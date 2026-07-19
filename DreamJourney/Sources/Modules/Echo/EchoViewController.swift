@@ -266,6 +266,7 @@ final class EchoViewController: UIViewController {
     private var lastEchoRuntimeFallbackReason: String?
     private var lastDigitalHumanSessionEvidenceSummary: EchoDigitalHumanSessionEvidenceSummary?
     private var lastVoiceSynthesisEvidenceSummary: EchoVoiceSynthesisEvidenceSummary?
+    private var lastOwnerTruthContextCitationEvidence: OwnerTruthContextCitationQAEvidenceReadout?
     private var trueDeviceBackendPCMDriveTrace = TencentBackendPCMDriveTrueDeviceTrace()
     private var digitalHumanRuntimeContextKey: String?
     private var digitalHumanRuntimeLifecycleGeneration: UInt64?
@@ -438,9 +439,17 @@ final class EchoViewController: UIViewController {
         label.font = .monospacedSystemFont(ofSize: 10, weight: .medium)
         label.textColor = UIColor.white.withAlphaComponent(0.9)
         label.numberOfLines = 0
-        label.lineBreakMode = .byTruncatingTail
+        label.lineBreakMode = .byWordWrapping
         label.accessibilityIdentifier = "echoRuntimeDiagnosticsPanelLabel"
         return label
+    }()
+
+    private let echoRuntimeDiagnosticsScrollView: UIScrollView = {
+        let scrollView = UIScrollView()
+        scrollView.alwaysBounceVertical = true
+        scrollView.showsVerticalScrollIndicator = true
+        scrollView.accessibilityIdentifier = "echoRuntimeDiagnosticsScrollView"
+        return scrollView
     }()
 
     private lazy var echoTraceEvidenceExportButton: UIButton = {
@@ -668,6 +677,7 @@ final class EchoViewController: UIViewController {
             || configuration.contains("DJRunEchoRuntimeDiagnosticsExportSmoke")
             || configuration.contains("DJRunEchoTraceEvidencePackageExportSmoke")
             || configuration.contains("DJRunEchoTraceEvidencePackagePanelExportSmoke")
+            || configuration.contains("DJRunEchoQAEvidenceBundleExportSmoke")
         #else
         return false
         #endif
@@ -905,7 +915,8 @@ final class EchoViewController: UIViewController {
         view.addSubview(voiceStatusView)
         if shouldShowEchoRuntimeDiagnosticsPanel {
             view.addSubview(echoRuntimeDiagnosticsPanelView)
-            echoRuntimeDiagnosticsPanelView.addSubview(echoRuntimeDiagnosticsPanelLabel)
+            echoRuntimeDiagnosticsPanelView.addSubview(echoRuntimeDiagnosticsScrollView)
+            echoRuntimeDiagnosticsScrollView.addSubview(echoRuntimeDiagnosticsPanelLabel)
             echoRuntimeDiagnosticsPanelView.addSubview(echoTraceEvidenceExportButton)
         }
         view.addSubview(micRingView)
@@ -948,6 +959,7 @@ final class EchoViewController: UIViewController {
             voiceStatusView,
             voiceStatusLabel,
             echoRuntimeDiagnosticsPanelView,
+            echoRuntimeDiagnosticsScrollView,
             echoRuntimeDiagnosticsPanelLabel,
             echoTraceEvidenceExportButton,
             micRingView,
@@ -1044,21 +1056,41 @@ final class EchoViewController: UIViewController {
                     lessThanOrEqualTo: view.widthAnchor,
                     multiplier: 0.66
                 ),
-                echoRuntimeDiagnosticsPanelLabel.topAnchor.constraint(
+                echoRuntimeDiagnosticsPanelView.heightAnchor.constraint(equalToConstant: 244),
+                echoRuntimeDiagnosticsPanelView.bottomAnchor.constraint(
+                    lessThanOrEqualTo: micButton.topAnchor,
+                    constant: -16
+                ),
+                echoRuntimeDiagnosticsScrollView.topAnchor.constraint(
                     equalTo: echoRuntimeDiagnosticsPanelView.topAnchor,
                     constant: 10
                 ),
-                echoRuntimeDiagnosticsPanelLabel.leadingAnchor.constraint(
+                echoRuntimeDiagnosticsScrollView.leadingAnchor.constraint(
                     equalTo: echoRuntimeDiagnosticsPanelView.leadingAnchor,
                     constant: 10
                 ),
-                echoRuntimeDiagnosticsPanelLabel.trailingAnchor.constraint(
+                echoRuntimeDiagnosticsScrollView.trailingAnchor.constraint(
                     equalTo: echoRuntimeDiagnosticsPanelView.trailingAnchor,
                     constant: -10
                 ),
-                echoRuntimeDiagnosticsPanelLabel.bottomAnchor.constraint(
-                    lessThanOrEqualTo: echoTraceEvidenceExportButton.topAnchor,
+                echoRuntimeDiagnosticsScrollView.bottomAnchor.constraint(
+                    equalTo: echoTraceEvidenceExportButton.topAnchor,
                     constant: -8
+                ),
+                echoRuntimeDiagnosticsPanelLabel.topAnchor.constraint(
+                    equalTo: echoRuntimeDiagnosticsScrollView.contentLayoutGuide.topAnchor
+                ),
+                echoRuntimeDiagnosticsPanelLabel.leadingAnchor.constraint(
+                    equalTo: echoRuntimeDiagnosticsScrollView.contentLayoutGuide.leadingAnchor
+                ),
+                echoRuntimeDiagnosticsPanelLabel.trailingAnchor.constraint(
+                    equalTo: echoRuntimeDiagnosticsScrollView.contentLayoutGuide.trailingAnchor
+                ),
+                echoRuntimeDiagnosticsPanelLabel.bottomAnchor.constraint(
+                    equalTo: echoRuntimeDiagnosticsScrollView.contentLayoutGuide.bottomAnchor
+                ),
+                echoRuntimeDiagnosticsPanelLabel.widthAnchor.constraint(
+                    equalTo: echoRuntimeDiagnosticsScrollView.frameLayoutGuide.widthAnchor
                 ),
 
                 echoTraceEvidenceExportButton.leadingAnchor.constraint(
@@ -1205,6 +1237,7 @@ final class EchoViewController: UIViewController {
         lastEchoTraceRecord = nil
         lastDigitalHumanSessionEvidenceSummary = nil
         lastVoiceSynthesisEvidenceSummary = nil
+        lastOwnerTruthContextCitationEvidence = nil
         lastVoiceCloneProviderLogId = nil
         lastVoiceCloneProviderRequestId = nil
         lastVoiceCloneProviderMode = nil
@@ -3197,7 +3230,22 @@ final class EchoViewController: UIViewController {
         source: String
     ) -> EchoQAEvidenceBundle {
         let package = makeEchoTraceEvidencePackage(snapshot: snapshot, source: source)
-        return EchoQAEvidenceBundle(evidencePackage: package)
+        return EchoQAEvidenceBundle(
+            evidencePackage: package,
+            ownerTruthContextCitationEvidence: lastOwnerTruthContextCitationEvidence
+        )
+    }
+
+    @discardableResult
+    private func recordOwnerTruthContextCitationQAEvidence(
+        _ summary: OwnerTruthContextCitationTraceSummary
+    ) -> Bool {
+        guard OwnerTruthContextCitationQAGate.isEnabled else {
+            lastOwnerTruthContextCitationEvidence = nil
+            return false
+        }
+        lastOwnerTruthContextCitationEvidence = OwnerTruthContextCitationQAEvidenceReadout(summary: summary)
+        return true
     }
 
     private func renderEchoRuntimeDiagnosticsPanel(snapshot: EchoRuntimeDiagnosticsSnapshot) {
@@ -3228,6 +3276,7 @@ final class EchoViewController: UIViewController {
         ].compactMap { capability in
             capability.map { "capability.\($0.diagnosticSummary)" }
         }
+        let ownerTruthContextLines = lastOwnerTruthContextCitationEvidence?.panelLines() ?? []
         let baseLines = [
             "Echo QA clues",
             "turnHash: \(PrivacySafeDiagnostics.correlationHash(snapshot.turnID))",
@@ -3246,9 +3295,15 @@ final class EchoViewController: UIViewController {
             "latencyMs: \(snapshot.contextLatencyMs)"
         ]
         echoRuntimeDiagnosticsPanelLabel.text = (
-            baseLines + capabilityLines + policyLines + contextClues.panelLines(prefix: "ctx")
+            [baseLines[0]]
+                + ownerTruthContextLines
+                + Array(baseLines.dropFirst())
+                + capabilityLines
+                + policyLines
+                + contextClues.panelLines(prefix: "ctx")
         )
             .joined(separator: "\n")
+        echoRuntimeDiagnosticsScrollView.setContentOffset(.zero, animated: false)
         echoRuntimeDiagnosticsPanelView.isHidden = false
         echoRuntimeDiagnosticsPanelView.alpha = 1
         echoRuntimeDiagnosticsPanelView.accessibilityLabel = echoRuntimeDiagnosticsPanelLabel.text
@@ -7506,7 +7561,11 @@ extension EchoViewController {
     func runUIQAEchoQAEvidenceBundleExportSmoke(completion: @escaping ([String: Any]) -> Void) {
         let ownerContext = prepareEchoTraceUIQAOwner(fallbackOwnerUserId: "uiqa_echo_qa_bundle_user")
         let ownerUserId = ownerContext.ownerUserId
-        defer { restoreEchoTraceUIQAOwner(ownerContext) }
+        let previousOwnerTruthContextCitationEvidence = lastOwnerTruthContextCitationEvidence
+        defer {
+            lastOwnerTruthContextCitationEvidence = previousOwnerTruthContextCitationEvidence
+            restoreEchoTraceUIQAOwner(ownerContext)
+        }
         EchoTraceStore.shared.clear(ownerUserId: ownerUserId)
         EchoRuntimeDiagnosticsStore.shared.clear(ownerUserId: ownerUserId)
         EchoTraceEvidencePackageStore.shared.clear(ownerUserId: ownerUserId)
@@ -7577,6 +7636,36 @@ extension EchoViewController {
             detail: "UIQA bundle stores provider metadata only"
         )
 
+        let ownerTruthContextReference = "memory-version:00000000-0000-0000-0000-000000000901"
+        let ownerTruthContextSummary = OwnerTruthContextCitationTraceSummary(
+            contextVersion: "echo-context-v4-shadow",
+            policyVersion: "owner-truth-context-shadow-build-policy-v1",
+            contextHash: "uiqa-owner-truth-context-hash",
+            authorityState: .ready,
+            authorityEpoch: 7,
+            projectionCheckpoint: "uiqa-owner-truth-projection-checkpoint",
+            selectedContextRefs: [ownerTruthContextReference],
+            selectedContextRefsBySource: [
+                "owner-truth-memory-projection": [ownerTruthContextReference]
+            ],
+            filteredContextReasons: ["sensitivity_not_context_eligible"],
+            selectedContextCount: 1,
+            filteredContextCount: 1,
+            rankingTraceCount: 1,
+            citationCount: 1,
+            answerCitationCount: 1,
+            selectedContextSourceCounts: ["owner-truth-memory-projection": 1],
+            fallbacks: []
+        )
+        guard recordOwnerTruthContextCitationQAEvidence(ownerTruthContextSummary) else {
+            completion([
+                "completed": false,
+                "failureReason": "ownerTruthContextCitationQADisabled",
+                "error": "redacted",
+            ])
+            return
+        }
+
         do {
             let scopedExportURL = try exportEchoQAEvidenceBundleForQA(source: "uiqaQAEvidenceBundleExport")
             let exportURL = try preserveTemporaryEchoTraceUIQAExport(
@@ -7598,6 +7687,7 @@ extension EchoViewController {
             let manifestSerialized = String(data: manifestData, encoding: .utf8) ?? ""
             let evidencePackage = bundle["evidencePackage"] as? [String: Any]
             let clueSummary = bundle["contextClues"] as? [String: Any]
+            let ownerTruthContextEvidence = bundle["ownerTruthContextCitationEvidence"] as? [String: Any]
             let voiceSynthesis = bundle["voiceSynthesis"] as? [String: Any]
             let fallbackSummary = bundle["fallbackSummary"] as? [String: Any]
             let latestTurnIDHash = redactedEchoExportString(bundle, key: "turnIDHash")
@@ -7621,6 +7711,10 @@ extension EchoViewController {
             let careClueHashes = redactedEchoExportStrings(
                 clueSummary,
                 key: "careRefsHashes"
+            )
+            let ownerTruthContextRefDigests = redactedEchoExportStrings(
+                ownerTruthContextEvidence,
+                key: "selectedContextRefDigests"
             )
             let manifestArtifactHashes = redactedEchoExportStrings(manifest, key: "artifactHashes")
             let manifestSourceCommit = redactedEchoExportString(manifest, key: "sourceCommit")
@@ -7649,6 +7743,17 @@ extension EchoViewController {
                     && careClueHashes == [PrivacySafeDiagnostics.correlationHash("care:latest")]
                     && redactedEchoExportStrings(clueSummary, key: "filteredContextReasons").count == 2
                     && ((clueSummary?["rankingTraceCount"] as? Int) == 6)
+                    && ownerTruthContextEvidence?["schemaVersion"] as? String
+                        == OwnerTruthContextCitationQAEvidenceReadout.schemaVersion
+                    && ownerTruthContextEvidence?["contextVersion"] as? String == "echo-context-v4-shadow"
+                    && ownerTruthContextEvidence?["authorityState"] as? String == "ready"
+                    && ownerTruthContextEvidence?["authorityEpoch"] as? Int == 7
+                    && ownerTruthContextRefDigests.count == 1
+                    && ownerTruthContextRefDigests.allSatisfy {
+                        $0.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil
+                    }
+                    && !serialized.contains(ownerTruthContextReference)
+                    && echoRuntimeDiagnosticsPanelLabel.text?.contains("ownerCtx schema") == true
                     && (bundle["digitalHumanSession"] as? [String: Any])?["status"] as? String == "unavailable"
                     && latestProviderLogIdHash
                         == PrivacySafeDiagnostics.correlationHash("uiqa-bundle-provider-log")
@@ -7695,6 +7800,9 @@ extension EchoViewController {
                 "latestClueSummaryKbFactRefHashes": kbFactClueHashes.joined(separator: ","),
                 "latestClueSummaryPersonaRefHashes": personaClueHashes.joined(separator: ","),
                 "latestClueSummaryCareRefHashes": careClueHashes.joined(separator: ","),
+                "ownerTruthContextEvidenceSchemaVersion": ownerTruthContextEvidence?["schemaVersion"] as? String ?? "",
+                "ownerTruthContextReferenceDigestCount": ownerTruthContextRefDigests.count,
+                "ownerTruthContextPanelVisible": echoRuntimeDiagnosticsPanelLabel.text?.contains("ownerCtx schema") == true,
                 "latestFilteredReasons": redactedEchoExportStrings(
                     clueSummary,
                     key: "filteredContextReasons"

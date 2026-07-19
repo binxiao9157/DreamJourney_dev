@@ -642,6 +642,54 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertFalse(text.contains(answer))
     }
 
+    func testContextCitationQAEvidenceReadoutHashesReferencesWithoutRawText() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let query = "这段问题不能进入 QA 导出包"
+        let answer = "这段回答也不能进入 QA 导出包"
+        let reference = "memory-version:00000000-0000-0000-0000-000000000302"
+        let build = try OwnerTruthContextShadowBuild(
+            backendJSONObject: try contextShadowBuildResponse(for: lease, query: query),
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+            expectedIntent: "echo_chat",
+            expectedQuery: query
+        )
+        let receipt = try OwnerTruthAnswerCitationReceipt(
+            backendJSONObject: answerCitationReceiptResponse(
+                for: build,
+                commandID: "owner-truth-answer-citation-ios-readout",
+                query: query,
+                answer: answer
+            ),
+            expectedContext: build,
+            expectedCommandID: "owner-truth-answer-citation-ios-readout",
+            expectedQuery: query,
+            expectedAnswerText: answer
+        )
+
+        let readout = OwnerTruthContextCitationQAEvidenceReadout(
+            summary: build.traceSummary(receipt: receipt)
+        )
+        XCTAssertEqual(
+            readout.schemaVersion,
+            OwnerTruthContextCitationQAEvidenceReadout.schemaVersion
+        )
+        XCTAssertEqual(readout.authorityState, .ready)
+        XCTAssertEqual(readout.authorityEpoch, 7)
+        XCTAssertEqual(readout.selectedContextRefDigests.count, 1)
+        XCTAssertNotEqual(readout.selectedContextRefDigests, [reference])
+        XCTAssertEqual(readout.selectedContextRefDigests.first?.count, 64)
+        XCTAssertEqual(readout.citationCount, 1)
+        XCTAssertEqual(readout.answerCitationCount, 1)
+
+        let encoded = try JSONEncoder().encode(readout)
+        let text = String(decoding: encoded, as: UTF8.self)
+        XCTAssertFalse(text.contains(reference))
+        XCTAssertFalse(text.contains(query))
+        XCTAssertFalse(text.contains(answer))
+        XCTAssertFalse(text.contains(build.contextHash))
+        XCTAssertFalse(text.contains(build.authority.projectionCheckpoint ?? ""))
+    }
+
     func testAnswerCitationReceiptRejectsChangedContextHash() throws {
         let (_, lease) = try makeActiveRuntime()
         let query = "上下文 hash 必须精确绑定"

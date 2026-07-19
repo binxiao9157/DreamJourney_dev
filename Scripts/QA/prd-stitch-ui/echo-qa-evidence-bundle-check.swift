@@ -25,6 +25,8 @@ func require(_ condition: Bool, _ message: String) {
 let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
+let ownerTruthContracts = read("DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 let uiqaSmoke = readIfPresent("Scripts/QA/prd-stitch-ui/run-echo-qa-evidence-bundle-export-smoke.sh")
@@ -42,6 +44,7 @@ for required in [
     "echo-qa-evidence-bundle.json",
     "echo-qa-evidence-manifest.json",
     "schemaVersion = 2",
+    "ownerTruthContextCitationEvidence",
 ] {
     require(backendClient.contains(required), "backend client should define QA bundle support: \(required)")
 }
@@ -85,17 +88,45 @@ for required in [
     "latestVoiceOutputMode",
     "latestDigitalHumanStatus",
     "latestArchiveClueHashes",
+    "recordOwnerTruthContextCitationQAEvidence",
+    "ownerTruthContextEvidenceSchemaVersion",
+    "ownerTruthContextReferenceDigestCount",
 ] {
     require(echo.contains(required), "Echo should build/export QA evidence bundle: \(required)")
 }
 
 for required in [
-    "DJRunEchoQAEvidenceBundleExportSmoke",
+    "struct OwnerTruthContextCitationQAEvidenceReadout",
+    "owner-truth-context-citation-readout-v1",
+    "contextHashDigest",
+    "projectionCheckpointDigest",
+    "selectedContextRefDigests",
+    "selectedContextRefDigestsBySource",
+    "enum OwnerTruthContextCitationQAGate",
+    "DJEnableOwnerTruthContextCitationQA",
+] {
+    require(ownerTruthContracts.contains(required), "Owner Truth QA readout must stay value-free: \(required)")
+}
+
+require(
+    !echo.contains("buildOwnerTruthContextShadow(") &&
+        !echo.contains("recordOwnerTruthAnswerCitationReceipt("),
+    "public Echo must not call the Owner Truth QA routes directly"
+)
+
+for required in [
+    "case .echoQAEvidenceBundleExportSmoke:",
     "runEchoQAEvidenceBundleExportSmoke",
     "writeEchoQAEvidenceBundleExportSmokeResult",
     "echo-qa-evidence-bundle-export-smoke-result.json",
 ] {
     require(appDelegate.contains(required), "AppDelegate should expose QA evidence bundle smoke: \(required)")
+}
+
+for required in [
+    "case echoQAEvidenceBundleExportSmoke = \"DJRunEchoQAEvidenceBundleExportSmoke\"",
+] {
+    require(featureFlags.contains(required), "Feature flags should register QA evidence bundle smoke: \(required)")
 }
 
 require(
@@ -134,6 +165,9 @@ for required in [
     "digitalHumanSession",
     "voiceSynthesis",
     "fallbackSummary",
+    "ownerTruthContextCitationEvidence",
+    "selectedContextRefDigests",
+    "DJEnableOwnerTruthContextCitationQA",
     "audioBase64",
     "appkey",
     "accesstoken",
@@ -147,6 +181,7 @@ for required in [
     "digital human session",
     "voice synthesis",
     "fallback summary",
+    "Owner Truth Context QA",
     "不导出 raw audio",
     "不导出 appkey/accesstoken",
 ] {

@@ -3565,6 +3565,7 @@ struct EchoQAEvidenceBundle: Codable {
     let traceRecord: EchoTraceRecord?
     let runtimeDiagnostics: EchoRuntimeDiagnosticsSnapshot?
     let contextClues: EchoContextV2ClueSummary
+    let ownerTruthContextCitationEvidence: OwnerTruthContextCitationQAEvidenceReadout?
     let digitalHumanSession: EchoDigitalHumanSessionEvidenceSummary?
     let voiceSynthesis: EchoVoiceSynthesisEvidenceSummary?
     let fallbackSummary: EchoQAFallbackSummary
@@ -3574,7 +3575,10 @@ struct EchoQAEvidenceBundle: Codable {
         evidencePackage.derivedOwnerUserId
     }
 
-    init(evidencePackage: EchoTraceEvidencePackage) {
+    init(
+        evidencePackage: EchoTraceEvidencePackage,
+        ownerTruthContextCitationEvidence: OwnerTruthContextCitationQAEvidenceReadout? = nil
+    ) {
         self.schemaVersion = 2
         let uniqueSuffix = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24))
         self.bundleId = "echo_qa_bundle_" + uniqueSuffix
@@ -3586,6 +3590,9 @@ struct EchoQAEvidenceBundle: Codable {
         self.traceRecord = evidencePackage.traceRecord
         self.runtimeDiagnostics = evidencePackage.runtimeDiagnostics
         self.contextClues = evidencePackage.contextBuild.clueSummary
+        self.ownerTruthContextCitationEvidence = OwnerTruthContextCitationQAGate.isEnabled
+            ? ownerTruthContextCitationEvidence
+            : nil
         self.digitalHumanSession = evidencePackage.digitalHumanSession
         self.voiceSynthesis = evidencePackage.voiceSynthesis
         self.fallbackSummary = EchoQAFallbackSummary(
@@ -3596,6 +3603,7 @@ struct EchoQAEvidenceBundle: Codable {
         )
         self.redactionPolicy = evidencePackage.redactionPolicy + [
             "QA bundle v2 汇总 Context V2 线索、数字人 session、声音合成和 fallback 摘要",
+            "Owner Truth Context QA 只导出哈希引用、计数和过滤码",
             "不导出 raw audio、PCM、音频 base64 或供应商密钥",
             "手动分享仅在 QA 面板中开放"
         ]

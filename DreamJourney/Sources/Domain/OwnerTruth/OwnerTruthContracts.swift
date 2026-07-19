@@ -2883,6 +2883,130 @@ struct OwnerTruthContextCitationTraceSummary: Codable, Equatable, Sendable {
         selectedContextSourceCounts = context.selectedContextSourceCounts
         fallbacks = context.fallbacks
     }
+
+    init(
+        contextVersion: String,
+        policyVersion: String,
+        contextHash: String,
+        authorityState: OwnerTruthContextShadowState,
+        authorityEpoch: Int?,
+        projectionCheckpoint: String?,
+        selectedContextRefs: [String],
+        selectedContextRefsBySource: [String: [String]],
+        filteredContextReasons: [String],
+        selectedContextCount: Int,
+        filteredContextCount: Int,
+        rankingTraceCount: Int,
+        citationCount: Int,
+        answerCitationCount: Int,
+        selectedContextSourceCounts: [String: Int],
+        fallbacks: [String]
+    ) {
+        self.contextVersion = contextVersion
+        self.policyVersion = policyVersion
+        self.contextHash = contextHash
+        self.authorityState = authorityState
+        self.authorityEpoch = authorityEpoch
+        self.projectionCheckpoint = projectionCheckpoint
+        self.selectedContextRefs = selectedContextRefs
+        self.selectedContextRefsBySource = selectedContextRefsBySource
+        self.filteredContextReasons = filteredContextReasons
+        self.selectedContextCount = selectedContextCount
+        self.filteredContextCount = filteredContextCount
+        self.rankingTraceCount = rankingTraceCount
+        self.citationCount = citationCount
+        self.answerCitationCount = answerCitationCount
+        self.selectedContextSourceCounts = selectedContextSourceCounts
+        self.fallbacks = fallbacks
+    }
+}
+
+/// This is the only Owner Truth Context shape allowed into the Echo QA panel
+/// and export bundle. Reference identifiers and Context authority material are
+/// one-way digested before the UI layer sees them; query, answer and memory
+/// values never enter this representation.
+struct OwnerTruthContextCitationQAEvidenceReadout: Codable, Equatable, Sendable {
+    static let schemaVersion = "owner-truth-context-citation-readout-v1"
+
+    let schemaVersion: String
+    let contextVersion: String
+    let policyVersion: String
+    let contextHashDigest: String
+    let authorityState: OwnerTruthContextShadowState
+    let authorityEpoch: Int?
+    let projectionCheckpointDigest: String?
+    let selectedContextRefDigests: [String]
+    let selectedContextRefDigestsBySource: [String: [String]]
+    let filteredContextReasons: [String]
+    let selectedContextCount: Int
+    let filteredContextCount: Int
+    let rankingTraceCount: Int
+    let citationCount: Int
+    let answerCitationCount: Int
+    let selectedContextSourceCounts: [String: Int]
+    let fallbacks: [String]
+
+    init(summary: OwnerTruthContextCitationTraceSummary) {
+        schemaVersion = Self.schemaVersion
+        contextVersion = summary.contextVersion
+        policyVersion = summary.policyVersion
+        contextHashDigest = Self.digest(summary.contextHash)
+        authorityState = summary.authorityState
+        authorityEpoch = summary.authorityEpoch
+        projectionCheckpointDigest = summary.projectionCheckpoint.map(Self.digest)
+        selectedContextRefDigests = summary.selectedContextRefs.map(Self.digest)
+        selectedContextRefDigestsBySource = summary.selectedContextRefsBySource
+            .mapValues { $0.map(Self.digest) }
+        filteredContextReasons = summary.filteredContextReasons
+        selectedContextCount = summary.selectedContextCount
+        filteredContextCount = summary.filteredContextCount
+        rankingTraceCount = summary.rankingTraceCount
+        citationCount = summary.citationCount
+        answerCitationCount = summary.answerCitationCount
+        selectedContextSourceCounts = summary.selectedContextSourceCounts
+        fallbacks = summary.fallbacks
+    }
+
+    func panelLines(prefix: String = "ownerCtx") -> [String] {
+        [
+            "\(prefix) schema: \(schemaVersion)",
+            "\(prefix) authority: \(authorityState.rawValue) epoch=\(authorityEpoch.map(String.init) ?? "none")",
+            "\(prefix) selected/filtered: \(selectedContextCount)/\(filteredContextCount)",
+            "\(prefix) citation/answer: \(citationCount)/\(answerCitationCount)",
+            "\(prefix) ranking: \(rankingTraceCount)",
+            "\(prefix) sources: \(sourceCountsText)",
+            "\(prefix) filtered: \(filteredCodesText)",
+            "\(prefix) fallbacks: \(fallbackCodesText)"
+        ]
+    }
+
+    private var sourceCountsText: String {
+        guard !selectedContextSourceCounts.isEmpty else { return "none" }
+        return selectedContextSourceCounts
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key):\($0.value)" }
+            .joined(separator: ",")
+    }
+
+    private var filteredCodesText: String {
+        previewCodes(filteredContextReasons)
+    }
+
+    private var fallbackCodesText: String {
+        previewCodes(fallbacks)
+    }
+
+    private func previewCodes(_ codes: [String], limit: Int = 3) -> String {
+        guard !codes.isEmpty else { return "none" }
+        let prefix = codes.prefix(limit).joined(separator: ",")
+        return codes.count > limit ? prefix + "+\(codes.count - limit)" : prefix
+    }
+
+    private static func digest(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
 }
 
 /// The concrete backend client keeps HTTP/auth/header ownership. Callers only

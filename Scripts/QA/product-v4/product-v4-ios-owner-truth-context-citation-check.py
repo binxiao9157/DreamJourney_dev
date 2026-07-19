@@ -34,6 +34,22 @@ def function_body(source: str, name: str) -> str:
     raise AssertionError(f"unterminated function: {name}")
 
 
+def type_body(source: str, marker: str) -> str:
+    start = source.find(marker)
+    require(start >= 0, f"missing type: {marker}")
+    opening = source.find("{", start)
+    require(opening >= 0, f"missing type body: {marker}")
+    depth = 0
+    for index in range(opening, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[opening + 1 : index]
+    raise AssertionError(f"unterminated type: {marker}")
+
+
 def main() -> None:
     contracts = CONTRACTS.read_text(encoding="utf-8")
     client = CLIENT.read_text(encoding="utf-8")
@@ -52,6 +68,7 @@ def main() -> None:
         "struct OwnerTruthContextShadowBuild",
         "struct OwnerTruthAnswerCitationReceipt",
         "struct OwnerTruthContextCitationTraceSummary",
+        "struct OwnerTruthContextCitationQAEvidenceReadout",
         "protocol OwnerTruthContextCitationClient",
         "owner-truth-context-shadow-build-response-v1",
         "owner-truth-context-shadow-build-v1",
@@ -61,7 +78,11 @@ def main() -> None:
         "legacyContextRead",
         "rawContentKeys",
         "SHA256.hash(data: Data(text.utf8))",
-    ):
+        "owner-truth-context-citation-readout-v1",
+        "contextHashDigest",
+        "projectionCheckpointDigest",
+        "selectedContextRefDigests",
+        ):
         require(required in contracts, f"Owner Truth Context/Citation contract missing: {required}")
 
     require(
@@ -125,6 +146,23 @@ def main() -> None:
         "Echo evidence must have a value-free typed Context/Citation mapper",
     )
 
+    readout_body = type_body(
+        contracts,
+        "struct OwnerTruthContextCitationQAEvidenceReadout",
+    )
+    for prohibited in (
+        "let query:",
+        "let answer:",
+        "let memoryContent:",
+        "let selectedContextRefs:",
+        "let projectionCheckpoint:",
+        "let contextHash:",
+    ):
+        require(
+            prohibited not in readout_body,
+            f"QA readout must not retain raw Context material: {prohibited}",
+        )
+
     for test_name in (
         "func testContextShadowBuildAcceptsTypedProjectionCitationsWithoutRawContent()",
         "func testContextShadowBuildAcceptsJSONRoundTripNumberValues()",
@@ -132,6 +170,7 @@ def main() -> None:
         "func testContextShadowBuildRejectsRawMemoryValueAndCrossVaultCitation()",
         "func testAnswerCitationReceiptBindsExactContextWithoutStoringAnswerText()",
         "func testAnswerCitationReceiptRejectsChangedContextHash()",
+        "func testContextCitationQAEvidenceReadoutHashesReferencesWithoutRawText()",
     ):
         require(test_name in tests, f"Context/Citation contract test missing: {test_name}")
 

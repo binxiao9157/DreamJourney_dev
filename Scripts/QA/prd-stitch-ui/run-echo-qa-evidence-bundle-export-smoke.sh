@@ -83,6 +83,7 @@ sleep 1
 echo "[echo-qa-evidence-bundle-export-smoke] Launching QA evidence bundle export harness..."
 xcrun simctl launch --console "$SIMULATOR_UDID" "$BUNDLE_ID" \
   DJRunEchoQAEvidenceBundleExportSmoke \
+  DJEnableOwnerTruthContextCitationQA \
   "DJEvidenceSourceCommit=$SOURCE_COMMIT" > "$RUNTIME_LOG" 2>&1 &
 CONSOLE_PID="$!"
 
@@ -131,6 +132,18 @@ require(
 )
 require(result.get("latestClueSummaryCareRefHashes") == correlation_hash("care:latest"), "QA evidence bundle care clue hash changed")
 require(result.get("latestRankingTraceCount") == 6, "QA evidence bundle ranking trace count changed")
+require(
+    result.get("ownerTruthContextEvidenceSchemaVersion") == "owner-truth-context-citation-readout-v1",
+    "Owner Truth Context QA evidence schema changed",
+)
+require(
+    result.get("ownerTruthContextReferenceDigestCount") == 1,
+    "Owner Truth Context QA evidence should include one digested citation reference",
+)
+require(
+    result.get("ownerTruthContextPanelVisible") is True,
+    "Owner Truth Context QA evidence should render in the QA diagnostics panel",
+)
 require(result.get("fileExists") is True, "QA evidence bundle export file should exist")
 require(result.get("manifestSchemaVersion") == 1, "QA evidence manifest schemaVersion changed")
 require(result.get("manifestStatus") == "passed", "QA evidence manifest should be passed")
@@ -152,6 +165,20 @@ require(bundle.get("evidencePackage", {}).get("schemaVersion") == 1, "Nested evi
 require(bundle.get("redactionPolicyVersion") == "iosDiagnostics-v1", "QA evidence bundle should declare its redaction policy")
 require(bundle.get("contextClues", {}).get("archiveRefsHashes") == [correlation_hash("archive_qa_bundle")], "Exported archive clue summary changed")
 require(bundle.get("contextClues", {}).get("kbFactRefsHashes") == [correlation_hash("fact_qa_bundle")], "Exported kbFact clue summary changed")
+owner_truth_context = bundle.get("ownerTruthContextCitationEvidence") or {}
+require(
+    owner_truth_context.get("schemaVersion") == "owner-truth-context-citation-readout-v1",
+    "Exported Owner Truth Context QA evidence schema changed",
+)
+require(owner_truth_context.get("contextVersion") == "echo-context-v4-shadow", "Owner Truth Context version changed")
+require(owner_truth_context.get("authorityState") == "ready", "Owner Truth Context authority state changed")
+require(owner_truth_context.get("authorityEpoch") == 7, "Owner Truth Context authority epoch changed")
+owner_truth_ref_digests = owner_truth_context.get("selectedContextRefDigests") or []
+require(len(owner_truth_ref_digests) == 1, "Owner Truth Context should export one digested reference")
+require(
+    all(isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value) for value in owner_truth_ref_digests),
+    "Owner Truth Context references must be SHA-256 digests",
+)
 require(bundle.get("digitalHumanSession", {}).get("status") == "unavailable", "Exported digital human status changed")
 require(bundle.get("voiceSynthesis", {}).get("providerLogIdHash") == correlation_hash("uiqa-bundle-provider-log"), "Exported voice provider log changed")
 require(
@@ -164,6 +191,10 @@ require("appkey" not in serialized.lower(), "QA evidence bundle must not export 
 require("accesstoken" not in serialized.lower(), "QA evidence bundle must not export accesstoken")
 require("uiqa-bundle-provider-log" not in serialized, "QA evidence bundle must not export raw provider log IDs")
 require("archive_qa_bundle" not in serialized, "QA evidence bundle must not export raw archive references")
+require(
+    "memory-version:00000000-0000-0000-0000-000000000901" not in serialized,
+    "QA evidence bundle must not export raw Owner Truth memory references",
+)
 bundle_copy_path.write_text(json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True))
 
 manifest_file = pathlib.Path(manifest_export_path)

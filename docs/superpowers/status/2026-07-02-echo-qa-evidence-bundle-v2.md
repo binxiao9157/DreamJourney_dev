@@ -19,6 +19,10 @@
   - ranking trace count
   - source counts
   - latency
+- Owner Truth Context QA（仅 Debug/UIQA 且需显式 launch arg）
+  - context / policy / authority 状态与 epoch
+  - selected / filtered / citation / ranking 计数
+  - 单向哈希后的 MemoryVersion 引用，不含原始引用值
 - digital human session summary
 - voice synthesis summary
 - fallback summary
@@ -44,6 +48,9 @@ RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE=1 \
 Scripts/QA/prd-stitch-ui/run-release-regression.sh
 ```
 
+QA 面板为固定高度的可滚动容器，始终位于话筒上方；Owner Truth Context 摘要优先显示。
+该布局仅在 Debug/UIQA launch arg 下启用，不改变公开 Echo 的全屏视觉或交互。
+
 ## 隐私与安全边界
 
 - 不导出 raw audio
@@ -52,6 +59,7 @@ Scripts/QA/prd-stitch-ui/run-release-regression.sh
 - 不导出供应商访问密钥
 - 只保留 providerLogId/providerRequestId 用于服务商排查
 - 只导出档案 ID、数量、线索来源和权限摘要，不导出档案正文
+- Owner Truth Context QA 不导出 Query、Answer、Memory 正文、原始 MemoryVersion 或 projection checkpoint
 
 ## 验证
 
