@@ -60,6 +60,8 @@ def main() -> None:
         "echoRuntimeSessionCoordinator.finishInteraction()",
         "echoRuntimeSessionCoordinator.releaseRuntime()",
         "runtimeSessionCallback: EchoRuntimeCallbackToken",
+        "beginEchoRuntimeInteraction(",
+        "runtimeInteractionCallback: EchoRuntimeCallbackToken?",
     ):
         require(required in view_controller, f"Echo runtime session integration missing: {required}")
 
@@ -93,12 +95,35 @@ def main() -> None:
         "reason: \"digitalHumanSessionHeartbeatResponse\"" in heartbeat,
         "heartbeat response must validate its runtime session callback",
     )
+    interaction = source_slice(
+        view_controller,
+        "    private func sendEchoReplyViaTencentVoiceClonePCMDrive(",
+        "    private func showVoiceCloneNotEnabledStatusIfNeeded(",
+    )
+    require(
+        "beginEchoRuntimeInteraction(" in interaction,
+        "voice-clone synthesis must begin a runtime interaction lease",
+    )
+    require(
+        "reason: \"voiceClonePCMDriveResponse\"" in interaction,
+        "voice-clone synthesis response must validate its runtime interaction lease",
+    )
+    pcm_drive = source_slice(
+        view_controller,
+        "    private func startPCMDriveSignalToDigitalHumanRuntime(",
+        "    private func makeTencentDigitalHumanPCMDriveTestSignal(",
+    )
+    require(
+        "runtimeInteractionCallback" in pcm_drive,
+        "PCM drive chunks must consume the runtime interaction callback",
+    )
 
     for test_name in (
         "func testLateRoleSwitchSessionCallbackIsRejectedBeforeActivation()",
         "func testStopInvalidatesInteractionButPreservesActiveSession()",
         "func testReleaseRejectsAllOutstandingSessionCallbacks()",
         "func testSessionCallbackRejectsDifferentProviderSession()",
+        "func testNewInteractionRejectsPriorRequestCallbacks()",
     ):
         require(test_name in tests, f"runtime session coordinator test missing: {test_name}")
 

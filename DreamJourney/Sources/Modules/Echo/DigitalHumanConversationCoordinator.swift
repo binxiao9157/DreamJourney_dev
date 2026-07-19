@@ -113,7 +113,7 @@ final class EchoRuntimeSessionCoordinator {
             accountLease: activeLease.accountLease,
             contextKey: activeLease.contextKey,
             conversationID: activeLease.conversationID,
-            requestID: activeLease.requestID,
+            requestID: nil,
             sessionID: sessionID,
             providerAssetID: providerAssetID,
             expiresAt: expiresAt,
@@ -177,7 +177,8 @@ final class EchoRuntimeSessionCoordinator {
 
     func finishInteraction() {
         guard let activeLease,
-              activeLease.status == .active else {
+              activeLease.status == .active,
+              activeLease.conversationID != nil || activeLease.requestID != nil else {
             return
         }
         self.activeLease = EchoRuntimeLease(

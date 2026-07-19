@@ -7,6 +7,7 @@ enum EchoRuntimeSessionCoordinatorModelSmoke {
         verifyStopPreservesSessionButInvalidatesInteraction()
         verifyReleaseRejectsOutstandingSessionCallback()
         verifySessionCallbackRejectsDifferentProviderSession()
+        verifyNewInteractionRejectsPriorRequestCallbacks()
         print("Echo runtime session coordinator model smoke passed")
     }
 
@@ -164,6 +165,47 @@ enum EchoRuntimeSessionCoordinatorModelSmoke {
         require(
             coordinator.validate(staleSession) == .rejected(.sessionMismatch),
             "heartbeat or provider state from a replaced session must be rejected"
+        )
+    }
+
+    private static func verifyNewInteractionRejectsPriorRequestCallbacks() {
+        let coordinator = EchoRuntimeSessionCoordinator()
+        let sessionRequest = coordinator.beginSessionRequest(
+            accountLease: makeAccountLease(subjectId: "owner-1", generation: 7),
+            lifecycleToken: token(
+                generation: 11,
+                interactionGeneration: 3,
+                contextKey: "viewer|owner-1|self"
+            ),
+            contextKey: "viewer|owner-1|self",
+            requestID: "session-request"
+        )
+        require(
+            coordinator.activateSession(
+                sessionRequest,
+                sessionID: "active-session",
+                providerAssetID: "self-asset",
+                expiresAt: nil
+            ) == .accepted,
+            "active session setup should succeed"
+        )
+        guard let first = coordinator.beginInteraction(
+            conversationID: "conversation-1",
+            requestID: "reply-request-1"
+        ), let replacement = coordinator.beginInteraction(
+            conversationID: "conversation-1",
+            requestID: "reply-request-2"
+        ) else {
+            fail("active session should issue interaction callback tokens")
+        }
+
+        require(
+            coordinator.validate(first) == .rejected(.interactionGenerationMismatch),
+            "a replacement request must reject older synthesis or PCM callbacks"
+        )
+        require(
+            coordinator.validate(replacement) == .accepted,
+            "the newest provider request should remain valid"
         )
     }
 

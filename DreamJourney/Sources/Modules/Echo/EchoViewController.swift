@@ -3773,6 +3773,15 @@ final class EchoViewController: UIViewController {
         let contextKey = currentDigitalHumanRuntimeContextKey()
         let requestID = makeTencentDigitalHumanRequestID()
         let turnID = ensureCurrentEchoTurnID()
+        let runtimeInteractionCallback = beginEchoRuntimeInteraction(
+            requestID: requestID,
+            turnID: turnID,
+            source: "voiceClonePCMDrive"
+        )
+        guard runtimeInteractionCallback != nil || !requiresEchoRuntimeInteractionLease else {
+            degradeTencentDigitalHumanRoute(reason: "runtimeInteractionLeaseUnavailable")
+            return true
+        }
         let pausedDialogEngine = pauseDialogEngineForTencentProviderSpeechIfNeeded()
         prepareAudioSessionForTencentProviderPlayback(preserveRecordingCategory: pausedDialogEngine)
         digitalHumanConversation.beginProviderRequest(
@@ -3781,7 +3790,11 @@ final class EchoViewController: UIViewController {
             turnID: turnID,
             keepsPendingReply: routeEchoAudioThroughDigitalHuman
         )
-        scheduleTencentDigitalHumanTextOverTimeout(requestID: requestID, source: "voiceClonePCMDrive")
+        scheduleTencentDigitalHumanTextOverTimeout(
+            requestID: requestID,
+            source: "voiceClonePCMDrive",
+            runtimeInteractionCallback: runtimeInteractionCallback
+        )
         renderVoiceStatus(text: "正在生成复刻声音", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
 
         let userId = UserManager.shared.currentUser?.id ?? "default"
@@ -3821,6 +3834,10 @@ final class EchoViewController: UIViewController {
                         lifecycleToken,
                         reason: "voiceClonePCMDriveResponse"
                       ),
+                      self.isCurrentEchoRuntimeSessionCallback(
+                        runtimeInteractionCallback,
+                        reason: "voiceClonePCMDriveResponse"
+                      ),
                       self.digitalHumanConversation.activeRequestID == requestID,
                       self.currentDigitalHumanRuntimeContextKey() == contextKey else {
                     PrivacySafeDiagnostics.log(
@@ -3850,7 +3867,8 @@ final class EchoViewController: UIViewController {
                             ownerUserId: userId,
                             reason: "incompatibleAudioFormat",
                             detail: "format=\(synthesis.audioFormat) sampleRate=\(synthesis.sampleRate ?? 0) bits=\(synthesis.bitsPerSample ?? 0) channels=\(synthesis.channelCount ?? 0)",
-                            lifecycleToken: lifecycleToken
+                            lifecycleToken: lifecycleToken,
+                            runtimeInteractionCallback: runtimeInteractionCallback
                         )
                         PrivacySafeDiagnostics.log(
                             subsystem: "TencentDigitalHuman",
@@ -3889,7 +3907,8 @@ final class EchoViewController: UIViewController {
                         requestID: requestID,
                         contextKey: contextKey,
                         source: "voiceClonePCMDrive",
-                        lifecycleToken: lifecycleToken
+                        lifecycleToken: lifecycleToken,
+                        runtimeInteractionCallback: runtimeInteractionCallback
                     )
                     PrivacySafeDiagnostics.log(
                         subsystem: "TencentDigitalHuman",
@@ -3919,7 +3938,8 @@ final class EchoViewController: UIViewController {
                         ownerUserId: userId,
                         reason: "providerRequestFailed",
                         detail: error.localizedDescription,
-                        lifecycleToken: lifecycleToken
+                        lifecycleToken: lifecycleToken,
+                        runtimeInteractionCallback: runtimeInteractionCallback
                     )
                     PrivacySafeDiagnostics.log(
                         subsystem: "TencentDigitalHuman",
@@ -4366,10 +4386,15 @@ final class EchoViewController: UIViewController {
         ownerUserId: String,
         reason: String,
         detail: String,
-        lifecycleToken: DigitalHumanLifecycleToken
+        lifecycleToken: DigitalHumanLifecycleToken,
+        runtimeInteractionCallback: EchoRuntimeCallbackToken?
     ) {
         cancelTencentDigitalHumanTextOverTimeout()
         digitalHumanConversation.clearProviderRequest()
+        if runtimeInteractionCallback != nil {
+            echoRuntimeSessionCoordinator.finishInteraction()
+        }
+        let runtimeSessionCallback = echoRuntimeSessionCoordinator.currentSessionCallbackToken()
         stopDigitalHumanAudioLevelMetering()
         markEchoReplyDelivered()
         lastVoiceCloneProviderLogId = providerLogId
@@ -4409,6 +4434,10 @@ final class EchoViewController: UIViewController {
                   self.isCurrentDigitalHumanLifecycleToken(
                     lifecycleToken,
                     reason: "voiceClonePCMDriveFailureResume"
+                  ),
+                  self.isCurrentEchoRuntimeSessionCallback(
+                    runtimeSessionCallback,
+                    reason: "voiceClonePCMDriveFailureResume"
                   ) else { return }
             if self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(
                 reason: "voiceClonePCMDriveFailed",
@@ -4430,9 +4459,19 @@ final class EchoViewController: UIViewController {
             return
         }
 
+        let requestID = makeTencentDigitalHumanRequestID()
+        let turnID = ensureCurrentEchoTurnID()
+        let runtimeInteractionCallback = beginEchoRuntimeInteraction(
+            requestID: requestID,
+            turnID: turnID,
+            source: source
+        )
+        guard runtimeInteractionCallback != nil || !requiresEchoRuntimeInteractionLease else {
+            degradeTencentDigitalHumanRoute(reason: "runtimeInteractionLeaseUnavailable")
+            return
+        }
+
         do {
-            let requestID = makeTencentDigitalHumanRequestID()
-            let turnID = ensureCurrentEchoTurnID()
             let pausedDialogEngine = pauseDialogEngineForTencentProviderSpeechIfNeeded()
             prepareAudioSessionForTencentProviderPlayback(preserveRecordingCategory: pausedDialogEngine)
             try digitalHumanRuntime.sendTextChunk(normalizedText, requestID: requestID, sequence: 1, isFinal: true)
@@ -4442,7 +4481,11 @@ final class EchoViewController: UIViewController {
                 turnID: turnID,
                 keepsPendingReply: routeEchoAudioThroughDigitalHuman
             )
-            scheduleTencentDigitalHumanTextOverTimeout(requestID: requestID, source: source)
+            scheduleTencentDigitalHumanTextOverTimeout(
+                requestID: requestID,
+                source: source,
+                runtimeInteractionCallback: runtimeInteractionCallback
+            )
             PrivacySafeDiagnostics.log(
                 subsystem: "TencentDigitalHuman",
                 event: "textReplySent",
@@ -4454,6 +4497,9 @@ final class EchoViewController: UIViewController {
                 ]
             )
         } catch {
+            if runtimeInteractionCallback != nil {
+                echoRuntimeSessionCoordinator.finishInteraction()
+            }
             resumeDialogEngineAfterTencentProviderSpeechIfNeeded(reason: "sendTextFailed")
             PrivacySafeDiagnostics.log(
                 subsystem: "TencentDigitalHuman",
@@ -4470,18 +4516,52 @@ final class EchoViewController: UIViewController {
         digitalHumanConversation.ensureTurnID(makeID: makeTencentDigitalHumanRequestID)
     }
 
+    private var requiresEchoRuntimeInteractionLease: Bool {
+        digitalHumanRuntime is TencentDigitalHumanCloudRuntime
+    }
+
+    private func beginEchoRuntimeInteraction(
+        requestID: String,
+        turnID: String,
+        source: String
+    ) -> EchoRuntimeCallbackToken? {
+        let callback = echoRuntimeSessionCoordinator.beginInteraction(
+            conversationID: turnID,
+            requestID: requestID
+        )
+        guard callback == nil,
+              requiresEchoRuntimeInteractionLease else {
+            return callback
+        }
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "runtimeInteractionLeaseUnavailable",
+            states: ["source": source],
+            correlations: [
+                "request": requestID,
+                "turn": turnID,
+            ]
+        )
+        return nil
+    }
+
     private func makeTencentDigitalHumanRequestID() -> String {
         UUID().uuidString.replacingOccurrences(of: "-", with: "")
     }
 
-    private func scheduleTencentDigitalHumanTextOverTimeout(requestID: String, source: String) {
+    private func scheduleTencentDigitalHumanTextOverTimeout(
+        requestID: String,
+        source: String,
+        runtimeInteractionCallback: EchoRuntimeCallbackToken?
+    ) {
         cancelTencentDigitalHumanTextOverTimeout()
         let turnID = ensureCurrentEchoTurnID()
         let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "textOverTimeout:\(source)")
         let workItem = DispatchWorkItem { [weak self] in
             self?.handleTencentDigitalHumanTextOverTimeout(
                 requestID: requestID,
-                lifecycleToken: lifecycleToken
+                lifecycleToken: lifecycleToken,
+                runtimeInteractionCallback: runtimeInteractionCallback
             )
         }
         digitalHumanProviderTextOverTimeoutWorkItem = workItem
@@ -4508,10 +4588,15 @@ final class EchoViewController: UIViewController {
 
     private func handleTencentDigitalHumanTextOverTimeout(
         requestID: String,
-        lifecycleToken: DigitalHumanLifecycleToken
+        lifecycleToken: DigitalHumanLifecycleToken,
+        runtimeInteractionCallback: EchoRuntimeCallbackToken?
     ) {
         guard isCurrentDigitalHumanLifecycleToken(
                 lifecycleToken,
+                reason: "textOverTimeout"
+              ),
+              isCurrentEchoRuntimeSessionCallback(
+                runtimeInteractionCallback,
                 reason: "textOverTimeout"
               ),
               digitalHumanConversation.activeRequestID == requestID else {
@@ -4531,6 +4616,10 @@ final class EchoViewController: UIViewController {
         cancelTencentDigitalHumanTextOverTimeout()
         let turnID = digitalHumanConversation.currentTurnID ?? "unknown"
         digitalHumanConversation.clearProviderRequest()
+        if runtimeInteractionCallback != nil {
+            echoRuntimeSessionCoordinator.finishInteraction()
+        }
+        let runtimeSessionCallback = echoRuntimeSessionCoordinator.currentSessionCallbackToken()
         stopDigitalHumanAudioLevelMetering()
         digitalHumanRuntime?.interrupt()
         markEchoReplyDelivered()
@@ -4547,6 +4636,10 @@ final class EchoViewController: UIViewController {
             guard let self,
                   self.isCurrentDigitalHumanLifecycleToken(
                     lifecycleToken,
+                    reason: "textOverTimeoutResume"
+                  ),
+                  self.isCurrentEchoRuntimeSessionCallback(
+                    runtimeSessionCallback,
                     reason: "textOverTimeoutResume"
                   ) else { return }
             if self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(
@@ -4568,6 +4661,7 @@ final class EchoViewController: UIViewController {
         let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "interruptPlayback:\(reason)")
         cancelDigitalHumanReplyPrewarm()
         cancelTencentDigitalHumanTextOverTimeout()
+        echoRuntimeSessionCoordinator.finishInteraction()
         digitalHumanConversation.clearProviderRequestAndResumeState()
         if let cloudRuntime = digitalHumanRuntime as? TencentDigitalHumanCloudRuntime {
             cloudRuntime.interruptPlaybackIfNeeded(reason: reason)
@@ -4970,6 +5064,8 @@ final class EchoViewController: UIViewController {
         let resumeDelay = tencentDigitalHumanDialogResumeDelay(for: completion.replyText)
         let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "providerTextOver")
         cancelTencentDigitalHumanTextOverTimeout()
+        echoRuntimeSessionCoordinator.finishInteraction()
+        let runtimeSessionCallback = echoRuntimeSessionCoordinator.currentSessionCallbackToken()
         stopDigitalHumanAudioLevelMetering()
         markEchoReplyDelivered()
         if shouldTraceTrueDeviceBackendPCMDrive,
@@ -4993,6 +5089,10 @@ final class EchoViewController: UIViewController {
             guard let self,
                   self.isCurrentDigitalHumanLifecycleToken(
                     lifecycleToken,
+                    reason: "providerTextOverResume"
+                  ),
+                  self.isCurrentEchoRuntimeSessionCallback(
+                    runtimeSessionCallback,
                     reason: "providerTextOverResume"
                   ) else { return }
             if self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(
@@ -5278,6 +5378,31 @@ final class EchoViewController: UIViewController {
 
         let requestID = makeTencentDigitalHumanRequestID()
         let turnID = ensureCurrentEchoTurnID()
+        let runtimeInteractionCallback = beginEchoRuntimeInteraction(
+            requestID: requestID,
+            turnID: turnID,
+            source: source
+        )
+        guard runtimeInteractionCallback != nil || !requiresEchoRuntimeInteractionLease else {
+            if source == "trueDeviceBackendPCMDriveSmoke" {
+                trueDeviceBackendPCMDriveTrace.markFailure(
+                    reason: "runtimeInteractionLeaseUnavailable",
+                    detail: "A real Tencent runtime had no active RuntimeLease interaction token"
+                )
+                emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "runtimeInteractionLeaseUnavailable")
+            }
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "pcmDriveSkipped",
+                states: [
+                    "reason": "runtimeInteractionLeaseUnavailable",
+                    "source": source,
+                ],
+                correlations: ["request": requestID]
+            )
+            degradeTencentDigitalHumanRoute(reason: "runtimeInteractionLeaseUnavailable")
+            return
+        }
         let pausedDialogEngine = pauseDialogEngineForTencentProviderSpeechIfNeeded()
         prepareAudioSessionForTencentProviderPlayback(preserveRecordingCategory: pausedDialogEngine)
         if source == "trueDeviceBackendPCMDriveSmoke" {
@@ -5294,13 +5419,18 @@ final class EchoViewController: UIViewController {
             turnID: turnID,
             keepsPendingReply: routeEchoAudioThroughDigitalHuman
         )
-        scheduleTencentDigitalHumanTextOverTimeout(requestID: requestID, source: source)
+        scheduleTencentDigitalHumanTextOverTimeout(
+            requestID: requestID,
+            source: source,
+            runtimeInteractionCallback: runtimeInteractionCallback
+        )
         startPCMDriveSignalToDigitalHumanRuntime(
             signal: signal,
             requestID: requestID,
             contextKey: currentDigitalHumanRuntimeContextKey(),
             source: source,
-            lifecycleToken: lifecycleToken
+            lifecycleToken: lifecycleToken,
+            runtimeInteractionCallback: runtimeInteractionCallback
         )
 
         if shouldRunTencentDigitalHumanPCMDriveStopProbe {
@@ -5308,6 +5438,10 @@ final class EchoViewController: UIViewController {
                 guard let self,
                       self.isCurrentDigitalHumanLifecycleToken(
                         lifecycleToken,
+                        reason: "pcmDriveStopProbe"
+                      ),
+                      self.isCurrentEchoRuntimeSessionCallback(
+                        runtimeInteractionCallback,
                         reason: "pcmDriveStopProbe"
                       ),
                       self.shouldRunTencentDigitalHumanPCMDriveSmoke
@@ -5346,10 +5480,15 @@ final class EchoViewController: UIViewController {
         requestID: String,
         contextKey: String,
         source: String,
-        lifecycleToken: DigitalHumanLifecycleToken
+        lifecycleToken: DigitalHumanLifecycleToken,
+        runtimeInteractionCallback: EchoRuntimeCallbackToken?
     ) {
         guard isCurrentDigitalHumanLifecycleToken(
             lifecycleToken,
+            reason: "pcmDriveStart:\(source)"
+        ),
+        isCurrentEchoRuntimeSessionCallback(
+            runtimeInteractionCallback,
             reason: "pcmDriveStart:\(source)"
         ) else {
             return
@@ -5360,7 +5499,8 @@ final class EchoViewController: UIViewController {
             requestID: requestID,
             contextKey: contextKey,
             source: source,
-            lifecycleToken: lifecycleToken
+            lifecycleToken: lifecycleToken,
+            runtimeInteractionCallback: runtimeInteractionCallback
         )
         PrivacySafeDiagnostics.log(
             subsystem: "TencentDigitalHuman",
@@ -5385,7 +5525,8 @@ final class EchoViewController: UIViewController {
         requestID: String,
         contextKey: String,
         source: String,
-        lifecycleToken: DigitalHumanLifecycleToken
+        lifecycleToken: DigitalHumanLifecycleToken,
+        runtimeInteractionCallback: EchoRuntimeCallbackToken?
     ) {
         let chunks = signal.chunks()
         for (index, chunk) in chunks.enumerated() {
@@ -5396,6 +5537,10 @@ final class EchoViewController: UIViewController {
                 guard let self,
                       self.isCurrentDigitalHumanLifecycleToken(
                         lifecycleToken,
+                        reason: "pcmChunk:\(source):\(sequence)"
+                      ),
+                      self.isCurrentEchoRuntimeSessionCallback(
+                        runtimeInteractionCallback,
                         reason: "pcmChunk:\(source):\(sequence)"
                       ),
                       self.digitalHumanConversation.activeRequestID == requestID,
@@ -5420,6 +5565,9 @@ final class EchoViewController: UIViewController {
                     )
                 } catch {
                     self.digitalHumanConversation.clearProviderRequest()
+                    if runtimeInteractionCallback != nil {
+                        self.echoRuntimeSessionCoordinator.finishInteraction()
+                    }
                     self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(
                         reason: "sendPCMChunkFailed",
                         lifecycleToken: lifecycleToken
@@ -5453,6 +5601,10 @@ final class EchoViewController: UIViewController {
                     lifecycleToken,
                     reason: "pcmFinal:\(source)"
                   ),
+                  self.isCurrentEchoRuntimeSessionCallback(
+                    runtimeInteractionCallback,
+                    reason: "pcmFinal:\(source)"
+                  ),
                   self.digitalHumanConversation.activeRequestID == requestID,
                   self.currentDigitalHumanRuntimeContextKey() == contextKey,
                   let digitalHumanRuntime = self.digitalHumanRuntime else {
@@ -5473,6 +5625,9 @@ final class EchoViewController: UIViewController {
                 )
             } catch {
                 self.digitalHumanConversation.clearProviderRequest()
+                if runtimeInteractionCallback != nil {
+                    self.echoRuntimeSessionCoordinator.finishInteraction()
+                }
                 self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(
                     reason: "sendPCMFinalFailed",
                     lifecycleToken: lifecycleToken

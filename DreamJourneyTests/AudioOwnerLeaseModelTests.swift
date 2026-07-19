@@ -483,6 +483,47 @@ final class EchoRuntimeSessionCoordinatorTests: XCTestCase {
         )
     }
 
+    func testNewInteractionRejectsPriorRequestCallbacks() {
+        let coordinator = EchoRuntimeSessionCoordinator()
+        let sessionRequest = coordinator.beginSessionRequest(
+            accountLease: makeAccountLease(subjectId: "owner-1", generation: 7),
+            lifecycleToken: DigitalHumanLifecycleToken(
+                generation: 11,
+                interactionGeneration: 3,
+                contextKey: "viewer|owner-1|self"
+            ),
+            contextKey: "viewer|owner-1|self",
+            requestID: "session-request"
+        )
+        XCTAssertEqual(
+            coordinator.activateSession(
+                sessionRequest,
+                sessionID: "active-session",
+                providerAssetID: "asset-self",
+                expiresAt: nil
+            ),
+            .accepted
+        )
+        let first = try! XCTUnwrap(
+            coordinator.beginInteraction(
+                conversationID: "conversation-1",
+                requestID: "reply-request-1"
+            )
+        )
+        let replacement = try! XCTUnwrap(
+            coordinator.beginInteraction(
+                conversationID: "conversation-1",
+                requestID: "reply-request-2"
+            )
+        )
+
+        XCTAssertEqual(
+            coordinator.validate(first),
+            .rejected(.interactionGenerationMismatch)
+        )
+        XCTAssertEqual(coordinator.validate(replacement), .accepted)
+    }
+
     private func makeAccountLease(subjectId: String, generation: UInt64) -> AccountLease {
         AccountLease(
             subjectId: subjectId,

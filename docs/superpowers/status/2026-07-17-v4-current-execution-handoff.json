@@ -34,12 +34,13 @@
       "WI-S1-03-05-CONTEXT_BUILD_IDENTITY_GATE_G0_COMPLETE",
       "WI-S1-03-06-RUNTIME_LEASE_MODEL_G0_COMPLETE",
       "WI-S1-03-06-SESSION_CREATE_CALLBACK_FENCE_G0_COMPLETE",
-      "WI-S1-03-06-HEARTBEAT_AND_PROVIDER_STATE_CALLBACK_FENCE_G0_COMPLETE"
+      "WI-S1-03-06-HEARTBEAT_AND_PROVIDER_STATE_CALLBACK_FENCE_G0_COMPLETE",
+      "WI-S1-03-06-INTERACTION_CALLBACK_FENCE_G0_COMPLETE"
     ],
-    "currentSubSlice": "WI-S1-03-06-HEARTBEAT_AND_PROVIDER_STATE_CALLBACK_FENCE_G0_COMPLETE",
+    "currentSubSlice": "WI-S1-03-06-INTERACTION_CALLBACK_FENCE_G0_COMPLETE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "ECHO_RUNTIME_LEASE_SESSION_HEARTBEAT_AND_PROVIDER_STATE_CALLBACK_FENCE_STATIC_MODEL_SMOKE_AND_BUILD_FOR_TESTING_VERIFIED",
+      "G0": "ECHO_RUNTIME_LEASE_SESSION_HEARTBEAT_PROVIDER_STATE_AND_CONTROLLER_INTERACTION_CALLBACK_FENCE_STATIC_MODEL_SMOKE_AND_BUILD_FOR_TESTING_VERIFIED",
       "G1": "SIMULATOR_RUNTIME_OPEN_SCHEME_HAS_NO_RUNNABLE_DESTINATION",
       "G3": "TENCENT_PROVIDER_SESSION_QUOTA_CLEANUP_AND_REAL_RUNTIME_SCOPE_OPEN",
       "G4": "REAL_DEVICE_RUNTIME_LIFECYCLE_SCOPE_OPEN"
@@ -47,11 +48,11 @@
     "id": "WI-S1-03-06",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-06 has completed its second G0 runtime-session slice. EchoRuntimeSessionCoordinator owns an explicit local RuntimeLease containing account, role context, request/session identity, lifecycle/interaction generations, provider asset, expiry and state. EchoViewController begins each /digital-human/sessions request through that lease and rejects stale capability/session callbacks before binding a runtime. The active session token now also fences heartbeat scheduling/response and Provider runtime state changes, including stale session-ID callbacks. Backend session release stays a separate cleanup-only callback that cannot mutate the active UIKit runtime. Provider text/PCM interaction token consumption, background grace/fallback model coverage and real Tencent lifecycle gates remain open. No public UI, audio-owner policy, backend contract or Provider credential changed. G1/G3/G4 remain open."
+    "summary": "WI-S1-03-06 has completed its third G0 runtime-session slice. EchoRuntimeSessionCoordinator owns an explicit local RuntimeLease containing account, role context, request/session identity, lifecycle/interaction generations, provider asset, expiry and state. EchoViewController begins each /digital-human/sessions request through that lease and rejects stale capability/session callbacks before binding a runtime. The active session token fences heartbeat scheduling/response and Provider runtime state changes, including stale session-ID callbacks. A request-scoped interaction token now also fences voice-clone synthesis responses, text timeout, PCM start/chunk/final, stop probes, failure recovery and delayed microphone resume; a replacement request rejects older callbacks while stop preserves the active session. Tencent Provider state callbacks still carry no request ID and therefore remain session-scoped only. Backend session release stays a separate cleanup-only callback that cannot mutate the active UIKit runtime. Background grace/fallback model coverage, release receipt audit and real Tencent lifecycle gates remain open. No public UI, audio-owner policy, backend contract or Provider credential changed. G1/G3/G4 remain open."
   },
   "baselines": {
     "backend": "main@32c38f2",
-    "ios": "feature/prd-stitch-ui-adaptation@3eabd3d",
+    "ios": "feature/prd-stitch-ui-adaptation@db1e4ed",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -398,5 +399,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T08:50:00+0800"
+  "updatedAt": "2026-07-19T08:57:49+0800"
 }
