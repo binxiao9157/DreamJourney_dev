@@ -10,7 +10,8 @@ Confirmed Memory / Projection 的无正文引用证据，并把摘要映射到�
 evidence 结构。
 
 状态：`INTERNAL_READY / G0_TYPED_CONTRACT_VERIFIED /
-G1_QA_TEXT_EVIDENCE_SIMULATOR_VERIFIED / IOS_LOCAL_COMMITTED / G2_G3_OPEN`。
+G1_QA_TEXT_EVIDENCE_SIMULATOR_VERIFIED /
+G2_SCOPED_DEPLOYED_POSTGRES_VERIFIED / IOS_LOCAL_COMMITTED / G3_OPEN`。
 
 本轮没有修改公开 `/context/build`、公开 Echo UI、Archive/KBLite writer、数字人或
 音色链路。生产用户无法通过此合同读取个人记忆正文。
@@ -77,15 +78,29 @@ tmp/visual-qa/prd-stitch-ui/echo-qa-evidence-bundle-export-smoke/20260719-233143
 
 后端本轮没有代码变化；服务器上的既有 QA contract 不需要重新部署。
 
+### G2 服务器隔离验证
+
+- 服务器运行版本为 Backend `main@162afb0`；API、Postgres、Redis 均处于 running，
+  `/ready` 返回 `ready`。
+- 在 API 容器执行 `scripts/run-backend-owner-truth-postgres-smoke.sh` 通过。该脚本为
+  Postgres 创建并删除独立临时库，未向业务库写入测试 Source、Candidate、Memory 或
+  Answer；结果包含 `schemaHead=0023`，并确认 Context Shadow typed citation、
+  value-free、fail-closed、Answer Citation 幂等/不可变等断言全部通过。
+- 服务器运行时 `OWNER_TRUTH_CANDIDATE_REVIEW_QA_ENABLED=false`、Projection worker
+  仍默认关闭。匿名外网请求在路由认证中间件即被 `401` 拒绝，因此没有为了验收而打开
+  QA-only 路由或创建生产测试用户。
+
 ## 剩余 Gate
 
 - `G1`：已完成 QA-only 文本 readout、导出和模拟器交互验证；公开 UI 保持不变。
-- `G2`：Context V4 的性能、容量、线上 shadow 观察与 citation resolve 压测尚未执行。
+- `G2`：已完成部署容器内的隔离 Postgres 合同 smoke；真实 Owner QA cohort 的线上
+  观察、性能/容量阈值和 citation resolve 压测仍未执行，不能因此宣称公开 Context
+  切流完成。
 - `G3`：模型回答质量与 Retrieval ranking 仍未验收。
 - `G4`：不适用于本轮内部 QA 合同；未来公开/隐私评审另行处理。
 
 ## 下一步
 
-继续同一 Work Item 的 G2：在已部署的 QA-only Context Shadow 合同上完成受控线上
-shadow 观察、性能/容量和 citation resolve 证据，仍不改变公开 Echo 或把 legacy/private
-JSON 当作 Authority。
+继续同一 Work Item 的 G3：先补不依赖公开切流的 fixture-based Retrieval/ranking
+质量基线与失败分母；真实 Owner QA cohort 的线上观察、容量压测仍作为后续受控外部
+Gate，且不得把 legacy/private JSON 当作 Authority。

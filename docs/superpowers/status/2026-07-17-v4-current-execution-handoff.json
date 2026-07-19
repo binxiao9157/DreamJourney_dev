@@ -7,21 +7,22 @@
       "WI-S1-01-06-G0-KBLITE-COMPATIBILITY-READ-ENVELOPE",
       "WI-S1-01-06-G2-KBLITE-COMPATIBILITY-READ-ENVELOPE-DEPLOYMENT",
       "WI-S1-01-07-G0-OWNER-QA-CONTEXT-TYPED-CITATION-CONTRACT",
-      "WI-S1-01-07-G1-OWNER-QA-CONTEXT-TEXT-EVIDENCE"
+      "WI-S1-01-07-G1-OWNER-QA-CONTEXT-TEXT-EVIDENCE",
+      "WI-S1-01-07-G2-OWNER-QA-CONTEXT-DEPLOYED-SHADOW-OBSERVATION"
     ],
-    "currentSubSlice": "WI-S1-01-07-G2-OWNER-QA-CONTEXT-DEPLOYED-SHADOW-OBSERVATION",
+    "currentSubSlice": "WI-S1-01-07-G3-CONTEXT-RETRIEVAL-QUALITY-BASELINE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "SCOPED_TYPED_CONTRACT_VERIFIED",
       "G1": "QA_TEXT_EVIDENCE_SIMULATOR_VERIFIED",
-      "G2": "MISSING",
+      "G2": "SCOPED_DEPLOYED_POSTGRES_CONTRACT_VERIFIED",
       "G3": "MISSING",
       "G4": "NOT_APPLICABLE_TO_CURRENT_INTERNAL_QA"
     },
     "id": "WI-S1-01-07",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-01-07 G0 typed Context/Citation contract and G1 QA-only text evidence are verified. The exported readout contains only authority/policy/count summaries and hashed MemoryVersion references; public /context/build, Echo, KBLite and runtime authority remain unchanged. Continue G2 deployed shadow observation without public UI exposure."
+    "summary": "WI-S1-01-07 G0 typed Context/Citation contract, G1 QA-only text evidence and a scoped G2 deployed Postgres smoke are verified. The server remains default-off for Owner Truth QA routes; public /context/build, Echo, KBLite and runtime authority remain unchanged. Continue G3 fixture-based retrieval/ranking quality baseline without public UI exposure."
   },
   "baselines": {
     "backend": "main@162afb0",
