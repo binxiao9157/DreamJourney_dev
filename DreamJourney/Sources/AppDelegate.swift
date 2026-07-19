@@ -1162,21 +1162,7 @@ private extension AppDelegate {
     }
 
     func selectProfileTabForCareEscalationSmoke() -> Bool {
-        guard let tabBarController = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow })?
-            .rootViewController as? WarmTabBarController,
-              let viewControllers = tabBarController.viewControllers,
-              viewControllers.indices.contains(2) else {
-            return false
-        }
-
-        if let profileNavigationController = viewControllers[2] as? UINavigationController {
-            profileNavigationController.popToRootViewController(animated: false)
-        }
-        tabBarController.selectedIndex = 2
-        return true
+        QAProfileScenarioRunner.selectRootProfileTab()
     }
 
     func uiqaArgumentValue(prefix: String) -> String? {
@@ -3649,19 +3635,11 @@ private extension AppDelegate {
         var result = payload
         result["completed"] = completed
         result["profileTabSelected"] = profileTabSelected
-
-        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
-              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            print("[UI_QA] ProfileCareEscalationBoundarySmoke failed reason=resultEncoding")
-            return
-        }
-
-        let resultURL = documentsURL.appendingPathComponent("profile-care-escalation-boundary-smoke-result.json")
-        do {
-            try data.write(to: resultURL, options: [.atomic])
-        } catch {
-            print("[UI_QA] ProfileCareEscalationBoundarySmoke failed reason=resultWrite error=\(error.localizedDescription)")
-        }
+        QAProfileScenarioRunner.writeResult(
+            result,
+            fileName: "profile-care-escalation-boundary-smoke-result.json",
+            smokeName: "ProfileCareEscalationBoundarySmoke"
+        )
     }
 
     func writeProfileCareStateSmokeResult(

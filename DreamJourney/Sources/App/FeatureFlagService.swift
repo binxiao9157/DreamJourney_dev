@@ -395,6 +395,45 @@ enum QAEchoScenarioRunner {
         ])
     }
 }
+
+/// Shared Profile-tab routing and result persistence for UIQA-only scenarios.
+/// It intentionally contains no care, family, or backend business rules; each
+/// smoke keeps those assertions at its call site while AppDelegate stays a
+/// launch bridge.
+enum QAProfileScenarioRunner {
+    static func selectRootProfileTab() -> Bool {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController,
+              let viewControllers = tabBarController.viewControllers,
+              viewControllers.indices.contains(2) else {
+            return false
+        }
+
+        if let profileNavigationController = viewControllers[2] as? UINavigationController {
+            profileNavigationController.popToRootViewController(animated: false)
+        }
+        tabBarController.selectedIndex = 2
+        return true
+    }
+
+    static func writeResult(
+        _ result: [String: Any],
+        fileName: String,
+        smokeName: String
+    ) {
+        do {
+            let resultURL = try QAScenarioResultWriter.write(result, fileName: fileName)
+            print("[UI_QA] \(smokeName) result=\(resultURL.path)")
+        } catch QAScenarioResultWriter.WriteError.resultEncoding {
+            print("[UI_QA] \(smokeName) failed reason=resultEncoding")
+        } catch {
+            print("[UI_QA] \(smokeName) failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+}
 #endif
 
 enum DJFeature: String, CaseIterable {
