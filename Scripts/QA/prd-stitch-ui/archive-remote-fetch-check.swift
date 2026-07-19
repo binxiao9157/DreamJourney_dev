@@ -43,7 +43,8 @@ assertContains(repository, "save(mergedItems)", "repository should persist merge
 
 assertContains(archiveView, "FeatureFlagService.shared.isEnabled(.archiveRemoteFetch)", "archive remote fetch must be feature-gated")
 assertContains(archiveView, "repository.refreshFromBackend", "archive view should trigger gated refresh")
-assertContains(appDelegate, "DJEnableArchiveRemoteFetch", "UIQA should expose an explicit launch flag for backend fetch verification")
-assertContains(appDelegate, "FeatureFlagService.shared.set(.archiveRemoteFetch, enabled: true)", "UIQA backend fetch flag should enable the hidden feature inside the app")
+assertContains(flags, "DJEnableArchiveRemoteFetch", "QA feature registry should expose an explicit launch flag for backend fetch verification")
+assertContains(appDelegate, "configuration.shouldEnableArchiveRemoteFetch", "UIQA backend fetch flag should use centralized launch configuration")
+assertContains(appDelegate, "FeatureFlagService.shared.enableForCurrentLaunch(.archiveRemoteFetch)", "UIQA backend fetch flag should enable the hidden feature only for the current launch")
 
 print("Archive remote fetch checks passed")

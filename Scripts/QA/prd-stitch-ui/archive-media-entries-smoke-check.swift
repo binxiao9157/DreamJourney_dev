@@ -17,12 +17,14 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 }
 
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let script = read("Scripts/QA/prd-stitch-ui/run-archive-media-entries-smoke.sh")
 let readiness = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaReleaseReadiness.swift")
 let option = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveCreationOption.swift")
 let status = read("docs/superpowers/status/2026-06-18-archive-media-release-readiness.md")
 
-assertContains(appDelegate, "DJRunArchiveMediaEntriesSmoke", "archive media entries smoke launch argument")
+assertContains(featureFlags, "DJRunArchiveMediaEntriesSmoke", "QA scenario registry should retain archive media entries smoke launch argument")
+assertContains(appDelegate, "case .archiveMediaEntriesSmoke", "AppDelegate should dispatch archive media entries smoke through the scenario registry")
 assertContains(appDelegate, "runArchiveMediaEntriesSmoke()", "archive media entries smoke runner")
 assertContains(appDelegate, "writeArchiveMediaEntriesSmokeResult", "archive media entries smoke should write pollable JSON")
 assertContains(appDelegate, "archive-media-entries-smoke-result.json", "archive media entries smoke result file")

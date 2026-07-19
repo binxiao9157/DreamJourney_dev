@@ -17,6 +17,7 @@ func require(_ condition: @autoclosure () -> Bool, _ message: String) {
 let client = try read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let echo = try read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let appDelegate = try read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = try read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let runtime = try read("DreamJourney/Sources/Services/DigitalHuman/DigitalHumanRuntime.swift")
 let runtimeFactory = try read("DreamJourney/Sources/Services/DigitalHuman/DigitalHumanRuntimeFactory.swift")
 let releaseRegression = try read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
@@ -55,7 +56,8 @@ require(echo.contains("DigitalHumanRuntimeFactory.makeRuntime"), "Echo QA path m
 require(echo.contains("createDigitalHumanSession("), "Echo QA path must request backend session contract")
 require(echo.contains("AudioOnlyDigitalHumanRuntime"), "Echo QA path must verify audio-only fallback")
 
-require(appDelegate.contains("DJRunDigitalHumanRuntimeStubSmoke"), "AppDelegate launch arg is missing")
+require(featureFlags.contains("DJRunDigitalHumanRuntimeStubSmoke"), "QA scenario registry launch arg is missing")
+require(appDelegate.contains("case .digitalHumanRuntimeStubSmoke"), "AppDelegate scenario dispatch is missing")
 require(appDelegate.contains("runDigitalHumanRuntimeStubSmoke"), "AppDelegate runner is missing")
 require(appDelegate.contains("writeDigitalHumanRuntimeStubSmokeResult"), "AppDelegate result writer is missing")
 require(appDelegate.contains("digital-human-runtime-stub-smoke-result.json"), "QA result file name is missing")

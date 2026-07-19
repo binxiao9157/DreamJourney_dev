@@ -16,7 +16,10 @@ swiftc -D DEBUG \
 DJ_EXPECT_QA_CONFIGURATION=1 "$BUILD_DIR/qa-launch-configuration-debug-smoke" \
   DJQAExact \
   'DJQAPrefix= value ' \
-  'DJQAEmpty=   '
+  'DJQAEmpty=   ' \
+  DJRunEchoTraceExportSmoke \
+  DJRunDigitalHumanLivePanelSmoke \
+  DJRunProfileCareStateSmoke
 
 swiftc \
   DreamJourney/Sources/App/FeatureFlagService.swift \
@@ -24,7 +27,9 @@ swiftc \
   -o "$BUILD_DIR/qa-launch-configuration-release-smoke"
 DJ_EXPECT_QA_CONFIGURATION=0 "$BUILD_DIR/qa-launch-configuration-release-smoke" \
   DJQAExact \
-  'DJQAPrefix=value'
+  'DJQAPrefix=value' \
+  DJRunDigitalHumanLivePanelSmoke \
+  DJRunProfileCareStateSmoke
 
 git diff --check -- \
   DreamJourney/Sources/App/FeatureFlagService.swift \

@@ -19,6 +19,7 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 let readiness = read("DreamJourney/Sources/Modules/Profile/ProfileFamilyPersonaReleaseReadiness.swift")
 let profile = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let script = read("Scripts/QA/prd-stitch-ui/run-profile-family-persona-release-smoke.sh")
 let status = read("docs/superpowers/status/2026-06-18-profile-family-persona-switcher.md")
 let project = read("DreamJourney.xcodeproj/project.pbxproj")
@@ -36,7 +37,8 @@ assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.isFamilyManagement
 assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPersonaSwitcher", "profile route gate should use family/persona contract")
 assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.unavailableTitle", "profile unavailable alert should use contract copy")
 
-assertContains(appDelegate, "DJRunProfileFamilyPersonaReleaseSmoke", "family/persona release smoke launch argument")
+assertContains(featureFlags, "DJRunProfileFamilyPersonaReleaseSmoke", "QA scenario registry should retain the family/persona release smoke launch argument")
+assertContains(appDelegate, "case .profileFamilyPersonaReleaseSmoke", "AppDelegate should dispatch family/persona release smoke through the scenario registry")
 assertContains(appDelegate, "runProfileFamilyPersonaReleaseSmoke()", "family/persona release smoke runner")
 assertContains(appDelegate, "writeProfileFamilyPersonaReleaseSmokeResult", "family/persona smoke should write pollable JSON")
 assertContains(appDelegate, "profile-family-persona-release-smoke-result.json", "family/persona smoke result file")

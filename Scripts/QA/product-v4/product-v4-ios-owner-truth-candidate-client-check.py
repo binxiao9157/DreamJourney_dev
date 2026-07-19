@@ -12,6 +12,7 @@ CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 TESTS = ROOT / "DreamJourneyTests/OwnerTruthContractsTests.swift"
 ARCHIVE = ROOT / "DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift"
 APP_DELEGATE = ROOT / "DreamJourney/Sources/AppDelegate.swift"
+FEATURE_FLAGS = ROOT / "DreamJourney/Sources/App/FeatureFlagService.swift"
 
 
 def require(condition: bool, message: str) -> None:
@@ -42,6 +43,7 @@ def main() -> None:
     tests = TESTS.read_text(encoding="utf-8")
     archive = ARCHIVE.read_text(encoding="utf-8")
     app_delegate = APP_DELEGATE.read_text(encoding="utf-8")
+    feature_flags = FEATURE_FLAGS.read_text(encoding="utf-8")
 
     for required in (
         "enum OwnerTruthCandidateReviewAction",
@@ -170,8 +172,12 @@ def main() -> None:
         "Candidate Inbox route must enforce the QA gate at the tap boundary",
     )
     require(
-        'configuration.contains("DJRunOwnerTruthCandidateInboxSmoke")' in app_delegate,
-        "Candidate Inbox UIQA smoke launch route must use QALaunchConfiguration",
+        '"DJRunOwnerTruthCandidateInboxSmoke"' in feature_flags,
+        "Candidate Inbox UIQA smoke launch route must stay in the QA scenario registry",
+    )
+    require(
+        "case .ownerTruthCandidateInboxSmoke" in app_delegate,
+        "Candidate Inbox UIQA smoke must route through the typed scenario registry",
     )
     require(
         "OwnerTruthCandidateInboxUIQASmoke.makeViewController(accountLease: accountLease)" in app_delegate,

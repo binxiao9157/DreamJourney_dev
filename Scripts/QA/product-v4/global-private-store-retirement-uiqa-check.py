@@ -6,6 +6,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_DELEGATE = ROOT / "DreamJourney/Sources/AppDelegate.swift"
+FEATURE_FLAGS = ROOT / "DreamJourney/Sources/App/FeatureFlagService.swift"
 SMOKE_SOURCE = ROOT / "DreamJourney/Sources/Services/ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift"
 PROJECT = ROOT / "DreamJourney.xcodeproj/project.pbxproj"
 RUNNER = ROOT / "Scripts/QA/product-v4/run-global-private-store-retirement-uiqa-smoke.sh"
@@ -23,13 +24,18 @@ def read(path: Path) -> str:
 
 
 app_delegate = read(APP_DELEGATE)
+feature_flags = read(FEATURE_FLAGS)
 smoke_source = read(SMOKE_SOURCE)
 project = read(PROJECT)
 runner = read(RUNNER)
 
 require(
-    'configuration.contains("DJRunGlobalPrivateStoreRetirementSmoke")' in app_delegate,
-    "AppDelegate must route the dedicated WI-S0-01-06 UIQA launch argument through QALaunchConfiguration",
+    '"DJRunGlobalPrivateStoreRetirementSmoke"' in feature_flags,
+    "QA scenario registry must retain the dedicated WI-S0-01-06 UIQA launch argument",
+)
+require(
+    "case .globalPrivateStoreRetirementSmoke" in app_delegate,
+    "AppDelegate must route WI-S0-01-06 through the typed QA scenario registry",
 )
 require(
     "runGlobalPrivateStoreRetirementSmoke()" in app_delegate,

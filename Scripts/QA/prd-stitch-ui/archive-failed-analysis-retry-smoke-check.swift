@@ -30,6 +30,7 @@ func assertNotContains(_ haystack: String, _ needle: String, _ message: String) 
 }
 
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let detail = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releasePackage = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
@@ -41,8 +42,18 @@ assertFileExists(
 
 let smokeScript = read("Scripts/QA/prd-stitch-ui/run-archive-failed-analysis-retry-smoke.sh")
 
-for phrase in [
+assertContains(
+    featureFlags,
     "DJRunArchiveFailedAnalysisRetrySmoke",
+    "QA scenario registry should retain the failed analysis retry launch argument"
+)
+assertContains(
+    appDelegate,
+    "case .archiveFailedAnalysisRetrySmoke",
+    "AppDelegate should dispatch failed analysis retry through the scenario registry"
+)
+
+for phrase in [
     "seedFailedArchiveAnalysisRetryContext",
     "runArchiveFailedAnalysisRetrySmoke",
     "writeArchiveFailedAnalysisRetrySmokeResult",

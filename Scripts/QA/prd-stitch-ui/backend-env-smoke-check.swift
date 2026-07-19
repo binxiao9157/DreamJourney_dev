@@ -60,7 +60,9 @@ assertContains(script, "report.md", "script should write a human-readable report
 assertContains(script, "simctl uninstall", "script should isolate simulator app container")
 
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
-assertContains(appDelegate, "DJRunBackendEnvSmoke", "app should expose an app-side backend smoke launch argument")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
+assertContains(featureFlags, "DJRunBackendEnvSmoke", "QA scenario registry should expose an app-side backend smoke launch argument")
+assertContains(appDelegate, "case .backendEnvironmentSmoke", "AppDelegate should dispatch backend environment smoke through the scenario registry")
 assertContains(appDelegate, "runBackendEnvSmoke()", "app should run backend archive/profile smoke from the UIQA harness")
 assertContains(appDelegate, "writeBackendEnvSmokeResult", "app should write a pollable backend smoke result")
 assertContains(appDelegate, "backend-env-smoke-result.json", "app should use a stable backend smoke result filename")

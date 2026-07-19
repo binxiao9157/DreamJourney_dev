@@ -36,6 +36,171 @@ struct QALaunchConfiguration {
                 return trimmed.isEmpty ? nil : trimmed
             }
     }
+
+    var startupScenario: QALaunchScenario? {
+        QALaunchScenario.resolve(in: self)
+    }
+
+    var shouldEnableArchiveRemoteFetch: Bool {
+        contains(QALaunchFeature.archiveRemoteFetch.rawValue)
+    }
+
+    var shouldEnableDigitalHumanLivePanel: Bool {
+        QALaunchFeature.digitalHumanLivePanelArguments.contains { argument in
+            contains(argument.rawValue)
+        } || startupScenario?.requiresDigitalHumanLivePanel == true
+    }
+
+    var shouldSeedProfileCareFamilyMember: Bool {
+        contains(prefix: QALaunchFeature.profileCareScenarioPrefix)
+    }
+}
+
+/// Non-scenario QA arguments. These may enable an isolated test capability,
+/// but do not select one of the AppDelegate smoke flows.
+enum QALaunchFeature: String, CaseIterable {
+    case archiveRemoteFetch = "DJEnableArchiveRemoteFetch"
+    case showDigitalHumanLivePanel = "DJShowDigitalHumanLivePanel"
+    case tencentDigitalHumanTextDriveSmoke = "DJRunTencentDigitalHumanTextDriveSmoke"
+    case tencentDigitalHumanPCMDriveSmoke = "DJRunTencentDigitalHumanPCMDriveSmoke"
+    case tencentDigitalHumanBackendPCMDriveSmoke = "DJRunTencentDigitalHumanBackendPCMDriveSmoke"
+
+    static let profileCareScenarioPrefix = "DJRunProfileCare"
+
+    static let digitalHumanLivePanelArguments: [QALaunchFeature] = [
+        .showDigitalHumanLivePanel,
+        .tencentDigitalHumanTextDriveSmoke,
+        .tencentDigitalHumanPCMDriveSmoke,
+        .tencentDigitalHumanBackendPCMDriveSmoke,
+    ]
+}
+
+/// The only startup UIQA scenario registry. `startupOrder` preserves the
+/// legacy AppDelegate if/else priority: when more than one argument is present,
+/// the earliest registered scenario is the sole scenario that runs.
+enum QALaunchScenario: String, CaseIterable {
+    case digitalHumanLivePanelSmoke = "DJRunDigitalHumanLivePanelSmoke"
+    case echoDigitalHumanLifecycleSmoke = "DJRunEchoDigitalHumanLifecycleSmoke"
+    case digitalHumanRuntimeStubSmoke = "DJRunDigitalHumanRuntimeStubSmoke"
+    case voiceCloneProfileSelectionSmoke = "DJRunVoiceCloneProfileSelectionSmoke"
+    case voiceCloneSynthesisRuntimeSmoke = "DJRunVoiceCloneSynthesisRuntimeSmoke"
+    case tencentBackendPCMDriveMockSmoke = "DJRunTencentBackendPCMDriveMockSmoke"
+    case echoTraceExportSmoke = "DJRunEchoTraceExportSmoke"
+    case echoRuntimeDiagnosticsExportSmoke = "DJRunEchoRuntimeDiagnosticsExportSmoke"
+    case echoTraceEvidencePackageExportSmoke = "DJRunEchoTraceEvidencePackageExportSmoke"
+    case echoTraceEvidencePackagePanelExportSmoke = "DJRunEchoTraceEvidencePackagePanelExportSmoke"
+    case echoQAEvidenceBundleExportSmoke = "DJRunEchoQAEvidenceBundleExportSmoke"
+    case profileCareBackendFailureRetrySmoke = "DJRunProfileCareBackendFailureRetrySmoke"
+    case profileCareBackendStateSmoke = "DJRunProfileCareBackendStateSmoke"
+    case profileCareStateSmoke = "DJRunProfileCareStateSmoke"
+    case profileCareEscalationBoundarySmoke = "DJRunProfileCareEscalationBoundarySmoke"
+    case profileFamilyPersonaReleaseSmoke = "DJRunProfileFamilyPersonaReleaseSmoke"
+    case globalPrivateStoreRetirementSmoke = "DJRunGlobalPrivateStoreRetirementSmoke"
+    case archiveMediaEntriesSmoke = "DJRunArchiveMediaEntriesSmoke"
+    case archiveAudioLifecycleSmoke = "DJRunArchiveAudioLifecycleSmoke"
+    case archiveHiddenShellSmoke = "DJRunArchiveHiddenShellSmoke"
+    case ownerTruthCandidateInboxSmoke = "DJRunOwnerTruthCandidateInboxSmoke"
+    case archiveFailedAnalysisRetrySmoke = "DJRunArchiveFailedAnalysisRetrySmoke"
+    case echoDelayedReplyNotificationSmoke = "DJRunEchoDelayedReplyNotificationSmoke"
+    case backendEnvironmentSmoke = "DJRunBackendEnvSmoke"
+    case archiveToEchoSmoke = "DJRunArchiveToEchoSmoke"
+    case archiveMediaEchoContextSmoke = "DJRunArchiveMediaEchoContextSmoke"
+    case timeLetterDispatchReminderSmoke = "DJRunTimeLetterDispatchReminderSmoke"
+    case echoListeningStatePreview = "DJShowEchoListeningStatePreview"
+    case echoSpeakingStatePreview = "DJShowEchoSpeakingStatePreview"
+    case voiceSDKReadinessPreview = "DJShowVoiceSDKReadinessPreview"
+    case voiceCloneStatusFeedbackPreview = "DJShowVoiceCloneStatusFeedbackPreview"
+    case echoVoiceStatePreview = "DJShowEchoVoiceStatePreview"
+    case seedEchoArchiveContext = "DJSeedEchoArchiveContext"
+    case seedArchiveAnalysisInsights = "DJSeedArchiveAnalysisInsights"
+    case seedPendingArchiveAnalysis = "DJSeedPendingArchiveAnalysis"
+
+    static let startupOrder: [QALaunchScenario] = [
+        .digitalHumanLivePanelSmoke,
+        .echoDigitalHumanLifecycleSmoke,
+        .digitalHumanRuntimeStubSmoke,
+        .voiceCloneProfileSelectionSmoke,
+        .voiceCloneSynthesisRuntimeSmoke,
+        .tencentBackendPCMDriveMockSmoke,
+        .echoTraceExportSmoke,
+        .echoRuntimeDiagnosticsExportSmoke,
+        .echoTraceEvidencePackageExportSmoke,
+        .echoTraceEvidencePackagePanelExportSmoke,
+        .echoQAEvidenceBundleExportSmoke,
+        .profileCareBackendFailureRetrySmoke,
+        .profileCareBackendStateSmoke,
+        .profileCareStateSmoke,
+        .profileCareEscalationBoundarySmoke,
+        .profileFamilyPersonaReleaseSmoke,
+        .globalPrivateStoreRetirementSmoke,
+        .archiveMediaEntriesSmoke,
+        .archiveAudioLifecycleSmoke,
+        .archiveHiddenShellSmoke,
+        .ownerTruthCandidateInboxSmoke,
+        .archiveFailedAnalysisRetrySmoke,
+        .echoDelayedReplyNotificationSmoke,
+        .backendEnvironmentSmoke,
+        .archiveToEchoSmoke,
+        .archiveMediaEchoContextSmoke,
+        .timeLetterDispatchReminderSmoke,
+        .echoListeningStatePreview,
+        .echoSpeakingStatePreview,
+        .voiceSDKReadinessPreview,
+        .voiceCloneStatusFeedbackPreview,
+        .echoVoiceStatePreview,
+        .seedEchoArchiveContext,
+        .seedArchiveAnalysisInsights,
+        .seedPendingArchiveAnalysis,
+    ]
+
+    static func resolve(in configuration: QALaunchConfiguration) -> QALaunchScenario? {
+        startupOrder.first { configuration.contains($0.rawValue) }
+    }
+
+    var sessionPreparation: QALaunchScenarioSessionPreparation {
+        switch self {
+        case .globalPrivateStoreRetirementSmoke,
+             .backendEnvironmentSmoke,
+             .archiveToEchoSmoke,
+             .seedEchoArchiveContext,
+             .seedArchiveAnalysisInsights,
+             .seedPendingArchiveAnalysis:
+            return .none
+        case .voiceCloneProfileSelectionSmoke,
+             .voiceCloneSynthesisRuntimeSmoke,
+             .profileCareBackendFailureRetrySmoke,
+             .profileCareBackendStateSmoke,
+             .profileCareStateSmoke,
+             .profileFamilyPersonaReleaseSmoke,
+             .archiveMediaEntriesSmoke,
+             .archiveAudioLifecycleSmoke,
+             .archiveHiddenShellSmoke,
+             .ownerTruthCandidateInboxSmoke,
+             .archiveFailedAnalysisRetrySmoke,
+             .timeLetterDispatchReminderSmoke:
+            return .loginAndResetFeatureFlags
+        default:
+            return .login
+        }
+    }
+
+    var requiresDigitalHumanLivePanel: Bool {
+        switch self {
+        case .digitalHumanLivePanelSmoke,
+             .echoDigitalHumanLifecycleSmoke,
+             .digitalHumanRuntimeStubSmoke,
+             .tencentBackendPCMDriveMockSmoke:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+enum QALaunchScenarioSessionPreparation {
+    case none
+    case login
+    case loginAndResetFeatureFlags
 }
 
 enum DJFeature: String, CaseIterable {

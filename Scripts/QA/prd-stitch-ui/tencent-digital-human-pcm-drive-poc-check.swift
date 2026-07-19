@@ -18,6 +18,7 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let sdkBridge = read("DreamJourney/Sources/Services/DigitalHuman/TencentDigitalHumanSDKBridge.swift")
 let cloudRuntime = read("DreamJourney/Sources/Services/DigitalHuman/TencentDigitalHumanCloudRuntime.swift")
 let realBridge = read("DreamJourney/Sources/Services/DigitalHuman/TencentVirtualmanSDKBridge.swift")
@@ -26,7 +27,8 @@ let releasePackage = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swi
 let trueDevicePCMDriveSmoke = read("Scripts/QA/prd-stitch-ui/run-true-device-tencent-backend-pcm-drive-smoke.sh")
 
 assertContains(echo, "DJRunTencentDigitalHumanPCMDriveSmoke", "Echo should expose a QA-only Tencent PCM drive launch argument")
-assertContains(appDelegate, "DJRunTencentDigitalHumanPCMDriveSmoke", "AppDelegate should enable the digital human panel for PCM smoke")
+assertContains(featureFlags, "DJRunTencentDigitalHumanPCMDriveSmoke", "QA feature registry should retain the true-device PCM smoke launch argument")
+assertContains(appDelegate, "configuration.shouldEnableDigitalHumanLivePanel", "AppDelegate should enable the digital human panel through the centralized QA capability")
 assertContains(echo, "shouldRunTencentDigitalHumanPCMDriveSmoke", "Echo should keep PCM smoke separate from text-drive smoke")
 assertContains(echo, "runTencentDigitalHumanPCMDriveSmokeIfNeeded", "Echo should trigger PCM smoke only after Tencent runtime is ready")
 assertContains(echo, "makeTencentDigitalHumanPCMDriveTestSignal", "Echo should generate a deterministic local PCM test signal")

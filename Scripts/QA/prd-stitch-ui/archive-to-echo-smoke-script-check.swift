@@ -17,12 +17,14 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 }
 
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let detail = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let script = read("Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh")
 let installableHelper = read("Scripts/QA/prd-stitch-ui/run-installable-simulator-uiqa.sh")
 
-assertContains(appDelegate, "DJRunArchiveToEchoSmoke", "archive-to-echo smoke launch argument")
+assertContains(featureFlags, "DJRunArchiveToEchoSmoke", "QA scenario registry should retain the archive-to-echo smoke launch argument")
+assertContains(appDelegate, "case .archiveToEchoSmoke", "AppDelegate should dispatch archive-to-echo smoke through the scenario registry")
 assertContains(appDelegate, "runArchiveToEchoSmoke()", "archive-to-echo smoke runner")
 assertContains(appDelegate, "[UI_QA] ArchiveToEchoSmoke completed", "archive-to-echo smoke completion log")
 assertContains(appDelegate, "DialogPromptDebugRecorder.lastSnapshot", "archive-to-echo smoke verifies prompt recorder")

@@ -28,6 +28,7 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 }
 
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let recorder = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveAudioRecorderViewController.swift")
 let detail = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift")
 let factory = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift")
@@ -38,7 +39,8 @@ let scriptPath = "Scripts/QA/prd-stitch-ui/run-archive-audio-lifecycle-smoke.sh"
 assertFileExists(scriptPath, "archive audio lifecycle smoke script")
 let script = read(scriptPath)
 
-assertContains(appDelegate, "DJRunArchiveAudioLifecycleSmoke", "App delegate should expose archive audio lifecycle smoke launch argument")
+assertContains(featureFlags, "DJRunArchiveAudioLifecycleSmoke", "QA scenario registry should expose archive audio lifecycle smoke launch argument")
+assertContains(appDelegate, "case .archiveAudioLifecycleSmoke", "App delegate should dispatch archive audio lifecycle smoke through the scenario registry")
 assertContains(appDelegate, "runArchiveAudioLifecycleSmoke", "App delegate should run archive audio lifecycle smoke")
 assertContains(appDelegate, "writeArchiveAudioLifecycleSmokeResult", "Archive audio lifecycle smoke should write pollable JSON")
 assertContains(appDelegate, "archive-audio-lifecycle-smoke-result.json", "Archive audio lifecycle smoke result file should be stable")

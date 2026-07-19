@@ -17,10 +17,12 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 }
 
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let detail = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift")
 let repository = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift")
 
-assertContains(appDelegate, "DJSeedPendingArchiveAnalysis", "QA pending analysis launch argument")
+assertContains(featureFlags, "DJSeedPendingArchiveAnalysis", "QA scenario registry should retain the pending analysis seed argument")
+assertContains(appDelegate, "case .seedPendingArchiveAnalysis", "AppDelegate should dispatch the pending analysis seed through the scenario registry")
 assertContains(appDelegate, "seedPendingArchiveAnalysisContext()", "QA pending analysis seed helper")
 assertContains(appDelegate, "MemoryArchiveItemFactory.makePhotoItem(localPath: \"/tmp/uiqa-pending-photo.jpg\")", "QA pending analysis seed uses a pending photo")
 assertContains(appDelegate, "MemoryArchiveRepository.shared.add(item, syncToBackend: false)", "QA pending analysis seed skips backend sync")

@@ -57,8 +57,10 @@ assertContains(flags, "private static let nonPersistentFeatures: Set<DJFeature>"
 assertContains(appDelegate, "#if !(UI_QA_SIMULATOR && targetEnvironment(simulator))\nimport SpeechEngineToB", "speech import should be excluded from UIQA simulator")
 assertContains(appDelegate, "#if !(UI_QA_SIMULATOR && targetEnvironment(simulator))\nimport SpeechEngineToB\nimport AMapFoundationKit\nimport MAMapKit\n#endif", "device-only imports should stay gated together")
 assertContains(appDelegate, "#if UI_QA_SIMULATOR && targetEnvironment(simulator)\n        configureUIQASmokeHarnessIfNeeded()\n        #endif", "UIQA harness should be simulator gated")
-assertContains(appDelegate, "arguments.contains(\"DJEnableArchiveRemoteFetch\")", "archive backend fetch QA launch arg")
-assertContains(appDelegate, "arguments.contains(\"DJRunArchiveToEchoSmoke\")", "archive-to-echo smoke launch arg")
+assertContains(flags, "DJEnableArchiveRemoteFetch", "archive backend fetch QA launch arg should live in centralized feature registry")
+assertContains(flags, "DJRunArchiveToEchoSmoke", "archive-to-echo smoke launch arg should live in centralized scenario registry")
+assertContains(appDelegate, "configuration.shouldEnableArchiveRemoteFetch", "AppDelegate should consume the centralized archive remote fetch policy")
+assertContains(appDelegate, "case .archiveToEchoSmoke", "AppDelegate should dispatch archive-to-echo through the scenario registry")
 assertContains(appDelegate, "MemoryArchiveRepository.shared.add(item, syncToBackend: false)", "UIQA seeds should not sync to backend")
 assertContains(appDelegate, "archive-to-echo-smoke-result.json", "smoke result file should stay stable")
 

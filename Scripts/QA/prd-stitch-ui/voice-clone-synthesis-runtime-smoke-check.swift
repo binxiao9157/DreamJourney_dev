@@ -37,12 +37,23 @@ let runner = "Scripts/QA/prd-stitch-ui/run-voice-clone-synthesis-runtime-smoke.s
 assertFileExists(runner, "voice clone synthesis runtime smoke runner")
 
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let runnerContent = read(runner)
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 
-for required in [
+assertContains(
+    featureFlags,
     "DJRunVoiceCloneSynthesisRuntimeSmoke",
+    "QA scenario registry should retain the voice clone synthesis launch argument"
+)
+assertContains(
+    appDelegate,
+    "case .voiceCloneSynthesisRuntimeSmoke",
+    "AppDelegate should dispatch voice clone synthesis through the scenario registry"
+)
+
+for required in [
     "DJVoiceCloneProbeProfileId=",
     "DJVoiceCloneProbeUserId=",
     "runVoiceCloneSynthesisRuntimeSmoke()",

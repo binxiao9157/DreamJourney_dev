@@ -25,11 +25,13 @@ func assertOrder(_ haystack: String, _ first: String, _ second: String, _ messag
 }
 
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let dialogManager = read("DreamJourney/Sources/Services/DialogEngineManager.swift")
 let microphone = read("DreamJourney/Sources/Services/MicrophonePermissionManager.swift")
 
 assertContains(appDelegate, "#if UI_QA_SIMULATOR && targetEnvironment(simulator)", "QA launch harness compile gate")
-assertContains(appDelegate, "DJSeedEchoArchiveContext", "QA launch argument")
+assertContains(featureFlags, "DJSeedEchoArchiveContext", "QA scenario registry should retain the archive context seed argument")
+assertContains(appDelegate, "case .seedEchoArchiveContext", "AppDelegate should dispatch the archive context seed through the scenario registry")
 assertContains(appDelegate, "UserManager.shared.login(phone: \"13800009999\"", "QA launch harness logs in deterministic user")
 assertContains(appDelegate, "UserDefaults.standard.removeObject(forKey: \"dj.memoryArchive.items.user_9999\")", "QA launch harness resets deterministic archive state")
 assertContains(appDelegate, "MemoryArchiveItemFactory.makeTextItem(", "QA launch harness seeds archive text item")

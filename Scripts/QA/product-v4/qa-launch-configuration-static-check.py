@@ -30,6 +30,12 @@ def main() -> None:
         "func contains(_ argument: String) -> Bool",
         "func contains(prefix: String) -> Bool",
         "func value(forPrefix prefix: String) -> String?",
+        "var startupScenario: QALaunchScenario?",
+        "enum QALaunchFeature: String, CaseIterable",
+        "enum QALaunchScenario: String, CaseIterable",
+        "static let startupOrder: [QALaunchScenario]",
+        "static func resolve(in configuration: QALaunchConfiguration)",
+        "enum QALaunchScenarioSessionPreparation",
     ):
         require(anchor in feature_flags, f"QALaunchConfiguration missing boundary anchor: {anchor}")
 
@@ -50,8 +56,20 @@ def main() -> None:
         "AppDelegate QA harness must acquire the centralized configuration",
     )
     require(
-        "configuration.contains(prefix: \"DJRunProfileCare\")" in app_delegate,
-        "AppDelegate profile-care seed must preserve prefix matching through the centralized configuration",
+        "configuration.shouldSeedProfileCareFamilyMember" in app_delegate,
+        "AppDelegate profile-care seed must use the centralized scenario policy",
+    )
+    require(
+        "configuration.startupScenario" in app_delegate,
+        "AppDelegate UIQA harness must resolve one typed startup scenario",
+    )
+    require(
+        "switch scenario" in app_delegate,
+        "AppDelegate UIQA harness must dispatch through the typed scenario registry",
+    )
+    require(
+        "configuration.contains(" not in app_delegate,
+        "AppDelegate must not retain per-scenario raw launch-argument checks",
     )
     require(
         "QALaunchConfiguration.shared.value(forPrefix: prefix)" in app_delegate,
@@ -62,18 +80,22 @@ def main() -> None:
         "Echo keyed QA arguments must use centralized parsing",
     )
 
-    for argument in (
-        "DJRunDigitalHumanLivePanelSmoke",
-        "DJRunVoiceCloneSynthesisRuntimeSmoke",
-        "DJRunArchiveFailedAnalysisRetrySmoke",
-        "DJRunEchoDelayedReplyNotificationSmoke",
-        "DJRunOwnerTruthCandidateInboxSmoke",
-        "DJRunTimeLetterDispatchReminderSmoke",
-        "DJShowEchoVoiceStatePreview",
-    ):
+    for argument, scenario_case in {
+        "DJRunDigitalHumanLivePanelSmoke": "digitalHumanLivePanelSmoke",
+        "DJRunVoiceCloneSynthesisRuntimeSmoke": "voiceCloneSynthesisRuntimeSmoke",
+        "DJRunArchiveFailedAnalysisRetrySmoke": "archiveFailedAnalysisRetrySmoke",
+        "DJRunEchoDelayedReplyNotificationSmoke": "echoDelayedReplyNotificationSmoke",
+        "DJRunOwnerTruthCandidateInboxSmoke": "ownerTruthCandidateInboxSmoke",
+        "DJRunTimeLetterDispatchReminderSmoke": "timeLetterDispatchReminderSmoke",
+        "DJShowEchoVoiceStatePreview": "echoVoiceStatePreview",
+    }.items():
         require(
-            f'configuration.contains("{argument}")' in app_delegate,
-            f"AppDelegate must retain the existing UIQA scenario: {argument}",
+            f'"{argument}"' in feature_flags,
+            f"scenario registry must retain the existing UIQA argument: {argument}",
+        )
+        require(
+            f"case .{scenario_case}" in app_delegate,
+            f"AppDelegate must retain the existing UIQA scenario dispatch: {argument}",
         )
 
     for argument in (
