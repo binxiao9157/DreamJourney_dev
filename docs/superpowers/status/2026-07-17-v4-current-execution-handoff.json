@@ -2,53 +2,18 @@
   "activeWorkItem": {
     "authorityLock": "IOS_COMPOSITION",
     "backendPendingPaths": [],
-    "completedSubSlices": [
-      "WI-S1-01-01-OWNER_TRUTH_SCHEMA",
-      "WI-S1-01-02-CREATE_SOURCE_COMPATIBILITY_FACADE",
-      "WI-S1-02-01-EFFECT_KERNEL_OUTBOX",
-      "WI-S1-02-02-CREATE_SOURCE_ATOMIC_OUTBOX",
-      "WI-S1-02-03-WORKER_LEASE_FOUNDATION",
-      "WI-S1-02-03-SCHEDULER_SHADOW_FOUNDATION",
-      "WI-S1-02-04-SYNTHETIC_CONSUMER_KERNEL",
-      "WI-S1-02-04-SOURCE_TARGET_AUTHZ_RECHECK",
-      "WI-S1-02-04-TYPED_BLOCKED_SOURCE_COMPLETION",
-      "WI-S1-01-03-CANDIDATE_SCHEMA_AND_SYNTHETIC_EXTRACTION",
-      "WI-S1-01-04-CANDIDATE_REVIEW_AND_DECISION_RECEIPT",
-      "WI-S1-01-05-MEMORY_VERSION_ACTIVATION",
-      "WI-S1-01-06-PROJECTION_FOUNDATION_AND_KBLITE_COMPATIBILITY_SHADOW",
-      "WI-S1-01-07-TYPED_CONTEXT_ANSWER_CITATION_SHADOW",
-      "WI-S1-01-08-CORRECTION_REQUEST_AND_RESOLVER_SHADOW",
-      "WI-S1-01-09-LEGACY_INVENTORY_CLASSIFIER",
-      "WI-S1-01-09-SHADOW_PARITY_OBSERVER",
-      "WI-S1-03-02-APP_COMPOSITION_SEAM",
-      "WI-S1-03-03-APP_SCENE_EVENT_FORWARDING",
-      "WI-S1-03-03-LIFECYCLE_CONSUMER_INVENTORY",
-      "WI-S1-03-03-ECHO_LIFECYCLE_MIGRATION",
-      "WI-S1-03-03-AI_RECORDING_LIFECYCLE_MIGRATION",
-      "WI-S1-03-04-OWNER_TRUTH_CANDIDATE_CLIENT_G0_COMPLETE",
-      "WI-S1-03-04-OWNER_TRUTH_CANDIDATE_USE_CASE_G0_COMPLETE",
-      "WI-S1-03-04-ARCHIVE_CANDIDATE_INBOX_UIQA_G1_COMPLETE",
-      "WI-S1-03-05-TURN_INTENT_REDUCER_G0_COMPLETE",
-      "WI-S1-03-05-CONTEXT_BUILD_LEASE_G0_COMPLETE",
-      "WI-S1-03-05-CONTEXT_BUILD_TRANSPORT_G0_COMPLETE",
-      "WI-S1-03-05-CONTEXT_BUILD_IDENTITY_GATE_G0_COMPLETE",
-      "WI-S1-03-06-RUNTIME_LEASE_MODEL_G0_COMPLETE",
-      "WI-S1-03-06-SESSION_CREATE_CALLBACK_FENCE_G0_COMPLETE",
-      "WI-S1-03-06-HEARTBEAT_AND_PROVIDER_STATE_CALLBACK_FENCE_G0_COMPLETE",
-      "WI-S1-03-06-INTERACTION_CALLBACK_FENCE_G0_COMPLETE"
-    ],
-    "currentSubSlice": "WI-S1-03-06-INTERACTION_CALLBACK_FENCE_G0_COMPLETE",
+    "completedSubSlices": [],
+    "currentSubSlice": "WI-S1-03-07-AUDIO_OWNER_INVENTORY_AND_MODEL_G0",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "ECHO_RUNTIME_LEASE_SESSION_HEARTBEAT_PROVIDER_STATE_AND_CONTROLLER_INTERACTION_CALLBACK_FENCE_STATIC_MODEL_SMOKE_AND_BUILD_FOR_TESTING_VERIFIED",
-      "G1": "SIMULATOR_RUNTIME_OPEN_SCHEME_HAS_NO_RUNNABLE_DESTINATION",
-      "G3": "TENCENT_PROVIDER_SESSION_QUOTA_CLEANUP_AND_REAL_RUNTIME_SCOPE_OPEN",
-      "G4": "REAL_DEVICE_RUNTIME_LIFECYCLE_SCOPE_OPEN"
+      "G0": "PENDING_AUDIO_OWNER_INVENTORY_AND_EXCLUSIVE_LEASE_MODEL",
+      "G1": "NOT_STARTED",
+      "G4": "NOT_STARTED"
     },
-    "id": "WI-S1-03-06",
+    "id": "WI-S1-03-07",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-06 has completed its third G0 runtime-session slice. EchoRuntimeSessionCoordinator owns an explicit local RuntimeLease containing account, role context, request/session identity, lifecycle/interaction generations, provider asset, expiry and state. EchoViewController begins each /digital-human/sessions request through that lease and rejects stale capability/session callbacks before binding a runtime. The active session token fences heartbeat scheduling/response and Provider runtime state changes, including stale session-ID callbacks. A request-scoped interaction token now also fences voice-clone synthesis responses, text timeout, PCM start/chunk/final, stop probes, failure recovery and delayed microphone resume; a replacement request rejects older callbacks while stop preserves the active session. Tencent Provider state callbacks still carry no request ID and therefore remain session-scoped only. Backend session release stays a separate cleanup-only callback that cannot mutate the active UIKit runtime. Background grace/fallback model coverage, release receipt audit and real Tencent lifecycle gates remain open. No public UI, audio-owner policy, backend contract or Provider credential changed. G1/G3/G4 remain open."
+    "summary": "WI-S1-03-06 is internally ready at G0: RuntimeLease now fences role/session creation, heartbeat, Provider state, request-scoped synthesis/text/PCM callbacks, background grace release, quota/error and ordinary Echo fallback. Provider state callbacks remain session-scoped because the Tencent SDK does not supply a request ID; real Tencent lifecycle remains G3/G4. WI-S1-03-07 now begins the next bounded seam: inventory current AVAudioSession mutations and define an exclusive AudioOwnerLease model before moving any production audio route. No public UI, backend contract, provider credential or release exposure changes are included."
   },
   "baselines": {
     "backend": "main@32c38f2",
@@ -56,6 +21,12 @@
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-06-runtime-session-coordinator.md",
+      "id": "WI-S1-03-06",
+      "implementationStatus": "INTERNAL_READY / G0_LIFECYCLE_FENCE_VERIFIED / IOS_LOCAL_COMMITTED / G1_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
+    },
     {
       "evidence": "docs/superpowers/status/2026-07-18-wi-s0-01-01-private-state-inventory.md",
       "id": "WI-S0-01-01",
@@ -388,9 +359,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-03-07",
+    "id": "WI-S1-03-08",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After WI-S1-03-06 makes the RuntimeLease the sole session callback boundary, continue with process-level audio owner arbitration without widening the public release scope."
+    "summary": "After WI-S1-03-07 establishes the process-level audio owner boundary, continue with typed Voice/DH client ports and runtime adapters without widening the public release scope."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -399,5 +370,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T08:57:49+0800"
+  "updatedAt": "2026-07-19T09:01:04+0800"
 }

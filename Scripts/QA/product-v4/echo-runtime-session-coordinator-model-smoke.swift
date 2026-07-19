@@ -6,6 +6,7 @@ enum EchoRuntimeSessionCoordinatorModelSmoke {
         verifyLateRoleSwitchCannotActivateStaleSession()
         verifyStopPreservesSessionButInvalidatesInteraction()
         verifyReleaseRejectsOutstandingSessionCallback()
+        verifyBackgroundOrFallbackReleaseRejectsSessionAndInteractionCallbacks()
         verifySessionCallbackRejectsDifferentProviderSession()
         verifyNewInteractionRejectsPriorRequestCallbacks()
         print("Echo runtime session coordinator model smoke passed")
@@ -126,6 +127,47 @@ enum EchoRuntimeSessionCoordinatorModelSmoke {
         require(
             coordinator.validate(session) == .rejected(.noActiveLease),
             "page exit or runtime release must reject late provider callbacks"
+        )
+    }
+
+    private static func verifyBackgroundOrFallbackReleaseRejectsSessionAndInteractionCallbacks() {
+        let coordinator = EchoRuntimeSessionCoordinator()
+        let request = coordinator.beginSessionRequest(
+            accountLease: makeAccountLease(subjectId: "owner-1", generation: 7),
+            lifecycleToken: token(
+                generation: 11,
+                interactionGeneration: 3,
+                contextKey: "viewer|owner-1|self"
+            ),
+            contextKey: "viewer|owner-1|self",
+            requestID: "request-self"
+        )
+        require(
+            coordinator.activateSession(
+                request,
+                sessionID: "active-session",
+                providerAssetID: "self-asset",
+                expiresAt: nil
+            ) == .accepted,
+            "active session setup should succeed"
+        )
+        guard let session = coordinator.currentSessionCallbackToken(),
+              let interaction = coordinator.beginInteraction(
+                conversationID: "conversation-1",
+                requestID: "reply-1"
+              ) else {
+            fail("active session should issue session and interaction callback tokens")
+        }
+
+        coordinator.releaseRuntime()
+
+        require(
+            coordinator.validate(session) == .rejected(.noActiveLease),
+            "background or fallback runtime release must reject old session callbacks"
+        )
+        require(
+            coordinator.validate(interaction) == .rejected(.noActiveLease),
+            "background or fallback runtime release must reject old interaction callbacks"
         )
     }
 

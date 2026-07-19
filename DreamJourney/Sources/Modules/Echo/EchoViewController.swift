@@ -1378,6 +1378,21 @@ final class EchoViewController: UIViewController {
         }
         let contextKey = currentDigitalHumanRuntimeContextKey()
         let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "backgroundReleaseLease")
+        let runtimeSessionCallback = echoRuntimeSessionCoordinator.currentSessionCallbackToken()
+        guard runtimeSessionCallback != nil || !requiresEchoRuntimeInteractionLease else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "backgroundReleaseSkipped",
+                states: ["reason": "runtimeSessionLeaseUnavailable"],
+                correlations: ["context": contextKey]
+            )
+            releaseDigitalHumanRuntime(
+                reason: "appLifecycle:backgroundLeaseUnavailable",
+                resetsAudioOwnerToOrdinaryEcho: true,
+                removeProviderViewMessage: "数字人已暂停"
+            )
+            return
+        }
         let lease = digitalHumanLifecycle.beginBackgroundReleaseLease(contextKey: contextKey)
         let workItem = DispatchWorkItem { [weak self] in
             guard let self,
@@ -1392,6 +1407,10 @@ final class EchoViewController: UIViewController {
                   ),
                   self.isCurrentDigitalHumanSessionToken(
                     lifecycleToken,
+                    reason: "backgroundReleaseLeaseExpired"
+                  ),
+                  self.isCurrentEchoRuntimeSessionCallback(
+                    runtimeSessionCallback,
                     reason: "backgroundReleaseLeaseExpired"
                   ) else {
                 return

@@ -117,11 +117,34 @@ def main() -> None:
         "runtimeInteractionCallback" in pcm_drive,
         "PCM drive chunks must consume the runtime interaction callback",
     )
+    background_release = source_slice(
+        view_controller,
+        "    private func scheduleCloudDigitalHumanRuntimeReleaseForBackgroundIfNeeded()",
+        "    private var digitalHumanBackgroundReleaseGracePeriod",
+    )
+    require(
+        "let runtimeSessionCallback = echoRuntimeSessionCoordinator.currentSessionCallbackToken()" in background_release,
+        "background grace release must capture the active runtime session callback",
+    )
+    require(
+        "reason: \"backgroundReleaseLeaseExpired\"" in background_release,
+        "background grace release must validate the captured runtime session callback",
+    )
+    fallback = source_slice(
+        view_controller,
+        "    private func degradeTencentDigitalHumanRoute(reason: String)",
+        "    private func digitalHumanRouteFailureMessage",
+    )
+    require(
+        "releaseDigitalHumanRuntime(" in fallback,
+        "quota and provider fallback must release the active runtime lease",
+    )
 
     for test_name in (
         "func testLateRoleSwitchSessionCallbackIsRejectedBeforeActivation()",
         "func testStopInvalidatesInteractionButPreservesActiveSession()",
         "func testReleaseRejectsAllOutstandingSessionCallbacks()",
+        "func testBackgroundOrFallbackReleaseRejectsSessionAndInteractionCallbacks()",
         "func testSessionCallbackRejectsDifferentProviderSession()",
         "func testNewInteractionRejectsPriorRequestCallbacks()",
     ):

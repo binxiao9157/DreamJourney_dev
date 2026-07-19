@@ -7,8 +7,8 @@
 - Work Item：`WI-S1-03-06`
 - Authority lock：`IOS_COMPOSITION`
 - Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`
-- 当前结果：`IN_PROGRESS / THIRD_G0_INTERACTION_CALLBACK_FENCE_VERIFIED / G1_G3_G4_OPEN`
-- 本切片：`WI-S1-03-06-INTERACTION_CALLBACK_FENCE_G0_COMPLETE`
+- 当前结果：`INTERNAL_READY / G0_LIFECYCLE_FENCE_VERIFIED / G1_G3_G4_OPEN`
+- 本切片：`WI-S1-03-06-LIFECYCLE_FALLBACK_RELEASE_G0_COMPLETE`
 - 范围：为 Echo 数字人建立本地 RuntimeLease，围住 session 创建、heartbeat、Provider state 和请求级文本/PCM
   回包；不改变全屏 UI、音频 owner、腾讯 Provider 合同或公开发布范围。
 
@@ -36,6 +36,11 @@
   音频送给未受围栏保护的 runtime。UIQA stub 不依赖真实腾讯 session，因此允许其使用既有 mock 路径；
 - 腾讯 Provider 的 `onStateChange` 目前不携带 request ID，只能使用 session token 围栏。它不能被表述为已完成的
   request 级回调关联；请求级安全性由本地发起的 synthesis/text/PCM work 和 active request gate 提供。
+- 后台宽限期在创建 timer 时额外捕获 active RuntimeLease session callback；到期时只有账户、角色、lifecycle、
+  background lease 和 RuntimeLease session 都仍匹配才会释放。真实腾讯 runtime 若意外缺少 lease，则立即安全释放，
+  不保留无法验证的后台 session；
+- 配额满和 Provider route failure 已统一进入 `releaseDigitalHumanRuntime`，该路径撤销 RuntimeLease、取消延迟工作、
+  关闭 runtime 并回到普通 Echo。因此旧 session/interaction callback 不能在 fallback 后恢复旧角色或旧声音。
 - session release 回包保持为与 UIKit runtime 解耦的 backend cleanup：它只能维护对应 contract 的 deferred-cleanup
   队列与诊断，不能覆盖当前角色/当前 session 的页面状态。这条 cleanup 路径后续仍会单独补其回执审计。
 
@@ -59,7 +64,8 @@ git diff --check
   session callback fence 和 XCTest 覆盖声明；
 - `echo-runtime-session-coordinator-model-smoke.swift` 实际编译运行，覆盖：角色切换迟到回包、停止回合
   保留 session 但拒绝旧 interaction callback、页面释放后拒绝所有迟到 session callback、替换 session 的
-  heartbeat/state callback 因 session ID 不一致被拒绝，以及新 request 拒绝旧 request 的 interaction callback；
+  heartbeat/state callback 因 session ID 不一致被拒绝、新 request 拒绝旧 request 的 interaction callback，以及
+  background/fallback release 同时拒绝旧 session 与 interaction callback；
 - Debug、`generic/platform=iOS`、`CODE_SIGNING_ALLOWED=NO` 的 `build-for-testing` 成功，App 和
   `DreamJourneyTests` bundle 均已编译；
 - `git diff --check` 通过。
@@ -69,18 +75,19 @@ git diff --check
 
 ## 未完成边界
 
+- G0 覆盖已完成：角色快速切换、late session/callback、stop vs exit、background grace、quota/error 与 ordinary Echo
+  fallback 都有模型或静态路径证据；这只证明本地合同，不替代真实腾讯 session/音频行为验收；
 - heartbeat、Provider runtime state 和 Controller 发起的 interaction callback 已消费 RuntimeLease token，但其调度/
   恢复流程仍留在 `EchoViewController`，尚未把所有 lifecycle policy 移为 coordinator 的唯一实现；
 - session release 仍是独立 backend cleanup 回包，尚未纳入完整 receipt/audit 模型；
 - Provider `onStateChange` 没有 request ID；必须在腾讯 SDK 能力允许或增加 provider event envelope 后，才能把
   provider state 本身提升为 request 级精确关联，当前不能把它误报为已关闭；
-- background grace、配额满、普通 Echo fallback 的 RuntimeLease release/callback 拒绝仍缺独立 G0 模型覆盖；
 - G1 仍受当前 scheme 没有 runnable simulator destination 阻断；G3 的腾讯配额、session cleanup 和
   Provider runtime；G4 的真机渲染/生命周期都没有因本次 G0 而关闭；
 - 不涉及 `WI-S1-03-07` 的 AVAudioSession/AudioOwnerLease 仲裁，也不触及声音复刻质量。
 
 ## 下一步
 
-继续 `WI-S1-03-06`：补 background grace、quota failure、普通 Echo fallback 的 RuntimeLease release/callback 拒绝
-模型验证，并审计 session release receipt。只有该 coordinator 成为唯一 session creator 后，才能进入 `WI-S1-03-07`
-的音频 owner 仲裁。
+`WI-S1-03-06` 已达到内部 G0 完成定义。下一步进入 `WI-S1-03-07`，建立进程级 AudioOwnerLease 与
+AVAudioSession 仲裁；session release receipt/audit 和真实腾讯 lifecycle 继续分别保留为 G3/G4 证据，不阻塞
+下一项的本地合同开发。
