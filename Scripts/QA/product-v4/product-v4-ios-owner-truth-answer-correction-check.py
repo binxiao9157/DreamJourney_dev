@@ -64,6 +64,11 @@ def main() -> None:
         "struct OwnerTruthCorrectionRequestCommand",
         "struct OwnerTruthCorrectionRequestReceipt",
         "final class OwnerTruthCorrectionRequestUseCase",
+        "enum OwnerTruthCorrectionCandidateInboxHandoffIntent",
+        "enum OwnerTruthCorrectionCandidateInboxHandoffPhase",
+        "enum OwnerTruthCorrectionCandidateInboxHandoffNotice",
+        "struct OwnerTruthCorrectionCandidateInboxHandoffViewState",
+        "final class OwnerTruthCorrectionCandidateInboxHandoffUseCase",
         "protocol OwnerTruthCorrectionRequestClient",
         "owner-truth-correction-request-response-v1",
         "owner-truth-correction-request-v1",
@@ -88,6 +93,28 @@ def main() -> None:
             prohibited not in receipt_body,
             f"correction receipt must not retain unsupported or raw content: {prohibited}",
         )
+
+    handoff_state_body = type_body(
+        contracts,
+        "struct OwnerTruthCorrectionCandidateInboxHandoffViewState",
+    )
+    require(
+        "correctionText" not in handoff_state_body,
+        "correction-to-inbox handoff state must not retain correction text",
+    )
+    handoff_body = type_body(
+        contracts,
+        "final class OwnerTruthCorrectionCandidateInboxHandoffUseCase",
+    )
+    for required in (
+        "correctionQAGateEnabled(), candidateReviewQAGateEnabled()",
+        "candidateInboxUseCase.send(.refresh)",
+        "state.items.contains(where: { $0.id == candidateID })",
+        "awaitingCandidateID = nil",
+        "OwnerTruthCorrectionRequestUseCase",
+        "OwnerTruthCandidateReviewUseCase",
+    ):
+        require(required in handoff_body, f"correction-to-inbox handoff missing: {required}")
 
     request_body = function_body(client, "requestOwnerTruthCorrection")
     for required in (
@@ -124,6 +151,9 @@ def main() -> None:
         "func testCorrectionRequestReceiptRejectsMismatchedIdentityAndIntegrity()",
         "func testCorrectionRequestCommandRejectsInvalidInputAndUnknownCitation()",
         "func testCorrectionRequestUseCaseSubmitsPendingCandidateWithoutMutatingLegacyState()",
+        "func testCorrectionCandidateHandoffRefreshesExistingInboxAndLeavesReviewAuthorityWithInbox()",
+        "func testCorrectionCandidateHandoffFailsClosedWhenPendingCandidateIsAbsentFromInbox()",
+        "func testCorrectionCandidateHandoffRequiresBothQAGatesBeforeWritingOrReading()",
     ):
         require(test_name in tests, f"answer-correction contract test missing: {test_name}")
 

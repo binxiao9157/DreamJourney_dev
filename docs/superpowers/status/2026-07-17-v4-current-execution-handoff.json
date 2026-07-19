@@ -9,21 +9,22 @@
       "WI-S1-01-07-G0-OWNER-QA-CONTEXT-TYPED-CITATION-CONTRACT",
       "WI-S1-01-07-G1-OWNER-QA-CONTEXT-TEXT-EVIDENCE",
       "WI-S1-01-07-G2-OWNER-QA-CONTEXT-DEPLOYED-SHADOW-OBSERVATION",
-      "WI-S1-01-08-G0-CITATION-BOUND-CORRECTION-REQUEST-CLIENT"
+      "WI-S1-01-08-G0-CITATION-BOUND-CORRECTION-REQUEST-CLIENT",
+      "WI-S1-01-08-G1-QA-CANDIDATE-INBOX-HANDOFF"
     ],
-    "currentSubSlice": "WI-S1-01-08-G1-QA-ENTRYPOINT-AND-CANDIDATE-INBOX-INTEGRATION",
+    "currentSubSlice": "WI-S1-01-08-G2-DEPLOYED-CORRECTION-CANDIDATE-INBOX-SMOKE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "IOS_TYPED_CORRECTION_CLIENT_AND_BACKEND_REGRESSION_VERIFIED",
-      "G1": "NEXT_QA_ENTRYPOINT_AND_CANDIDATE_INBOX_INTEGRATION",
-      "G2": "BACKEND_ROUTE_PREEXISTING_DEPLOYED_NO_BACKEND_CHANGE_THIS_SLICE",
+      "G1": "IOS_QA_CANDIDATE_INBOX_HANDOFF_LOCAL_VERIFIED",
+      "G2": "NEXT_POSTGRES_DEPLOYED_CORRECTION_TO_CANDIDATE_INBOX_SMOKE",
       "G3": "NOT_APPLICABLE_TO_CORRECTION_REQUEST_CONTRACT",
       "G4": "PUBLIC_EXPOSURE_REMAINS_DISABLED_PENDING_PRODUCT_UX_APPROVAL"
     },
     "id": "WI-S1-01-08",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-01-08 G0 now has a citation-bound iOS correction-request client, value-free receipt parsing, independent QA-only write gate, AccountLease fencing and static/default-public exposure checks. The deployed backend route already creates a pending Candidate without directly changing Memory authority; local backend regression verifies stale/cross-vault/duplicate/resolve boundaries. No public Echo, Archive or KBLite entrypoint has changed. Next is the narrow QA entrypoint and Candidate Inbox integration; public correction UX remains disabled pending product approval."
+    "summary": "WI-S1-01-08 now has a citation-bound iOS correction-request client plus a default-off handoff into the existing Candidate Inbox QA path. The handoff retains only correctionRequestId/candidateId, requires both QA gates, refreshes the inbox, and fails closed unless the exact pending Candidate appears in the same Vault; review/activation remains solely in the existing Candidate review use case. The deployed backend route already creates a pending Candidate without directly changing Memory authority. No public Echo, Archive or KBLite entrypoint has changed. Next is a deployed Postgres correction-to-inbox smoke; public correction UX remains disabled pending product approval."
   },
   "baselines": {
     "backend": "main@162afb0",

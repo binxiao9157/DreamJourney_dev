@@ -1147,6 +1147,161 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertNil(useCase.viewState.latestReceipt)
     }
 
+    func testCorrectionCandidateHandoffRefreshesExistingInboxAndLeavesReviewAuthorityWithInbox() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let answerReceipt = try verifiedAnswerCitationReceipt(
+            for: lease,
+            query: "这条回答可以被纠正后进入审核。",
+            answer: "我会先把需要纠正的内容交给本人审核。",
+            commandID: "owner-truth-answer-citation-handoff"
+        )
+        let citationID = try XCTUnwrap(answerReceipt.citations.first?.citationID)
+        let expectedCommand = try OwnerTruthCorrectionRequestCommand(
+            commandID: "owner-truth-correction-handoff",
+            answerCitationReceipt: answerReceipt,
+            citationID: citationID,
+            correctionText: "这条记忆应保留为待审核候选。",
+            reasonCode: "ownerReportedCorrection"
+        )
+        let correctionClient = CorrectionRequestClientSpy()
+        let correctionReceipt = try OwnerTruthCorrectionRequestReceipt(
+            backendJSONObject: correctionRequestReceiptResponse(for: expectedCommand),
+            expectedCommand: expectedCommand
+        )
+        correctionClient.requestResult = .success(correctionReceipt)
+
+        let candidateClient = CandidateReviewClientSpy()
+        candidateClient.inboxResult = .success(try candidateInbox(
+            vaultID: lease.vaultId,
+            candidateID: correctionReceipt.candidateID
+        ))
+        candidateClient.reviewResult = .success(try decisionResult(
+            candidateID: correctionReceipt.candidateID,
+            decision: .accepted
+        ))
+        let handoff = OwnerTruthCorrectionCandidateInboxHandoffUseCase(
+            accountLease: lease,
+            answerCitationReceipt: answerReceipt,
+            correctionClient: correctionClient,
+            candidateReviewClient: candidateClient,
+            accountLeaseRuntime: runtime,
+            correctionQAGateEnabled: { true },
+            candidateReviewQAGateEnabled: { true },
+            correctionCommandIDFactory: { expectedCommand.commandID }
+        )
+
+        handoff.send(.submit(
+            citationID: citationID,
+            correctionText: expectedCommand.correctionText,
+            reasonCode: expectedCommand.reasonCode
+        ))
+
+        XCTAssertEqual(correctionClient.requestedCommands, [expectedCommand])
+        XCTAssertEqual(handoff.viewState.phase, .ready)
+        XCTAssertNil(handoff.viewState.notice)
+        XCTAssertEqual(handoff.viewState.correctionRequestID, correctionReceipt.correctionRequestID)
+        XCTAssertEqual(handoff.viewState.candidateID, correctionReceipt.candidateID)
+        XCTAssertEqual(handoff.candidateInboxUseCase.viewState.phase, .ready)
+        XCTAssertEqual(
+            handoff.candidateInboxUseCase.viewState.items.map(\.id),
+            [correctionReceipt.candidateID]
+        )
+
+        handoff.candidateInboxUseCase.send(.accept(candidateID: correctionReceipt.candidateID))
+
+        XCTAssertEqual(handoff.candidateInboxUseCase.viewState.phase, .empty)
+        XCTAssertEqual(
+            handoff.candidateInboxUseCase.viewState.latestReceipt?.candidateID,
+            correctionReceipt.candidateID
+        )
+        XCTAssertTrue(handoff.candidateInboxUseCase.viewState.latestReceipt?.createdMemoryVersion == true)
+        XCTAssertEqual(handoff.viewState.phase, .ready)
+    }
+
+    func testCorrectionCandidateHandoffFailsClosedWhenPendingCandidateIsAbsentFromInbox() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let answerReceipt = try verifiedAnswerCitationReceipt(
+            for: lease,
+            query: "纠正候选必须出现在同一 Vault 的审核收件箱。",
+            answer: "不可见的候选不得被假定为可审核。",
+            commandID: "owner-truth-answer-citation-handoff-missing"
+        )
+        let citationID = try XCTUnwrap(answerReceipt.citations.first?.citationID)
+        let expectedCommand = try OwnerTruthCorrectionRequestCommand(
+            commandID: "owner-truth-correction-handoff-missing",
+            answerCitationReceipt: answerReceipt,
+            citationID: citationID,
+            correctionText: "候选必须先在收件箱中可见。",
+            reasonCode: "ownerReportedCorrection"
+        )
+        let correctionClient = CorrectionRequestClientSpy()
+        let correctionReceipt = try OwnerTruthCorrectionRequestReceipt(
+            backendJSONObject: correctionRequestReceiptResponse(for: expectedCommand),
+            expectedCommand: expectedCommand
+        )
+        correctionClient.requestResult = .success(correctionReceipt)
+        let candidateClient = CandidateReviewClientSpy()
+        candidateClient.inboxResult = .success(try candidateInbox(
+            vaultID: lease.vaultId,
+            candidateID: recordID("00000000-0000-0000-0000-000000000353")
+        ))
+        let handoff = OwnerTruthCorrectionCandidateInboxHandoffUseCase(
+            accountLease: lease,
+            answerCitationReceipt: answerReceipt,
+            correctionClient: correctionClient,
+            candidateReviewClient: candidateClient,
+            accountLeaseRuntime: runtime,
+            correctionQAGateEnabled: { true },
+            candidateReviewQAGateEnabled: { true },
+            correctionCommandIDFactory: { expectedCommand.commandID }
+        )
+
+        handoff.send(.submit(
+            citationID: citationID,
+            correctionText: expectedCommand.correctionText,
+            reasonCode: expectedCommand.reasonCode
+        ))
+
+        XCTAssertEqual(handoff.viewState.phase, .failed)
+        XCTAssertEqual(handoff.viewState.notice, .candidateUnavailable)
+        XCTAssertEqual(handoff.viewState.correctionRequestID, correctionReceipt.correctionRequestID)
+        XCTAssertEqual(handoff.viewState.candidateID, correctionReceipt.candidateID)
+    }
+
+    func testCorrectionCandidateHandoffRequiresBothQAGatesBeforeWritingOrReading() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let answerReceipt = try verifiedAnswerCitationReceipt(
+            for: lease,
+            query: "关闭审核 QA 时不得请求纠正候选。",
+            answer: "写入与审核必须同时处于受控 QA 环境。",
+            commandID: "owner-truth-answer-citation-handoff-gate"
+        )
+        let correctionClient = CorrectionRequestClientSpy()
+        let candidateClient = CandidateReviewClientSpy()
+        let handoff = OwnerTruthCorrectionCandidateInboxHandoffUseCase(
+            accountLease: lease,
+            answerCitationReceipt: answerReceipt,
+            correctionClient: correctionClient,
+            candidateReviewClient: candidateClient,
+            accountLeaseRuntime: runtime,
+            correctionQAGateEnabled: { true },
+            candidateReviewQAGateEnabled: { false },
+            correctionCommandIDFactory: { "owner-truth-correction-handoff-gate" }
+        )
+
+        handoff.send(.submit(
+            citationID: try XCTUnwrap(answerReceipt.citations.first?.citationID),
+            correctionText: "关闭审核入口时不得创建候选。",
+            reasonCode: "ownerReportedCorrection"
+        ))
+
+        XCTAssertEqual(handoff.viewState.phase, .unavailable)
+        XCTAssertEqual(handoff.viewState.notice, .qaOnlyDisabled)
+        XCTAssertNil(handoff.viewState.correctionRequestID)
+        XCTAssertNil(handoff.viewState.candidateID)
+        XCTAssertTrue(correctionClient.requestedCommands.isEmpty)
+    }
+
     private func contextShadowBuildResponse(
         for lease: AccountLease,
         query: String

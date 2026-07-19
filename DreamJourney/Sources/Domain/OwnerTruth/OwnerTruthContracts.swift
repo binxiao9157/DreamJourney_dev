@@ -3403,6 +3403,216 @@ final class OwnerTruthCorrectionRequestUseCase {
     }
 }
 
+/// QA-only bridge from a citation-bound correction request to the existing
+/// Candidate Inbox. It retains only opaque request/candidate identifiers and
+/// deliberately delegates every terminal decision to `OwnerTruthCandidateReviewUseCase`.
+/// No correction text, answer text or Memory authority is retained here.
+enum OwnerTruthCorrectionCandidateInboxHandoffIntent: Equatable, Sendable {
+    case submit(citationID: OwnerTruthRecordID, correctionText: String, reasonCode: String)
+}
+
+enum OwnerTruthCorrectionCandidateInboxHandoffPhase: Equatable, Sendable {
+    case idle
+    case unavailable
+    case submitting(OwnerTruthRecordID)
+    case locatingCandidate(OwnerTruthRecordID)
+    case ready
+    case failed
+}
+
+enum OwnerTruthCorrectionCandidateInboxHandoffNotice: Equatable, Sendable {
+    case qaOnlyDisabled
+    case accountUnavailable
+    case correctionRequestFailed
+    case candidateUnavailable
+    case candidateInboxFailed
+}
+
+/// The handoff state is intentionally value-free. The existing QA Candidate
+/// Inbox owns any review preview and terminal decision state.
+struct OwnerTruthCorrectionCandidateInboxHandoffViewState: Equatable, Sendable {
+    let phase: OwnerTruthCorrectionCandidateInboxHandoffPhase
+    let notice: OwnerTruthCorrectionCandidateInboxHandoffNotice?
+    let correctionRequestID: OwnerTruthRecordID?
+    let candidateID: OwnerTruthRecordID?
+
+    static let idle = OwnerTruthCorrectionCandidateInboxHandoffViewState(
+        phase: .idle,
+        notice: nil,
+        correctionRequestID: nil,
+        candidateID: nil
+    )
+}
+
+/// Composes two existing QA-only use cases without adding a second review or
+/// activation path. A submitted correction must reappear in Candidate Inbox
+/// before this handoff is considered ready; normal Archive/KBLite writers are
+/// never called.
+final class OwnerTruthCorrectionCandidateInboxHandoffUseCase {
+    let candidateInboxUseCase: OwnerTruthCandidateReviewUseCase
+
+    private let correctionRequestUseCase: OwnerTruthCorrectionRequestUseCase
+    private let correctionQAGateEnabled: () -> Bool
+    private let candidateReviewQAGateEnabled: () -> Bool
+    private var awaitingCandidateID: OwnerTruthRecordID?
+
+    private(set) var viewState: OwnerTruthCorrectionCandidateInboxHandoffViewState = .idle {
+        didSet {
+            onViewStateChange?(viewState)
+        }
+    }
+
+    var onViewStateChange: ((OwnerTruthCorrectionCandidateInboxHandoffViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        answerCitationReceipt: OwnerTruthAnswerCitationReceipt,
+        correctionClient: OwnerTruthCorrectionRequestClient,
+        candidateReviewClient: OwnerTruthCandidateReviewClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        correctionQAGateEnabled: @escaping () -> Bool = { OwnerTruthCorrectionRequestQAGate.isEnabled },
+        candidateReviewQAGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled },
+        correctionCommandIDFactory: @escaping OwnerTruthCorrectionRequestUseCase.CommandIDFactory = {
+            "owner-truth-correction-\(UUID().uuidString.lowercased())"
+        }
+    ) {
+        self.correctionQAGateEnabled = correctionQAGateEnabled
+        self.candidateReviewQAGateEnabled = candidateReviewQAGateEnabled
+        candidateInboxUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: accountLease,
+            client: candidateReviewClient,
+            accountLeaseRuntime: accountLeaseRuntime,
+            qaGateEnabled: candidateReviewQAGateEnabled
+        )
+        correctionRequestUseCase = OwnerTruthCorrectionRequestUseCase(
+            accountLease: accountLease,
+            answerCitationReceipt: answerCitationReceipt,
+            client: correctionClient,
+            accountLeaseRuntime: accountLeaseRuntime,
+            qaGateEnabled: correctionQAGateEnabled,
+            commandIDFactory: correctionCommandIDFactory
+        )
+
+        correctionRequestUseCase.onViewStateChange = { [weak self] state in
+            self?.receiveCorrectionRequest(state)
+        }
+        candidateInboxUseCase.onViewStateChange = { [weak self] state in
+            self?.receiveCandidateInbox(state)
+        }
+    }
+
+    func send(_ intent: OwnerTruthCorrectionCandidateInboxHandoffIntent) {
+        guard correctionQAGateEnabled(), candidateReviewQAGateEnabled() else {
+            resetForUnavailable(.qaOnlyDisabled)
+            return
+        }
+
+        switch intent {
+        case .submit(let citationID, let correctionText, let reasonCode):
+            awaitingCandidateID = nil
+            viewState = OwnerTruthCorrectionCandidateInboxHandoffViewState(
+                phase: .submitting(citationID),
+                notice: nil,
+                correctionRequestID: nil,
+                candidateID: nil
+            )
+            correctionRequestUseCase.send(.submit(
+                citationID: citationID,
+                correctionText: correctionText,
+                reasonCode: reasonCode
+            ))
+        }
+    }
+
+    private func receiveCorrectionRequest(_ state: OwnerTruthCorrectionRequestViewState) {
+        switch state.phase {
+        case .idle, .submitting:
+            return
+        case .unavailable:
+            switch state.notice {
+            case .qaOnlyDisabled:
+                resetForUnavailable(.qaOnlyDisabled)
+            case .accountUnavailable, .staleAccountLease:
+                resetForUnavailable(.accountUnavailable)
+            default:
+                transitionFailure(.correctionRequestFailed)
+            }
+        case .failed:
+            transitionFailure(.correctionRequestFailed)
+        case .submitted:
+            guard correctionQAGateEnabled(), candidateReviewQAGateEnabled() else {
+                resetForUnavailable(.qaOnlyDisabled)
+                return
+            }
+            guard let receipt = state.latestReceipt else {
+                transitionFailure(.correctionRequestFailed)
+                return
+            }
+            awaitingCandidateID = receipt.candidateID
+            viewState = OwnerTruthCorrectionCandidateInboxHandoffViewState(
+                phase: .locatingCandidate(receipt.candidateID),
+                notice: nil,
+                correctionRequestID: receipt.correctionRequestID,
+                candidateID: receipt.candidateID
+            )
+            candidateInboxUseCase.send(.refresh)
+        }
+    }
+
+    private func receiveCandidateInbox(_ state: OwnerTruthCandidateInboxViewState) {
+        guard let candidateID = awaitingCandidateID else { return }
+        switch state.phase {
+        case .idle, .loading, .submitting:
+            return
+        case .unavailable:
+            switch state.notice {
+            case .qaOnlyDisabled:
+                resetForUnavailable(.qaOnlyDisabled)
+            case .accountUnavailable, .staleAccountLease:
+                resetForUnavailable(.accountUnavailable)
+            default:
+                transitionFailure(.candidateInboxFailed)
+            }
+        case .failed:
+            transitionFailure(.candidateInboxFailed)
+        case .empty:
+            transitionFailure(.candidateUnavailable)
+        case .ready:
+            guard state.items.contains(where: { $0.id == candidateID }) else {
+                transitionFailure(.candidateUnavailable)
+                return
+            }
+            awaitingCandidateID = nil
+            viewState = OwnerTruthCorrectionCandidateInboxHandoffViewState(
+                phase: .ready,
+                notice: nil,
+                correctionRequestID: viewState.correctionRequestID,
+                candidateID: candidateID
+            )
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthCorrectionCandidateInboxHandoffNotice) {
+        awaitingCandidateID = nil
+        viewState = OwnerTruthCorrectionCandidateInboxHandoffViewState(
+            phase: .unavailable,
+            notice: notice,
+            correctionRequestID: nil,
+            candidateID: nil
+        )
+    }
+
+    private func transitionFailure(_ notice: OwnerTruthCorrectionCandidateInboxHandoffNotice) {
+        awaitingCandidateID = nil
+        viewState = OwnerTruthCorrectionCandidateInboxHandoffViewState(
+            phase: .failed,
+            notice: notice,
+            correctionRequestID: viewState.correctionRequestID,
+            candidateID: viewState.candidateID
+        )
+    }
+}
+
 /// A value-free bridge for existing Echo QA evidence. It has no runtime or
 /// model text and therefore can be exported alongside the current trace.
 struct OwnerTruthContextCitationTraceSummary: Codable, Equatable, Sendable {
