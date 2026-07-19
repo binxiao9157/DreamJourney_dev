@@ -897,17 +897,17 @@
       "catalogId": "S10",
       "surfaceId": "S10.voice-training-poll-runtime",
       "dataClass": "speaker/profile id, persona target, completion closures, and training state",
-      "ownerScope": "captured target without a unified AccountLease checkpoint",
+      "ownerScope": "captured AccountLease plus persona target and monotonic runtime generation",
       "storage": "process memory and repeating Timer",
-      "pathOrKey": "pollTimer; trainingSpeakerId; trainingPersonaTarget; pendingCompletion",
+      "pathOrKey": "pollTimer; trainingRuntimeOperation; trainingPrimaryCompletion; pendingCompletion",
       "writer": "VoiceCloneService",
       "readers": "VoiceCloneService status callbacks and profile UI",
-      "cleanup": "current success/failure/timeout cancellation exists; account switch cancellation is pending",
-      "migration": "runtime is never migrated; stale callback must be rejected by generation",
+      "cleanup": "account lifecycle and persona-context changes invalidate the exact operation; stale timer/completion callbacks are ignored",
+      "migration": "runtime is never migrated; stale callback must be rejected by AccountLease, persona target, and runtime generation",
       "retention": "up to provider poll limit or singleton lifetime",
-      "testOwner": "WI-S0-01-07",
-      "status": "REGISTERED_ACCOUNT_LEASE_GAP",
-      "nextWorkItem": "WI-S0-01-07",
+      "testOwner": "WI-S1-03-08",
+      "status": "REGISTERED_TYPED_RUNTIME_OPERATION_G0",
+      "nextWorkItem": "WI-S1-03-08",
       "sourcePaths": [
         "DreamJourney/Sources/Memoir/VoiceCloneService.swift"
       ],
@@ -915,12 +915,16 @@
         {
           "path": "DreamJourney/Sources/Memoir/VoiceCloneService.swift",
           "contains": [
-            "trainingPersonaTarget",
+            "VoiceCloneTrainingRuntimeOperation",
+            "trainingRuntimeOperation",
+            "nextTrainingRuntimeGeneration",
             "pendingCompletion"
           ]
         }
       ],
       "currentChecks": [
+        "Scripts/QA/product-v4/run-voice-clone-local-owner-scope-gate.sh",
+        "Scripts/QA/product-v4/voice-clone-local-owner-scope-static-check.py",
         "Scripts/QA/prd-stitch-ui/voice-clone-stale-ready-state-check.swift"
       ]
     },

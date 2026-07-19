@@ -32,6 +32,20 @@ class LeaseModel:
     generation_id: uuid.UUID
 
 
+@dataclass(frozen=True)
+class PersonaTargetModel:
+    scope: str
+    digital_human_id: str
+
+
+@dataclass(frozen=True)
+class TrainingOperationModel:
+    runtime_generation: int
+    speaker_id: str
+    target: PersonaTargetModel
+    lease: LeaseModel
+
+
 def storage_key(lease: LeaseModel) -> str:
     # session_id is deliberately not part of persistent ownership identity.
     values = (
@@ -91,6 +105,84 @@ def run_owner_scope_model() -> None:
             "stale async completion must roll back its staged write")
 
 
+class TrainingRuntimeModel:
+    def __init__(self) -> None:
+        self.next_generation = 0
+        self.active: TrainingOperationModel | None = None
+        self.current_target: PersonaTargetModel | None = None
+        self.persisted_status: dict[tuple[str, str], str] = {}
+
+    def begin(
+        self,
+        speaker_id: str,
+        target: PersonaTargetModel,
+        lease: LeaseModel,
+    ) -> TrainingOperationModel:
+        self.next_generation += 1
+        operation = TrainingOperationModel(
+            runtime_generation=self.next_generation,
+            speaker_id=speaker_id,
+            target=target,
+            lease=lease,
+        )
+        self.active = operation
+        self.current_target = target
+        return operation
+
+    def switch_target(self, target: PersonaTargetModel) -> None:
+        self.current_target = target
+        if self.active is not None and self.active.target != target:
+            self.active = None
+
+    def complete(self, operation: TrainingOperationModel, status: str) -> bool:
+        if self.active != operation or self.current_target != operation.target:
+            return False
+        self.persisted_status[(operation.target.scope, operation.target.digital_human_id)] = status
+        self.active = None
+        return True
+
+    def stale_timer_cancel(self, operation: TrainingOperationModel) -> bool:
+        if self.active != operation:
+            return False
+        self.active = None
+        return True
+
+
+def run_training_runtime_model() -> None:
+    generation_a = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+    generation_b = uuid.UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+    lease_a = LeaseModel("user-a", "vault-a", "session-a", 7, generation_a)
+    lease_a_next = LeaseModel("user-a", "vault-a", "session-b", 8, generation_b)
+    self_target = PersonaTargetModel("personal", "user-a")
+    family_target = PersonaTargetModel("family", "family-a")
+
+    model = TrainingRuntimeModel()
+    old_operation = model.begin("S_same", self_target, lease_a)
+    replacement = model.begin("S_same", family_target, lease_a)
+    require(old_operation.runtime_generation != replacement.runtime_generation,
+            "same speaker under a role switch must allocate a new runtime generation")
+    require(not model.complete(old_operation, "ready"),
+            "late self-persona completion must not overwrite the selected family persona")
+    require(model.active == replacement,
+            "late completion must not clear the replacement runtime operation")
+    require(model.complete(replacement, "ready"),
+            "current role completion must persist only to its own persona target")
+    require(model.persisted_status == {("family", "family-a"): "ready"},
+            "role switch must not persist the old profile as the selected profile")
+
+    old_generation_operation = model.begin("S_old", self_target, lease_a)
+    replacement_generation = model.begin("S_new", self_target, lease_a_next)
+    require(not model.stale_timer_cancel(old_generation_operation),
+            "a stale account-generation timer must not cancel a new generation operation")
+    require(model.active == replacement_generation,
+            "new account generation must remain active after old timer cleanup")
+    model.switch_target(family_target)
+    require(not model.complete(replacement_generation, "ready"),
+            "context change must discard a completion after the persona is no longer selected")
+    require(("personal", "user-a") not in model.persisted_status,
+            "discarded completion must not silently create a default personal profile")
+
+
 def main() -> None:
     source = SOURCE_PATH.read_text()
 
@@ -145,6 +237,39 @@ def main() -> None:
             "VoiceCloneService must not directly read or write global UserDefaults")
     require('?? "default"' not in service_source,
             "VoiceCloneService must not use a default/anonymous principal fallback")
+    require_all(
+        source,
+        (
+            "private struct VoiceCloneTrainingRuntimeOperation",
+            "let runtimeGeneration: UInt64",
+        ),
+        "voice-clone runtime operation type",
+    )
+    require_all(
+        service_source,
+        (
+            "private var trainingRuntimeOperation: VoiceCloneTrainingRuntimeOperation?",
+            "private var nextTrainingRuntimeGeneration: UInt64 = 0",
+            "private func beginTrainingRuntime(",
+            "private func isCurrentTrainingRuntimeOperation(",
+            "private func handleDigitalHumanContextChange(",
+            "forName: .djDigitalHumanContextDidChange",
+            "trainingOperation: VoiceCloneTrainingRuntimeOperation? = nil",
+            "bindTrainingPrimaryCompletion(",
+            "deliverTrainingResult(",
+            "deliverPendingTrainingResult(",
+            "guard (pendingCompletion != nil || pollTimer != nil)",
+        ),
+        "voice-clone runtime operation contract",
+    )
+    for retired_field in (
+        "trainingSpeakerId",
+        "trainingPersonaTarget",
+        "trainingAccountLease",
+        "clearTrainingStateIfOwned",
+    ):
+        require(retired_field not in service_source,
+                f"runtime operation must replace retired split field: {retired_field}")
 
     update_match = re.search(
         r"func update\([\s\S]*?\n    private func restore",
@@ -172,6 +297,7 @@ def main() -> None:
                 f"legacy key must only remain as quarantine input: {key}")
 
     run_owner_scope_model()
+    run_training_runtime_model()
     print("Voice-clone local owner scope static/model smoke passed")
 
 

@@ -29,24 +29,37 @@ def main() -> None:
         voice,
         (
             "private let accountLeaseRuntime: AccountLeaseRuntimePort",
-            "private var trainingAccountLease: AccountLease?",
+            "private var trainingRuntimeOperation: VoiceCloneTrainingRuntimeOperation?",
+            "private var nextTrainingRuntimeGeneration: UInt64 = 0",
+            "private func beginTrainingRuntime(",
+            "private func isCurrentTrainingRuntimeOperation(",
+            "private func handleDigitalHumanContextChange(",
             "accountLeaseRuntime.capture(forSubjectId:",
             "validate(accountLease, at: .request).allowed",
             "validate(accountLease, at: .commit).allowed",
-            "validate(accountLease, at: .timer).allowed",
             "validate(accountLease, at: .runtime).allowed",
             "validate(accountLease, at: .ui).allowed",
+            "isCurrentTrainingRuntimeOperation(operation, at: .timer)",
+            "isCurrentTrainingRuntimeOperation(operation, at: .runtime)",
+            "isCurrentTrainingRuntimeOperation(operation, at: .commit)",
+            "isCurrentTrainingRuntimeOperation(operation, at: .ui)",
             "accountLease: AccountLease",
         ),
         "VoiceClone AccountLease contract",
     )
     require(
-        re.search(r"startPollingStatus\([\s\S]*?accountLease:\s*AccountLease", voice) is not None,
-        "voice training polling must retain the originating AccountLease",
+        re.search(
+            r"startPollingStatus\([\s\S]*?operation:\s*VoiceCloneTrainingRuntimeOperation",
+            voice,
+        ) is not None,
+        "voice training polling must retain the typed owner/persona runtime operation",
     )
     require(
-        re.search(r"queryStatus\([\s\S]*?accountLease:\s*AccountLease", voice) is not None,
-        "voice status callbacks must retain the originating AccountLease",
+        re.search(
+            r"queryStatus\([\s\S]*?trainingOperation:\s*VoiceCloneTrainingRuntimeOperation\?\s*=\s*nil",
+            voice,
+        ) is not None,
+        "voice status callbacks must carry the optional typed runtime operation",
     )
 
     require_all(

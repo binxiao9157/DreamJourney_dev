@@ -55,13 +55,14 @@ xcodebuild build-for-testing \
 
 ## 保持开放的边界
 
-- 未迁移 `VoiceCloneService` 的训练轮询、状态 timer 或本地 profile state；这是同一 Work Item 的后续
-  runtime boundary 收敛任务。
+- `VoiceCloneService` 的训练轮询、状态 timer、前台补查和 completion 已在后续 G0 切片收敛为
+  AccountLease/persona/runtime-generation 绑定的 operation token，详见
+  [VoiceClone runtime operation boundary](2026-07-19-wi-s1-03-08-voiceclone-runtime-operation.md)。
 - 未执行真实 Provider 合成、试听、Tencent digital-human session、PCM audio-drive 或真机音频验收。
 - 旧 v2 cache 仅被拒绝读取；物理清理由既有账号 lifecycle purge 负责，未在本切片执行不可逆迁移。
 - G1、G3、G4 仍不能由本次 G0 结果关闭。
 
 ## 下一步
 
-在 `WI-S1-03-08` 内继续收敛 `VoiceCloneService` 的 profile/state timer 与 runtime generation 绑定，确保
-快速角色切换或账号切换时，旧 profile readiness 回调不能覆盖当前角色；保持 Provider、公开 UI 和真机范围不变。
+在 `WI-S1-03-08` 内继续收敛 VoiceClone/Digital Human runtime capability 的 failed/unknown/expiry 边界；
+保持 Provider、公开 UI 和真机范围不变。

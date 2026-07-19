@@ -125,7 +125,7 @@ struct VoiceCloneProfileSnapshot {
 
 // MARK: - 声音复刻服务（后端代理火山引擎 Voice Clone V3）
 
-private struct VoiceClonePersonaTarget {
+private struct VoiceClonePersonaTarget: Equatable {
     let userId: String
     let personaScope: String
     let digitalHumanId: String
@@ -134,6 +134,22 @@ private struct VoiceClonePersonaTarget {
     var isFamilyMember: Bool {
         familyMemberId != nil
     }
+}
+
+/// A single in-process training operation. Provider work may finish after a
+/// role/account transition, so every timer tick and completion must prove it
+/// still belongs to the currently selected persona before it can update state.
+private struct VoiceCloneTrainingRuntimeOperation: Equatable {
+    let id: UUID
+    let runtimeGeneration: UInt64
+    let speakerId: String
+    let target: VoiceClonePersonaTarget
+    let accountLease: AccountLease
+}
+
+private struct VoiceCloneTrainingRuntimeCompletions {
+    let primary: ((Result<String, VoiceCloneError>) -> Void)?
+    let pending: ((Result<String, VoiceCloneError>) -> Void)?
 }
 
 private struct VoiceCloneLocalOwnerScope: Equatable {
@@ -501,22 +517,39 @@ final class VoiceCloneService {
     /// 训练轮询定时器
     private var pollTimer: Timer?
 
-    /// 正在等待音色就绪的回调（用于 checkPendingTraining 加速完成）
-    /// 当 App 从后台回到前台时，如果训练已完成，通过此回调通知等待方
+    /// 正在等待音色就绪的附加回调（用于 checkPendingTraining 加速完成）。
+    /// 主回调由创建 runtime operation 的调用方持有，附加回调只会在同一
+    /// operation 仍有效时触发。
     private var pendingCompletion: ((Result<String, VoiceCloneError>) -> Void)?
+    private var trainingPrimaryCompletion: ((Result<String, VoiceCloneError>) -> Void)?
+    private var trainingCompletionOperationID: UUID?
 
-    /// 训练中的 speakerId（用于 checkPendingTraining 匹配）
-    private var trainingSpeakerId: String?
-    private var trainingPersonaTarget: VoiceClonePersonaTarget?
-    private var trainingAccountLease: AccountLease?
+    /// 训练中的唯一 runtime token，替代彼此独立的 speaker/persona/lease
+    /// 字段，避免旧角色的异步回调拼接到新角色的运行态。
+    private var trainingRuntimeOperation: VoiceCloneTrainingRuntimeOperation?
+    private var nextTrainingRuntimeGeneration: UInt64 = 0
     private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let localStateStore: VoiceCloneLocalStateStore
+    private var digitalHumanContextObserver: NSObjectProtocol?
 
     // MARK: - Init
 
     private init(accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared) {
         self.accountLeaseRuntime = accountLeaseRuntime
         localStateStore = VoiceCloneLocalStateStore(accountLeaseRuntime: accountLeaseRuntime)
+        digitalHumanContextObserver = NotificationCenter.default.addObserver(
+            forName: .djDigitalHumanContextDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            self?.handleDigitalHumanContextChange(notification)
+        }
+    }
+
+    deinit {
+        if let digitalHumanContextObserver {
+            NotificationCenter.default.removeObserver(digitalHumanContextObserver)
+        }
     }
 
     // MARK: - 公开 API
@@ -1022,18 +1055,142 @@ final class VoiceCloneService {
         return (accountLease, currentPersonaTarget(userId: accountLease.subjectId))
     }
 
-    private func cancelTrainingRuntime(for oldAccountLease: AccountLease) {
-        guard let oldScope = VoiceCloneLocalOwnerScope(accountLease: oldAccountLease),
-              let trainingAccountLease,
-              VoiceCloneLocalOwnerScope(accountLease: trainingAccountLease) == oldScope else {
+    private func beginTrainingRuntime(
+        speakerId: String,
+        target: VoiceClonePersonaTarget,
+        accountLease: AccountLease
+    ) -> VoiceCloneTrainingRuntimeOperation {
+        invalidateTrainingRuntime()
+        nextTrainingRuntimeGeneration &+= 1
+        let operation = VoiceCloneTrainingRuntimeOperation(
+            id: UUID(),
+            runtimeGeneration: nextTrainingRuntimeGeneration,
+            speakerId: speakerId,
+            target: target,
+            accountLease: accountLease
+        )
+        trainingRuntimeOperation = operation
+        return operation
+    }
+
+    private func isCurrentTrainingRuntimeOperation(
+        _ operation: VoiceCloneTrainingRuntimeOperation,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> Bool {
+        guard trainingRuntimeOperation == operation,
+              accountLeaseRuntime.validate(operation.accountLease, at: checkpoint).allowed else {
+            return false
+        }
+        return currentPersonaTarget(userId: operation.accountLease.subjectId) == operation.target
+    }
+
+    private func handleDigitalHumanContextChange(_ notification: Notification) {
+        guard let operation = trainingRuntimeOperation,
+              accountLeaseRuntime.validate(operation.accountLease, at: .runtime).allowed else {
             return
         }
+        guard let context = notification.object as? DigitalHumanContext,
+              personaTarget(
+                  for: context,
+                  userId: operation.accountLease.subjectId
+              ) == operation.target else {
+            invalidateTrainingRuntime(expected: operation)
+            return
+        }
+    }
+
+    private func cancelTrainingRuntime(for oldAccountLease: AccountLease) {
+        guard let oldScope = VoiceCloneLocalOwnerScope(accountLease: oldAccountLease),
+              let operation = trainingRuntimeOperation,
+              VoiceCloneLocalOwnerScope(accountLease: operation.accountLease) == oldScope else {
+            return
+        }
+        invalidateTrainingRuntime(expected: operation)
+    }
+
+    private func invalidateTrainingRuntime(
+        expected operation: VoiceCloneTrainingRuntimeOperation? = nil,
+        timer: Timer? = nil
+    ) {
+        guard operation == nil || trainingRuntimeOperation == operation else {
+            timer?.invalidate()
+            return
+        }
+        timer?.invalidate()
         pollTimer?.invalidate()
         pollTimer = nil
         pendingCompletion = nil
-        trainingSpeakerId = nil
-        trainingPersonaTarget = nil
-        self.trainingAccountLease = nil
+        trainingPrimaryCompletion = nil
+        trainingCompletionOperationID = nil
+        trainingRuntimeOperation = nil
+    }
+
+    private func bindTrainingPrimaryCompletion(
+        _ completion: @escaping (Result<String, VoiceCloneError>) -> Void,
+        to operation: VoiceCloneTrainingRuntimeOperation
+    ) {
+        guard trainingRuntimeOperation == operation else { return }
+        trainingPrimaryCompletion = completion
+        trainingCompletionOperationID = operation.id
+    }
+
+    private func completeTrainingRuntimeIfCurrent(
+        _ operation: VoiceCloneTrainingRuntimeOperation,
+        timer: Timer? = nil
+    ) -> VoiceCloneTrainingRuntimeCompletions? {
+        guard trainingRuntimeOperation == operation else {
+            timer?.invalidate()
+            return nil
+        }
+        timer?.invalidate()
+        pollTimer?.invalidate()
+        pollTimer = nil
+        let completions = VoiceCloneTrainingRuntimeCompletions(
+            primary: trainingCompletionOperationID == operation.id ? trainingPrimaryCompletion : nil,
+            pending: pendingCompletion
+        )
+        pendingCompletion = nil
+        trainingPrimaryCompletion = nil
+        trainingCompletionOperationID = nil
+        trainingRuntimeOperation = nil
+        return completions
+    }
+
+    private func deliverTrainingResult(
+        _ result: Result<String, VoiceCloneError>,
+        operation: VoiceCloneTrainingRuntimeOperation,
+        primaryCompletion: @escaping (Result<String, VoiceCloneError>) -> Void,
+        timer: Timer? = nil
+    ) {
+        guard isCurrentTrainingRuntimeOperation(operation, at: .ui) else {
+            invalidateTrainingRuntime(expected: operation, timer: timer)
+            return
+        }
+        let completions = completeTrainingRuntimeIfCurrent(operation, timer: timer)
+        deliver(result, accountLease: operation.accountLease, completion: primaryCompletion)
+        if let pending = completions?.pending {
+            deliver(result, accountLease: operation.accountLease, completion: pending)
+        }
+    }
+
+    private func deliverPendingTrainingResult(
+        _ result: Result<String, VoiceCloneError>,
+        operation: VoiceCloneTrainingRuntimeOperation,
+        timer: Timer? = nil
+    ) {
+        guard isCurrentTrainingRuntimeOperation(operation, at: .ui) else {
+            invalidateTrainingRuntime(expected: operation, timer: timer)
+            return
+        }
+        guard let completions = completeTrainingRuntimeIfCurrent(operation, timer: timer) else {
+            return
+        }
+        if let primary = completions.primary {
+            deliver(result, accountLease: operation.accountLease, completion: primary)
+        }
+        if let pending = completions.pending {
+            deliver(result, accountLease: operation.accountLease, completion: pending)
+        }
     }
 
     private func voiceLifecycleDetailCode(
@@ -1066,26 +1223,14 @@ final class VoiceCloneService {
         completion(result)
     }
 
-    private func clearTrainingStateIfOwned(
-        speakerId: String,
-        accountLease: AccountLease,
-        timer: Timer? = nil
-    ) {
-        guard trainingSpeakerId == speakerId,
-              trainingAccountLease == accountLease else {
-            timer?.invalidate()
-            return
-        }
-        timer?.invalidate()
-        pollTimer?.invalidate()
-        pollTimer = nil
-        trainingSpeakerId = nil
-        trainingPersonaTarget = nil
-        trainingAccountLease = nil
+    private func currentPersonaTarget(userId: String) -> VoiceClonePersonaTarget {
+        personaTarget(for: DigitalHumanContextStore.shared.current, userId: userId)
     }
 
-    private func currentPersonaTarget(userId: String) -> VoiceClonePersonaTarget {
-        let context = DigitalHumanContextStore.shared.current
+    private func personaTarget(
+        for context: DigitalHumanContext,
+        userId: String
+    ) -> VoiceClonePersonaTarget {
         let normalizedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
         let ownerId = context.ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
         let isFamilyPersona = !context.isSelfAssistant
@@ -1238,6 +1383,12 @@ final class VoiceCloneService {
             return
         }
 
+        let trainingOperation = beginTrainingRuntime(
+            speakerId: finalSpeakerId,
+            target: target,
+            accountLease: accountLease
+        )
+
         let payload: [String: Any] = [
             "userId": accountLease.subjectId,
             "voiceProfileId": finalSpeakerId,
@@ -1257,12 +1408,12 @@ final class VoiceCloneService {
         DDLogInfo("[VoiceClone] 通过后端提交音色训练: \(finalSpeakerId), scope=\(target.personaScope), digitalHumanId=\(target.digitalHumanId), 音频大小: \(audioData.count) bytes")
         DreamJourneyBackendClient.shared.saveVoiceCloneProfile(payload: payload) { [weak self] result in
             guard let self,
-                  self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                  self.isCurrentTrainingRuntimeOperation(trainingOperation, at: .runtime) else {
                 return
             }
             switch result {
             case .success(let profile):
-                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                guard self.isCurrentTrainingRuntimeOperation(trainingOperation, at: .commit) else {
                     return
                 }
                 self.persistBackendProfileIfUsable(
@@ -1270,44 +1421,42 @@ final class VoiceCloneService {
                     target: target,
                     accountLease: accountLease
                 )
-                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                guard self.isCurrentTrainingRuntimeOperation(trainingOperation, at: .commit) else {
                     return
                 }
                 DDLogInfo("[VoiceClone] 后端已接收音色训练: \(profile.voiceProfileId), status=\(profile.sampleStatus.rawValue)")
-                if self.accountLeaseRuntime.validate(accountLease, at: .ui).allowed {
+                if self.isCurrentTrainingRuntimeOperation(trainingOperation, at: .ui) {
                     onProfileAccepted?(VoiceCloneProfileSnapshot(backendContract: profile))
                 }
                 if profile.sampleStatus == .ready {
-                    self.deliver(
+                    self.deliverTrainingResult(
                         .success(profile.voiceProfileId),
-                        accountLease: accountLease,
-                        completion: completion
+                        operation: trainingOperation,
+                        primaryCompletion: completion
                     )
                 } else if profile.sampleStatus == .failed {
-                    self.deliver(
+                    self.deliverTrainingResult(
                         .failure(
                             .trainingFailed(
                                 code: 3,
                                 message: Self.trainingFailureMessage(from: profile.providerMessage)
                             )
                         ),
-                        accountLease: accountLease,
-                        completion: completion
+                        operation: trainingOperation,
+                        primaryCompletion: completion
                     )
                 } else {
                     self.startPollingStatus(
-                        speakerId: profile.voiceProfileId,
-                        target: target,
-                        accountLease: accountLease,
+                        operation: trainingOperation,
                         completion: completion
                     )
                 }
             case .failure(let error):
                 DDLogError("[VoiceClone] 后端训练请求失败: \(error.localizedDescription)")
-                self.deliver(
+                self.deliverTrainingResult(
                     .failure(.networkError(error.localizedDescription)),
-                    accountLease: accountLease,
-                    completion: completion
+                    operation: trainingOperation,
+                    primaryCompletion: completion
                 )
             }
         }
@@ -1332,10 +1481,14 @@ final class VoiceCloneService {
         speakerId: String? = nil,
         target: VoiceClonePersonaTarget,
         accountLease: AccountLease,
+        trainingOperation: VoiceCloneTrainingRuntimeOperation? = nil,
         completion: @escaping (Result<VoiceCloneStatus, VoiceCloneError>) -> Void
     ) {
         guard accountLeaseRuntime.validate(accountLease, at: .request).allowed,
-              accountLease.subjectId == target.userId else {
+              accountLease.subjectId == target.userId,
+              trainingOperation == nil
+                || (trainingOperation?.accountLease == accountLease
+                    && trainingOperation?.target == target) else {
             return
         }
         guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured else {
@@ -1350,6 +1503,9 @@ final class VoiceCloneService {
             deliver(.failure(.speakerIdNotFound), accountLease: accountLease, completion: completion)
             return
         }
+        guard trainingOperation?.speakerId == nil || trainingOperation?.speakerId == sid else {
+            return
+        }
 
         DreamJourneyBackendClient.shared.refreshVoiceCloneProfile(
             userId: accountLease.subjectId,
@@ -1359,33 +1515,69 @@ final class VoiceCloneService {
                   self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
                 return
             }
-            switch result {
-            case .success(let profile):
-                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
-                    return
-                }
-                self.persistBackendProfileIfUsable(
-                    profile,
+            guard let trainingOperation else {
+                self.handleVoiceCloneStatusResult(
+                    result,
                     target: target,
-                    accountLease: accountLease
-                )
-                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
-                    return
-                }
-                DDLogInfo("[VoiceClone] 后端查询状态: speakerId=\(sid), status=\(profile.sampleStatus.rawValue)")
-                self.deliver(
-                    .success(Self.cloneStatus(from: profile)),
                     accountLease: accountLease,
                     completion: completion
                 )
-            case .failure(let error):
-                DDLogError("[VoiceClone] 后端查询失败: \(error.localizedDescription)")
-                self.deliver(
-                    .failure(.networkError(error.localizedDescription)),
-                    accountLease: accountLease,
-                    completion: completion
-                )
+                return
             }
+            guard self.isCurrentTrainingRuntimeOperation(trainingOperation, at: .runtime) else {
+                return
+            }
+            self.handleVoiceCloneStatusResult(
+                result,
+                target: target,
+                accountLease: accountLease,
+                trainingOperation: trainingOperation,
+                completion: completion
+            )
+        }
+    }
+
+    private func handleVoiceCloneStatusResult(
+        _ result: Result<VoiceCloneProfileContract, Error>,
+        target: VoiceClonePersonaTarget,
+        accountLease: AccountLease,
+        trainingOperation: VoiceCloneTrainingRuntimeOperation? = nil,
+        completion: @escaping (Result<VoiceCloneStatus, VoiceCloneError>) -> Void
+    ) {
+        switch result {
+        case .success(let profile):
+            guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed,
+                  trainingOperation == nil
+                    || isCurrentTrainingRuntimeOperation(trainingOperation!, at: .commit) else {
+                return
+            }
+            persistBackendProfileIfUsable(
+                profile,
+                target: target,
+                accountLease: accountLease
+            )
+            guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed,
+                  trainingOperation == nil
+                    || isCurrentTrainingRuntimeOperation(trainingOperation!, at: .commit) else {
+                return
+            }
+            DDLogInfo("[VoiceClone] 后端查询状态: speakerId=\(profile.voiceProfileId), status=\(profile.sampleStatus.rawValue)")
+            deliver(
+                .success(Self.cloneStatus(from: profile)),
+                accountLease: accountLease,
+                completion: completion
+            )
+        case .failure(let error):
+            DDLogError("[VoiceClone] 后端查询失败: \(error.localizedDescription)")
+            guard trainingOperation == nil
+                    || isCurrentTrainingRuntimeOperation(trainingOperation!, at: .runtime) else {
+                return
+            }
+            deliver(
+                .failure(.networkError(error.localizedDescription)),
+                accountLease: accountLease,
+                completion: completion
+            )
         }
     }
 
@@ -1516,52 +1708,34 @@ final class VoiceCloneService {
     /// VoiceCloneService 使用 Timer 轮询训练状态，App 进入后台后 Timer 会被挂起
     /// 此方法在 App 回前台时调用，如果训练已完成则直接回调等待方（而不是发通知）
     func checkPendingTraining() {
-        // 只有在有 pendingCompletion 时才检查（说明有等待方）
-        guard pendingCompletion != nil || pollTimer != nil else { return }
-        guard let accountLease = trainingAccountLease,
-              accountLeaseRuntime.validate(accountLease, at: .timer).allowed,
-              let target = trainingPersonaTarget,
-              let speakerId = trainingSpeakerId
-                ?? reusableSpeakerIdForTraining(
-                    target: target,
-                    accountLease: accountLease
-                ) else {
-            pollTimer?.invalidate()
-            pollTimer = nil
-            pendingCompletion = nil
-            trainingSpeakerId = nil
-            trainingPersonaTarget = nil
-            trainingAccountLease = nil
+        guard (pendingCompletion != nil || pollTimer != nil),
+              let operation = trainingRuntimeOperation else {
+            return
+        }
+        guard isCurrentTrainingRuntimeOperation(operation, at: .timer) else {
+            invalidateTrainingRuntime(expected: operation)
             return
         }
         queryStatus(
-            speakerId: speakerId,
-            target: target,
-            accountLease: accountLease
+            speakerId: operation.speakerId,
+            target: operation.target,
+            accountLease: operation.accountLease,
+            trainingOperation: operation
         ) { [weak self] result in
             guard let self,
-                  self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                  self.isCurrentTrainingRuntimeOperation(operation, at: .runtime) else {
                 return
             }
             guard case .success(let status) = result,
                   status == .success || status == .active else {
                 return
             }
-            DDLogInfo("[VoiceClone] 回前台检测到声音复刻已就绪: \(speakerId)")
+            DDLogInfo("[VoiceClone] 回前台检测到声音复刻已就绪: \(operation.speakerId)")
             DispatchQueue.main.async { [weak self] in
-                guard let self,
-                      self.accountLeaseRuntime.validate(accountLease, at: .ui).allowed,
-                      self.trainingSpeakerId == speakerId,
-                      self.trainingAccountLease == accountLease else {
-                    return
-                }
-                let pending = self.pendingCompletion
-                self.pendingCompletion = nil
-                self.clearTrainingStateIfOwned(
-                    speakerId: speakerId,
-                    accountLease: accountLease
+                self?.deliverPendingTrainingResult(
+                    .success(operation.speakerId),
+                    operation: operation
                 )
-                pending?(.success(speakerId))
             }
         }
     }
@@ -1578,14 +1752,31 @@ final class VoiceCloneService {
         }
         let accountLease = operation.accountLease
         let target = operation.target
+        if let activeOperation = trainingRuntimeOperation,
+           activeOperation.speakerId == speakerId,
+           activeOperation.target == target,
+           activeOperation.accountLease == accountLease,
+           isCurrentTrainingRuntimeOperation(activeOperation, at: .timer) {
+            // A training request or poll for exactly this owner/persona is already
+            // active. Attach the waiter instead of creating another provider poll.
+            pendingCompletion = completion
+            return
+        }
+
+        let trainingOperation = beginTrainingRuntime(
+            speakerId: speakerId,
+            target: target,
+            accountLease: accountLease
+        )
         // 先快速检查一次
         queryStatus(
             speakerId: speakerId,
             target: target,
-            accountLease: accountLease
+            accountLease: accountLease,
+            trainingOperation: trainingOperation
         ) { [weak self] result in
             guard let self,
-                  self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                  self.isCurrentTrainingRuntimeOperation(trainingOperation, at: .runtime) else {
                 return
             }
             let ready: Bool
@@ -1597,38 +1788,20 @@ final class VoiceCloneService {
             }
             if ready {
                 DDLogInfo("[VoiceClone] 音色已就绪，无需等待: \(speakerId)")
-                self.deliver(
+                self.deliverTrainingResult(
                     .success(speakerId),
-                    accountLease: accountLease,
-                    completion: completion
+                    operation: trainingOperation,
+                    primaryCompletion: completion
                 )
             } else {
                 DDLogInfo("[VoiceClone] 音色尚未就绪，开始轮询等待: \(speakerId)")
-                guard self.accountLeaseRuntime.validate(accountLease, at: .timer).allowed else {
+                guard self.isCurrentTrainingRuntimeOperation(trainingOperation, at: .timer) else {
                     return
                 }
-                // 如果已有轮询在进行（比如 trainVoice 启动的），保存 completion 等轮询完成时回调
-                if self.pollTimer != nil,
-                   self.trainingSpeakerId == speakerId,
-                   self.trainingAccountLease == accountLease {
-                    // 轮询已在进行，只需注册回调
-                    self.pendingCompletion = completion
-                    self.trainingSpeakerId = speakerId
-                    self.trainingPersonaTarget = target
-                    self.trainingAccountLease = accountLease
-                } else {
-                    // 没有轮询在进行，启动新的轮询
-                    self.startPollingStatus(
-                        speakerId: speakerId,
-                        target: target,
-                        accountLease: accountLease,
-                        completion: completion
-                    )
-                    self.pendingCompletion = nil  // startPollingStatus 自己管理 completion
-                    self.trainingSpeakerId = speakerId
-                    self.trainingPersonaTarget = target
-                    self.trainingAccountLease = accountLease
-                }
+                self.startPollingStatus(
+                    operation: trainingOperation,
+                    completion: completion
+                )
             }
         }
     }
@@ -1636,116 +1809,79 @@ final class VoiceCloneService {
     // MARK: - 轮询训练状态
 
     private func startPollingStatus(
-        speakerId: String,
-        target: VoiceClonePersonaTarget,
-        accountLease: AccountLease,
+        operation: VoiceCloneTrainingRuntimeOperation,
         completion: @escaping (Result<String, VoiceCloneError>) -> Void
     ) {
-        guard accountLeaseRuntime.validate(accountLease, at: .timer).allowed,
-              accountLease.subjectId == target.userId else {
+        guard isCurrentTrainingRuntimeOperation(operation, at: .timer),
+              operation.accountLease.subjectId == operation.target.userId else {
             return
         }
         var pollCount = 0
         let maxPolls = 30  // 最多轮询 30 次，约 2.5 分钟
 
         pollTimer?.invalidate()
-        trainingSpeakerId = speakerId
-        trainingPersonaTarget = target
-        trainingAccountLease = accountLease
+        bindTrainingPrimaryCompletion(completion, to: operation)
         pollTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] timer in
             guard let self = self else { timer.invalidate(); return }
-            guard self.accountLeaseRuntime.validate(accountLease, at: .timer).allowed,
-                  self.trainingSpeakerId == speakerId,
-                  self.trainingAccountLease == accountLease else {
-                self.clearTrainingStateIfOwned(
-                    speakerId: speakerId,
-                    accountLease: accountLease,
-                    timer: timer
-                )
-                self.pendingCompletion = nil
+            guard self.isCurrentTrainingRuntimeOperation(operation, at: .timer) else {
+                self.invalidateTrainingRuntime(expected: operation, timer: timer)
                 return
             }
 
             pollCount += 1
             if pollCount > maxPolls {
-                let pending = self.pendingCompletion
-                self.pendingCompletion = nil
-                self.clearTrainingStateIfOwned(
-                    speakerId: speakerId,
-                    accountLease: accountLease,
+                self.deliverTrainingResult(
+                    .failure(.trainingTimeout),
+                    operation: operation,
+                    primaryCompletion: completion,
                     timer: timer
                 )
-                self.deliver(
-                    .failure(.trainingTimeout),
-                    accountLease: accountLease,
-                    completion: completion
-                )
-                if let pending {
-                    self.deliver(
-                        .failure(.trainingTimeout),
-                        accountLease: accountLease,
-                        completion: pending
-                    )
-                }
                 return
             }
 
             self.queryStatus(
-                speakerId: speakerId,
-                target: target,
-                accountLease: accountLease
+                speakerId: operation.speakerId,
+                target: operation.target,
+                accountLease: operation.accountLease,
+                trainingOperation: operation
             ) { result in
-                guard self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                guard self.isCurrentTrainingRuntimeOperation(operation, at: .runtime) else {
                     return
                 }
                 switch result {
                 case .success(let status):
                     switch status {
                     case .success, .active:
-                        DDLogInfo("[VoiceClone] 音色训练完成: \(speakerId)")
-                        if !target.isFamilyMember {
-                            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                        DDLogInfo("[VoiceClone] 音色训练完成: \(operation.speakerId)")
+                        if !operation.target.isFamilyMember {
+                            guard self.isCurrentTrainingRuntimeOperation(operation, at: .commit) else {
                                 return
                             }
                             self.saveSampleStatus(
                                 .ready,
-                                accountLease: accountLease
+                                accountLease: operation.accountLease
                             )
                         }
                         DispatchQueue.main.async { [weak self] in
-                            guard let self,
-                                  self.accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
-                                return
-                            }
-                            let pending = self.pendingCompletion
-                            self.pendingCompletion = nil
-                            self.clearTrainingStateIfOwned(
-                                speakerId: speakerId,
-                                accountLease: accountLease,
+                            self?.deliverTrainingResult(
+                                .success(operation.speakerId),
+                                operation: operation,
+                                primaryCompletion: completion,
                                 timer: timer
                             )
-                            completion(.success(speakerId))
-                            pending?(.success(speakerId))
                         }
                     case .failed:
                         DispatchQueue.main.async { [weak self] in
-                            guard let self,
-                                  self.accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
-                                return
-                            }
-                            let pending = self.pendingCompletion
-                            self.pendingCompletion = nil
-                            self.clearTrainingStateIfOwned(
-                                speakerId: speakerId,
-                                accountLease: accountLease,
-                                timer: timer
-                            )
                             let failure = VoiceCloneError.trainingFailed(
                                 code: 3,
                                 message: "音色训练失败"
                             )
-                            completion(.failure(failure))
-                            pending?(.failure(failure))
+                            self?.deliverTrainingResult(
+                                .failure(failure),
+                                operation: operation,
+                                primaryCompletion: completion,
+                                timer: timer
+                            )
                         }
                     case .training:
                         // 继续轮询
@@ -1753,23 +1889,16 @@ final class VoiceCloneService {
                         break
                     case .notFound:
                         DispatchQueue.main.async { [weak self] in
-                            guard let self,
-                                  self.accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
-                                return
-                            }
-                            let pending = self.pendingCompletion
-                            self.pendingCompletion = nil
-                            self.clearTrainingStateIfOwned(
-                                speakerId: speakerId,
-                                accountLease: accountLease,
-                                timer: timer
-                            )
                             let failure = VoiceCloneError.trainingFailed(
                                 code: 0,
                                 message: "音色未找到"
                             )
-                            completion(.failure(failure))
-                            pending?(.failure(failure))
+                            self?.deliverTrainingResult(
+                                .failure(failure),
+                                operation: operation,
+                                primaryCompletion: completion,
+                                timer: timer
+                            )
                         }
                     }
                 case .failure(let error):

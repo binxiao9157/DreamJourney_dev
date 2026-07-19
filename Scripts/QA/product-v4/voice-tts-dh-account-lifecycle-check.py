@@ -154,13 +154,9 @@ def run_voice_static_check(source: str) -> None:
         cancel,
         (
             "VoiceCloneLocalOwnerScope(accountLease: oldAccountLease)",
-            "VoiceCloneLocalOwnerScope(accountLease: trainingAccountLease) == oldScope",
-            "pollTimer?.invalidate()",
-            "pollTimer = nil",
-            "pendingCompletion = nil",
-            "trainingSpeakerId = nil",
-            "trainingPersonaTarget = nil",
-            "self.trainingAccountLease = nil",
+            "let operation = trainingRuntimeOperation",
+            "VoiceCloneLocalOwnerScope(accountLease: operation.accountLease) == oldScope",
+            "invalidateTrainingRuntime(expected: operation)",
         ),
         "voice runtime cancellation",
     )

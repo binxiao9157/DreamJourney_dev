@@ -66,8 +66,9 @@ git diff --check
 
 ## 未完成边界
 
-- `VoiceCloneService` 的训练状态轮询和本地 owner-scoped storage 仍使用既有服务边界；本轮只迁移核心
-  synthesis/session port，后续需要按同一 typed contract 收敛其 timer/cache。
+- `VoiceCloneService` 的训练状态轮询、前台补查和 completion 已在后续 G0 切片收敛为 AccountLease/
+  persona/runtime-generation 绑定的 operation token，详见
+  [VoiceClone runtime operation boundary](2026-07-19-wi-s1-03-08-voiceclone-runtime-operation.md)。
 - `MemoirTTSService` 的 owner-keyed cache identity 已在后续 G0 切片完成，详见
   [owner-keyed cache identity](2026-07-19-wi-s1-03-08-owner-keyed-cache-identity.md)。
 - Echo 中仅核心 production create/heartbeat/release 使用 port；UIQA-only helper 仍保留旧 client 调用，
@@ -77,6 +78,5 @@ git diff --check
 
 ## 下一步
 
-继续 `WI-S1-03-08-VOICECLONE_STATE_RUNTIME_BOUNDARY_G0`：收敛 `VoiceCloneService` 的 profile/state timer、
-owner 与 runtime generation 绑定；旧账户、旧角色或旧 timer 回调不得覆盖当前角色。之后再处理 Digital
-Human runtime adapter 的剩余边界。
+继续 `WI-S1-03-08-PROVIDER_CAPABILITY_EXPIRY_G0`：收敛 VoiceClone/Digital Human runtime capability 的
+failed/unknown/expiry 结果，并保持 Provider、公开 UI 与真机范围不变。

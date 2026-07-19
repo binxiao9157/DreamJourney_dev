@@ -34,9 +34,14 @@ for required in [
     "var isReadyForUse: Bool",
     "sampleStatus == .ready && isEnabled && realCloneProviderReady && !qualityAcceptanceRequired",
     "guard snapshot.isReadyForUse",
-    "saveBackendState(snapshot)",
-    "storedBool(forKey: realCloneProviderReadyKey)",
-    "storedBool(forKey: qualityAcceptanceRequiredKey)",
+    "private struct VoiceCloneTrainingRuntimeOperation",
+    "let runtimeGeneration: UInt64",
+    "private var trainingRuntimeOperation: VoiceCloneTrainingRuntimeOperation?",
+    "private func isCurrentTrainingRuntimeOperation(",
+    "private func handleDigitalHumanContextChange(",
+    "forName: .djDigitalHumanContextDidChange",
+    "trainingOperation: VoiceCloneTrainingRuntimeOperation? = nil",
+    "deliverTrainingResult(",
     "let preferred = selectableProfiles.first(where: {",
     "$0.voiceProfileId == preferredProfileId",
 ] {
@@ -45,13 +50,18 @@ for required in [
 
 assertNotContains(
     voiceService,
-    "existingStatus == .ready",
-    "new pending/failed backend state must be allowed to replace a stale ready cache"
+    "trainingSpeakerId",
+    "typed runtime operation must replace split speaker state"
 )
 assertNotContains(
     voiceService,
-    "snapshot.sampleStatus == .ready,",
-    "currentUsableSpeakerId must use snapshot.isReadyForUse instead of sampleStatus alone"
+    "trainingPersonaTarget",
+    "typed runtime operation must replace split persona state"
+)
+assertNotContains(
+    voiceService,
+    "trainingAccountLease",
+    "typed runtime operation must replace split account state"
 )
 
 for required in [
