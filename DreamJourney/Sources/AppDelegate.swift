@@ -3331,56 +3331,35 @@ private extension AppDelegate {
     }
 
     func runTencentBackendPCMDriveMockSmoke(retryCount: Int = 0) {
-        guard let tabBarController = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow })?
-            .rootViewController as? WarmTabBarController else {
-            guard retryCount < 20 else {
-                print("[UI_QA] TencentBackendPCMDriveMockSmoke failed reason=missingRootTab")
-                writeTencentBackendPCMDriveMockSmokeResult([
-                    "completed": false,
-                    "failureReason": "missingRootTab"
-                ])
-                return
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                self?.runTencentBackendPCMDriveMockSmoke(retryCount: retryCount + 1)
-            }
-            return
-        }
-
-        guard let viewControllers = tabBarController.viewControllers,
-              viewControllers.count > 1,
-              let echoNavigationController = viewControllers[1] as? UINavigationController,
-              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
-            print("[UI_QA] TencentBackendPCMDriveMockSmoke failed reason=missingEcho")
-            writeTencentBackendPCMDriveMockSmokeResult([
-                "completed": false,
-                "failureReason": "missingEcho"
-            ])
-            return
-        }
-
-        tabBarController.selectedIndex = 1
         let voiceProfileId = uiqaArgumentValue(prefix: "DJTencentBackendPCMDriveMockVoiceProfileId=") ?? "S_uiqa_tencent_pcm_mock"
         let userId = uiqaArgumentValue(prefix: "DJTencentBackendPCMDriveMockUserId=")
             ?? UserManager.shared.currentUser?.id
             ?? "uiqa_tencent_backend_pcm_mock"
-        echoViewController.runUIQATencentBackendPCMDriveMockSmoke(
-            voiceProfileId: voiceProfileId,
-            userId: userId
-        ) { [weak self] payload in
-            var result = payload
-            result["selectedTabIndex"] = tabBarController.selectedIndex
-            self?.writeTencentBackendPCMDriveMockSmokeResult(result)
-            print(
-                "[UI_QA] TencentBackendPCMDriveMockSmoke completed " +
-                "completed=\(result["completed"] as? Bool == true) " +
-                "chunks=\(result["pcmChunkCount"] as? Int ?? 0) " +
-                "final=\(result["finalChunkObserved"] as? Bool == true)"
-            )
-        }
+        QAEchoScenarioRunner.run(
+            retryCount: retryCount,
+            smokeName: "TencentBackendPCMDriveMockSmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runTencentBackendPCMDriveMockSmoke(retryCount: nextRetryCount)
+            },
+            writeResult: { [weak self] result in
+                self?.writeTencentBackendPCMDriveMockSmokeResult(result)
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQATencentBackendPCMDriveMockSmoke(
+                    voiceProfileId: voiceProfileId,
+                    userId: userId,
+                    completion: completion
+                )
+            },
+            completionLog: { result in
+                print(
+                    "[UI_QA] TencentBackendPCMDriveMockSmoke completed " +
+                    "completed=\(result["completed"] as? Bool == true) " +
+                    "chunks=\(result["pcmChunkCount"] as? Int ?? 0) " +
+                    "final=\(result["finalChunkObserved"] as? Bool == true)"
+                )
+            }
+        )
     }
 
     func runEchoTraceExportSmoke(retryCount: Int = 0) {

@@ -39,6 +39,7 @@ assertFileExists(runnerPath, "Tencent backend PCM-drive mock smoke runner")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let runtimeStub = read("DreamJourney/Sources/Services/DigitalHuman/TencentDigitalHumanRuntimeStub.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let runner = read(runnerPath)
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
@@ -55,13 +56,30 @@ for required in [
 }
 
 for required in [
-    "DJRunTencentBackendPCMDriveMockSmoke",
+    "case .tencentBackendPCMDriveMockSmoke",
     "runTencentBackendPCMDriveMockSmoke",
     "writeTencentBackendPCMDriveMockSmokeResult",
     "tencent-backend-pcm-drive-mock-smoke-result.json",
 ] {
     assertContains(appDelegate, required, "AppDelegate should expose Tencent backend PCM-drive mock smoke \(required)")
 }
+
+assertContains(
+    featureFlags,
+    "case tencentBackendPCMDriveMockSmoke = \"DJRunTencentBackendPCMDriveMockSmoke\"",
+    "Centralized QA launch configuration should own the Tencent backend PCM-drive mock launch argument"
+)
+
+assertContains(
+    featureFlags,
+    "enum QAEchoScenarioRunner",
+    "Tencent backend PCM-drive mock should use the compile-isolated shared Echo scenario runner"
+)
+assertContains(
+    appDelegate,
+    "QAEchoScenarioRunner.run(\n            retryCount: retryCount,\n            smokeName: \"TencentBackendPCMDriveMockSmoke\"",
+    "Tencent backend PCM-drive mock should delegate root/Echo routing to the shared scenario runner"
+)
 
 for required in [
     "runUIQATencentBackendPCMDriveMockSmoke",

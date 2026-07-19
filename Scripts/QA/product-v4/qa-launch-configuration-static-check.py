@@ -99,8 +99,8 @@ def main() -> None:
         "Echo QA export adapter must use the compile-isolated result writer",
     )
     require(
-        app_delegate.count("QAEchoScenarioRunner.run(") >= 7,
-        "Echo scenario runner must own five evidence exports, lifecycle, and runtime-stub scenarios",
+        app_delegate.count("QAEchoScenarioRunner.run(") >= 8,
+        "Echo scenario runner must own five evidence exports, lifecycle, runtime-stub, and PCM-drive scenarios",
     )
     for smoke_name in (
         "EchoTraceExportSmoke",
