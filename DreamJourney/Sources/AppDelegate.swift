@@ -295,78 +295,78 @@ private extension AppDelegate {
 
         switch scenario {
         case .digitalHumanLivePanelSmoke:
-            scheduleUIQAScenario(after: 1.0) { $0.runDigitalHumanLivePanelSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runDigitalHumanLivePanelSmoke() }
         case .echoDigitalHumanLifecycleSmoke:
-            scheduleUIQAScenario(after: 1.0) { $0.runEchoDigitalHumanLifecycleSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runEchoDigitalHumanLifecycleSmoke() }
         case .digitalHumanRuntimeStubSmoke:
-            scheduleUIQAScenario(after: 1.0) { $0.runDigitalHumanRuntimeStubSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runDigitalHumanRuntimeStubSmoke() }
         case .voiceCloneProfileSelectionSmoke:
-            scheduleUIQAScenario(after: 0.8) { $0.runVoiceCloneProfileSelectionSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runVoiceCloneProfileSelectionSmoke() }
         case .voiceCloneSynthesisRuntimeSmoke:
-            scheduleUIQAScenario(after: 0.8) { $0.runVoiceCloneSynthesisRuntimeSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runVoiceCloneSynthesisRuntimeSmoke() }
         case .tencentBackendPCMDriveMockSmoke:
-            scheduleUIQAScenario(after: 1.0) { $0.runTencentBackendPCMDriveMockSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runTencentBackendPCMDriveMockSmoke() }
         case .echoTraceExportSmoke:
-            scheduleUIQAScenario(after: 1.0) { $0.runEchoTraceExportSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runEchoTraceExportSmoke() }
         case .echoRuntimeDiagnosticsExportSmoke:
-            scheduleUIQAScenario(after: 1.0) { $0.runEchoRuntimeDiagnosticsExportSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runEchoRuntimeDiagnosticsExportSmoke() }
         case .echoTraceEvidencePackageExportSmoke:
-            scheduleUIQAScenario(after: 1.0) { $0.runEchoTraceEvidencePackageExportSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runEchoTraceEvidencePackageExportSmoke() }
         case .echoTraceEvidencePackagePanelExportSmoke:
-            scheduleUIQAScenario(after: 1.0) { $0.runEchoTraceEvidencePackagePanelExportSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runEchoTraceEvidencePackagePanelExportSmoke() }
         case .echoQAEvidenceBundleExportSmoke:
-            scheduleUIQAScenario(after: 1.0) { $0.runEchoQAEvidenceBundleExportSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runEchoQAEvidenceBundleExportSmoke() }
         case .profileCareBackendFailureRetrySmoke:
-            scheduleUIQAScenario(after: 0.8) { $0.runProfileCareBackendFailureRetrySmoke() }
+            scheduleUIQAScenario(scenario) { $0.runProfileCareBackendFailureRetrySmoke() }
         case .profileCareBackendStateSmoke:
-            scheduleUIQAScenario(after: 0.8) { $0.runProfileCareBackendStateSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runProfileCareBackendStateSmoke() }
         case .profileCareStateSmoke:
-            scheduleUIQAScenario(after: 0.8) { $0.runProfileCareStateSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runProfileCareStateSmoke() }
         case .profileCareEscalationBoundarySmoke:
-            scheduleUIQAScenario(after: 0.8) { $0.runProfileCareEscalationBoundarySmoke() }
+            scheduleUIQAScenario(scenario) { $0.runProfileCareEscalationBoundarySmoke() }
         case .profileFamilyPersonaReleaseSmoke:
-            scheduleUIQAScenario(after: 0.8) { $0.runProfileFamilyPersonaReleaseSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runProfileFamilyPersonaReleaseSmoke() }
         case .globalPrivateStoreRetirementSmoke:
-            scheduleUIQAScenario(after: 0.8) { $0.runGlobalPrivateStoreRetirementSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runGlobalPrivateStoreRetirementSmoke() }
         case .archiveMediaEntriesSmoke:
-            scheduleUIQAScenario(after: 0.8) { $0.runArchiveMediaEntriesSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runArchiveMediaEntriesSmoke() }
         case .archiveAudioLifecycleSmoke:
-            scheduleUIQAScenario(after: 0.8) { $0.runArchiveAudioLifecycleSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runArchiveAudioLifecycleSmoke() }
         case .archiveHiddenShellSmoke:
-            scheduleUIQAScenario(after: 0.8) { $0.runArchiveHiddenShellSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runArchiveHiddenShellSmoke() }
         case .ownerTruthCandidateInboxSmoke:
-            scheduleUIQAScenario(after: 0.8) { $0.runOwnerTruthCandidateInboxSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runOwnerTruthCandidateInboxSmoke() }
         case .archiveFailedAnalysisRetrySmoke:
             seedFailedArchiveAnalysisRetryContext()
-            scheduleUIQAScenario(after: 0.8) { $0.runArchiveFailedAnalysisRetrySmoke() }
+            scheduleUIQAScenario(scenario) { $0.runArchiveFailedAnalysisRetrySmoke() }
         case .echoDelayedReplyNotificationSmoke:
-            scheduleUIQAScenario(after: 0.8) { $0.runEchoDelayedReplyNotificationSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runEchoDelayedReplyNotificationSmoke() }
         case .backendEnvironmentSmoke:
             seedEchoArchiveContext()
-            scheduleUIQAScenario(after: 1.0) { $0.runBackendEnvSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runBackendEnvSmoke() }
         case .archiveToEchoSmoke:
             DialogPromptDebugRecorder.reset()
             seedPendingArchiveAnalysisContext()
-            scheduleUIQAScenario(after: 1.0) { $0.runArchiveToEchoSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runArchiveToEchoSmoke() }
         case .archiveMediaEchoContextSmoke:
             DialogPromptDebugRecorder.reset()
             prepareArchiveMediaEchoContextSmoke()
         case .timeLetterDispatchReminderSmoke:
-            scheduleUIQAScenario(after: 0.8) { $0.runTimeLetterDispatchReminderSmoke() }
+            scheduleUIQAScenario(scenario) { $0.runTimeLetterDispatchReminderSmoke() }
         case .echoListeningStatePreview:
-            scheduleUIQAScenario(after: 1.0) {
+            scheduleUIQAScenario(scenario) {
                 $0.showEchoVoiceStatePreview(targetState: .listening)
             }
         case .echoSpeakingStatePreview:
-            scheduleUIQAScenario(after: 1.0) {
+            scheduleUIQAScenario(scenario) {
                 $0.showEchoVoiceStatePreview(targetState: .speaking)
             }
         case .voiceSDKReadinessPreview:
-            scheduleUIQAScenario(after: 1.0) { $0.showVoiceSDKReadinessPreview() }
+            scheduleUIQAScenario(scenario) { $0.showVoiceSDKReadinessPreview() }
         case .voiceCloneStatusFeedbackPreview:
-            scheduleUIQAScenario(after: 1.0) { $0.showVoiceCloneStatusFeedbackPreview() }
+            scheduleUIQAScenario(scenario) { $0.showVoiceCloneStatusFeedbackPreview() }
         case .echoVoiceStatePreview:
-            scheduleUIQAScenario(after: 1.0) { $0.showEchoVoiceStatePreview() }
+            scheduleUIQAScenario(scenario) { $0.showEchoVoiceStatePreview() }
         case .seedEchoArchiveContext:
             seedEchoArchiveContext()
         case .seedArchiveAnalysisInsights:
@@ -377,13 +377,22 @@ private extension AppDelegate {
     }
 
     func scheduleUIQAScenario(
-        after delay: TimeInterval,
+        _ scenario: QALaunchScenario,
         action: @escaping (AppDelegate) -> Void
     ) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self else { return }
-            action(self)
-        }
+        QAScenarioRunner.schedule(
+            scenario,
+            scheduleAfter: { delay, scheduledAction in
+                DispatchQueue.main.asyncAfter(
+                    deadline: .now() + delay,
+                    execute: scheduledAction
+                )
+            },
+            action: { [weak self] in
+                guard let self else { return }
+                action(self)
+            }
+        )
     }
 
     func runGlobalPrivateStoreRetirementSmoke() {

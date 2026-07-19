@@ -40,6 +40,8 @@ def main() -> None:
         "enum QAScenarioRunner",
         "static func makeLaunchPlan(from configuration: QALaunchConfiguration)",
         "static func prepareSession(",
+        "var startupDelay: TimeInterval?",
+        "static func schedule(",
         "enum QAScenarioResultWriter",
         "static func write(",
     ):
@@ -78,6 +80,10 @@ def main() -> None:
         "AppDelegate UIQA harness must delegate session preparation to QAScenarioRunner",
     )
     require(
+        "QAScenarioRunner.schedule(" in app_delegate,
+        "AppDelegate UIQA harness must delegate startup timing to QAScenarioRunner",
+    )
+    require(
         "func prepareUIQASession(" not in app_delegate,
         "AppDelegate must not retain the pre-runner session-preparation helper",
     )
@@ -103,6 +109,10 @@ def main() -> None:
     require(
         "switch scenario" in app_delegate,
         "AppDelegate UIQA harness must dispatch through the typed scenario registry",
+    )
+    require(
+        "scheduleUIQAScenario(after:" not in app_delegate,
+        "AppDelegate must not retain per-scenario magic startup delays",
     )
     require(
         "configuration.contains(" not in app_delegate,

@@ -196,6 +196,38 @@ enum QALaunchScenario: String, CaseIterable {
             return false
         }
     }
+
+    /// Keep UIQA startup timing declarative so AppDelegate dispatch does not
+    /// accumulate per-scenario magic delays. `nil` means the legacy path is
+    /// intentionally immediate because it only prepares a local QA seed.
+    var startupDelay: TimeInterval? {
+        switch self {
+        case .archiveMediaEchoContextSmoke,
+             .seedEchoArchiveContext,
+             .seedArchiveAnalysisInsights,
+             .seedPendingArchiveAnalysis:
+            return nil
+        case .digitalHumanLivePanelSmoke,
+             .echoDigitalHumanLifecycleSmoke,
+             .digitalHumanRuntimeStubSmoke,
+             .tencentBackendPCMDriveMockSmoke,
+             .echoTraceExportSmoke,
+             .echoRuntimeDiagnosticsExportSmoke,
+             .echoTraceEvidencePackageExportSmoke,
+             .echoTraceEvidencePackagePanelExportSmoke,
+             .echoQAEvidenceBundleExportSmoke,
+             .backendEnvironmentSmoke,
+             .archiveToEchoSmoke,
+             .echoListeningStatePreview,
+             .echoSpeakingStatePreview,
+             .voiceSDKReadinessPreview,
+             .voiceCloneStatusFeedbackPreview,
+             .echoVoiceStatePreview:
+            return 1.0
+        default:
+            return 0.8
+        }
+    }
 }
 
 enum QALaunchScenarioSessionPreparation {
@@ -243,6 +275,18 @@ enum QAScenarioRunner {
             login()
             resetFeatureFlags()
         }
+    }
+
+    static func schedule(
+        _ scenario: QALaunchScenario,
+        scheduleAfter: @escaping (_ delay: TimeInterval, _ action: @escaping () -> Void) -> Void,
+        action: @escaping () -> Void
+    ) {
+        guard let delay = scenario.startupDelay else {
+            action()
+            return
+        }
+        scheduleAfter(delay, action)
     }
 }
 

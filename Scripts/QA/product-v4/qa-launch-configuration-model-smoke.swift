@@ -55,6 +55,7 @@ struct QALaunchConfigurationModelSmoke {
                 "QA scenario runner must preserve launch capability and seed policies"
             )
             verifySessionPreparation()
+            verifyScenarioScheduling()
             verifyResultWriter()
         } else {
             require(
@@ -136,6 +137,43 @@ struct QALaunchConfigurationModelSmoke {
             resetFeatureFlags: reset
         )
         require(loginCount == 2 && resetCount == 1, "reset scenario must log in before resetting flags")
+    }
+
+    private static func verifyScenarioScheduling() {
+        require(
+            QALaunchScenario.echoTraceExportSmoke.startupDelay == 1.0,
+            "trace export must retain its legacy one-second startup delay"
+        )
+        require(
+            QALaunchScenario.voiceCloneSynthesisRuntimeSmoke.startupDelay == 0.8,
+            "voice clone runtime smoke must retain its legacy 0.8-second startup delay"
+        )
+        require(
+            QALaunchScenario.seedEchoArchiveContext.startupDelay == nil,
+            "seed-only scenarios must remain immediate"
+        )
+
+        var scheduledDelay: TimeInterval?
+        var scheduledCount = 0
+        QAScenarioRunner.schedule(
+            .echoTraceExportSmoke,
+            scheduleAfter: { delay, action in
+                scheduledDelay = delay
+                action()
+            },
+            action: { scheduledCount += 1 }
+        )
+        require(scheduledDelay == 1.0 && scheduledCount == 1, "scheduled scenario must dispatch through its metadata delay")
+
+        scheduledDelay = nil
+        QAScenarioRunner.schedule(
+            .seedEchoArchiveContext,
+            scheduleAfter: { delay, _ in
+                scheduledDelay = delay
+            },
+            action: { scheduledCount += 1 }
+        )
+        require(scheduledDelay == nil && scheduledCount == 2, "immediate seed scenario must bypass delayed scheduling")
     }
 
     #if DEBUG || UI_QA_SIMULATOR
