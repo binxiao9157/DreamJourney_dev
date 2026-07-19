@@ -10,19 +10,19 @@
       "WI-S1-01-07-G1-OWNER-QA-CONTEXT-TEXT-EVIDENCE",
       "WI-S1-01-07-G2-OWNER-QA-CONTEXT-DEPLOYED-SHADOW-OBSERVATION"
     ],
-    "currentSubSlice": "WI-S1-01-07-G3-CONTEXT-RETRIEVAL-QUALITY-BASELINE",
+    "currentSubSlice": "WI-S1-01-07-G3-DEFERRED-UNTIL-QUERY-RETRIEVER-EXISTS",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "SCOPED_TYPED_CONTRACT_VERIFIED",
       "G1": "QA_TEXT_EVIDENCE_SIMULATOR_VERIFIED",
       "G2": "SCOPED_DEPLOYED_POSTGRES_CONTRACT_VERIFIED",
-      "G3": "MISSING",
+      "G3": "DEFERRED_UNTIL_QUERY_RETRIEVER_EXISTS",
       "G4": "NOT_APPLICABLE_TO_CURRENT_INTERNAL_QA"
     },
     "id": "WI-S1-01-07",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-01-07 G0 typed Context/Citation contract, G1 QA-only text evidence and a scoped G2 deployed Postgres smoke are verified. The server remains default-off for Owner Truth QA routes; public /context/build, Echo, KBLite and runtime authority remain unchanged. Continue G3 fixture-based retrieval/ranking quality baseline without public UI exposure."
+    "summary": "WI-S1-01-07 G0 typed Context/Citation contract, G1 QA-only text evidence and a scoped G2 deployed Postgres smoke are verified. The server remains default-off for Owner Truth QA routes; public /context/build, Echo, KBLite and runtime authority remain unchanged. G3 is deferred: current projectionCitationOrder is deterministic citation order, not a query retriever/ranker, so no synthetic fixture may claim retrieval-quality completion. Continue the independent correction-candidate Work Item without widening public exposure."
   },
   "baselines": {
     "backend": "main@162afb0",
@@ -421,5 +421,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T23:18:05+0800"
+  "updatedAt": "2026-07-19T23:31:00+0800"
 }
