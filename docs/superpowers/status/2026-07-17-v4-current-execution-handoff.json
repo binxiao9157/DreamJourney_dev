@@ -8,21 +8,22 @@
       "WI-S1-01-06-G2-KBLITE-COMPATIBILITY-READ-ENVELOPE-DEPLOYMENT",
       "WI-S1-01-07-G0-OWNER-QA-CONTEXT-TYPED-CITATION-CONTRACT",
       "WI-S1-01-07-G1-OWNER-QA-CONTEXT-TEXT-EVIDENCE",
-      "WI-S1-01-07-G2-OWNER-QA-CONTEXT-DEPLOYED-SHADOW-OBSERVATION"
+      "WI-S1-01-07-G2-OWNER-QA-CONTEXT-DEPLOYED-SHADOW-OBSERVATION",
+      "WI-S1-01-08-G0-CITATION-BOUND-CORRECTION-REQUEST-CLIENT"
     ],
-    "currentSubSlice": "WI-S1-01-07-G3-DEFERRED-UNTIL-QUERY-RETRIEVER-EXISTS",
+    "currentSubSlice": "WI-S1-01-08-G1-QA-ENTRYPOINT-AND-CANDIDATE-INBOX-INTEGRATION",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "SCOPED_TYPED_CONTRACT_VERIFIED",
-      "G1": "QA_TEXT_EVIDENCE_SIMULATOR_VERIFIED",
-      "G2": "SCOPED_DEPLOYED_POSTGRES_CONTRACT_VERIFIED",
-      "G3": "DEFERRED_UNTIL_QUERY_RETRIEVER_EXISTS",
-      "G4": "NOT_APPLICABLE_TO_CURRENT_INTERNAL_QA"
+      "G0": "IOS_TYPED_CORRECTION_CLIENT_AND_BACKEND_REGRESSION_VERIFIED",
+      "G1": "NEXT_QA_ENTRYPOINT_AND_CANDIDATE_INBOX_INTEGRATION",
+      "G2": "BACKEND_ROUTE_PREEXISTING_DEPLOYED_NO_BACKEND_CHANGE_THIS_SLICE",
+      "G3": "NOT_APPLICABLE_TO_CORRECTION_REQUEST_CONTRACT",
+      "G4": "PUBLIC_EXPOSURE_REMAINS_DISABLED_PENDING_PRODUCT_UX_APPROVAL"
     },
-    "id": "WI-S1-01-07",
+    "id": "WI-S1-01-08",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-01-07 G0 typed Context/Citation contract, G1 QA-only text evidence and a scoped G2 deployed Postgres smoke are verified. The server remains default-off for Owner Truth QA routes; public /context/build, Echo, KBLite and runtime authority remain unchanged. G3 is deferred: current projectionCitationOrder is deterministic citation order, not a query retriever/ranker, so no synthetic fixture may claim retrieval-quality completion. Continue the independent correction-candidate Work Item without widening public exposure."
+    "summary": "WI-S1-01-08 G0 now has a citation-bound iOS correction-request client, value-free receipt parsing, independent QA-only write gate, AccountLease fencing and static/default-public exposure checks. The deployed backend route already creates a pending Candidate without directly changing Memory authority; local backend regression verifies stale/cross-vault/duplicate/resolve boundaries. No public Echo, Archive or KBLite entrypoint has changed. Next is the narrow QA entrypoint and Candidate Inbox integration; public correction UX remains disabled pending product approval."
   },
   "baselines": {
     "backend": "main@162afb0",
@@ -391,6 +392,12 @@
       "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
     },
     {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-01-08-owner-correction-request.md",
+      "id": "WI-S1-01-08",
+      "implementationStatus": "INTERNAL_READY / IOS_TYPED_CLIENT_AND_QA_GATE_VERIFIED / BACKEND_ROUTE_PREEXISTING_DEPLOYED / PUBLIC_ENTRY_DISABLED / G1_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G4_OPEN"
+    },
+    {
       "evidence": "../DreamJourneyBackend/docs/backend/2026-07-19-owner-truth-legacy-shadow-parity.md",
       "id": "WI-S1-01-09",
       "implementationStatus": "INTERNAL_READY / LEGACY_INVENTORY_AND_VALUE_FREE_PARITY_OBSERVER_DEPLOYED / G0_G2_ISOLATED_POSTGRES_VERIFIED / REAL_DATA_LINEAGE_BACKFILL_AND_COHORT_CUTOVER_OPEN",
@@ -411,8 +418,8 @@
   ],
   "nextWorkItem": {
     "id": "WI-S1-01-08",
-    "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After the Owner QA Context and typed Citation contract has scoped evidence, continue correction candidate handling without widening the public release scope."
+    "state": "G1_NEXT_SUBSLICE",
+    "summary": "Integrate the default-off correction request into the existing QA-only Candidate Inbox path, without widening public release scope or permitting direct authority mutation."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -421,5 +428,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T23:31:00+0800"
+  "updatedAt": "2026-07-19T23:58:00+0800"
 }

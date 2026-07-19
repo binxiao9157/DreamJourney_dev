@@ -4176,6 +4176,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL && OwnerTruthContextCitationQAGate.isEnabled
     }
 
+    var isOwnerTruthCorrectionRequestQAConfigured: Bool {
+        hasExplicitBaseURL && OwnerTruthCorrectionRequestQAGate.isEnabled
+    }
+
     private init() {
         let configured = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendBaseURL") as? String
         let raw = configured?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -4895,6 +4899,53 @@ final class DreamJourneyBackendClient {
                         expectedCommandID: commandID,
                         expectedQuery: query,
                         expectedAnswerText: answerText
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func requestOwnerTruthCorrection(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        command: OwnerTruthCorrectionRequestCommand,
+        completion: @escaping (Result<OwnerTruthCorrectionRequestReceipt, Error>) -> Void
+    ) {
+        guard OwnerTruthCorrectionRequestQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthCorrectionRequest",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        guard command.vaultID == vaultID else {
+            DispatchQueue.main.async {
+                completion(.failure(OwnerTruthRemoteContractError.invalidCorrectionRequestCommand(
+                    "requested Vault does not match the verified answer citation"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/memories/\(pathComponent(command.memoryID.rawValue.uuidString))/corrections",
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            sessionUserId: expectedOwnerSubjectID,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthCorrectionRequestReceipt(
+                        backendJSONObject: object,
+                        expectedCommand: command
                     )))
                 } catch {
                     completion(.failure(error))
@@ -6628,3 +6679,4 @@ final class DreamJourneyBackendClient {
 extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}
 extension DreamJourneyBackendClient: OwnerTruthContextCitationClient {}
+extension DreamJourneyBackendClient: OwnerTruthCorrectionRequestClient {}
