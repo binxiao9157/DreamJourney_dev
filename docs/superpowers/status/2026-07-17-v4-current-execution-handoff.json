@@ -30,12 +30,13 @@
       "WI-S1-03-04-ARCHIVE_CANDIDATE_INBOX_UIQA_G1_COMPLETE",
       "WI-S1-03-05-TURN_INTENT_REDUCER_G0_COMPLETE",
       "WI-S1-03-05-CONTEXT_BUILD_LEASE_G0_COMPLETE",
-      "WI-S1-03-05-CONTEXT_BUILD_TRANSPORT_G0_COMPLETE"
+      "WI-S1-03-05-CONTEXT_BUILD_TRANSPORT_G0_COMPLETE",
+      "WI-S1-03-05-CONTEXT_BUILD_IDENTITY_GATE_G0_COMPLETE"
     ],
-    "currentSubSlice": "WI-S1-03-05-TURN_INTENT_CONTEXT_LEASE_AND_TRANSPORT_G0_COMPLETE",
+    "currentSubSlice": "WI-S1-03-05-TURN_INTENT_CONTEXT_LEASE_TRANSPORT_AND_IDENTITY_G0_COMPLETE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "ECHO_TURN_INTENT_CONTEXT_BUILD_LEASE_AND_TRANSPORT_STATIC_AND_BUILD_FOR_TESTING_VERIFIED",
+      "G0": "ECHO_TURN_INTENT_CONTEXT_BUILD_LEASE_TRANSPORT_AND_IDENTITY_STATIC_AND_BUILD_FOR_TESTING_VERIFIED",
       "G1": "SIMULATOR_RUNTIME_OPEN_SCHEME_HAS_NO_RUNNABLE_DESTINATION",
       "G2": "ECHO_DELAYED_REPLY_REPLY_DISPATCH_AND_DIAGNOSTICS_SCOPE_OPEN",
       "G3": "PROVIDER_RUNTIME_SCOPE_OPEN"
@@ -43,7 +44,7 @@
     "id": "WI-S1-03-05",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-05 has completed three G0 sub-slices. EchoTurnIntentReducer provides a provider-independent lifecycle for normal replies, delayed replies, restored due replies, failure and retry; user and AI transcript writes are fenced before memory side effects. EchoApplicationCoordinator now owns the context-build transport and generation lease: a later request or lifecycle invalidation rejects older /context/build callbacks before they reach EchoViewController, trace persistence or fallback submission, including callbacks that reuse the same turn ID. The controller retains local KBLite fallback when the transport is unavailable and no longer directly composes DreamJourneyBackendClient context requests. Tencent QA/POC reply paths explicitly start a turn first. No public UI, Provider contract, KBLite authority or backend route changed. Runnable simulator evidence remains open because the current scheme exposes no runnable simulator destination; delayed/reply coordination and provider runtime gates remain open."
+    "summary": "WI-S1-03-05 has completed four G0 sub-slices. EchoTurnIntentReducer provides a provider-independent lifecycle for normal replies, delayed replies, restored due replies, failure and retry; user and AI transcript writes are fenced before memory side effects. EchoApplicationCoordinator now owns the context-build transport, generation lease and response identity classification: a later request or lifecycle invalidation rejects older /context/build callbacks before they reach EchoViewController, trace persistence or fallback submission, including callbacks that reuse the same turn ID; a packet whose owner/persona/digitalHuman identity does not match the request is delivered only as a typed rejection. The controller retains local KBLite fallback when the transport is unavailable or an identity rejection occurs and no longer directly composes DreamJourneyBackendClient context requests or context response identity policy. Tencent QA/POC reply paths explicitly start a turn first. No public UI, Provider contract, KBLite authority or backend route changed. Runnable simulator evidence remains open because the current scheme exposes no runnable simulator destination; runtime session/callback fencing, delayed/reply coordination and provider runtime gates remain open."
   },
   "baselines": {
     "backend": "main@32c38f2",
@@ -394,5 +395,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T08:24:00+0800"
+  "updatedAt": "2026-07-19T08:31:00+0800"
 }

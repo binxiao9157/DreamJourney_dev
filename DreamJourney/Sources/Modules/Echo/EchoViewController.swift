@@ -3925,8 +3925,8 @@ final class EchoViewController: UIViewController {
             expectedIdentity: expectedIdentity,
             lifecycleMode: context.mode,
             viewerFamilyMemberID: context.isSelfAssistant ? nil : context.ownerId
-        ) { [weak self] _, result in
-            switch result {
+        ) { [weak self] _, delivery in
+            switch delivery {
             case .success(let packet):
                 let record = EchoTraceRecord(turnID: turnID, packet: packet)
                 guard let self,
@@ -3934,35 +3934,6 @@ final class EchoViewController: UIViewController {
                         lifecycleToken,
                         reason: "contextPacketResponse"
                       ) else { return }
-                guard EchoKnowledgeContextPolicy.responseIdentityMatches(
-                    expected: expectedIdentity,
-                    responseUserId: packet.userId,
-                    responsePersonaScope: packet.personaScope,
-                    responseDigitalHumanId: packet.digitalHumanId
-                ) else {
-                    if let gate {
-                        self.submitLocalEchoTurnKnowledgeContext(
-                            text: text,
-                            gate: gate,
-                            source: "localKBLitePacketIdentityMismatch"
-                        )
-                    }
-                    PrivacySafeDiagnostics.log(
-                        subsystem: "CFLite",
-                        event: "contextPacketIgnored",
-                        states: ["reason": "identityMismatch"],
-                        correlations: [
-                            "turn": turnID,
-                            "expectedUser": expectedIdentity.userId,
-                            "expectedPersona": expectedIdentity.personaScope,
-                            "expectedDigitalHuman": expectedIdentity.digitalHumanId,
-                            "actualUser": packet.userId,
-                            "actualPersona": packet.personaScope,
-                            "actualDigitalHuman": packet.digitalHumanId,
-                        ]
-                    )
-                    return
-                }
                 EchoTraceStore.shared.record(record, ownerUserId: expectedIdentity.userId)
                 self.lastEchoTraceRecord = record
                 self.recordEchoRuntimeDiagnosticsSnapshot(reason: "contextPacketBuilt")
@@ -4012,6 +3983,33 @@ final class EchoViewController: UIViewController {
                     ]
                 )
                 print(record.logLine)
+            case .identityMismatch(let mismatch):
+                guard let self,
+                      self.isCurrentDigitalHumanLifecycleToken(
+                        lifecycleToken,
+                        reason: "contextPacketIdentityMismatch"
+                      ) else { return }
+                if let gate {
+                    self.submitLocalEchoTurnKnowledgeContext(
+                        text: text,
+                        gate: gate,
+                        source: "localKBLitePacketIdentityMismatch"
+                    )
+                }
+                PrivacySafeDiagnostics.log(
+                    subsystem: "CFLite",
+                    event: "contextPacketIgnored",
+                    states: ["reason": "identityMismatch"],
+                    correlations: [
+                        "turn": turnID,
+                        "expectedUser": mismatch.expectedIdentity.userId,
+                        "expectedPersona": mismatch.expectedIdentity.personaScope,
+                        "expectedDigitalHuman": mismatch.expectedIdentity.digitalHumanId,
+                        "actualUser": mismatch.responseUserId,
+                        "actualPersona": mismatch.responsePersonaScope,
+                        "actualDigitalHuman": mismatch.responseDigitalHumanId,
+                    ]
+                )
             case .failure:
                 guard let self,
                       self.isCurrentDigitalHumanLifecycleToken(

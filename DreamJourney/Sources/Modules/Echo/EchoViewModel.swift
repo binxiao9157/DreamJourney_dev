@@ -411,6 +411,19 @@ struct EchoContextBuildLease: Equatable {
     let expectedIdentity: EchoKnowledgeContextIdentity
 }
 
+struct EchoContextBuildIdentityMismatch: Equatable {
+    let expectedIdentity: EchoKnowledgeContextIdentity
+    let responseUserId: String
+    let responsePersonaScope: String?
+    let responseDigitalHumanId: String?
+}
+
+enum EchoContextBuildDelivery {
+    case success(EchoContextPacket)
+    case identityMismatch(EchoContextBuildIdentityMismatch)
+    case failure(Error)
+}
+
 /// Incremental application coordinator for Echo business requests.
 /// Runtime digital-human/audio lifecycles intentionally remain outside this seam.
 final class EchoApplicationCoordinator {
@@ -455,7 +468,7 @@ final class EchoApplicationCoordinator {
         expectedIdentity: EchoKnowledgeContextIdentity,
         lifecycleMode: DigitalHumanMode,
         viewerFamilyMemberID: String?,
-        completion: @escaping (EchoContextBuildLease, Result<EchoContextPacket, Error>) -> Void
+        completion: @escaping (EchoContextBuildLease, EchoContextBuildDelivery) -> Void
     ) -> EchoContextBuildLease? {
         guard contextBuildTransport.isContextBuildConfigured else {
             return nil
@@ -476,7 +489,31 @@ final class EchoApplicationCoordinator {
                 guard let self, self.isCurrent(lease) else {
                     return
                 }
-                completion(lease, result)
+                switch result {
+                case .success(let packet):
+                    guard EchoKnowledgeContextPolicy.responseIdentityMatches(
+                        expected: lease.expectedIdentity,
+                        responseUserId: packet.userId,
+                        responsePersonaScope: packet.personaScope,
+                        responseDigitalHumanId: packet.digitalHumanId
+                    ) else {
+                        completion(
+                            lease,
+                            .identityMismatch(
+                                EchoContextBuildIdentityMismatch(
+                                    expectedIdentity: lease.expectedIdentity,
+                                    responseUserId: packet.userId,
+                                    responsePersonaScope: packet.personaScope,
+                                    responseDigitalHumanId: packet.digitalHumanId
+                                )
+                            )
+                        )
+                        return
+                    }
+                    completion(lease, .success(packet))
+                case .failure(let error):
+                    completion(lease, .failure(error))
+                }
             }
         }
         return lease

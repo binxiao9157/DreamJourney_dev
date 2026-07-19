@@ -33,6 +33,8 @@ def main() -> None:
     for required in (
         "protocol EchoContextBuildTransport",
         "struct EchoContextBuildLease: Equatable",
+        "struct EchoContextBuildIdentityMismatch: Equatable",
+        "enum EchoContextBuildDelivery",
         "final class EchoApplicationCoordinator",
         "private(set) var activeContextBuildLease: EchoContextBuildLease?",
         "func beginContextBuild(",
@@ -72,6 +74,14 @@ def main() -> None:
         "echoApplicationCoordinator.isCurrent(contextBuildLease)" not in context_build,
         "the coordinator must own stale lease filtering before invoking the controller callback",
     )
+    require(
+        "EchoKnowledgeContextPolicy.responseIdentityMatches" not in context_build,
+        "the coordinator must classify context identity mismatches before controller delivery",
+    )
+    require(
+        "case .identityMismatch(let mismatch):" in context_build,
+        "the controller must retain its explicit local fallback for rejected context identity",
+    )
 
     for test_name in (
         "func testContextBuildLeaseSupersedesEarlierRequest()",
@@ -79,6 +89,7 @@ def main() -> None:
         "func testSameTurnNewGenerationRejectsOldCallback()",
         "func testCoordinatorDropsSupersededTransportCallbackBeforeDelivery()",
         "func testCoordinatorDoesNotStartWhenContextTransportIsUnavailable()",
+        "func testCoordinatorClassifiesIdentityMismatchedPacketBeforeControllerDelivery()",
     ):
         require(test_name in tests, f"Echo application coordinator test missing: {test_name}")
 

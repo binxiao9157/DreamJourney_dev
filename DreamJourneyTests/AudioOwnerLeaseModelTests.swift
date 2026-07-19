@@ -274,6 +274,49 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
         XCTAssertTrue(transport.completions.isEmpty)
         XCTAssertNil(coordinator.activeContextBuildLease)
     }
+
+    func testCoordinatorClassifiesIdentityMismatchedPacketBeforeControllerDelivery() {
+        let transport = DeferredEchoContextBuildTransport()
+        let coordinator = EchoApplicationCoordinator(contextBuildTransport: transport)
+        let expectedIdentity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let expectation = expectation(description: "identity mismatch delivered")
+
+        let lease = coordinator.requestContextBuild(
+            turnID: "turn-1",
+            query: "query",
+            expectedIdentity: expectedIdentity,
+            lifecycleMode: .sunlight,
+            viewerFamilyMemberID: nil
+        ) { _, delivery in
+            guard case .identityMismatch(let mismatch) = delivery else {
+                XCTFail("mismatched packet must not be delivered as success")
+                return
+            }
+            XCTAssertEqual(mismatch.expectedIdentity, expectedIdentity)
+            XCTAssertEqual(mismatch.responseUserId, "owner-2")
+            XCTAssertEqual(mismatch.responsePersonaScope, "self")
+            XCTAssertEqual(mismatch.responseDigitalHumanId, "digital-human-1")
+            expectation.fulfill()
+        }
+
+        XCTAssertNotNil(lease)
+        transport.complete(
+            at: 0,
+            result: .success(
+                makeEchoContextPacket(
+                    userId: "owner-2",
+                    personaScope: "self",
+                    digitalHumanId: "digital-human-1"
+                )
+            )
+        )
+
+        wait(for: [expectation], timeout: 1)
+    }
 }
 
 private final class DeferredEchoContextBuildTransport: EchoContextBuildTransport {
@@ -299,4 +342,21 @@ private final class DeferredEchoContextBuildTransport: EchoContextBuildTransport
     func complete(at index: Int, result: Result<EchoContextPacket, Error>) {
         completions[index](result)
     }
+}
+
+private func makeEchoContextPacket(
+    userId: String,
+    personaScope: String,
+    digitalHumanId: String
+) -> EchoContextPacket {
+    guard let packet = EchoContextPacket(json: [
+        "traceId": "trace-id",
+        "intent": "echo",
+        "userId": userId,
+        "personaScope": personaScope,
+        "digitalHumanId": digitalHumanId,
+    ]) else {
+        fatalError("test context packet must decode")
+    }
+    return packet
 }
