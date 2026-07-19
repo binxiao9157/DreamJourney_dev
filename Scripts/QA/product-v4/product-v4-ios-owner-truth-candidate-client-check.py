@@ -170,8 +170,8 @@ def main() -> None:
         "Candidate Inbox route must enforce the QA gate at the tap boundary",
     )
     require(
-        'arguments.contains("DJRunOwnerTruthCandidateInboxSmoke")' in app_delegate,
-        "Candidate Inbox UIQA smoke launch route missing",
+        'configuration.contains("DJRunOwnerTruthCandidateInboxSmoke")' in app_delegate,
+        "Candidate Inbox UIQA smoke launch route must use QALaunchConfiguration",
     )
     require(
         "OwnerTruthCandidateInboxUIQASmoke.makeViewController(accountLease: accountLease)" in app_delegate,

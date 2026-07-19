@@ -45,9 +45,9 @@ def main() -> None:
 
     header = text[:900]
     require(
-        "V1.2 Product Confirmed Baseline + Staged Validation + Startup Lean Profile" in header
+        "V1.3 2026-07-15 新规生效后的 M0-M4 路线基线" in header
         and "115 个 Work Item" in header,
-        "roadmap header must report the July 15 product-confirmed state",
+        "roadmap header must report the current M0-M4 baseline",
     )
     require(
         "产品范围已确认不代表工程实现" in header

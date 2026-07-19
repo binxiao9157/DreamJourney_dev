@@ -2,11 +2,13 @@
   "activeWorkItem": {
     "authorityLock": "IOS_COMPOSITION",
     "backendPendingPaths": [],
-    "completedSubSlices": [],
-    "currentSubSlice": "WI-S1-03-10-G0-DISCOVERY",
+    "completedSubSlices": [
+      "WI-S1-03-10-G0-QA-LAUNCH-CONFIGURATION"
+    ],
+    "currentSubSlice": "WI-S1-03-10-G0-SCENARIO-REGISTRY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "NOT_STARTED",
+      "G0": "PARTIAL_QA_LAUNCH_CONFIGURATION_VERIFIED",
       "G1": "NOT_STARTED",
       "G3": "NOT_STARTED",
       "G4": "NOT_STARTED"
@@ -14,7 +16,7 @@
     "id": "WI-S1-03-10",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-09 is internally ready at G0: notification, remote notification and deeplink ingress are parsed only as opaque owner-scoped route intents, validated against the active AccountLease at request/runtime/UI checkpoints, cleared on old-account lifecycle teardown, and routed only to a neutral Tab. G1/G3/G4 remain open. WI-S1-03-10 now owns QA support extraction and progressive strangler discovery without widening the public release scope."
+    "summary": "WI-S1-03-09 is internally ready at G0: notification, remote notification and deeplink ingress are parsed only as opaque owner-scoped route intents, validated against the active AccountLease at request/runtime/UI checkpoints, cleared on old-account lifecycle teardown, and routed only to a neutral Tab. G1/G3/G4 remain open. WI-S1-03-10 has completed its first G0 sub-slice: AppDelegate and Echo now consume launch arguments only through a centralized fail-closed QALaunchConfiguration, while scenario execution remains intentionally unchanged pending registry extraction."
   },
   "baselines": {
     "backend": "main@32c38f2",
@@ -389,5 +391,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T11:05:00+0800"
+  "updatedAt": "2026-07-19T11:13:02+0800"
 }

@@ -158,14 +158,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     private func configureLaunchArgumentFeatureFlagsIfNeeded() {
         #if DEBUG || UI_QA_SIMULATOR
-        let arguments = ProcessInfo.processInfo.arguments
-        if arguments.contains("DJShowDigitalHumanLivePanel")
-            || arguments.contains("DJRunDigitalHumanLivePanelSmoke")
-            || arguments.contains("DJRunEchoDigitalHumanLifecycleSmoke")
-            || arguments.contains("DJRunTencentDigitalHumanTextDriveSmoke")
-            || arguments.contains("DJRunTencentDigitalHumanPCMDriveSmoke")
-            || arguments.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
-            || arguments.contains("DJRunDigitalHumanRuntimeStubSmoke") {
+        let configuration = QALaunchConfiguration.shared
+        if configuration.contains("DJShowDigitalHumanLivePanel")
+            || configuration.contains("DJRunDigitalHumanLivePanelSmoke")
+            || configuration.contains("DJRunEchoDigitalHumanLifecycleSmoke")
+            || configuration.contains("DJRunTencentDigitalHumanTextDriveSmoke")
+            || configuration.contains("DJRunTencentDigitalHumanPCMDriveSmoke")
+            || configuration.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
+            || configuration.contains("DJRunDigitalHumanRuntimeStubSmoke") {
             FeatureFlagService.shared.enableForCurrentLaunch(.digitalHumanLivePanel)
             print("[QA] Digital human live panel enabled by launch argument")
         }
@@ -278,198 +278,198 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 #if UI_QA_SIMULATOR && targetEnvironment(simulator)
 private extension AppDelegate {
     func configureUIQASmokeHarnessIfNeeded() {
-        let arguments = ProcessInfo.processInfo.arguments
-        if arguments.contains("DJEnableArchiveRemoteFetch") {
+        let configuration = QALaunchConfiguration.shared
+        if configuration.contains("DJEnableArchiveRemoteFetch") {
             FeatureFlagService.shared.enableForCurrentLaunch(.archiveRemoteFetch)
             print("[UI_QA] Archive remote fetch enabled")
         }
-        if arguments.contains("DJShowDigitalHumanLivePanel")
-            || arguments.contains("DJRunDigitalHumanLivePanelSmoke")
-            || arguments.contains("DJRunEchoDigitalHumanLifecycleSmoke")
-            || arguments.contains("DJRunTencentBackendPCMDriveMockSmoke") {
+        if configuration.contains("DJShowDigitalHumanLivePanel")
+            || configuration.contains("DJRunDigitalHumanLivePanelSmoke")
+            || configuration.contains("DJRunEchoDigitalHumanLifecycleSmoke")
+            || configuration.contains("DJRunTencentBackendPCMDriveMockSmoke") {
             FeatureFlagService.shared.enableForCurrentLaunch(.digitalHumanLivePanel)
             print("[UI_QA] Digital human live panel enabled")
         }
-        if arguments.contains(where: { $0.hasPrefix("DJRunProfileCare") }) {
+        if configuration.contains(prefix: "DJRunProfileCare") {
             seedUIQAStarCareFamilyMember()
         }
-        if arguments.contains("DJRunDigitalHumanLivePanelSmoke") {
+        if configuration.contains("DJRunDigitalHumanLivePanelSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runDigitalHumanLivePanelSmoke()
             }
-        } else if arguments.contains("DJRunEchoDigitalHumanLifecycleSmoke") {
+        } else if configuration.contains("DJRunEchoDigitalHumanLifecycleSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runEchoDigitalHumanLifecycleSmoke()
             }
-        } else if arguments.contains("DJRunDigitalHumanRuntimeStubSmoke") {
+        } else if configuration.contains("DJRunDigitalHumanRuntimeStubSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runDigitalHumanRuntimeStubSmoke()
             }
-        } else if arguments.contains("DJRunVoiceCloneProfileSelectionSmoke") {
+        } else if configuration.contains("DJRunVoiceCloneProfileSelectionSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runVoiceCloneProfileSelectionSmoke()
             }
-        } else if arguments.contains("DJRunVoiceCloneSynthesisRuntimeSmoke") {
+        } else if configuration.contains("DJRunVoiceCloneSynthesisRuntimeSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runVoiceCloneSynthesisRuntimeSmoke()
             }
-        } else if arguments.contains("DJRunTencentBackendPCMDriveMockSmoke") {
+        } else if configuration.contains("DJRunTencentBackendPCMDriveMockSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runTencentBackendPCMDriveMockSmoke()
             }
-        } else if arguments.contains("DJRunEchoTraceExportSmoke") {
+        } else if configuration.contains("DJRunEchoTraceExportSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runEchoTraceExportSmoke()
             }
-        } else if arguments.contains("DJRunEchoRuntimeDiagnosticsExportSmoke") {
+        } else if configuration.contains("DJRunEchoRuntimeDiagnosticsExportSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runEchoRuntimeDiagnosticsExportSmoke()
             }
-        } else if arguments.contains("DJRunEchoTraceEvidencePackageExportSmoke") {
+        } else if configuration.contains("DJRunEchoTraceEvidencePackageExportSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runEchoTraceEvidencePackageExportSmoke()
             }
-        } else if arguments.contains("DJRunEchoTraceEvidencePackagePanelExportSmoke") {
+        } else if configuration.contains("DJRunEchoTraceEvidencePackagePanelExportSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runEchoTraceEvidencePackagePanelExportSmoke()
             }
-        } else if arguments.contains("DJRunEchoQAEvidenceBundleExportSmoke") {
+        } else if configuration.contains("DJRunEchoQAEvidenceBundleExportSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runEchoQAEvidenceBundleExportSmoke()
             }
-        } else if arguments.contains("DJRunProfileCareBackendFailureRetrySmoke") {
+        } else if configuration.contains("DJRunProfileCareBackendFailureRetrySmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runProfileCareBackendFailureRetrySmoke()
             }
-        } else if arguments.contains("DJRunProfileCareBackendStateSmoke") {
+        } else if configuration.contains("DJRunProfileCareBackendStateSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runProfileCareBackendStateSmoke()
             }
-        } else if arguments.contains("DJRunProfileCareStateSmoke") {
+        } else if configuration.contains("DJRunProfileCareStateSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runProfileCareStateSmoke()
             }
-        } else if arguments.contains("DJRunProfileCareEscalationBoundarySmoke") {
+        } else if configuration.contains("DJRunProfileCareEscalationBoundarySmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runProfileCareEscalationBoundarySmoke()
             }
-        } else if arguments.contains("DJRunProfileFamilyPersonaReleaseSmoke") {
+        } else if configuration.contains("DJRunProfileFamilyPersonaReleaseSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runProfileFamilyPersonaReleaseSmoke()
             }
-        } else if arguments.contains("DJRunGlobalPrivateStoreRetirementSmoke") {
+        } else if configuration.contains("DJRunGlobalPrivateStoreRetirementSmoke") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runGlobalPrivateStoreRetirementSmoke()
             }
-        } else if arguments.contains("DJRunArchiveMediaEntriesSmoke") {
+        } else if configuration.contains("DJRunArchiveMediaEntriesSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runArchiveMediaEntriesSmoke()
             }
-        } else if arguments.contains("DJRunArchiveAudioLifecycleSmoke") {
+        } else if configuration.contains("DJRunArchiveAudioLifecycleSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runArchiveAudioLifecycleSmoke()
             }
-        } else if arguments.contains("DJRunArchiveHiddenShellSmoke") {
+        } else if configuration.contains("DJRunArchiveHiddenShellSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runArchiveHiddenShellSmoke()
             }
-        } else if arguments.contains("DJRunOwnerTruthCandidateInboxSmoke") {
+        } else if configuration.contains("DJRunOwnerTruthCandidateInboxSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runOwnerTruthCandidateInboxSmoke()
             }
-        } else if arguments.contains("DJRunArchiveFailedAnalysisRetrySmoke") {
+        } else if configuration.contains("DJRunArchiveFailedAnalysisRetrySmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             seedFailedArchiveAnalysisRetryContext()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runArchiveFailedAnalysisRetrySmoke()
             }
-        } else if arguments.contains("DJRunEchoDelayedReplyNotificationSmoke") {
+        } else if configuration.contains("DJRunEchoDelayedReplyNotificationSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runEchoDelayedReplyNotificationSmoke()
             }
-        } else if arguments.contains("DJRunBackendEnvSmoke") {
+        } else if configuration.contains("DJRunBackendEnvSmoke") {
             seedEchoArchiveContext()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runBackendEnvSmoke()
             }
-        } else if arguments.contains("DJRunArchiveToEchoSmoke") {
+        } else if configuration.contains("DJRunArchiveToEchoSmoke") {
             DialogPromptDebugRecorder.reset()
             seedPendingArchiveAnalysisContext()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.runArchiveToEchoSmoke()
             }
-        } else if arguments.contains("DJRunArchiveMediaEchoContextSmoke") {
+        } else if configuration.contains("DJRunArchiveMediaEchoContextSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DialogPromptDebugRecorder.reset()
             prepareArchiveMediaEchoContextSmoke()
-        } else if arguments.contains("DJRunTimeLetterDispatchReminderSmoke") {
+        } else if configuration.contains("DJRunTimeLetterDispatchReminderSmoke") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             FeatureFlagService.shared.resetToDefaults()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.runTimeLetterDispatchReminderSmoke()
             }
-        } else if arguments.contains("DJShowEchoListeningStatePreview") {
+        } else if configuration.contains("DJShowEchoListeningStatePreview") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.showEchoVoiceStatePreview(targetState: .listening)
             }
-        } else if arguments.contains("DJShowEchoSpeakingStatePreview") {
+        } else if configuration.contains("DJShowEchoSpeakingStatePreview") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.showEchoVoiceStatePreview(targetState: .speaking)
             }
-        } else if arguments.contains("DJShowVoiceSDKReadinessPreview") {
+        } else if configuration.contains("DJShowVoiceSDKReadinessPreview") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.showVoiceSDKReadinessPreview()
             }
-        } else if arguments.contains("DJShowVoiceCloneStatusFeedbackPreview") {
+        } else if configuration.contains("DJShowVoiceCloneStatusFeedbackPreview") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.showVoiceCloneStatusFeedbackPreview()
             }
-        } else if arguments.contains("DJShowEchoVoiceStatePreview") {
+        } else if configuration.contains("DJShowEchoVoiceStatePreview") {
             UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.showEchoVoiceStatePreview()
             }
-        } else if arguments.contains("DJSeedEchoArchiveContext") {
+        } else if configuration.contains("DJSeedEchoArchiveContext") {
             seedEchoArchiveContext()
-        } else if arguments.contains("DJSeedArchiveAnalysisInsights") {
+        } else if configuration.contains("DJSeedArchiveAnalysisInsights") {
             seedArchiveAnalysisInsightsContext()
-        } else if arguments.contains("DJSeedPendingArchiveAnalysis") {
+        } else if configuration.contains("DJSeedPendingArchiveAnalysis") {
             seedPendingArchiveAnalysisContext()
         }
     }
@@ -1159,10 +1159,7 @@ private extension AppDelegate {
     }
 
     func uiqaArgumentValue(prefix: String) -> String? {
-        ProcessInfo.processInfo.arguments
-            .first(where: { $0.hasPrefix(prefix) })
-            .map { String($0.dropFirst(prefix.count)) }
-            .flatMap { $0.isEmpty ? nil : $0 }
+        QALaunchConfiguration.shared.value(forPrefix: prefix)
     }
 
     func seedUIQAStarCareFamilyMember() {

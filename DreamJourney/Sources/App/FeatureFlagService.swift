@@ -1,5 +1,43 @@
 import Foundation
 
+/// Centralizes launch-argument access for Debug and simulator UIQA only.
+///
+/// Production artifacts intentionally receive an empty configuration so a
+/// stale command-line argument can never enable a seed, smoke flow, or hidden
+/// feature. Keep scenario orchestration outside of this type; it is the
+/// fail-closed boundary between process arguments and the app runtime.
+struct QALaunchConfiguration {
+    static let shared = QALaunchConfiguration()
+
+    private let arguments: [String]
+
+    private init() {
+        #if DEBUG || UI_QA_SIMULATOR
+        arguments = ProcessInfo.processInfo.arguments
+        #else
+        arguments = []
+        #endif
+    }
+
+    func contains(_ argument: String) -> Bool {
+        arguments.contains(argument)
+    }
+
+    func contains(prefix: String) -> Bool {
+        arguments.contains { $0.hasPrefix(prefix) }
+    }
+
+    func value(forPrefix prefix: String) -> String? {
+        arguments
+            .first(where: { $0.hasPrefix(prefix) })
+            .map { String($0.dropFirst(prefix.count)) }
+            .flatMap { value in
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }
+    }
+}
+
 enum DJFeature: String, CaseIterable {
     case echoTextInput
     case echoImageInput

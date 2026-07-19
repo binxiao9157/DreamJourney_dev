@@ -639,15 +639,15 @@ final class EchoViewController: UIViewController {
 
     private var isDigitalHumanQAOverrideEnabled: Bool {
         #if DEBUG || UI_QA_SIMULATOR
-        let arguments = ProcessInfo.processInfo.arguments
-        return arguments.contains("DJShowDigitalHumanLivePanel")
-            || arguments.contains("DJRunDigitalHumanLivePanelSmoke")
-            || arguments.contains("DJRunEchoDigitalHumanLifecycleSmoke")
-            || arguments.contains("DJRunDigitalHumanRuntimeStubSmoke")
-            || arguments.contains("DJRunTencentDigitalHumanTextDriveSmoke")
-            || arguments.contains("DJRunTencentDigitalHumanPCMDriveSmoke")
-            || arguments.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
-            || arguments.contains("DJRunTencentBackendPCMDriveMockSmoke")
+        let configuration = QALaunchConfiguration.shared
+        return configuration.contains("DJShowDigitalHumanLivePanel")
+            || configuration.contains("DJRunDigitalHumanLivePanelSmoke")
+            || configuration.contains("DJRunEchoDigitalHumanLifecycleSmoke")
+            || configuration.contains("DJRunDigitalHumanRuntimeStubSmoke")
+            || configuration.contains("DJRunTencentDigitalHumanTextDriveSmoke")
+            || configuration.contains("DJRunTencentDigitalHumanPCMDriveSmoke")
+            || configuration.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
+            || configuration.contains("DJRunTencentBackendPCMDriveMockSmoke")
         #else
         return false
         #endif
@@ -655,7 +655,7 @@ final class EchoViewController: UIViewController {
 
     private var isDigitalHumanQADisableEnabled: Bool {
         #if DEBUG || UI_QA_SIMULATOR
-        return ProcessInfo.processInfo.arguments.contains("DJDisableDigitalHumanLivePanel")
+        return QALaunchConfiguration.shared.contains("DJDisableDigitalHumanLivePanel")
         #else
         return false
         #endif
@@ -663,11 +663,11 @@ final class EchoViewController: UIViewController {
 
     private var shouldShowEchoRuntimeDiagnosticsPanel: Bool {
         #if DEBUG || UI_QA_SIMULATOR
-        let arguments = ProcessInfo.processInfo.arguments
-        return arguments.contains("DJShowEchoRuntimeDiagnosticsPanel")
-            || arguments.contains("DJRunEchoRuntimeDiagnosticsExportSmoke")
-            || arguments.contains("DJRunEchoTraceEvidencePackageExportSmoke")
-            || arguments.contains("DJRunEchoTraceEvidencePackagePanelExportSmoke")
+        let configuration = QALaunchConfiguration.shared
+        return configuration.contains("DJShowEchoRuntimeDiagnosticsPanel")
+            || configuration.contains("DJRunEchoRuntimeDiagnosticsExportSmoke")
+            || configuration.contains("DJRunEchoTraceEvidencePackageExportSmoke")
+            || configuration.contains("DJRunEchoTraceEvidencePackagePanelExportSmoke")
         #else
         return false
         #endif
@@ -675,7 +675,7 @@ final class EchoViewController: UIViewController {
 
     private var shouldRunTencentDigitalHumanTextDriveSmoke: Bool {
         #if DEBUG || UI_QA_SIMULATOR
-        return ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanTextDriveSmoke")
+        return QALaunchConfiguration.shared.contains("DJRunTencentDigitalHumanTextDriveSmoke")
         #else
         return false
         #endif
@@ -683,7 +683,7 @@ final class EchoViewController: UIViewController {
 
     private var shouldRunTencentDigitalHumanPCMDriveSmoke: Bool {
         #if DEBUG || UI_QA_SIMULATOR
-        return ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanPCMDriveSmoke")
+        return QALaunchConfiguration.shared.contains("DJRunTencentDigitalHumanPCMDriveSmoke")
         #else
         return false
         #endif
@@ -691,7 +691,7 @@ final class EchoViewController: UIViewController {
 
     private var shouldRunTencentDigitalHumanBackendPCMDriveSmoke: Bool {
         #if DEBUG || UI_QA_SIMULATOR
-        return ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
+        return QALaunchConfiguration.shared.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
         #else
         return false
         #endif
@@ -699,7 +699,7 @@ final class EchoViewController: UIViewController {
 
     private var shouldRunTencentBackendPCMDriveMockSmoke: Bool {
         #if DEBUG || UI_QA_SIMULATOR
-        return ProcessInfo.processInfo.arguments.contains("DJRunTencentBackendPCMDriveMockSmoke")
+        return QALaunchConfiguration.shared.contains("DJRunTencentBackendPCMDriveMockSmoke")
         #else
         return false
         #endif
@@ -707,7 +707,7 @@ final class EchoViewController: UIViewController {
 
     private var shouldRunTencentDigitalHumanPCMDriveStopProbe: Bool {
         #if DEBUG || UI_QA_SIMULATOR
-        return ProcessInfo.processInfo.arguments.contains("DJRunTencentDigitalHumanPCMDriveStopProbe")
+        return QALaunchConfiguration.shared.contains("DJRunTencentDigitalHumanPCMDriveStopProbe")
         #else
         return false
         #endif
@@ -753,13 +753,7 @@ final class EchoViewController: UIViewController {
 
     private func launchArgumentValue(prefix: String) -> String? {
         #if DEBUG || UI_QA_SIMULATOR
-        ProcessInfo.processInfo.arguments
-            .first { $0.hasPrefix(prefix) }
-            .map { String($0.dropFirst(prefix.count)) }
-            .flatMap { value in
-                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                return trimmed.isEmpty ? nil : trimmed
-            }
+        QALaunchConfiguration.shared.value(forPrefix: prefix)
         #else
         return nil
         #endif
@@ -1454,7 +1448,7 @@ final class EchoViewController: UIViewController {
 
     private var digitalHumanBackgroundReleaseGracePeriod: TimeInterval {
 #if UI_QA_SIMULATOR && targetEnvironment(simulator)
-        if ProcessInfo.processInfo.arguments.contains("DJRunEchoDigitalHumanLifecycleSmoke") {
+        if QALaunchConfiguration.shared.contains("DJRunEchoDigitalHumanLifecycleSmoke") {
             return 0.45
         }
 #endif
@@ -1466,7 +1460,7 @@ final class EchoViewController: UIViewController {
             return true
         }
 #if UI_QA_SIMULATOR && targetEnvironment(simulator)
-        return ProcessInfo.processInfo.arguments.contains("DJRunEchoDigitalHumanLifecycleSmoke")
+        return QALaunchConfiguration.shared.contains("DJRunEchoDigitalHumanLifecycleSmoke")
             && digitalHumanRuntime is TencentDigitalHumanRuntimeStub
 #else
         return false
@@ -6734,7 +6728,7 @@ extension EchoViewController {
         updatePersonaBadge()
         panel.setLocalPreviewEnabled(true)
         viewModel.beginVoiceInteraction()
-        let usesProviderVisemeTimeline = ProcessInfo.processInfo.arguments.contains("DJDigitalHumanLipSyncProviderVisemeTimeline")
+        let usesProviderVisemeTimeline = QALaunchConfiguration.shared.contains("DJDigitalHumanLipSyncProviderVisemeTimeline")
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             self?.render(state: .thinking)

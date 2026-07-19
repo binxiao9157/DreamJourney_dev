@@ -28,8 +28,8 @@ project = read(PROJECT)
 runner = read(RUNNER)
 
 require(
-    'arguments.contains("DJRunGlobalPrivateStoreRetirementSmoke")' in app_delegate,
-    "AppDelegate must expose the dedicated WI-S0-01-06 UIQA launch argument",
+    'configuration.contains("DJRunGlobalPrivateStoreRetirementSmoke")' in app_delegate,
+    "AppDelegate must route the dedicated WI-S0-01-06 UIQA launch argument through QALaunchConfiguration",
 )
 require(
     "runGlobalPrivateStoreRetirementSmoke()" in app_delegate,
