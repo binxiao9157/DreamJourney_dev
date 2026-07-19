@@ -88,3 +88,62 @@ final class AudioOwnerLeaseModelTests: XCTestCase {
         }
     }
 }
+
+final class EchoTurnIntentReducerTests: XCTestCase {
+    func testOrdinaryTurnTransitionsFromVoiceStartToReplyDelivered() {
+        var reducer = EchoTurnIntentReducer()
+
+        XCTAssertEqual(reducer.reduce(.prepareVoiceInteraction).currentPhase, .starting)
+        XCTAssertEqual(reducer.reduce(.voiceCaptureStarted).currentPhase, .listening)
+        XCTAssertEqual(reducer.reduce(.userTurnAccepted).currentPhase, .thinking)
+        XCTAssertEqual(reducer.reduce(.replyStarted).currentPhase, .speaking)
+
+        let delivery = reducer.reduce(.replyDelivered)
+
+        XCTAssertTrue(delivery.accepted)
+        XCTAssertEqual(delivery.previousPhase, .speaking)
+        XCTAssertEqual(delivery.currentPhase, .replied)
+    }
+
+    func testStaleReplyCannotResurrectAnIdleTurn() {
+        var reducer = EchoTurnIntentReducer()
+
+        XCTAssertTrue(reducer.reduce(.reset).accepted)
+        let staleReply = reducer.reduce(.replyStarted)
+
+        XCTAssertFalse(staleReply.accepted)
+        XCTAssertEqual(staleReply.previousPhase, .idle)
+        XCTAssertEqual(staleReply.currentPhase, .idle)
+        XCTAssertEqual(reducer.phase, .idle)
+    }
+
+    func testDelayedReplyCanBeScheduledAndDeliveredWithoutOpeningAnotherTurn() {
+        var reducer = EchoTurnIntentReducer()
+        _ = reducer.reduce(.prepareVoiceInteraction)
+        _ = reducer.reduce(.voiceCaptureStarted)
+
+        XCTAssertEqual(reducer.reduce(.delayedReplyScheduled).currentPhase, .waitingReply)
+        XCTAssertFalse(reducer.reduce(.voiceCaptureStarted).accepted)
+        XCTAssertEqual(reducer.reduce(.replyDelivered).currentPhase, .replied)
+    }
+
+    func testStoredDueReplyCanDeliverAfterAppRelaunchWithoutAcceptingStaleReply() {
+        var reducer = EchoTurnIntentReducer()
+
+        XCTAssertFalse(reducer.reduce(.replyDelivered).accepted)
+
+        let restoredDelivery = reducer.reduce(.restoredDelayedReplyDelivered)
+
+        XCTAssertTrue(restoredDelivery.accepted)
+        XCTAssertEqual(restoredDelivery.previousPhase, .idle)
+        XCTAssertEqual(restoredDelivery.currentPhase, .replied)
+    }
+
+    func testFailureOnlyRetriesFromFailureState() {
+        var reducer = EchoTurnIntentReducer()
+
+        XCTAssertFalse(reducer.reduce(.retry).accepted)
+        XCTAssertEqual(reducer.reduce(.failure).currentPhase, .failed)
+        XCTAssertEqual(reducer.reduce(.retry).currentPhase, .idle)
+    }
+}

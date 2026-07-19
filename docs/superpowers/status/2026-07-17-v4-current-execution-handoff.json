@@ -27,20 +27,21 @@
       "WI-S1-03-03-AI_RECORDING_LIFECYCLE_MIGRATION",
       "WI-S1-03-04-OWNER_TRUTH_CANDIDATE_CLIENT_G0_COMPLETE",
       "WI-S1-03-04-OWNER_TRUTH_CANDIDATE_USE_CASE_G0_COMPLETE",
-      "WI-S1-03-04-ARCHIVE_CANDIDATE_INBOX_UIQA_G1_COMPLETE"
+      "WI-S1-03-04-ARCHIVE_CANDIDATE_INBOX_UIQA_G1_COMPLETE",
+      "WI-S1-03-05-TURN_INTENT_REDUCER_G0_COMPLETE"
     ],
-    "currentSubSlice": "WI-S1-03-04-ARCHIVE_CANDIDATE_INBOX_UIQA_G1_COMPLETE",
+    "currentSubSlice": "WI-S1-03-05-TURN_INTENT_REDUCER_G0_COMPLETE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "TYPED_OWNER_TRUTH_CANDIDATE_CLIENT_AND_LEASE_FENCED_INTENT_VIEWSTATE_VERIFIED",
-      "G1": "HIDDEN_ARCHIVE_CANDIDATE_INBOX_UIQA_VERIFIED",
-      "G2": "QA_ONLY_DEPLOYED_CANDIDATE_ROUTE_SMOKE_OPEN",
-      "G4": "EXTERNAL_PRIVACY_AND_RELEASE_DECISION_OPEN"
+      "G0": "ECHO_TURN_INTENT_REDUCER_STATIC_AND_BUILD_FOR_TESTING_VERIFIED",
+      "G1": "SIMULATOR_RUNTIME_OPEN_SCHEME_HAS_NO_RUNNABLE_DESTINATION",
+      "G2": "ECHO_COORDINATOR_AND_BACKEND_TRANSPORT_SCOPE_OPEN",
+      "G3": "PROVIDER_RUNTIME_SCOPE_OPEN"
     },
-    "id": "WI-S1-03-04",
+    "id": "WI-S1-03-05",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-04 has completed its typed Owner Truth Candidate client, lease-fenced Intent/ViewState foundation and hidden Archive Candidate Inbox UIQA. Inbox, review command, immutable receipt and MemoryVersion activation responses are parsed fail-closed; the review use case rejects stale AccountLease callbacks and mismatched terminal receipts. The Archive entry is self-mode, QA-launch-gated and default-hidden, while the page never receives owner IDs, raw transport data, KBLite authority or legacy writer access. A simulator smoke renders a fake candidate and validates the QA page. G2 deployed route evidence and G4 external privacy/release decisions remain open; no backend or public release change is included."
+    "summary": "WI-S1-03-05 has completed its first G0 slice: EchoTurnIntentReducer provides a provider-independent lifecycle for normal replies, delayed replies, restored due replies, failure and retry. User and AI transcript writes are fenced before memory side effects, while a dedicated restored-delivery intent preserves an authenticated delayed reply after app relaunch without allowing generic stale replies from idle. Tencent QA/POC reply paths explicitly start a turn first. No public UI, Provider contract, KBLite authority or backend route changed. Runnable simulator evidence remains open because the current scheme exposes no runnable simulator destination; coordinator extraction and transport/runtime gates remain open."
   },
   "baselines": {
     "backend": "main@32c38f2",
@@ -380,9 +381,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-03-05",
+    "id": "WI-S1-03-06",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After WI-S1-03-04 has hidden Candidate Inbox/ViewState evidence, extract Echo application coordination without changing public layout or granting VC direct authority. It must retain text-only fallback and re-check its own G0/G1/G2 scope."
+    "summary": "After WI-S1-03-05 completes its Echo application coordination boundaries, continue with the next IOS_COMPOSITION item without widening the public release scope."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -391,5 +392,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T07:32:36+0800"
+  "updatedAt": "2026-07-19T08:09:34+0800"
 }

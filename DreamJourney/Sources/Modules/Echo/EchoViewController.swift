@@ -4905,6 +4905,7 @@ final class EchoViewController: UIViewController {
         }
         hasRunTencentDigitalHumanTextDriveSmoke = true
         let text = "真机数字人文本驱动测试。请用腾讯数智人说出这句话。"
+        viewModel.prepareVoiceInteraction()
         viewModel.receiveAIReply(text)
         sendEchoReplyToDigitalHumanRuntimeIfReady(text, source: "trueDeviceTextDriveSmoke")
         PrivacySafeDiagnostics.log(
@@ -4925,6 +4926,7 @@ final class EchoViewController: UIViewController {
 
         hasRunTencentDigitalHumanPCMDriveSmoke = true
         let text = "腾讯音频驱动 POC：正在用本地标准 PCM 测试声音和口型。"
+        viewModel.prepareVoiceInteraction()
         viewModel.receiveAIReply(text)
         sendPCMDriveTestSignalToDigitalHumanRuntime(
             source: "trueDevicePCMDriveSmoke",
@@ -4947,6 +4949,7 @@ final class EchoViewController: UIViewController {
         }
 
         hasRunTencentDigitalHumanBackendPCMDriveSmoke = true
+        viewModel.prepareVoiceInteraction()
         trueDeviceBackendPCMDriveTrace.begin(
             trigger: trigger,
             voiceProfileId: tencentBackendPCMDriveVoiceProfileId ?? "",
@@ -5987,6 +5990,7 @@ extension EchoViewController {
     }
 
     func runUIQAEchoSpeakingStatePreview() {
+        viewModel.prepareVoiceInteraction()
         viewModel.receiveAIReply("我在这里，慢慢听你说。")
     }
 

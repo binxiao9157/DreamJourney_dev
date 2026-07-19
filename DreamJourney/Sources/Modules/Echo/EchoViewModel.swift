@@ -171,6 +171,136 @@ enum EchoInteractionState {
     case error(String)
 }
 
+/// Pure, provider-independent turn lifecycle used by Echo application code.
+/// It intentionally does not carry transcript, context, audio or digital-human state.
+enum EchoTurnPhase: String, Equatable {
+    case idle
+    case starting
+    case listening
+    case thinking
+    case waitingReply
+    case speaking
+    case replied
+    case failed
+}
+
+enum EchoTurnIntent: Equatable {
+    case prepareVoiceInteraction
+    case voiceCaptureStarted
+    case userTurnAccepted
+    case delayedReplyScheduled
+    case delayedReplyRestored
+    case replyStarted
+    case replyDelivered
+    case restoredDelayedReplyDelivered
+    case reset
+    case failure
+    case retry
+}
+
+struct EchoTurnTransition: Equatable {
+    let intent: EchoTurnIntent
+    let previousPhase: EchoTurnPhase
+    let currentPhase: EchoTurnPhase
+    let accepted: Bool
+}
+
+struct EchoTurnIntentReducer {
+    private(set) var phase: EchoTurnPhase = .idle
+
+    func accepts(_ intent: EchoTurnIntent) -> Bool {
+        nextPhase(for: intent) != nil
+    }
+
+    @discardableResult
+    mutating func reduce(_ intent: EchoTurnIntent) -> EchoTurnTransition {
+        let previousPhase = phase
+        guard let nextPhase = nextPhase(for: intent) else {
+            return EchoTurnTransition(
+                intent: intent,
+                previousPhase: previousPhase,
+                currentPhase: previousPhase,
+                accepted: false
+            )
+        }
+
+        phase = nextPhase
+        return EchoTurnTransition(
+            intent: intent,
+            previousPhase: previousPhase,
+            currentPhase: nextPhase,
+            accepted: true
+        )
+    }
+
+    private func nextPhase(for intent: EchoTurnIntent) -> EchoTurnPhase? {
+        switch intent {
+        case .prepareVoiceInteraction:
+            switch phase {
+            case .idle, .replied, .failed:
+                return .starting
+            case .starting, .listening, .thinking, .waitingReply, .speaking:
+                return nil
+            }
+        case .voiceCaptureStarted:
+            switch phase {
+            case .idle, .starting, .replied:
+                return .listening
+            case .listening, .thinking, .waitingReply, .speaking, .failed:
+                return nil
+            }
+        case .userTurnAccepted:
+            switch phase {
+            case .starting, .listening:
+                return .thinking
+            case .idle, .thinking, .waitingReply, .speaking, .replied, .failed:
+                return nil
+            }
+        case .delayedReplyScheduled:
+            switch phase {
+            case .listening, .thinking:
+                return .waitingReply
+            case .idle, .starting, .waitingReply, .speaking, .replied, .failed:
+                return nil
+            }
+        case .delayedReplyRestored:
+            switch phase {
+            case .idle, .replied, .failed:
+                return .waitingReply
+            case .starting, .listening, .thinking, .waitingReply, .speaking:
+                return nil
+            }
+        case .replyStarted:
+            switch phase {
+            case .starting, .listening, .thinking:
+                return .speaking
+            case .idle, .waitingReply, .speaking, .replied, .failed:
+                return nil
+            }
+        case .replyDelivered:
+            switch phase {
+            case .waitingReply, .speaking:
+                return .replied
+            case .idle, .starting, .listening, .thinking, .replied, .failed:
+                return nil
+            }
+        case .restoredDelayedReplyDelivered:
+            switch phase {
+            case .idle, .waitingReply:
+                return .replied
+            case .starting, .listening, .thinking, .speaking, .replied, .failed:
+                return nil
+            }
+        case .reset:
+            return .idle
+        case .failure:
+            return .failed
+        case .retry:
+            return phase == .failed ? .idle : nil
+        }
+    }
+}
+
 struct EchoReplyPacingPolicy {
     static let waitAfterUserTurnCount = 10
     static let replyDelayMinuteRange = 5...10
@@ -272,6 +402,7 @@ final class EchoViewModel {
     private(set) var pendingDelayedReply: EchoDelayedReply?
     private(set) var pendingDelayedReplyContext: EchoDelayedReplyCallsiteContext?
     private var currentSessionUserTurnCount = 0
+    private var turnIntentReducer = EchoTurnIntentReducer()
 
     var onStateChange: ((EchoInteractionState) -> Void)?
     var onTranscriptAppend: ((String, Bool) -> Void)?
@@ -316,19 +447,19 @@ final class EchoViewModel {
         context = contextStore.current
         memoryManager.refreshForCurrentContext()
         refreshArchiveContextStatus()
-        updateState(.starting)
+        _ = applyTurnIntent(.prepareVoiceInteraction, state: .starting)
     }
 
     func beginVoiceInteraction() {
         context = contextStore.current
         memoryManager.refreshForCurrentContext()
         refreshArchiveContextStatus()
-        updateState(.listening)
+        _ = applyTurnIntent(.voiceCaptureStarted, state: .listening)
     }
 
     func finishUserVoice(text: String) {
         guard let accountLease = accountLeaseRuntime.capture(forSubjectId: nil) else {
-            updateState(.error("账号状态已变化，请重新进入回响"))
+            _ = applyTurnIntent(.failure, state: .error("账号状态已变化，请重新进入回响"))
             return
         }
         finishUserVoice(
@@ -350,7 +481,7 @@ final class EchoViewModel {
         }
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else {
-            updateState(.error("刚才没有听清，可以再说一次"))
+            _ = applyTurnIntent(.failure, state: .error("刚才没有听清，可以再说一次"))
             return
         }
 
@@ -361,6 +492,11 @@ final class EchoViewModel {
                 userText: normalizedText,
                 accountLease: accountLease
             )
+            return
+        }
+
+        guard turnIntentReducer.accepts(.userTurnAccepted)
+                || turnIntentReducer.accepts(.delayedReplyScheduled) else {
             return
         }
 
@@ -400,7 +536,7 @@ final class EchoViewModel {
                 operationId: callsiteContext.operationId,
                 accountLease: callsiteContext.accountLease
             ) else {
-                updateState(.error("等待回信保存失败，请稍后重试"))
+                _ = applyTurnIntent(.failure, state: .error("等待回信保存失败，请稍后重试"))
                 return
             }
             guard delayedReplyCallsiteScopeStore.save(callsiteContext) else {
@@ -409,32 +545,33 @@ final class EchoViewModel {
                     operationId: callsiteContext.operationId,
                     accountLease: callsiteContext.accountLease
                 )
-                updateState(.error("等待回信保存失败，请稍后重试"))
+                _ = applyTurnIntent(.failure, state: .error("等待回信保存失败，请稍后重试"))
                 return
             }
             pendingDelayedReply = delayedReply
             pendingDelayedReplyContext = callsiteContext
-            updateState(.waitingReply(minutes: wait))
+            _ = applyTurnIntent(.delayedReplyScheduled, state: .waitingReply(minutes: wait))
             return
         }
 
-        updateState(.thinking)
+        _ = applyTurnIntent(.userTurnAccepted, state: .thinking)
     }
 
     func receiveAIReply(_ text: String) {
         guard !isNeutralSafetyMode else { return }
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedText.isEmpty else { return }
+        guard !normalizedText.isEmpty,
+              applyTurnIntent(.replyStarted, state: .speaking) else { return }
 
         memoryManager.refreshForCurrentContext()
         memoryManager.recordAITurn(text: normalizedText)
         onTranscriptAppend?(normalizedText, false)
-        updateState(.speaking)
     }
 
     func markReplyDelivered(accountLease: AccountLease) {
         guard !isNeutralSafetyMode else { return }
-        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else { return }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed,
+              turnIntentReducer.accepts(.replyDelivered) else { return }
         if let callsiteContext = pendingDelayedReplyContext {
             guard callsiteContext.accountLease == accountLease,
                   retirePendingDelayedReply(callsiteContext) else {
@@ -443,7 +580,7 @@ final class EchoViewModel {
         }
         pendingDelayedReply = nil
         pendingDelayedReplyContext = nil
-        updateState(.replied)
+        _ = applyTurnIntent(.replyDelivered, state: .replied)
     }
 
     func markReplyDelivered() {
@@ -462,7 +599,7 @@ final class EchoViewModel {
         currentSessionUserTurnCount = 0
         pendingDelayedReply = nil
         pendingDelayedReplyContext = nil
-        updateState(.idle)
+        _ = applyTurnIntent(.reset, state: .idle)
     }
 
     func resetToIdle() {
@@ -475,17 +612,17 @@ final class EchoViewModel {
         currentSessionUserTurnCount = 0
         pendingDelayedReply = nil
         pendingDelayedReplyContext = nil
-        updateState(.idle)
+        _ = applyTurnIntent(.reset, state: .idle)
     }
 
     func fail(_ message: String) {
         guard !isNeutralSafetyMode else { return }
-        updateState(.error(message))
+        _ = applyTurnIntent(.failure, state: .error(message))
     }
 
     func retryAfterError() {
         guard case .error = state else { return }
-        updateState(.idle)
+        _ = applyTurnIntent(.retry, state: .idle)
     }
 
     func markStoredDelayedReplyArrived(
@@ -494,6 +631,7 @@ final class EchoViewModel {
     ) {
         guard matchesPendingDelayedReplyContext(callsiteContext),
               delayedReply.id == callsiteContext.operationId,
+              turnIntentReducer.accepts(.restoredDelayedReplyDelivered),
               echoReplyMessageStore.saveArrivedReply(
             id: delayedReply.id,
             deliverAt: delayedReply.deliverAt,
@@ -506,7 +644,7 @@ final class EchoViewModel {
         }
         pendingDelayedReply = nil
         pendingDelayedReplyContext = nil
-        updateState(.replied)
+        _ = applyTurnIntent(.restoredDelayedReplyDelivered, state: .replied)
     }
 
     static func replyDelayMinutes(for sessionCount: Int) -> Int {
@@ -556,9 +694,9 @@ final class EchoViewModel {
             return false
         }
 
-        pendingDelayedReply = delayedReply
-        pendingDelayedReplyContext = callsiteContext
         if delayedReply.deliverAt <= now {
+            pendingDelayedReply = delayedReply
+            pendingDelayedReplyContext = callsiteContext
             markStoredDelayedReplyArrived(
                 delayedReply,
                 callsiteContext: callsiteContext
@@ -567,7 +705,12 @@ final class EchoViewModel {
         }
 
         let remainingMinutes = max(1, Int(ceil(delayedReply.deliverAt.timeIntervalSince(now) / 60)))
-        updateState(.waitingReply(minutes: remainingMinutes))
+        guard turnIntentReducer.accepts(.delayedReplyRestored) else {
+            return false
+        }
+        pendingDelayedReply = delayedReply
+        pendingDelayedReplyContext = callsiteContext
+        _ = applyTurnIntent(.delayedReplyRestored, state: .waitingReply(minutes: remainingMinutes))
         return true
     }
 
@@ -596,6 +739,17 @@ final class EchoViewModel {
         onStateChange?(newState)
     }
 
+    @discardableResult
+    private func applyTurnIntent(
+        _ intent: EchoTurnIntent,
+        state: EchoInteractionState
+    ) -> Bool {
+        let transition = turnIntentReducer.reduce(intent)
+        guard transition.accepted else { return false }
+        updateState(state)
+        return true
+    }
+
     private func enterNeutralSafetyMode(
         _ decision: EchoSafetyDecision,
         userText: String,
@@ -616,6 +770,7 @@ final class EchoViewModel {
         if let responseText = decision.responseText {
             onTranscriptAppend?(responseText, false)
         }
+        _ = turnIntentReducer.reduce(.reset)
         updateState(.neutralSafety(decision))
     }
 
