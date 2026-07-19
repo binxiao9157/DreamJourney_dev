@@ -51,8 +51,12 @@ pending Candidate 对接到现有 QA-only Candidate Inbox。请求只会创建�
 - **G1**：完成（本地合同）。Answer/Citation 纠正回执中的 `candidateId` 已被刷新并定位到
   既有 QA-only Candidate Inbox；测试覆盖候选可审核、候选缺失失败和双 QA gate 闭合。该结论
   不等同于公开纠错体验完成。
-- **G2**：待执行现网 Postgres 纠正→Candidate Inbox smoke。既有路由已部署；本轮未修改后端，
-  因此没有重新部署。
+- **G2**：完成（部署 Postgres）。2026-07-20 在后端 `main@162afb0` 的 API 容器内运行
+  `scripts/run-backend-owner-truth-postgres-smoke.sh`，一次性数据库 smoke 以
+  `schemaHead=0023`、`status=passed` 结束。它验证 Answer/Citation→Correction Request→
+  pending Candidate→专用 resolver→同一 Memory 的 successor version→outdated Answer evidence→
+  projection rebuild，且确认请求幂等、不可变、值无泄露、旧版本冲突失败闭合。
+  运行时 `api/postgres` healthy，`OWNER_TRUTH_CANDIDATE_REVIEW_QA_ENABLED=false`，未改变公开开关。
 - **G4**：公开纠错入口、审核体验和 cohort 策略仍等待产品确认，默认保持关闭。
 
 ## 不能宣称完成的内容
@@ -61,3 +65,10 @@ pending Candidate 对接到现有 QA-only Candidate Inbox。请求只会创建�
 - 尚未执行真实生产账号的在线纠正写入/收件箱读取 smoke。
 - Candidate 接受后生成 superseding MemoryVersion 的后端能力已有回归覆盖，但本轮没有
   新增公开 UI 或重新部署该服务。
+
+## 部署证据边界
+
+本次服务器 smoke 创建并删除隔离 PostgreSQL 数据库，脚本不向应用业务库写入测试记录。
+它证明的是已部署容器中的 schema/service/transaction 纠正链，不等同于打开 QA-only HTTP
+路由或为普通用户开放纠错体验。后者仍受两个客户端 QA gate 与服务端
+`OWNER_TRUTH_CANDIDATE_REVIEW_QA_ENABLED` 控制。
