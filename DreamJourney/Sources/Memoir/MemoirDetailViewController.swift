@@ -504,7 +504,7 @@ final class MemoirDetailViewController: UIViewController {
 
             audioStatusLabel.text = "点击播放回忆录朗读"
             playButton.setImage(UIImage(systemName: "play.circle.fill"), for: .normal)
-        } else if memoir.speakerId != nil || VoiceCloneService.shared.currentSpeakerId != nil {
+        } else if resolvedMemoirVoiceProfileId() != nil {
             // 有 speaker_id 但还没有合成：显示"生成朗读"按钮
             playButton.isHidden = true
             audioStatusLabel.isHidden = true
@@ -630,22 +630,33 @@ final class MemoirDetailViewController: UIViewController {
     }
 
     @objc private func generateAudioTapped() {
-        // 如果有 speaker_id，用声音复刻 TTS；否则降级为系统 TTS
-        if memoir.speakerId != nil || VoiceCloneService.shared.currentSpeakerId != nil {
-            generateAudioWithClone()
-        } else {
-            // 降级：直接用系统 TTS 朗读
+        // Resolve once before synthesis so a role switch cannot change the
+        // selected profile while this memoir is being generated.
+        guard let voiceProfileId = resolvedMemoirVoiceProfileId() else {
             MemoirAudioPlayer.shared.playWithSystemTTS(text: memoir.prose, memoirId: memoir.id)
+            return
         }
+        generateAudioWithClone(voiceProfileId: voiceProfileId)
     }
 
-    private func generateAudioWithClone() {
+    private func resolvedMemoirVoiceProfileId() -> String? {
+        let explicitProfileId = memoir.speakerId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let explicitProfileId, !explicitProfileId.isEmpty {
+            return explicitProfileId
+        }
+        return VoiceCloneService.shared.currentUsablePersonalSpeakerId(forOwnerId: memoir.authorId)
+    }
+
+    private func generateAudioWithClone(voiceProfileId: String) {
         synthesizingIndicator.startAnimating()
         generateAudioButton.isHidden = true
         audioStatusLabel.isHidden = false
         audioStatusLabel.text = "正在合成语音..."
 
-        MemoirTTSService.shared.synthesize(memoir: memoir) { [weak self] result in
+        var memoirForSynthesis = memoir
+        memoirForSynthesis.speakerId = voiceProfileId
+
+        MemoirTTSService.shared.synthesize(memoir: memoirForSynthesis) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.synthesizingIndicator.stopAnimating()
@@ -654,8 +665,8 @@ final class MemoirDetailViewController: UIViewController {
                 case .success(let audioURL):
                     // 更新模型，保存音频文件名和 speakerId
                     self.memoir.audioFileName = audioURL.lastPathComponent
-                    if self.memoir.speakerId == nil, let sid = VoiceCloneService.shared.currentSpeakerId {
-                        self.memoir.speakerId = sid
+                    if self.memoir.speakerId == nil {
+                        self.memoir.speakerId = voiceProfileId
                     }
                     MemoirRepository.shared.save(self.memoir)
                     self.updateAudioCardState()

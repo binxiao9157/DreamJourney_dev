@@ -107,6 +107,39 @@ def main() -> None:
         "Echo scoped local TTS selection integration",
     )
 
+    memoir_detail = read("DreamJourney/Sources/Memoir/MemoirDetailViewController.swift")
+    require_all(
+        voice,
+        (
+            "func currentUsablePersonalSpeakerId(forOwnerId ownerId: String)",
+            "accountLeaseRuntime.capture(forSubjectId: normalizedOwnerId)",
+            "let personalTarget = VoiceClonePersonaTarget(",
+            "personaScope: \"personal\"",
+        ),
+        "VoiceClone personal owner-scoped fallback contract",
+    )
+    require(
+        "VoiceCloneService.shared.currentUsableSpeakerId" not in tts,
+        "MemoirTTSService must not use the active persona's process-global profile",
+    )
+    require_all(
+        tts,
+        (
+            "currentUsablePersonalSpeakerId(\n                forOwnerId: accountLease.subjectId",
+            "resolvedVoiceProfileId(\n                  for: memoir,\n                  accountLease: access.accountLease",
+        ),
+        "Memoir TTS owner-scoped fallback integration",
+    )
+    require_all(
+        memoir_detail,
+        (
+            "private func resolvedMemoirVoiceProfileId() -> String?",
+            "currentUsablePersonalSpeakerId(forOwnerId: memoir.authorId)",
+            "generateAudioWithClone(voiceProfileId: voiceProfileId)",
+        ),
+        "Memoir detail owner-scoped voice selection integration",
+    )
+
     print("Voice/TTS AccountLease check passed")
 
 

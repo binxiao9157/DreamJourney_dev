@@ -571,6 +571,32 @@ final class VoiceCloneService {
         return speakerId
     }
 
+    /// Resolves a usable personal profile for a persisted owner, without
+    /// consulting the currently selected Digital Human persona. Memoir playback
+    /// may only fall back to its author's own profile; a family role selected in
+    /// Echo must never influence that choice.
+    func currentUsablePersonalSpeakerId(forOwnerId ownerId: String) -> String? {
+        let normalizedOwnerId = ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedOwnerId.isEmpty,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: normalizedOwnerId),
+              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+            return nil
+        }
+
+        let personalTarget = VoiceClonePersonaTarget(
+            userId: normalizedOwnerId,
+            personaScope: "personal",
+            digitalHumanId: normalizedOwnerId,
+            familyMemberId: nil
+        )
+        let snapshot = voiceCloneShellSnapshot(
+            accountLease: accountLease,
+            target: personalTarget
+        )
+        guard snapshot.isReadyForUse else { return nil }
+        return normalizedVoiceProfileId(snapshot.voiceProfileId)
+    }
+
     func handleAccountLifecycle(
         _ context: AccountLifecycleContext,
         requestedOutcome: AccountLifecycleModuleOutcome

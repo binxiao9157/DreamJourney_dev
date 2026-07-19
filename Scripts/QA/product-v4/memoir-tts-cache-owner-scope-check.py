@@ -235,7 +235,7 @@ def run_static_check() -> None:
         public_lookup,
         (
             "captureScopedAccess(forSubjectId: memoir.authorId, at: .request)",
-            "resolvedVoiceProfileId(for: memoir)",
+            "resolvedVoiceProfileId(for: memoir, accountLease: access.accountLease)",
             "MemoirTTSCacheLookup(",
             "personaOwnerId: memoir.authorId",
             'roleKey: "memoir"',

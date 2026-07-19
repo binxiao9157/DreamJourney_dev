@@ -285,7 +285,10 @@ final class MemoirTTSService {
             return
         }
 
-        guard let speakerId = memoir.speakerId ?? VoiceCloneService.shared.currentUsableSpeakerId,
+        guard let speakerId = resolvedVoiceProfileId(
+            for: memoir,
+            accountLease: accountLease
+        ),
               !speakerId.isEmpty else {
             completion(.failure(.noSpeakerId))
             return
@@ -361,7 +364,10 @@ final class MemoirTTSService {
     /// 获取与回忆录当前 owner、音色和文本完全匹配的缓存结果。
     func getCachedSynthesis(for memoir: MemoirModel) -> MemoirTTSCacheResult? {
         guard let access = captureScopedAccess(forSubjectId: memoir.authorId, at: .request),
-              let voiceProfileId = resolvedVoiceProfileId(for: memoir),
+              let voiceProfileId = resolvedVoiceProfileId(
+                  for: memoir,
+                  accountLease: access.accountLease
+              ),
               let lookup = MemoirTTSCacheLookup(
                   memoirId: memoir.id,
                   personaOwnerId: memoir.authorId,
@@ -1001,8 +1007,14 @@ final class MemoirTTSService {
                 == entry.cacheIdentity.providerMode
     }
 
-    private func resolvedVoiceProfileId(for memoir: MemoirModel) -> String? {
-        let candidate = memoir.speakerId ?? VoiceCloneService.shared.currentUsableSpeakerId
+    private func resolvedVoiceProfileId(
+        for memoir: MemoirModel,
+        accountLease: AccountLease
+    ) -> String? {
+        let candidate = memoir.speakerId
+            ?? VoiceCloneService.shared.currentUsablePersonalSpeakerId(
+                forOwnerId: accountLease.subjectId
+            )
         let normalized = MemoirTTSCacheStoragePolicy.normalized(candidate ?? "")
         return normalized.isEmpty ? nil : normalized
     }
