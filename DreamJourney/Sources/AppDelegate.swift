@@ -3282,95 +3282,51 @@ private extension AppDelegate {
     }
 
     func runEchoTraceExportSmoke(retryCount: Int = 0) {
-        guard let tabBarController = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow })?
-            .rootViewController as? WarmTabBarController else {
-            guard retryCount < 20 else {
-                print("[UI_QA] EchoTraceExportSmoke failed reason=missingRootTab")
-                writeEchoTraceExportSmokeResult([
-                    "completed": false,
-                    "failureReason": "missingRootTab"
-                ])
-                return
+        QAEchoExportRunner.run(
+            retryCount: retryCount,
+            smokeName: "EchoTraceExportSmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runEchoTraceExportSmoke(retryCount: nextRetryCount)
+            },
+            writeResult: { [weak self] result in
+                self?.writeEchoTraceExportSmokeResult(result)
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQAEchoTraceExportSmoke(completion: completion)
+            },
+            completionLog: { result in
+                print(
+                    "[UI_QA] EchoTraceExportSmoke completed " +
+                    "completed=\(result["completed"] as? Bool == true) " +
+                    "recordCount=\(result["recordCount"] as? Int ?? 0) " +
+                    "latestTurnID=\(result["latestTurnID"] as? String ?? "missing")"
+                )
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                self?.runEchoTraceExportSmoke(retryCount: retryCount + 1)
-            }
-            return
-        }
-
-        guard let viewControllers = tabBarController.viewControllers,
-              viewControllers.count > 1,
-              let echoNavigationController = viewControllers[1] as? UINavigationController,
-              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
-            print("[UI_QA] EchoTraceExportSmoke failed reason=missingEcho")
-            writeEchoTraceExportSmokeResult([
-                "completed": false,
-                "failureReason": "missingEcho"
-            ])
-            return
-        }
-
-        tabBarController.selectedIndex = 1
-        echoViewController.runUIQAEchoTraceExportSmoke { [weak self] payload in
-            var result = payload
-            result["selectedTabIndex"] = tabBarController.selectedIndex
-            self?.writeEchoTraceExportSmokeResult(result)
-            print(
-                "[UI_QA] EchoTraceExportSmoke completed " +
-                "completed=\(result["completed"] as? Bool == true) " +
-                "recordCount=\(result["recordCount"] as? Int ?? 0) " +
-                "latestTurnID=\(result["latestTurnID"] as? String ?? "missing")"
-            )
-        }
+        )
     }
 
     func runEchoRuntimeDiagnosticsExportSmoke(retryCount: Int = 0) {
-        guard let tabBarController = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow })?
-            .rootViewController as? WarmTabBarController else {
-            guard retryCount < 20 else {
-                print("[UI_QA] EchoRuntimeDiagnosticsExportSmoke failed reason=missingRootTab")
-                writeEchoRuntimeDiagnosticsExportSmokeResult([
-                    "completed": false,
-                    "failureReason": "missingRootTab"
-                ])
-                return
+        QAEchoExportRunner.run(
+            retryCount: retryCount,
+            smokeName: "EchoRuntimeDiagnosticsExportSmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runEchoRuntimeDiagnosticsExportSmoke(retryCount: nextRetryCount)
+            },
+            writeResult: { [weak self] result in
+                self?.writeEchoRuntimeDiagnosticsExportSmokeResult(result)
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQAEchoRuntimeDiagnosticsExportSmoke(completion: completion)
+            },
+            completionLog: { result in
+                print(
+                    "[UI_QA] EchoRuntimeDiagnosticsExportSmoke completed " +
+                    "completed=\(result["completed"] as? Bool == true) " +
+                    "snapshotCount=\(result["snapshotCount"] as? Int ?? 0) " +
+                    "latestTurnID=\(result["latestTurnID"] as? String ?? "missing")"
+                )
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                self?.runEchoRuntimeDiagnosticsExportSmoke(retryCount: retryCount + 1)
-            }
-            return
-        }
-
-        guard let viewControllers = tabBarController.viewControllers,
-              viewControllers.count > 1,
-              let echoNavigationController = viewControllers[1] as? UINavigationController,
-              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
-            print("[UI_QA] EchoRuntimeDiagnosticsExportSmoke failed reason=missingEcho")
-            writeEchoRuntimeDiagnosticsExportSmokeResult([
-                "completed": false,
-                "failureReason": "missingEcho"
-            ])
-            return
-        }
-
-        tabBarController.selectedIndex = 1
-        echoViewController.runUIQAEchoRuntimeDiagnosticsExportSmoke { [weak self] payload in
-            var result = payload
-            result["selectedTabIndex"] = tabBarController.selectedIndex
-            self?.writeEchoRuntimeDiagnosticsExportSmokeResult(result)
-            print(
-                "[UI_QA] EchoRuntimeDiagnosticsExportSmoke completed " +
-                "completed=\(result["completed"] as? Bool == true) " +
-                "snapshotCount=\(result["snapshotCount"] as? Int ?? 0) " +
-                "latestTurnID=\(result["latestTurnID"] as? String ?? "missing")"
-            )
-        }
+        )
     }
 
     func runEchoDigitalHumanLifecycleSmoke(retryCount: Int = 0) {

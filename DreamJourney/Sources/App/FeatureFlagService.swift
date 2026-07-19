@@ -1,5 +1,9 @@
 import Foundation
 
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+import UIKit
+#endif
+
 /// Centralizes AppDelegate and Echo smoke-harness launch-argument access for
 /// Debug and simulator UIQA only.
 ///
@@ -320,6 +324,75 @@ enum QAScenarioResultWriter {
         } catch {
             throw WriteError.resultWrite(error)
         }
+    }
+}
+#endif
+
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+/// Shared route/retry orchestration for Echo export smokes. Scenario-specific
+/// operations, output labels, and result adapters stay explicit at the call
+/// site, while this runner owns only the repeated UIQA navigation mechanics.
+enum QAEchoExportRunner {
+    private static let maximumRootRetries = 20
+    private static let rootRetryDelay: TimeInterval = 0.25
+
+    static func run(
+        retryCount: Int,
+        smokeName: String,
+        retry: @escaping (_ retryCount: Int) -> Void,
+        writeResult: @escaping (_ result: [String: Any]) -> Void,
+        execute: @escaping (
+            _ echoViewController: EchoViewController,
+            _ completion: @escaping ([String: Any]) -> Void
+        ) -> Void,
+        completionLog: @escaping (_ result: [String: Any]) -> Void
+    ) {
+        guard let tabBarController = keyWindowRootViewController() as? WarmTabBarController else {
+            guard retryCount < maximumRootRetries else {
+                fail(smokeName: smokeName, reason: "missingRootTab", writeResult: writeResult)
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + rootRetryDelay) {
+                retry(retryCount + 1)
+            }
+            return
+        }
+
+        guard let viewControllers = tabBarController.viewControllers,
+              viewControllers.count > 1,
+              let echoNavigationController = viewControllers[1] as? UINavigationController,
+              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
+            fail(smokeName: smokeName, reason: "missingEcho", writeResult: writeResult)
+            return
+        }
+
+        tabBarController.selectedIndex = 1
+        execute(echoViewController) { payload in
+            var result = payload
+            result["selectedTabIndex"] = tabBarController.selectedIndex
+            writeResult(result)
+            completionLog(result)
+        }
+    }
+
+    private static func keyWindowRootViewController() -> UIViewController? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController
+    }
+
+    private static func fail(
+        smokeName: String,
+        reason: String,
+        writeResult: ([String: Any]) -> Void
+    ) {
+        print("[UI_QA] \(smokeName) failed reason=\(reason)")
+        writeResult([
+            "completed": false,
+            "failureReason": reason
+        ])
     }
 }
 #endif

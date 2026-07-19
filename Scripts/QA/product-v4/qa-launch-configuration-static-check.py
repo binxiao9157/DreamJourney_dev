@@ -44,6 +44,9 @@ def main() -> None:
         "static func schedule(",
         "enum QAScenarioResultWriter",
         "static func write(",
+        "enum QAEchoExportRunner",
+        "private static let maximumRootRetries = 20",
+        "result[\"selectedTabIndex\"] = tabBarController.selectedIndex",
     ):
         require(anchor in feature_flags, f"QALaunchConfiguration missing boundary anchor: {anchor}")
 
@@ -94,6 +97,10 @@ def main() -> None:
     require(
         "QAScenarioResultWriter.write(result, fileName: fileName)" in app_delegate,
         "Echo QA export adapter must use the compile-isolated result writer",
+    )
+    require(
+        app_delegate.count("QAEchoExportRunner.run(") >= 2,
+        "Echo export runner must own at least the first two parity-verified export scenarios",
     )
     for smoke_name in (
         "EchoTraceExportSmoke",

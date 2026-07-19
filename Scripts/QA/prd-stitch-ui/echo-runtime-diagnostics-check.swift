@@ -20,6 +20,7 @@ func require(_ condition: Bool, _ message: String) {
 let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 
@@ -76,8 +77,12 @@ for required in [
     require(echo.contains(required), "Echo should produce/export diagnostics snapshots: \(required)")
 }
 
+require(
+    featureFlags.contains("DJRunEchoRuntimeDiagnosticsExportSmoke"),
+    "centralized QA scenario registry should retain the Echo runtime diagnostics launch argument"
+)
+
 for required in [
-    "DJRunEchoRuntimeDiagnosticsExportSmoke",
     "runEchoRuntimeDiagnosticsExportSmoke",
     "writeEchoRuntimeDiagnosticsExportSmokeResult",
     "echo-runtime-diagnostics-export-smoke-result.json",
