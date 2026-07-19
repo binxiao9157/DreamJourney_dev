@@ -3282,7 +3282,7 @@ private extension AppDelegate {
     }
 
     func runEchoTraceExportSmoke(retryCount: Int = 0) {
-        QAEchoExportRunner.run(
+        QAEchoScenarioRunner.run(
             retryCount: retryCount,
             smokeName: "EchoTraceExportSmoke",
             retry: { [weak self] nextRetryCount in
@@ -3306,7 +3306,7 @@ private extension AppDelegate {
     }
 
     func runEchoRuntimeDiagnosticsExportSmoke(retryCount: Int = 0) {
-        QAEchoExportRunner.run(
+        QAEchoScenarioRunner.run(
             retryCount: retryCount,
             smokeName: "EchoRuntimeDiagnosticsExportSmoke",
             retry: { [weak self] nextRetryCount in
@@ -3330,54 +3330,32 @@ private extension AppDelegate {
     }
 
     func runEchoDigitalHumanLifecycleSmoke(retryCount: Int = 0) {
-        guard let tabBarController = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow })?
-            .rootViewController as? WarmTabBarController else {
-            guard retryCount < 20 else {
-                print("[UI_QA] EchoDigitalHumanLifecycleSmoke failed reason=missingRootTab")
-                writeEchoDigitalHumanLifecycleSmokeResult([
-                    "completed": false,
-                    "failureReason": "missingRootTab"
-                ])
-                return
+        QAEchoScenarioRunner.run(
+            retryCount: retryCount,
+            smokeName: "EchoDigitalHumanLifecycleSmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runEchoDigitalHumanLifecycleSmoke(retryCount: nextRetryCount)
+            },
+            writeResult: { [weak self] result in
+                self?.writeEchoDigitalHumanLifecycleSmokeResult(result)
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQAEchoDigitalHumanLifecycleSmoke(completion: completion)
+            },
+            completionLog: { result in
+                print(
+                    "[UI_QA] EchoDigitalHumanLifecycleSmoke completed " +
+                    "completed=\(result["completed"] as? Bool == true) " +
+                    "suspended=\(result["lifecycleSuspended"] as? Bool == true) " +
+                    "restored=\(result["lifecycleRestored"] as? Bool == true) " +
+                    "microphoneAutoStart=\(result["microphoneAutoStart"] as? Bool == true)"
+                )
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                self?.runEchoDigitalHumanLifecycleSmoke(retryCount: retryCount + 1)
-            }
-            return
-        }
-
-        guard let viewControllers = tabBarController.viewControllers,
-              viewControllers.count > 1,
-              let echoNavigationController = viewControllers[1] as? UINavigationController,
-              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
-            print("[UI_QA] EchoDigitalHumanLifecycleSmoke failed reason=missingEcho")
-            writeEchoDigitalHumanLifecycleSmokeResult([
-                "completed": false,
-                "failureReason": "missingEcho"
-            ])
-            return
-        }
-
-        tabBarController.selectedIndex = 1
-        echoViewController.runUIQAEchoDigitalHumanLifecycleSmoke { [weak self] payload in
-            var result = payload
-            result["selectedTabIndex"] = tabBarController.selectedIndex
-            self?.writeEchoDigitalHumanLifecycleSmokeResult(result)
-            print(
-                "[UI_QA] EchoDigitalHumanLifecycleSmoke completed " +
-                "completed=\(result["completed"] as? Bool == true) " +
-                "suspended=\(result["lifecycleSuspended"] as? Bool == true) " +
-                "restored=\(result["lifecycleRestored"] as? Bool == true) " +
-                "microphoneAutoStart=\(result["microphoneAutoStart"] as? Bool == true)"
-            )
-        }
+        )
     }
 
     func runEchoTraceEvidencePackageExportSmoke(retryCount: Int = 0) {
-        QAEchoExportRunner.run(
+        QAEchoScenarioRunner.run(
             retryCount: retryCount,
             smokeName: "EchoTraceEvidencePackageExportSmoke",
             retry: { [weak self] nextRetryCount in
@@ -3401,7 +3379,7 @@ private extension AppDelegate {
     }
 
     func runEchoTraceEvidencePackagePanelExportSmoke(retryCount: Int = 0) {
-        QAEchoExportRunner.run(
+        QAEchoScenarioRunner.run(
             retryCount: retryCount,
             smokeName: "EchoTraceEvidencePackagePanelExportSmoke",
             retry: { [weak self] nextRetryCount in
@@ -3425,7 +3403,7 @@ private extension AppDelegate {
     }
 
     func runEchoQAEvidenceBundleExportSmoke(retryCount: Int = 0) {
-        QAEchoExportRunner.run(
+        QAEchoScenarioRunner.run(
             retryCount: retryCount,
             smokeName: "EchoQAEvidenceBundleExportSmoke",
             retry: { [weak self] nextRetryCount in

@@ -18,18 +18,35 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let runner = read("Scripts/QA/prd-stitch-ui/run-echo-digital-human-lifecycle-smoke.sh")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 
-for required in [
+assertContains(
+    featureFlags,
     "DJRunEchoDigitalHumanLifecycleSmoke",
+    "centralized QA scenario registry should retain the Echo lifecycle launch argument"
+)
+
+for required in [
     "runEchoDigitalHumanLifecycleSmoke",
     "writeEchoDigitalHumanLifecycleSmokeResult",
     "echo-digital-human-lifecycle-smoke-result.json",
 ] {
     assertContains(appDelegate, required, "AppDelegate should expose Echo lifecycle UIQA smoke \(required)")
 }
+
+assertContains(
+    featureFlags,
+    "enum QAEchoScenarioRunner",
+    "Echo lifecycle UIQA route should use the compile-isolated shared scenario runner"
+)
+assertContains(
+    appDelegate,
+    "QAEchoScenarioRunner.run(\n            retryCount: retryCount,\n            smokeName: \"EchoDigitalHumanLifecycleSmoke\"",
+    "Echo lifecycle UIQA smoke should delegate root/Echo routing to the shared scenario runner"
+)
 
 for required in [
     "runUIQAEchoDigitalHumanLifecycleSmoke",

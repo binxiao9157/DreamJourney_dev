@@ -329,10 +329,10 @@ enum QAScenarioResultWriter {
 #endif
 
 #if UI_QA_SIMULATOR && targetEnvironment(simulator)
-/// Shared route/retry orchestration for Echo export smokes. Scenario-specific
+/// Shared route/retry orchestration for Echo UIQA smokes. Scenario-specific
 /// operations, output labels, and result adapters stay explicit at the call
 /// site, while this runner owns only the repeated UIQA navigation mechanics.
-enum QAEchoExportRunner {
+enum QAEchoScenarioRunner {
     private static let maximumRootRetries = 20
     private static let rootRetryDelay: TimeInterval = 0.25
 

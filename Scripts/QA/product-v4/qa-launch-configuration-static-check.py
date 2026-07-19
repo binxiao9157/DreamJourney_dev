@@ -44,7 +44,7 @@ def main() -> None:
         "static func schedule(",
         "enum QAScenarioResultWriter",
         "static func write(",
-        "enum QAEchoExportRunner",
+        "enum QAEchoScenarioRunner",
         "private static let maximumRootRetries = 20",
         "result[\"selectedTabIndex\"] = tabBarController.selectedIndex",
     ):
@@ -99,8 +99,8 @@ def main() -> None:
         "Echo QA export adapter must use the compile-isolated result writer",
     )
     require(
-        app_delegate.count("QAEchoExportRunner.run(") >= 5,
-        "Echo export runner must own all five parity-verified evidence export scenarios",
+        app_delegate.count("QAEchoScenarioRunner.run(") >= 6,
+        "Echo scenario runner must own all five evidence exports and the lifecycle scenario",
     )
     for smoke_name in (
         "EchoTraceExportSmoke",
@@ -108,6 +108,7 @@ def main() -> None:
         "EchoTraceEvidencePackageExportSmoke",
         "EchoTraceEvidencePackagePanelExportSmoke",
         "EchoQAEvidenceBundleExportSmoke",
+        "EchoDigitalHumanLifecycleSmoke",
     ):
         require(
             f'smokeName: "{smoke_name}"' in app_delegate,
