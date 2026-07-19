@@ -62,6 +62,53 @@ final class AudioOwnerLeaseModelTests: XCTestCase {
         XCTAssertEqual(model.activeLease, current)
     }
 
+    func testSystemInterruptionOnlyResumesCurrentLease() {
+        var model = AudioOwnerLeaseModel()
+        let scope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+        let capture = acquire(
+            &model,
+            owner: .echoCapture,
+            priority: .echoCapture,
+            scope: scope,
+            leaseId: UUID(uuidString: "00000000-0000-0000-0000-000000000010")!,
+            issuedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let playback = acquire(
+            &model,
+            owner: .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            scope: scope,
+            leaseId: UUID(uuidString: "00000000-0000-0000-0000-000000000011")!,
+            issuedAt: Date(timeIntervalSince1970: 1_700_000_001)
+        )
+
+        guard case let .interrupted(interrupted) = model.interruptActiveLease() else {
+            return XCTFail("active playback lease should enter interrupted state")
+        }
+        XCTAssertEqual(interrupted.leaseId, playback.leaseId)
+        XCTAssertEqual(interrupted.state, .interrupted)
+        XCTAssertEqual(model.resume(capture), .ignoredStaleLease(active: interrupted))
+
+        XCTAssertEqual(model.resume(playback), .resumed(playback))
+        XCTAssertEqual(model.activeLease, playback)
+    }
+
+    func testOwnerDefaultPurposeAndRouteAreStable() {
+        var model = AudioOwnerLeaseModel()
+        let profilePreview = acquire(
+            &model,
+            owner: .profileVoicePreview,
+            priority: .playback,
+            scope: AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9),
+            leaseId: UUID(uuidString: "00000000-0000-0000-0000-000000000012")!,
+            issuedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+
+        XCTAssertEqual(profilePreview.purpose, .profileVoicePreview)
+        XCTAssertEqual(profilePreview.route, .spokenAudioPreview)
+        XCTAssertEqual(profilePreview.state, .active)
+    }
+
     private func acquire(
         _ model: inout AudioOwnerLeaseModel,
         owner: AudioOwnerLeaseOwner,
