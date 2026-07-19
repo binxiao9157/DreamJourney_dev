@@ -3944,6 +3944,16 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         })
         present(alert, animated: true)
     }
+
+    #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+    func runUIQAAcceptFirstCandidate() {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled,
+              let candidateID = renderedState.items.first?.id else {
+            return
+        }
+        useCase.send(.accept(candidateID: candidateID))
+    }
+    #endif
 }
 
 extension OwnerTruthCandidateInboxViewController: UITableViewDataSource, UITableViewDelegate {
@@ -4106,6 +4116,12 @@ struct OwnerTruthCandidateInboxUIQASmokeResult: Codable {
     let candidateVisible: Bool
     let candidatePreviewVisible: Bool
     let reviewActionsAvailable: Bool
+    let reviewSubmitted: Bool
+    let reviewAction: String?
+    let terminalDecision: String?
+    let receiptConsumed: Bool
+    let memoryVersionCreated: Bool
+    let candidateRemovedAfterReview: Bool
     let launchArgument: String
     let failureReason: String?
 
@@ -4132,9 +4148,9 @@ enum OwnerTruthCandidateInboxUIQASmoke {
             client: client,
             qaGateEnabled: { OwnerTruthCandidateReviewQAGate.isEnabled }
         )
-        let reporter = CandidateInboxUIQAReporter()
-        controller.onViewStateRendered = { state in
-            reporter.consume(state)
+        let scenario = CandidateInboxUIQAScenario()
+        controller.onViewStateRendered = { [weak controller] state in
+            scenario.consume(state, controller: controller)
         }
         return controller
     }
@@ -4146,6 +4162,12 @@ enum OwnerTruthCandidateInboxUIQASmoke {
             candidateVisible: false,
             candidatePreviewVisible: false,
             reviewActionsAvailable: false,
+            reviewSubmitted: false,
+            reviewAction: nil,
+            terminalDecision: nil,
+            receiptConsumed: false,
+            memoryVersionCreated: false,
+            candidateRemovedAfterReview: false,
             launchArgument: OwnerTruthCandidateReviewQAGate.launchArgument,
             failureReason: reason
         )
@@ -4158,25 +4180,56 @@ enum OwnerTruthCandidateInboxUIQASmoke {
     }
 }
 
-private final class CandidateInboxUIQAReporter {
+private final class CandidateInboxUIQAScenario {
     private var didWrite = false
+    private var didSubmit = false
+    private var candidateVisible = false
+    private var candidatePreviewVisible = false
+    private var reviewActionsAvailable = false
 
-    func consume(_ state: OwnerTruthCandidateInboxViewState) {
-        guard !didWrite,
-              case .ready = state.phase,
-              let firstItem = state.items.first else {
+    func consume(
+        _ state: OwnerTruthCandidateInboxViewState,
+        controller: OwnerTruthCandidateInboxViewController?
+    ) {
+        if case .ready = state.phase,
+           let firstItem = state.items.first,
+           !didSubmit {
+            candidateVisible = true
+            candidatePreviewVisible = !firstItem.proposalPreview.isEmpty
+            reviewActionsAvailable = firstItem.supportsCorrection
+            didSubmit = true
+            DispatchQueue.main.async { [weak controller] in
+                controller?.runUIQAAcceptFirstCandidate()
+            }
             return
         }
+
+        guard !didWrite else { return }
+        guard case .empty = state.phase,
+              let receipt = state.latestReceipt,
+              receipt.decision == .accepted,
+              receipt.createdMemoryVersion,
+              state.items.isEmpty else {
+            return
+        }
+
         didWrite = true
         let result = OwnerTruthCandidateInboxUIQASmokeResult(
             completed: OwnerTruthCandidateReviewQAGate.isEnabled
-                && !state.items.isEmpty
-                && !firstItem.proposalPreview.isEmpty
-                && firstItem.supportsCorrection,
+                && didSubmit
+                && candidateVisible
+                && candidatePreviewVisible
+                && reviewActionsAvailable,
             qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
-            candidateVisible: true,
-            candidatePreviewVisible: !firstItem.proposalPreview.isEmpty,
-            reviewActionsAvailable: firstItem.supportsCorrection,
+            candidateVisible: candidateVisible,
+            candidatePreviewVisible: candidatePreviewVisible,
+            reviewActionsAvailable: reviewActionsAvailable,
+            reviewSubmitted: didSubmit,
+            reviewAction: OwnerTruthCandidateReviewAction.accept.rawValue,
+            terminalDecision: receipt.decision.rawValue,
+            receiptConsumed: true,
+            memoryVersionCreated: receipt.createdMemoryVersion,
+            candidateRemovedAfterReview: state.items.isEmpty,
             launchArgument: OwnerTruthCandidateReviewQAGate.launchArgument,
             failureReason: nil
         )
@@ -4191,6 +4244,7 @@ private final class CandidateInboxUIQAReporter {
 
 private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
     private let vaultID: OwnerTruthVaultID?
+    private var candidateIsPending = true
 
     init(vaultID: OwnerTruthVaultID?) {
         self.vaultID = vaultID
@@ -4209,7 +4263,7 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
                 backendJSONObject: [
                     "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
                     "vaultId": vaultID.rawValue,
-                    "candidates": [[
+                    "candidates": candidateIsPending ? [[
                         "candidateId": "00000000-0000-0000-0000-000000000151",
                         "sourceId": "00000000-0000-0000-0000-000000000152",
                         "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
@@ -4228,7 +4282,7 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
                         ]],
                         "reviewMode": "single",
                         "candidateVersion": 1,
-                    ]],
+                    ]] : [],
                 ],
                 expectedVaultID: vaultID
             )
@@ -4244,13 +4298,49 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
         command: OwnerTruthCandidateReviewCommand,
         completion: @escaping (Result<OwnerTruthCandidateDecisionResult, Error>) -> Void
     ) {
-        completion(.failure(CandidateInboxUIQAClientError.reviewNotExercised))
+        guard self.vaultID == vaultID,
+              candidateIsPending,
+              candidateID.rawValue.uuidString.lowercased() == "00000000-0000-0000-0000-000000000151",
+              command.action == .accept,
+              command.expectedCandidateVersion == 1 else {
+            completion(.failure(CandidateInboxUIQAClientError.invalidReview))
+            return
+        }
+
+        candidateIsPending = false
+        do {
+            let result = try OwnerTruthCandidateDecisionResult(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthCandidateDecisionResult.schemaVersion,
+                    "status": OwnerTruthCommandOutcome.created.rawValue,
+                    "receipt": [
+                        "receiptId": "00000000-0000-0000-0000-000000000153",
+                        "candidateId": candidateID.rawValue.uuidString,
+                        "decision": OwnerTruthCandidateDecision.accepted.rawValue,
+                        "candidateVersion": 2,
+                        "candidateBeforeHash": "uiqa-owner-truth-candidate-hash",
+                        "candidateAfterHash": "uiqa-owner-truth-candidate-reviewed-hash",
+                        "correctedValueId": NSNull(),
+                    ],
+                    "memoryActivation": [
+                        "status": OwnerTruthMemoryActivationOutcome.created.rawValue,
+                        "memoryId": "00000000-0000-0000-0000-000000000154",
+                        "memoryVersionId": "00000000-0000-0000-0000-000000000155",
+                        "contentHash": "uiqa-owner-truth-memory-version-hash",
+                    ],
+                ],
+                expectedCandidateID: candidateID
+            )
+            completion(.success(result))
+        } catch {
+            completion(.failure(error))
+        }
     }
 }
 
 private enum CandidateInboxUIQAClientError: Error {
     case invalidVault
-    case reviewNotExercised
+    case invalidReview
 }
 #endif
 

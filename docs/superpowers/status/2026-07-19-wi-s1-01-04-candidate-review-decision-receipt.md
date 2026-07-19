@@ -52,15 +52,22 @@ POST /v2/vaults/{vaultId}/candidates/{candidateId}/decisions
 
 ## iOS 影响与后续依赖
 
-本 Work Item 不提前实现 iOS Candidate Inbox，也不改变公开 UI。后续
-`WI-S1-03-04` 才负责隐藏 QA Inbox 的界面组合；它还依赖后续 `WI-S1-01-05`
-MemoryVersion 等 Owner Truth 主链路。
+原始 `WI-S1-01-04` 后端提交不提前实现公开 iOS Candidate Inbox，也不改变公开 UI。
+后续 `WI-S1-03-04` 的 hidden QA 组合层已经提供了 Archive 内的 typed Inbox/review
+use case，仍需显式 QA launch argument 才可见。
 
-`WI-S1-01-05` 是当前下一项：仅对 accept/correct 决策在独立事务合同下创建不可变
-`MemoryVersion`；reject 必须保持“不创建 memory”。在该项完成前，不应把 Candidate
-审核能力当作已公开可用功能。
+`WI-S1-01-05` 随后已完成并部署。因此当前聚合行为为：`accept`/`correct` 在同一
+事务中同时返回不可变 `DecisionReceipt` 和已激活的 `MemoryVersion`；`reject` 保持
+“不创建 memory”。这不是把 Candidate 审核公开化，也不允许客户端绕过 Owner Truth
+合同写入事实。
+
+本页记录的是 `WI-S1-01-04` 的原始审核合同；当前 iOS action-level UIQA 的补充证据
+见 `2026-07-19-wi-s1-01-04-candidate-inbox-action-uiqa.md`，MemoryVersion 激活的
+事务边界见 `2026-07-19-wi-s1-01-05-memory-activation.md`。
 
 ## Gate 状态
 
 `WI-S1-01-04` 达到内部 `G0/G2`：数据合同、幂等、跨 vault 防护、terminal CAS 和真实
-Postgres 并发单写均有证据。`G1/G4` 仍开放，因为 iOS 审核界面和发布策略均未启用。
+Postgres 并发单写均有证据。隐藏 iOS action-level UIQA 已验证一条 `accept` 命令可消费
+回执、激活 MemoryVersion 并从 pending Inbox 移除。`G1/G4` 仍开放，公开审核入口与
+发布策略均未启用。

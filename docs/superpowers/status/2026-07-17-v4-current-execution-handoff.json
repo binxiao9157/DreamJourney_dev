@@ -2,19 +2,21 @@
   "activeWorkItem": {
     "authorityLock": "OWNER_TRUTH",
     "backendPendingPaths": [],
-    "completedSubSlices": [],
-    "currentSubSlice": "WI-S1-01-04-G0-CANDIDATE-INBOX-OWNER-REVIEW-DISCOVERY",
+    "completedSubSlices": [
+      "WI-S1-01-04-G0-CANDIDATE-INBOX-OWNER-REVIEW-ACTION-UIQA"
+    ],
+    "currentSubSlice": "WI-S1-01-06-G0-KBLITE-COMPATIBILITY-READ-ENVELOPE-DISCOVERY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "NOT_STARTED",
-      "G1": "NOT_STARTED",
-      "G2": "NOT_STARTED",
-      "G4": "NOT_STARTED"
+      "G0": "SCOPED_EVIDENCE_PRESENT",
+      "G1": "MISSING",
+      "G2": "SCOPED_EVIDENCE_PRESENT",
+      "G4": "NOT_APPLICABLE_TO_CURRENT_INTERNAL_DISCOVERY"
     },
-    "id": "WI-S1-01-04",
+    "id": "WI-S1-01-06",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-10 is internally ready at bounded G0: QA launch configuration, scenario/result orchestration, Echo evidence exports, digital-human runtime parity, non-Echo dispatch inventory, GlobalPrivateStore retirement and Profile Care routing are isolated behind explicit QA support boundaries. The authenticated Profile Care backend-state runner verifies real short-lived V2 session composition, failure/retry behavior and fixture cleanup without service-token injection or ReleasePolicy bypass. G1/G3/G4 remain open. The active P0 item is WI-S1-01-04: establish hidden Candidate Inbox, Owner Review and immutable DecisionReceipt contracts after the existing synthetic candidate extraction evidence."
+    "summary": "WI-S1-01-04 is internally ready: backend Owner-only CAS/receipt evidence is deployed and the hidden iOS QA Inbox now executes an accept action, consumes the receipt, activates a MemoryVersion and removes the pending candidate. WI-S1-01-05 MemoryVersion activation and WI-S1-01-06 Projection foundation already have scoped backend evidence; the current bounded task is to audit and close the KBLite compatibility read-envelope gap without changing public Archive or Echo UI. G1/G3/G4 remain open."
   },
   "baselines": {
     "backend": "main@32c38f2",
@@ -365,6 +367,18 @@
       "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G3_OPEN"
     },
     {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-01-04-candidate-inbox-action-uiqa.md",
+      "id": "WI-S1-01-04",
+      "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G0_G2_CONTRACT_VERIFIED / IOS_QA_ACTION_UIQA_VERIFIED / HIDDEN_DEFAULT_OFF / G1_G4_OPEN",
+      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G1_G4_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-01-05-memory-activation.md",
+      "id": "WI-S1-01-05",
+      "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G0_G2_SCOPED_EVIDENCE_PRESENT / HIDDEN_DEFAULT_OFF",
+      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT"
+    },
+    {
       "evidence": "../DreamJourneyBackend/docs/backend/2026-07-19-owner-truth-legacy-shadow-parity.md",
       "id": "WI-S1-01-09",
       "implementationStatus": "INTERNAL_READY / LEGACY_INVENTORY_AND_VALUE_FREE_PARITY_OBSERVER_DEPLOYED / G0_G2_ISOLATED_POSTGRES_VERIFIED / REAL_DATA_LINEAGE_BACKFILL_AND_COHORT_CUTOVER_OPEN",
@@ -384,9 +398,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-01-05",
+    "id": "WI-S1-01-07",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After Candidate Inbox, Owner Review and immutable DecisionReceipt have scoped evidence, continue the next P0 Owner Truth item without widening the public release scope."
+    "summary": "After the KBLite compatibility read envelope has scoped evidence, continue Owner QA Context and typed Citation without widening the public release scope."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -395,5 +409,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T14:01:42+0800"
+  "updatedAt": "2026-07-19T14:12:00+0800"
 }

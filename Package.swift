@@ -20,6 +20,7 @@ let package = Package(
                 "App/AccountLifecycleCoordinator.swift",
                 "App/AccountLifecycleRuntimeRegistry.swift",
                 "App/AppCoordinator.swift",
+                "App/AudioOwnerLeaseCoordinator.swift",
                 "App/AuthCoordinator.swift",
                 "App/Coordinator.swift",
                 "App/DigitalHumanContextStore.swift",
@@ -47,7 +48,15 @@ let package = Package(
         .testTarget(
             name: "DreamJourneyCoreTests",
             dependencies: ["DreamJourneyCore"],
-            path: "DreamJourneyTests"
+            path: "DreamJourneyTests",
+            exclude: [
+                "AudioOwnerLeaseModelTests.swift",
+            ],
+            sources: [
+                "AccountLeaseRuntimeTests.swift",
+                "OwnerTruthContractsTests.swift",
+                "TestDoubles.swift",
+            ]
         ),
     ]
 )

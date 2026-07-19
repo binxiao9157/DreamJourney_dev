@@ -119,6 +119,12 @@ grep -Eq '"qaGateEnabled"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "
 grep -Eq '"candidateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate row should render."
 grep -Eq '"candidatePreviewVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate preview should render."
 grep -Eq '"reviewActionsAvailable"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Review actions should be available."
+grep -Eq '"reviewSubmitted"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate review should submit."
+grep -Eq '"reviewAction"[[:space:]]*:[[:space:]]*"accept"' "$RESULT_FILE" || fail "Candidate review action should be accept."
+grep -Eq '"terminalDecision"[[:space:]]*:[[:space:]]*"accepted"' "$RESULT_FILE" || fail "Candidate receipt should be accepted."
+grep -Eq '"receiptConsumed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate receipt should be consumed."
+grep -Eq '"memoryVersionCreated"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Accepted Candidate should create a MemoryVersion."
+grep -Eq '"candidateRemovedAfterReview"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Reviewed Candidate should leave the pending Inbox."
 grep -Eq '"launchArgument"[[:space:]]*:[[:space:]]*"DJEnableOwnerTruthCandidateReviewQA"' "$RESULT_FILE" || fail "QA launch argument drifted."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null

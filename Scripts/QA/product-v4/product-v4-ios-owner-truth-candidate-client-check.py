@@ -157,6 +157,10 @@ def main() -> None:
         "owner-truth-candidate-inbox-list",
         "owner-truth-candidate-inbox-item",
         "OwnerTruthCandidateInboxUIQASmoke",
+        "runUIQAAcceptFirstCandidate",
+        "CandidateInboxUIQAScenario",
+        "reviewSubmitted",
+        "candidateRemovedAfterReview",
     ):
         require(required in archive, f"Candidate Inbox QA UI missing: {required}")
     require(
