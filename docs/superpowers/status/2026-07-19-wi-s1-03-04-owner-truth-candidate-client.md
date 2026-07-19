@@ -7,8 +7,8 @@
 - Work Item：`WI-S1-03-04`
 - Authority lock：`IOS_COMPOSITION`
 - Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`
-- 当前结果：`IN_PROGRESS / G0_G1_HIDDEN_QA_VERIFIED / IOS_LOCAL_COMMITTED / G2_G4_OPEN`
-- 本切片：`WI-S1-03-04-ARCHIVE_CANDIDATE_INBOX_UIQA_G1_COMPLETE`
+- 当前结果：`INTERNAL_READY / G0_G1_G2_HIDDEN_QA_VERIFIED / IOS_LOCAL_COMMITTED / G4_OPEN`
+- 本切片：`WI-S1-03-04-G2-ISOLATED-POSTGRES-CANDIDATE-ROUTE-SMOKE_COMPLETE`
 - 范围：为 Archive 内 hidden Candidate Inbox 提供 typed client、命令合同、lease-fenced Intent/ViewState 用例和 QA-only 页面；本切片不新增公开入口或 Authority writer。
 
 ## 已实现
@@ -46,8 +46,9 @@ POST /v2/vaults/{vaultId}/candidates/{candidateId}/decisions
 `featurePolicyDenied(ownerTruthCandidateReview, qaOnlyDisabled)`，不尝试请求、不回退到
 legacy writer，也不暴露公共功能。
 
-后端 `WI-S1-01-03..05` 的 Candidate/Decision/MemoryVersion 合同已经兼容部署；本轮没有
-修改后端、没有部署，也没有打开服务端 QA flag。
+后端 `WI-S1-01-03..05` 的 Candidate/Decision/MemoryVersion 合同已经兼容部署。为本项
+G2 新增的隔离路由 smoke 仅在独立 Python 进程和临时数据库内短暂打开 QA route contract；
+运行中的 API 配置仍保持 QA flag 关闭，公开路由没有因此开放。
 
 ### Intent / ViewState 审核用例
 
@@ -107,17 +108,38 @@ bash Scripts/QA/product-v4/run-ios-owner-truth-candidate-client-gate.sh
   可用性；结果与截图保存在：
   `tmp/visual-qa/product-v4/owner-truth-candidate-inbox-smoke/20260719-075600/`。
 
+### G2 部署隔离路由 smoke
+
+Backend `main@3787665` 已部署到服务器 API 容器。执行：
+
+```bash
+scripts/run-backend-owner-truth-candidate-route-postgres-smoke.sh
+```
+
+结果：`PASS`，输出 `schemaHead=0023`，确认：
+
+- 运行时默认 QA flag 关闭时，已认证 Owner 仍得到稳定的 `404`；
+- 缺少 `X-DreamJourney-QA-Owner-Truth: 1` 仍得到 `404`；
+- 仅临时 smoke 进程内开启 QA contract 后，Owner 可读取待审 Candidate；
+- 跨 Vault 与跨 Owner 均返回 typed `403`；
+- `accept` 生成一次 DecisionReceipt 与 MemoryVersion activation；相同 command 重放为
+  `deduplicated`，待审列表不再保留该 Candidate；
+- 临时数据库在运行结束后删除；没有创建生产用户、Vault、Candidate、Memory、Decision 或
+  业务库测试数据。
+
+服务容器随后通过 `/ready` 健康检查。该证据只证明 G2 隔离 Postgres route/transaction
+contract，不证明公开 Candidate 审核、真实 Owner cohort 或产品体验已放行。
+
 ## 未完成边界
 
-本切片不是 `WI-S1-03-04` 的完整完成声明：
+本切片不是公开发布完成声明：
 
-- 尚未运行 QA server flag 开启后的真实路由 smoke，因此 G2 仍开放；
 - 不能把 Candidate 审核能力公开，也不能切换 legacy writer；
 - 没有改变 KBLite、Archive 现有事实写入、三 Tab 或 Stitch 已对齐视觉；
 - G4 的审核体验、隐私与公开策略保持外部开放。
 
 ## 下一步
 
-在同一 `WI-S1-03-04` 内，执行可选 G2：在服务端 QA flag 受控开启的环境运行真实
-Candidate inbox/decision route smoke，并保留部署证据。该操作不能开启公开 release 路由、
-不能改动 legacy writer，也不应绕过 AccountLease 或 owner authorization。
+本 Work Item 的可控 G0/G1/G2 证据已收敛。后续仅在产品和隐私审核批准后，才可讨论
+Candidate Inbox 的公开或 cohort 策略；不得用本次 smoke 推进 legacy writer 切换，亦不得
+绕过 AccountLease 或 Owner authorization。

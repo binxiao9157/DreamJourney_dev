@@ -1,27 +1,24 @@
 {
   "activeWorkItem": {
-    "authorityLock": "IOS_COMPOSITION",
+    "authorityLock": "ASYNC_EFFECT",
     "backendPendingPaths": [],
-    "completedSubSlices": [
-      "WI-S1-03-04-G0-TYPED-CANDIDATE-INBOX-CLIENT",
-      "WI-S1-03-04-G1-HIDDEN-CANDIDATE-INBOX-UIQA"
-    ],
-    "currentSubSlice": "WI-S1-03-04-G2-ISOLATED-POSTGRES-CANDIDATE-ROUTE-SMOKE",
+    "completedSubSlices": [],
+    "currentSubSlice": "WI-S1-02-05-G0-TIMELETTER-TARGET-DELIVERY-RECEIPT-INVENTORY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "IOS_TYPED_CLIENT_AND_CONTRACT_VERIFIED",
-      "G1": "HIDDEN_QA_CANDIDATE_INBOX_UIQA_VERIFIED",
-      "G2": "IN_PROGRESS_CONTROLLED_POSTGRES_CANDIDATE_INBOX_DECISION_ROUTE_SMOKE",
-      "G4": "PUBLIC_EXPOSURE_REMAINS_DISABLED_PENDING_PRODUCT_UX_APPROVAL"
+      "G0": "IN_PROGRESS_TIMELETTER_TARGET_RECEIPT_AND_ATOMICITY_INVENTORY",
+      "G2": "NOT_STARTED",
+      "G3": "NOT_STARTED",
+      "G4": "PUBLIC_TIMELETTER_EXPOSURE_REMAINS_DISABLED_PENDING_PRODUCT_AND_PRIVACY_APPROVAL"
     },
-    "id": "WI-S1-03-04",
+    "id": "WI-S1-02-05",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-04 already has a default-off typed iOS Candidate Inbox/review client and hidden QA-only Archive UI. The current G2 sub-slice will exercise the deployed Candidate Inbox and Decision routes in an isolated Postgres environment with temporary identities, vault binding and negative authorization checks. It must not enable a public route, switch a legacy writer or mutate production business data."
+    "summary": "WI-S1-02-05 starts the first S1-F business-effect slice only after the async-effect kernel evidence. It inventories and then replaces the legacy TimeLetter due-dispatch path with per-recipient, receipt-first, atomic delivery semantics. This first sub-slice is default-off, must not start a worker, enable APNs, migrate historical business data, or widen the public TimeLetter surface."
   },
   "baselines": {
-    "backend": "main@162afb0",
-    "ios": "feature/prd-stitch-ui-adaptation@91e97ae",
+    "backend": "main@3787665",
+    "ios": "feature/prd-stitch-ui-adaptation@54c6b7a",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -414,12 +411,36 @@
       "id": "WI-S1-03-10",
       "implementationStatus": "INTERNAL_READY / BOUNDED_G0_QA_STRANGLER_PARITY_VERIFIED / IOS_LOCAL_COMMITTED / G1_G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-01-07-owner-qa-context-typed-citation.md",
+      "id": "WI-S1-01-07",
+      "implementationStatus": "INTERNAL_READY / G0_G1_G2_SCOPED_EVIDENCE_PRESENT / IOS_LOCAL_COMMITTED / G3_DEFERRED_UNTIL_QUERY_RETRIEVER_EXISTS",
+      "registryClosure": "SCOPED_G0_G1_G2_EVIDENCE_PRESENT_G3_RETRIEVER_QUALITY_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-03-lifecycle-event-forwarding.md",
+      "id": "WI-S1-03-03",
+      "implementationStatus": "INTERNAL_READY / G0_ROOT_LIFECYCLE_PROPAGATION_VERIFIED / G1_ECHO_SIMULATOR_UIQA_VERIFIED / IOS_LOCAL_COMMITTED / G2_G4_OPEN",
+      "registryClosure": "SCOPED_G0_G1_EVIDENCE_PRESENT_G2_G4_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-04-owner-truth-candidate-client.md",
+      "id": "WI-S1-03-04",
+      "implementationStatus": "INTERNAL_READY / G0_G1_G2_HIDDEN_QA_VERIFIED / IOS_LOCAL_COMMITTED / G4_OPEN",
+      "registryClosure": "SCOPED_G0_G1_G2_EVIDENCE_PRESENT_G4_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-05-echo-turn-intent-reducer.md",
+      "id": "WI-S1-03-05",
+      "implementationStatus": "IN_PROGRESS / G0_STATIC_AND_BUILD_FOR_TESTING_VERIFIED / G1_G2_G3_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_DEPENDENT_DELAYED_REPLY_OPEN"
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-01-10",
+    "id": "WI-S1-02-06",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Owner cohort cutover remains planned only after WI-S1-03-04 G2 plus WI-S1-01-09 production-shape backup/restore, sampling and migration Go record. It must not be activated merely because its internal shadow evidence exists; do not reopen completed correction contracts or widen public release scope."
+    "summary": "Echo delayed reply Answer/Inbox/receipt closure follows the TimeLetter business-effect slice. It may begin only after WI-S1-02-05 records its receipt-first delivery contract; it must retain server-off default behavior and must not generate a local pseudo-completed reply."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -428,5 +449,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T00:20:00+0800"
+  "updatedAt": "2026-07-20T00:42:00+0800"
 }
