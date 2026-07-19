@@ -1,39 +1,24 @@
 {
   "activeWorkItem": {
-    "authorityLock": "IOS_COMPOSITION",
+    "authorityLock": "OWNER_TRUTH",
     "backendPendingPaths": [],
-    "completedSubSlices": [
-      "WI-S1-03-10-G0-QA-LAUNCH-CONFIGURATION",
-      "WI-S1-03-10-G0-SCENARIO-REGISTRY",
-      "WI-S1-03-10-G0-QA-SCENARIO-RUNNER-EXTRACTION",
-      "WI-S1-03-10-G0-QA-EXPORT-RESULT-WRITER-EXTRACTION",
-      "WI-S1-03-10-G0-QA-DISPATCH-METADATA-EXTRACTION",
-      "WI-S1-03-10-G0-QA-ECHO-EXPORT-RUNNER-EXTRACTION",
-      "WI-S1-03-10-G0-QA-ECHO-EVIDENCE-EXPORT-RUNNER-EXPANSION",
-      "WI-S1-03-10-G0-QA-DIGITAL-HUMAN-LIFECYCLE-RUNNER-PARITY",
-      "WI-S1-03-10-G0-QA-DIGITAL-HUMAN-RUNTIME-STUB-RUNNER-PARITY",
-      "WI-S1-03-10-G0-QA-TENCENT-BACKEND-PCM-DRIVE-RUNNER-PARITY",
-      "WI-S1-03-10-G0-QA-NON-ECHO-DISPATCH-INVENTORY",
-      "WI-S1-03-10-G0-QA-GLOBAL-PRIVATE-STORE-RUNNER-PARITY",
-      "WI-S1-03-10-G0-QA-PROFILE-CARE-ESCALATION-RUNNER-PARITY",
-      "WI-S1-03-10-G0-QA-PROFILE-CARE-STATE-RUNNER-PARITY"
-    ],
-    "currentSubSlice": "WI-S1-03-10-G0-QA-PROFILE-CARE-BACKEND-STATE-RUNNER-PARITY",
+    "completedSubSlices": [],
+    "currentSubSlice": "WI-S1-01-04-G0-CANDIDATE-INBOX-OWNER-REVIEW-DISCOVERY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PARTIAL_QA_LAUNCH_CONFIGURATION_RUNNER_EXPORT_WRITER_DISPATCH_METADATA_FIVE_ECHO_EVIDENCE_EXPORTS_DIGITAL_HUMAN_LIFECYCLE_AUTHENTICATED_RUNTIME_STUB_TENCENT_BACKEND_PCM_DRIVE_ROUTE_NON_ECHO_DISPATCH_INVENTORY_GLOBAL_PRIVATE_STORE_AND_PROFILE_CARE_ESCALATION_STATE_RUNNER_PARITY_VERIFIED",
+      "G0": "NOT_STARTED",
       "G1": "NOT_STARTED",
-      "G3": "NOT_STARTED",
+      "G2": "NOT_STARTED",
       "G4": "NOT_STARTED"
     },
-    "id": "WI-S1-03-10",
+    "id": "WI-S1-01-04",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-09 is internally ready at G0: notification, remote notification and deeplink ingress are parsed only as opaque owner-scoped route intents, validated against the active AccountLease at request/runtime/UI checkpoints, cleared on old-account lifecycle teardown, and routed only to a neutral Tab. G1/G3/G4 remain open. WI-S1-03-10 has completed fourteen bounded G0 sub-slices: AppDelegate and Echo consume centralized smoke-harness launch configuration, startup scenarios use an explicit legacy-compatible priority registry, QAScenarioRunner owns launch-plan/session-preparation semantics, QAScenarioResultWriter owns Echo QA JSON export persistence, QALaunchScenario owns startup timing metadata, and QAEchoScenarioRunner owns the root/Echo route/retry path for five evidence exports, the digital-human lifecycle scenario, the authenticated runtime-stub broker boundary, and Tencent backend PCM-drive mock routing. The remaining 35 startup scenarios are explicitly classified; GlobalPrivateStoreRetirementSmoke owns its run/persist/present lifecycle, and QAProfileScenarioRunner owns Profile root routing and result persistence for the care escalation boundary and care state smokes while their business assertions remain at the call sites. Authenticated, seeded, and AccountLease-sensitive routes remain intentionally in AppDelegate."
+    "summary": "WI-S1-03-10 is internally ready at bounded G0: QA launch configuration, scenario/result orchestration, Echo evidence exports, digital-human runtime parity, non-Echo dispatch inventory, GlobalPrivateStore retirement and Profile Care routing are isolated behind explicit QA support boundaries. The authenticated Profile Care backend-state runner verifies real short-lived V2 session composition, failure/retry behavior and fixture cleanup without service-token injection or ReleasePolicy bypass. G1/G3/G4 remain open. The active P0 item is WI-S1-01-04: establish hidden Candidate Inbox, Owner Review and immutable DecisionReceipt contracts after the existing synthetic candidate extraction evidence."
   },
   "baselines": {
     "backend": "main@32c38f2",
-    "ios": "feature/prd-stitch-ui-adaptation@db1e4ed",
+    "ios": "feature/prd-stitch-ui-adaptation@c2b97ec",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -390,12 +375,18 @@
       "id": "WI-S1-03-09",
       "implementationStatus": "INTERNAL_READY / G0_OWNER_ROUTING_VERIFIED / IOS_LOCAL_COMMITTED / G1_G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-10-qa-strangler-g0-closure.md",
+      "id": "WI-S1-03-10",
+      "implementationStatus": "INTERNAL_READY / BOUNDED_G0_QA_STRANGLER_PARITY_VERIFIED / IOS_LOCAL_COMMITTED / G1_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-01-04",
+    "id": "WI-S1-01-05",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After WI-S1-03-10 isolates QA orchestration from production composition, continue the next P0 Owner Truth item without widening the public release scope."
+    "summary": "After Candidate Inbox, Owner Review and immutable DecisionReceipt have scoped evidence, continue the next P0 Owner Truth item without widening the public release scope."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -404,5 +395,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T12:55:40+0800"
+  "updatedAt": "2026-07-19T14:01:42+0800"
 }
