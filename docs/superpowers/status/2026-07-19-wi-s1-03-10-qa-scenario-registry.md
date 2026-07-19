@@ -22,7 +22,10 @@
 
 ## 运行边界
 
-- `QALaunchConfiguration` 仍是唯一读取 `ProcessInfo.processInfo.arguments` 的位置。
+- `QALaunchConfiguration` 是 AppDelegate 与 Echo UIQA smoke 编排唯一读取
+  `ProcessInfo.processInfo.arguments` 的位置。仓库仍有少量模块级 Debug/QA 本地 override
+  （例如数字人 asset、OwnerTruth review、Profile/Archive 隐藏分支）；它们不属于本子切片的
+  startup scenario 范围，后续只能随对应模块迁移，不能被误标为已统一。
 - 非 `DEBUG` / `UI_QA_SIMULATOR` 配置保持空参数，因此不会解析 startup scenario、QA seed 或
   隐藏 capability。
 - 没有新增公开入口、deeplink、持久化开关或发布态 UI；三 Tab、Stitch 视觉和业务调用链均未改变。

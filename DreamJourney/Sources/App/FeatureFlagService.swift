@@ -1,11 +1,12 @@
 import Foundation
 
-/// Centralizes launch-argument access for Debug and simulator UIQA only.
+/// Centralizes AppDelegate and Echo smoke-harness launch-argument access for
+/// Debug and simulator UIQA only.
 ///
 /// Production artifacts intentionally receive an empty configuration so a
 /// stale command-line argument can never enable a seed, smoke flow, or hidden
-/// feature. Keep scenario orchestration outside of this type; it is the
-/// fail-closed boundary between process arguments and the app runtime.
+/// harness feature. Keep scenario orchestration outside of this type; it is
+/// the fail-closed boundary for the centralized smoke harness.
 struct QALaunchConfiguration {
     static let shared = QALaunchConfiguration()
 
@@ -201,6 +202,48 @@ enum QALaunchScenarioSessionPreparation {
     case none
     case login
     case loginAndResetFeatureFlags
+}
+
+/// A compile-contained QA support facade. It owns launch planning and session
+/// preparation while AppDelegate keeps the temporary bridge to existing smoke
+/// method bodies. This lets the QA orchestration move incrementally without
+/// exposing a public runtime entry point or touching product composition.
+struct QAScenarioLaunchPlan {
+    let scenario: QALaunchScenario?
+    let shouldEnableArchiveRemoteFetch: Bool
+    let shouldEnableDigitalHumanLivePanel: Bool
+    let shouldSeedProfileCareFamilyMember: Bool
+
+    var sessionPreparation: QALaunchScenarioSessionPreparation? {
+        scenario?.sessionPreparation
+    }
+}
+
+enum QAScenarioRunner {
+    static func makeLaunchPlan(from configuration: QALaunchConfiguration) -> QAScenarioLaunchPlan {
+        QAScenarioLaunchPlan(
+            scenario: configuration.startupScenario,
+            shouldEnableArchiveRemoteFetch: configuration.shouldEnableArchiveRemoteFetch,
+            shouldEnableDigitalHumanLivePanel: configuration.shouldEnableDigitalHumanLivePanel,
+            shouldSeedProfileCareFamilyMember: configuration.shouldSeedProfileCareFamilyMember
+        )
+    }
+
+    static func prepareSession(
+        for plan: QAScenarioLaunchPlan,
+        login: () -> Void,
+        resetFeatureFlags: () -> Void
+    ) {
+        switch plan.sessionPreparation {
+        case nil, .some(.none):
+            return
+        case .some(.login):
+            login()
+        case .some(.loginAndResetFeatureFlags):
+            login()
+            resetFeatureFlags()
+        }
+    }
 }
 
 enum DJFeature: String, CaseIterable {

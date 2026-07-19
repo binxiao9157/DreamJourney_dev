@@ -4,12 +4,13 @@
     "backendPendingPaths": [],
     "completedSubSlices": [
       "WI-S1-03-10-G0-QA-LAUNCH-CONFIGURATION",
-      "WI-S1-03-10-G0-SCENARIO-REGISTRY"
+      "WI-S1-03-10-G0-SCENARIO-REGISTRY",
+      "WI-S1-03-10-G0-QA-SCENARIO-RUNNER-EXTRACTION"
     ],
-    "currentSubSlice": "WI-S1-03-10-G0-QA-SCENARIO-RUNNER-EXTRACTION",
+    "currentSubSlice": "WI-S1-03-10-G0-QA-EXPORT-RESULT-WRITER-EXTRACTION",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PARTIAL_QA_LAUNCH_CONFIGURATION_AND_SCENARIO_REGISTRY_VERIFIED",
+      "G0": "PARTIAL_QA_LAUNCH_CONFIGURATION_SCENARIO_REGISTRY_AND_RUNNER_VERIFIED",
       "G1": "NOT_STARTED",
       "G3": "NOT_STARTED",
       "G4": "NOT_STARTED"
@@ -17,7 +18,7 @@
     "id": "WI-S1-03-10",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-09 is internally ready at G0: notification, remote notification and deeplink ingress are parsed only as opaque owner-scoped route intents, validated against the active AccountLease at request/runtime/UI checkpoints, cleared on old-account lifecycle teardown, and routed only to a neutral Tab. G1/G3/G4 remain open. WI-S1-03-10 has completed two bounded G0 sub-slices: AppDelegate and Echo now consume launch arguments only through a centralized fail-closed QALaunchConfiguration, and AppDelegate selects one typed QALaunchScenario from an explicit, legacy-compatible priority registry. Concrete smoke/seed/export execution remains in AppDelegate pending runner extraction."
+    "summary": "WI-S1-03-09 is internally ready at G0: notification, remote notification and deeplink ingress are parsed only as opaque owner-scoped route intents, validated against the active AccountLease at request/runtime/UI checkpoints, cleared on old-account lifecycle teardown, and routed only to a neutral Tab. G1/G3/G4 remain open. WI-S1-03-10 has completed three bounded G0 sub-slices: AppDelegate and Echo consume centralized smoke-harness launch configuration, startup scenarios use an explicit legacy-compatible priority registry, and QAScenarioRunner now owns launch-plan/session-preparation semantics. Concrete smoke/seed/export execution remains in AppDelegate pending result-writer extraction."
   },
   "baselines": {
     "backend": "main@32c38f2",

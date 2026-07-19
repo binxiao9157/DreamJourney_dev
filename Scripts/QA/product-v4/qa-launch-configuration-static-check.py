@@ -36,6 +36,10 @@ def main() -> None:
         "static let startupOrder: [QALaunchScenario]",
         "static func resolve(in configuration: QALaunchConfiguration)",
         "enum QALaunchScenarioSessionPreparation",
+        "struct QAScenarioLaunchPlan",
+        "enum QAScenarioRunner",
+        "static func makeLaunchPlan(from configuration: QALaunchConfiguration)",
+        "static func prepareSession(",
     ):
         require(anchor in feature_flags, f"QALaunchConfiguration missing boundary anchor: {anchor}")
 
@@ -56,12 +60,24 @@ def main() -> None:
         "AppDelegate QA harness must acquire the centralized configuration",
     )
     require(
-        "configuration.shouldSeedProfileCareFamilyMember" in app_delegate,
-        "AppDelegate profile-care seed must use the centralized scenario policy",
+        "QAScenarioRunner.makeLaunchPlan(" in app_delegate,
+        "AppDelegate UIQA harness must obtain its orchestration plan from QAScenarioRunner",
     )
     require(
-        "configuration.startupScenario" in app_delegate,
-        "AppDelegate UIQA harness must resolve one typed startup scenario",
+        "launchPlan.shouldSeedProfileCareFamilyMember" in app_delegate,
+        "AppDelegate profile-care seed must use the centralized scenario plan",
+    )
+    require(
+        "launchPlan.scenario" in app_delegate,
+        "AppDelegate UIQA harness must resolve one typed startup scenario from the plan",
+    )
+    require(
+        "QAScenarioRunner.prepareSession(" in app_delegate,
+        "AppDelegate UIQA harness must delegate session preparation to QAScenarioRunner",
+    )
+    require(
+        "func prepareUIQASession(" not in app_delegate,
+        "AppDelegate must not retain the pre-runner session-preparation helper",
     )
     require(
         "switch scenario" in app_delegate,

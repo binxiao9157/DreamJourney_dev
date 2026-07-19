@@ -272,20 +272,26 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 #if UI_QA_SIMULATOR && targetEnvironment(simulator)
 private extension AppDelegate {
     func configureUIQASmokeHarnessIfNeeded() {
-        let configuration = QALaunchConfiguration.shared
-        if configuration.shouldEnableArchiveRemoteFetch {
+        let launchPlan = QAScenarioRunner.makeLaunchPlan(
+            from: QALaunchConfiguration.shared
+        )
+        if launchPlan.shouldEnableArchiveRemoteFetch {
             FeatureFlagService.shared.enableForCurrentLaunch(.archiveRemoteFetch)
             print("[UI_QA] Archive remote fetch enabled")
         }
-        if configuration.shouldEnableDigitalHumanLivePanel {
+        if launchPlan.shouldEnableDigitalHumanLivePanel {
             FeatureFlagService.shared.enableForCurrentLaunch(.digitalHumanLivePanel)
             print("[UI_QA] Digital human live panel enabled")
         }
-        if configuration.shouldSeedProfileCareFamilyMember {
+        if launchPlan.shouldSeedProfileCareFamilyMember {
             seedUIQAStarCareFamilyMember()
         }
-        guard let scenario = configuration.startupScenario else { return }
-        prepareUIQASession(for: scenario)
+        guard let scenario = launchPlan.scenario else { return }
+        QAScenarioRunner.prepareSession(
+            for: launchPlan,
+            login: { UserManager.shared.login(phone: "13800009999", nickname: "UI QA") },
+            resetFeatureFlags: { FeatureFlagService.shared.resetToDefaults() }
+        )
 
         switch scenario {
         case .digitalHumanLivePanelSmoke:
@@ -367,18 +373,6 @@ private extension AppDelegate {
             seedArchiveAnalysisInsightsContext()
         case .seedPendingArchiveAnalysis:
             seedPendingArchiveAnalysisContext()
-        }
-    }
-
-    func prepareUIQASession(for scenario: QALaunchScenario) {
-        switch scenario.sessionPreparation {
-        case .none:
-            return
-        case .login:
-            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
-        case .loginAndResetFeatureFlags:
-            UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
-            FeatureFlagService.shared.resetToDefaults()
         }
     }
 

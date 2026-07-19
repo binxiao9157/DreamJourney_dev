@@ -59,7 +59,7 @@ assertContains(appDelegate, "#if !(UI_QA_SIMULATOR && targetEnvironment(simulato
 assertContains(appDelegate, "#if UI_QA_SIMULATOR && targetEnvironment(simulator)\n        configureUIQASmokeHarnessIfNeeded()\n        #endif", "UIQA harness should be simulator gated")
 assertContains(flags, "DJEnableArchiveRemoteFetch", "archive backend fetch QA launch arg should live in centralized feature registry")
 assertContains(flags, "DJRunArchiveToEchoSmoke", "archive-to-echo smoke launch arg should live in centralized scenario registry")
-assertContains(appDelegate, "configuration.shouldEnableArchiveRemoteFetch", "AppDelegate should consume the centralized archive remote fetch policy")
+assertContains(appDelegate, "launchPlan.shouldEnableArchiveRemoteFetch", "AppDelegate should consume the centralized archive remote fetch plan")
 assertContains(appDelegate, "case .archiveToEchoSmoke", "AppDelegate should dispatch archive-to-echo through the scenario registry")
 assertContains(appDelegate, "MemoryArchiveRepository.shared.add(item, syncToBackend: false)", "UIQA seeds should not sync to backend")
 assertContains(appDelegate, "archive-to-echo-smoke-result.json", "smoke result file should stay stable")
