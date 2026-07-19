@@ -13,6 +13,56 @@ import CocoaLumberjack
 /// 3. 后端代理火山 TTS V3 并返回 base64 音频
 /// 4. 保存到当前账号 generation 隔离的 Application Support 缓存目录
 
+struct MemoirTTSCacheIdentity: Codable, Equatable {
+    let memoirId: String
+    let personaOwnerId: String
+    let roleKey: String
+    let voiceProfileId: String
+    let textHash: String
+    let audioFormat: String
+    let providerMode: String
+
+    init?(
+        memoirId: String,
+        personaOwnerId: String,
+        roleKey: String,
+        voiceProfileId: String,
+        textHash: String,
+        audioFormat: String,
+        providerMode: String
+    ) {
+        let memoirId = MemoirTTSCacheStoragePolicy.normalized(memoirId)
+        let personaOwnerId = MemoirTTSCacheStoragePolicy.normalized(personaOwnerId)
+        let roleKey = MemoirTTSCacheStoragePolicy.normalized(roleKey)
+        let voiceProfileId = MemoirTTSCacheStoragePolicy.normalized(voiceProfileId)
+        let textHash = MemoirTTSCacheStoragePolicy.normalized(textHash)
+        let audioFormat = MemoirTTSCacheStoragePolicy.normalized(audioFormat).lowercased()
+        let providerMode = MemoirTTSCacheStoragePolicy.normalized(providerMode).lowercased()
+        guard !memoirId.isEmpty,
+              !personaOwnerId.isEmpty,
+              !roleKey.isEmpty,
+              !voiceProfileId.isEmpty,
+              !textHash.isEmpty,
+              !audioFormat.isEmpty,
+              !providerMode.isEmpty else {
+            return nil
+        }
+        self.memoirId = memoirId
+        self.personaOwnerId = personaOwnerId
+        self.roleKey = roleKey
+        self.voiceProfileId = voiceProfileId
+        self.textHash = textHash
+        self.audioFormat = audioFormat
+        self.providerMode = providerMode
+    }
+
+    var cacheDigest: String {
+        MemoirTTSCacheStoragePolicy.digest(
+            "memoir-tts-cache-identity-v1|\(memoirId)|\(personaOwnerId)|\(roleKey)|\(voiceProfileId)|\(textHash)|\(audioFormat)|\(providerMode)"
+        )
+    }
+}
+
 struct MemoirTTSCacheEntry: Codable {
     let memoirId: String
     let audioFileURL: URL
@@ -22,6 +72,7 @@ struct MemoirTTSCacheEntry: Codable {
     let visemeTimeline: DigitalHumanLipSyncTimeline?
     let createdAt: Date
     let providerMode: String
+    let cacheIdentity: MemoirTTSCacheIdentity
 }
 
 struct MemoirTTSCacheResult {
@@ -34,7 +85,7 @@ struct MemoirTTSCacheResult {
 }
 
 private enum MemoirTTSCacheStoragePolicy {
-    static let schemaVersion = 2
+    static let schemaVersion = 3
 
     static func normalized(_ value: String) -> String {
         value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -88,6 +139,55 @@ private struct MemoirTTSCacheEnvelope: Codable {
 private struct MemoirTTSScopedAccess {
     let accountLease: AccountLease
     let scope: MemoirTTSCacheScope
+}
+
+private struct MemoirTTSCacheLookup {
+    let memoirId: String
+    let personaOwnerId: String
+    let roleKey: String
+    let voiceProfileId: String?
+    let textHash: String?
+
+    init?(
+        memoirId: String,
+        personaOwnerId: String,
+        roleKey: String,
+        voiceProfileId: String? = nil,
+        textHash: String? = nil
+    ) {
+        let memoirId = MemoirTTSCacheStoragePolicy.normalized(memoirId)
+        let personaOwnerId = MemoirTTSCacheStoragePolicy.normalized(personaOwnerId)
+        let roleKey = MemoirTTSCacheStoragePolicy.normalized(roleKey)
+        let voiceProfileId = voiceProfileId.map(MemoirTTSCacheStoragePolicy.normalized)
+        let textHash = textHash.map(MemoirTTSCacheStoragePolicy.normalized)
+        guard !memoirId.isEmpty,
+              !personaOwnerId.isEmpty,
+              !roleKey.isEmpty,
+              voiceProfileId?.isEmpty != true,
+              textHash?.isEmpty != true else {
+            return nil
+        }
+        self.memoirId = memoirId
+        self.personaOwnerId = personaOwnerId
+        self.roleKey = roleKey
+        self.voiceProfileId = voiceProfileId
+        self.textHash = textHash
+    }
+
+    func matches(_ identity: MemoirTTSCacheIdentity) -> Bool {
+        guard identity.memoirId == memoirId,
+              identity.personaOwnerId == personaOwnerId,
+              identity.roleKey == roleKey else {
+            return false
+        }
+        if let voiceProfileId, identity.voiceProfileId != voiceProfileId {
+            return false
+        }
+        if let textHash, identity.textHash != textHash {
+            return false
+        }
+        return true
+    }
 }
 
 private struct MemoirTTSLegacyQuarantineReceipt: Codable {
@@ -232,27 +332,23 @@ final class MemoirTTSService {
         }
     }
 
-    /// 获取已合成的音频文件 URL
-    func getAudioURL(for memoirId: String) -> URL? {
-        guard let access = captureScopedAccess(forSubjectId: nil, at: .request) else {
-            return nil
-        }
-        return getCachedSynthesis(for: memoirId, access: access)?.audioFileURL
+    /// 获取与回忆录当前 owner、音色和文本完全匹配的已合成音频文件 URL。
+    func getAudioURL(for memoir: MemoirModel) -> URL? {
+        getCachedSynthesis(for: memoir)?.audioFileURL
     }
 
-    /// 获取已缓存的 TTS 合成结果，包含本地音频和口型时间线。
-    func getCachedSynthesis(for memoirId: String) -> MemoirTTSCacheResult? {
-        guard let access = captureScopedAccess(forSubjectId: nil, at: .request) else {
-            return nil
-        }
-        return getCachedSynthesis(for: memoirId, access: access)
-    }
-
-    /// 获取已缓存的 TTS 合成结果，并验证当前文本仍匹配缓存。
+    /// 获取与回忆录当前 owner、音色和文本完全匹配的缓存结果。
     func getCachedSynthesis(for memoir: MemoirModel) -> MemoirTTSCacheResult? {
         guard let access = captureScopedAccess(forSubjectId: memoir.authorId, at: .request),
-              let result = getCachedSynthesis(for: memoir.id, access: access),
-              result.cacheEntry.textHash == Self.textHash(for: memoir.prose) else {
+              let voiceProfileId = resolvedVoiceProfileId(for: memoir),
+              let lookup = MemoirTTSCacheLookup(
+                  memoirId: memoir.id,
+                  personaOwnerId: memoir.authorId,
+                  roleKey: "memoir",
+                  voiceProfileId: voiceProfileId,
+                  textHash: Self.textHash(for: memoir.prose)
+              ),
+              let result = getCachedSynthesis(matching: lookup, access: access) else {
             return nil
         }
         return result
@@ -280,37 +376,34 @@ final class MemoirTTSService {
             return nil
         }
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let timeline = cacheFiles
-            .compactMap { fileURL -> MemoirTTSCacheEnvelope? in
-                guard fileURL.pathExtension == "json",
-                      let data = try? Data(contentsOf: fileURL) else {
-                    return nil
-                }
-                return try? decoder.decode(MemoirTTSCacheEnvelope.self, from: data)
+        let matchingEntries = cacheFiles.compactMap { fileURL -> MemoirTTSCacheEntry? in
+            guard let entry = loadCacheEntry(from: fileURL, scope: access.scope),
+                  entry.textHash == expectedTextHash,
+                  entry.cacheIdentity.roleKey == "memoir",
+                  entry.visemeTimeline?.frames.isEmpty == false,
+                  FileManager.default.fileExists(atPath: entry.audioFileURL.path) else {
+                return nil
             }
-            .filter { envelope in
-                envelope.schemaVersion == MemoirTTSCacheStoragePolicy.schemaVersion
-                    && envelope.scope == access.scope
-                    && envelope.entry.textHash == expectedTextHash
-                    && envelope.entry.visemeTimeline?.frames.isEmpty == false
-                    && isExpectedAudioURL(envelope.entry.audioFileURL, for: envelope.entry, scope: access.scope)
-                    && FileManager.default.fileExists(atPath: envelope.entry.audioFileURL.path)
-            }
-            .map(\.entry)
-            .sorted { $0.createdAt > $1.createdAt }
-            .first?
-            .visemeTimeline
+            return entry
+        }
+        let voiceProfileIds = Set(matchingEntries.map(\.cacheIdentity.voiceProfileId))
+        let timeline = voiceProfileIds.count == 1
+            ? matchingEntries.sorted { $0.createdAt > $1.createdAt }.first?.visemeTimeline
+            : nil
         guard accountLeaseRuntime.validate(access.accountLease, at: .runtime).allowed else {
             return nil
         }
         return timeline
     }
 
-    /// 删除已合成的音频文件
-    func deleteAudio(for memoirId: String) {
-        guard let access = captureScopedAccess(forSubjectId: nil, at: .request) else {
+    /// 删除当前 owner 的回忆录缓存变体。文本编辑后不保留旧音色或旧 Provider 的音频。
+    func deleteAudio(for memoir: MemoirModel) {
+        guard let access = captureScopedAccess(forSubjectId: memoir.authorId, at: .request),
+              let lookup = MemoirTTSCacheLookup(
+                  memoirId: memoir.id,
+                  personaOwnerId: memoir.authorId,
+                  roleKey: "memoir"
+              ) else {
             return
         }
         retireLegacyGlobalCacheIfNeeded()
@@ -318,9 +411,13 @@ final class MemoirTTSService {
 
         storageLock.lock()
         defer { storageLock.unlock() }
-        let scopedURLs = ["mp3", "m4a", "aac", "wav"].map {
-            audioFileURL(for: memoirId, audioFormat: $0, scope: access.scope)
-        } + [cacheFileURL(for: memoirId, scope: access.scope)]
+        let scopedURLs = cachedEntries(
+            matching: lookup,
+            scope: access.scope,
+            requiresAudioFile: false
+        ).flatMap { entry in
+            [entry.audioFileURL, cacheFileURL(for: entry.cacheIdentity, scope: access.scope)]
+        }
         let previousFiles = Dictionary(uniqueKeysWithValues: scopedURLs.compactMap { url in
             (try? Data(contentsOf: url)).map { (url, $0) }
         })
@@ -432,29 +529,49 @@ final class MemoirTTSService {
                     return
                 }
                 let audioFormat = Self.normalizedAudioFormat(synthesis.audioFormat)
-                guard let cacheScope = MemoirTTSCacheScope(accountLease: accountLease) else {
+                let returnedVoiceProfileId = MemoirTTSCacheStoragePolicy.normalized(synthesis.voiceProfileId)
+                guard returnedVoiceProfileId == request.voiceProfileId else {
+                    self.finishSynthesis(operation)
+                    DDLogError("[MemoirTTS] 后端返回的音色与请求不一致: requested=\(request.voiceProfileId), returned=\(returnedVoiceProfileId)")
+                    self.deliver(
+                        .failure(.synthesisFailed("合成音色与请求不一致")),
+                        accountLease: accountLease,
+                        completion: completion
+                    )
+                    return
+                }
+                guard let cacheScope = MemoirTTSCacheScope(accountLease: accountLease),
+                      let cacheIdentity = MemoirTTSCacheIdentity(
+                          memoirId: memoir.id,
+                          personaOwnerId: scope.personaOwnerId,
+                          roleKey: scope.roleKey,
+                          voiceProfileId: returnedVoiceProfileId,
+                          textHash: Self.textHash(for: memoir.prose),
+                          audioFormat: audioFormat,
+                          providerMode: synthesis.providerMode
+                      ) else {
                     self.finishSynthesis(operation)
                     self.deliver(
-                        .failure(.accountSessionChanged),
+                        .failure(.synthesisFailed("合成响应缺少缓存身份字段")),
                         accountLease: accountLease,
                         completion: completion
                     )
                     return
                 }
                 let outputPath = self.audioFileURL(
-                    for: memoir.id,
-                    audioFormat: audioFormat,
+                    for: cacheIdentity,
                     scope: cacheScope
                 )
                 let cacheEntry = MemoirTTSCacheEntry(
                     memoirId: memoir.id,
                     audioFileURL: outputPath,
-                    voiceProfileId: synthesis.voiceProfileId,
+                    voiceProfileId: returnedVoiceProfileId,
                     textHash: Self.textHash(for: memoir.prose),
                     audioFormat: audioFormat,
                     visemeTimeline: synthesis.visemeTimeline,
                     createdAt: Date(),
-                    providerMode: synthesis.providerMode
+                    providerMode: cacheIdentity.providerMode,
+                    cacheIdentity: cacheIdentity
                 )
                 do {
                     try self.commitSynthesisArtifacts(
@@ -646,7 +763,10 @@ final class MemoirTTSService {
         guard isExpectedAudioURL(audioURL, for: cacheEntry, scope: cacheScope) else {
             throw TTSError.accountSessionChanged
         }
-        let metadataURL = cacheFileURL(for: cacheEntry.memoirId, scope: cacheScope)
+        let metadataURL = cacheFileURL(for: cacheEntry.cacheIdentity, scope: cacheScope)
+        guard isExpectedMetadataURL(metadataURL, for: cacheEntry, scope: cacheScope) else {
+            throw TTSError.accountSessionChanged
+        }
         let stagedAudioURL = stagingFileURL(for: audioURL, operation: operation)
         let stagedMetadataURL = stagingFileURL(for: metadataURL, operation: operation)
         defer {
@@ -718,15 +838,16 @@ final class MemoirTTSService {
     }
 
     private func getCachedSynthesis(
-        for memoirId: String,
+        matching lookup: MemoirTTSCacheLookup,
         access: MemoirTTSScopedAccess
     ) -> MemoirTTSCacheResult? {
         storageLock.lock()
         defer { storageLock.unlock() }
         retireLegacyGlobalCacheIfNeeded()
         ensureScopeDirectories(for: access.scope)
-        guard let entry = loadCacheEntry(for: memoirId, scope: access.scope),
-              FileManager.default.fileExists(atPath: entry.audioFileURL.path),
+        guard let entry = cachedEntries(matching: lookup, scope: access.scope)
+              .sorted(by: { $0.createdAt > $1.createdAt })
+              .first,
               accountLeaseRuntime.validate(access.accountLease, at: .runtime).allowed else {
             return nil
         }
@@ -753,18 +874,17 @@ final class MemoirTTSService {
     }
 
     private func audioFileURL(
-        for memoirId: String,
-        audioFormat: String,
+        for identity: MemoirTTSCacheIdentity,
         scope: MemoirTTSCacheScope
     ) -> URL {
         audioDirectory(for: scope).appendingPathComponent(
-            "\(Self.fileNameDigest(for: memoirId)).\(Self.normalizedAudioFormat(audioFormat))"
+            "\(identity.cacheDigest).\(identity.audioFormat)"
         )
     }
 
-    private func cacheFileURL(for memoirId: String, scope: MemoirTTSCacheScope) -> URL {
+    private func cacheFileURL(for identity: MemoirTTSCacheIdentity, scope: MemoirTTSCacheScope) -> URL {
         cacheDirectory(for: scope).appendingPathComponent(
-            "\(Self.fileNameDigest(for: memoirId)).json"
+            "\(identity.cacheDigest).json"
         )
     }
 
@@ -776,11 +896,37 @@ final class MemoirTTSService {
         try data.write(to: fileURL, options: .atomic)
     }
 
+    private func cachedEntries(
+        matching lookup: MemoirTTSCacheLookup,
+        scope: MemoirTTSCacheScope,
+        requiresAudioFile: Bool = true
+    ) -> [MemoirTTSCacheEntry] {
+        guard let cacheFiles = try? FileManager.default.contentsOfDirectory(
+            at: cacheDirectory(for: scope),
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+        return cacheFiles.compactMap { fileURL in
+            guard let entry = loadCacheEntry(from: fileURL, scope: scope),
+                  lookup.matches(entry.cacheIdentity),
+                  !requiresAudioFile || FileManager.default.fileExists(atPath: entry.audioFileURL.path) else {
+                return nil
+            }
+            return entry
+        }
+    }
+
     private func loadCacheEntry(
-        for memoirId: String,
+        from fileURL: URL,
         scope: MemoirTTSCacheScope
     ) -> MemoirTTSCacheEntry? {
-        let fileURL = cacheFileURL(for: memoirId, scope: scope)
+        guard fileURL.pathExtension == "json",
+              fileURL.deletingLastPathComponent().standardizedFileURL
+                == cacheDirectory(for: scope).standardizedFileURL else {
+            return nil
+        }
         guard let data = try? Data(contentsOf: fileURL) else {
             return nil
         }
@@ -789,7 +935,8 @@ final class MemoirTTSService {
         guard let envelope = try? decoder.decode(MemoirTTSCacheEnvelope.self, from: data),
               envelope.schemaVersion == MemoirTTSCacheStoragePolicy.schemaVersion,
               envelope.scope == scope,
-              envelope.entry.memoirId == memoirId,
+              isIdentityConsistent(envelope.entry),
+              isExpectedMetadataURL(fileURL, for: envelope.entry, scope: scope),
               isExpectedAudioURL(envelope.entry.audioFileURL, for: envelope.entry, scope: scope) else {
             return nil
         }
@@ -801,11 +948,42 @@ final class MemoirTTSService {
         for entry: MemoirTTSCacheEntry,
         scope: MemoirTTSCacheScope
     ) -> Bool {
-        audioURL.standardizedFileURL == audioFileURL(
-            for: entry.memoirId,
-            audioFormat: entry.audioFormat,
+        guard isIdentityConsistent(entry) else {
+            return false
+        }
+        return audioURL.standardizedFileURL == audioFileURL(
+            for: entry.cacheIdentity,
             scope: scope
         ).standardizedFileURL
+    }
+
+    private func isExpectedMetadataURL(
+        _ metadataURL: URL,
+        for entry: MemoirTTSCacheEntry,
+        scope: MemoirTTSCacheScope
+    ) -> Bool {
+        guard isIdentityConsistent(entry) else {
+            return false
+        }
+        return metadataURL.standardizedFileURL == cacheFileURL(
+            for: entry.cacheIdentity,
+            scope: scope
+        ).standardizedFileURL
+    }
+
+    private func isIdentityConsistent(_ entry: MemoirTTSCacheEntry) -> Bool {
+        entry.memoirId == entry.cacheIdentity.memoirId
+            && entry.voiceProfileId == entry.cacheIdentity.voiceProfileId
+            && entry.textHash == entry.cacheIdentity.textHash
+            && Self.normalizedAudioFormat(entry.audioFormat) == entry.cacheIdentity.audioFormat
+            && MemoirTTSCacheStoragePolicy.normalized(entry.providerMode).lowercased()
+                == entry.cacheIdentity.providerMode
+    }
+
+    private func resolvedVoiceProfileId(for memoir: MemoirModel) -> String? {
+        let candidate = memoir.speakerId ?? VoiceCloneService.shared.currentUsableSpeakerId
+        let normalized = MemoirTTSCacheStoragePolicy.normalized(candidate ?? "")
+        return normalized.isEmpty ? nil : normalized
     }
 
     private func retireLegacyGlobalCacheIfNeeded() {
@@ -878,10 +1056,6 @@ final class MemoirTTSService {
             hash = hash &* 0x100000001b3
         }
         return String(format: "%016llx", hash)
-    }
-
-    private static func fileNameDigest(for memoirId: String) -> String {
-        MemoirTTSCacheStoragePolicy.digest("memoir-id-v2|\(memoirId)")
     }
 
     // MARK: - 降级方案：系统 TTS

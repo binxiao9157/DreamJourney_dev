@@ -491,7 +491,7 @@ final class MemoirDetailViewController: UIViewController {
     // MARK: - 音频播放卡片状态
 
     private func updateAudioCardState() {
-        let hasAudioFile = MemoirTTSService.shared.getAudioURL(for: memoir.id) != nil
+        let hasAudioFile = MemoirTTSService.shared.getAudioURL(for: memoir) != nil
         let canPlay = hasAudioFile
 
         if canPlay {
@@ -614,7 +614,7 @@ final class MemoirDetailViewController: UIViewController {
             MemoirAudioPlayer.shared.pause()
         } else {
             // 优先播放本地文件，降级用系统 TTS
-            if let audioURL = MemoirTTSService.shared.getAudioURL(for: memoir.id) {
+            if let audioURL = MemoirTTSService.shared.getAudioURL(for: memoir) {
                 MemoirAudioPlayer.shared.play(audioURL: audioURL, memoirId: memoir.id)
             } else {
                 // 降级：系统 TTS 朗读
@@ -844,7 +844,7 @@ final class MemoirDetailViewController: UIViewController {
 
         // 如果散文正文被修改，之前的合成音频已过期，需要删除
         if proseChanged && memoir.audioFileName != nil {
-            MemoirTTSService.shared.deleteAudio(for: memoir.id)
+            MemoirTTSService.shared.deleteAudio(for: memoir)
             memoir.audioFileName = nil
             DDLogInfo("[MemoirDetail] 散文已修改，旧音频已删除")
         }

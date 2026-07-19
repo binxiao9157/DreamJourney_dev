@@ -7,11 +7,11 @@
 - Work Item：`WI-S1-03-08`
 - Authority lock：`IOS_COMPOSITION`
 - Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`
-- 当前结果：`IN_PROGRESS / TYPED_PORT_CORE_ADAPTER_G0_VERIFIED / G1_G3_G4_OPEN`
-- 已完成切片：`WI-S1-03-08-TYPED_PORT_CORE_ADAPTER_G0`
-- 下一切片：`WI-S1-03-08-OWNER_KEYED_CACHE_IDENTITY_G0`
+- 当前结果：`IN_PROGRESS / TWO_G0_SLICES_VERIFIED / G1_G3_G4_OPEN`
+- 已完成切片：`WI-S1-03-08-TYPED_PORT_CORE_ADAPTER_G0`、`WI-S1-03-08-OWNER_KEYED_CACHE_IDENTITY_G0`
+- 当前下一切片：`WI-S1-03-08-VOICECLONE_STATE_RUNTIME_BOUNDARY_G0`
 - 范围：为回忆录复刻语音合成和 Echo 数字人 session 的核心调用建立 typed client port；不改变
-  全屏 UI、公开范围、Provider、缓存格式或真实音频行为。
+  全屏 UI、公开范围、Provider 或真实音频行为。
 
 ## 已实现
 
@@ -68,8 +68,8 @@ git diff --check
 
 - `VoiceCloneService` 的训练状态轮询和本地 owner-scoped storage 仍使用既有服务边界；本轮只迁移核心
   synthesis/session port，后续需要按同一 typed contract 收敛其 timer/cache。
-- `MemoirTTSService` 的磁盘缓存仍以现有 `memoirId` 主键组织；虽然 envelope 已记录 profile/text hash，
-  仍需下一切片验证“同文本、不同 profile/角色/账户”不能复用旧音频，并做 owner-keyed shadow migration。
+- `MemoirTTSService` 的 owner-keyed cache identity 已在后续 G0 切片完成，详见
+  [owner-keyed cache identity](2026-07-19-wi-s1-03-08-owner-keyed-cache-identity.md)。
 - Echo 中仅核心 production create/heartbeat/release 使用 port；UIQA-only helper 仍保留旧 client 调用，
   不能作为生产接入完成的证据。
 - 不涉及真实 Provider 合成、腾讯数字人 session、PCM audio-drive、试听与 Echo 音色一致性、音频 owner
@@ -77,6 +77,6 @@ git diff --check
 
 ## 下一步
 
-继续 `WI-S1-03-08-OWNER_KEYED_CACHE_IDENTITY_G0`：先在不迁移真实媒体文件的前提下，为 Memoir TTS
-cache 建立 account/role/profile/textHash/provider mode 的 shadow key 和 stale-cache 拒绝模型；完成后再决定
-如何迁移 VoiceCloneService timer/cache 与 Digital Human runtime adapter。
+继续 `WI-S1-03-08-VOICECLONE_STATE_RUNTIME_BOUNDARY_G0`：收敛 `VoiceCloneService` 的 profile/state timer、
+owner 与 runtime generation 绑定；旧账户、旧角色或旧 timer 回调不得覆盖当前角色。之后再处理 Digital
+Human runtime adapter 的剩余边界。

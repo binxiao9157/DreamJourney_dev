@@ -3,12 +3,13 @@
     "authorityLock": "IOS_COMPOSITION",
     "backendPendingPaths": [],
     "completedSubSlices": [
-      "WI-S1-03-08-TYPED_PORT_CORE_ADAPTER_G0"
+      "WI-S1-03-08-TYPED_PORT_CORE_ADAPTER_G0",
+      "WI-S1-03-08-OWNER_KEYED_CACHE_IDENTITY_G0"
     ],
-    "currentSubSlice": "WI-S1-03-08-OWNER_KEYED_CACHE_IDENTITY_G0",
+    "currentSubSlice": "WI-S1-03-08-VOICECLONE_STATE_RUNTIME_BOUNDARY_G0",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PARTIAL_TYPED_PORT_CORE_VERIFIED",
+      "G0": "PARTIAL_TYPED_PORT_AND_OWNER_KEYED_CACHE_VERIFIED",
       "G1": "NOT_STARTED",
       "G3": "NOT_STARTED",
       "G4": "NOT_STARTED"
@@ -16,7 +17,7 @@
     "id": "WI-S1-03-08",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-07 is internally ready at G0: the AudioOwnerLease model, direct AVAudioSession inventory, Echo/DH observe-only adapter, token-scoped interruption/route-change handling, and fallback/context/background release ordering are verified. It does not enforce device audio routing; G1/G4 remain open. WI-S1-03-08 has completed its typed-port core adapter slice: Memoir synthesis and Echo session create/heartbeat/release now carry AccountLease/persona/role/runtime generation through typed client ports, with no Provider credentials in iOS. The next G0 slice is owner-keyed cache identity; public UI, Provider behavior, and G1/G3/G4 remain unchanged."
+    "summary": "WI-S1-03-07 is internally ready at G0: the AudioOwnerLease model, direct AVAudioSession inventory, Echo/DH observe-only adapter, token-scoped interruption/route-change handling, and fallback/context/background release ordering are verified. It does not enforce device audio routing; G1/G4 remain open. WI-S1-03-08 has completed typed client-port and owner-keyed cache G0 slices: Memoir synthesis and Echo session create/heartbeat/release carry AccountLease/persona/role/runtime generation through typed client ports, and Memoir cache reads require owner/role/profile/text/provider-bound identities. The next G0 slice is VoiceClone profile/state timer runtime binding; public UI, Provider behavior, and G1/G3/G4 remain unchanged."
   },
   "baselines": {
     "backend": "main@32c38f2",

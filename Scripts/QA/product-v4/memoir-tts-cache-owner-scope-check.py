@@ -74,6 +74,26 @@ def cache_scope(lease: Lease) -> tuple[str, str, int, str]:
     )
 
 
+def cache_identity(
+    memoir_id: str,
+    persona_owner_id: str,
+    role_key: str,
+    voice_profile_id: str,
+    text_hash: str,
+    audio_format: str,
+    provider_mode: str,
+) -> tuple[str, str, str, str, str, str, str]:
+    return (
+        memoir_id.strip(),
+        persona_owner_id.strip(),
+        role_key.strip(),
+        voice_profile_id.strip(),
+        text_hash.strip(),
+        audio_format.strip().lower(),
+        provider_mode.strip().lower(),
+    )
+
+
 def run_scope_model() -> None:
     alice = Lease("alice", "vault-a", 7, "generation-a", "session-old")
     alice_refresh = Lease("alice", "vault-a", 7, "generation-a", "session-new")
@@ -93,18 +113,46 @@ def run_scope_model() -> None:
         "different account subjects must not share cache",
     )
 
-    scoped_cache = {(cache_scope(alice), "memoir-1"): "alice-audio"}
+    alice_profile_a = cache_identity(
+        "memoir-1", "alice", "memoir", "S_alice_a", "text-a", "mp3", "volcengine"
+    )
+    alice_profile_b = cache_identity(
+        "memoir-1", "alice", "memoir", "S_alice_b", "text-a", "mp3", "volcengine"
+    )
+    alice_changed_text = cache_identity(
+        "memoir-1", "alice", "memoir", "S_alice_a", "text-b", "mp3", "volcengine"
+    )
+    alice_changed_provider = cache_identity(
+        "memoir-1", "alice", "memoir", "S_alice_a", "text-a", "mp3", "mockcontract"
+    )
+    scoped_cache = {(cache_scope(alice), alice_profile_a): "alice-profile-a-audio"}
     require(
-        scoped_cache.get((cache_scope(alice_refresh), "memoir-1")) == "alice-audio",
+        scoped_cache.get((cache_scope(alice_refresh), alice_profile_a)) == "alice-profile-a-audio",
         "same-generation refreshed session must read existing cache",
     )
     require(
-        scoped_cache.get((cache_scope(alice_new_generation), "memoir-1")) is None,
+        scoped_cache.get((cache_scope(alice_new_generation), alice_profile_a)) is None,
         "new generation must fail closed for the same memoir id",
     )
     require(
-        scoped_cache.get((cache_scope(bob), "memoir-1")) is None,
+        scoped_cache.get((cache_scope(bob), alice_profile_a)) is None,
         "another subject must fail closed for the same memoir id",
+    )
+    require(
+        alice_profile_a != alice_profile_b,
+        "different voice profiles must not share a cache identity",
+    )
+    require(
+        alice_profile_a != alice_changed_text,
+        "changed memoir text must not reuse an earlier audio identity",
+    )
+    require(
+        alice_profile_a != alice_changed_provider,
+        "different synthesis providers must not reuse an earlier audio identity",
+    )
+    require(
+        scoped_cache.get((cache_scope(alice), alice_profile_b)) is None,
+        "a requested profile must never resolve another profile's audio",
     )
 
 
@@ -138,6 +186,29 @@ def run_static_check() -> None:
         "cache envelope",
     )
 
+    identity = declaration_body(source, "struct MemoirTTSCacheIdentity")
+    require_all(
+        identity,
+        (
+            "let memoirId: String",
+            "let personaOwnerId: String",
+            "let roleKey: String",
+            "let voiceProfileId: String",
+            "let textHash: String",
+            "let audioFormat: String",
+            "let providerMode: String",
+            "var cacheDigest: String",
+            "memoir-tts-cache-identity-v1",
+        ),
+        "owner keyed cache identity",
+    )
+    entry = declaration_body(source, "struct MemoirTTSCacheEntry")
+    require_all(
+        entry,
+        ("let cacheIdentity: MemoirTTSCacheIdentity",),
+        "cache entry identity",
+    )
+
     service = declaration_body(source, "final class MemoirTTSService")
     require_all(
         service,
@@ -155,18 +226,45 @@ def run_static_check() -> None:
     require('?? "default"' not in service, "cache must not fall back to a default principal")
     require('?? "anonymous"' not in service, "cache must not fall back to an anonymous principal")
 
+    public_lookup = function_body(
+        service,
+        r"func\s+getCachedSynthesis\s*\(for\s+memoir:\s+MemoirModel\)",
+        "memoir cache lookup",
+    )
+    require_all(
+        public_lookup,
+        (
+            "captureScopedAccess(forSubjectId: memoir.authorId, at: .request)",
+            "resolvedVoiceProfileId(for: memoir)",
+            "MemoirTTSCacheLookup(",
+            "personaOwnerId: memoir.authorId",
+            'roleKey: "memoir"',
+            "textHash: Self.textHash(for: memoir.prose)",
+            "getCachedSynthesis(matching: lookup, access: access)",
+        ),
+        "owner/profile/text cache lookup",
+    )
+    require(
+        "func getAudioURL(for memoirId:" not in service,
+        "raw memoir-id audio lookup must not bypass identity checks",
+    )
+    require(
+        "func getCachedSynthesis(for memoirId:" not in service,
+        "raw memoir-id cache lookup must not bypass identity checks",
+    )
+
     load = function_body(
         service,
-        r"private\s+func\s+loadCacheEntry\s*\(",
+        r"private\s+func\s+loadCacheEntry\s*\(\s*from\s+fileURL",
         "scoped cache load",
     )
     require_all(
         load,
         (
-            "cacheFileURL(for: memoirId, scope: scope)",
             "decode(MemoirTTSCacheEnvelope.self",
             "envelope.scope == scope",
-            "envelope.entry.memoirId == memoirId",
+            "isIdentityConsistent(envelope.entry)",
+            "isExpectedMetadataURL(fileURL, for: envelope.entry, scope: scope)",
             "isExpectedAudioURL",
         ),
         "fail-closed scoped cache load",
@@ -202,6 +300,7 @@ def run_static_check() -> None:
             "operation.accountLease",
             "at: .commit",
             "MemoirTTSCacheScope(accountLease: accountLease)",
+            "cacheFileURL(for: cacheEntry.cacheIdentity, scope: cacheScope)",
             "stagingFileURL",
             "saveCacheEnvelope",
             "storageLock.lock()",
@@ -214,6 +313,54 @@ def run_static_check() -> None:
     require(
         commit.count("accountLeaseRuntime.validate(accountLease, at: .commit)") >= 3,
         "synthesis commit must validate before staging, before commit, and after writes",
+    )
+
+    audio_url = function_body(
+        service,
+        r"private\s+func\s+isExpectedAudioURL\s*\(",
+        "cache audio path validation",
+    )
+    require_all(
+        audio_url,
+        (
+            "isIdentityConsistent(entry)",
+            "return audioURL.standardizedFileURL == audioFileURL(",
+            "for: entry.cacheIdentity",
+        ),
+        "cache audio path validation",
+    )
+
+    synthesis = function_body(
+        service,
+        r"private\s+func\s+performSynthesis\s*\(",
+        "synthesis response identity binding",
+    )
+    require_all(
+        synthesis,
+        (
+            "returnedVoiceProfileId == request.voiceProfileId",
+            "MemoirTTSCacheIdentity(",
+            "personaOwnerId: scope.personaOwnerId",
+            "roleKey: scope.roleKey",
+            "providerMode: synthesis.providerMode",
+            "audioFileURL(for: cacheIdentity, scope: cacheScope)",
+            "cacheIdentity: cacheIdentity",
+        ),
+        "synthesis response identity binding",
+    )
+
+    timeline_lookup = function_body(
+        service,
+        r"func\s+getCachedLipSyncTimeline\s*\(forText",
+        "timeline profile ambiguity rejection",
+    )
+    require_all(
+        timeline_lookup,
+        (
+            "Set(matchingEntries.map(\\.cacheIdentity.voiceProfileId))",
+            "voiceProfileIds.count == 1",
+        ),
+        "timeline profile ambiguity rejection",
     )
 
 
