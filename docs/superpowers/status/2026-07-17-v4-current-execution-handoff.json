@@ -1,30 +1,23 @@
 {
   "activeWorkItem": {
-    "authorityLock": "OWNER_TRUTH",
+    "authorityLock": "IOS_COMPOSITION",
     "backendPendingPaths": [],
     "completedSubSlices": [
-      "WI-S1-01-04-G0-CANDIDATE-INBOX-OWNER-REVIEW-ACTION-UIQA",
-      "WI-S1-01-06-G0-KBLITE-COMPATIBILITY-READ-ENVELOPE",
-      "WI-S1-01-06-G2-KBLITE-COMPATIBILITY-READ-ENVELOPE-DEPLOYMENT",
-      "WI-S1-01-07-G0-OWNER-QA-CONTEXT-TYPED-CITATION-CONTRACT",
-      "WI-S1-01-07-G1-OWNER-QA-CONTEXT-TEXT-EVIDENCE",
-      "WI-S1-01-07-G2-OWNER-QA-CONTEXT-DEPLOYED-SHADOW-OBSERVATION",
-      "WI-S1-01-08-G0-CITATION-BOUND-CORRECTION-REQUEST-CLIENT",
-      "WI-S1-01-08-G1-QA-CANDIDATE-INBOX-HANDOFF"
+      "WI-S1-03-04-G0-TYPED-CANDIDATE-INBOX-CLIENT",
+      "WI-S1-03-04-G1-HIDDEN-CANDIDATE-INBOX-UIQA"
     ],
-    "currentSubSlice": "WI-S1-01-08-CLOSED-INTERNAL-G4-PUBLIC-UX-OPEN",
+    "currentSubSlice": "WI-S1-03-04-G2-ISOLATED-POSTGRES-CANDIDATE-ROUTE-SMOKE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "IOS_TYPED_CORRECTION_CLIENT_AND_BACKEND_REGRESSION_VERIFIED",
-      "G1": "IOS_QA_CANDIDATE_INBOX_HANDOFF_LOCAL_VERIFIED",
-      "G2": "DEPLOYED_POSTGRES_CORRECTION_CHAIN_VERIFIED_SCHEMA_0023",
-      "G3": "NOT_APPLICABLE_TO_CORRECTION_REQUEST_CONTRACT",
+      "G0": "IOS_TYPED_CLIENT_AND_CONTRACT_VERIFIED",
+      "G1": "HIDDEN_QA_CANDIDATE_INBOX_UIQA_VERIFIED",
+      "G2": "IN_PROGRESS_CONTROLLED_POSTGRES_CANDIDATE_INBOX_DECISION_ROUTE_SMOKE",
       "G4": "PUBLIC_EXPOSURE_REMAINS_DISABLED_PENDING_PRODUCT_UX_APPROVAL"
     },
-    "id": "WI-S1-01-08",
+    "id": "WI-S1-03-04",
     "leaseState": "HELD",
-    "state": "INTERNAL_READY_G4_OPEN",
-    "summary": "WI-S1-01-08 has a citation-bound iOS correction-request client plus a default-off handoff into the existing Candidate Inbox QA path. The handoff retains only correctionRequestId/candidateId, requires both QA gates, refreshes the inbox, and fails closed unless the exact pending Candidate appears in the same Vault; review/activation remains solely in the existing Candidate review use case. On 2026-07-20 deployed backend main@162afb0 completed the isolated Postgres correction-chain smoke at schema 0023, covering Answer/Citation binding, pending Candidate, dedicated correction resolution, same-memory successor version, outdated Answer evidence and projection rebuild. No public Echo, Archive or KBLite entrypoint has changed; G4 public correction UX remains disabled pending product approval."
+    "state": "IN_PROGRESS",
+    "summary": "WI-S1-03-04 already has a default-off typed iOS Candidate Inbox/review client and hidden QA-only Archive UI. The current G2 sub-slice will exercise the deployed Candidate Inbox and Decision routes in an isolated Postgres environment with temporary identities, vault binding and negative authorization checks. It must not enable a public route, switch a legacy writer or mutate production business data."
   },
   "baselines": {
     "backend": "main@162afb0",
@@ -91,6 +84,12 @@
       "id": "WI-S0-01-07",
       "implementationStatus": "INTERNAL_READY / G0_VERIFIED / IOS_LOCAL_COMMITTED / G1_G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-18-wi-s0-01-08c-account-deletion-local-purge.md",
+      "id": "WI-S0-01-08",
+      "implementationStatus": "INTERNAL_READY / G0_LIFECYCLE_GATES_RERUN / SIMULATOR_INSTALL_EVIDENCE / GENERIC_IPHONEOS_BUILD_VERIFIED / G1_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G4_OPEN"
     },
     {
       "evidence": "docs/superpowers/status/2026-07-18-wi-s0-05-01c-rights-route-adapter.md",
@@ -418,9 +417,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-01-09",
-    "state": "SELECT_NEXT_UNCLOSED_INTERNAL_SLICE",
-    "summary": "WI-S1-01-08 is internally ready with G4 public exposure open. Select the next Stage 1 Owner Truth/Migration slice from current implementation evidence; do not reopen a completed correction contract or widen public release scope."
+    "id": "WI-S1-01-10",
+    "state": "PLANNED_AFTER_CURRENT",
+    "summary": "Owner cohort cutover remains planned only after WI-S1-03-04 G2 plus WI-S1-01-09 production-shape backup/restore, sampling and migration Go record. It must not be activated merely because its internal shadow evidence exists; do not reopen completed correction contracts or widen public release scope."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -429,5 +428,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T23:58:00+0800"
+  "updatedAt": "2026-07-20T00:20:00+0800"
 }
