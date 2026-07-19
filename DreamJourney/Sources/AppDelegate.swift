@@ -3377,141 +3377,75 @@ private extension AppDelegate {
     }
 
     func runEchoTraceEvidencePackageExportSmoke(retryCount: Int = 0) {
-        guard let tabBarController = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow })?
-            .rootViewController as? WarmTabBarController else {
-            guard retryCount < 20 else {
-                print("[UI_QA] EchoTraceEvidencePackageExportSmoke failed reason=missingRootTab")
-                writeEchoTraceEvidencePackageExportSmokeResult([
-                    "completed": false,
-                    "failureReason": "missingRootTab"
-                ])
-                return
+        QAEchoExportRunner.run(
+            retryCount: retryCount,
+            smokeName: "EchoTraceEvidencePackageExportSmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runEchoTraceEvidencePackageExportSmoke(retryCount: nextRetryCount)
+            },
+            writeResult: { [weak self] result in
+                self?.writeEchoTraceEvidencePackageExportSmokeResult(result)
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQAEchoTraceEvidencePackageExportSmoke(completion: completion)
+            },
+            completionLog: { result in
+                print(
+                    "[UI_QA] EchoTraceEvidencePackageExportSmoke completed " +
+                    "completed=\(result["completed"] as? Bool == true) " +
+                    "packageCount=\(result["packageCount"] as? Int ?? 0) " +
+                    "latestTurnID=\(result["latestTurnID"] as? String ?? "missing")"
+                )
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                self?.runEchoTraceEvidencePackageExportSmoke(retryCount: retryCount + 1)
-            }
-            return
-        }
-
-        guard let viewControllers = tabBarController.viewControllers,
-              viewControllers.count > 1,
-              let echoNavigationController = viewControllers[1] as? UINavigationController,
-              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
-            print("[UI_QA] EchoTraceEvidencePackageExportSmoke failed reason=missingEcho")
-            writeEchoTraceEvidencePackageExportSmokeResult([
-                "completed": false,
-                "failureReason": "missingEcho"
-            ])
-            return
-        }
-
-        tabBarController.selectedIndex = 1
-        echoViewController.runUIQAEchoTraceEvidencePackageExportSmoke { [weak self] payload in
-            var result = payload
-            result["selectedTabIndex"] = tabBarController.selectedIndex
-            self?.writeEchoTraceEvidencePackageExportSmokeResult(result)
-            print(
-                "[UI_QA] EchoTraceEvidencePackageExportSmoke completed " +
-                "completed=\(result["completed"] as? Bool == true) " +
-                "packageCount=\(result["packageCount"] as? Int ?? 0) " +
-                "latestTurnID=\(result["latestTurnID"] as? String ?? "missing")"
-            )
-        }
+        )
     }
 
     func runEchoTraceEvidencePackagePanelExportSmoke(retryCount: Int = 0) {
-        guard let tabBarController = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow })?
-            .rootViewController as? WarmTabBarController else {
-            guard retryCount < 20 else {
-                print("[UI_QA] EchoTraceEvidencePackagePanelExportSmoke failed reason=missingRootTab")
-                writeEchoTraceEvidencePackagePanelExportSmokeResult([
-                    "completed": false,
-                    "failureReason": "missingRootTab"
-                ])
-                return
+        QAEchoExportRunner.run(
+            retryCount: retryCount,
+            smokeName: "EchoTraceEvidencePackagePanelExportSmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runEchoTraceEvidencePackagePanelExportSmoke(retryCount: nextRetryCount)
+            },
+            writeResult: { [weak self] result in
+                self?.writeEchoTraceEvidencePackagePanelExportSmokeResult(result)
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQAEchoTraceEvidencePackagePanelExportSmoke(completion: completion)
+            },
+            completionLog: { result in
+                print(
+                    "[UI_QA] EchoTraceEvidencePackagePanelExportSmoke completed " +
+                    "completed=\(result["completed"] as? Bool == true) " +
+                    "buttonVisible=\(result["buttonVisible"] as? Bool == true) " +
+                    "latestTurnID=\(result["latestTurnID"] as? String ?? "missing")"
+                )
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                self?.runEchoTraceEvidencePackagePanelExportSmoke(retryCount: retryCount + 1)
-            }
-            return
-        }
-
-        guard let viewControllers = tabBarController.viewControllers,
-              viewControllers.count > 1,
-              let echoNavigationController = viewControllers[1] as? UINavigationController,
-              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
-            print("[UI_QA] EchoTraceEvidencePackagePanelExportSmoke failed reason=missingEcho")
-            writeEchoTraceEvidencePackagePanelExportSmokeResult([
-                "completed": false,
-                "failureReason": "missingEcho"
-            ])
-            return
-        }
-
-        tabBarController.selectedIndex = 1
-        echoViewController.runUIQAEchoTraceEvidencePackagePanelExportSmoke { [weak self] payload in
-            var result = payload
-            result["selectedTabIndex"] = tabBarController.selectedIndex
-            self?.writeEchoTraceEvidencePackagePanelExportSmokeResult(result)
-            print(
-                "[UI_QA] EchoTraceEvidencePackagePanelExportSmoke completed " +
-                "completed=\(result["completed"] as? Bool == true) " +
-                "buttonVisible=\(result["buttonVisible"] as? Bool == true) " +
-                "latestTurnID=\(result["latestTurnID"] as? String ?? "missing")"
-            )
-        }
+        )
     }
 
     func runEchoQAEvidenceBundleExportSmoke(retryCount: Int = 0) {
-        guard let tabBarController = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow })?
-            .rootViewController as? WarmTabBarController else {
-            guard retryCount < 20 else {
-                print("[UI_QA] EchoQAEvidenceBundleExportSmoke failed reason=missingRootTab")
-                writeEchoQAEvidenceBundleExportSmokeResult([
-                    "completed": false,
-                    "failureReason": "missingRootTab"
-                ])
-                return
+        QAEchoExportRunner.run(
+            retryCount: retryCount,
+            smokeName: "EchoQAEvidenceBundleExportSmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runEchoQAEvidenceBundleExportSmoke(retryCount: nextRetryCount)
+            },
+            writeResult: { [weak self] result in
+                self?.writeEchoQAEvidenceBundleExportSmokeResult(result)
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQAEchoQAEvidenceBundleExportSmoke(completion: completion)
+            },
+            completionLog: { result in
+                print(
+                    "[UI_QA] EchoQAEvidenceBundleExportSmoke completed " +
+                    "completed=\(result["completed"] as? Bool == true) " +
+                    "schemaVersion=\(result["schemaVersion"] as? Int ?? 0) " +
+                    "latestTurnID=\(result["latestTurnID"] as? String ?? "missing")"
+                )
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                self?.runEchoQAEvidenceBundleExportSmoke(retryCount: retryCount + 1)
-            }
-            return
-        }
-
-        guard let viewControllers = tabBarController.viewControllers,
-              viewControllers.count > 1,
-              let echoNavigationController = viewControllers[1] as? UINavigationController,
-              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
-            print("[UI_QA] EchoQAEvidenceBundleExportSmoke failed reason=missingEcho")
-            writeEchoQAEvidenceBundleExportSmokeResult([
-                "completed": false,
-                "failureReason": "missingEcho"
-            ])
-            return
-        }
-
-        tabBarController.selectedIndex = 1
-        echoViewController.runUIQAEchoQAEvidenceBundleExportSmoke { [weak self] payload in
-            var result = payload
-            result["selectedTabIndex"] = tabBarController.selectedIndex
-            self?.writeEchoQAEvidenceBundleExportSmokeResult(result)
-            print(
-                "[UI_QA] EchoQAEvidenceBundleExportSmoke completed " +
-                "completed=\(result["completed"] as? Bool == true) " +
-                "schemaVersion=\(result["schemaVersion"] as? Int ?? 0) " +
-                "latestTurnID=\(result["latestTurnID"] as? String ?? "missing")"
-            )
-        }
+        )
     }
 
     func runBackendEnvSmoke(retryCount: Int = 0) {

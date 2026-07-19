@@ -99,8 +99,8 @@ def main() -> None:
         "Echo QA export adapter must use the compile-isolated result writer",
     )
     require(
-        app_delegate.count("QAEchoExportRunner.run(") >= 2,
-        "Echo export runner must own at least the first two parity-verified export scenarios",
+        app_delegate.count("QAEchoExportRunner.run(") >= 5,
+        "Echo export runner must own all five parity-verified evidence export scenarios",
     )
     for smoke_name in (
         "EchoTraceExportSmoke",
