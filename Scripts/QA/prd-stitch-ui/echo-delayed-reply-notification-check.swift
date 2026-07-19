@@ -65,8 +65,8 @@ assertContains(scheduler, "func cancelPendingDelayedReply", "Scheduler should ca
 assertContains(scheduler, "回信到了，回来听听这段回响。", "Local notification copy should match PRD tone")
 
 assertContains(echoViewModel, "private(set) var pendingDelayedReply: EchoDelayedReply?", "Echo view model should expose generated delayed reply state")
-assertContains(echoViewModel, "EchoDelayedReplyStore.shared.save(delayedReply)", "Echo view model should persist delayed reply state")
-assertContains(echoViewModel, "EchoDelayedReplyStore.shared.clear()", "Echo view model should clear stale delayed reply state")
+assertContains(echoViewModel, "delayedReplyStore.save(", "Echo view model should persist delayed reply state through the scoped store")
+assertContains(echoViewModel, "delayedReplyStore.clear(", "Echo view model should clear delayed reply state only after a real completion/reset")
 assertContains(echoViewModel, "EchoReplyPacingPolicy.triggerForWait", "Echo view model should persist the wait trigger reason")
 
 assertContains(echoViewController, "scheduleDelayedReplyNotificationIfNeeded(rawTranscript:", "Echo controller should schedule local notification after waiting starts")
@@ -92,8 +92,8 @@ assertContains(appDelegate, "now: delayedReply.scheduledAt.addingTimeInterval(60
 assertContains(appDelegate, "\"restoredWaitingState\"", "Echo notification smoke should report restored waiting state")
 assertContains(appDelegate, "\"restoredWaitingMinutesInRange\"", "Echo notification smoke should report restored waiting minutes")
 assertContains(appDelegate, "\"restoredDelayedReplyIdMatched\"", "Echo notification smoke should verify restored delayed reply identity")
-assertContains(appDelegate, "\"expiredDelayedReplyArrived\"", "Echo notification smoke should report expired delayed reply arrival")
-assertContains(appDelegate, "\"expiredDelayedReplyCleared\"", "Echo notification smoke should verify expired delayed reply clears storage")
+assertContains(appDelegate, "\"expiredDelayedReplyAwaitingServer\"", "Echo notification smoke should report an expired reply awaiting server delivery")
+assertContains(appDelegate, "\"expiredDelayedReplyPreserved\"", "Echo notification smoke should verify expired reply storage is retained")
 
 let smokeScript = read("Scripts/QA/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh")
 assertContains(smokeScript, "\"pendingNotificationMatched\"", "Echo notification smoke script should assert pending request existence")
@@ -101,8 +101,8 @@ assertContains(smokeScript, "\"pendingNotificationUserInfoMatched\"", "Echo noti
 assertContains(smokeScript, "\"restoredWaitingState\"", "Echo notification smoke script should assert restored waiting state")
 assertContains(smokeScript, "\"restoredWaitingMinutesInRange\"", "Echo notification smoke script should assert restored waiting minutes")
 assertContains(smokeScript, "\"restoredDelayedReplyIdMatched\"", "Echo notification smoke script should assert restored delayed reply identity")
-assertContains(smokeScript, "\"expiredDelayedReplyArrived\"", "Echo notification smoke script should assert expired delayed reply arrival")
-assertContains(smokeScript, "\"expiredDelayedReplyCleared\"", "Echo notification smoke script should assert expired delayed reply clearing")
+assertContains(smokeScript, "\"expiredDelayedReplyAwaitingServer\"", "Echo notification smoke script should assert an expired reply awaits server delivery")
+assertContains(smokeScript, "\"expiredDelayedReplyPreserved\"", "Echo notification smoke script should assert expired reply storage is retained")
 
 assertContains(project, "EchoDelayedReplyStore.swift in Sources", "Echo delayed reply store should be in the Xcode target")
 assertContains(project, "EchoDelayedReplyNotificationScheduler.swift in Sources", "Echo delayed reply scheduler should be in the Xcode target")

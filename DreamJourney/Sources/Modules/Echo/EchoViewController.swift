@@ -2588,6 +2588,15 @@ final class EchoViewController: UIViewController {
                 accessibilityLabel: "先去窗边走走，约 \(minutes) 分钟后我再回信"
             )
             setMicPulse(active: false)
+        case .awaitingReplyDelivery:
+            renderVoiceStatus(text: "回信生成中，准备好后会提醒您", isVisible: true)
+            configureMicButton(
+                systemName: "hourglass",
+                backgroundColor: DJDesignTokens.Color.surfaceContainer,
+                isEnabled: false,
+                accessibilityLabel: "回信生成中，准备好后会提醒您"
+            )
+            setMicPulse(active: false)
         case .neutralSafety(let decision):
             quoteLabel.text = decision.responseText ?? EchoSafetyPolicy.neutralChineseCrisisResponse
             renderVoiceStatus(text: "请立即联系信任的真人", isVisible: true)
@@ -2647,7 +2656,7 @@ final class EchoViewController: UIViewController {
             liveState = .idle
         case .starting, .listening:
             liveState = .listening
-        case .thinking, .waitingReply:
+        case .thinking, .waitingReply, .awaitingReplyDelivery:
             liveState = .thinking
         case .neutralSafety:
             liveState = .idle

@@ -1042,6 +1042,7 @@ private extension AppDelegate {
                 roleContextKey: roleContextKey
             )
             viewModel.receiveAIReply("我在听，慢慢说。")
+            viewModel.markReplyDelivered(accountLease: accountLease)
         }
         viewModel.beginVoiceInteraction()
         viewModel.finishUserVoice(
@@ -1065,8 +1066,8 @@ private extension AppDelegate {
                 restoredWaitingMinutes: 0,
                 restoredWaitingMinutesInRange: false,
                 restoredDelayedReplyIdMatched: false,
-                expiredDelayedReplyArrived: false,
-                expiredDelayedReplyCleared: false,
+                expiredDelayedReplyAwaitingServer: false,
+                expiredDelayedReplyPreserved: false,
                 pendingNotificationScheduleSucceeded: false,
                 pendingNotificationMatched: false,
                 pendingNotificationIdentifierMatched: false,
@@ -1154,28 +1155,22 @@ private extension AppDelegate {
             roleContextKey: roleContextKey,
             now: delayedReply.scheduledAt
         )
-        let expiredDelayedReplyArrived: Bool
-        if case .replied = expiredViewModel.state {
-            expiredDelayedReplyArrived = expiredDelayedReplyHandled
+        let expiredDelayedReplyAwaitingServer: Bool
+        if case .awaitingReplyDelivery = expiredViewModel.state {
+            expiredDelayedReplyAwaitingServer = expiredDelayedReplyHandled
         } else {
-            expiredDelayedReplyArrived = false
+            expiredDelayedReplyAwaitingServer = false
         }
-        let expiredDelayedReplyCleared = EchoDelayedReplyStore.shared.load(
+        let expiredDelayedReplyPreserved = EchoDelayedReplyStore.shared.load(
             resourceOwnerId: callsiteContext.resourceOwnerId,
             operationId: callsiteContext.operationId,
             accountLease: callsiteContext.accountLease
-        ) == nil
+        )?.id == expiredDelayedReply.id
             && EchoDelayedReplyCallsiteScopeStore().load(
                 accountLease: accountLease,
                 resourceOwnerId: resourceOwnerId,
                 roleContextKey: roleContextKey
-            ) == nil
-        _ = EchoReplyMessageStore.shared.removeArrivedReply(
-            id: notificationOperationId,
-            accountLease: accountLease,
-            resourceOwnerId: resourceOwnerId,
-            operationId: notificationOperationId
-        )
+            ) == callsiteContext
         _ = EchoDelayedReplyStore.shared.save(
             delayedReply,
             resourceOwnerId: callsiteContext.resourceOwnerId,
@@ -1196,8 +1191,8 @@ private extension AppDelegate {
                     restoredWaitingMinutes: restoredWaitingMinutes,
                     restoredWaitingMinutesInRange: restoredWaitingMinutesInRange,
                     restoredDelayedReplyIdMatched: restoredDelayedReplyIdMatched,
-                    expiredDelayedReplyArrived: expiredDelayedReplyArrived,
-                    expiredDelayedReplyCleared: expiredDelayedReplyCleared,
+                    expiredDelayedReplyAwaitingServer: expiredDelayedReplyAwaitingServer,
+                    expiredDelayedReplyPreserved: expiredDelayedReplyPreserved,
                     pendingNotificationScheduleSucceeded: false,
                     pendingNotificationMatched: false,
                     pendingNotificationIdentifierMatched: false,
@@ -1320,8 +1315,8 @@ private extension AppDelegate {
                             && restoredWaitingState
                             && restoredWaitingMinutesInRange
                             && restoredDelayedReplyIdMatched
-                            && expiredDelayedReplyArrived
-                            && expiredDelayedReplyCleared
+                            && expiredDelayedReplyAwaitingServer
+                            && expiredDelayedReplyPreserved
                             && pendingNotificationScheduleSucceeded
                             && pendingNotificationMatched
 
@@ -1334,8 +1329,8 @@ private extension AppDelegate {
                             restoredWaitingMinutes: restoredWaitingMinutes,
                             restoredWaitingMinutesInRange: restoredWaitingMinutesInRange,
                             restoredDelayedReplyIdMatched: restoredDelayedReplyIdMatched,
-                            expiredDelayedReplyArrived: expiredDelayedReplyArrived,
-                            expiredDelayedReplyCleared: expiredDelayedReplyCleared,
+                            expiredDelayedReplyAwaitingServer: expiredDelayedReplyAwaitingServer,
+                            expiredDelayedReplyPreserved: expiredDelayedReplyPreserved,
                             pendingNotificationScheduleSucceeded: pendingNotificationScheduleSucceeded,
                             pendingNotificationMatched: pendingNotificationMatched,
                             pendingNotificationIdentifierMatched: pendingNotificationIdentifierMatched,
@@ -1351,7 +1346,7 @@ private extension AppDelegate {
                             "storedDelayedReply=\(storedDelayedReply) " +
                             "localNotificationContractPresent=\(localNotificationContractPresent) " +
                             "restoredWaitingState=\(restoredWaitingState) " +
-                            "expiredDelayedReplyArrived=\(expiredDelayedReplyArrived) " +
+                            "expiredDelayedReplyAwaitingServer=\(expiredDelayedReplyAwaitingServer) " +
                             "pendingNotificationMatched=\(pendingNotificationMatched)"
                         )
                     }
@@ -4195,8 +4190,8 @@ private extension AppDelegate {
         restoredWaitingMinutes: Int,
         restoredWaitingMinutesInRange: Bool,
         restoredDelayedReplyIdMatched: Bool,
-        expiredDelayedReplyArrived: Bool,
-        expiredDelayedReplyCleared: Bool,
+        expiredDelayedReplyAwaitingServer: Bool,
+        expiredDelayedReplyPreserved: Bool,
         pendingNotificationScheduleSucceeded: Bool,
         pendingNotificationMatched: Bool,
         pendingNotificationIdentifierMatched: Bool,
@@ -4215,8 +4210,8 @@ private extension AppDelegate {
             "restoredWaitingMinutes": restoredWaitingMinutes,
             "restoredWaitingMinutesInRange": restoredWaitingMinutesInRange,
             "restoredDelayedReplyIdMatched": restoredDelayedReplyIdMatched,
-            "expiredDelayedReplyArrived": expiredDelayedReplyArrived,
-            "expiredDelayedReplyCleared": expiredDelayedReplyCleared,
+            "expiredDelayedReplyAwaitingServer": expiredDelayedReplyAwaitingServer,
+            "expiredDelayedReplyPreserved": expiredDelayedReplyPreserved,
             "pendingNotificationScheduleSucceeded": pendingNotificationScheduleSucceeded,
             "pendingNotificationMatched": pendingNotificationMatched,
             "pendingNotificationIdentifierMatched": pendingNotificationIdentifierMatched,

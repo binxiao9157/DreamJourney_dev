@@ -307,16 +307,18 @@ final class EchoTurnIntentReducerTests: XCTestCase {
         XCTAssertEqual(reducer.reduce(.replyDelivered).currentPhase, .replied)
     }
 
-    func testStoredDueReplyCanDeliverAfterAppRelaunchWithoutAcceptingStaleReply() {
+    func testStoredDueReplyAwaitsServerResultAfterAppRelaunchWithoutAcceptingStaleReply() {
         var reducer = EchoTurnIntentReducer()
 
         XCTAssertFalse(reducer.reduce(.replyDelivered).accepted)
 
-        let restoredDelivery = reducer.reduce(.restoredDelayedReplyDelivered)
+        let restoredDelivery = reducer.reduce(.delayedReplyDue)
 
         XCTAssertTrue(restoredDelivery.accepted)
         XCTAssertEqual(restoredDelivery.previousPhase, .idle)
-        XCTAssertEqual(restoredDelivery.currentPhase, .replied)
+        XCTAssertEqual(restoredDelivery.currentPhase, .awaitingReplyDelivery)
+        XCTAssertTrue(reducer.reduce(.replyDelivered).accepted)
+        XCTAssertEqual(reducer.phase, .replied)
     }
 
     func testFailureOnlyRetriesFromFailureState() {

@@ -46,9 +46,9 @@ def main() -> None:
         ".userTurnAccepted",
         ".delayedReplyScheduled",
         ".delayedReplyRestored",
+        ".delayedReplyDue",
         ".replyStarted",
         ".replyDelivered",
-        ".restoredDelayedReplyDelivered",
         ".reset",
         ".failure",
         ".retry",
@@ -86,7 +86,7 @@ def main() -> None:
         "func testOrdinaryTurnTransitionsFromVoiceStartToReplyDelivered()",
         "func testStaleReplyCannotResurrectAnIdleTurn()",
         "func testDelayedReplyCanBeScheduledAndDeliveredWithoutOpeningAnotherTurn()",
-        "func testStoredDueReplyCanDeliverAfterAppRelaunchWithoutAcceptingStaleReply()",
+        "func testStoredDueReplyAwaitsServerResultAfterAppRelaunchWithoutAcceptingStaleReply()",
         "func testFailureOnlyRetriesFromFailureState()",
     ):
         require(test_name in tests, f"Echo turn reducer test missing: {test_name}")

@@ -63,14 +63,21 @@ def main() -> None:
     ):
         require(view_model.count(snippet) >= 3, f"explicit delayed-reply scope not propagated: {snippet}")
 
-    arrived = body_after(view_model, "func markStoredDelayedReplyArrived(")
+    restore = body_after(view_model, "func restoreStoredDelayedReplyIfAvailable(")
     for snippet in (
-        "echoReplyMessageStore.saveArrivedReply(",
-        "accountLease: callsiteContext.accountLease",
-        "resourceOwnerId: callsiteContext.resourceOwnerId",
-        "operationId: callsiteContext.operationId",
+        "pendingDelayedReply = delayedReply",
+        "pendingDelayedReplyContext = callsiteContext",
+        "return applyTurnIntent(.delayedReplyDue, state: .awaitingReplyDelivery)",
     ):
-        require(snippet in arrived, f"arrived reply does not preserve origin scope: {snippet}")
+        require(snippet in restore, f"due delayed reply does not preserve the server-result boundary: {snippet}")
+    require(
+        "markStoredDelayedReplyArrived" not in view_model,
+        "a local delayed-reply timer must not manufacture an arrived reply",
+    )
+    require(
+        "echoReplyMessageStore.saveArrivedReply" not in view_model,
+        "a local delayed-reply timer must not create an Inbox completion",
+    )
 
     forbidden_patterns = (
         r"EchoDelayedReplyStore\.shared\.save\(delayedReply\)",

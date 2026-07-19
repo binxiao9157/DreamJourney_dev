@@ -165,6 +165,9 @@ enum EchoInteractionState {
     case listening
     case thinking
     case waitingReply(minutes: Int)
+    /// The local schedule is due, but no server-side Answer/receipt has been
+    /// observed. A due timer must never be presented as an arrived reply.
+    case awaitingReplyDelivery
     case neutralSafety(EchoSafetyDecision)
     case speaking
     case replied
@@ -179,6 +182,7 @@ enum EchoTurnPhase: String, Equatable {
     case listening
     case thinking
     case waitingReply
+    case awaitingReplyDelivery
     case speaking
     case replied
     case failed
@@ -190,9 +194,9 @@ enum EchoTurnIntent: Equatable {
     case userTurnAccepted
     case delayedReplyScheduled
     case delayedReplyRestored
+    case delayedReplyDue
     case replyStarted
     case replyDelivered
-    case restoredDelayedReplyDelivered
     case reset
     case failure
     case retry
@@ -239,56 +243,56 @@ struct EchoTurnIntentReducer {
             switch phase {
             case .idle, .replied, .failed:
                 return .starting
-            case .starting, .listening, .thinking, .waitingReply, .speaking:
+            case .starting, .listening, .thinking, .waitingReply, .awaitingReplyDelivery, .speaking:
                 return nil
             }
         case .voiceCaptureStarted:
             switch phase {
             case .idle, .starting, .replied:
                 return .listening
-            case .listening, .thinking, .waitingReply, .speaking, .failed:
+            case .listening, .thinking, .waitingReply, .awaitingReplyDelivery, .speaking, .failed:
                 return nil
             }
         case .userTurnAccepted:
             switch phase {
             case .starting, .listening:
                 return .thinking
-            case .idle, .thinking, .waitingReply, .speaking, .replied, .failed:
+            case .idle, .thinking, .waitingReply, .awaitingReplyDelivery, .speaking, .replied, .failed:
                 return nil
             }
         case .delayedReplyScheduled:
             switch phase {
             case .listening, .thinking:
                 return .waitingReply
-            case .idle, .starting, .waitingReply, .speaking, .replied, .failed:
+            case .idle, .starting, .waitingReply, .awaitingReplyDelivery, .speaking, .replied, .failed:
                 return nil
             }
         case .delayedReplyRestored:
             switch phase {
             case .idle, .replied, .failed:
                 return .waitingReply
-            case .starting, .listening, .thinking, .waitingReply, .speaking:
+            case .starting, .listening, .thinking, .waitingReply, .awaitingReplyDelivery, .speaking:
+                return nil
+            }
+        case .delayedReplyDue:
+            switch phase {
+            case .idle, .waitingReply:
+                return .awaitingReplyDelivery
+            case .starting, .listening, .thinking, .awaitingReplyDelivery, .speaking, .replied, .failed:
                 return nil
             }
         case .replyStarted:
             switch phase {
             case .starting, .listening, .thinking:
                 return .speaking
-            case .idle, .waitingReply, .speaking, .replied, .failed:
+            case .idle, .waitingReply, .awaitingReplyDelivery, .speaking, .replied, .failed:
                 return nil
             }
         case .replyDelivered:
             switch phase {
-            case .waitingReply, .speaking:
+            case .waitingReply, .awaitingReplyDelivery, .speaking:
                 return .replied
             case .idle, .starting, .listening, .thinking, .replied, .failed:
-                return nil
-            }
-        case .restoredDelayedReplyDelivered:
-            switch phase {
-            case .idle, .waitingReply:
-                return .replied
-            case .starting, .listening, .thinking, .speaking, .replied, .failed:
                 return nil
             }
         case .reset:
@@ -528,7 +532,6 @@ final class EchoViewModel {
     private let delayedReplyStore: EchoDelayedReplyStore
     private let delayedReplyCallsiteScopeStore: EchoDelayedReplyCallsiteScopeStore
     private let delayedReplyNotificationScheduler: EchoDelayedReplyNotificationScheduler
-    private let echoReplyMessageStore: EchoReplyMessageStore
 
     private(set) var context: DigitalHumanContext
     private(set) var archiveContextStatus: EchoArchiveContextStatus = .empty
@@ -542,10 +545,12 @@ final class EchoViewModel {
     var onTranscriptAppend: ((String, Bool) -> Void)?
     var onArchiveContextStatusChange: ((EchoArchiveContextStatus) -> Void)?
     var isWaitingForDelayedReply: Bool {
-        if case .waitingReply = state {
+        switch state {
+        case .waitingReply, .awaitingReplyDelivery:
             return true
+        default:
+            return false
         }
-        return false
     }
     var neutralSafetyDecision: EchoSafetyDecision? {
         guard case .neutralSafety(let decision) = state else { return nil }
@@ -562,8 +567,7 @@ final class EchoViewModel {
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         delayedReplyStore: EchoDelayedReplyStore = .shared,
         delayedReplyCallsiteScopeStore: EchoDelayedReplyCallsiteScopeStore? = nil,
-        delayedReplyNotificationScheduler: EchoDelayedReplyNotificationScheduler = .shared,
-        echoReplyMessageStore: EchoReplyMessageStore = .shared
+        delayedReplyNotificationScheduler: EchoDelayedReplyNotificationScheduler = .shared
     ) {
         self.contextStore = contextStore
         self.memoryManager = memoryManager
@@ -573,7 +577,6 @@ final class EchoViewModel {
         self.delayedReplyCallsiteScopeStore = delayedReplyCallsiteScopeStore
             ?? EchoDelayedReplyCallsiteScopeStore(accountLeaseRuntime: accountLeaseRuntime)
         self.delayedReplyNotificationScheduler = delayedReplyNotificationScheduler
-        self.echoReplyMessageStore = echoReplyMessageStore
         self.context = contextStore.current
     }
 
@@ -759,28 +762,6 @@ final class EchoViewModel {
         _ = applyTurnIntent(.retry, state: .idle)
     }
 
-    func markStoredDelayedReplyArrived(
-        _ delayedReply: EchoDelayedReply,
-        callsiteContext: EchoDelayedReplyCallsiteContext
-    ) {
-        guard matchesPendingDelayedReplyContext(callsiteContext),
-              delayedReply.id == callsiteContext.operationId,
-              turnIntentReducer.accepts(.restoredDelayedReplyDelivered),
-              echoReplyMessageStore.saveArrivedReply(
-            id: delayedReply.id,
-            deliverAt: delayedReply.deliverAt,
-            trigger: delayedReply.trigger.rawValue,
-            accountLease: callsiteContext.accountLease,
-            resourceOwnerId: callsiteContext.resourceOwnerId,
-            operationId: callsiteContext.operationId
-        ), retirePendingDelayedReply(callsiteContext) else {
-            return
-        }
-        pendingDelayedReply = nil
-        pendingDelayedReplyContext = nil
-        _ = applyTurnIntent(.restoredDelayedReplyDelivered, state: .replied)
-    }
-
     static func replyDelayMinutes(for sessionCount: Int) -> Int {
         EchoReplyPacingPolicy.replyDelayMinutes(forCompletedSessionCount: sessionCount)
     }
@@ -831,11 +812,7 @@ final class EchoViewModel {
         if delayedReply.deliverAt <= now {
             pendingDelayedReply = delayedReply
             pendingDelayedReplyContext = callsiteContext
-            markStoredDelayedReplyArrived(
-                delayedReply,
-                callsiteContext: callsiteContext
-            )
-            return true
+            return applyTurnIntent(.delayedReplyDue, state: .awaitingReplyDelivery)
         }
 
         let remainingMinutes = max(1, Int(ceil(delayedReply.deliverAt.timeIntervalSince(now) / 60)))

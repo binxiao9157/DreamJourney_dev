@@ -16,6 +16,12 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
     }
 }
 
+func assertNotContains(_ haystack: String, _ needle: String, _ message: String) {
+    guard !haystack.contains(needle) else {
+        fatalError("\(message): unexpectedly found \(needle)")
+    }
+}
+
 let echoViewModel = read("DreamJourney/Sources/Modules/Echo/EchoViewModel.swift")
 let echoView = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let releasePackage = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
@@ -26,6 +32,7 @@ for state in [
     "case listening",
     "case thinking",
     "case waitingReply(minutes: Int)",
+    "case awaitingReplyDelivery",
     "case speaking",
     "case replied",
     "case error(String)",
@@ -34,10 +41,11 @@ for state in [
 }
 
 assertContains(echoViewModel, "func retryAfterError()", "Echo state machine should expose an explicit retry transition from error")
-assertContains(echoViewModel, "func markStoredDelayedReplyArrived", "Echo should not silently drop overdue delayed replies on restore")
-assertContains(echoViewModel, "markStoredDelayedReplyArrived(delayedReply)", "Expired delayed replies should move to an arrived state")
-assertContains(echoViewModel, "updateState(.replied)", "Arrived delayed replies should render as replied")
-assertContains(echoViewModel, "EchoDelayedReplyStore.shared.clear()", "Arrived delayed replies should clear persisted waiting state")
+assertContains(echoViewModel, "case delayedReplyDue", "Echo reducer should distinguish a due timer from a delivered reply")
+assertContains(echoViewModel, "state: .awaitingReplyDelivery", "Expired delayed replies should await a server receipt")
+assertContains(echoViewModel, "return applyTurnIntent(.delayedReplyDue", "Expired delayed replies should transition without local completion")
+assertNotContains(echoViewModel, "func markStoredDelayedReplyArrived", "A local timer must not fabricate an arrived reply")
+assertContains(echoView, "case .awaitingReplyDelivery", "Echo UI should render a truthful awaiting-server state")
 
 assertContains(echoView, "case .error:", "Echo UI should render recoverable error state")
 assertContains(echoView, "viewModel.retryAfterError()", "Echo UI should explicitly retry after error before starting a new capture")
