@@ -109,6 +109,21 @@ final class AudioOwnerLeaseModelTests: XCTestCase {
         XCTAssertEqual(profilePreview.state, .active)
     }
 
+    func testEchoLocalPlaybackDefaultPurposeAndRouteAreStable() {
+        var model = AudioOwnerLeaseModel()
+        let localPlayback = acquire(
+            &model,
+            owner: .echoLocalPlayback,
+            priority: .playback,
+            scope: AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9),
+            leaseId: UUID(uuidString: "00000000-0000-0000-0000-000000000013")!,
+            issuedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+
+        XCTAssertEqual(localPlayback.purpose, .echoLocalTTSPlayback)
+        XCTAssertEqual(localPlayback.route, .playAndRecordVoiceChat)
+    }
+
     private func acquire(
         _ model: inout AudioOwnerLeaseModel,
         owner: AudioOwnerLeaseOwner,
@@ -133,6 +148,57 @@ final class AudioOwnerLeaseModelTests: XCTestCase {
             XCTFail("expected initial audio owner acquisition")
             fatalError("test cannot continue without an audio lease")
         }
+    }
+}
+
+final class AudioOwnerLeaseCoordinatorTests: XCTestCase {
+    func testObserveOnlyTransitionRejectsStaleRelease() {
+        let coordinator = AudioOwnerLeaseCoordinator()
+        let scope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+
+        guard case let .acquired(localPlayback) = coordinator.observeOwner(
+            .echoLocalPlayback,
+            priority: .playback,
+            scope: scope
+        ) else {
+            return XCTFail("local Echo playback should acquire its observation lease")
+        }
+        guard case let .preempted(previous, digitalHuman) = coordinator.observeOwner(
+            .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            scope: scope
+        ) else {
+            return XCTFail("Tencent playback should preempt local Echo playback")
+        }
+        XCTAssertEqual(previous.leaseId, localPlayback.leaseId)
+
+        XCTAssertEqual(
+            coordinator.releaseObservedLease(localPlayback),
+            .ignoredStaleRelease(active: digitalHuman)
+        )
+        XCTAssertEqual(coordinator.diagnosticsSnapshot().activeLease, digitalHuman)
+    }
+
+    func testRepeatedObserveOnlyOwnerDoesNotCreateAnotherLease() {
+        let coordinator = AudioOwnerLeaseCoordinator()
+        let scope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+        guard case let .acquired(first) = coordinator.observeOwner(
+            .echoLocalPlayback,
+            priority: .playback,
+            scope: scope
+        ) else {
+            return XCTFail("first local Echo owner should acquire")
+        }
+
+        XCTAssertEqual(
+            coordinator.observeOwner(
+                .echoLocalPlayback,
+                priority: .playback,
+                scope: scope
+            ),
+            .unchanged(first)
+        )
+        XCTAssertEqual(coordinator.diagnosticsSnapshot().observedTransitionCount, 2)
     }
 }
 

@@ -160,6 +160,7 @@
 		D4F000000000000000000003 /* AudioOwnerLeaseModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000103 /* AudioOwnerLeaseModelTests.swift */; };
 		D4F000000000000000000004 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000105 /* XCTest.framework */; };
 		D4F000000000000000000005 /* AudioOwnerLeaseModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000106 /* AudioOwnerLeaseModel.swift */; };
+		D4F000000000000000000006 /* AudioOwnerLeaseCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000107 /* AudioOwnerLeaseCoordinator.swift */; };
 		D5F000000000000000000001 /* OwnerTruthContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000101 /* OwnerTruthContracts.swift */; };
 		D5F000000000000000000002 /* OwnerTruthRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000102 /* OwnerTruthRepository.swift */; };
 		D5F000000000000000000003 /* OwnerTruthContractsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000103 /* OwnerTruthContractsTests.swift */; };
@@ -368,6 +369,7 @@
 		D4F000000000000000000104 /* DreamJourneyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DreamJourneyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D4F000000000000000000105 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
 		D4F000000000000000000106 /* AudioOwnerLeaseModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOwnerLeaseModel.swift; sourceTree = "<group>"; };
+		D4F000000000000000000107 /* AudioOwnerLeaseCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOwnerLeaseCoordinator.swift; sourceTree = "<group>"; };
 		D5F000000000000000000101 /* OwnerTruthContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthContracts.swift; sourceTree = "<group>"; };
 		D5F000000000000000000102 /* OwnerTruthRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthRepository.swift; sourceTree = "<group>"; };
 		D5F000000000000000000103 /* OwnerTruthContractsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthContractsTests.swift; sourceTree = "<group>"; };
@@ -693,6 +695,7 @@
 			isa = PBXGroup;
 			children = (
 				D4F000000000000000000106 /* AudioOwnerLeaseModel.swift */,
+				D4F000000000000000000107 /* AudioOwnerLeaseCoordinator.swift */,
 				C7E1B4000000000000000101 /* AccountLifecycleCoordinator.swift */,
 				C7E1B5000000000000000101 /* AccountLifecycleRuntimeRegistry.swift */,
 				C7E1B3000000000000000101 /* AccountLease.swift */,
@@ -1058,6 +1061,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D4F000000000000000000005 /* AudioOwnerLeaseModel.swift in Sources */,
+				D4F000000000000000000006 /* AudioOwnerLeaseCoordinator.swift in Sources */,
 				D5F000000000000000000001 /* OwnerTruthContracts.swift in Sources */,
 				D5F000000000000000000002 /* OwnerTruthRepository.swift in Sources */,
 				E6D53A82564EE472B1164972 /* AIRecordingViewController.swift in Sources */,

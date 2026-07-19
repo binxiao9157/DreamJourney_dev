@@ -10,6 +10,7 @@ MODEL_SMOKE_BINARY="$(mktemp "${TMPDIR:-/tmp}/audio-owner-lease-model.XXXXXX")"
 trap 'rm -f "$MODEL_SMOKE_BINARY"' EXIT
 swiftc \
   "$ROOT/DreamJourney/Sources/App/AudioOwnerLeaseModel.swift" \
+  "$ROOT/DreamJourney/Sources/App/AudioOwnerLeaseCoordinator.swift" \
   "$ROOT/Scripts/QA/product-v4/audio-owner-lease-model-smoke.swift" \
   -o "$MODEL_SMOKE_BINARY"
 "$MODEL_SMOKE_BINARY"

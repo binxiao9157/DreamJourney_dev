@@ -8,7 +8,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 MODEL = ROOT / "DreamJourney/Sources/App/AudioOwnerLeaseModel.swift"
+COORDINATOR = ROOT / "DreamJourney/Sources/App/AudioOwnerLeaseCoordinator.swift"
 TESTS = ROOT / "DreamJourneyTests/AudioOwnerLeaseModelTests.swift"
+ECHO = ROOT / "DreamJourney/Sources/Modules/Echo/EchoViewController.swift"
 SOURCE_ROOT = ROOT / "DreamJourney/Sources"
 
 EXPECTED_DIRECT_AUDIO_SESSION_CONFIGURATORS = {
@@ -45,12 +47,16 @@ def direct_audio_session_configurators() -> set[str]:
 
 def main() -> None:
     model = read(MODEL)
+    coordinator = read(COORDINATOR)
     tests = read(TESTS)
+    echo = read(ECHO)
 
     for required in (
         "enum AudioOwnerLeasePurpose",
         "enum AudioOwnerLeaseRoute",
         "enum AudioOwnerLeaseState",
+        "case echoLocalPlayback",
+        "case echoLocalTTSPlayback",
         "let purpose: AudioOwnerLeasePurpose",
         "let route: AudioOwnerLeaseRoute",
         "let state: AudioOwnerLeaseState",
@@ -64,11 +70,41 @@ def main() -> None:
         "func testOlderRuntimeGenerationCannotPreemptCurrentAudioOwner()",
         "func testSystemInterruptionOnlyResumesCurrentLease()",
         "func testOwnerDefaultPurposeAndRouteAreStable()",
+        "func testEchoLocalPlaybackDefaultPurposeAndRouteAreStable()",
+        "func testObserveOnlyTransitionRejectsStaleRelease()",
+        "func testRepeatedObserveOnlyOwnerDoesNotCreateAnotherLease()",
     ):
         require(test_name in tests, f"audio owner lease XCTest missing: {test_name}")
 
     for forbidden in ("UIKit", "AVFoundation", "URLSession", "UserDefaults", ".shared"):
         require(forbidden not in model, f"pure audio owner model must not depend on {forbidden}")
+
+    for required in (
+        "final class AudioOwnerLeaseCoordinator",
+        "func observeOwner(",
+        "func releaseObservedLease(",
+        "static let shared = AudioOwnerLeaseCoordinator()",
+        "does not configure AVAudioSession yet",
+    ):
+        require(required in coordinator, f"audio owner observe coordinator missing: {required}")
+
+    for forbidden in (
+        "import AVFoundation",
+        "AVAudioSession.sharedInstance",
+        ".setCategory(",
+        ".setActive(",
+    ):
+        require(
+            forbidden not in coordinator,
+            f"observe coordinator must not configure audio runtime: {forbidden}",
+        )
+    for required in (
+        "private var activeEchoAudioOwnerLease: AudioOwnerLease?",
+        "observeEchoAudioOwnerTransition(",
+        "AudioOwnerLeaseCoordinator.shared.observeOwner(",
+        "releaseObservedEchoAudioOwnerLease(reason: \"viewWillDisappear\")",
+    ):
+        require(required in echo, f"Echo observe-only audio owner adapter missing: {required}")
 
     actual_configurators = direct_audio_session_configurators()
     require(

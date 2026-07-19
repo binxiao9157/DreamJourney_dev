@@ -255,6 +255,7 @@ final class EchoViewController: UIViewController {
     private var isLoadingVoiceCloneRuntimeCapability = false
     private var lastTencentProviderAudioHandoffAt: Date?
     private var currentEchoAudioOwner: EchoDigitalHumanAudioOwner = .volcengineLocalTTS
+    private var activeEchoAudioOwnerLease: AudioOwnerLease?
     private var lastEchoTraceRecord: EchoTraceRecord?
     private let echoApplicationCoordinator = EchoApplicationCoordinator()
     private var activeEchoTurnKnowledgeContextGate: EchoTurnKnowledgeContextGate?
@@ -861,6 +862,7 @@ final class EchoViewController: UIViewController {
             }
         }
         releaseDigitalHumanRuntime(reason: "viewWillDisappear", resetsAudioOwnerToOrdinaryEcho: true)
+        releaseObservedEchoAudioOwnerLease(reason: "viewWillDisappear")
         if ownsDialogDelegate {
             DialogEngineManager.shared.delegate = nil
             releaseDialogEngineBinding()
@@ -2759,7 +2761,13 @@ final class EchoViewController: UIViewController {
     }
 
     private func setEchoAudioOwner(_ owner: EchoDigitalHumanAudioOwner, reason: String) {
+        let previousOwner = currentEchoAudioOwner
         currentEchoAudioOwner = owner
+        observeEchoAudioOwnerTransition(
+            from: previousOwner,
+            to: owner,
+            reason: reason
+        )
         PrivacySafeDiagnostics.log(
             subsystem: "TencentDigitalHuman",
             event: "audioOwnerUpdated",
@@ -2767,6 +2775,105 @@ final class EchoViewController: UIViewController {
                 "audioOwner": owner.rawValue,
                 "reason": reason,
                 "providerSpeechInFlight": hasTencentDigitalHumanProviderSpeechInFlight ? "true" : "false",
+            ]
+        )
+    }
+
+    private func observeEchoAudioOwnerTransition(
+        from previousOwner: EchoDigitalHumanAudioOwner,
+        to owner: EchoDigitalHumanAudioOwner,
+        reason: String
+    ) {
+        guard let scope = currentEchoAudioOwnerLeaseScope() else {
+            if previousOwner.rawValue != owner.rawValue {
+                releaseObservedEchoAudioOwnerLease(reason: "missingScope")
+            }
+            return
+        }
+
+        if let activeLease = activeEchoAudioOwnerLease,
+           previousOwner.rawValue != owner.rawValue || activeLease.scope != scope {
+            releaseObservedEchoAudioOwnerLease(reason: "transition")
+        }
+
+        guard let request = audioOwnerLeaseRequest(for: owner) else {
+            return
+        }
+
+        let result = AudioOwnerLeaseCoordinator.shared.observeOwner(
+            request.owner,
+            priority: request.priority,
+            scope: scope
+        )
+        switch result {
+        case let .unchanged(lease), let .acquired(lease), let .preempted(_, lease):
+            activeEchoAudioOwnerLease = lease
+        case .deniedByActiveOwner, .deniedStaleGeneration:
+            activeEchoAudioOwnerLease = nil
+        case .released, .ignoredStaleRelease:
+            activeEchoAudioOwnerLease = nil
+        }
+        recordEchoAudioOwnerLeaseObservation(
+            result,
+            requestedOwner: owner,
+            reason: reason
+        )
+    }
+
+    private func releaseObservedEchoAudioOwnerLease(reason: String) {
+        guard let activeLease = activeEchoAudioOwnerLease else {
+            return
+        }
+        activeEchoAudioOwnerLease = nil
+        let result = AudioOwnerLeaseCoordinator.shared.releaseObservedLease(activeLease)
+        recordEchoAudioOwnerLeaseObservation(
+            result,
+            requestedOwner: currentEchoAudioOwner,
+            reason: reason
+        )
+    }
+
+    private func currentEchoAudioOwnerLeaseScope() -> AudioOwnerLeaseScope? {
+        guard let echoAccountLease else {
+            return nil
+        }
+        let runtimeGeneration = echoRuntimeSessionCoordinator.activeLease?.runtimeGeneration
+            ?? digitalHumanRuntimeLifecycleGeneration
+            ?? digitalHumanLifecycle.generation
+        return AudioOwnerLeaseScope(
+            accountGeneration: echoAccountLease.generation,
+            runtimeGeneration: runtimeGeneration
+        )
+    }
+
+    private func audioOwnerLeaseRequest(
+        for owner: EchoDigitalHumanAudioOwner
+    ) -> (owner: AudioOwnerLeaseOwner, priority: AudioOwnerLeasePriority)? {
+        switch owner {
+        case .tencentDigitalHuman:
+            return (.tencentDigitalHumanPlayback, .tencentDigitalHumanPlayback)
+        case .localPreview, .volcengineLocalTTS:
+            return (.echoLocalPlayback, .playback)
+        case .fallbackMuted:
+            return nil
+        }
+    }
+
+    private func recordEchoAudioOwnerLeaseObservation(
+        _ result: AudioOwnerLeaseObservationResult,
+        requestedOwner: EchoDigitalHumanAudioOwner,
+        reason: String
+    ) {
+        let snapshot = AudioOwnerLeaseCoordinator.shared.diagnosticsSnapshot()
+        PrivacySafeDiagnostics.log(
+            subsystem: "AudioOwnerLease",
+            event: "echoObserveOnlyTransition",
+            states: [
+                "result": result.diagnosticCode,
+                "requestedOwner": requestedOwner.rawValue,
+                "activeOwner": snapshot.activeLease?.owner.rawValue ?? "none",
+                "transitionCount": String(snapshot.observedTransitionCount),
+                "reasonHash": PrivacySafeDiagnostics.correlationHash(reason),
             ]
         )
     }
@@ -6894,7 +7001,7 @@ extension EchoViewController {
         lastEchoRuntimeFallbackReason = nil
         defer {
             DigitalHumanContextStore.shared.current = previousContext
-            currentEchoAudioOwner = previousAudioOwner
+            setEchoAudioOwner(previousAudioOwner, reason: "uiqaPanelRestore")
         }
 
         let record = EchoTraceRecord(

@@ -3,19 +3,20 @@
     "authorityLock": "IOS_COMPOSITION",
     "backendPendingPaths": [],
     "completedSubSlices": [
-      "WI-S1-03-07-AUDIO_OWNER_INVENTORY_AND_MODEL_G0"
+      "WI-S1-03-07-AUDIO_OWNER_INVENTORY_AND_MODEL_G0",
+      "WI-S1-03-07-ECHO_DH_OBSERVE_ONLY_ADAPTER_G0"
     ],
-    "currentSubSlice": "WI-S1-03-07-AUDIO_OWNER_INVENTORY_AND_MODEL_G0",
+    "currentSubSlice": "WI-S1-03-07-ECHO_DH_OBSERVE_ONLY_ADAPTER_G0",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "AUDIO_OWNER_LEASE_PURPOSE_ROUTE_INTERRUPTION_MODEL_AND_DIRECT_CONFIGURATOR_INVENTORY_VERIFIED",
+      "G0": "AUDIO_OWNER_LEASE_MODEL_DIRECT_CONFIGURATOR_INVENTORY_AND_ECHO_DH_OBSERVE_ONLY_STALE_RELEASE_FENCE_VERIFIED",
       "G1": "NOT_STARTED",
       "G4": "NOT_STARTED"
     },
     "id": "WI-S1-03-07",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-06 is internally ready at G0: RuntimeLease fences role/session creation, heartbeat, Provider state, request-scoped synthesis/text/PCM callbacks, background grace release, quota/error and ordinary Echo fallback. Provider state remains session-scoped because the Tencent SDK does not supply a request ID; real Tencent lifecycle remains G3/G4. WI-S1-03-07 has now completed its first observe-only G0 slice: the existing AudioOwnerLeaseModel carries explicit purpose, route and interruption state, and a static gate inventories the 7 current AVAudioSession configurators. No runtime audio route has moved to the new lease yet. Next is an Echo/DH-only observe adapter; no public UI, backend contract, provider credential or release exposure changes are included."
+    "summary": "WI-S1-03-06 is internally ready at G0: RuntimeLease fences role/session creation, heartbeat, Provider state, request-scoped synthesis/text/PCM callbacks, background grace release, quota/error and ordinary Echo fallback. Provider state remains session-scoped because the Tencent SDK does not supply a request ID; real Tencent lifecycle remains G3/G4. WI-S1-03-07 now has two G0 observe-only slices: the pure AudioOwnerLease model carries explicit purpose, route and interruption state; a static gate inventories 7 direct AVAudioSession configurators; and Echo/DH maps its existing desired local/Tencent/muted ownership state into process-level observation leases with stale-release fencing. No actual AVAudioSession route has moved to the lease, and actual Echo capture remains outside the adapter. Next is model-level capture/playback event ordering and interruption/route-change guards; no public UI, backend contract, provider credential or release exposure changes are included."
   },
   "baselines": {
     "backend": "main@32c38f2",
@@ -372,5 +373,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T09:06:11+0800"
+  "updatedAt": "2026-07-19T09:15:14+0800"
 }

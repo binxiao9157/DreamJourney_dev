@@ -5,6 +5,7 @@ enum AudioOwnerLeaseModelSmoke {
     static func main() {
         verifyCurrentLeaseOwnsInterruptionRecovery()
         verifyOwnerDefaultsDescribeTheIntendedRoute()
+        verifyObserveOnlyTransitionRejectsStaleRelease()
         print("Audio owner lease model smoke passed")
     }
 
@@ -54,6 +55,33 @@ enum AudioOwnerLeaseModelSmoke {
         require(preview.purpose == .profileVoicePreview, "profile preview purpose must be explicit")
         require(preview.route == .spokenAudioPreview, "profile preview route must remain explicit")
         require(preview.state == .active, "a new lease must start active")
+    }
+
+    private static func verifyObserveOnlyTransitionRejectsStaleRelease() {
+        let coordinator = AudioOwnerLeaseCoordinator()
+        let scope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+        guard case let .acquired(localPlayback) = coordinator.observeOwner(
+            .echoLocalPlayback,
+            priority: .playback,
+            scope: scope
+        ) else {
+            fail("local Echo playback should acquire its observation lease")
+        }
+        guard case let .preempted(_, digitalHuman) = coordinator.observeOwner(
+            .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            scope: scope
+        ) else {
+            fail("Tencent playback should preempt local Echo playback")
+        }
+        require(
+            coordinator.releaseObservedLease(localPlayback) == .ignoredStaleRelease(active: digitalHuman),
+            "old local playback release must not clear the newer Tencent owner"
+        )
+        require(
+            coordinator.diagnosticsSnapshot().activeLease == digitalHuman,
+            "newer Tencent owner must remain active after stale release"
+        )
     }
 
     private static func acquire(

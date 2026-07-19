@@ -1,8 +1,9 @@
 import Foundation
 
-// Pure arbitration model. Runtime AVAudioSession integration remains in WI-S1-03-07.
+// Pure arbitration model. Runtime AVAudioSession enforcement remains in WI-S1-03-07.
 enum AudioOwnerLeaseOwner: String, CaseIterable, Sendable {
     case echoCapture
+    case echoLocalPlayback
     case tencentDigitalHumanPlayback
     case archiveRecorder
     case archivePlayback
@@ -12,6 +13,7 @@ enum AudioOwnerLeaseOwner: String, CaseIterable, Sendable {
 
 enum AudioOwnerLeasePurpose: String, Equatable, Sendable {
     case echoCapture
+    case echoLocalTTSPlayback
     case tencentAudioDrive
     case archiveRecording
     case archivePlayback
@@ -193,6 +195,8 @@ private extension AudioOwnerLeaseOwner {
         switch self {
         case .echoCapture:
             return .echoCapture
+        case .echoLocalPlayback:
+            return .echoLocalTTSPlayback
         case .tencentDigitalHumanPlayback:
             return .tencentAudioDrive
         case .archiveRecorder:
@@ -208,7 +212,7 @@ private extension AudioOwnerLeaseOwner {
 
     var defaultRoute: AudioOwnerLeaseRoute {
         switch self {
-        case .echoCapture, .tencentDigitalHumanPlayback:
+        case .echoCapture, .echoLocalPlayback, .tencentDigitalHumanPlayback:
             return .playAndRecordVoiceChat
         case .archiveRecorder:
             return .recordAndSpeaker
