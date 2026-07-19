@@ -491,6 +491,7 @@ final class EchoViewController: UIViewController {
     private var digitalHumanRuntimeRecoveryAttemptsByContext: [String: Int] = [:]
     private let digitalHumanConversation = DigitalHumanConversationCoordinator()
     private let digitalHumanLifecycle = DigitalHumanLifecycleCoordinator()
+    private let echoRuntimeSessionCoordinator = EchoRuntimeSessionCoordinator()
     private var activeVoiceInteractionLifecycleToken: DigitalHumanLifecycleToken?
     private var hasRunTencentDigitalHumanTextDriveSmoke = false
     private var hasRunTencentDigitalHumanPCMDriveSmoke = false
@@ -1849,6 +1850,7 @@ final class EchoViewController: UIViewController {
         removeProviderViewMessage: String? = nil,
         recordsDiagnostics: Bool = true
     ) {
+        echoRuntimeSessionCoordinator.releaseRuntime()
         cancelCloudDigitalHumanBackgroundRelease(reason: "runtimeRelease:\(reason)")
         cancelDigitalHumanRuntimeRecovery()
         releaseActiveDigitalHumanSessionLease(reason: reason)
@@ -2100,8 +2102,29 @@ final class EchoViewController: UIViewController {
         return true
     }
 
+    private func isCurrentEchoRuntimeSessionCallback(
+        _ callback: EchoRuntimeCallbackToken,
+        reason: String
+    ) -> Bool {
+        let validation = echoRuntimeSessionCoordinator.validate(callback)
+        guard validation == .accepted else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "runtimeSessionCallbackIgnored",
+                states: [
+                    "reason": reason,
+                    "validation": String(describing: validation),
+                ],
+                correlations: ["request": callback.requestID]
+            )
+            return false
+        }
+        return true
+    }
+
     @discardableResult
     private func invalidateDigitalHumanLifecycle(reason: String) -> DigitalHumanLifecycleToken {
+        echoRuntimeSessionCoordinator.invalidatePendingSessionRequest()
         let token = digitalHumanLifecycle.invalidate(
             contextKey: currentDigitalHumanRuntimeContextKey(),
             reason: reason
@@ -2122,6 +2145,7 @@ final class EchoViewController: UIViewController {
 
     @discardableResult
     private func invalidateDigitalHumanInteraction(reason: String) -> DigitalHumanLifecycleToken {
+        echoRuntimeSessionCoordinator.finishInteraction()
         let token = digitalHumanLifecycle.invalidateInteraction(
             contextKey: currentDigitalHumanRuntimeContextKey(),
             reason: reason
@@ -3013,8 +3037,15 @@ final class EchoViewController: UIViewController {
         let requestID = UUID().uuidString
         pendingDigitalHumanSessionRequestID = requestID
         pendingDigitalHumanSessionContextKey = contextKey
+        let runtimeSessionCallback = echoRuntimeSessionCoordinator.beginSessionRequest(
+            accountLease: accountLease,
+            lifecycleToken: lifecycleToken,
+            contextKey: contextKey,
+            requestID: requestID
+        )
 
         guard DreamJourneyBackendClient.shared.isDigitalHumanSessionConfigured else {
+            echoRuntimeSessionCoordinator.releaseRuntime()
             pendingDigitalHumanSessionRequestID = nil
             pendingDigitalHumanSessionContextKey = nil
             hasRequestedCloudDigitalHumanRuntime = false
@@ -3043,6 +3074,10 @@ final class EchoViewController: UIViewController {
                             lifecycleToken,
                             reason: "runtimeCapabilitySuccess"
                           ),
+                          self.isCurrentEchoRuntimeSessionCallback(
+                            runtimeSessionCallback,
+                            reason: "runtimeCapabilitySuccess"
+                          ),
                           self.isCurrentDigitalHumanSessionRequest(requestID: requestID, contextKey: contextKey) else {
                         PrivacySafeDiagnostics.log(
                             subsystem: "TencentDigitalHuman",
@@ -3058,6 +3093,7 @@ final class EchoViewController: UIViewController {
                         contextKey: contextKey,
                         requestID: requestID,
                         lifecycleToken: lifecycleToken,
+                        runtimeSessionCallback: runtimeSessionCallback,
                         accountLease: accountLease,
                         requestOwnerUserId: requestOwnerUserId
                     )
@@ -3069,6 +3105,10 @@ final class EchoViewController: UIViewController {
                             lifecycleToken,
                             reason: "runtimeCapabilityFailure"
                           ),
+                          self.isCurrentEchoRuntimeSessionCallback(
+                            runtimeSessionCallback,
+                            reason: "runtimeCapabilityFailure"
+                          ),
                           self.isCurrentDigitalHumanSessionRequest(requestID: requestID, contextKey: contextKey) else {
                         PrivacySafeDiagnostics.log(
                             subsystem: "TencentDigitalHuman",
@@ -3078,6 +3118,7 @@ final class EchoViewController: UIViewController {
                         )
                         return
                     }
+                    self.echoRuntimeSessionCoordinator.releaseRuntime()
                     self.pendingDigitalHumanSessionRequestID = nil
                     self.pendingDigitalHumanSessionContextKey = nil
                     self.hasRequestedCloudDigitalHumanRuntime = false
@@ -3107,6 +3148,7 @@ final class EchoViewController: UIViewController {
         contextKey: String,
         requestID: String,
         lifecycleToken: DigitalHumanLifecycleToken,
+        runtimeSessionCallback: EchoRuntimeCallbackToken,
         accountLease: AccountLease,
         requestOwnerUserId: String
     ) {
@@ -3126,6 +3168,7 @@ final class EchoViewController: UIViewController {
                     contextKey: contextKey,
                     requestID: requestID,
                     lifecycleToken: lifecycleToken,
+                    runtimeSessionCallback: runtimeSessionCallback,
                     accountLease: accountLease,
                     requestOwnerUserId: requestOwnerUserId
                 )
@@ -3140,6 +3183,7 @@ final class EchoViewController: UIViewController {
         contextKey: String,
         requestID: String,
         lifecycleToken: DigitalHumanLifecycleToken,
+        runtimeSessionCallback: EchoRuntimeCallbackToken,
         accountLease: AccountLease,
         requestOwnerUserId: String
     ) {
@@ -3152,6 +3196,10 @@ final class EchoViewController: UIViewController {
               ),
               isCurrentDigitalHumanSessionToken(
                 lifecycleToken,
+                reason: "digitalHumanSessionResponse"
+              ),
+              isCurrentEchoRuntimeSessionCallback(
+                runtimeSessionCallback,
                 reason: "digitalHumanSessionResponse"
               ),
               isCurrentDigitalHumanSessionRequest(requestID: requestID, contextKey: contextKey) else {
@@ -3176,6 +3224,26 @@ final class EchoViewController: UIViewController {
 
         switch result {
         case .success(let contract):
+            let activation = echoRuntimeSessionCoordinator.activateSession(
+                runtimeSessionCallback,
+                sessionID: contract.sessionId,
+                providerAssetID: contract.assetKey ?? contract.providerAssetId,
+                expiresAt: contract.lease?.expiresAt ?? contract.credential.expiresAt
+            )
+            guard activation == .accepted else {
+                releaseDigitalHumanSessionLease(
+                    contract,
+                    accountLease: accountLease,
+                    reason: "runtimeSessionActivationRejected"
+                )
+                PrivacySafeDiagnostics.log(
+                    subsystem: "TencentDigitalHuman",
+                    event: "sessionResponseIgnored",
+                    states: ["reason": "runtimeSessionActivationRejected"],
+                    correlations: ["request": requestID]
+                )
+                return
+            }
             activateDigitalHumanSessionLease(contract, lifecycleToken: lifecycleToken)
             let profile = contract.toDigitalHumanProfile(displayName: context.resolvedDisplayName)
             lastDigitalHumanSessionEvidenceSummary = EchoDigitalHumanSessionEvidenceSummary(
@@ -3220,6 +3288,7 @@ final class EchoViewController: UIViewController {
                 digitalHumanRuntimeContextKey = nil
                 digitalHumanRuntimeLifecycleGeneration = nil
                 releaseActiveDigitalHumanSessionLease(reason: "runtimeNotSDKBacked")
+                echoRuntimeSessionCoordinator.releaseRuntime()
                 digitalHumanStatusDetailLabel.text = "腾讯 SDK 暂不可用，已回到普通回响"
                 digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
                 lastEchoRuntimeFallbackReason = runtimeSelection.fallbackReason ?? "digitalHumanRuntimeNotSDKBacked"
@@ -3248,6 +3317,7 @@ final class EchoViewController: UIViewController {
                 digitalHumanRuntimeContextKey = nil
                 digitalHumanRuntimeLifecycleGeneration = nil
                 releaseActiveDigitalHumanSessionLease(reason: "digitalHumanOpenFailed")
+                echoRuntimeSessionCoordinator.releaseRuntime()
                 digitalHumanStatusDetailLabel.text = "腾讯数智人打开失败，已回到普通回响"
                 digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
                 lastEchoRuntimeFallbackReason = "digitalHumanOpenFailed"
@@ -3260,6 +3330,7 @@ final class EchoViewController: UIViewController {
                 )
             }
         case .failure(let error):
+            echoRuntimeSessionCoordinator.releaseRuntime()
             let reason = error.localizedDescription
             let quotaFailure = isDigitalHumanQuotaFailure(reason)
             digitalHumanStatusDetailLabel.text = quotaFailure

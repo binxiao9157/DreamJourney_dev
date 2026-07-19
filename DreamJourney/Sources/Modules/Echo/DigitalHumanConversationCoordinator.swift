@@ -1,5 +1,261 @@
 import Foundation
 
+enum EchoRuntimeLeaseStatus: String, Equatable {
+    case requestingSession
+    case active
+    case fallback
+}
+
+enum EchoRuntimeCallbackScope: Equatable {
+    case session
+    case interaction
+}
+
+enum EchoRuntimeCallbackRejection: Equatable {
+    case noActiveLease
+    case accountMismatch
+    case contextMismatch
+    case runtimeGenerationMismatch
+    case lifecycleGenerationMismatch
+    case interactionGenerationMismatch
+    case requestMismatch
+    case sessionMismatch
+    case sessionNotRequesting
+}
+
+enum EchoRuntimeCallbackValidation: Equatable {
+    case accepted
+    case rejected(EchoRuntimeCallbackRejection)
+}
+
+struct EchoRuntimeLease: Equatable {
+    let accountLease: AccountLease
+    let contextKey: String
+    let conversationID: String?
+    let requestID: String?
+    let sessionID: String?
+    let providerAssetID: String?
+    let expiresAt: Date?
+    let runtimeGeneration: UInt64
+    let lifecycleGeneration: UInt64
+    let interactionGeneration: UInt64
+    let status: EchoRuntimeLeaseStatus
+}
+
+struct EchoRuntimeCallbackToken: Equatable {
+    let accountLease: AccountLease
+    let contextKey: String
+    let runtimeGeneration: UInt64
+    let lifecycleGeneration: UInt64
+    let interactionGeneration: UInt64
+    let requestID: String?
+    let sessionID: String?
+    let scope: EchoRuntimeCallbackScope
+}
+
+/// Owns the local validity boundary for a single Echo digital-human runtime.
+/// Provider session authority remains on the backend; this coordinator only
+/// rejects late callbacks before they can mutate the active UIKit screen.
+final class EchoRuntimeSessionCoordinator {
+    private(set) var activeLease: EchoRuntimeLease?
+    private(set) var runtimeGeneration: UInt64 = 0
+
+    @discardableResult
+    func beginSessionRequest(
+        accountLease: AccountLease,
+        lifecycleToken: DigitalHumanLifecycleToken,
+        contextKey: String,
+        requestID: String
+    ) -> EchoRuntimeCallbackToken {
+        runtimeGeneration &+= 1
+        let lease = EchoRuntimeLease(
+            accountLease: accountLease,
+            contextKey: contextKey,
+            conversationID: nil,
+            requestID: requestID,
+            sessionID: nil,
+            providerAssetID: nil,
+            expiresAt: nil,
+            runtimeGeneration: runtimeGeneration,
+            lifecycleGeneration: lifecycleToken.generation,
+            interactionGeneration: lifecycleToken.interactionGeneration,
+            status: .requestingSession
+        )
+        activeLease = lease
+        return callbackToken(for: lease, scope: .session)
+    }
+
+    func currentSessionCallbackToken() -> EchoRuntimeCallbackToken? {
+        guard let activeLease,
+              activeLease.status == .active,
+              activeLease.sessionID != nil else {
+            return nil
+        }
+        return callbackToken(for: activeLease, scope: .session)
+    }
+
+    @discardableResult
+    func activateSession(
+        _ callback: EchoRuntimeCallbackToken,
+        sessionID: String,
+        providerAssetID: String?,
+        expiresAt: Date?
+    ) -> EchoRuntimeCallbackValidation {
+        let validation = validate(callback)
+        guard validation == .accepted else {
+            return validation
+        }
+        guard let activeLease,
+              activeLease.status == .requestingSession else {
+            return .rejected(.sessionNotRequesting)
+        }
+        self.activeLease = EchoRuntimeLease(
+            accountLease: activeLease.accountLease,
+            contextKey: activeLease.contextKey,
+            conversationID: activeLease.conversationID,
+            requestID: activeLease.requestID,
+            sessionID: sessionID,
+            providerAssetID: providerAssetID,
+            expiresAt: expiresAt,
+            runtimeGeneration: activeLease.runtimeGeneration,
+            lifecycleGeneration: activeLease.lifecycleGeneration,
+            interactionGeneration: activeLease.interactionGeneration,
+            status: .active
+        )
+        return .accepted
+    }
+
+    @discardableResult
+    func markFallback(_ callback: EchoRuntimeCallbackToken) -> EchoRuntimeCallbackValidation {
+        let validation = validate(callback)
+        guard validation == .accepted,
+              let activeLease else {
+            return validation
+        }
+        self.activeLease = EchoRuntimeLease(
+            accountLease: activeLease.accountLease,
+            contextKey: activeLease.contextKey,
+            conversationID: activeLease.conversationID,
+            requestID: activeLease.requestID,
+            sessionID: activeLease.sessionID,
+            providerAssetID: activeLease.providerAssetID,
+            expiresAt: activeLease.expiresAt,
+            runtimeGeneration: activeLease.runtimeGeneration,
+            lifecycleGeneration: activeLease.lifecycleGeneration,
+            interactionGeneration: activeLease.interactionGeneration,
+            status: .fallback
+        )
+        return .accepted
+    }
+
+    func beginInteraction(
+        conversationID: String,
+        requestID: String
+    ) -> EchoRuntimeCallbackToken? {
+        guard let activeLease,
+              activeLease.status == .active,
+              activeLease.sessionID != nil else {
+            return nil
+        }
+        let interactionGeneration = activeLease.interactionGeneration &+ 1
+        let interactionLease = EchoRuntimeLease(
+            accountLease: activeLease.accountLease,
+            contextKey: activeLease.contextKey,
+            conversationID: conversationID,
+            requestID: requestID,
+            sessionID: activeLease.sessionID,
+            providerAssetID: activeLease.providerAssetID,
+            expiresAt: activeLease.expiresAt,
+            runtimeGeneration: activeLease.runtimeGeneration,
+            lifecycleGeneration: activeLease.lifecycleGeneration,
+            interactionGeneration: interactionGeneration,
+            status: .active
+        )
+        self.activeLease = interactionLease
+        return callbackToken(for: interactionLease, scope: .interaction)
+    }
+
+    func finishInteraction() {
+        guard let activeLease,
+              activeLease.status == .active else {
+            return
+        }
+        self.activeLease = EchoRuntimeLease(
+            accountLease: activeLease.accountLease,
+            contextKey: activeLease.contextKey,
+            conversationID: nil,
+            requestID: nil,
+            sessionID: activeLease.sessionID,
+            providerAssetID: activeLease.providerAssetID,
+            expiresAt: activeLease.expiresAt,
+            runtimeGeneration: activeLease.runtimeGeneration,
+            lifecycleGeneration: activeLease.lifecycleGeneration,
+            interactionGeneration: activeLease.interactionGeneration &+ 1,
+            status: .active
+        )
+    }
+
+    func invalidatePendingSessionRequest() {
+        guard activeLease?.status == .requestingSession else {
+            return
+        }
+        runtimeGeneration &+= 1
+        activeLease = nil
+    }
+
+    func releaseRuntime() {
+        runtimeGeneration &+= 1
+        activeLease = nil
+    }
+
+    func validate(_ callback: EchoRuntimeCallbackToken) -> EchoRuntimeCallbackValidation {
+        guard let activeLease else {
+            return .rejected(.noActiveLease)
+        }
+        guard activeLease.accountLease == callback.accountLease else {
+            return .rejected(.accountMismatch)
+        }
+        guard activeLease.contextKey == callback.contextKey else {
+            return .rejected(.contextMismatch)
+        }
+        guard activeLease.runtimeGeneration == callback.runtimeGeneration else {
+            return .rejected(.runtimeGenerationMismatch)
+        }
+        guard activeLease.lifecycleGeneration == callback.lifecycleGeneration else {
+            return .rejected(.lifecycleGenerationMismatch)
+        }
+        if let callbackSessionID = callback.sessionID,
+           activeLease.sessionID != callbackSessionID {
+            return .rejected(.sessionMismatch)
+        }
+        if callback.scope == .interaction {
+            guard activeLease.interactionGeneration == callback.interactionGeneration else {
+                return .rejected(.interactionGenerationMismatch)
+            }
+            guard activeLease.requestID == callback.requestID else {
+                return .rejected(.requestMismatch)
+            }
+        }
+        return .accepted
+    }
+
+    private func callbackToken(
+        for lease: EchoRuntimeLease,
+        scope: EchoRuntimeCallbackScope
+    ) -> EchoRuntimeCallbackToken {
+        EchoRuntimeCallbackToken(
+            accountLease: lease.accountLease,
+            contextKey: lease.contextKey,
+            runtimeGeneration: lease.runtimeGeneration,
+            lifecycleGeneration: lease.lifecycleGeneration,
+            interactionGeneration: lease.interactionGeneration,
+            requestID: lease.requestID,
+            sessionID: lease.sessionID,
+            scope: scope
+        )
+    }
+}
+
 struct DigitalHumanLifecycleToken: Equatable {
     let generation: UInt64
     let interactionGeneration: UInt64

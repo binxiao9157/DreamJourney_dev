@@ -31,24 +31,26 @@
       "WI-S1-03-05-TURN_INTENT_REDUCER_G0_COMPLETE",
       "WI-S1-03-05-CONTEXT_BUILD_LEASE_G0_COMPLETE",
       "WI-S1-03-05-CONTEXT_BUILD_TRANSPORT_G0_COMPLETE",
-      "WI-S1-03-05-CONTEXT_BUILD_IDENTITY_GATE_G0_COMPLETE"
+      "WI-S1-03-05-CONTEXT_BUILD_IDENTITY_GATE_G0_COMPLETE",
+      "WI-S1-03-06-RUNTIME_LEASE_MODEL_G0_COMPLETE",
+      "WI-S1-03-06-SESSION_CREATE_CALLBACK_FENCE_G0_COMPLETE"
     ],
-    "currentSubSlice": "WI-S1-03-05-TURN_INTENT_CONTEXT_LEASE_TRANSPORT_AND_IDENTITY_G0_COMPLETE",
+    "currentSubSlice": "WI-S1-03-06-RUNTIME_LEASE_AND_SESSION_CREATE_CALLBACK_FENCE_G0_COMPLETE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "ECHO_TURN_INTENT_CONTEXT_BUILD_LEASE_TRANSPORT_AND_IDENTITY_STATIC_AND_BUILD_FOR_TESTING_VERIFIED",
+      "G0": "ECHO_RUNTIME_LEASE_SESSION_CREATE_CALLBACK_FENCE_STATIC_MODEL_SMOKE_AND_BUILD_FOR_TESTING_VERIFIED",
       "G1": "SIMULATOR_RUNTIME_OPEN_SCHEME_HAS_NO_RUNNABLE_DESTINATION",
-      "G2": "ECHO_DELAYED_REPLY_REPLY_DISPATCH_AND_DIAGNOSTICS_SCOPE_OPEN",
-      "G3": "PROVIDER_RUNTIME_SCOPE_OPEN"
+      "G3": "TENCENT_PROVIDER_SESSION_QUOTA_CLEANUP_AND_REAL_RUNTIME_SCOPE_OPEN",
+      "G4": "REAL_DEVICE_RUNTIME_LIFECYCLE_SCOPE_OPEN"
     },
-    "id": "WI-S1-03-05",
+    "id": "WI-S1-03-06",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-05 has completed four G0 sub-slices. EchoTurnIntentReducer provides a provider-independent lifecycle for normal replies, delayed replies, restored due replies, failure and retry; user and AI transcript writes are fenced before memory side effects. EchoApplicationCoordinator now owns the context-build transport, generation lease and response identity classification: a later request or lifecycle invalidation rejects older /context/build callbacks before they reach EchoViewController, trace persistence or fallback submission, including callbacks that reuse the same turn ID; a packet whose owner/persona/digitalHuman identity does not match the request is delivered only as a typed rejection. The controller retains local KBLite fallback when the transport is unavailable or an identity rejection occurs and no longer directly composes DreamJourneyBackendClient context requests or context response identity policy. Tencent QA/POC reply paths explicitly start a turn first. No public UI, Provider contract, KBLite authority or backend route changed. Runnable simulator evidence remains open because the current scheme exposes no runnable simulator destination; runtime session/callback fencing, delayed/reply coordination and provider runtime gates remain open."
+    "summary": "WI-S1-03-06 has completed its first G0 runtime-session slice. EchoRuntimeSessionCoordinator now owns an explicit local RuntimeLease containing account, role context, request/session identity, lifecycle/interaction generations, provider asset, expiry and state. EchoViewController begins each /digital-human/sessions request through that lease and rejects stale capability/session callbacks before binding a runtime; stale successful contracts keep the existing backend release cleanup. The model defines turn-stop interaction invalidation without session destruction, while actual Provider text/PCM callback migration remains open. Full runtime release invalidates all local callbacks. Existing lifecycle, heartbeat, release and Provider state paths remain in place for incremental migration, and no public UI, audio-owner policy, backend contract or Provider credential changed. G1/G3/G4 remain open."
   },
   "baselines": {
     "backend": "main@32c38f2",
-    "ios": "feature/prd-stitch-ui-adaptation@158ff15",
+    "ios": "feature/prd-stitch-ui-adaptation@2bf5a03",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -384,9 +386,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-03-06",
+    "id": "WI-S1-03-07",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After WI-S1-03-05 completes its Echo application coordination boundaries, continue with the next IOS_COMPOSITION item without widening the public release scope."
+    "summary": "After WI-S1-03-06 makes the RuntimeLease the sole session callback boundary, continue with process-level audio owner arbitration without widening the public release scope."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -395,5 +397,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T08:31:00+0800"
+  "updatedAt": "2026-07-19T08:42:00+0800"
 }
