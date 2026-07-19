@@ -20,6 +20,26 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def without_simulator_uiqa_sections(source: str) -> str:
+    """Remove compile-time simulator-only QA blocks before production-path checks."""
+    retained: list[str] = []
+    skipped_depth = 0
+    for line in source.splitlines(keepends=True):
+        stripped = line.strip()
+        if skipped_depth == 0 and stripped == "#if UI_QA_SIMULATOR && targetEnvironment(simulator)":
+            skipped_depth = 1
+            continue
+        if skipped_depth > 0:
+            if stripped.startswith("#if "):
+                skipped_depth += 1
+            elif stripped == "#endif":
+                skipped_depth -= 1
+            continue
+        retained.append(line)
+    require(skipped_depth == 0, "unterminated simulator-only UIQA section")
+    return "".join(retained)
+
+
 def main() -> None:
     require(STORAGE.is_file(), "ArchiveLocalStorage production contract is missing")
     storage = STORAGE.read_text()
@@ -102,7 +122,8 @@ def main() -> None:
         (audio_entry, "audio entry"),
         (text_entry, "time-letter entry"),
     ):
-        require(".documentDirectory" not in source, f"{name} must not write shared Documents media")
+        production_source = without_simulator_uiqa_sections(source)
+        require(".documentDirectory" not in production_source, f"{name} must not write shared Documents media")
         require("ArchiveMediaStore.shared" in source, f"{name} must route media through ArchiveMediaStore")
 
     require(
