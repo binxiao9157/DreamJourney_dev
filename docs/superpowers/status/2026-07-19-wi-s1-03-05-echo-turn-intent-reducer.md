@@ -1,4 +1,4 @@
-# WI-S1-03-05 Echo Turn Intent Reducer
+# WI-S1-03-05 Echo Turn Intent And Context Coordination
 
 日期：2026-07-19
 
@@ -8,8 +8,9 @@
 - Authority lock：`IOS_COMPOSITION`
 - Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`
 - 当前结果：`IN_PROGRESS / G0_STATIC_AND_BUILD_FOR_TESTING_VERIFIED / G1_G2_G3_OPEN`
-- 本切片：`WI-S1-03-05-TURN_INTENT_REDUCER_G0_COMPLETE`
-- 范围：先将 Echo 的 provider-independent 回合状态收敛为纯 reducer，阻止旧回调在写入记忆或转录前越过回合边界；不改公开页面、不接管现有数字人或语音 Provider。
+- 本切片：`WI-S1-03-05-TURN_INTENT_REDUCER_AND_CONTEXT_LEASE_G0_COMPLETE`
+- 范围：先将 Echo 的 provider-independent 回合状态收敛为纯 reducer，并让 context build 使用独立
+  generation lease；不改公开页面、不接管现有数字人、语音 Provider 或后端 transport。
 
 ## 已实现
 
@@ -29,12 +30,27 @@ view-state 更新的安全覆盖层。
 QA/POC 的腾讯数智人文本、PCM 与复刻 PCM 驱动入口会先发出 `prepareVoiceInteraction`，再注入
 模拟回复；这使测试入口遵守同一回合边界，而不是放宽 production reply 的 `idle` 状态规则。
 
+### Context Build Lease 增量
+
+新增 `EchoApplicationCoordinator` 和 `EchoContextBuildLease`。本轮 coordinator 的职责被刻意限制为：
+
+- 每次 `/context/build` 分配单调递增的 generation lease；
+- 新回合、账户/角色生命周期失效或页面退出时作废旧 lease；
+- 后端 success/failure 回调必须先验证当前 lease，才允许写入 `EchoTraceStore`、更新本轮 trace
+  或触发本地 KBLite fallback。
+
+因此旧角色、旧账户或已离开页面的 context response 不会再写入当前回合的 trace。原先基于
+`turnID` 字符串的 `latestEchoContextRequestTurnID` 已移除：同一个 turn ID 被重新发起时，也必须以
+新的 generation 才能被接收。`EchoViewController` 仍负责本地 KBLite fallback、`DialogEngineManager`
+提交、诊断渲染和所有数字人/音频行为；这些职责没有在本轮迁移。
+
 ## 验证
 
 执行：
 
 ```bash
 bash Scripts/QA/product-v4/run-ios-echo-turn-reducer-gate.sh
+bash Scripts/QA/product-v4/run-ios-echo-application-coordinator-gate.sh
 ```
 
 结果：`PASS`。
@@ -45,6 +61,8 @@ bash Scripts/QA/product-v4/run-ios-echo-turn-reducer-gate.sh
   `DreamJourneyTests` bundle 均已编译；
 - `git diff --check` 通过；
 - 新增 XCTest 覆盖正常回合、空闲态旧回复、延迟回信、App 重开后的到期回信和失败重试。
+- 新增 XCTest 覆盖 context build 新请求覆盖旧请求、显式取消拒绝迟到回调、同 turn ID 的新 generation
+  拒绝旧 callback；静态检查还确认 stale response 会在 trace 持久化前被 lease fence 拒绝。
 
 曾尝试在已启动的 `iPhone 17 Pro` 模拟器执行这五条 XCTest，但当前 `DreamJourney` scheme 的
 `xcodebuild -showdestinations` 只提供 `Any iOS Simulator Device` placeholder，未提供可运行的
@@ -54,7 +72,8 @@ simulator destination。因此测试未在 simulator runtime 实际执行；这�
 
 本切片不是 `WI-S1-03-05` 的完整完成声明：
 
-- `EchoApplicationCoordinator` 尚未承接 context build、transport、延迟策略、reply dispatch 和 diagnostics；
+- `EchoApplicationCoordinator` 目前只承接 context build request lease，尚未承接 transport、延迟策略、
+  reply dispatch 或 diagnostics；
 - `EchoViewController` 仍持有现有 Provider 调度，尚未完成“ViewController 只发 Intent/渲染 ViewState”的
   完整迁移；
 - 没有修改 `/context/build`、数字人、声音复刻、KBLite Authority、后端合同或公开 UI；
@@ -63,6 +82,5 @@ simulator destination。因此测试未在 simulator runtime 实际执行；这�
 
 ## 下一步
 
-在同一 Work Item 内新增最小 `EchoApplicationCoordinator`，先将 context build request、文本 reply
-dispatch 和 delayed-reply policy 从 ViewController 的业务编排中移出；保留现有文字 fallback，并用 lease/
-generation fence 防止旧角色或旧账户请求回写当前回合。
+在同一 Work Item 内继续抽取最小的文本 reply dispatch 或 delayed-reply policy 协调边界；保留现有文字
+fallback，并复用本轮 generation fence，避免旧角色、旧账户或旧 interaction callback 回写当前回合。

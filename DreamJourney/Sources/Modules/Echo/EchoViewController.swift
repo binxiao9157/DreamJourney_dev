@@ -256,8 +256,8 @@ final class EchoViewController: UIViewController {
     private var lastTencentProviderAudioHandoffAt: Date?
     private var currentEchoAudioOwner: EchoDigitalHumanAudioOwner = .volcengineLocalTTS
     private var lastEchoTraceRecord: EchoTraceRecord?
+    private let echoApplicationCoordinator = EchoApplicationCoordinator()
     private var activeEchoTurnKnowledgeContextGate: EchoTurnKnowledgeContextGate?
-    private var latestEchoContextRequestTurnID: String?
     private var lastVoiceCloneProviderLogId: String?
     private var lastVoiceCloneProviderRequestId: String?
     private var lastVoiceCloneProviderMode: String?
@@ -1190,8 +1190,6 @@ final class EchoViewController: UIViewController {
     private func rebindEchoAccountScope(reason: String) {
         invalidateDigitalHumanLifecycle(reason: reason)
         activeVoiceInteractionLifecycleToken = nil
-        activeEchoTurnKnowledgeContextGate?.cancel()
-        activeEchoTurnKnowledgeContextGate = nil
         releaseDigitalHumanRuntime(
             reason: reason,
             resetsAudioOwnerToOrdinaryEcho: true,
@@ -2112,9 +2110,7 @@ final class EchoViewController: UIViewController {
         pendingDigitalHumanSessionContextKey = nil
         isLoadingVoiceCloneRuntimeCapability = false
         activeVoiceInteractionLifecycleToken = nil
-        activeEchoTurnKnowledgeContextGate?.cancel()
-        activeEchoTurnKnowledgeContextGate = nil
-        latestEchoContextRequestTurnID = nil
+        cancelActiveEchoContextBuild(reason: "digitalHumanLifecycle:\(reason)")
         cancelDigitalHumanReplyPrewarm()
         cancelTencentDigitalHumanTextOverTimeout()
         print(
@@ -2130,9 +2126,7 @@ final class EchoViewController: UIViewController {
             contextKey: currentDigitalHumanRuntimeContextKey(),
             reason: reason
         )
-        activeEchoTurnKnowledgeContextGate?.cancel()
-        activeEchoTurnKnowledgeContextGate = nil
-        latestEchoContextRequestTurnID = nil
+        cancelActiveEchoContextBuild(reason: "digitalHumanInteraction:\(reason)")
         cancelDigitalHumanReplyPrewarm()
         cancelTencentDigitalHumanTextOverTimeout()
         print(
@@ -3863,6 +3857,21 @@ final class EchoViewController: UIViewController {
         KBLiteManager.resolveAuthorizedPersonaIdentity(for: context)
     }
 
+    private func cancelActiveEchoContextBuild(reason: String) {
+        activeEchoTurnKnowledgeContextGate?.cancel()
+        activeEchoTurnKnowledgeContextGate = nil
+        guard let lease = echoApplicationCoordinator.invalidateContextBuild() else {
+            return
+        }
+        PrivacySafeDiagnostics.log(
+            subsystem: "CFLite",
+            event: "contextBuildInvalidated",
+            states: ["reason": reason],
+            counts: ["generation": Int(lease.generation)],
+            correlations: ["turn": lease.turnID]
+        )
+    }
+
     private func recordEchoContextPacketForUserTurn(
         text: String,
         turnID: String,
@@ -3871,9 +3880,7 @@ final class EchoViewController: UIViewController {
     ) {
         let context = DigitalHumanContextStore.shared.current
         guard let expectedIdentity = echoKnowledgeContextIdentity(for: context) else {
-            activeEchoTurnKnowledgeContextGate?.cancel()
-            activeEchoTurnKnowledgeContextGate = nil
-            latestEchoContextRequestTurnID = turnID
+            cancelActiveEchoContextBuild(reason: "familyRelationshipUnauthorized")
             lastEchoRuntimeFallbackReason = "familyRelationshipUnauthorized"
             recordEchoRuntimeDiagnosticsSnapshot(reason: "familyRelationshipUnauthorized")
             PrivacySafeDiagnostics.log(
@@ -3885,9 +3892,7 @@ final class EchoViewController: UIViewController {
             return
         }
 
-        activeEchoTurnKnowledgeContextGate?.cancel()
-        activeEchoTurnKnowledgeContextGate = nil
-        latestEchoContextRequestTurnID = turnID
+        cancelActiveEchoContextBuild(reason: "newEchoTurn")
         let gate: EchoTurnKnowledgeContextGate?
         if allowsGeneration {
             let turnGate = EchoTurnKnowledgeContextGate(
@@ -3930,6 +3935,10 @@ final class EchoViewController: UIViewController {
             )
             return
         }
+        let contextBuildLease = echoApplicationCoordinator.beginContextBuild(
+            turnID: turnID,
+            expectedIdentity: expectedIdentity
+        )
         DreamJourneyBackendClient.shared.buildEchoContextPacket(
             userId: expectedIdentity.userId,
             query: text,
@@ -3942,7 +3951,17 @@ final class EchoViewController: UIViewController {
             case .success(let packet):
                 let record = EchoTraceRecord(turnID: turnID, packet: packet)
                 DispatchQueue.main.async {
-                    guard let self,
+                    guard let self else { return }
+                    guard self.echoApplicationCoordinator.isCurrent(contextBuildLease) else {
+                        PrivacySafeDiagnostics.log(
+                            subsystem: "CFLite",
+                            event: "contextTraceIgnored",
+                            states: ["reason": "staleCoordinatorLease"],
+                            correlations: ["turn": turnID]
+                        )
+                        return
+                    }
+                    guard
                           self.isCurrentDigitalHumanLifecycleToken(
                             lifecycleToken,
                             reason: "contextPacketResponse"
@@ -3977,15 +3996,6 @@ final class EchoViewController: UIViewController {
                         return
                     }
                     EchoTraceStore.shared.record(record, ownerUserId: expectedIdentity.userId)
-                    guard self.latestEchoContextRequestTurnID == turnID else {
-                        PrivacySafeDiagnostics.log(
-                            subsystem: "CFLite",
-                            event: "contextTraceIgnored",
-                            states: ["reason": "stale"],
-                            correlations: ["turn": turnID]
-                        )
-                        return
-                    }
                     self.lastEchoTraceRecord = record
                     self.recordEchoRuntimeDiagnosticsSnapshot(reason: "contextPacketBuilt")
                     if let gate {
@@ -4038,6 +4048,7 @@ final class EchoViewController: UIViewController {
             case .failure:
                 DispatchQueue.main.async {
                     guard let self,
+                          self.echoApplicationCoordinator.isCurrent(contextBuildLease),
                           self.isCurrentDigitalHumanLifecycleToken(
                             lifecycleToken,
                             reason: "contextPacketFailure"

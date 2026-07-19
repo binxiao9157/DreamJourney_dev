@@ -147,3 +147,67 @@ final class EchoTurnIntentReducerTests: XCTestCase {
         XCTAssertEqual(reducer.reduce(.retry).currentPhase, .idle)
     }
 }
+
+final class EchoApplicationCoordinatorTests: XCTestCase {
+    func testContextBuildLeaseSupersedesEarlierRequest() {
+        let coordinator = EchoApplicationCoordinator()
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+
+        let first = coordinator.beginContextBuild(
+            turnID: "turn-1",
+            expectedIdentity: identity
+        )
+        let second = coordinator.beginContextBuild(
+            turnID: "turn-2",
+            expectedIdentity: identity
+        )
+
+        XCTAssertFalse(coordinator.isCurrent(first))
+        XCTAssertTrue(coordinator.isCurrent(second))
+        XCTAssertEqual(second.generation, first.generation + 1)
+        XCTAssertEqual(second.turnID, "turn-2")
+        XCTAssertEqual(second.expectedIdentity, identity)
+    }
+
+    func testInvalidatingContextBuildRejectsLateCallback() {
+        let coordinator = EchoApplicationCoordinator()
+        let lease = coordinator.beginContextBuild(
+            turnID: "turn-1",
+            expectedIdentity: EchoKnowledgeContextIdentity(
+                userId: "owner-1",
+                personaScope: "self",
+                digitalHumanId: "digital-human-1"
+            )
+        )
+
+        XCTAssertEqual(coordinator.invalidateContextBuild(), lease)
+        XCTAssertFalse(coordinator.isCurrent(lease))
+        XCTAssertNil(coordinator.activeContextBuildLease)
+    }
+
+    func testSameTurnNewGenerationRejectsOldCallback() {
+        let coordinator = EchoApplicationCoordinator()
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "family",
+            digitalHumanId: "digital-human-2"
+        )
+
+        let first = coordinator.beginContextBuild(
+            turnID: "same-turn",
+            expectedIdentity: identity
+        )
+        let replacement = coordinator.beginContextBuild(
+            turnID: "same-turn",
+            expectedIdentity: identity
+        )
+
+        XCTAssertNotEqual(first.generation, replacement.generation)
+        XCTAssertFalse(coordinator.isCurrent(first))
+        XCTAssertTrue(coordinator.isCurrent(replacement))
+    }
+}

@@ -386,6 +386,48 @@ struct EchoArchiveContextStatus: Equatable {
     }
 }
 
+/// Provider-independent ownership for one backend context-build request.
+/// The controller still owns rendering and DialogEngine submission; this lease
+/// only prevents an older asynchronous response from mutating a newer Echo turn.
+struct EchoContextBuildLease: Equatable {
+    let generation: UInt64
+    let turnID: String
+    let expectedIdentity: EchoKnowledgeContextIdentity
+}
+
+/// Incremental application coordinator for Echo business requests.
+/// Runtime digital-human/audio lifecycles intentionally remain outside this seam.
+final class EchoApplicationCoordinator {
+    private var nextContextBuildGeneration: UInt64 = 0
+    private(set) var activeContextBuildLease: EchoContextBuildLease?
+
+    @discardableResult
+    func beginContextBuild(
+        turnID: String,
+        expectedIdentity: EchoKnowledgeContextIdentity
+    ) -> EchoContextBuildLease {
+        nextContextBuildGeneration &+= 1
+        let lease = EchoContextBuildLease(
+            generation: nextContextBuildGeneration,
+            turnID: turnID,
+            expectedIdentity: expectedIdentity
+        )
+        activeContextBuildLease = lease
+        return lease
+    }
+
+    @discardableResult
+    func invalidateContextBuild() -> EchoContextBuildLease? {
+        let invalidatedLease = activeContextBuildLease
+        activeContextBuildLease = nil
+        return invalidatedLease
+    }
+
+    func isCurrent(_ lease: EchoContextBuildLease) -> Bool {
+        activeContextBuildLease == lease
+    }
+}
+
 final class EchoViewModel {
     private let contextStore: DigitalHumanContextStore
     private let memoryManager: ConversationMemoryManager

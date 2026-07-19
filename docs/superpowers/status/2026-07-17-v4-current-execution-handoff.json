@@ -28,12 +28,13 @@
       "WI-S1-03-04-OWNER_TRUTH_CANDIDATE_CLIENT_G0_COMPLETE",
       "WI-S1-03-04-OWNER_TRUTH_CANDIDATE_USE_CASE_G0_COMPLETE",
       "WI-S1-03-04-ARCHIVE_CANDIDATE_INBOX_UIQA_G1_COMPLETE",
-      "WI-S1-03-05-TURN_INTENT_REDUCER_G0_COMPLETE"
+      "WI-S1-03-05-TURN_INTENT_REDUCER_G0_COMPLETE",
+      "WI-S1-03-05-CONTEXT_BUILD_LEASE_G0_COMPLETE"
     ],
-    "currentSubSlice": "WI-S1-03-05-TURN_INTENT_REDUCER_G0_COMPLETE",
+    "currentSubSlice": "WI-S1-03-05-TURN_INTENT_REDUCER_AND_CONTEXT_LEASE_G0_COMPLETE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "ECHO_TURN_INTENT_REDUCER_STATIC_AND_BUILD_FOR_TESTING_VERIFIED",
+      "G0": "ECHO_TURN_INTENT_AND_CONTEXT_BUILD_LEASE_STATIC_AND_BUILD_FOR_TESTING_VERIFIED",
       "G1": "SIMULATOR_RUNTIME_OPEN_SCHEME_HAS_NO_RUNNABLE_DESTINATION",
       "G2": "ECHO_COORDINATOR_AND_BACKEND_TRANSPORT_SCOPE_OPEN",
       "G3": "PROVIDER_RUNTIME_SCOPE_OPEN"
@@ -41,7 +42,7 @@
     "id": "WI-S1-03-05",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-05 has completed its first G0 slice: EchoTurnIntentReducer provides a provider-independent lifecycle for normal replies, delayed replies, restored due replies, failure and retry. User and AI transcript writes are fenced before memory side effects, while a dedicated restored-delivery intent preserves an authenticated delayed reply after app relaunch without allowing generic stale replies from idle. Tencent QA/POC reply paths explicitly start a turn first. No public UI, Provider contract, KBLite authority or backend route changed. Runnable simulator evidence remains open because the current scheme exposes no runnable simulator destination; coordinator extraction and transport/runtime gates remain open."
+    "summary": "WI-S1-03-05 has completed two G0 sub-slices. EchoTurnIntentReducer provides a provider-independent lifecycle for normal replies, delayed replies, restored due replies, failure and retry; user and AI transcript writes are fenced before memory side effects. EchoApplicationCoordinator now owns the context-build generation lease: a later request or lifecycle invalidation rejects older /context/build callbacks before trace persistence or fallback submission, including callbacks that reuse the same turn ID. Tencent QA/POC reply paths explicitly start a turn first. No public UI, Provider contract, KBLite authority or backend route changed. Runnable simulator evidence remains open because the current scheme exposes no runnable simulator destination; transport, delayed/reply coordination and provider runtime gates remain open."
   },
   "baselines": {
     "backend": "main@32c38f2",
