@@ -299,7 +299,10 @@ private extension AppDelegate {
         case .echoDigitalHumanLifecycleSmoke:
             scheduleUIQAScenario(scenario) { $0.runEchoDigitalHumanLifecycleSmoke() }
         case .digitalHumanRuntimeStubSmoke:
-            scheduleUIQAScenario(scenario) { $0.runDigitalHumanRuntimeStubSmoke() }
+            prepareUIQADigitalHumanRuntimeStubBackendSession { [weak self] authenticated in
+                guard authenticated else { return }
+                self?.scheduleUIQAScenario(scenario) { $0.runDigitalHumanRuntimeStubSmoke() }
+            }
         case .voiceCloneProfileSelectionSmoke:
             scheduleUIQAScenario(scenario) { $0.runVoiceCloneProfileSelectionSmoke() }
         case .voiceCloneSynthesisRuntimeSmoke:
@@ -373,6 +376,127 @@ private extension AppDelegate {
             seedArchiveAnalysisInsightsContext()
         case .seedPendingArchiveAnalysis:
             seedPendingArchiveAnalysisContext()
+        }
+    }
+
+    /// The runtime-stub smoke intentionally exercises the authenticated route
+    /// boundary. Its local backend provides a synthetic V2 challenge only in
+    /// the UI_QA_SIMULATOR process; no production credential is synthesized.
+    func prepareUIQADigitalHumanRuntimeStubBackendSession(
+        completion: @escaping (Bool) -> Void
+    ) {
+        let phone = "13800009999"
+        let fallbackNickname = "UI QA"
+        guard let verificationCode = uiqaArgumentValue(prefix: "DJUIQAIdentityChallengeCode="),
+              !verificationCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            writeDigitalHumanRuntimeStubSmokeResult([
+                "completed": false,
+                "failureReason": "missingUIQAIdentityChallengeCode",
+            ])
+            print("[UI_QA] DigitalHumanRuntimeStubSmoke failed reason=missingUIQAIdentityChallengeCode")
+            completion(false)
+            return
+        }
+
+        DreamJourneyBackendClient.shared.createIdentityChallenge(phone: phone) { [weak self] challengeResult in
+            guard let self else { return }
+            switch challengeResult {
+            case .failure:
+                self.writeDigitalHumanRuntimeStubSmokeResult([
+                    "completed": false,
+                    "failureReason": "identityChallengeCreateFailed",
+                ])
+                print("[UI_QA] DigitalHumanRuntimeStubSmoke failed reason=identityChallengeCreateFailed")
+                completion(false)
+            case .success(let challenge):
+                DreamJourneyBackendClient.shared.verifyIdentityChallenge(
+                    challengeId: challenge.challengeId,
+                    verificationCode: verificationCode,
+                    nickname: fallbackNickname
+                ) { [weak self] verificationResult in
+                    guard let self else { return }
+                    switch verificationResult {
+                    case .failure(let error):
+                        self.writeDigitalHumanRuntimeStubSmokeResult([
+                            "completed": false,
+                            "failureReason": "identityChallengeVerificationFailed",
+                            "error": error.localizedDescription,
+                        ])
+                        print(
+                            "[UI_QA] DigitalHumanRuntimeStubSmoke failed " +
+                            "reason=identityChallengeVerificationFailed error=\(error.localizedDescription)"
+                        )
+                        completion(false)
+                    case .success(let response):
+                        guard let user = response["user"] as? [String: Any],
+                              let userId = user["id"] as? String,
+                              !userId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                            self.writeDigitalHumanRuntimeStubSmokeResult([
+                                "completed": false,
+                                "failureReason": "identityChallengeMissingUser",
+                            ])
+                            print("[UI_QA] DigitalHumanRuntimeStubSmoke failed reason=identityChallengeMissingUser")
+                            completion(false)
+                            return
+                        }
+                        let nickname = (user["nickname"] as? String) ?? fallbackNickname
+                        guard UserManager.shared.loginVerifiedAccount(
+                            phone: phone,
+                            nickname: nickname,
+                            userId: userId
+                        ) else {
+                            self.writeDigitalHumanRuntimeStubSmokeResult([
+                                "completed": false,
+                                "failureReason": "identityChallengeSessionAdoptionFailed",
+                            ])
+                            print("[UI_QA] DigitalHumanRuntimeStubSmoke failed reason=identityChallengeSessionAdoptionFailed")
+                            completion(false)
+                            return
+                        }
+                        self.activateUIQADigitalHumanRuntimeStubAccount(
+                            expectedUserId: userId,
+                            completion: completion
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /// Mirrors the post-login AccountSessionActor activation that the normal
+    /// AppCoordinator performs after a verified identity challenge.
+    func activateUIQADigitalHumanRuntimeStubAccount(
+        expectedUserId: String,
+        completion: @escaping (Bool) -> Void
+    ) {
+        guard let credential = UserManager.shared.accountSessionCredentialSnapshot(),
+              credential.trust == .requiresOnlineValidation,
+              credential.normalizedSubjectId == expectedUserId else {
+            writeDigitalHumanRuntimeStubSmokeResult([
+                "completed": false,
+                "failureReason": "identityChallengeCredentialUnavailable",
+            ])
+            completion(false)
+            return
+        }
+
+        Task { [weak self] in
+            let receipt = await AccountSessionActor.shared.activateVerifiedLogin(credential)
+            await MainActor.run {
+                guard let self else { return }
+                guard receipt.accepted,
+                      receipt.state == .active,
+                      receipt.session?.subjectId == expectedUserId else {
+                    self.writeDigitalHumanRuntimeStubSmokeResult([
+                        "completed": false,
+                        "failureReason": "identityChallengeAccountActivationFailed",
+                    ])
+                    completion(false)
+                    return
+                }
+                print("[UI_QA] DigitalHumanRuntimeStubSmoke authenticated via synthetic V2 challenge")
+                completion(true)
+            }
         }
     }
 
@@ -3183,49 +3307,27 @@ private extension AppDelegate {
     }
 
     func runDigitalHumanRuntimeStubSmoke(retryCount: Int = 0) {
-        guard let tabBarController = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow })?
-            .rootViewController as? WarmTabBarController else {
-            guard retryCount < 20 else {
-                print("[UI_QA] DigitalHumanRuntimeStubSmoke failed reason=missingRootTab")
-                writeDigitalHumanRuntimeStubSmokeResult([
-                    "completed": false,
-                    "failureReason": "missingRootTab"
-                ])
-                return
+        QAEchoScenarioRunner.run(
+            retryCount: retryCount,
+            smokeName: "DigitalHumanRuntimeStubSmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runDigitalHumanRuntimeStubSmoke(retryCount: nextRetryCount)
+            },
+            writeResult: { [weak self] result in
+                self?.writeDigitalHumanRuntimeStubSmokeResult(result)
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQADigitalHumanRuntimeStubSmoke(completion: completion)
+            },
+            completionLog: { result in
+                print(
+                    "[UI_QA] DigitalHumanRuntimeStubSmoke completed " +
+                    "completed=\(result["completed"] as? Bool == true) " +
+                    "provider=\(result["provider"] as? String ?? "missing") " +
+                    "fallback=\(result["fallbackMode"] as? String ?? "missing")"
+                )
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                self?.runDigitalHumanRuntimeStubSmoke(retryCount: retryCount + 1)
-            }
-            return
-        }
-
-        guard let viewControllers = tabBarController.viewControllers,
-              viewControllers.count > 1,
-              let echoNavigationController = viewControllers[1] as? UINavigationController,
-              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
-            print("[UI_QA] DigitalHumanRuntimeStubSmoke failed reason=missingEcho")
-            writeDigitalHumanRuntimeStubSmokeResult([
-                "completed": false,
-                "failureReason": "missingEcho"
-            ])
-            return
-        }
-
-        tabBarController.selectedIndex = 1
-        echoViewController.runUIQADigitalHumanRuntimeStubSmoke { [weak self] payload in
-            var result = payload
-            result["selectedTabIndex"] = tabBarController.selectedIndex
-            self?.writeDigitalHumanRuntimeStubSmokeResult(result)
-            print(
-                "[UI_QA] DigitalHumanRuntimeStubSmoke completed " +
-                "completed=\(result["completed"] as? Bool == true) " +
-                "provider=\(result["provider"] as? String ?? "missing") " +
-                "fallback=\(result["fallbackMode"] as? String ?? "missing")"
-            )
-        }
+        )
     }
 
     func runTencentBackendPCMDriveMockSmoke(retryCount: Int = 0) {

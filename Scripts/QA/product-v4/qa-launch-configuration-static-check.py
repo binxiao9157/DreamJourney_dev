@@ -99,8 +99,8 @@ def main() -> None:
         "Echo QA export adapter must use the compile-isolated result writer",
     )
     require(
-        app_delegate.count("QAEchoScenarioRunner.run(") >= 6,
-        "Echo scenario runner must own all five evidence exports and the lifecycle scenario",
+        app_delegate.count("QAEchoScenarioRunner.run(") >= 7,
+        "Echo scenario runner must own five evidence exports, lifecycle, and runtime-stub scenarios",
     )
     for smoke_name in (
         "EchoTraceExportSmoke",
@@ -109,6 +109,7 @@ def main() -> None:
         "EchoTraceEvidencePackagePanelExportSmoke",
         "EchoQAEvidenceBundleExportSmoke",
         "EchoDigitalHumanLifecycleSmoke",
+        "DigitalHumanRuntimeStubSmoke",
     ):
         require(
             f'smokeName: "{smoke_name}"' in app_delegate,

@@ -4313,15 +4313,19 @@ final class DreamJourneyBackendClient {
         scene: String,
         deviceId: String,
         lifecycleMode: DigitalHumanMode,
+        subjectEligibility: [String: Any]? = nil,
         completion: @escaping (Result<DigitalHumanSessionContract, Error>) -> Void
     ) {
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "userId": userId,
             "personaId": personaId,
             "scene": scene,
             "deviceId": deviceId,
             "lifecycleMode": lifecycleMode.rawValue,
         ]
+        if let subjectEligibility {
+            payload["subjectEligibility"] = subjectEligibility
+        }
         requestJSON(
             path: "/digital-human/sessions",
             method: .post,

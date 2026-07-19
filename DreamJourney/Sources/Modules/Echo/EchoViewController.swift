@@ -7937,7 +7937,17 @@ extension EchoViewController {
             personaId: context.ownerId,
             scene: "echo",
             deviceId: "ios-uiqa-simulator",
-            lifecycleMode: context.mode
+            lifecycleMode: context.mode,
+            subjectEligibility: [
+                "subjectKind": "self",
+                "ageStatus": "adult",
+                "livingStatus": "living",
+                "ageVerified": true,
+                "livenessVerified": true,
+                "subjectMatchesActor": true,
+                "consentVerified": true,
+                "consentPurpose": "digitalHuman",
+            ]
         ) { [weak self] result in
             guard let self else { return }
             guard self.validateEchoAccountLease(

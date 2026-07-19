@@ -1,5 +1,6 @@
 import Foundation
 import KeychainAccess
+import CoreFoundation
 
 struct BackendAuthSessionContract: Codable, Equatable, Sendable {
     let sessionId: String
@@ -275,9 +276,10 @@ struct BackendAuthSessionContract: Codable, Equatable, Sendable {
     }
 
     private static func strictInt(_ value: Any?) -> Int? {
-        guard let value, !(value is Bool) else { return nil }
-        if let value = value as? Int { return value }
-        guard let number = value as? NSNumber else { return nil }
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else {
+            return nil
+        }
         let doubleValue = number.doubleValue
         guard doubleValue.isFinite,
               doubleValue.rounded(.towardZero) == doubleValue,
@@ -381,7 +383,19 @@ final class BackendAuthSessionStore: @unchecked Sendable {
         let encoded = try JSONEncoder().encode(session)
         lock.lock()
         defer { lock.unlock() }
-        try keychain.set(encoded, key: storageKey)
+        do {
+            try keychain.set(encoded, key: storageKey)
+        } catch {
+            #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+            // UIQA simulator builds intentionally omit production keychain
+            // entitlements. Keep the verified V2 session in-process only.
+            cachedSession = session
+            didLoad = true
+            return
+            #else
+            throw error
+            #endif
+        }
         cachedSession = session
         didLoad = true
     }

@@ -29,6 +29,8 @@ DEFAULT_BACKEND_HOST="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr
 BACKEND_BIND_HOST="${BACKEND_BIND_HOST:-0.0.0.0}"
 BACKEND_BASE_URL="${BACKEND_BASE_URL:-http://$DEFAULT_BACKEND_HOST:$BACKEND_PORT}"
 BACKEND_HEALTH_URL="${BACKEND_HEALTH_URL:-http://127.0.0.1:$BACKEND_PORT/health}"
+UIQA_IDENTITY_CHALLENGE_CODE="${UIQA_IDENTITY_CHALLENGE_CODE:-uiqa-runtime-stub-code}"
+UIQA_IDENTITY_BINDING_HMAC_KEY="uiqa-runtime-stub-identity-binding-key-0123456789"
 
 mkdir -p "$OUTPUT_DIR"
 cd "$ROOT_DIR"
@@ -82,7 +84,35 @@ fi
 echo "[digital-human-runtime-stub-smoke] Starting memory backend at $BACKEND_BASE_URL..."
 (
   cd "$BACKEND_ROOT"
-  STORE_BACKEND=memory BACKEND_API_TOKEN= "$PYTHON_BIN" -m uvicorn app.main:app --host "$BACKEND_BIND_HOST" --port "$BACKEND_PORT"
+  STORE_BACKEND=memory \
+    BACKEND_API_TOKEN= \
+    IDENTITY_BINDING_HMAC_KEY="$UIQA_IDENTITY_BINDING_HMAC_KEY" \
+    IDENTITY_CHALLENGE_ADAPTER=synthetic \
+    IDENTITY_CHALLENGE_SYNTHETIC_CODE="$UIQA_IDENTITY_CHALLENGE_CODE" \
+    UIQA_DIGITAL_HUMAN_RUNTIME_STUB=1 \
+    BACKEND_BIND_HOST="$BACKEND_BIND_HOST" \
+    BACKEND_PORT="$BACKEND_PORT" \
+    "$PYTHON_BIN" -c '
+import os
+import uvicorn
+
+import app.main as main
+from app.services.release_policy import ReleasePolicyCommandGate
+
+# This process exists only for the runtime-stub smoke. Let the test traverse
+# the authenticated server boundary and assert the scoped-broker fallback;
+# production policy remains closed to this feature by default.
+visible_features = set(main.RELEASE_POLICY_SERVICE._CLOSED_PILOT_OWNER_VISIBLE)
+visible_features.add("digitalHumanLivePanel")
+main.RELEASE_POLICY_SERVICE._CLOSED_PILOT_OWNER_VISIBLE = visible_features
+main.RELEASE_POLICY_COMMAND_GATE = ReleasePolicyCommandGate(main.RELEASE_POLICY_SERVICE)
+
+uvicorn.run(
+    main.app,
+    host=os.environ["BACKEND_BIND_HOST"],
+    port=int(os.environ["BACKEND_PORT"]),
+)
+'
 ) > "$BACKEND_LOG" 2>&1 &
 BACKEND_PID="$!"
 
@@ -144,7 +174,8 @@ sleep 1
 
 echo "[digital-human-runtime-stub-smoke] Launching runtime stub harness..."
 xcrun simctl launch --console "$SIMULATOR_UDID" "$BUNDLE_ID" \
-  DJRunDigitalHumanRuntimeStubSmoke > "$RUNTIME_LOG" 2>&1 &
+  DJRunDigitalHumanRuntimeStubSmoke \
+  "DJUIQAIdentityChallengeCode=$UIQA_IDENTITY_CHALLENGE_CODE" > "$RUNTIME_LOG" 2>&1 &
 CONSOLE_PID="$!"
 
 deadline=$((SECONDS + LOG_WAIT_TIMEOUT))
