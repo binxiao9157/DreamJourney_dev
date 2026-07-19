@@ -6,6 +6,7 @@ enum AudioOwnerLeaseModelSmoke {
         verifyCurrentLeaseOwnsInterruptionRecovery()
         verifyOwnerDefaultsDescribeTheIntendedRoute()
         verifyObserveOnlyTransitionRejectsStaleRelease()
+        verifyObserveOnlySystemEventsRequireCurrentLease()
         print("Audio owner lease model smoke passed")
     }
 
@@ -81,6 +82,40 @@ enum AudioOwnerLeaseModelSmoke {
         require(
             coordinator.diagnosticsSnapshot().activeLease == digitalHuman,
             "newer Tencent owner must remain active after stale release"
+        )
+    }
+
+    private static func verifyObserveOnlySystemEventsRequireCurrentLease() {
+        let coordinator = AudioOwnerLeaseCoordinator()
+        let scope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+        guard case let .acquired(capture) = coordinator.observeOwner(
+            .echoCapture,
+            priority: .echoCapture,
+            scope: scope
+        ) else {
+            fail("Echo capture should acquire its observation lease")
+        }
+        guard case let .preempted(_, digitalHuman) = coordinator.observeOwner(
+            .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            scope: scope
+        ) else {
+            fail("Tencent playback should preempt Echo capture")
+        }
+        require(
+            coordinator.observeInterruption(for: capture) == .ignoredStaleEvent(active: digitalHuman),
+            "a stale interruption must not interrupt the newer Tencent lease"
+        )
+        guard case let .interrupted(interruptedDigitalHuman) = coordinator.observeInterruption(for: digitalHuman) else {
+            fail("the current Tencent lease should enter interrupted state")
+        }
+        require(
+            coordinator.observeRouteChange(for: capture) == .ignoredStaleEvent(active: interruptedDigitalHuman),
+            "a stale route change must not mutate the newer Tencent lease"
+        )
+        require(
+            coordinator.observeResume(for: interruptedDigitalHuman) == .resumed(digitalHuman),
+            "only the current interrupted Tencent lease may resume"
         )
     }
 

@@ -8,6 +8,12 @@ enum AudioOwnerLeaseObservationResult: Equatable, Sendable {
     case deniedStaleGeneration(active: AudioOwnerLease)
     case released(AudioOwnerLease)
     case ignoredStaleRelease(active: AudioOwnerLease?)
+    case interrupted(AudioOwnerLease)
+    case alreadyInterrupted(AudioOwnerLease)
+    case resumed(AudioOwnerLease)
+    case routeChanged(AudioOwnerLease)
+    case ignoredStaleEvent(active: AudioOwnerLease?)
+    case ignoredNotInterrupted(active: AudioOwnerLease)
 
     var diagnosticCode: String {
         switch self {
@@ -25,6 +31,18 @@ enum AudioOwnerLeaseObservationResult: Equatable, Sendable {
             return "released"
         case .ignoredStaleRelease:
             return "ignoredStaleRelease"
+        case .interrupted:
+            return "interrupted"
+        case .alreadyInterrupted:
+            return "alreadyInterrupted"
+        case .resumed:
+            return "resumed"
+        case .routeChanged:
+            return "routeChanged"
+        case .ignoredStaleEvent:
+            return "ignoredStaleEvent"
+        case .ignoredNotInterrupted:
+            return "ignoredNotInterrupted"
         }
     }
 }
@@ -91,6 +109,59 @@ final class AudioOwnerLeaseCoordinator: @unchecked Sendable {
             result = .released(released)
         case let .ignoredStaleLease(active):
             result = .ignoredStaleRelease(active: active)
+        }
+        record(result)
+        return result
+    }
+
+    @discardableResult
+    func observeInterruption(for lease: AudioOwnerLease) -> AudioOwnerLeaseObservationResult {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let result: AudioOwnerLeaseObservationResult
+        switch model.interrupt(lease) {
+        case let .interrupted(interrupted):
+            result = .interrupted(interrupted)
+        case let .alreadyInterrupted(interrupted):
+            result = .alreadyInterrupted(interrupted)
+        case .ignoredNoActiveLease:
+            result = .ignoredStaleEvent(active: nil)
+        case let .ignoredStaleLease(active):
+            result = .ignoredStaleEvent(active: active)
+        }
+        record(result)
+        return result
+    }
+
+    @discardableResult
+    func observeResume(for lease: AudioOwnerLease) -> AudioOwnerLeaseObservationResult {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let result: AudioOwnerLeaseObservationResult
+        switch model.resume(lease) {
+        case let .resumed(resumed):
+            result = .resumed(resumed)
+        case let .ignoredStaleLease(active):
+            result = .ignoredStaleEvent(active: active)
+        case let .ignoredNotInterrupted(active):
+            result = .ignoredNotInterrupted(active: active)
+        }
+        record(result)
+        return result
+    }
+
+    @discardableResult
+    func observeRouteChange(for lease: AudioOwnerLease) -> AudioOwnerLeaseObservationResult {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let result: AudioOwnerLeaseObservationResult
+        if let activeLease = model.activeLease, activeLease.leaseId == lease.leaseId {
+            result = .routeChanged(activeLease)
+        } else {
+            result = .ignoredStaleEvent(active: model.activeLease)
         }
         record(result)
         return result

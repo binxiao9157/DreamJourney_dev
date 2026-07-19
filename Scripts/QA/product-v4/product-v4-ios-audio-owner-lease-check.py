@@ -61,6 +61,7 @@ def main() -> None:
         "let route: AudioOwnerLeaseRoute",
         "let state: AudioOwnerLeaseState",
         "mutating func interruptActiveLease()",
+        "mutating func interrupt(_ lease: AudioOwnerLease)",
         "mutating func resume(_ lease: AudioOwnerLease)",
     ):
         require(required in model, f"audio owner lease contract missing: {required}")
@@ -73,6 +74,7 @@ def main() -> None:
         "func testEchoLocalPlaybackDefaultPurposeAndRouteAreStable()",
         "func testObserveOnlyTransitionRejectsStaleRelease()",
         "func testRepeatedObserveOnlyOwnerDoesNotCreateAnotherLease()",
+        "func testObserveOnlySystemEventsRequireTheCurrentLeaseToken()",
     ):
         require(test_name in tests, f"audio owner lease XCTest missing: {test_name}")
 
@@ -83,6 +85,9 @@ def main() -> None:
         "final class AudioOwnerLeaseCoordinator",
         "func observeOwner(",
         "func releaseObservedLease(",
+        "func observeInterruption(for lease: AudioOwnerLease)",
+        "func observeResume(for lease: AudioOwnerLease)",
+        "func observeRouteChange(for lease: AudioOwnerLease)",
         "static let shared = AudioOwnerLeaseCoordinator()",
         "does not configure AVAudioSession yet",
     ):
@@ -100,8 +105,12 @@ def main() -> None:
         )
     for required in (
         "private var activeEchoAudioOwnerLease: AudioOwnerLease?",
-        "observeEchoAudioOwnerTransition(",
+        "observeEchoRuntimeAudioOwner(",
         "AudioOwnerLeaseCoordinator.shared.observeOwner(",
+        "AVAudioSession.interruptionNotification",
+        "AVAudioSession.routeChangeNotification",
+        "reason: \"dialogStarted\"",
+        "reason: \"digitalHumanRuntimeSpeaking\"",
         "releaseObservedEchoAudioOwnerLease(reason: \"viewWillDisappear\")",
     ):
         require(required in echo, f"Echo observe-only audio owner adapter missing: {required}")

@@ -200,6 +200,45 @@ final class AudioOwnerLeaseCoordinatorTests: XCTestCase {
         )
         XCTAssertEqual(coordinator.diagnosticsSnapshot().observedTransitionCount, 2)
     }
+
+    func testObserveOnlySystemEventsRequireTheCurrentLeaseToken() {
+        let coordinator = AudioOwnerLeaseCoordinator()
+        let scope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+        guard case let .acquired(capture) = coordinator.observeOwner(
+            .echoCapture,
+            priority: .echoCapture,
+            scope: scope
+        ) else {
+            return XCTFail("Echo capture should acquire its observation lease")
+        }
+        guard case let .preempted(_, digitalHuman) = coordinator.observeOwner(
+            .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            scope: scope
+        ) else {
+            return XCTFail("Tencent playback should preempt Echo capture")
+        }
+
+        XCTAssertEqual(
+            coordinator.observeInterruption(for: capture),
+            .ignoredStaleEvent(active: digitalHuman)
+        )
+        guard case let .interrupted(interruptedDigitalHuman) = coordinator.observeInterruption(for: digitalHuman) else {
+            return XCTFail("the current digital-human lease should enter interrupted state")
+        }
+        XCTAssertEqual(
+            coordinator.observeRouteChange(for: capture),
+            .ignoredStaleEvent(active: interruptedDigitalHuman)
+        )
+        XCTAssertEqual(
+            coordinator.observeResume(for: capture),
+            .ignoredStaleEvent(active: interruptedDigitalHuman)
+        )
+        XCTAssertEqual(
+            coordinator.observeResume(for: interruptedDigitalHuman),
+            .resumed(digitalHuman)
+        )
+    }
 }
 
 final class EchoTurnIntentReducerTests: XCTestCase {

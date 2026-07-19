@@ -89,6 +89,7 @@ enum AudioOwnerLeaseInterruptionResult: Equatable, Sendable {
     case interrupted(AudioOwnerLease)
     case alreadyInterrupted(AudioOwnerLease)
     case ignoredNoActiveLease
+    case ignoredStaleLease(active: AudioOwnerLease?)
 }
 
 enum AudioOwnerLeaseResumeResult: Equatable, Sendable {
@@ -155,6 +156,13 @@ struct AudioOwnerLeaseModel: Sendable {
     mutating func interruptActiveLease() -> AudioOwnerLeaseInterruptionResult {
         guard let activeLease else {
             return .ignoredNoActiveLease
+        }
+        return interrupt(activeLease)
+    }
+
+    mutating func interrupt(_ lease: AudioOwnerLease) -> AudioOwnerLeaseInterruptionResult {
+        guard let activeLease, activeLease.leaseId == lease.leaseId else {
+            return .ignoredStaleLease(active: activeLease)
         }
         guard activeLease.state == .active else {
             return .alreadyInterrupted(activeLease)
