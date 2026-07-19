@@ -27,6 +27,7 @@ let careModels = read("DreamJourney/Sources/Modules/Profile/ProfileCareModels.sw
 let profileView = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
 let dashboard = read("DreamJourney/Sources/Modules/Profile/ProfileElderCareDashboardViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releasePackage = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 
@@ -69,7 +70,6 @@ for phrase in [
 }
 
 for phrase in [
-    "DJRunProfileCareStateSmoke",
     "runProfileCareStateSmoke",
     "writeProfileCareStateSmokeResult",
     "profile-care-state-smoke-result.json",
@@ -80,8 +80,32 @@ for phrase in [
     assertContains(appDelegate, phrase, "AppDelegate should wire care state smoke \(phrase)")
 }
 
+assertContains(
+    featureFlags,
+    "DJRunProfileCareStateSmoke",
+    "QA scenario registry should expose the care state smoke launch argument"
+)
+
+assertContains(
+    featureFlags,
+    "static func selectRootProfileViewController() -> ProfileViewController?",
+    "Profile UIQA runner should own Profile root lookup"
+)
+assertContains(
+    appDelegate,
+    "QAProfileScenarioRunner.selectRootProfileViewController()",
+    "AppDelegate should delegate Profile root lookup to the shared runner"
+)
+assertContains(
+    appDelegate,
+    "QAProfileScenarioRunner.writeResult(",
+    "AppDelegate should delegate Profile care state JSON persistence to the shared runner"
+)
+
 for phrase in [
     "DJRunProfileCareStateSmoke",
+    "run-installable-simulator-uiqa.sh",
+    "source \"$INSTALL_DIR/install.env\"",
     "profile-care-state-smoke-result.json",
     "profile-care-state-smoke",
     "profileCareStateEmpty",

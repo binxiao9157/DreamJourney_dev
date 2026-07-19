@@ -402,21 +402,31 @@ enum QAEchoScenarioRunner {
 /// launch bridge.
 enum QAProfileScenarioRunner {
     static func selectRootProfileTab() -> Bool {
+        selectRootProfileNavigationController() != nil
+    }
+
+    static func selectRootProfileViewController() -> ProfileViewController? {
+        guard let profileNavigationController = selectRootProfileNavigationController() else {
+            return nil
+        }
+        return profileNavigationController.viewControllers.first as? ProfileViewController
+    }
+
+    private static func selectRootProfileNavigationController() -> UINavigationController? {
         guard let tabBarController = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap({ $0.windows })
             .first(where: { $0.isKeyWindow })?
             .rootViewController as? WarmTabBarController,
               let viewControllers = tabBarController.viewControllers,
-              viewControllers.indices.contains(2) else {
-            return false
+              viewControllers.indices.contains(2),
+              let profileNavigationController = viewControllers[2] as? UINavigationController else {
+            return nil
         }
 
-        if let profileNavigationController = viewControllers[2] as? UINavigationController {
-            profileNavigationController.popToRootViewController(animated: false)
-        }
+        profileNavigationController.popToRootViewController(animated: false)
         tabBarController.selectedIndex = 2
-        return true
+        return profileNavigationController
     }
 
     static func writeResult(

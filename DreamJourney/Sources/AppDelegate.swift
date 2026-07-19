@@ -563,15 +563,7 @@ private extension AppDelegate {
     }
 
     func runProfileCareStateSmoke() {
-        guard let tabBarController = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow })?
-            .rootViewController as? WarmTabBarController,
-              let viewControllers = tabBarController.viewControllers,
-              viewControllers.indices.contains(2),
-              let profileNavigationController = viewControllers[2] as? UINavigationController,
-              let profileViewController = profileNavigationController.viewControllers.first as? ProfileViewController else {
+        guard let profileViewController = QAProfileScenarioRunner.selectRootProfileViewController() else {
             writeProfileCareStateSmokeResult(
                 completed: false,
                 states: [],
@@ -582,8 +574,6 @@ private extension AppDelegate {
             return
         }
 
-        profileNavigationController.popToRootViewController(animated: false)
-        tabBarController.selectedIndex = 2
         profileViewController.loadViewIfNeeded()
 
         let states = profileViewController.runUIQAProfileCareStateSmoke()
@@ -612,7 +602,7 @@ private extension AppDelegate {
         writeProfileCareStateSmokeResult(
             completed: completed,
             states: states,
-            profileTabSelected: tabBarController.selectedIndex == 2,
+            profileTabSelected: true,
             failureReason: completed ? nil : "stateContractMismatch"
         )
         print(
@@ -3662,18 +3652,11 @@ private extension AppDelegate {
             result["failureReason"] = failureReason
         }
 
-        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
-              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            print("[UI_QA] ProfileCareStateSmoke failed reason=resultEncoding")
-            return
-        }
-
-        let resultURL = documentsURL.appendingPathComponent("profile-care-state-smoke-result.json")
-        do {
-            try data.write(to: resultURL, options: [.atomic])
-        } catch {
-            print("[UI_QA] ProfileCareStateSmoke failed reason=resultWrite error=\(error.localizedDescription)")
-        }
+        QAProfileScenarioRunner.writeResult(
+            result,
+            fileName: "profile-care-state-smoke-result.json",
+            smokeName: "ProfileCareStateSmoke"
+        )
     }
 
     func writeProfileCareBackendStateSmokeResult(

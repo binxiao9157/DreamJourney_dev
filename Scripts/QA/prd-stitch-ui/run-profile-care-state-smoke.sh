@@ -4,15 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
-SCHEME="${SCHEME:-DreamJourney}"
-CONFIGURATION="${CONFIGURATION:-Debug}"
-SIMULATOR_NAME="${SIMULATOR_NAME:-iPhone 16}"
-SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG UI_QA_SIMULATOR'
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/DerivedDataProfileCareStateSmoke}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/profile-care-state-smoke}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 OUTPUT_DIR="$OUTPUT_ROOT/$RUN_ID"
-BUILD_LOG="$OUTPUT_DIR/build.log"
+INSTALL_DIR="$OUTPUT_DIR/install"
+BUILD_LOG="$INSTALL_DIR/build.log"
 RUNTIME_LOG="$OUTPUT_DIR/runtime.log"
 OS_LOG="$OUTPUT_DIR/oslog.log"
 SCREENSHOT_PATH="$OUTPUT_DIR/01-profile-care-state-smoke.png"
@@ -21,7 +18,6 @@ COMPLETION_PATTERN="ProfileCareStateSmoke completed"
 LOG_WAIT_TIMEOUT="${LOG_WAIT_TIMEOUT:-45}"
 
 mkdir -p "$OUTPUT_DIR"
-cd "$ROOT_DIR"
 
 fail() {
   echo "[profile-care-state-smoke] $*" >&2
@@ -36,44 +32,15 @@ fail() {
   exit 1
 }
 
-booted_simulator_udid() {
-  xcrun simctl list devices booted | awk -F '[()]' '/Booted/ { print $2; exit }'
-}
+echo "[profile-care-state-smoke] Building and installing UIQA app..."
+OUTPUT_DIR="$INSTALL_DIR" \
+DERIVED_DATA_PATH="$DERIVED_DATA_PATH" \
+CONFIGURATION=Debug \
+SWIFT_ACTIVE_COMPILATION_CONDITIONS="DEBUG UI_QA_SIMULATOR" \
+  "$ROOT_DIR/Scripts/QA/prd-stitch-ui/run-installable-simulator-uiqa.sh"
 
-SIMULATOR_UDID="${SIMULATOR_UDID:-$(booted_simulator_udid)}"
-if [[ -z "$SIMULATOR_UDID" ]]; then
-  xcrun simctl boot "$SIMULATOR_NAME" >/dev/null
-  SIMULATOR_UDID="$(booted_simulator_udid)"
-fi
-[[ -n "$SIMULATOR_UDID" ]] || fail "No booted simulator. Set SIMULATOR_UDID or SIMULATOR_NAME."
-
-echo "[profile-care-state-smoke] Building UIQA app..."
-xcodebuild \
-  -workspace DreamJourney.xcworkspace \
-  -scheme "$SCHEME" \
-  -configuration "$CONFIGURATION" \
-  -sdk iphonesimulator \
-  -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  CODE_SIGNING_ALLOWED=NO \
-  SWIFT_ACTIVE_COMPILATION_CONDITIONS="$SWIFT_ACTIVE_COMPILATION_CONDITIONS" \
-  EXCLUDED_ARCHS='' \
-  ARCHS=arm64 \
-  ONLY_ACTIVE_ARCH=NO \
-  build > "$BUILD_LOG"
-
-APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/DreamJourney.app"
-[[ -d "$APP_PATH" ]] || fail "Built app not found: $APP_PATH"
-
-BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
-[[ -n "$BUNDLE_ID" ]] || fail "Unable to read bundle id from $APP_PATH"
-
-echo "[profile-care-state-smoke] Installing $BUNDLE_ID on $SIMULATOR_UDID..."
-xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
-xcrun simctl uninstall "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
-xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
-xcrun simctl spawn "$SIMULATOR_UDID" defaults delete "$BUNDLE_ID" >/dev/null 2>&1 || true
-DATA_CONTAINER="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data)"
+# shellcheck disable=SC1090
+source "$INSTALL_DIR/install.env"
 RESULT_FILE="$DATA_CONTAINER/Documents/profile-care-state-smoke-result.json"
 rm -f "$RESULT_FILE"
 
