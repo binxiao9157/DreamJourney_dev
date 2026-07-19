@@ -1,3 +1,4 @@
+import CryptoKit
 import XCTest
 #if canImport(DreamJourney)
 @testable import DreamJourney
@@ -468,6 +469,377 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
         XCTAssertEqual(store.apply(nonReadyEnvelope, for: lease), .rebuilding)
         XCTAssertFalse(FileManager.default.fileExists(atPath: cacheURL.path))
+    }
+
+    func testContextShadowBuildAcceptsTypedProjectionCitationsWithoutRawContent() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let query = "只允许已确认记忆参与本轮回响"
+        let build = try OwnerTruthContextShadowBuild(
+            backendJSONObject: try contextShadowBuildResponse(for: lease, query: query),
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+            expectedIntent: "echo_chat",
+            expectedQuery: query
+        )
+
+        XCTAssertEqual(build.contextVersion, "echo-context-v4-shadow")
+        XCTAssertTrue(build.shadowOnly)
+        XCTAssertTrue(build.legacyContextUnchanged)
+        XCTAssertFalse(build.legacyContextRead)
+        XCTAssertEqual(build.selectedContext.count, 1)
+        XCTAssertEqual(build.filteredContext.count, 1)
+        XCTAssertEqual(build.rankingTrace.count, 1)
+        XCTAssertEqual(build.citationProof.count, 1)
+        XCTAssertEqual(build.selectedContext[0].citation.sourceID, build.selectedContext[0].sourceReference.sourceID)
+        XCTAssertEqual(build.filteredContext[0].reason, "sensitivity_not_context_eligible")
+
+        let trace = build.traceSummary()
+        XCTAssertEqual(trace.selectedContextCount, 1)
+        XCTAssertEqual(trace.filteredContextCount, 1)
+        XCTAssertEqual(trace.citationCount, 1)
+        XCTAssertEqual(trace.selectedContextRefsBySource["owner-truth-memory-projection"], [
+            "memory-version:00000000-0000-0000-0000-000000000302",
+        ])
+        let encoded = try JSONEncoder().encode(trace)
+        XCTAssertFalse(String(decoding: encoded, as: UTF8.self).contains(query))
+    }
+
+    func testContextShadowBuildAcceptsJSONRoundTripNumberValues() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let query = "网络 JSON 的数字字段必须能稳定解析"
+        let original = try contextShadowBuildResponse(for: lease, query: query)
+        let data = try JSONSerialization.data(withJSONObject: original)
+        let response = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+
+        let build = try OwnerTruthContextShadowBuild(
+            backendJSONObject: response,
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+            expectedIntent: "echo_chat",
+            expectedQuery: query
+        )
+
+        XCTAssertEqual(
+            build.selectedContextSourceCounts,
+            ["owner-truth-memory-projection": 1]
+        )
+    }
+
+    func testContextShadowBuildRejectsBooleanAndFractionalJSONNumbers() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let query = "数字字段不能接受布尔或小数"
+        let expectedVaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+
+        for invalidSourceVersion: Any in [true, 1.5] {
+            var response = try contextShadowBuildResponse(for: lease, query: query)
+            var shadow = try XCTUnwrap(response["contextShadow"] as? [String: Any])
+            var selected = try XCTUnwrap(shadow["selectedContext"] as? [[String: Any]])
+            var sourceRef = try XCTUnwrap(selected[0]["sourceRef"] as? [String: Any])
+            sourceRef["sourceVersion"] = invalidSourceVersion
+            selected[0]["sourceRef"] = sourceRef
+            shadow["selectedContext"] = selected
+            response["contextShadow"] = shadow
+
+            let data = try JSONSerialization.data(withJSONObject: response)
+            let jsonResponse = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: data) as? [String: Any]
+            )
+            XCTAssertThrowsError(
+                try OwnerTruthContextShadowBuild(
+                    backendJSONObject: jsonResponse,
+                    expectedVaultID: expectedVaultID,
+                    expectedIntent: "echo_chat",
+                    expectedQuery: query
+                ),
+                "invalid numeric value: \(invalidSourceVersion)"
+            )
+        }
+    }
+
+    func testContextShadowBuildRejectsRawMemoryValueAndCrossVaultCitation() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let query = "原文必须不进入 QA evidence"
+        let expectedVaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        var response = try contextShadowBuildResponse(for: lease, query: query)
+        var shadow = try XCTUnwrap(response["contextShadow"] as? [String: Any])
+        var selected = try XCTUnwrap(shadow["selectedContext"] as? [[String: Any]])
+        selected[0]["content"] = "不得导出的记忆正文"
+        shadow["selectedContext"] = selected
+        response["contextShadow"] = shadow
+
+        XCTAssertThrowsError(
+            try OwnerTruthContextShadowBuild(
+                backendJSONObject: response,
+                expectedVaultID: expectedVaultID,
+                expectedIntent: "echo_chat",
+                expectedQuery: query
+            )
+        ) { error in
+            guard case .invalidContextCitationShadowBuild = error as? OwnerTruthRemoteContractError else {
+                return XCTFail("expected raw context contract rejection, got \(error)")
+            }
+        }
+
+        response = try contextShadowBuildResponse(for: lease, query: query)
+        shadow = try XCTUnwrap(response["contextShadow"] as? [String: Any])
+        selected = try XCTUnwrap(shadow["selectedContext"] as? [[String: Any]])
+        var sourceRef = try XCTUnwrap(selected[0]["sourceRef"] as? [String: Any])
+        sourceRef["vaultId"] = "vault-other"
+        selected[0]["sourceRef"] = sourceRef
+        shadow["selectedContext"] = selected
+        response["contextShadow"] = shadow
+
+        XCTAssertThrowsError(
+            try OwnerTruthContextShadowBuild(
+                backendJSONObject: response,
+                expectedVaultID: expectedVaultID,
+                expectedIntent: "echo_chat",
+                expectedQuery: query
+            )
+        ) { error in
+            guard case .invalidContextCitationShadowBuild = error as? OwnerTruthRemoteContractError else {
+                return XCTFail("expected cross-vault context contract rejection, got \(error)")
+            }
+        }
+    }
+
+    func testAnswerCitationReceiptBindsExactContextWithoutStoringAnswerText() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let query = "请只依据已确认记忆回答"
+        let answer = "我会基于已确认的记忆继续陪您回顾。"
+        let commandID = "owner-truth-answer-citation-ios-001"
+        let build = try OwnerTruthContextShadowBuild(
+            backendJSONObject: try contextShadowBuildResponse(for: lease, query: query),
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+            expectedIntent: "echo_chat",
+            expectedQuery: query
+        )
+        let receipt = try OwnerTruthAnswerCitationReceipt(
+            backendJSONObject: answerCitationReceiptResponse(
+                for: build,
+                commandID: commandID,
+                query: query,
+                answer: answer
+            ),
+            expectedContext: build,
+            expectedCommandID: commandID,
+            expectedQuery: query,
+            expectedAnswerText: answer
+        )
+
+        XCTAssertEqual(receipt.outcome, .created)
+        XCTAssertEqual(receipt.contextHash, build.contextHash)
+        XCTAssertEqual(receipt.citations.count, build.selectedContext.count)
+        XCTAssertEqual(receipt.citations[0].citation, build.selectedContext[0].citation)
+        XCTAssertEqual(receipt.citations[0].resolution, "current_confirmed_projection_entry")
+
+        let trace = build.traceSummary(receipt: receipt)
+        XCTAssertEqual(trace.answerCitationCount, 1)
+        XCTAssertEqual(trace.contextHash, build.contextHash)
+        let encoded = try JSONEncoder().encode(trace)
+        let text = String(decoding: encoded, as: UTF8.self)
+        XCTAssertFalse(text.contains(query))
+        XCTAssertFalse(text.contains(answer))
+    }
+
+    func testAnswerCitationReceiptRejectsChangedContextHash() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let query = "上下文 hash 必须精确绑定"
+        let answer = "不能把新旧上下文混在同一份回答证据里。"
+        let commandID = "owner-truth-answer-citation-ios-002"
+        let build = try OwnerTruthContextShadowBuild(
+            backendJSONObject: try contextShadowBuildResponse(for: lease, query: query),
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+            expectedIntent: "echo_chat",
+            expectedQuery: query
+        )
+        var response = answerCitationReceiptResponse(
+            for: build,
+            commandID: commandID,
+            query: query,
+            answer: answer
+        )
+        var receipt = try XCTUnwrap(response["answerCitation"] as? [String: Any])
+        receipt["contextHash"] = digest("different-context")
+        response["answerCitation"] = receipt
+
+        XCTAssertThrowsError(
+            try OwnerTruthAnswerCitationReceipt(
+                backendJSONObject: response,
+                expectedContext: build,
+                expectedCommandID: commandID,
+                expectedQuery: query,
+                expectedAnswerText: answer
+            )
+        ) { error in
+            guard case .invalidAnswerCitationReceipt = error as? OwnerTruthRemoteContractError else {
+                return XCTFail("expected changed context rejection, got \(error)")
+            }
+        }
+    }
+
+    private func contextShadowBuildResponse(
+        for lease: AccountLease,
+        query: String
+    ) throws -> [String: Any] {
+        let selectedCitation: [String: Any] = [
+            "vaultId": lease.vaultId,
+            "memoryId": "00000000-0000-0000-0000-000000000301",
+            "memoryVersionId": "00000000-0000-0000-0000-000000000302",
+            "memoryVersion": 2,
+            "sourceId": "00000000-0000-0000-0000-000000000303",
+            "sourceVersion": 1,
+            "contentHash": digest("selected-content"),
+        ]
+        let selectedSourceRef: [String: Any] = [
+            "vaultId": lease.vaultId,
+            "sourceId": "00000000-0000-0000-0000-000000000303",
+            "sourceVersion": 1,
+        ]
+        let selected: [String: Any] = [
+            "source": "owner-truth-memory-projection",
+            "refId": "memory-version:00000000-0000-0000-0000-000000000302",
+            "memoryId": "00000000-0000-0000-0000-000000000301",
+            "memoryVersionId": "00000000-0000-0000-0000-000000000302",
+            "memoryVersion": 2,
+            "memoryKind": "experience",
+            "perspectiveType": "firstPerson",
+            "epistemicStatus": "recalled",
+            "sensitivity": "standard",
+            "visibility": "owner",
+            "sourceRef": selectedSourceRef,
+            "citation": selectedCitation,
+            "reason": "confirmed_current_memory_version",
+            "rank": [
+                "position": 1,
+                "strategy": "projectionCitationOrder",
+            ],
+        ]
+        let filteredCitation: [String: Any] = [
+            "vaultId": lease.vaultId,
+            "memoryId": "00000000-0000-0000-0000-000000000311",
+            "memoryVersionId": "00000000-0000-0000-0000-000000000312",
+            "memoryVersion": 1,
+            "sourceId": "00000000-0000-0000-0000-000000000313",
+            "sourceVersion": 1,
+            "contentHash": digest("filtered-content"),
+        ]
+        let filtered: [String: Any] = [
+            "source": "owner-truth-memory-projection",
+            "refId": "memory-version:00000000-0000-0000-0000-000000000312",
+            "memoryId": "00000000-0000-0000-0000-000000000311",
+            "memoryVersionId": "00000000-0000-0000-0000-000000000312",
+            "memoryKind": "experience",
+            "sensitivity": "sensitive",
+            "sourceRef": [
+                "vaultId": lease.vaultId,
+                "sourceId": "00000000-0000-0000-0000-000000000313",
+                "sourceVersion": 1,
+            ],
+            "citation": filteredCitation,
+            "reason": "sensitivity_not_context_eligible",
+        ]
+        let shadow: [String: Any] = [
+            "schemaVersion": "owner-truth-context-shadow-build-v1",
+            "contextVersion": "echo-context-v4-shadow",
+            "policyVersion": "owner-truth-context-shadow-build-policy-v1",
+            "shadowOnly": true,
+            "legacyContextUnchanged": true,
+            "legacyContextRead": false,
+            "contextHash": digest("context-hash"),
+            "request": [
+                "intent": "echo_chat",
+                "queryHash": digest(query),
+                "queryLength": query.unicodeScalars.count,
+            ],
+            "authority": [
+                "source": "owner-truth-memory-projection",
+                "state": "ready",
+                "vaultId": lease.vaultId,
+                "authorityEpoch": 7,
+                "projectionCheckpoint": digest("projection-checkpoint"),
+            ],
+            "selectedContext": [selected],
+            "filteredContext": [filtered],
+            "rankingTrace": [[
+                "refId": "memory-version:00000000-0000-0000-0000-000000000302",
+                "source": "owner-truth-memory-projection",
+                "selected": true,
+                "reason": "confirmed_current_memory_version",
+                "rank": [
+                    "position": 1,
+                    "strategy": "projectionCitationOrder",
+                ],
+            ]],
+            "citationProof": [[
+                "refId": "memory-version:00000000-0000-0000-0000-000000000302",
+                "source": "owner-truth-memory-projection",
+                "resolved": true,
+                "resolution": "current_confirmed_projection_entry",
+                "citation": selectedCitation,
+                "sourceRef": selectedSourceRef,
+            ]],
+            "selectedContextSourceCounts": [
+                "owner-truth-memory-projection": 1,
+            ],
+            "fallbacks": [],
+            "trace": [
+                "selectedContextCount": 1,
+                "filteredContextCount": 1,
+                "rankingTraceCount": 1,
+                "citationProofCount": 1,
+                "fallbackCount": 0,
+            ],
+        ]
+        return [
+            "schemaVersion": "owner-truth-context-shadow-build-response-v1",
+            "contextShadow": shadow,
+        ]
+    }
+
+    private func answerCitationReceiptResponse(
+        for context: OwnerTruthContextShadowBuild,
+        commandID: String,
+        query: String,
+        answer: String
+    ) -> [String: Any] {
+        let citations: [[String: Any]] = context.selectedContext.enumerated().map { index, item in
+            [
+                "citationId": index == 0
+                    ? "00000000-0000-0000-0000-000000000321"
+                    : UUID().uuidString.lowercased(),
+                "position": index + 1,
+                "resolved": true,
+                "resolution": "current_confirmed_projection_entry",
+                "citation": item.citation.backendJSONObject,
+            ]
+        }
+        return [
+            "schemaVersion": "owner-truth-answer-citation-receipt-response-v1",
+            "status": "created",
+            "answerCitation": [
+                "schemaVersion": "owner-truth-answer-citation-v1",
+                "outcome": "created",
+                "answerId": "00000000-0000-0000-0000-000000000320",
+                "commandIdHash": digest(commandID),
+                "contextHash": context.contextHash,
+                "contextVersion": context.contextVersion,
+                "queryHash": digest(query),
+                "answerHash": digest(answer),
+                "answerLength": answer.unicodeScalars.count,
+                "authorityEpoch": context.authority.authorityEpoch ?? NSNull(),
+                "projectionCheckpoint": context.authority.projectionCheckpoint ?? NSNull(),
+                "citationCount": citations.count,
+                "citations": citations,
+                "fallbacks": context.fallbacks,
+            ],
+        ]
+    }
+
+    private func digest(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 
     private func makeActiveRuntime() throws -> (AccountLeaseRuntime, AccountLease) {

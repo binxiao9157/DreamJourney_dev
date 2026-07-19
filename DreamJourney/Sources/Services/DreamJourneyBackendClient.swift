@@ -3093,6 +3093,25 @@ struct EchoContextV2ClueSummary: Codable {
     }
 }
 
+/// Maps the Owner Truth QA shadow into the existing Echo evidence shape without
+/// widening the public Context Packet or retaining raw query/memory text.
+extension EchoContextV2ClueSummary {
+    init(ownerTruthContextCitation summary: OwnerTruthContextCitationTraceSummary) {
+        contextVersion = summary.contextVersion
+        selectedContextRefs = summary.selectedContextRefs
+        selectedContextRefsBySource = summary.selectedContextRefsBySource
+        archiveRefs = []
+        kbFactRefs = []
+        personaRefs = []
+        careRefs = []
+        filteredContextReasons = summary.filteredContextReasons
+        rankingTraceCount = summary.rankingTraceCount
+        selectedContextSourceCounts = summary.selectedContextSourceCounts
+        fallbacks = summary.fallbacks
+        latencyMs = 0
+    }
+}
+
 struct EchoContextBuildEvidenceSummary: Codable {
     let status: String
     let traceId: String
@@ -4145,6 +4164,10 @@ final class DreamJourneyBackendClient {
         hasExplicitBaseURL && OwnerTruthKBLiteCompatibilityQAGate.isEnabled
     }
 
+    var isOwnerTruthContextCitationQAConfigured: Bool {
+        hasExplicitBaseURL && OwnerTruthContextCitationQAGate.isEnabled
+    }
+
     private init() {
         let configured = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendBaseURL") as? String
         let raw = configured?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -4760,6 +4783,110 @@ final class DreamJourneyBackendClient {
                         backendJSONObject: object,
                         expectedVaultID: vaultID,
                         expectedOwnerSubjectID: expectedOwnerSubjectID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func buildOwnerTruthContextShadow(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        intent: String,
+        query: String,
+        completion: @escaping (Result<OwnerTruthContextShadowBuild, Error>) -> Void
+    ) {
+        guard OwnerTruthContextCitationQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthContextCitation",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/context-shadow/build",
+            method: .post,
+            payload: [
+                "intent": intent,
+                "query": query,
+            ],
+            authPolicy: .userRequired,
+            sessionUserId: expectedOwnerSubjectID,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthContextShadowBuild(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID,
+                        expectedIntent: intent,
+                        expectedQuery: query
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func recordOwnerTruthAnswerCitationReceipt(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        expectedContext: OwnerTruthContextShadowBuild,
+        commandID: String,
+        intent: String,
+        query: String,
+        answerText: String,
+        completion: @escaping (Result<OwnerTruthAnswerCitationReceipt, Error>) -> Void
+    ) {
+        guard OwnerTruthContextCitationQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthContextCitation",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        guard expectedContext.authority.vaultID == vaultID else {
+            DispatchQueue.main.async {
+                completion(.failure(OwnerTruthRemoteContractError.invalidAnswerCitationReceipt(
+                    "requested Vault does not match the selected Context"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/answer-citation-receipts",
+            method: .post,
+            payload: [
+                "commandId": commandID,
+                "intent": intent,
+                "query": query,
+                "answerText": answerText,
+            ],
+            authPolicy: .userRequired,
+            sessionUserId: expectedOwnerSubjectID,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthAnswerCitationReceipt(
+                        backendJSONObject: object,
+                        expectedContext: expectedContext,
+                        expectedCommandID: commandID,
+                        expectedQuery: query,
+                        expectedAnswerText: answerText
                     )))
                 } catch {
                     completion(.failure(error))
@@ -6492,3 +6619,4 @@ final class DreamJourneyBackendClient {
 
 extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}
+extension DreamJourneyBackendClient: OwnerTruthContextCitationClient {}

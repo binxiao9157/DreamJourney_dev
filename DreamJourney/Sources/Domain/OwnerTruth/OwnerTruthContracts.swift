@@ -132,6 +132,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidDecision(String)
     case invalidCommand(String)
     case invalidKBLiteCompatibilityReadEnvelope(String)
+    case invalidContextCitationShadowBuild(String)
+    case invalidAnswerCitationReceipt(String)
 
     var errorDescription: String? {
         switch self {
@@ -143,6 +145,10 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "候选审核命令无效：\(detail)"
         case .invalidKBLiteCompatibilityReadEnvelope(let detail):
             return "兼容读取合同无效：\(detail)"
+        case .invalidContextCitationShadowBuild(let detail):
+            return "上下文引用合同无效：\(detail)"
+        case .invalidAnswerCitationReceipt(let detail):
+            return "回答引用回执合同无效：\(detail)"
         }
     }
 }
@@ -1610,4 +1616,1294 @@ struct OwnerTruthMemoryVersion: Codable, Equatable, Sendable {
     let isCurrent: Bool
     let schemaVersion: String
     let contentHash: String
+}
+
+// MARK: - Default-off Owner QA Context / typed Citation
+
+/// This shadow gate is separate from the public Context Packet and legacy
+/// KBLite. It must never make the QA-only owner projection readable in a
+/// release build.
+enum OwnerTruthContextCitationQAGate {
+    static let launchArgument = "DJEnableOwnerTruthContextCitationQA"
+
+    static var isEnabled: Bool {
+        #if DEBUG || UI_QA_SIMULATOR
+        return ProcessInfo.processInfo.arguments.contains(launchArgument)
+        #else
+        return false
+        #endif
+    }
+}
+
+enum OwnerTruthContextShadowState: String, Codable, Equatable, Sendable {
+    case disabled
+    case rebuilding
+    case ready
+}
+
+enum OwnerTruthAnswerCitationOutcome: String, Codable, Equatable, Sendable {
+    case created
+    case deduplicated
+}
+
+private enum OwnerTruthContextCitationContract {
+    static let projectionSource = "owner-truth-memory-projection"
+    static let contextBuildResponseSchemaVersion = "owner-truth-context-shadow-build-response-v1"
+    static let contextBuildSchemaVersion = "owner-truth-context-shadow-build-v1"
+    static let contextVersion = "echo-context-v4-shadow"
+    static let policyVersion = "owner-truth-context-shadow-build-policy-v1"
+    static let answerCitationResponseSchemaVersion = "owner-truth-answer-citation-receipt-response-v1"
+    static let answerCitationSchemaVersion = "owner-truth-answer-citation-v1"
+    static let citationResolution = "current_confirmed_projection_entry"
+    static let rankStrategy = "projectionCitationOrder"
+    static let unavailableFallback = "owner_truth_context_unavailable_no_personal_memory"
+    static let emptyFallback = "owner_truth_context_no_eligible_personal_memory"
+
+    /// A QA evidence response is citation-only. These fields would carry
+    /// human-readable private content and are rejected at the mobile boundary.
+    private static let rawContentKeys: Set<String> = [
+        "answer",
+        "answerText",
+        "claim",
+        "content",
+        "memoryContent",
+        "query",
+        "statement",
+        "summary",
+        "text",
+        "value",
+    ]
+
+    static func contextError(_ detail: String) -> OwnerTruthRemoteContractError {
+        .invalidContextCitationShadowBuild(detail)
+    }
+
+    static func receiptError(_ detail: String) -> OwnerTruthRemoteContractError {
+        .invalidAnswerCitationReceipt(detail)
+    }
+
+    static func nonEmptyString(
+        _ value: Any?,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> String {
+        guard let value = value as? String else {
+            throw error("\(field) must be a non-empty string")
+        }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            throw error("\(field) must be a non-empty string")
+        }
+        return normalized
+    }
+
+    static func optionalString(
+        _ value: Any?,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> String? {
+        guard let value, !(value is NSNull) else { return nil }
+        return try nonEmptyString(value, field: field, error: error)
+    }
+
+    static func bool(
+        _ value: Any?,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> Bool {
+        guard let value = value as? Bool else {
+            throw error("\(field) must be a Boolean")
+        }
+        return value
+    }
+
+    static func positiveInt(
+        _ value: Any?,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> Int {
+        guard let value = integer(value), value > 0 else {
+            throw error("\(field) must be a positive integer")
+        }
+        return value
+    }
+
+    static func nonnegativeInt(
+        _ value: Any?,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> Int {
+        guard let value = integer(value), value >= 0 else {
+            throw error("\(field) must be a non-negative integer")
+        }
+        return value
+    }
+
+    /// `JSONSerialization` exposes numeric JSON values as `NSNumber`. Keep the
+    /// wire contract strict by accepting only finite, in-range integral values
+    /// and rejecting Boolean and fractional numbers.
+    private static func integer(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else {
+            return nil
+        }
+        let doubleValue = number.doubleValue
+        guard doubleValue.isFinite,
+              doubleValue.rounded(.towardZero) == doubleValue,
+              number.compare(NSNumber(value: Int.min)) != .orderedAscending,
+              number.compare(NSNumber(value: Int.max)) != .orderedDescending else {
+            return nil
+        }
+        return number.intValue
+    }
+
+    static func optionalNonnegativeInt(
+        _ value: Any?,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> Int? {
+        guard let value, !(value is NSNull) else { return nil }
+        return try nonnegativeInt(value, field: field, error: error)
+    }
+
+    static func object(
+        _ value: Any?,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> [String: Any] {
+        guard let value = value as? [String: Any] else {
+            throw error("\(field) must be an object")
+        }
+        return value
+    }
+
+    static func objects(
+        _ value: Any?,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> [[String: Any]] {
+        guard let value = value as? [[String: Any]] else {
+            throw error("\(field) must be an object array")
+        }
+        return value
+    }
+
+    static func strings(
+        _ value: Any?,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> [String] {
+        guard let value = value as? [String] else {
+            throw error("\(field) must be a string array")
+        }
+        return try value.enumerated().map { index, value in
+            try nonEmptyString(value, field: "\(field)[\(index)]", error: error)
+        }
+    }
+
+    static func sha256(
+        _ value: Any?,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> String {
+        let normalized = try nonEmptyString(value, field: field, error: error)
+        guard normalized.count == 64,
+              normalized == normalized.lowercased(),
+              normalized.allSatisfy(\.isHexDigit) else {
+            throw error("\(field) must be a lowercase sha256 digest")
+        }
+        return normalized
+    }
+
+    static func optionalSHA256(
+        _ value: Any?,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> String? {
+        guard let value, !(value is NSNull) else { return nil }
+        return try sha256(value, field: field, error: error)
+    }
+
+    static func recordID(
+        _ value: Any?,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> OwnerTruthRecordID {
+        let rawValue = try nonEmptyString(value, field: field, error: error)
+        guard let uuid = UUID(uuidString: rawValue) else {
+            throw error("\(field) must be a UUID")
+        }
+        return OwnerTruthRecordID(rawValue: uuid)
+    }
+
+    static func digest(_ text: String) -> String {
+        SHA256.hash(data: Data(text.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    static func normalizedText(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func scalarCount(_ value: String) -> Int {
+        value.unicodeScalars.count
+    }
+
+    static func ensureNoRawContent(
+        _ object: [String: Any],
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws {
+        for key in rawContentKeys where object[key] != nil && !(object[key] is NSNull) {
+            throw error("\(field) contains prohibited raw field \(key)")
+        }
+    }
+
+    static func safeCode(
+        _ value: Any?,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> String {
+        let normalized = try nonEmptyString(value, field: field, error: error)
+        guard normalized.count <= 160,
+              normalized.unicodeScalars.allSatisfy({ scalar in
+                  switch scalar.value {
+                  case 45, 46, 58, 95, 48...57, 65...90, 97...122:
+                      return true
+                  default:
+                      return false
+                  }
+              }) else {
+            throw error("\(field) must be a bounded diagnostic code")
+        }
+        return normalized
+    }
+}
+
+struct OwnerTruthContextCitation: Codable, Equatable, Sendable {
+    let vaultID: OwnerTruthVaultID
+    let memoryID: OwnerTruthRecordID
+    let memoryVersionID: OwnerTruthRecordID
+    let memoryVersion: Int
+    let sourceID: OwnerTruthRecordID
+    let sourceVersion: Int
+    let contentHash: String
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID,
+        error: (String) -> OwnerTruthRemoteContractError = OwnerTruthContextCitationContract.contextError
+    ) throws {
+        try OwnerTruthContextCitationContract.ensureNoRawContent(
+            object,
+            field: "citation",
+            error: error
+        )
+        let vaultID = try OwnerTruthContextCitationContract.nonEmptyString(
+            object["vaultId"],
+            field: "citation.vaultId",
+            error: error
+        )
+        guard vaultID == expectedVaultID.rawValue else {
+            throw error("citation.vaultId does not match the requested Vault")
+        }
+        self.vaultID = expectedVaultID
+        self.memoryID = try OwnerTruthContextCitationContract.recordID(
+            object["memoryId"],
+            field: "citation.memoryId",
+            error: error
+        )
+        self.memoryVersionID = try OwnerTruthContextCitationContract.recordID(
+            object["memoryVersionId"],
+            field: "citation.memoryVersionId",
+            error: error
+        )
+        self.memoryVersion = try OwnerTruthContextCitationContract.positiveInt(
+            object["memoryVersion"],
+            field: "citation.memoryVersion",
+            error: error
+        )
+        self.sourceID = try OwnerTruthContextCitationContract.recordID(
+            object["sourceId"],
+            field: "citation.sourceId",
+            error: error
+        )
+        self.sourceVersion = try OwnerTruthContextCitationContract.positiveInt(
+            object["sourceVersion"],
+            field: "citation.sourceVersion",
+            error: error
+        )
+        self.contentHash = try OwnerTruthContextCitationContract.sha256(
+            object["contentHash"],
+            field: "citation.contentHash",
+            error: error
+        )
+    }
+
+    var backendJSONObject: [String: Any] {
+        [
+            "vaultId": vaultID.rawValue,
+            "memoryId": memoryID.rawValue.uuidString.lowercased(),
+            "memoryVersionId": memoryVersionID.rawValue.uuidString.lowercased(),
+            "memoryVersion": memoryVersion,
+            "sourceId": sourceID.rawValue.uuidString.lowercased(),
+            "sourceVersion": sourceVersion,
+            "contentHash": contentHash,
+        ]
+    }
+}
+
+struct OwnerTruthContextSourceReference: Codable, Equatable, Sendable {
+    let vaultID: OwnerTruthVaultID
+    let sourceID: OwnerTruthRecordID
+    let sourceVersion: Int
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID,
+        error: (String) -> OwnerTruthRemoteContractError = OwnerTruthContextCitationContract.contextError
+    ) throws {
+        try OwnerTruthContextCitationContract.ensureNoRawContent(
+            object,
+            field: "sourceRef",
+            error: error
+        )
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            object["vaultId"],
+            field: "sourceRef.vaultId",
+            error: error
+        ) == expectedVaultID.rawValue else {
+            throw error("sourceRef.vaultId does not match the requested Vault")
+        }
+        self.vaultID = expectedVaultID
+        self.sourceID = try OwnerTruthContextCitationContract.recordID(
+            object["sourceId"],
+            field: "sourceRef.sourceId",
+            error: error
+        )
+        self.sourceVersion = try OwnerTruthContextCitationContract.positiveInt(
+            object["sourceVersion"],
+            field: "sourceRef.sourceVersion",
+            error: error
+        )
+    }
+
+    var backendJSONObject: [String: Any] {
+        [
+            "vaultId": vaultID.rawValue,
+            "sourceId": sourceID.rawValue.uuidString.lowercased(),
+            "sourceVersion": sourceVersion,
+        ]
+    }
+}
+
+struct OwnerTruthContextCitationRank: Codable, Equatable, Sendable {
+    let position: Int
+    let strategy: String
+
+    init(backendJSONObject object: [String: Any]) throws {
+        let error = OwnerTruthContextCitationContract.contextError
+        try OwnerTruthContextCitationContract.ensureNoRawContent(object, field: "rank", error: error)
+        position = try OwnerTruthContextCitationContract.positiveInt(
+            object["position"],
+            field: "rank.position",
+            error: error
+        )
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            object["strategy"],
+            field: "rank.strategy",
+            error: error
+        ) == OwnerTruthContextCitationContract.rankStrategy else {
+            throw error("rank.strategy is not the approved projection order")
+        }
+        strategy = OwnerTruthContextCitationContract.rankStrategy
+    }
+}
+
+struct OwnerTruthContextShadowItem: Codable, Equatable, Sendable, Identifiable {
+    let source: String
+    let refID: String
+    let citation: OwnerTruthContextCitation
+    let sourceReference: OwnerTruthContextSourceReference
+    let reason: String
+    let rank: OwnerTruthContextCitationRank?
+    let memoryKind: String?
+    let perspectiveType: String?
+    let epistemicStatus: String?
+    let sensitivity: String?
+    let visibility: String?
+
+    var id: String { refID }
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID,
+        requiresRank: Bool
+    ) throws {
+        let error = OwnerTruthContextCitationContract.contextError
+        try OwnerTruthContextCitationContract.ensureNoRawContent(object, field: "context item", error: error)
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            object["source"],
+            field: "contextItem.source",
+            error: error
+        ) == OwnerTruthContextCitationContract.projectionSource else {
+            throw error("contextItem.source is not the Owner Truth projection")
+        }
+        source = OwnerTruthContextCitationContract.projectionSource
+        refID = try OwnerTruthContextCitationContract.nonEmptyString(
+            object["refId"],
+            field: "contextItem.refId",
+            error: error
+        )
+        let citationObject = try OwnerTruthContextCitationContract.object(
+            object["citation"],
+            field: "contextItem.citation",
+            error: error
+        )
+        let sourceReferenceObject = try OwnerTruthContextCitationContract.object(
+            object["sourceRef"],
+            field: "contextItem.sourceRef",
+            error: error
+        )
+        citation = try OwnerTruthContextCitation(
+            backendJSONObject: citationObject,
+            expectedVaultID: expectedVaultID,
+            error: error
+        )
+        sourceReference = try OwnerTruthContextSourceReference(
+            backendJSONObject: sourceReferenceObject,
+            expectedVaultID: expectedVaultID,
+            error: error
+        )
+        guard sourceReference.sourceID == citation.sourceID,
+              sourceReference.sourceVersion == citation.sourceVersion,
+              refID == "memory-version:\(citation.memoryVersionID.rawValue.uuidString.lowercased())" else {
+            throw error("context item citation/source reference identity does not match")
+        }
+        reason = try OwnerTruthContextCitationContract.safeCode(
+            object["reason"],
+            field: "contextItem.reason",
+            error: error
+        )
+        if requiresRank {
+            rank = try OwnerTruthContextCitationRank(
+                backendJSONObject: OwnerTruthContextCitationContract.object(
+                    object["rank"],
+                    field: "contextItem.rank",
+                    error: error
+                )
+            )
+        } else {
+            guard object["rank"] == nil || object["rank"] is NSNull else {
+                throw error("filtered Context item must not carry a rank")
+            }
+            rank = nil
+        }
+        memoryKind = try Self.optionalDiagnosticCode(object["memoryKind"], field: "contextItem.memoryKind")
+        perspectiveType = try Self.optionalDiagnosticCode(object["perspectiveType"], field: "contextItem.perspectiveType")
+        epistemicStatus = try Self.optionalDiagnosticCode(object["epistemicStatus"], field: "contextItem.epistemicStatus")
+        sensitivity = try Self.optionalDiagnosticCode(object["sensitivity"], field: "contextItem.sensitivity")
+        visibility = try Self.optionalDiagnosticCode(object["visibility"], field: "contextItem.visibility")
+    }
+
+    private static func optionalDiagnosticCode(_ value: Any?, field: String) throws -> String? {
+        guard let value, !(value is NSNull) else { return nil }
+        return try OwnerTruthContextCitationContract.safeCode(
+            value,
+            field: field,
+            error: OwnerTruthContextCitationContract.contextError
+        )
+    }
+}
+
+struct OwnerTruthContextRankingTrace: Codable, Equatable, Sendable {
+    let refID: String
+    let source: String
+    let selected: Bool
+    let reason: String
+    let rank: OwnerTruthContextCitationRank
+
+    init(backendJSONObject object: [String: Any]) throws {
+        let error = OwnerTruthContextCitationContract.contextError
+        try OwnerTruthContextCitationContract.ensureNoRawContent(object, field: "rankingTrace", error: error)
+        refID = try OwnerTruthContextCitationContract.nonEmptyString(
+            object["refId"],
+            field: "rankingTrace.refId",
+            error: error
+        )
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            object["source"],
+            field: "rankingTrace.source",
+            error: error
+        ) == OwnerTruthContextCitationContract.projectionSource else {
+            throw error("rankingTrace.source is not the Owner Truth projection")
+        }
+        source = OwnerTruthContextCitationContract.projectionSource
+        selected = try OwnerTruthContextCitationContract.bool(
+            object["selected"],
+            field: "rankingTrace.selected",
+            error: error
+        )
+        guard selected else {
+            throw error("rankingTrace must only describe selected Context")
+        }
+        reason = try OwnerTruthContextCitationContract.safeCode(
+            object["reason"],
+            field: "rankingTrace.reason",
+            error: error
+        )
+        rank = try OwnerTruthContextCitationRank(
+            backendJSONObject: OwnerTruthContextCitationContract.object(
+                object["rank"],
+                field: "rankingTrace.rank",
+                error: error
+            )
+        )
+    }
+}
+
+struct OwnerTruthContextCitationProof: Codable, Equatable, Sendable {
+    let refID: String
+    let source: String
+    let resolved: Bool
+    let resolution: String
+    let citation: OwnerTruthContextCitation
+    let sourceReference: OwnerTruthContextSourceReference
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        let error = OwnerTruthContextCitationContract.contextError
+        try OwnerTruthContextCitationContract.ensureNoRawContent(object, field: "citationProof", error: error)
+        refID = try OwnerTruthContextCitationContract.nonEmptyString(
+            object["refId"],
+            field: "citationProof.refId",
+            error: error
+        )
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            object["source"],
+            field: "citationProof.source",
+            error: error
+        ) == OwnerTruthContextCitationContract.projectionSource else {
+            throw error("citationProof.source is not the Owner Truth projection")
+        }
+        source = OwnerTruthContextCitationContract.projectionSource
+        resolved = try OwnerTruthContextCitationContract.bool(
+            object["resolved"],
+            field: "citationProof.resolved",
+            error: error
+        )
+        guard resolved,
+              try OwnerTruthContextCitationContract.nonEmptyString(
+                object["resolution"],
+                field: "citationProof.resolution",
+                error: error
+              ) == OwnerTruthContextCitationContract.citationResolution else {
+            throw error("citationProof is not a resolved current projection entry")
+        }
+        resolution = OwnerTruthContextCitationContract.citationResolution
+        citation = try OwnerTruthContextCitation(
+            backendJSONObject: OwnerTruthContextCitationContract.object(
+                object["citation"],
+                field: "citationProof.citation",
+                error: error
+            ),
+            expectedVaultID: expectedVaultID,
+            error: error
+        )
+        sourceReference = try OwnerTruthContextSourceReference(
+            backendJSONObject: OwnerTruthContextCitationContract.object(
+                object["sourceRef"],
+                field: "citationProof.sourceRef",
+                error: error
+            ),
+            expectedVaultID: expectedVaultID,
+            error: error
+        )
+        guard citation.sourceID == sourceReference.sourceID,
+              citation.sourceVersion == sourceReference.sourceVersion else {
+            throw error("citationProof source reference does not match citation")
+        }
+    }
+}
+
+struct OwnerTruthContextShadowRequestSummary: Codable, Equatable, Sendable {
+    let intent: String
+    let queryHash: String?
+    let queryLength: Int
+
+    init(backendJSONObject object: [String: Any], expectedIntent: String, expectedQuery: String) throws {
+        let error = OwnerTruthContextCitationContract.contextError
+        try OwnerTruthContextCitationContract.ensureNoRawContent(object, field: "context request", error: error)
+        let normalizedIntent = OwnerTruthContextCitationContract.normalizedText(expectedIntent)
+        let expectedIntent = normalizedIntent.isEmpty ? "echo_chat" : normalizedIntent
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            object["intent"],
+            field: "request.intent",
+            error: error
+        ) == expectedIntent else {
+            throw error("request.intent does not match the submitted intent")
+        }
+        intent = expectedIntent
+        let normalizedQuery = OwnerTruthContextCitationContract.normalizedText(expectedQuery)
+        queryHash = try OwnerTruthContextCitationContract.optionalSHA256(
+            object["queryHash"],
+            field: "request.queryHash",
+            error: error
+        )
+        queryLength = try OwnerTruthContextCitationContract.nonnegativeInt(
+            object["queryLength"],
+            field: "request.queryLength",
+            error: error
+        )
+        let expectedLength = OwnerTruthContextCitationContract.scalarCount(normalizedQuery)
+        guard queryLength == expectedLength else {
+            throw error("request.queryLength does not match the submitted query")
+        }
+        let expectedHash = normalizedQuery.isEmpty
+            ? nil
+            : OwnerTruthContextCitationContract.digest(normalizedQuery)
+        guard queryHash == expectedHash else {
+            throw error("request.queryHash does not match the submitted query")
+        }
+    }
+}
+
+struct OwnerTruthContextShadowAuthority: Codable, Equatable, Sendable {
+    let source: String
+    let state: OwnerTruthContextShadowState
+    let vaultID: OwnerTruthVaultID
+    let authorityEpoch: Int?
+    let projectionCheckpoint: String?
+
+    init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID) throws {
+        let error = OwnerTruthContextCitationContract.contextError
+        try OwnerTruthContextCitationContract.ensureNoRawContent(object, field: "authority", error: error)
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            object["source"],
+            field: "authority.source",
+            error: error
+        ) == OwnerTruthContextCitationContract.projectionSource,
+        let state = OwnerTruthContextShadowState(
+            rawValue: try OwnerTruthContextCitationContract.nonEmptyString(
+                object["state"],
+                field: "authority.state",
+                error: error
+            )
+        ),
+        try OwnerTruthContextCitationContract.nonEmptyString(
+            object["vaultId"],
+            field: "authority.vaultId",
+            error: error
+        ) == expectedVaultID.rawValue else {
+            throw error("authority source, state or Vault is invalid")
+        }
+        source = OwnerTruthContextCitationContract.projectionSource
+        self.state = state
+        vaultID = expectedVaultID
+        authorityEpoch = try OwnerTruthContextCitationContract.optionalNonnegativeInt(
+            object["authorityEpoch"],
+            field: "authority.authorityEpoch",
+            error: error
+        )
+        projectionCheckpoint = try OwnerTruthContextCitationContract.optionalSHA256(
+            object["projectionCheckpoint"],
+            field: "authority.projectionCheckpoint",
+            error: error
+        )
+        if state == .ready, (authorityEpoch == nil || projectionCheckpoint == nil) {
+            throw error("ready authority requires epoch and projection checkpoint")
+        }
+    }
+}
+
+struct OwnerTruthContextShadowBuild: Codable, Equatable, Sendable {
+    let contextVersion: String
+    let policyVersion: String
+    let shadowOnly: Bool
+    let legacyContextUnchanged: Bool
+    let legacyContextRead: Bool
+    let contextHash: String
+    let request: OwnerTruthContextShadowRequestSummary
+    let authority: OwnerTruthContextShadowAuthority
+    let selectedContext: [OwnerTruthContextShadowItem]
+    let filteredContext: [OwnerTruthContextShadowItem]
+    let rankingTrace: [OwnerTruthContextRankingTrace]
+    let citationProof: [OwnerTruthContextCitationProof]
+    let selectedContextSourceCounts: [String: Int]
+    let fallbacks: [String]
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID,
+        expectedIntent: String,
+        expectedQuery: String
+    ) throws {
+        let error = OwnerTruthContextCitationContract.contextError
+        try OwnerTruthContextCitationContract.ensureNoRawContent(object, field: "context response", error: error)
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            object["schemaVersion"],
+            field: "schemaVersion",
+            error: error
+        ) == OwnerTruthContextCitationContract.contextBuildResponseSchemaVersion else {
+            throw error("unexpected context response schemaVersion")
+        }
+        let shadow = try OwnerTruthContextCitationContract.object(
+            object["contextShadow"],
+            field: "contextShadow",
+            error: error
+        )
+        try OwnerTruthContextCitationContract.ensureNoRawContent(shadow, field: "contextShadow", error: error)
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            shadow["schemaVersion"],
+            field: "contextShadow.schemaVersion",
+            error: error
+        ) == OwnerTruthContextCitationContract.contextBuildSchemaVersion,
+        try OwnerTruthContextCitationContract.nonEmptyString(
+            shadow["contextVersion"],
+            field: "contextShadow.contextVersion",
+            error: error
+        ) == OwnerTruthContextCitationContract.contextVersion,
+        try OwnerTruthContextCitationContract.nonEmptyString(
+            shadow["policyVersion"],
+            field: "contextShadow.policyVersion",
+            error: error
+        ) == OwnerTruthContextCitationContract.policyVersion else {
+            throw error("contextShadow schema or policy version is not approved")
+        }
+        contextVersion = OwnerTruthContextCitationContract.contextVersion
+        policyVersion = OwnerTruthContextCitationContract.policyVersion
+        shadowOnly = try OwnerTruthContextCitationContract.bool(
+            shadow["shadowOnly"],
+            field: "contextShadow.shadowOnly",
+            error: error
+        )
+        legacyContextUnchanged = try OwnerTruthContextCitationContract.bool(
+            shadow["legacyContextUnchanged"],
+            field: "contextShadow.legacyContextUnchanged",
+            error: error
+        )
+        legacyContextRead = try OwnerTruthContextCitationContract.bool(
+            shadow["legacyContextRead"],
+            field: "contextShadow.legacyContextRead",
+            error: error
+        )
+        guard shadowOnly, legacyContextUnchanged, !legacyContextRead else {
+            throw error("Owner Truth Context QA must remain shadow-only and legacy-free")
+        }
+        contextHash = try OwnerTruthContextCitationContract.sha256(
+            shadow["contextHash"],
+            field: "contextShadow.contextHash",
+            error: error
+        )
+        request = try OwnerTruthContextShadowRequestSummary(
+            backendJSONObject: OwnerTruthContextCitationContract.object(
+                shadow["request"],
+                field: "contextShadow.request",
+                error: error
+            ),
+            expectedIntent: expectedIntent,
+            expectedQuery: expectedQuery
+        )
+        authority = try OwnerTruthContextShadowAuthority(
+            backendJSONObject: OwnerTruthContextCitationContract.object(
+                shadow["authority"],
+                field: "contextShadow.authority",
+                error: error
+            ),
+            expectedVaultID: expectedVaultID
+        )
+        selectedContext = try OwnerTruthContextCitationContract.objects(
+            shadow["selectedContext"],
+            field: "contextShadow.selectedContext",
+            error: error
+        ).map {
+            try OwnerTruthContextShadowItem(
+                backendJSONObject: $0,
+                expectedVaultID: expectedVaultID,
+                requiresRank: true
+            )
+        }
+        filteredContext = try OwnerTruthContextCitationContract.objects(
+            shadow["filteredContext"],
+            field: "contextShadow.filteredContext",
+            error: error
+        ).map {
+            try OwnerTruthContextShadowItem(
+                backendJSONObject: $0,
+                expectedVaultID: expectedVaultID,
+                requiresRank: false
+            )
+        }
+        rankingTrace = try OwnerTruthContextCitationContract.objects(
+            shadow["rankingTrace"],
+            field: "contextShadow.rankingTrace",
+            error: error
+        ).map(OwnerTruthContextRankingTrace.init(backendJSONObject:))
+        citationProof = try OwnerTruthContextCitationContract.objects(
+            shadow["citationProof"],
+            field: "contextShadow.citationProof",
+            error: error
+        ).map {
+            try OwnerTruthContextCitationProof(
+                backendJSONObject: $0,
+                expectedVaultID: expectedVaultID
+            )
+        }
+        selectedContextSourceCounts = try Self.sourceCounts(
+            shadow["selectedContextSourceCounts"],
+            selectedContext: selectedContext
+        )
+        fallbacks = try OwnerTruthContextCitationContract.strings(
+            shadow["fallbacks"],
+            field: "contextShadow.fallbacks",
+            error: error
+        ).map {
+            try OwnerTruthContextCitationContract.safeCode(
+                $0,
+                field: "contextShadow.fallback",
+                error: error
+            )
+        }
+        try Self.validateReferences(
+            selectedContext: selectedContext,
+            filteredContext: filteredContext,
+            rankingTrace: rankingTrace,
+            citationProof: citationProof,
+            authority: authority,
+            fallbacks: fallbacks
+        )
+        try Self.validateTraceCounts(
+            shadow["trace"],
+            selectedCount: selectedContext.count,
+            filteredCount: filteredContext.count,
+            rankingCount: rankingTrace.count,
+            citationCount: citationProof.count,
+            fallbackCount: fallbacks.count
+        )
+    }
+
+    func traceSummary(
+        receipt: OwnerTruthAnswerCitationReceipt? = nil
+    ) -> OwnerTruthContextCitationTraceSummary {
+        OwnerTruthContextCitationTraceSummary(context: self, receipt: receipt)
+    }
+
+    private static func sourceCounts(
+        _ value: Any?,
+        selectedContext: [OwnerTruthContextShadowItem]
+    ) throws -> [String: Int] {
+        let error = OwnerTruthContextCitationContract.contextError
+        guard let object = value as? [String: Any] else {
+            throw error("contextShadow.selectedContextSourceCounts must be a string/integer map")
+        }
+        var counts: [String: Int] = [:]
+        for (source, rawCount) in object {
+            let normalizedSource = try OwnerTruthContextCitationContract.safeCode(
+                source,
+                field: "contextShadow.selectedContextSourceCounts.source",
+                error: error
+            )
+            counts[normalizedSource] = try OwnerTruthContextCitationContract.nonnegativeInt(
+                rawCount,
+                field: "contextShadow.selectedContextSourceCounts.\(normalizedSource)",
+                error: error
+            )
+        }
+        let expected = [OwnerTruthContextCitationContract.projectionSource: selectedContext.count]
+        guard counts == expected else {
+            throw error("selected Context source counts do not match typed Context")
+        }
+        return counts
+    }
+
+    private static func validateReferences(
+        selectedContext: [OwnerTruthContextShadowItem],
+        filteredContext: [OwnerTruthContextShadowItem],
+        rankingTrace: [OwnerTruthContextRankingTrace],
+        citationProof: [OwnerTruthContextCitationProof],
+        authority: OwnerTruthContextShadowAuthority,
+        fallbacks: [String]
+    ) throws {
+        let error = OwnerTruthContextCitationContract.contextError
+        let selectedByRef = Dictionary(uniqueKeysWithValues: selectedContext.map { ($0.refID, $0) })
+        guard selectedByRef.count == selectedContext.count else {
+            throw error("selected Context contains duplicate refs")
+        }
+        let filteredRefs = Set(filteredContext.map(\.refID))
+        guard filteredRefs.count == filteredContext.count,
+              filteredRefs.isDisjoint(with: Set(selectedByRef.keys)) else {
+            throw error("selected and filtered Context refs must be disjoint")
+        }
+        guard rankingTrace.count == selectedContext.count,
+              citationProof.count == selectedContext.count else {
+            throw error("ranking and citation proof must cover every selected Context item")
+        }
+        let expectedPositions = Set(selectedContext.indices.map { $0 + 1 })
+        let actualPositions = Set(rankingTrace.map(\.rank.position))
+        guard actualPositions == expectedPositions else {
+            throw error("ranking positions must form a deterministic sequence")
+        }
+        for trace in rankingTrace {
+            guard let selected = selectedByRef[trace.refID],
+                  trace.source == selected.source,
+                  trace.reason == selected.reason,
+                  trace.rank == selected.rank else {
+                throw error("ranking trace does not match its selected Context item")
+            }
+        }
+        for proof in citationProof {
+            guard let selected = selectedByRef[proof.refID],
+                  proof.source == selected.source,
+                  proof.citation == selected.citation,
+                  proof.sourceReference == selected.sourceReference else {
+                throw error("citation proof does not match its selected Context item")
+            }
+        }
+        switch authority.state {
+        case .ready:
+            if selectedContext.isEmpty,
+               !fallbacks.contains(OwnerTruthContextCitationContract.emptyFallback) {
+                throw error("ready empty Context requires the explicit no-eligible-memory fallback")
+            }
+        case .disabled, .rebuilding:
+            guard selectedContext.isEmpty,
+                  rankingTrace.isEmpty,
+                  citationProof.isEmpty,
+                  fallbacks == [OwnerTruthContextCitationContract.unavailableFallback] else {
+                throw error("unavailable Context must fail closed without personal memory")
+            }
+        }
+    }
+
+    private static func validateTraceCounts(
+        _ value: Any?,
+        selectedCount: Int,
+        filteredCount: Int,
+        rankingCount: Int,
+        citationCount: Int,
+        fallbackCount: Int
+    ) throws {
+        let error = OwnerTruthContextCitationContract.contextError
+        let trace = try OwnerTruthContextCitationContract.object(value, field: "contextShadow.trace", error: error)
+        try OwnerTruthContextCitationContract.ensureNoRawContent(trace, field: "contextShadow.trace", error: error)
+        let actual = [
+            "selectedContextCount": selectedCount,
+            "filteredContextCount": filteredCount,
+            "rankingTraceCount": rankingCount,
+            "citationProofCount": citationCount,
+            "fallbackCount": fallbackCount,
+        ]
+        for (field, expected) in actual {
+            guard try OwnerTruthContextCitationContract.nonnegativeInt(
+                trace[field],
+                field: "contextShadow.trace.\(field)",
+                error: error
+            ) == expected else {
+                throw error("contextShadow.trace.\(field) does not match typed Context")
+            }
+        }
+    }
+}
+
+struct OwnerTruthAnswerCitation: Codable, Equatable, Sendable, Identifiable {
+    let citationID: OwnerTruthRecordID
+    let position: Int
+    let resolved: Bool
+    let resolution: String
+    let citation: OwnerTruthContextCitation
+
+    var id: OwnerTruthRecordID { citationID }
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        let error = OwnerTruthContextCitationContract.receiptError
+        try OwnerTruthContextCitationContract.ensureNoRawContent(object, field: "answerCitation.citation", error: error)
+        citationID = try OwnerTruthContextCitationContract.recordID(
+            object["citationId"],
+            field: "answerCitation.citationId",
+            error: error
+        )
+        position = try OwnerTruthContextCitationContract.positiveInt(
+            object["position"],
+            field: "answerCitation.position",
+            error: error
+        )
+        resolved = try OwnerTruthContextCitationContract.bool(
+            object["resolved"],
+            field: "answerCitation.resolved",
+            error: error
+        )
+        guard resolved,
+              try OwnerTruthContextCitationContract.nonEmptyString(
+                object["resolution"],
+                field: "answerCitation.resolution",
+                error: error
+              ) == OwnerTruthContextCitationContract.citationResolution else {
+            throw error("answer citation must resolve one current projection entry")
+        }
+        resolution = OwnerTruthContextCitationContract.citationResolution
+        citation = try OwnerTruthContextCitation(
+            backendJSONObject: OwnerTruthContextCitationContract.object(
+                object["citation"],
+                field: "answerCitation.citation",
+                error: error
+            ),
+            expectedVaultID: expectedVaultID,
+            error: error
+        )
+    }
+}
+
+struct OwnerTruthAnswerCitationReceipt: Codable, Equatable, Sendable {
+    let outcome: OwnerTruthAnswerCitationOutcome
+    let answerID: OwnerTruthRecordID
+    let commandIDHash: String
+    let contextHash: String
+    let contextVersion: String
+    let queryHash: String?
+    let answerHash: String
+    let answerLength: Int
+    let authorityEpoch: Int?
+    let projectionCheckpoint: String?
+    let citations: [OwnerTruthAnswerCitation]
+    let fallbacks: [String]
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedContext: OwnerTruthContextShadowBuild,
+        expectedCommandID: String,
+        expectedQuery: String,
+        expectedAnswerText: String
+    ) throws {
+        let error = OwnerTruthContextCitationContract.receiptError
+        try OwnerTruthContextCitationContract.ensureNoRawContent(object, field: "answer citation response", error: error)
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            object["schemaVersion"],
+            field: "schemaVersion",
+            error: error
+        ) == OwnerTruthContextCitationContract.answerCitationResponseSchemaVersion,
+        let outcome = OwnerTruthAnswerCitationOutcome(
+            rawValue: try OwnerTruthContextCitationContract.nonEmptyString(
+                object["status"],
+                field: "status",
+                error: error
+            )
+        ) else {
+            throw error("answer citation response schemaVersion or status is invalid")
+        }
+        let receipt = try OwnerTruthContextCitationContract.object(
+            object["answerCitation"],
+            field: "answerCitation",
+            error: error
+        )
+        try OwnerTruthContextCitationContract.ensureNoRawContent(receipt, field: "answerCitation", error: error)
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            receipt["schemaVersion"],
+            field: "answerCitation.schemaVersion",
+            error: error
+        ) == OwnerTruthContextCitationContract.answerCitationSchemaVersion,
+        try OwnerTruthContextCitationContract.nonEmptyString(
+            receipt["outcome"],
+            field: "answerCitation.outcome",
+            error: error
+        ) == outcome.rawValue else {
+            throw error("answerCitation schemaVersion or outcome is invalid")
+        }
+        self.outcome = outcome
+        answerID = try OwnerTruthContextCitationContract.recordID(
+            receipt["answerId"],
+            field: "answerCitation.answerId",
+            error: error
+        )
+        commandIDHash = try OwnerTruthContextCitationContract.sha256(
+            receipt["commandIdHash"],
+            field: "answerCitation.commandIdHash",
+            error: error
+        )
+        let normalizedCommandID = OwnerTruthContextCitationContract.normalizedText(expectedCommandID)
+        guard !normalizedCommandID.isEmpty,
+              commandIDHash == OwnerTruthContextCitationContract.digest(normalizedCommandID) else {
+            throw error("answerCitation.commandIdHash does not match the submitted command")
+        }
+        contextHash = try OwnerTruthContextCitationContract.sha256(
+            receipt["contextHash"],
+            field: "answerCitation.contextHash",
+            error: error
+        )
+        guard contextHash == expectedContext.contextHash else {
+            throw error("answerCitation.contextHash does not match the selected Context")
+        }
+        contextVersion = try OwnerTruthContextCitationContract.nonEmptyString(
+            receipt["contextVersion"],
+            field: "answerCitation.contextVersion",
+            error: error
+        )
+        guard contextVersion == expectedContext.contextVersion else {
+            throw error("answerCitation.contextVersion does not match the selected Context")
+        }
+        queryHash = try OwnerTruthContextCitationContract.optionalSHA256(
+            receipt["queryHash"],
+            field: "answerCitation.queryHash",
+            error: error
+        )
+        let normalizedQuery = OwnerTruthContextCitationContract.normalizedText(expectedQuery)
+        let expectedQueryHash = normalizedQuery.isEmpty
+            ? nil
+            : OwnerTruthContextCitationContract.digest(normalizedQuery)
+        guard queryHash == expectedQueryHash, queryHash == expectedContext.request.queryHash else {
+            throw error("answerCitation.queryHash does not match the selected Context request")
+        }
+        answerHash = try OwnerTruthContextCitationContract.sha256(
+            receipt["answerHash"],
+            field: "answerCitation.answerHash",
+            error: error
+        )
+        let normalizedAnswer = OwnerTruthContextCitationContract.normalizedText(expectedAnswerText)
+        guard !normalizedAnswer.isEmpty,
+              answerHash == OwnerTruthContextCitationContract.digest(normalizedAnswer) else {
+            throw error("answerCitation.answerHash does not match the submitted answer")
+        }
+        answerLength = try OwnerTruthContextCitationContract.nonnegativeInt(
+            receipt["answerLength"],
+            field: "answerCitation.answerLength",
+            error: error
+        )
+        guard answerLength == OwnerTruthContextCitationContract.scalarCount(normalizedAnswer) else {
+            throw error("answerCitation.answerLength does not match the submitted answer")
+        }
+        authorityEpoch = try OwnerTruthContextCitationContract.optionalNonnegativeInt(
+            receipt["authorityEpoch"],
+            field: "answerCitation.authorityEpoch",
+            error: error
+        )
+        projectionCheckpoint = try OwnerTruthContextCitationContract.optionalSHA256(
+            receipt["projectionCheckpoint"],
+            field: "answerCitation.projectionCheckpoint",
+            error: error
+        )
+        guard authorityEpoch == expectedContext.authority.authorityEpoch,
+              projectionCheckpoint == expectedContext.authority.projectionCheckpoint else {
+            throw error("answerCitation authority does not match the selected Context")
+        }
+        let expectedVaultID = expectedContext.authority.vaultID
+        citations = try OwnerTruthContextCitationContract.objects(
+            receipt["citations"],
+            field: "answerCitation.citations",
+            error: error
+        ).map {
+            try OwnerTruthAnswerCitation(
+                backendJSONObject: $0,
+                expectedVaultID: expectedVaultID
+            )
+        }
+        let citationCount = try OwnerTruthContextCitationContract.nonnegativeInt(
+            receipt["citationCount"],
+            field: "answerCitation.citationCount",
+            error: error
+        )
+        guard citationCount == citations.count,
+              citationCount == expectedContext.selectedContext.count else {
+            throw error("answerCitation.citationCount does not cover the selected Context")
+        }
+        fallbacks = try OwnerTruthContextCitationContract.strings(
+            receipt["fallbacks"],
+            field: "answerCitation.fallbacks",
+            error: error
+        ).map {
+            try OwnerTruthContextCitationContract.safeCode(
+                $0,
+                field: "answerCitation.fallback",
+                error: error
+            )
+        }
+        guard fallbacks == expectedContext.fallbacks else {
+            throw error("answerCitation fallbacks do not match the selected Context")
+        }
+        let expectedCitations = Dictionary(
+            uniqueKeysWithValues: expectedContext.selectedContext.enumerated().map {
+                ($0.offset + 1, $0.element.citation)
+            }
+        )
+        let actualPositions = Set(citations.map(\.position))
+        guard actualPositions == Set(expectedCitations.keys),
+              Set(citations.map(\.citationID)).count == citations.count else {
+            throw error("answer citations have duplicate or missing positions")
+        }
+        for citation in citations {
+            guard expectedCitations[citation.position] == citation.citation else {
+                throw error("answer citation does not resolve the selected MemoryVersion")
+            }
+        }
+    }
+}
+
+/// A value-free bridge for existing Echo QA evidence. It has no runtime or
+/// model text and therefore can be exported alongside the current trace.
+struct OwnerTruthContextCitationTraceSummary: Codable, Equatable, Sendable {
+    static let schemaVersion = "owner-truth-context-citation-trace-v1"
+
+    let contextVersion: String
+    let policyVersion: String
+    let contextHash: String
+    let authorityState: OwnerTruthContextShadowState
+    let authorityEpoch: Int?
+    let projectionCheckpoint: String?
+    let selectedContextRefs: [String]
+    let selectedContextRefsBySource: [String: [String]]
+    let filteredContextReasons: [String]
+    let selectedContextCount: Int
+    let filteredContextCount: Int
+    let rankingTraceCount: Int
+    let citationCount: Int
+    let answerCitationCount: Int
+    let selectedContextSourceCounts: [String: Int]
+    let fallbacks: [String]
+
+    init(context: OwnerTruthContextShadowBuild, receipt: OwnerTruthAnswerCitationReceipt?) {
+        contextVersion = context.contextVersion
+        policyVersion = context.policyVersion
+        contextHash = context.contextHash
+        authorityState = context.authority.state
+        authorityEpoch = context.authority.authorityEpoch
+        projectionCheckpoint = context.authority.projectionCheckpoint
+        selectedContextRefs = context.selectedContext.map(\.refID)
+        selectedContextRefsBySource = Dictionary(grouping: context.selectedContext, by: \.source)
+            .mapValues { $0.map(\.refID) }
+        filteredContextReasons = context.filteredContext.map(\.reason)
+        selectedContextCount = context.selectedContext.count
+        filteredContextCount = context.filteredContext.count
+        rankingTraceCount = context.rankingTrace.count
+        citationCount = context.citationProof.count
+        answerCitationCount = receipt?.citations.count ?? 0
+        selectedContextSourceCounts = context.selectedContextSourceCounts
+        fallbacks = context.fallbacks
+    }
+}
+
+/// The concrete backend client keeps HTTP/auth/header ownership. Callers only
+/// receive typed, value-free evidence and cannot enable this in release.
+protocol OwnerTruthContextCitationClient: AnyObject {
+    func buildOwnerTruthContextShadow(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        intent: String,
+        query: String,
+        completion: @escaping (Result<OwnerTruthContextShadowBuild, Error>) -> Void
+    )
+
+    func recordOwnerTruthAnswerCitationReceipt(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        expectedContext: OwnerTruthContextShadowBuild,
+        commandID: String,
+        intent: String,
+        query: String,
+        answerText: String,
+        completion: @escaping (Result<OwnerTruthAnswerCitationReceipt, Error>) -> Void
+    )
 }

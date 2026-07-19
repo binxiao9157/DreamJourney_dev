@@ -5,21 +5,22 @@
     "completedSubSlices": [
       "WI-S1-01-04-G0-CANDIDATE-INBOX-OWNER-REVIEW-ACTION-UIQA",
       "WI-S1-01-06-G0-KBLITE-COMPATIBILITY-READ-ENVELOPE",
-      "WI-S1-01-06-G2-KBLITE-COMPATIBILITY-READ-ENVELOPE-DEPLOYMENT"
+      "WI-S1-01-06-G2-KBLITE-COMPATIBILITY-READ-ENVELOPE-DEPLOYMENT",
+      "WI-S1-01-07-G0-OWNER-QA-CONTEXT-TYPED-CITATION-CONTRACT"
     ],
-    "currentSubSlice": "WI-S1-01-07-G0-OWNER-QA-CONTEXT-TYPED-CITATION-DISCOVERY",
+    "currentSubSlice": "WI-S1-01-07-G1-OWNER-QA-CONTEXT-TEXT-EVIDENCE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "MISSING",
+      "G0": "SCOPED_TYPED_CONTRACT_VERIFIED",
       "G1": "MISSING",
       "G2": "MISSING",
       "G3": "MISSING",
-      "G4": "NOT_APPLICABLE_TO_CURRENT_INTERNAL_DISCOVERY"
+      "G4": "NOT_APPLICABLE_TO_CURRENT_INTERNAL_QA"
     },
     "id": "WI-S1-01-07",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "Start WI-S1-01-07 with a bounded discovery and contract slice for Owner QA Context and typed Citation. WI-S1-01-06 has deployed G0/G2 evidence for the default-off Projection-only KBLite compatibility read envelope; it remains outside public KBLite, Context Packet and Echo authority. Preserve that boundary while adding no public UI."
+    "summary": "WI-S1-01-07 G0 typed Context/Citation contract is verified with existing default-off backend QA routes and iOS value-free parsing/evidence mapping. Public /context/build, Echo, KBLite and runtime authority remain unchanged. Continue G1 owner QA text evidence without public UI exposure."
   },
   "baselines": {
     "backend": "main@162afb0",
@@ -418,5 +419,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T14:41:00+0800"
+  "updatedAt": "2026-07-19T23:18:05+0800"
 }
