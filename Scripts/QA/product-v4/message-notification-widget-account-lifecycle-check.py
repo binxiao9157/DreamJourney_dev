@@ -61,6 +61,8 @@ def static_check() -> None:
     messages = read("DreamJourney/Sources/Modules/Archive/InAppMessageCenter.swift")
     push = read("DreamJourney/Sources/Services/PushDeviceTokenStore.swift")
     widget = read("DreamJourney/Sources/Services/KnowledgeWidgetSnapshotStore.swift")
+    lease = read("DreamJourney/Sources/App/AccountLease.swift")
+    lifecycle = read("DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift")
 
     delayed_teardown = function_body(
         declaration_body(delayed, "EchoDelayedReplyStore"),
@@ -128,6 +130,24 @@ def static_check() -> None:
         "push registration envelope",
     )
 
+    route_inbox = declaration_body(lease, "NotificationRuntimeRouteInbox")
+    route_teardown = function_body(
+        route_inbox,
+        "func teardownForAccountLifecycle(oldAccountLease:",
+    )
+    require(
+        "payload.matches(oldAccountLease)" in route_teardown,
+        "route inbox teardown must retain only non-old-generation routes",
+    )
+    lifecycle_teardown = function_body(
+        lifecycle,
+        "private static func teardownMessageNotificationEffects(",
+    )
+    require(
+        "NotificationRuntimeRouteInbox.shared.teardownForAccountLifecycle" in lifecycle_teardown,
+        "message lifecycle teardown must clear pending runtime routes",
+    )
+
     widget_teardown = function_body(
         declaration_body(widget, "KnowledgeWidgetSnapshotStore"),
         "func teardownForAccountLifecycle(oldAccountLease:",
@@ -179,6 +199,7 @@ def model_check() -> None:
         Artifact("echo-reply", old),
         Artifact("message-local-state", old),
         Artifact("time-letter-mailbox", old),
+        Artifact("notification-runtime-route", old),
         Artifact("same-subject-new-generation", refreshed),
         Artifact("other-owner", other),
     ]

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 enum AccountLeaseCheckpoint: String, CaseIterable, Codable, Sendable {
@@ -292,4 +293,355 @@ final class AccountLeaseRuntime: AccountLeaseRuntimePort, @unchecked Sendable {
     private static func normalizedAuthorityEpoch(_ value: String) -> String {
         normalized(value) ?? "unresolved"
     }
+}
+
+// MARK: - Notification and deeplink runtime routing
+
+/// Notification and deeplink delivery is an untrusted ingress. It can select a
+/// safe in-app destination only after its owner-scoped digest envelope matches
+/// the currently active AccountLease. It never carries raw owner, vault, or
+/// provider runtime values into the UI.
+enum NotificationRuntimeRouteKind: String, Codable, CaseIterable, Sendable {
+    case echoDelayedReply
+    case timeLetter
+    case familyInvitation
+    case careSignal
+    case systemNotice
+
+    var selectedTabIndex: Int {
+        switch self {
+        case .echoDelayedReply:
+            return 1
+        case .timeLetter, .familyInvitation, .careSignal, .systemNotice:
+            return 0
+        }
+    }
+}
+
+enum NotificationRuntimeRouteAction: String, Codable, Sendable {
+    case open
+    case markRead
+    case archive
+}
+
+enum NotificationRuntimeRouteSource: String, Codable, Sendable {
+    case notificationResponse
+    case remoteNotification
+    case deepLink
+}
+
+enum NotificationRuntimeRouteIngressResult: Equatable, Sendable {
+    case queued
+    case duplicate
+    case rejected(NotificationRuntimeRouteRejectionReason)
+
+    var shouldNotifyRouter: Bool {
+        self == .queued
+    }
+}
+
+enum NotificationRuntimeRouteRejectionReason: String, Codable, Equatable, Sendable {
+    case malformedPayload
+    case unsupportedSchema
+    case noActiveLease
+    case leaseInvalid
+    case ownerMismatch
+    case duplicate
+}
+
+/// Value-minimized route payload shared by local notifications, APNs and future
+/// deeplinks. `operationIdentity` is an opaque digest rather than a raw
+/// message/resource identifier, so the lock screen payload cannot become a
+/// private data side channel.
+struct NotificationRuntimeRoutePayload: Equatable, Sendable {
+    static let schemaVersion = 1
+
+    enum Key {
+        static let schemaVersion = "runtimeRouteSchemaVersion"
+        static let action = "runtimeRouteAction"
+        static let type = "type"
+        static let subjectIdentity = "accountSubjectIdentity"
+        static let generation = "accountLeaseGeneration"
+        static let generationIdentity = "accountLeaseGenerationIdentity"
+        static let vaultIdentity = "accountLeaseVaultIdentity"
+        static let authorityEpochIdentity = "accountLeaseAuthorityEpochIdentity"
+        static let resourceOwnerIdentity = "resourceOwnerIdentity"
+        static let operationIdentity = "operationIdentity"
+    }
+
+    let kind: NotificationRuntimeRouteKind
+    let action: NotificationRuntimeRouteAction
+    let subjectIdentity: String
+    let generation: UInt64
+    let generationIdentity: String
+    let vaultIdentity: String
+    let authorityEpochIdentity: String
+    let resourceOwnerIdentity: String
+    let operationIdentity: String
+
+    init?(
+        userInfo: [AnyHashable: Any]
+    ) {
+        guard let schemaVersion = Self.unsignedInteger(userInfo[Key.schemaVersion]),
+              schemaVersion == UInt64(Self.schemaVersion) else {
+            return nil
+        }
+        guard let rawKind = Self.nonEmptyString(userInfo[Key.type]),
+              let kind = NotificationRuntimeRouteKind(rawValue: rawKind),
+              let rawAction = Self.nonEmptyString(userInfo[Key.action]),
+              let action = NotificationRuntimeRouteAction(rawValue: rawAction),
+              let subjectIdentity = Self.nonEmptyString(userInfo[Key.subjectIdentity]),
+              let generation = Self.unsignedInteger(userInfo[Key.generation]),
+              let generationIdentity = Self.nonEmptyString(userInfo[Key.generationIdentity]),
+              let vaultIdentity = Self.nonEmptyString(userInfo[Key.vaultIdentity]),
+              let authorityEpochIdentity = Self.nonEmptyString(userInfo[Key.authorityEpochIdentity]),
+              let resourceOwnerIdentity = Self.nonEmptyString(userInfo[Key.resourceOwnerIdentity]),
+              let operationIdentity = Self.nonEmptyString(userInfo[Key.operationIdentity]) else {
+            return nil
+        }
+        self.kind = kind
+        self.action = action
+        self.subjectIdentity = subjectIdentity
+        self.generation = generation
+        self.generationIdentity = generationIdentity
+        self.vaultIdentity = vaultIdentity
+        self.authorityEpochIdentity = authorityEpochIdentity
+        self.resourceOwnerIdentity = resourceOwnerIdentity
+        self.operationIdentity = operationIdentity
+    }
+
+    init?(deepLinkURL: URL) {
+        guard deepLinkURL.scheme?.lowercased() == "dreamjourney",
+              deepLinkURL.host?.lowercased() == "runtime-route",
+              let components = URLComponents(url: deepLinkURL, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+        var userInfo: [AnyHashable: Any] = [:]
+        components.queryItems?.forEach { item in
+            if let value = item.value {
+                userInfo[item.name] = value
+            }
+        }
+        self.init(userInfo: userInfo)
+    }
+
+    func matches(_ accountLease: AccountLease) -> Bool {
+        generation == accountLease.generation
+            && subjectIdentity == Self.identityDigest(
+                values: ["subject", accountLease.subjectId]
+            )
+            && generationIdentity == Self.identityDigest(
+                values: ["generation-id", accountLease.generationId.uuidString]
+            )
+            && vaultIdentity == Self.identityDigest(
+                values: ["vault", accountLease.vaultId]
+            )
+            && authorityEpochIdentity == Self.identityDigest(
+                values: ["authority-epoch", accountLease.authorityEpoch]
+            )
+            // Cross-account and delegated routes require a separate server
+            // authorization result. This local v1 router only permits the
+            // current account's own opaque owner identity.
+            && resourceOwnerIdentity == Self.identityDigest(
+                values: ["resource-owner", accountLease.subjectId]
+            )
+    }
+
+    var deduplicationIdentity: String {
+        [
+            kind.rawValue,
+            action.rawValue,
+            subjectIdentity,
+            String(generation),
+            generationIdentity,
+            vaultIdentity,
+            authorityEpochIdentity,
+            resourceOwnerIdentity,
+            operationIdentity,
+        ].joined(separator: "|")
+    }
+
+    static func identityDigest(values: [String]) -> String {
+        let canonicalIdentity = values
+            .map { "\($0.utf8.count):\($0)" }
+            .joined(separator: "|")
+        return SHA256.hash(data: Data(canonicalIdentity.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func unsignedInteger(_ value: Any?) -> UInt64? {
+        if let value = value as? NSNumber {
+            let signedValue = value.int64Value
+            return signedValue >= 0 ? UInt64(signedValue) : nil
+        }
+        if let value = nonEmptyString(value) {
+            return UInt64(value)
+        }
+        return nil
+    }
+}
+
+struct NotificationRuntimeRoute: Equatable, Sendable {
+    let payload: NotificationRuntimeRoutePayload
+    let source: NotificationRuntimeRouteSource
+    let accountLease: AccountLease
+}
+
+struct NotificationRuntimeRouteInboxSnapshot: Equatable, Sendable {
+    let queuedCount: Int
+    let rejectedCount: Int
+    let deliveredCount: Int
+}
+
+/// Keeps opaque ingress payloads in memory until the root coordinator has an
+/// active lease. Routes are removed on a mismatch or account lifecycle teardown
+/// and are never persisted across process launches.
+final class NotificationRuntimeRouteInbox: @unchecked Sendable {
+    static let shared = NotificationRuntimeRouteInbox()
+
+    private struct PendingRoute: Equatable {
+        let payload: NotificationRuntimeRoutePayload
+        let source: NotificationRuntimeRouteSource
+    }
+
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let lock = NSLock()
+    private var pendingRoutes: [PendingRoute] = []
+    private var rejectedCount = 0
+    private var deliveredCount = 0
+
+    init(accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared) {
+        self.accountLeaseRuntime = accountLeaseRuntime
+    }
+
+    @discardableResult
+    func ingest(
+        userInfo: [AnyHashable: Any],
+        source: NotificationRuntimeRouteSource
+    ) -> NotificationRuntimeRouteIngressResult {
+        guard let payload = NotificationRuntimeRoutePayload(userInfo: userInfo) else {
+            recordRejected()
+            return .rejected(.malformedPayload)
+        }
+        return enqueue(payload: payload, source: source)
+    }
+
+    @discardableResult
+    func ingest(
+        deepLinkURL: URL,
+        source: NotificationRuntimeRouteSource = .deepLink
+    ) -> NotificationRuntimeRouteIngressResult {
+        guard let payload = NotificationRuntimeRoutePayload(deepLinkURL: deepLinkURL) else {
+            recordRejected()
+            return .rejected(.malformedPayload)
+        }
+        return enqueue(payload: payload, source: source)
+    }
+
+    func consumeRoutesForCurrentAccount() -> [NotificationRuntimeRoute] {
+        guard let accountLease = accountLeaseRuntime.capture(forSubjectId: nil) else {
+            return []
+        }
+        return consumeRoutes(accountLease: accountLease)
+    }
+
+    func consumeRoutes(accountLease: AccountLease) -> [NotificationRuntimeRoute] {
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed,
+              accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
+            recordRejected()
+            return []
+        }
+
+        lock.lock()
+        let routes = pendingRoutes
+        pendingRoutes.removeAll()
+        lock.unlock()
+
+        var accepted: [NotificationRuntimeRoute] = []
+        var rejected = 0
+        for pendingRoute in routes {
+            guard pendingRoute.payload.matches(accountLease),
+                  accountLeaseRuntime.validate(accountLease, at: .runtime).allowed,
+                  accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
+                rejected += 1
+                continue
+            }
+            accepted.append(
+                NotificationRuntimeRoute(
+                    payload: pendingRoute.payload,
+                    source: pendingRoute.source,
+                    accountLease: accountLease
+                )
+            )
+        }
+
+        lock.lock()
+        rejectedCount += rejected
+        deliveredCount += accepted.count
+        lock.unlock()
+        return accepted
+    }
+
+    func canPresent(userInfo: [AnyHashable: Any]) -> Bool {
+        guard let payload = NotificationRuntimeRoutePayload(userInfo: userInfo),
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: nil),
+              accountLeaseRuntime.validate(accountLease, at: .ui).allowed,
+              payload.matches(accountLease) else {
+            return false
+        }
+        return true
+    }
+
+    @discardableResult
+    func teardownForAccountLifecycle(oldAccountLease: AccountLease?) -> Bool {
+        guard let oldAccountLease else { return false }
+        lock.lock()
+        pendingRoutes.removeAll { $0.payload.matches(oldAccountLease) }
+        lock.unlock()
+        return true
+    }
+
+    func snapshot() -> NotificationRuntimeRouteInboxSnapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        return NotificationRuntimeRouteInboxSnapshot(
+            queuedCount: pendingRoutes.count,
+            rejectedCount: rejectedCount,
+            deliveredCount: deliveredCount
+        )
+    }
+
+    private func enqueue(
+        payload: NotificationRuntimeRoutePayload,
+        source: NotificationRuntimeRouteSource
+    ) -> NotificationRuntimeRouteIngressResult {
+        let pendingRoute = PendingRoute(payload: payload, source: source)
+        lock.lock()
+        defer { lock.unlock() }
+        guard !pendingRoutes.contains(pendingRoute) else {
+            return .duplicate
+        }
+        pendingRoutes.append(pendingRoute)
+        return .queued
+    }
+
+    private func recordRejected() {
+        lock.lock()
+        rejectedCount += 1
+        lock.unlock()
+    }
+}
+
+extension Notification.Name {
+    static let djNotificationRuntimeRouteQueued = Notification.Name(
+        "dj.notificationRuntime.routeQueued"
+    )
 }

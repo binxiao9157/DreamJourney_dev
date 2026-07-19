@@ -176,6 +176,8 @@ private enum AppDelegateMessageNotificationCallsiteModelSmoke {
     ) {
         let userInfo = request.content.userInfo
         let expectedKeys: Set<String> = [
+            NotificationRuntimeRoutePayload.Key.schemaVersion,
+            NotificationRuntimeRoutePayload.Key.action,
             "type",
             "trigger",
             "accountSubjectIdentity",
@@ -190,6 +192,16 @@ private enum AppDelegateMessageNotificationCallsiteModelSmoke {
         require(
             actualKeys == expectedKeys && actualKeys.count == userInfo.count,
             "callsite metadata must contain only the notification allowlist"
+        )
+        require(
+            (userInfo[NotificationRuntimeRoutePayload.Key.schemaVersion] as? NSNumber)?.intValue
+                == NotificationRuntimeRoutePayload.schemaVersion,
+            "notification route schema mismatch"
+        )
+        require(
+            userInfo[NotificationRuntimeRoutePayload.Key.action] as? String
+                == NotificationRuntimeRouteAction.open.rawValue,
+            "notification route action mismatch"
         )
         require(userInfo["type"] as? String == "echoDelayedReply", "notification type mismatch")
         require(

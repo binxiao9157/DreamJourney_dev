@@ -378,6 +378,8 @@ private enum EchoDelayedReplyOwnerScopeModelSmoke {
         operationId: String
     ) throws {
         let expectedKeys: Set<String> = [
+            NotificationRuntimeRoutePayload.Key.schemaVersion,
+            NotificationRuntimeRoutePayload.Key.action,
             "type",
             "trigger",
             "accountSubjectIdentity",
@@ -392,6 +394,16 @@ private enum EchoDelayedReplyOwnerScopeModelSmoke {
         require(
             actualKeys == expectedKeys && actualKeys.count == userInfo.count,
             "notification userInfo must contain only the metadata allowlist"
+        )
+        require(
+            (userInfo[NotificationRuntimeRoutePayload.Key.schemaVersion] as? NSNumber)?.intValue
+                == NotificationRuntimeRoutePayload.schemaVersion,
+            "notification route schema mismatch"
+        )
+        require(
+            userInfo[NotificationRuntimeRoutePayload.Key.action] as? String
+                == NotificationRuntimeRouteAction.open.rawValue,
+            "notification route action mismatch"
         )
         require(userInfo["type"] as? String == "echoDelayedReply", "notification type mismatch")
         require(

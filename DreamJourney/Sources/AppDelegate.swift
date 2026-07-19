@@ -60,6 +60,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             object: nil
         )
         refreshReleasePolicy()
+        configureNotificationRuntimeIngress(launchOptions: launchOptions)
         configurePushDeviceTokenRegistration(application)
         #if UI_QA_SIMULATOR && targetEnvironment(simulator)
         configureUIQASmokeHarnessIfNeeded()
@@ -87,6 +88,51 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         print("[PushDeviceToken] remote notification registration failed: \(error.localizedDescription)")
+    }
+
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        let result = enqueueNotificationRuntimeRoute(
+            userInfo: userInfo,
+            source: .remoteNotification
+        )
+        completionHandler(result.shouldNotifyRouter ? .newData : .noData)
+    }
+
+    private func configureNotificationRuntimeIngress(
+        launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+    ) {
+        UNUserNotificationCenter.current().delegate = self
+        guard let userInfo = launchOptions?[.remoteNotification]
+            as? [AnyHashable: Any] else {
+            return
+        }
+        _ = enqueueNotificationRuntimeRoute(
+            userInfo: userInfo,
+            source: .remoteNotification
+        )
+    }
+
+    @discardableResult
+    private func enqueueNotificationRuntimeRoute(
+        userInfo: [AnyHashable: Any],
+        source: NotificationRuntimeRouteSource
+    ) -> NotificationRuntimeRouteIngressResult {
+        let result = NotificationRuntimeRouteInbox.shared.ingest(
+            userInfo: userInfo,
+            source: source
+        )
+        guard result.shouldNotifyRouter else { return result }
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: .djNotificationRuntimeRouteQueued,
+                object: nil
+            )
+        }
+        return result
     }
 
     private func configurePushDeviceTokenRegistration(_ application: UIApplication) {
@@ -198,6 +244,34 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 print("[PushDeviceToken] backend registration failed: \(error.localizedDescription)")
             }
         }
+    }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        guard NotificationRuntimeRouteInbox.shared.canPresent(
+            userInfo: notification.request.content.userInfo
+        ) else {
+            completionHandler([])
+            return
+        }
+        completionHandler([.banner, .sound, .badge])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        _ = enqueueNotificationRuntimeRoute(
+            userInfo: response.notification.request.content.userInfo,
+            source: .notificationResponse
+        )
+        completionHandler()
     }
 }
 
@@ -958,6 +1032,8 @@ private extension AppDelegate {
                             values: ["operation", notificationOperationId]
                         )
                         let expectedNotificationUserInfoKeys: Set<String> = [
+                            NotificationRuntimeRoutePayload.Key.schemaVersion,
+                            NotificationRuntimeRoutePayload.Key.action,
                             "type",
                             "trigger",
                             "accountSubjectIdentity",
@@ -993,6 +1069,10 @@ private extension AppDelegate {
                         }
                         let pendingNotificationUserInfoMatched = userInfo["type"] as? String
                             == "echoDelayedReply"
+                            && (userInfo[NotificationRuntimeRoutePayload.Key.schemaVersion] as? NSNumber)?.intValue
+                                == NotificationRuntimeRoutePayload.schemaVersion
+                            && userInfo[NotificationRuntimeRoutePayload.Key.action] as? String
+                                == NotificationRuntimeRouteAction.open.rawValue
                             && userInfo["trigger"] as? String == delayedReply.trigger.rawValue
                             && userInfo["accountSubjectIdentity"] as? String == expectedSubjectIdentity
                             && (userInfo["accountLeaseGeneration"] as? NSNumber)?.uint64Value

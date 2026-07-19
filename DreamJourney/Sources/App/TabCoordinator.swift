@@ -25,6 +25,26 @@ final class TabCoordinator: Coordinator {
         configureAppearance()
     }
 
+    /// A validated notification/deeplink may only select a neutral destination.
+    /// Resource opening, read/archive mutations, and any Voice/Digital Human
+    /// runtime activation remain explicit user actions inside their feature.
+    @discardableResult
+    func selectNotificationRuntimeRoute(
+        _ route: NotificationRuntimeRoute,
+        runtimeContext: AppFeatureRuntimeContext
+    ) -> Bool {
+        guard route.accountLease == runtimeContext.accountLease,
+              AccountLeaseRuntime.shared.validate(
+                  runtimeContext.accountLease,
+                  at: .ui
+              ).allowed else {
+            return false
+        }
+        let maximumIndex = max((tabBarController.viewControllers?.count ?? 1) - 1, 0)
+        tabBarController.selectedIndex = min(route.payload.kind.selectedTabIndex, maximumIndex)
+        return true
+    }
+
     private func setupTabs() {
         let archiveNav = featureFactory.makeArchiveNavigationController(
             runtimeContext: runtimeContext

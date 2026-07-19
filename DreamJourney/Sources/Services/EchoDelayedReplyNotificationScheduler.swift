@@ -263,6 +263,10 @@ final class EchoDelayedReplyNotificationScheduler: @unchecked Sendable {
         content.body = "回信到了，回来听听这段回响。"
         content.sound = .default
         content.userInfo = [
+            NotificationRuntimeRoutePayload.Key.schemaVersion: NSNumber(
+                value: NotificationRuntimeRoutePayload.schemaVersion
+            ),
+            NotificationRuntimeRoutePayload.Key.action: NotificationRuntimeRouteAction.open.rawValue,
             "type": "echoDelayedReply",
             "trigger": delayedReply.trigger.rawValue,
             "accountSubjectIdentity": scope.subjectIdentity,

@@ -17,25 +17,33 @@ final class AppCoordinator: Coordinator {
     private let accountSessionActor: AccountSessionActor
     private let appComposition: AppComposition
     private let lifecycleEventForwarder: AppLifecycleEventForwarder
+    private let notificationRuntimeRouteInbox: NotificationRuntimeRouteInbox
     private var rootMode: RootMode = .unresolved
     private var accountSessionReceipt: AccountSessionTransitionReceipt?
     private var accountSessionTask: Task<Void, Never>?
+    private weak var activeTabCoordinator: TabCoordinator?
+    private var notificationRuntimeRouteObserver: NSObjectProtocol?
 
     init(
         window: UIWindow,
         accountSessionActor: AccountSessionActor = .shared,
         appComposition: AppComposition? = nil,
-        lifecycleEventForwarder: AppLifecycleEventForwarder? = nil
+        lifecycleEventForwarder: AppLifecycleEventForwarder? = nil,
+        notificationRuntimeRouteInbox: NotificationRuntimeRouteInbox = .shared
     ) {
         self.window = window
         self.accountSessionActor = accountSessionActor
         self.appComposition = appComposition ?? AppComposition()
         self.lifecycleEventForwarder = lifecycleEventForwarder ?? AppLifecycleEventForwarder()
+        self.notificationRuntimeRouteInbox = notificationRuntimeRouteInbox
         self.navigationController = UINavigationController()
     }
 
     deinit {
         accountSessionTask?.cancel()
+        if let notificationRuntimeRouteObserver {
+            NotificationCenter.default.removeObserver(notificationRuntimeRouteObserver)
+        }
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -55,6 +63,15 @@ final class AppCoordinator: Coordinator {
             name: .djPrivateAccessDidSuspend,
             object: nil
         )
+        notificationRuntimeRouteObserver = NotificationCenter.default.addObserver(
+            forName: .djNotificationRuntimeRouteQueued,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.routePendingNotificationRuntimeRoutesIfPossible()
+            }
+        }
 
         bootstrapAccountSession()
     }
@@ -63,6 +80,7 @@ final class AppCoordinator: Coordinator {
         guard rootMode != .auth else { return }
         rootMode = .auth
         childCoordinators.removeAll()
+        activeTabCoordinator = nil
         let authCoordinator = AuthCoordinator(navigationController: navigationController)
         authCoordinator.didFinishLogin = { [weak self] in
             self?.removeChild(authCoordinator)
@@ -92,6 +110,7 @@ final class AppCoordinator: Coordinator {
         }
         rootMode = .main
         childCoordinators.removeAll()
+        activeTabCoordinator = tabCoordinator
         tabCoordinator.didRequestLogout = { [weak self] in
             self?.removeChild(tabCoordinator)
             self?.navigationController = UINavigationController()
@@ -101,6 +120,28 @@ final class AppCoordinator: Coordinator {
         window?.rootViewController = tabCoordinator.tabBarController
         window?.makeKeyAndVisible()
         tabCoordinator.start()
+        routePendingNotificationRuntimeRoutesIfPossible()
+    }
+
+    /// App/Scene ingress can queue a route before account bootstrap completes.
+    /// This method intentionally routes only after `showMainTab` has established
+    /// a valid AccountLease; it never starts Echo, Voice, or Digital Human work.
+    func receiveNotificationRuntimeRoute(
+        userInfo: [AnyHashable: Any],
+        source: NotificationRuntimeRouteSource
+    ) {
+        let result = notificationRuntimeRouteInbox.ingest(
+            userInfo: userInfo,
+            source: source
+        )
+        guard result.shouldNotifyRouter else { return }
+        routePendingNotificationRuntimeRoutesIfPossible()
+    }
+
+    func receiveNotificationRuntimeDeepLink(_ url: URL) {
+        let result = notificationRuntimeRouteInbox.ingest(deepLinkURL: url)
+        guard result.shouldNotifyRouter else { return }
+        routePendingNotificationRuntimeRoutesIfPossible()
     }
 
     /// SceneDelegate owns only UIKit callback forwarding. The coordinator
@@ -302,6 +343,37 @@ final class AppCoordinator: Coordinator {
         )
     }
 
+    private func routePendingNotificationRuntimeRoutesIfPossible() {
+        guard rootMode == .main,
+              let runtimeContext = currentFeatureRuntimeContext(),
+              let activeTabCoordinator,
+              AccountLeaseRuntime.shared.validate(
+                  runtimeContext.accountLease,
+                  at: .request
+              ).allowed,
+              AccountLeaseRuntime.shared.validate(
+                  runtimeContext.accountLease,
+                  at: .runtime
+              ).allowed,
+              AccountLeaseRuntime.shared.validate(
+                  runtimeContext.accountLease,
+                  at: .ui
+              ).allowed else {
+            return
+        }
+
+        let routes = notificationRuntimeRouteInbox.consumeRoutes(
+            accountLease: runtimeContext.accountLease
+        )
+        for route in routes {
+            guard route.accountLease == runtimeContext.accountLease else { continue }
+            _ = activeTabCoordinator.selectNotificationRuntimeRoute(
+                route,
+                runtimeContext: runtimeContext
+            )
+        }
+    }
+
     private func showStartupValidationGate() {
         let viewController = UIViewController()
         viewController.view.backgroundColor = UIColor(red: 0.99, green: 0.97, blue: 0.93, alpha: 1)
@@ -320,6 +392,7 @@ final class AppCoordinator: Coordinator {
 
     private func transitionToAuth() {
         childCoordinators.removeAll()
+        activeTabCoordinator = nil
         navigationController = UINavigationController()
         rootMode = .unresolved
         showAuth()

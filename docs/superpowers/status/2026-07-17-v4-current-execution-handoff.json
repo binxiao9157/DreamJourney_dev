@@ -3,7 +3,7 @@
     "authorityLock": "IOS_COMPOSITION",
     "backendPendingPaths": [],
     "completedSubSlices": [],
-    "currentSubSlice": "WI-S1-03-09-G0-DISCOVERY",
+    "currentSubSlice": "WI-S1-03-10-G0-DISCOVERY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "NOT_STARTED",
@@ -11,10 +11,10 @@
       "G3": "NOT_STARTED",
       "G4": "NOT_STARTED"
     },
-    "id": "WI-S1-03-09",
+    "id": "WI-S1-03-10",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-03-08 is internally ready at G0: typed Voice/Digital Human client ports, owner-keyed Memoir cache identities, account/persona/runtime-bound VoiceClone training state, fail-closed capability/session lease expiry, binding-scoped ordinary Echo TTS selection, and author-scoped Memoir fallback have passed final cross-path review. G1/G3/G4 remain open. WI-S1-03-09 now owns notification/deeplink runtime routing discovery. It must keep Voice/Digital Human runtime activation tied to the current AccountLease and current notification payload owner, without widening the public release scope."
+    "summary": "WI-S1-03-09 is internally ready at G0: notification, remote notification and deeplink ingress are parsed only as opaque owner-scoped route intents, validated against the active AccountLease at request/runtime/UI checkpoints, cleared on old-account lifecycle teardown, and routed only to a neutral Tab. G1/G3/G4 remain open. WI-S1-03-10 now owns QA support extraction and progressive strangler discovery without widening the public release scope."
   },
   "baselines": {
     "backend": "main@32c38f2",
@@ -369,12 +369,18 @@
       "id": "WI-S1-01-09",
       "implementationStatus": "INTERNAL_READY / LEGACY_INVENTORY_AND_VALUE_FREE_PARITY_OBSERVER_DEPLOYED / G0_G2_ISOLATED_POSTGRES_VERIFIED / REAL_DATA_LINEAGE_BACKFILL_AND_COHORT_CUTOVER_OPEN",
       "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_NO_CUTOVER"
+    },
+    {
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-09-notification-runtime-owner-routing.md",
+      "id": "WI-S1-03-09",
+      "implementationStatus": "INTERNAL_READY / G0_OWNER_ROUTING_VERIFIED / IOS_LOCAL_COMMITTED / G1_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-03-10",
+    "id": "WI-S1-01-04",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After WI-S1-03-09 binds notification/deeplink runtime routing to the active owner, continue with the next IOS_COMPOSITION item without widening the public release scope."
+    "summary": "After WI-S1-03-10 isolates QA orchestration from production composition, continue the next P0 Owner Truth item without widening the public release scope."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -383,5 +389,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-19T10:50:00+0800"
+  "updatedAt": "2026-07-19T11:05:00+0800"
 }

@@ -125,6 +125,15 @@ def main() -> None:
         require(re.search(signature, scheduler) is not None, f"explicit scheduler API missing: {signature}")
 
     request_builder = body_after(scheduler, "func makeRequest(")
+    for route_metadata in (
+        "NotificationRuntimeRoutePayload.Key.schemaVersion",
+        "NotificationRuntimeRoutePayload.Key.action",
+        "NotificationRuntimeRouteAction.open.rawValue",
+    ):
+        require(
+            route_metadata in request_builder,
+            f"notification runtime route metadata missing: {route_metadata}",
+        )
     for metadata_key in (
         '"type"',
         '"trigger"',

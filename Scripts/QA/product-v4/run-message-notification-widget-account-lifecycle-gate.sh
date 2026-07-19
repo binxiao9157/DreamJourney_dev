@@ -10,6 +10,8 @@ bash Scripts/QA/product-v4/run-in-app-message-owner-scope-gate.sh
 python3 Scripts/QA/product-v4/message-notification-account-lease-check.py
 
 git diff --check -- \
+  DreamJourney/Sources/App/AccountLease.swift \
+  DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift \
   DreamJourney/Sources/Services/EchoDelayedReplyStore.swift \
   DreamJourney/Sources/Services/EchoDelayedReplyNotificationScheduler.swift \
   DreamJourney/Sources/Modules/Archive/InAppMessageCenter.swift \

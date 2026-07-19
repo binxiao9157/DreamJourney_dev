@@ -20,6 +20,29 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         appCoordinator = coordinator
         coordinator.start()
         coordinator.handleSceneLifecycleEvent(.sceneConnected)
+        if let notificationResponse = connectionOptions.notificationResponse {
+            coordinator.receiveNotificationRuntimeRoute(
+                userInfo: notificationResponse.notification.request.content.userInfo,
+                source: .notificationResponse
+            )
+        }
+        connectionOptions.urlContexts.forEach { context in
+            coordinator.receiveNotificationRuntimeDeepLink(context.url)
+        }
+        connectionOptions.userActivities.compactMap(\.webpageURL).forEach { url in
+            coordinator.receiveNotificationRuntimeDeepLink(url)
+        }
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        URLContexts.forEach { context in
+            appCoordinator?.receiveNotificationRuntimeDeepLink(context.url)
+        }
+    }
+
+    func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+        guard let url = userActivity.webpageURL else { return }
+        appCoordinator?.receiveNotificationRuntimeDeepLink(url)
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
