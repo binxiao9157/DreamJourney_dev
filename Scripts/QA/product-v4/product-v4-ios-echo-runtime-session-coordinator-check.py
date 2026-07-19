@@ -59,6 +59,7 @@ def main() -> None:
         "echoRuntimeSessionCoordinator.invalidatePendingSessionRequest()",
         "echoRuntimeSessionCoordinator.finishInteraction()",
         "echoRuntimeSessionCoordinator.releaseRuntime()",
+        "runtimeSessionCallback: EchoRuntimeCallbackToken",
     ):
         require(required in view_controller, f"Echo runtime session integration missing: {required}")
 
@@ -75,11 +76,29 @@ def main() -> None:
         "runtimeSessionActivationRejected" in preparation,
         "stale session activation must be released before it can bind a runtime",
     )
+    require(
+        "runtimeSessionCallback: activeRuntimeSessionCallback" in preparation,
+        "provider runtime state must receive the active runtime session callback",
+    )
+    heartbeat = source_slice(
+        view_controller,
+        "    private func scheduleDigitalHumanSessionHeartbeat(",
+        "    private func cancelDigitalHumanSessionHeartbeat(",
+    )
+    require(
+        "runtimeSessionCallback: EchoRuntimeCallbackToken" in heartbeat,
+        "heartbeat must retain the active runtime session callback",
+    )
+    require(
+        "reason: \"digitalHumanSessionHeartbeatResponse\"" in heartbeat,
+        "heartbeat response must validate its runtime session callback",
+    )
 
     for test_name in (
         "func testLateRoleSwitchSessionCallbackIsRejectedBeforeActivation()",
         "func testStopInvalidatesInteractionButPreservesActiveSession()",
         "func testReleaseRejectsAllOutstandingSessionCallbacks()",
+        "func testSessionCallbackRejectsDifferentProviderSession()",
     ):
         require(test_name in tests, f"runtime session coordinator test missing: {test_name}")
 

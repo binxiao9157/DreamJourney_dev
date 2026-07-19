@@ -1527,7 +1527,8 @@ final class EchoViewController: UIViewController {
 
     private func activateDigitalHumanSessionLease(
         _ contract: DigitalHumanSessionContract,
-        lifecycleToken: DigitalHumanLifecycleToken
+        lifecycleToken: DigitalHumanLifecycleToken,
+        runtimeSessionCallback: EchoRuntimeCallbackToken
     ) {
         guard let accountLease = echoAccountLease,
               validateEchoAccountLease(
@@ -1553,7 +1554,11 @@ final class EchoViewController: UIViewController {
         activeDigitalHumanSessionContract = contract
         activeDigitalHumanSessionAccountLease = accountLease
         digitalHumanSessionHeartbeatFailureCount = 0
-        scheduleDigitalHumanSessionHeartbeat(for: contract, lifecycleToken: lifecycleToken)
+        scheduleDigitalHumanSessionHeartbeat(
+            for: contract,
+            lifecycleToken: lifecycleToken,
+            runtimeSessionCallback: runtimeSessionCallback
+        )
         if let lease = contract.lease {
             PrivacySafeDiagnostics.log(
                 subsystem: "TencentDigitalHuman",
@@ -1573,6 +1578,7 @@ final class EchoViewController: UIViewController {
     private func scheduleDigitalHumanSessionHeartbeat(
         for contract: DigitalHumanSessionContract,
         lifecycleToken: DigitalHumanLifecycleToken,
+        runtimeSessionCallback: EchoRuntimeCallbackToken,
         delayOverride: TimeInterval? = nil
     ) {
         cancelDigitalHumanSessionHeartbeat(reason: "reschedule")
@@ -1600,6 +1606,10 @@ final class EchoViewController: UIViewController {
                   self.isCurrentDigitalHumanSessionToken(
                     lifecycleToken,
                     reason: "digitalHumanSessionHeartbeat"
+                  ),
+                  self.isCurrentEchoRuntimeSessionCallback(
+                    runtimeSessionCallback,
+                    reason: "digitalHumanSessionHeartbeat"
                   ) else {
                 return
             }
@@ -1615,6 +1625,10 @@ final class EchoViewController: UIViewController {
                       self.isCurrentDigitalHumanSessionToken(
                         lifecycleToken,
                         reason: "digitalHumanSessionHeartbeatResponse"
+                      ),
+                      self.isCurrentEchoRuntimeSessionCallback(
+                        runtimeSessionCallback,
+                        reason: "digitalHumanSessionHeartbeatResponse"
                       ) else {
                     return
                 }
@@ -1623,7 +1637,8 @@ final class EchoViewController: UIViewController {
                     self.digitalHumanSessionHeartbeatFailureCount = 0
                     self.scheduleDigitalHumanSessionHeartbeat(
                         for: contract,
-                        lifecycleToken: lifecycleToken
+                        lifecycleToken: lifecycleToken,
+                        runtimeSessionCallback: runtimeSessionCallback
                     )
                     PrivacySafeDiagnostics.log(
                         subsystem: "TencentDigitalHuman",
@@ -1651,6 +1666,7 @@ final class EchoViewController: UIViewController {
                         self.scheduleDigitalHumanSessionHeartbeat(
                             for: contract,
                             lifecycleToken: lifecycleToken,
+                            runtimeSessionCallback: runtimeSessionCallback,
                             delayOverride: 5
                         )
                     }
@@ -2120,6 +2136,16 @@ final class EchoViewController: UIViewController {
             return false
         }
         return true
+    }
+
+    private func isCurrentEchoRuntimeSessionCallback(
+        _ callback: EchoRuntimeCallbackToken?,
+        reason: String
+    ) -> Bool {
+        guard let callback else {
+            return true
+        }
+        return isCurrentEchoRuntimeSessionCallback(callback, reason: reason)
     }
 
     @discardableResult
@@ -3244,7 +3270,26 @@ final class EchoViewController: UIViewController {
                 )
                 return
             }
-            activateDigitalHumanSessionLease(contract, lifecycleToken: lifecycleToken)
+            guard let activeRuntimeSessionCallback = echoRuntimeSessionCoordinator.currentSessionCallbackToken() else {
+                releaseDigitalHumanSessionLease(
+                    contract,
+                    accountLease: accountLease,
+                    reason: "runtimeSessionCallbackMissing"
+                )
+                echoRuntimeSessionCoordinator.releaseRuntime()
+                PrivacySafeDiagnostics.log(
+                    subsystem: "TencentDigitalHuman",
+                    event: "sessionResponseIgnored",
+                    states: ["reason": "runtimeSessionCallbackMissing"],
+                    correlations: ["request": requestID]
+                )
+                return
+            }
+            activateDigitalHumanSessionLease(
+                contract,
+                lifecycleToken: lifecycleToken,
+                runtimeSessionCallback: activeRuntimeSessionCallback
+            )
             let profile = contract.toDigitalHumanProfile(displayName: context.resolvedDisplayName)
             lastDigitalHumanSessionEvidenceSummary = EchoDigitalHumanSessionEvidenceSummary(
                 contract: contract,
@@ -3279,7 +3324,11 @@ final class EchoViewController: UIViewController {
             digitalHumanRuntime = runtime
             digitalHumanRuntimeContextKey = contextKey
             digitalHumanRuntimeLifecycleGeneration = lifecycleToken.generation
-            bindDigitalHumanRuntimeState(runtime, lifecycleToken: lifecycleToken)
+            bindDigitalHumanRuntimeState(
+                runtime,
+                lifecycleToken: lifecycleToken,
+                runtimeSessionCallback: activeRuntimeSessionCallback
+            )
 
             guard runtimeSelection.isRealSDKBacked else {
                 runtime.interrupt()
@@ -4792,7 +4841,8 @@ final class EchoViewController: UIViewController {
 
     private func bindDigitalHumanRuntimeState(
         _ runtime: DigitalHumanRuntime,
-        lifecycleToken: DigitalHumanLifecycleToken
+        lifecycleToken: DigitalHumanLifecycleToken,
+        runtimeSessionCallback: EchoRuntimeCallbackToken? = nil
     ) {
         runtime.onStateChange = { [weak self, weak runtime] state in
             DispatchQueue.main.async {
@@ -4801,6 +4851,10 @@ final class EchoViewController: UIViewController {
                       self.digitalHumanRuntimeLifecycleGeneration == lifecycleToken.generation,
                       self.isCurrentDigitalHumanSessionToken(
                         lifecycleToken,
+                        reason: "runtimeStateChange"
+                      ),
+                      self.isCurrentEchoRuntimeSessionCallback(
+                        runtimeSessionCallback,
                         reason: "runtimeStateChange"
                       ) else {
                     return

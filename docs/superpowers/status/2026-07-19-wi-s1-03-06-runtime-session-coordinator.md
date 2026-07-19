@@ -7,9 +7,9 @@
 - Work Item：`WI-S1-03-06`
 - Authority lock：`IOS_COMPOSITION`
 - Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`
-- 当前结果：`IN_PROGRESS / FIRST_G0_RUNTIME_LEASE_AND_SESSION_CALLBACK_FENCE_VERIFIED / G1_G3_G4_OPEN`
-- 本切片：`WI-S1-03-06-RUNTIME_LEASE_AND_SESSION_CREATE_CALLBACK_FENCE_G0_COMPLETE`
-- 范围：先为 Echo 数字人建立本地 RuntimeLease 和 session 创建回包围栏；不改变全屏 UI、
+- 当前结果：`IN_PROGRESS / SECOND_G0_SESSION_CALLBACK_FENCE_VERIFIED / G1_G3_G4_OPEN`
+- 本切片：`WI-S1-03-06-HEARTBEAT_AND_PROVIDER_STATE_CALLBACK_FENCE_G0_COMPLETE`
+- 范围：为 Echo 数字人建立本地 RuntimeLease，先围住 session 创建、heartbeat 和 Provider state 回包；不改变全屏 UI、
   音频 owner、腾讯 Provider 合同或公开发布范围。
 
 ## 已实现
@@ -28,10 +28,14 @@
   只能被拒绝；
 - `EchoViewController` 的 `/digital-human/sessions` capability 与 session 创建 callback 已接入该围栏。
   stale contract 继续走已有的后端 release 清理，不能重绑旧角色、旧 asset 或旧 runtime。
+- 已激活 session 的 heartbeat 定时器、heartbeat 回包和腾讯运行时 state callback 也携带同一份带 session ID 的
+  RuntimeLease token；角色切换、页面释放或 session replacement 后的迟到事件不能再更新当前 runtime、触发恢复或降级；
+- session release 回包保持为与 UIKit runtime 解耦的 backend cleanup：它只能维护对应 contract 的 deferred-cleanup
+  队列与诊断，不能覆盖当前角色/当前 session 的页面状态。这条 cleanup 路径后续仍会单独补其回执审计。
 
 本轮保留现有 `DigitalHumanLifecycleCoordinator` 和 `DigitalHumanConversationCoordinator`。这是刻意的
-渐进迁移：session 创建回包先由新的 RuntimeLease 把关，heartbeat、Provider state callback、恢复策略
-和完整生命周期收敛将在同一 Work Item 的后续切片迁移，避免旧/new coordinator 同时创建 Provider session。
+渐进迁移：session 创建、heartbeat 和 Provider state callback 先由新的 RuntimeLease 把关；Provider 文本/PCM
+interaction callback、恢复策略和完整生命周期收敛仍在同一 Work Item 的后续切片迁移，避免旧/new coordinator同时创建 Provider session。
 
 ## 验证
 
@@ -47,7 +51,8 @@ git diff --check
 - `product-v4-ios-echo-runtime-session-coordinator-check.py` 验证 RuntimeLease 类型、Controller 接入点、
   session callback fence 和 XCTest 覆盖声明；
 - `echo-runtime-session-coordinator-model-smoke.swift` 实际编译运行，覆盖：角色切换迟到回包、停止回合
-  保留 session 但拒绝旧 interaction callback、页面释放后拒绝所有迟到 session callback；
+  保留 session 但拒绝旧 interaction callback、页面释放后拒绝所有迟到 session callback、替换 session 的
+  heartbeat/state callback 因 session ID 不一致被拒绝；
 - Debug、`generic/platform=iOS`、`CODE_SIGNING_ALLOWED=NO` 的 `build-for-testing` 成功，App 和
   `DreamJourneyTests` bundle 均已编译；
 - `git diff --check` 通过。
@@ -57,8 +62,9 @@ git diff --check
 
 ## 未完成边界
 
-- heartbeat、release callback、Provider runtime state callback 仍由 `EchoViewController` 的既有路径处理，
-  尚未完全移动到 coordinator；
+- heartbeat 和 Provider runtime state callback 已消费 RuntimeLease token，但其调度/恢复流程仍留在
+  `EchoViewController`，尚未把所有 lifecycle policy 移为 coordinator 的唯一实现；
+- session release 仍是独立 backend cleanup 回包，尚未纳入完整 receipt/audit 模型；
 - `beginInteraction`/`finishInteraction` 已有纯模型和本地 lifecycle 对齐，但 Provider 文本/PCM callback 的
   逐个 token 消费属于后续子切片；本轮不把该模型测试误报为已完成的真实 Provider interaction 验收；
 - G1 仍受当前 scheme 没有 runnable simulator destination 阻断；G3 的腾讯配额、session cleanup 和
@@ -67,6 +73,6 @@ git diff --check
 
 ## 下一步
 
-继续 `WI-S1-03-06`：将 heartbeat、session release 和 provider state callback 逐步改为消费同一个
-RuntimeLease callback token，并为 account/role switch、background grace、quota failure 和普通 Echo fallback
-补 G0 模型验证。只有该 coordinator 成为唯一 session creator 后，才能进入 `WI-S1-03-07` 的音频 owner 仲裁。
+继续 `WI-S1-03-06`：将 Provider 文本/PCM interaction callback 与 background grace、quota failure、普通 Echo fallback
+逐步改为消费同一个 RuntimeLease token，并为它们补 G0 模型验证。只有该 coordinator 成为唯一 session creator 后，才能进入
+`WI-S1-03-07` 的音频 owner 仲裁。

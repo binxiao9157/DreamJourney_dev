@@ -443,6 +443,46 @@ final class EchoRuntimeSessionCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.validate(callback), .rejected(.noActiveLease))
     }
 
+    func testSessionCallbackRejectsDifferentProviderSession() {
+        let coordinator = EchoRuntimeSessionCoordinator()
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 7)
+        let request = coordinator.beginSessionRequest(
+            accountLease: accountLease,
+            lifecycleToken: DigitalHumanLifecycleToken(
+                generation: 11,
+                interactionGeneration: 3,
+                contextKey: "viewer|owner-1|self"
+            ),
+            contextKey: "viewer|owner-1|self",
+            requestID: "session-request"
+        )
+        XCTAssertEqual(
+            coordinator.activateSession(
+                request,
+                sessionID: "active-session",
+                providerAssetID: "asset-self",
+                expiresAt: nil
+            ),
+            .accepted
+        )
+
+        let staleSessionCallback = EchoRuntimeCallbackToken(
+            accountLease: accountLease,
+            contextKey: "viewer|owner-1|self",
+            runtimeGeneration: coordinator.runtimeGeneration,
+            lifecycleGeneration: 11,
+            interactionGeneration: 3,
+            requestID: nil,
+            sessionID: "previous-session",
+            scope: .session
+        )
+
+        XCTAssertEqual(
+            coordinator.validate(staleSessionCallback),
+            .rejected(.sessionMismatch)
+        )
+    }
+
     private func makeAccountLease(subjectId: String, generation: UInt64) -> AccountLease {
         AccountLease(
             subjectId: subjectId,

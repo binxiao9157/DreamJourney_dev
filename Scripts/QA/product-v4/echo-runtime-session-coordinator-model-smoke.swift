@@ -6,6 +6,7 @@ enum EchoRuntimeSessionCoordinatorModelSmoke {
         verifyLateRoleSwitchCannotActivateStaleSession()
         verifyStopPreservesSessionButInvalidatesInteraction()
         verifyReleaseRejectsOutstandingSessionCallback()
+        verifySessionCallbackRejectsDifferentProviderSession()
         print("Echo runtime session coordinator model smoke passed")
     }
 
@@ -124,6 +125,45 @@ enum EchoRuntimeSessionCoordinatorModelSmoke {
         require(
             coordinator.validate(session) == .rejected(.noActiveLease),
             "page exit or runtime release must reject late provider callbacks"
+        )
+    }
+
+    private static func verifySessionCallbackRejectsDifferentProviderSession() {
+        let coordinator = EchoRuntimeSessionCoordinator()
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 7)
+        let request = coordinator.beginSessionRequest(
+            accountLease: accountLease,
+            lifecycleToken: token(
+                generation: 11,
+                interactionGeneration: 3,
+                contextKey: "viewer|owner-1|self"
+            ),
+            contextKey: "viewer|owner-1|self",
+            requestID: "request-self"
+        )
+        require(
+            coordinator.activateSession(
+                request,
+                sessionID: "active-session",
+                providerAssetID: "self-asset",
+                expiresAt: nil
+            ) == .accepted,
+            "active session setup should succeed"
+        )
+        let staleSession = EchoRuntimeCallbackToken(
+            accountLease: accountLease,
+            contextKey: "viewer|owner-1|self",
+            runtimeGeneration: coordinator.runtimeGeneration,
+            lifecycleGeneration: 11,
+            interactionGeneration: 3,
+            requestID: nil,
+            sessionID: "previous-session",
+            scope: .session
+        )
+
+        require(
+            coordinator.validate(staleSession) == .rejected(.sessionMismatch),
+            "heartbeat or provider state from a replaced session must be rejected"
         )
     }
 
