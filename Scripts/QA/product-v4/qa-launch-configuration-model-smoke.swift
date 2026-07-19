@@ -55,6 +55,7 @@ struct QALaunchConfigurationModelSmoke {
                 "QA scenario runner must preserve launch capability and seed policies"
             )
             verifySessionPreparation()
+            verifyResultWriter()
         } else {
             require(
                 !configuration.contains("DJQAExact"),
@@ -136,4 +137,33 @@ struct QALaunchConfigurationModelSmoke {
         )
         require(loginCount == 2 && resetCount == 1, "reset scenario must log in before resetting flags")
     }
+
+    #if DEBUG || UI_QA_SIMULATOR
+    private static func verifyResultWriter() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("dreamjourney-qa-result-writer-model-smoke", isDirectory: true)
+        try? FileManager.default.removeItem(at: directory)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: directory) }
+
+            let outputURL = try QAScenarioResultWriter.write(
+                ["schemaVersion": 1, "kind": "modelSmoke"],
+                fileName: "qa-result.json",
+                directory: directory
+            )
+            require(outputURL.lastPathComponent == "qa-result.json", "writer must preserve the requested file name")
+            guard let data = try? Data(contentsOf: outputURL),
+                  let decoded = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                fatalError("writer must persist a readable JSON result")
+            }
+            require(decoded["schemaVersion"] as? Int == 1, "writer must preserve scalar result fields")
+            require(decoded["kind"] as? String == "modelSmoke", "writer must preserve string result fields")
+        } catch {
+            fatalError("writer model smoke failed error=\(error.localizedDescription)")
+        }
+    }
+    #else
+    private static func verifyResultWriter() {}
+    #endif
 }

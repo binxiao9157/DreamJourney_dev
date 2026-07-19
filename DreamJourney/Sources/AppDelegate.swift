@@ -4212,77 +4212,58 @@ private extension AppDelegate {
     }
 
     func writeEchoTraceExportSmokeResult(_ result: [String: Any]) {
-        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
-              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            print("[UI_QA] EchoTraceExportSmoke failed reason=resultEncoding")
-            return
-        }
-
-        let resultURL = documentsURL.appendingPathComponent("echo-trace-export-smoke-result.json")
-        do {
-            try data.write(to: resultURL, options: [.atomic])
-        } catch {
-            print("[UI_QA] EchoTraceExportSmoke failed reason=resultWrite error=\(error.localizedDescription)")
-        }
+        writeEchoQAExportSmokeResult(
+            result,
+            fileName: "echo-trace-export-smoke-result.json",
+            smokeName: "EchoTraceExportSmoke"
+        )
     }
 
     func writeEchoRuntimeDiagnosticsExportSmokeResult(_ result: [String: Any]) {
-        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
-              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            print("[UI_QA] EchoRuntimeDiagnosticsExportSmoke failed reason=resultEncoding")
-            return
-        }
-
-        let resultURL = documentsURL.appendingPathComponent("echo-runtime-diagnostics-export-smoke-result.json")
-        do {
-            try data.write(to: resultURL, options: [.atomic])
-        } catch {
-            print("[UI_QA] EchoRuntimeDiagnosticsExportSmoke failed reason=resultWrite error=\(error.localizedDescription)")
-        }
+        writeEchoQAExportSmokeResult(
+            result,
+            fileName: "echo-runtime-diagnostics-export-smoke-result.json",
+            smokeName: "EchoRuntimeDiagnosticsExportSmoke"
+        )
     }
 
     func writeEchoTraceEvidencePackageExportSmokeResult(_ result: [String: Any]) {
-        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
-              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            print("[UI_QA] EchoTraceEvidencePackageExportSmoke failed reason=resultEncoding")
-            return
-        }
-
-        let resultURL = documentsURL.appendingPathComponent("echo-trace-evidence-package-export-smoke-result.json")
-        do {
-            try data.write(to: resultURL, options: [.atomic])
-        } catch {
-            print("[UI_QA] EchoTraceEvidencePackageExportSmoke failed reason=resultWrite error=\(error.localizedDescription)")
-        }
+        writeEchoQAExportSmokeResult(
+            result,
+            fileName: "echo-trace-evidence-package-export-smoke-result.json",
+            smokeName: "EchoTraceEvidencePackageExportSmoke"
+        )
     }
 
     func writeEchoTraceEvidencePackagePanelExportSmokeResult(_ result: [String: Any]) {
-        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
-              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            print("[UI_QA] EchoTraceEvidencePackagePanelExportSmoke failed reason=resultEncoding")
-            return
-        }
-
-        let resultURL = documentsURL.appendingPathComponent("echo-trace-evidence-package-panel-export-smoke-result.json")
-        do {
-            try data.write(to: resultURL, options: [.atomic])
-        } catch {
-            print("[UI_QA] EchoTraceEvidencePackagePanelExportSmoke failed reason=resultWrite error=\(error.localizedDescription)")
-        }
+        writeEchoQAExportSmokeResult(
+            result,
+            fileName: "echo-trace-evidence-package-panel-export-smoke-result.json",
+            smokeName: "EchoTraceEvidencePackagePanelExportSmoke"
+        )
     }
 
     func writeEchoQAEvidenceBundleExportSmokeResult(_ result: [String: Any]) {
-        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
-              let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            print("[UI_QA] EchoQAEvidenceBundleExportSmoke failed reason=resultEncoding")
-            return
-        }
+        writeEchoQAExportSmokeResult(
+            result,
+            fileName: "echo-qa-evidence-bundle-export-smoke-result.json",
+            smokeName: "EchoQAEvidenceBundleExportSmoke"
+        )
+    }
 
-        let resultURL = documentsURL.appendingPathComponent("echo-qa-evidence-bundle-export-smoke-result.json")
+    func writeEchoQAExportSmokeResult(
+        _ result: [String: Any],
+        fileName: String,
+        smokeName: String
+    ) {
         do {
-            try data.write(to: resultURL, options: [.atomic])
+            _ = try QAScenarioResultWriter.write(result, fileName: fileName)
+        } catch QAScenarioResultWriter.WriteError.resultEncoding {
+            print("[UI_QA] \(smokeName) failed reason=resultEncoding")
+        } catch QAScenarioResultWriter.WriteError.resultWrite(let error) {
+            print("[UI_QA] \(smokeName) failed reason=resultWrite error=\(error.localizedDescription)")
         } catch {
-            print("[UI_QA] EchoQAEvidenceBundleExportSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+            print("[UI_QA] \(smokeName) failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 

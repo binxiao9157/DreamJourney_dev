@@ -40,6 +40,8 @@ def main() -> None:
         "enum QAScenarioRunner",
         "static func makeLaunchPlan(from configuration: QALaunchConfiguration)",
         "static func prepareSession(",
+        "enum QAScenarioResultWriter",
+        "static func write(",
     ):
         require(anchor in feature_flags, f"QALaunchConfiguration missing boundary anchor: {anchor}")
 
@@ -79,6 +81,25 @@ def main() -> None:
         "func prepareUIQASession(" not in app_delegate,
         "AppDelegate must not retain the pre-runner session-preparation helper",
     )
+    require(
+        "func writeEchoQAExportSmokeResult(" in app_delegate,
+        "AppDelegate must retain one stable Echo QA export adapter",
+    )
+    require(
+        "QAScenarioResultWriter.write(result, fileName: fileName)" in app_delegate,
+        "Echo QA export adapter must use the compile-isolated result writer",
+    )
+    for smoke_name in (
+        "EchoTraceExportSmoke",
+        "EchoRuntimeDiagnosticsExportSmoke",
+        "EchoTraceEvidencePackageExportSmoke",
+        "EchoTraceEvidencePackagePanelExportSmoke",
+        "EchoQAEvidenceBundleExportSmoke",
+    ):
+        require(
+            f'smokeName: "{smoke_name}"' in app_delegate,
+            f"{smoke_name} must retain its stable result label through the shared writer",
+        )
     require(
         "switch scenario" in app_delegate,
         "AppDelegate UIQA harness must dispatch through the typed scenario registry",

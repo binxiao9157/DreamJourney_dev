@@ -246,6 +246,40 @@ enum QAScenarioRunner {
     }
 }
 
+#if DEBUG || UI_QA_SIMULATOR
+/// Shared, compile-isolated result writer for deterministic UIQA smoke output.
+/// Scenario-specific code retains ownership of result names and log labels;
+/// this type only owns JSON encoding and atomic file persistence.
+enum QAScenarioResultWriter {
+    enum WriteError: Error {
+        case resultEncoding
+        case resultWrite(Error)
+    }
+
+    static func write(
+        _ result: [String: Any],
+        fileName: String,
+        directory: URL? = nil
+    ) throws -> URL {
+        guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+              let outputDirectory = directory ?? FileManager.default.urls(
+                for: .documentDirectory,
+                in: .userDomainMask
+              ).first else {
+            throw WriteError.resultEncoding
+        }
+
+        let outputURL = outputDirectory.appendingPathComponent(fileName)
+        do {
+            try data.write(to: outputURL, options: [.atomic])
+            return outputURL
+        } catch {
+            throw WriteError.resultWrite(error)
+        }
+    }
+}
+#endif
+
 enum DJFeature: String, CaseIterable {
     case echoTextInput
     case echoImageInput
