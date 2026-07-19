@@ -8,8 +8,8 @@
 QA-only read envelope 被 iOS 解析和隔离缓存，但旧 KBLite、公开 Archive、Context
 Packet 与 Echo 都没有切换。
 
-状态：`INTERNAL_READY / G0_SCOPED_EVIDENCE_PRESENT / G2_DEPLOYMENT_PENDING /
-G1_G3_G4_OPEN`。
+状态：`INTERNAL_READY / BACKEND_DEPLOYED / G0_G2_SCOPED_EVIDENCE_PRESENT /
+IOS_LOCAL_COMMITTED / G1_G3_G4_OPEN`。
 
 ## 实现
 
@@ -49,8 +49,17 @@ bash Scripts/QA/product-v4/run-ios-owner-truth-kblite-compatibility-gate.sh
 `build-for-testing`。新增测试覆盖 ready 解析、hash 篡改拒绝、A -> B -> A 缓存
 隔离、non-ready discard 和损坏本地文件删除。
 
-后端定向单测 68 项、Python compile 和 `git diff --check` 也已通过；G2 仍需在本轮
-后端提交部署后运行隔离 Postgres smoke。
+后端定向单测 68 项、Python compile 和 `git diff --check` 也已通过。
+
+部署 G2 已完成：
+
+- Backend `162afb0` 已在服务器 fast-forward 并重建 API 容器。
+- `/ready` 返回 HTTP 200，database、schema、auth、incident 全部 ready。
+- 容器内 `run-backend-owner-truth-postgres-smoke.sh` 通过，包含
+  `kbliteCompatibilityReadEnvelope`、knowledge-only、content hash、non-ready
+  discard、敏感字段不进入 graph 与 legacy isolation。
+- 容器内 `run-backend-route-authentication-postgres-smoke.sh` 通过，
+  `routeCount=91`、anonymous/user/machine principal 边界均符合合同。
 
 ## 非目标
 
@@ -61,6 +70,6 @@ bash Scripts/QA/product-v4/run-ios-owner-truth-kblite-compatibility-gate.sh
 
 ## 下一步
 
-分别提交 iOS 与后端；部署后端并跑 Owner Truth/route-auth Postgres smoke。之后按
-路线进入 `WI-S1-01-07`，继续 Owner QA Context 与 typed Citation，仍保持公开
-release scope 不变。
+本轮 iOS 与后端已提交，后端已部署并完成 Owner Truth/route-auth Postgres smoke。
+之后按路线进入 `WI-S1-01-07`，继续 Owner QA Context 与 typed Citation，仍保持
+公开 release scope 不变。

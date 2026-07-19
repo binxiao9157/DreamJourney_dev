@@ -6,7 +6,7 @@
 
 - Work Item：`WI-S1-01-06`
 - Authority lock：`OWNER_TRUTH`
-- 执行结果：`SCOPED_G0_G2_PROJECTION_EVIDENCE_PRESENT / KBLITE_READ_ENVELOPE_INTERNAL_READY / G2_READ_ENVELOPE_DEPLOYMENT_PENDING`
+- 执行结果：`SCOPED_G0_G2_PROJECTION_EVIDENCE_PRESENT / KBLITE_READ_ENVELOPE_DEPLOYED / G1_G3_G4_OPEN`
 - 范围：只实现确认态 `MemoryVersion` 的 owner-only、默认关闭、可重复重建 Projection 基础；不切换 KBLite、Context Packet、Echo 或公开 UI。
 
 ## 已实现
@@ -47,9 +47,12 @@
 
 1. Backend `1109a64 feat(v4): add owner truth memory projection` 已推送。
 2. Backend `9ac88e3 fix(v4): repair memory projection trigger mapping` 已推送；服务器已应用 migration `0017`。
-3. Backend `f1f37c5 test(v4): align route authentication smoke inventory` 已推送并部署；服务器当前 head 为 `f1f37c5`。
+3. Backend `f1f37c5 test(v4): align route authentication smoke inventory` 已推送并部署；随后 `162afb0 feat(v4): add owner truth compatibility read envelope` 已推送并部署，服务器当前 head 为 `162afb0`。
 4. 服务器 Owner Truth Postgres smoke 通过，包含 deterministic rebuild、corrected content、Source revocation fail-closed、stale epoch 与 payload leakage 拒绝。
-5. 服务器 route-authentication smoke 通过，`routeCount=82`；线上 `/ready` 为 ready。
+5. 服务器 route-authentication smoke 首轮通过，`routeCount=82`；线上 `/ready` 为 ready。
+6. `162afb0` 部署后再次运行隔离 Owner Truth Postgres smoke，通过 read-envelope 的 standard-fact content hash、non-ready discard、敏感字段过滤与 legacy isolation 验证。
+7. `162afb0` 部署后 route-authentication Postgres smoke 通过，`routeCount=91`，并确认匿名用户、机器 principal 与用户 principal 的路由边界仍然 fail closed。
+8. 部署后 API、Postgres 和 Redis 均为 healthy，`/ready` 返回 database、schema、auth、incident 全部 ready。
 
 ## 明确未做
 
@@ -61,5 +64,5 @@
 
 ## 下一项
 
-完成 read-envelope 部署和 G2 smoke 后，进入 `WI-S1-01-07` 的 Owner QA Context
+read-envelope 的 G2 部署与 smoke 已完成。下一步进入 `WI-S1-01-07` 的 Owner QA Context
 与 typed Citation 子闭环；保持 legacy KBLite 不能成为 confirmed-fact Authority。
