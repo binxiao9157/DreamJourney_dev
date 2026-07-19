@@ -8,6 +8,7 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 cd "$ROOT_DIR"
 
 python3 Scripts/QA/product-v4/qa-launch-configuration-static-check.py
+python3 Scripts/QA/product-v4/qa-non-echo-dispatch-inventory-check.py
 
 swiftc -D DEBUG \
   DreamJourney/Sources/App/FeatureFlagService.swift \
@@ -38,6 +39,7 @@ git diff --check -- \
   Scripts/QA/product-v4/global-private-store-retirement-uiqa-check.py \
   Scripts/QA/product-v4/product-v4-ios-owner-truth-candidate-client-check.py \
   Scripts/QA/product-v4/qa-launch-configuration-static-check.py \
+  Scripts/QA/product-v4/qa-non-echo-dispatch-inventory-check.py \
   Scripts/QA/product-v4/qa-launch-configuration-model-smoke.swift \
   Scripts/QA/product-v4/run-qa-launch-configuration-gate.sh
 
