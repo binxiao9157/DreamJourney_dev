@@ -717,8 +717,16 @@ struct VoiceCloneRuntimeCapability {
     let contractVersion: Int
     let axisSnapshot: RuntimeCapabilitySnapshot
 
+    var canTrain: Bool {
+        axisSnapshot.isRuntimeContractUsable && realProviderReady
+    }
+
+    var canQuery: Bool {
+        axisSnapshot.isRuntimeContractUsable && realProviderReady
+    }
+
     var canSynthesize: Bool {
-        axisSnapshot.isProviderOperational
+        axisSnapshot.isRuntimeContractUsable && synthesisProviderReady
     }
 
     static func localFallback(isBackendConfigured: Bool) -> VoiceCloneRuntimeCapability {
@@ -1035,8 +1043,18 @@ struct DigitalHumanRuntimeCapability {
         enabled && provider == "tencent" && providerMode == "mockContract"
     }
 
+    /// Mock contracts remain a QA-only simulator route.  They still require a
+    /// complete, non-stale runtime contract, but do not pretend to carry the
+    /// real scoped mobile credential that cloud render requires.
+    var allowsClientSessionRequest: Bool {
+        canCreateMockSession
+            ? axisSnapshot.isRuntimeContractUsable
+            : allowsScopedMobileSession
+    }
+
     var allowsScopedMobileSession: Bool {
-        axisSnapshot.isProviderOperational
+        axisSnapshot.isProviderEffectAllowed
+            && realProviderReady
             && credentialMode == "scopedSessionCredential"
             && accessPath == "scopedSessionCredential"
             && mobileDirectAllowed
@@ -1176,9 +1194,13 @@ struct DigitalHumanSessionCredential {
     let scopedSessionReady: Bool
 
     var isUsableScopedSessionCredential: Bool {
+        isUsableScopedSessionCredential(at: Date())
+    }
+
+    func isUsableScopedSessionCredential(at instant: Date) -> Bool {
         mode == "scopedSessionCredential"
             && scopedSessionReady
-            && (expiresAt.map { $0 > Date() } ?? false)
+            && (expiresAt.map { $0 > instant } ?? false)
     }
 
     init(json: [String: Any]?) {
@@ -1207,6 +1229,12 @@ struct DigitalHumanSessionLeaseContract {
 
     var isActive: Bool {
         status == "active"
+    }
+
+    func isUsable(at instant: Date) -> Bool {
+        isActive
+            && releasedAt == nil
+            && (expiresAt.map { $0 > instant } ?? false)
     }
 
     init(json: [String: Any]) {
@@ -1369,7 +1397,7 @@ struct DigitalHumanSessionContract {
     let credential: DigitalHumanSessionCredential
     let fallbackMode: String
     let fallbackReason: String
-    let lease: DigitalHumanSessionLeaseContract?
+    var lease: DigitalHumanSessionLeaseContract?
     let contractVersion: Int
 
     init?(json: [String: Any]) {
@@ -1411,6 +1439,30 @@ struct DigitalHumanSessionContract {
         self.fallbackReason = fallback?["reason"] as? String ?? ""
         self.lease = (json["lease"] as? [String: Any]).map(DigitalHumanSessionLeaseContract.init(json:))
         self.contractVersion = Self.intValue(json["contractVersion"]) ?? 1
+    }
+
+    var isUsableForClientRuntime: Bool {
+        isUsableForClientRuntime(at: Date())
+    }
+
+    func isUsableForClientRuntime(at instant: Date) -> Bool {
+        guard !sessionId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
+        }
+
+        // Mock contracts are QA-only and do not mint a cloud credential/lease.
+        // They remain usable for the existing simulator contract smoke, while
+        // every real cloud-render path must satisfy both expiry boundaries.
+        if providerMode == "mockContract" {
+            return contractVersion > 0
+        }
+
+        return credential.isUsableScopedSessionCredential(at: instant)
+            && (lease?.isUsable(at: instant) ?? false)
+    }
+
+    mutating func replaceLease(_ refreshedLease: DigitalHumanSessionLeaseContract) {
+        lease = refreshedLease
     }
 
     func toDigitalHumanProfile(displayName: String) -> DigitalHumanProfile {
@@ -4294,7 +4346,7 @@ final class DreamJourneyBackendClient {
         completion: @escaping (Result<DigitalHumanSessionLeaseOperationResult, Error>) -> Void
     ) {
         guard let lease = contract.lease,
-              lease.isActive,
+              lease.isUsable(at: Date()),
               !contract.userId.isEmpty,
               !contract.deviceId.isEmpty else {
             completion(.failure(ClientError.backendError(

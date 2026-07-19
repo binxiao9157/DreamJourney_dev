@@ -301,34 +301,55 @@ final class MemoirTTSService {
             return
         }
 
-        // 先检查音色是否就绪
-        VoiceCloneService.shared.isVoiceReady(
-            speakerId: speakerId,
-            accountLease: accountLease
-        ) { [weak self] ready in
+        // The backend runtime capability is the authority boundary for clone
+        // synthesis.  Do not let a stale local profile start a provider call.
+        voiceCloneSynthesisClient.fetchVoiceCloneRuntimeCapability { [weak self] capabilityResult in
             guard let self,
                   self.isCurrent(operation),
                   self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
                 self?.finishSynthesis(operation)
                 return
             }
-            if !ready {
+            guard case .success(let capability) = capabilityResult,
+                  capability.canSynthesize else {
                 self.finishSynthesis(operation)
                 self.deliver(
-                    .failure(.voiceNotReady),
+                    .failure(.runtimeCapabilityUnavailable),
                     accountLease: accountLease,
                     completion: completion
                 )
                 return
             }
-            self.performSynthesis(
-                memoir: memoir,
+            // Only query profile readiness after the runtime contract is known
+            // to be current and usable.
+            VoiceCloneService.shared.isVoiceReady(
                 speakerId: speakerId,
-                speed: speed,
-                volume: volume,
-                operation: operation,
-                completion: completion
-            )
+                accountLease: accountLease
+            ) { [weak self] ready in
+                guard let self,
+                      self.isCurrent(operation),
+                      self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+                    self?.finishSynthesis(operation)
+                    return
+                }
+                if !ready {
+                    self.finishSynthesis(operation)
+                    self.deliver(
+                        .failure(.voiceNotReady),
+                        accountLease: accountLease,
+                        completion: completion
+                    )
+                    return
+                }
+                self.performSynthesis(
+                    memoir: memoir,
+                    speakerId: speakerId,
+                    speed: speed,
+                    volume: volume,
+                    operation: operation,
+                    completion: completion
+                )
+            }
         }
     }
 
@@ -1086,6 +1107,7 @@ final class MemoirTTSService {
 
 enum TTSError: LocalizedError {
     case apiKeyMissing
+    case runtimeCapabilityUnavailable
     case accountSessionChanged
     case noSpeakerId
     case voiceNotReady         // 音色未训练完成
@@ -1099,6 +1121,8 @@ enum TTSError: LocalizedError {
         switch self {
         case .apiKeyMissing:
             return "声音复刻合成后端未配置"
+        case .runtimeCapabilityUnavailable:
+            return "声音复刻服务暂不可用，请稍后再试"
         case .accountSessionChanged:
             return "账号状态已变化，请重新进入后再合成"
         case .noSpeakerId:

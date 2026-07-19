@@ -36,7 +36,7 @@ final class DigitalHumanRuntimeFactory {
            realTencentProviderModes.contains(contract.providerMode) {
             guard let capability,
                   capability.allowsScopedMobileSession,
-                  contract.credential.isUsableScopedSessionCredential else {
+                  contract.isUsableForClientRuntime else {
                 let readinessMessage = capability?.sdkReadinessMessage ?? "Digital-human runtime capability is missing."
                 return DigitalHumanRuntimeSelection(
                     runtime: AudioOnlyDigitalHumanRuntime(contentView: contentView),

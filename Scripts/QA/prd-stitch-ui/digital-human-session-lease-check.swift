@@ -54,6 +54,11 @@ require(
     "iOS must parse the backend-issued lease and its operation endpoints"
 )
 require(
+    client.contains("func isUsable(at instant: Date) -> Bool")
+        && client.contains("func isUsableForClientRuntime(at instant: Date) -> Bool"),
+    "client must reject expired lease and credential contracts before runtime activation"
+)
+require(
     client.contains("let sessionLease: DigitalHumanSessionLeaseRuntimeCapability"),
     "runtime capability must expose the session-lease contract"
 )
@@ -69,9 +74,20 @@ require(
     "Echo must retain the active lease and schedule heartbeat work"
 )
 require(
+    echo.contains("lease.isUsable(at: Date())")
+        && echo.contains("refreshedContract.replaceLease(operation.lease)")
+        && echo.contains("echoRuntimeSessionCoordinator.renewSession("),
+    "heartbeat success must refresh the local lease and callback-expiry boundary"
+)
+require(
     handleSession.contains("releaseDigitalHumanSessionLease(")
         && handleSession.contains("staleSessionResponse"),
     "a successful stale session response must be released instead of discarded"
+)
+require(
+    handleSession.contains("contract.isUsableForClientRuntime")
+        && handleSession.contains("digitalHumanSessionContractExpiredOrMalformed"),
+    "expired or malformed sessions must be released before a provider runtime is opened"
 )
 require(
     releaseRuntime.contains("releaseActiveDigitalHumanSessionLease(reason: reason)"),

@@ -40,6 +40,7 @@ def main() -> None:
         "final class EchoRuntimeSessionCoordinator",
         "func beginSessionRequest(",
         "func activateSession(",
+        "func renewSession(",
         "func beginInteraction(",
         "func finishInteraction()",
         "func invalidatePendingSessionRequest()",
@@ -95,6 +96,11 @@ def main() -> None:
         "reason: \"digitalHumanSessionHeartbeatResponse\"" in heartbeat,
         "heartbeat response must validate its runtime session callback",
     )
+    require(
+        "refreshedContract.replaceLease(operation.lease)" in heartbeat
+        and "echoRuntimeSessionCoordinator.renewSession(" in heartbeat,
+        "heartbeat success must refresh both the session contract and callback expiry boundary",
+    )
     interaction = source_slice(
         view_controller,
         "    private func sendEchoReplyViaTencentVoiceClonePCMDrive(",
@@ -147,6 +153,8 @@ def main() -> None:
         "func testBackgroundOrFallbackReleaseRejectsSessionAndInteractionCallbacks()",
         "func testSessionCallbackRejectsDifferentProviderSession()",
         "func testNewInteractionRejectsPriorRequestCallbacks()",
+        "func testExpiredSessionRejectsNewWork()",
+        "func testHeartbeatRenewalExtendsSessionCallbackBoundary()",
     ):
         require(test_name in tests, f"runtime session coordinator test missing: {test_name}")
 

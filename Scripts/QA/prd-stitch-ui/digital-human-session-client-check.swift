@@ -47,6 +47,7 @@ require(client.contains("\"providerFieldAliases\""), "runtime capability should 
 
 require(runtime.contains("DigitalHumanSessionState"), "runtime abstraction must exist")
 require(runtimeFactory.contains("makeRuntime(") && runtimeFactory.contains("for contract: DigitalHumanSessionContract"), "runtime factory should create runtime from backend session contract")
+require(runtimeFactory.contains("contract.isUsableForClientRuntime"), "runtime factory must reject expired or malformed real session contracts")
 require(runtimeFactory.contains("isRealSDKBacked: false"), "runtime factory should not claim real SDK readiness without linked adapter")
 require(echo.contains("digitalHumanRuntime: DigitalHumanRuntime?"), "Echo must hold a runtime abstraction")
 require(echo.contains("runUIQADigitalHumanRuntimeStubSmoke"), "Echo QA runtime stub smoke is missing")

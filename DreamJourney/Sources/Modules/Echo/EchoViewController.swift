@@ -1616,7 +1616,7 @@ final class EchoViewController: UIViewController {
                 reason: "scheduleDigitalHumanSessionHeartbeat"
               ),
               let lease = contract.lease,
-              lease.isActive else {
+              lease.isUsable(at: Date()) else {
             return
         }
 
@@ -1665,9 +1665,29 @@ final class EchoViewController: UIViewController {
                 }
                 switch result {
                 case .success(let operation):
+                    guard operation.sessionId == sessionId,
+                          operation.lease.isUsable(at: Date()),
+                          var refreshedContract = self.activeDigitalHumanSessionContract,
+                          refreshedContract.sessionId == sessionId else {
+                        self.degradeTencentDigitalHumanRoute(
+                            reason: "digital_human_session_heartbeat_invalid_lease"
+                        )
+                        return
+                    }
+                    refreshedContract.replaceLease(operation.lease)
+                    guard self.echoRuntimeSessionCoordinator.renewSession(
+                        runtimeSessionCallback,
+                        expiresAt: operation.lease.expiresAt
+                    ) == .accepted else {
+                        self.degradeTencentDigitalHumanRoute(
+                            reason: "digital_human_session_heartbeat_renewal_rejected"
+                        )
+                        return
+                    }
+                    self.activeDigitalHumanSessionContract = refreshedContract
                     self.digitalHumanSessionHeartbeatFailureCount = 0
                     self.scheduleDigitalHumanSessionHeartbeat(
-                        for: contract,
+                        for: refreshedContract,
                         lifecycleToken: lifecycleToken,
                         runtimeSessionCallback: runtimeSessionCallback
                     )
@@ -3332,6 +3352,14 @@ final class EchoViewController: UIViewController {
                         )
                         return
                     }
+                    guard capability.allowsClientSessionRequest else {
+                        self.failClosedDigitalHumanRuntimePreparation(
+                            requestOwnerUserId: requestOwnerUserId,
+                            reason: "digitalHumanRuntimeCapabilityUnavailable",
+                            detail: capability.axisSnapshot.diagnosticSummary
+                        )
+                        return
+                    }
                     self.createCloudDigitalHumanSession(
                         capability: capability,
                         context: context,
@@ -3387,6 +3415,32 @@ final class EchoViewController: UIViewController {
         }
     }
 
+    private func failClosedDigitalHumanRuntimePreparation(
+        requestOwnerUserId: String,
+        reason: String,
+        detail: String? = nil
+    ) {
+        echoRuntimeSessionCoordinator.releaseRuntime()
+        pendingDigitalHumanSessionRequestID = nil
+        pendingDigitalHumanSessionContextKey = nil
+        hasRequestedCloudDigitalHumanRuntime = false
+        digitalHumanStatusDetailLabel.text = "数字人暂不可用，已回到普通回响"
+        digitalHumanLivePanelView?.removeHostedProviderView(showFallbackMessage: "数字人暂不可用")
+        lastDigitalHumanSessionEvidenceSummary = .unavailable(
+            ownerUserId: requestOwnerUserId,
+            reason: reason,
+            detail: detail
+        )
+        lastEchoRuntimeFallbackReason = reason
+        recordEchoRuntimeDiagnosticsSnapshot(reason: reason)
+        applyEchoAudioRoutePolicy()
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "runtimeCapabilityRejected",
+            states: ["reason": reason]
+        )
+    }
+
     private func createCloudDigitalHumanSession(
         capability: DigitalHumanRuntimeCapability,
         context: DigitalHumanContext,
@@ -3397,6 +3451,14 @@ final class EchoViewController: UIViewController {
         accountLease: AccountLease,
         requestOwnerUserId: String
     ) {
+        guard capability.allowsClientSessionRequest else {
+            failClosedDigitalHumanRuntimePreparation(
+                requestOwnerUserId: requestOwnerUserId,
+                reason: "digitalHumanRuntimeCapabilityRejectedBeforeSession",
+                detail: capability.axisSnapshot.diagnosticSummary
+            )
+            return
+        }
         let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? "ios-device"
         guard let scope = VoiceDigitalHumanOperationScope(
             accountLease: accountLease,
@@ -3481,6 +3543,31 @@ final class EchoViewController: UIViewController {
 
         switch result {
         case .success(let contract):
+            guard capability.allowsClientSessionRequest else {
+                releaseDigitalHumanSessionLease(
+                    contract,
+                    accountLease: accountLease,
+                    reason: "runtimeCapabilityRejectedAfterSession"
+                )
+                failClosedDigitalHumanRuntimePreparation(
+                    requestOwnerUserId: requestOwnerUserId,
+                    reason: "digitalHumanRuntimeCapabilityRejectedAfterSession",
+                    detail: capability.axisSnapshot.diagnosticSummary
+                )
+                return
+            }
+            guard contract.isUsableForClientRuntime else {
+                releaseDigitalHumanSessionLease(
+                    contract,
+                    accountLease: accountLease,
+                    reason: "expiredOrMalformedSessionContract"
+                )
+                failClosedDigitalHumanRuntimePreparation(
+                    requestOwnerUserId: requestOwnerUserId,
+                    reason: "digitalHumanSessionContractExpiredOrMalformed"
+                )
+                return
+            }
             let activation = echoRuntimeSessionCoordinator.activateSession(
                 runtimeSessionCallback,
                 sessionID: contract.sessionId,
@@ -3969,8 +4056,35 @@ final class EchoViewController: UIViewController {
             )
             return true
         }
-        if let capability = voiceCloneRuntimeCapability,
-           !(capability.canSynthesize && capability.tencentAudioDrive.supported) {
+        guard let capability = voiceCloneRuntimeCapability else {
+            renderVoiceStatus(text: "复刻声音能力读取中，暂不使用默认音色", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
+            lastVoiceCloneProviderLogId = nil
+            lastVoiceCloneProviderRequestId = nil
+            lastVoiceCloneProviderMode = nil
+            lastVoiceSynthesisEvidenceSummary = .unavailable(
+                ownerUserId: currentEchoEvidenceOwnerUserId,
+                reason: "voiceCloneRuntimeCapabilityUnknown"
+            )
+            lastEchoRuntimeFallbackReason = "voiceCloneRuntimeCapabilityUnknown"
+            recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneRuntimeCapabilityUnknown")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "voiceClonePCMDriveUnavailable",
+                states: [
+                    "audioOwner": currentEchoAudioOwner.rawValue,
+                    "outputMode": "tencentAudioDrive",
+                    "reason": "runtimeCapabilityUnknown",
+                    "voiceSource": voiceSelection.source.rawValue,
+                ],
+                correlations: [
+                    "voiceProfile": voiceProfileId,
+                    "contextOwner": voiceSelection.contextOwnerId,
+                ]
+            )
+            return true
+        }
+        guard capability.canSynthesize,
+              capability.tencentAudioDrive.supported else {
             renderVoiceStatus(text: "复刻声音服务暂不可用", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
             lastVoiceCloneProviderLogId = nil
             lastVoiceCloneProviderRequestId = nil

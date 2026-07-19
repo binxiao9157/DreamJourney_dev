@@ -558,6 +558,10 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard validateViewOperation(at: .ui),
               validateViewOperation(at: .request) else { return }
+        guard canSubmitVoiceTraining else {
+            feedbackLabel?.text = "声音复刻训练服务暂不可用，请稍后再试。"
+            return
+        }
         guard let audioURL = urls.first else { return }
         let didAccess = audioURL.startAccessingSecurityScopedResource()
         defer {
@@ -737,16 +741,32 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             && voiceCloneRuntimeCapability.canSynthesize
     }
 
+    private var canSubmitVoiceTraining: Bool {
+        voiceCloneRuntimeCapability.canTrain
+    }
+
+    private var canRefreshVoiceTrainingStatus: Bool {
+        voiceCloneRuntimeCapability.canQuery
+    }
+
     private var canAcceptVoiceQuality: Bool {
         canPreviewVoice && snapshot.qualityAcceptanceRequired
     }
 
     private func updateActionAvailability() {
         let hasValidLease = validateViewOperation(at: .ui)
-        submitButton?.isEnabled = hasValidLease && !isBusy && authorizationSwitch.isOn
+        submitButton?.isEnabled = hasValidLease
+            && !isBusy
+            && authorizationSwitch.isOn
+            && canSubmitVoiceTraining
         previewButton?.isEnabled = hasValidLease && !isBusy && canPreviewVoice
         acceptQualityButton?.isEnabled = hasValidLease && !isBusy && canAcceptVoiceQuality
-        refreshButton?.isEnabled = hasValidLease && !isBusy && hasVoiceProfile && snapshot.sampleStatus != .deleted && snapshot.sampleStatus != .disabled
+        refreshButton?.isEnabled = hasValidLease
+            && !isBusy
+            && hasVoiceProfile
+            && snapshot.sampleStatus != .deleted
+            && snapshot.sampleStatus != .disabled
+            && canRefreshVoiceTrainingStatus
         disableButton?.isEnabled = hasValidLease && !isBusy && hasVoiceProfile && snapshot.sampleStatus != .disabled && snapshot.sampleStatus != .deleted
         deleteButton?.isEnabled = hasValidLease && !isBusy && hasVoiceProfile && snapshot.sampleStatus != .deleted
         previewButton?.isHidden = !canPreviewVoice

@@ -21,6 +21,7 @@ enum EchoRuntimeCallbackRejection: Equatable {
     case requestMismatch
     case sessionMismatch
     case sessionNotRequesting
+    case sessionExpired
 }
 
 enum EchoRuntimeCallbackValidation: Equatable {
@@ -88,7 +89,8 @@ final class EchoRuntimeSessionCoordinator {
     func currentSessionCallbackToken() -> EchoRuntimeCallbackToken? {
         guard let activeLease,
               activeLease.status == .active,
-              activeLease.sessionID != nil else {
+              activeLease.sessionID != nil,
+              activeLease.expiresAt.map({ $0 > Date() }) ?? true else {
             return nil
         }
         return callbackToken(for: activeLease, scope: .session)
@@ -154,7 +156,8 @@ final class EchoRuntimeSessionCoordinator {
     ) -> EchoRuntimeCallbackToken? {
         guard let activeLease,
               activeLease.status == .active,
-              activeLease.sessionID != nil else {
+              activeLease.sessionID != nil,
+              activeLease.expiresAt.map({ $0 > Date() }) ?? true else {
             return nil
         }
         let interactionGeneration = activeLease.interactionGeneration &+ 1
@@ -196,6 +199,40 @@ final class EchoRuntimeSessionCoordinator {
         )
     }
 
+    /// A successful backend heartbeat extends the session lease.  Keep the
+    /// coordinator's callback boundary in sync so an otherwise-valid runtime
+    /// is not rejected at the original expiry time.
+    @discardableResult
+    func renewSession(
+        _ callback: EchoRuntimeCallbackToken,
+        expiresAt: Date?
+    ) -> EchoRuntimeCallbackValidation {
+        let validation = validate(callback)
+        guard validation == .accepted,
+              let activeLease,
+              activeLease.status == .active else {
+            return validation
+        }
+        guard expiresAt.map({ $0 > Date() }) == true else {
+            return .rejected(.sessionExpired)
+        }
+
+        self.activeLease = EchoRuntimeLease(
+            accountLease: activeLease.accountLease,
+            contextKey: activeLease.contextKey,
+            conversationID: activeLease.conversationID,
+            requestID: activeLease.requestID,
+            sessionID: activeLease.sessionID,
+            providerAssetID: activeLease.providerAssetID,
+            expiresAt: expiresAt,
+            runtimeGeneration: activeLease.runtimeGeneration,
+            lifecycleGeneration: activeLease.lifecycleGeneration,
+            interactionGeneration: activeLease.interactionGeneration,
+            status: activeLease.status
+        )
+        return .accepted
+    }
+
     func invalidatePendingSessionRequest() {
         guard activeLease?.status == .requestingSession else {
             return
@@ -224,6 +261,10 @@ final class EchoRuntimeSessionCoordinator {
         }
         guard activeLease.lifecycleGeneration == callback.lifecycleGeneration else {
             return .rejected(.lifecycleGenerationMismatch)
+        }
+        if let expiresAt = activeLease.expiresAt,
+           expiresAt <= Date() {
+            return .rejected(.sessionExpired)
         }
         if let callbackSessionID = callback.sessionID,
            activeLease.sessionID != callbackSessionID {

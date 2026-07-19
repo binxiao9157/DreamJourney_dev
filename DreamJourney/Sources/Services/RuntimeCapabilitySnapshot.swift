@@ -36,8 +36,27 @@ struct RuntimeCapabilitySnapshot: Equatable {
     let evidenceTimestamp: Date?
     let contractComplete: Bool
 
+    /// The runtime contract is safe to use as an authority boundary.  A missing
+    /// external verification receipt is intentionally not treated as a provider
+    /// outage for internal/QA flows, but an explicitly stale receipt is.  This
+    /// prevents a cached runtime response from reviving an expired provider path.
+    var isRuntimeContractUsable: Bool {
+        contractComplete
+            && implemented
+            && enabled
+            && reason != "externalEvidenceStale"
+    }
+
+    /// Provider-backed effects additionally require the provider to be ready.
+    /// Keep this separate from `isRuntimeContractUsable` because individual
+    /// operations (for example clone training versus synthesis) may carry a
+    /// more specific provider readiness signal.
+    var isProviderEffectAllowed: Bool {
+        isRuntimeContractUsable && providerReady
+    }
+
     var isProviderOperational: Bool {
-        contractComplete && implemented && enabled && providerReady
+        isProviderEffectAllowed
     }
 
     var isPubliclyAvailable: Bool {

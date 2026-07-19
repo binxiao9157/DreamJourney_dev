@@ -9,6 +9,8 @@ enum EchoRuntimeSessionCoordinatorModelSmoke {
         verifyBackgroundOrFallbackReleaseRejectsSessionAndInteractionCallbacks()
         verifySessionCallbackRejectsDifferentProviderSession()
         verifyNewInteractionRejectsPriorRequestCallbacks()
+        verifyExpiredSessionRejectsNewWork()
+        verifyHeartbeatRenewalExtendsSessionCallbackBoundary()
         print("Echo runtime session coordinator model smoke passed")
     }
 
@@ -248,6 +250,81 @@ enum EchoRuntimeSessionCoordinatorModelSmoke {
         require(
             coordinator.validate(replacement) == .accepted,
             "the newest provider request should remain valid"
+        )
+    }
+
+    private static func verifyExpiredSessionRejectsNewWork() {
+        let coordinator = EchoRuntimeSessionCoordinator()
+        let request = coordinator.beginSessionRequest(
+            accountLease: makeAccountLease(subjectId: "owner-1", generation: 7),
+            lifecycleToken: token(
+                generation: 11,
+                interactionGeneration: 3,
+                contextKey: "viewer|owner-1|self"
+            ),
+            contextKey: "viewer|owner-1|self",
+            requestID: "expired-session-request"
+        )
+        require(
+            coordinator.activateSession(
+                request,
+                sessionID: "expired-session",
+                providerAssetID: "self-asset",
+                expiresAt: Date().addingTimeInterval(-1)
+            ) == .accepted,
+            "an expired provider response still has to be representable for rejection"
+        )
+        require(
+            coordinator.validate(request) == .rejected(.sessionExpired),
+            "expired lease callbacks must fail closed"
+        )
+        require(
+            coordinator.currentSessionCallbackToken() == nil,
+            "expired lease must not issue a new session callback"
+        )
+        require(
+            coordinator.beginInteraction(conversationID: "conversation", requestID: "reply") == nil,
+            "expired lease must not begin a provider interaction"
+        )
+    }
+
+    private static func verifyHeartbeatRenewalExtendsSessionCallbackBoundary() {
+        let coordinator = EchoRuntimeSessionCoordinator()
+        let request = coordinator.beginSessionRequest(
+            accountLease: makeAccountLease(subjectId: "owner-1", generation: 7),
+            lifecycleToken: token(
+                generation: 11,
+                interactionGeneration: 3,
+                contextKey: "viewer|owner-1|self"
+            ),
+            contextKey: "viewer|owner-1|self",
+            requestID: "renew-session-request"
+        )
+        let initialExpiry = Date().addingTimeInterval(10)
+        require(
+            coordinator.activateSession(
+                request,
+                sessionID: "renew-session",
+                providerAssetID: "self-asset",
+                expiresAt: initialExpiry
+            ) == .accepted,
+            "active session setup should succeed"
+        )
+        guard let callback = coordinator.currentSessionCallbackToken() else {
+            fail("active session should issue a callback before renewal")
+        }
+        let renewedExpiry = Date().addingTimeInterval(120)
+        require(
+            coordinator.renewSession(callback, expiresAt: renewedExpiry) == .accepted,
+            "valid heartbeat renewal should update the session expiry"
+        )
+        require(
+            coordinator.activeLease?.expiresAt == renewedExpiry,
+            "renewed expiry must become the active callback boundary"
+        )
+        require(
+            coordinator.validate(callback) == .accepted,
+            "session callback remains valid after a successful renewal"
         )
     }
 

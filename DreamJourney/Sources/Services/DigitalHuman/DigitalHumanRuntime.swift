@@ -182,6 +182,10 @@ enum VoiceDigitalHumanClientPortError: Error, Equatable {
 protocol VoiceCloneSynthesisClientPort: AnyObject {
     var isVoiceCloneSynthesisConfigured: Bool { get }
 
+    func fetchVoiceCloneRuntimeCapability(
+        completion: @escaping (Result<VoiceCloneRuntimeCapability, Error>) -> Void
+    )
+
     func requestVoiceCloneSynthesis(
         _ request: VoiceCloneSynthesisRequest,
         completion: @escaping (Result<VoiceCloneSynthesisResult, Error>) -> Void

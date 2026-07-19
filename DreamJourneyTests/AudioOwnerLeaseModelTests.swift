@@ -739,6 +739,67 @@ final class EchoRuntimeSessionCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.validate(replacement), .accepted)
     }
 
+    func testExpiredSessionRejectsNewWork() {
+        let coordinator = EchoRuntimeSessionCoordinator()
+        let request = coordinator.beginSessionRequest(
+            accountLease: makeAccountLease(subjectId: "owner-1", generation: 7),
+            lifecycleToken: DigitalHumanLifecycleToken(
+                generation: 11,
+                interactionGeneration: 3,
+                contextKey: "viewer|owner-1|self"
+            ),
+            contextKey: "viewer|owner-1|self",
+            requestID: "expired-session-request"
+        )
+        XCTAssertEqual(
+            coordinator.activateSession(
+                request,
+                sessionID: "expired-session",
+                providerAssetID: "asset-self",
+                expiresAt: Date().addingTimeInterval(-1)
+            ),
+            .accepted
+        )
+
+        XCTAssertEqual(coordinator.validate(request), .rejected(.sessionExpired))
+        XCTAssertNil(coordinator.currentSessionCallbackToken())
+        XCTAssertNil(
+            coordinator.beginInteraction(
+                conversationID: "conversation",
+                requestID: "reply"
+            )
+        )
+    }
+
+    func testHeartbeatRenewalExtendsSessionCallbackBoundary() throws {
+        let coordinator = EchoRuntimeSessionCoordinator()
+        let request = coordinator.beginSessionRequest(
+            accountLease: makeAccountLease(subjectId: "owner-1", generation: 7),
+            lifecycleToken: DigitalHumanLifecycleToken(
+                generation: 11,
+                interactionGeneration: 3,
+                contextKey: "viewer|owner-1|self"
+            ),
+            contextKey: "viewer|owner-1|self",
+            requestID: "renew-session-request"
+        )
+        XCTAssertEqual(
+            coordinator.activateSession(
+                request,
+                sessionID: "renew-session",
+                providerAssetID: "asset-self",
+                expiresAt: Date().addingTimeInterval(10)
+            ),
+            .accepted
+        )
+        let callback = try XCTUnwrap(coordinator.currentSessionCallbackToken())
+        let renewedExpiry = Date().addingTimeInterval(120)
+
+        XCTAssertEqual(coordinator.renewSession(callback, expiresAt: renewedExpiry), .accepted)
+        XCTAssertEqual(coordinator.activeLease?.expiresAt, renewedExpiry)
+        XCTAssertEqual(coordinator.validate(callback), .accepted)
+    }
+
     private func makeAccountLease(subjectId: String, generation: UInt64) -> AccountLease {
         AccountLease(
             subjectId: subjectId,

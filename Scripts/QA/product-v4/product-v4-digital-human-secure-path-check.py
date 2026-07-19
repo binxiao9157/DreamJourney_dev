@@ -28,6 +28,7 @@ def main() -> None:
     require("let brokerStatus: String" in client, "digital-human runtime must parse brokerStatus")
     require("let decisionReasonCode: String?" in client, "digital-human runtime must parse decision receipt")
     require("var allowsScopedMobileSession: Bool" in client, "runtime capability needs a deny-by-default guard")
+    require("var allowsClientSessionRequest: Bool" in client, "Echo must distinguish bounded QA mock sessions from real cloud sessions")
     require('accessPath == "scopedSessionCredential"' in client, "only scoped session access may enable mobile direct")
     require('brokerStatus == "verified"' in client, "unverified broker status must remain denied")
     require("var isUsableScopedSessionCredential: Bool" in client, "session credential must reject expired or incomplete contracts")
@@ -38,7 +39,7 @@ def main() -> None:
     require("credentialBrokerUnavailable" in bridge, "real bridge must fail closed without an approved adapter")
 
     require("allowsScopedMobileSession" in factory, "runtime factory must enforce broker capability")
-    require("isUsableScopedSessionCredential" in factory, "runtime factory must enforce session credential usability")
+    require("isUsableForClientRuntime" in factory, "runtime factory must enforce session credential and lease usability")
     require("capability == nil" not in factory, "missing runtime capability must not implicitly authorize direct mobile")
     require("credentialBrokerUnavailable" in runtime, "cloud runtime must retain an explicit closed-path error")
 
