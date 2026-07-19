@@ -642,6 +642,192 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertFalse(text.contains(answer))
     }
 
+    func testCorrectionRequestCommandBindsVerifiedCitationAndReceiptIsValueFree() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let query = "请只依据已确认记忆回答"
+        let answer = "我会基于已确认的记忆继续陪您回顾。"
+        let correctionText = "不是父亲，是外祖父在院子里讲故事。"
+        let answerReceipt = try verifiedAnswerCitationReceipt(
+            for: lease,
+            query: query,
+            answer: answer,
+            commandID: "owner-truth-answer-citation-correction-001"
+        )
+        let citation = try XCTUnwrap(answerReceipt.citations.first)
+        let command = try OwnerTruthCorrectionRequestCommand(
+            commandID: "owner-truth-correction-request-001",
+            receipt: answerReceipt,
+            citationID: citation.citationID,
+            correctionText: correctionText,
+            reasonCode: "ownerReportedCorrection"
+        )
+
+        XCTAssertEqual(command.answerID, answerReceipt.answerID)
+        XCTAssertEqual(command.citationID, citation.citationID)
+        XCTAssertEqual(command.memoryID, citation.citation.memoryID)
+        XCTAssertEqual(command.expectedMemoryVersionID, citation.citation.memoryVersionID)
+        XCTAssertEqual(command.backendJSONObject["commandId"] as? String, command.commandID)
+        XCTAssertEqual(
+            command.backendJSONObject["answerId"] as? String,
+            answerReceipt.answerID.rawValue.uuidString.lowercased()
+        )
+        XCTAssertEqual(command.backendJSONObject["correctionText"] as? String, correctionText)
+
+        let receipt = try OwnerTruthCorrectionRequestReceipt(
+            backendJSONObject: correctionRequestReceiptResponse(for: command),
+            expectedCommand: command
+        )
+
+        XCTAssertEqual(receipt.outcome, .created)
+        XCTAssertEqual(receipt.status, .pendingReview)
+        XCTAssertEqual(receipt.answerID, command.answerID)
+        XCTAssertEqual(receipt.citationID, command.citationID)
+        XCTAssertEqual(receipt.memoryID, command.memoryID)
+        XCTAssertEqual(receipt.expectedMemoryVersionID, command.expectedMemoryVersionID)
+        XCTAssertEqual(receipt.correctionTextHash, command.correctionTextHash)
+        XCTAssertEqual(receipt.correctionTextLength, command.correctionTextLength)
+
+        let encoded = try JSONEncoder().encode(receipt)
+        let text = String(decoding: encoded, as: UTF8.self)
+        XCTAssertFalse(text.contains(correctionText))
+        XCTAssertFalse(text.contains(answer))
+        XCTAssertFalse(text.contains(query))
+    }
+
+    func testCorrectionRequestReceiptRejectsRawCorrectionAnswerAndContent() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let query = "纠错回执不得回显问题"
+        let answer = "纠错回执也不得回显回答。"
+        let correctionText = "正确人物应为外祖父。"
+        let answerReceipt = try verifiedAnswerCitationReceipt(
+            for: lease,
+            query: query,
+            answer: answer,
+            commandID: "owner-truth-answer-citation-correction-raw"
+        )
+        let command = try OwnerTruthCorrectionRequestCommand(
+            commandID: "owner-truth-correction-request-raw",
+            receipt: answerReceipt,
+            citationID: try XCTUnwrap(answerReceipt.citations.first).citationID,
+            correctionText: correctionText,
+            reasonCode: "ownerReportedCorrection"
+        )
+
+        let prohibitedValues: [(String, Any)] = [
+            ("correctionText", correctionText),
+            ("answerText", answer),
+            ("content", ["summary": "不得出现在纠错回执里的档案正文"]),
+        ]
+        for (field, value) in prohibitedValues {
+            var response = correctionRequestReceiptResponse(for: command)
+            var request = try XCTUnwrap(response["correctionRequest"] as? [String: Any])
+            request[field] = value
+            response["correctionRequest"] = request
+
+            XCTAssertThrowsError(
+                try OwnerTruthCorrectionRequestReceipt(
+                    backendJSONObject: response,
+                    expectedCommand: command
+                ),
+                "raw field \(field) must be rejected"
+            ) { error in
+                guard case .invalidCorrectionRequestReceipt = error as? OwnerTruthRemoteContractError else {
+                    return XCTFail("expected raw correction receipt rejection, got \(error)")
+                }
+            }
+        }
+    }
+
+    func testCorrectionRequestReceiptRejectsMismatchedIdentityAndIntegrity() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let answerReceipt = try verifiedAnswerCitationReceipt(
+            for: lease,
+            query: "纠错回执必须绑定原回答",
+            answer: "每个纠错请求只对应一个已验证引用。",
+            commandID: "owner-truth-answer-citation-correction-binding"
+        )
+        let command = try OwnerTruthCorrectionRequestCommand(
+            commandID: "owner-truth-correction-request-binding",
+            receipt: answerReceipt,
+            citationID: try XCTUnwrap(answerReceipt.citations.first).citationID,
+            correctionText: "被引用的记忆需要更正。",
+            reasonCode: "ownerReportedCorrection"
+        )
+        let mismatches: [(String, Any)] = [
+            ("citationId", "00000000-0000-0000-0000-000000000331"),
+            ("memoryId", "00000000-0000-0000-0000-000000000332"),
+            ("expectedMemoryVersionId", "00000000-0000-0000-0000-000000000333"),
+            ("correctionTextHash", digest("another-correction")),
+            ("correctionTextLength", command.correctionTextLength + 1),
+        ]
+        for (field, value) in mismatches {
+            var response = correctionRequestReceiptResponse(for: command)
+            var request = try XCTUnwrap(response["correctionRequest"] as? [String: Any])
+            request[field] = value
+            response["correctionRequest"] = request
+
+            XCTAssertThrowsError(
+                try OwnerTruthCorrectionRequestReceipt(
+                    backendJSONObject: response,
+                    expectedCommand: command
+                ),
+                "mismatched \(field) must be rejected"
+            ) { error in
+                guard case .invalidCorrectionRequestReceipt = error as? OwnerTruthRemoteContractError else {
+                    return XCTFail("expected correction identity rejection, got \(error)")
+                }
+            }
+        }
+    }
+
+    func testCorrectionRequestCommandRejectsInvalidInputAndUnknownCitation() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let answerReceipt = try verifiedAnswerCitationReceipt(
+            for: lease,
+            query: "只允许已验证引用发起纠错",
+            answer: "纠错请求必须锁定一条已有引用。",
+            commandID: "owner-truth-answer-citation-correction-invalid"
+        )
+        let citationID = try XCTUnwrap(answerReceipt.citations.first).citationID
+
+        let invalidCommands: [(String, String, String)] = [
+            (" ", "ownerReportedCorrection", "需要更正"),
+            ("1-invalid-command", "ownerReportedCorrection", "需要更正"),
+            ("owner-truth-correction-request-invalid", "reason code", "需要更正"),
+            ("owner-truth-correction-request-invalid", "ownerReportedCorrection", " \n "),
+        ]
+        for (commandID, reasonCode, correctionText) in invalidCommands {
+            XCTAssertThrowsError(
+                try OwnerTruthCorrectionRequestCommand(
+                    commandID: commandID,
+                    receipt: answerReceipt,
+                    citationID: citationID,
+                    correctionText: correctionText,
+                    reasonCode: reasonCode
+                ),
+                "invalid correction input must fail closed"
+            ) { error in
+                guard case .invalidCorrectionRequestCommand = error as? OwnerTruthRemoteContractError else {
+                    return XCTFail("expected invalid correction command, got \(error)")
+                }
+            }
+        }
+
+        XCTAssertThrowsError(
+            try OwnerTruthCorrectionRequestCommand(
+                commandID: "owner-truth-correction-request-unknown-citation",
+                receipt: answerReceipt,
+                citationID: recordID("00000000-0000-0000-0000-000000000339"),
+                correctionText: "不能绑定未验证引用。",
+                reasonCode: "ownerReportedCorrection"
+            )
+        ) { error in
+            guard case .invalidCorrectionRequestCommand = error as? OwnerTruthRemoteContractError else {
+                return XCTFail("expected unknown citation rejection, got \(error)")
+            }
+        }
+    }
+
     func testContextCitationQAEvidenceReadoutHashesReferencesWithoutRawText() throws {
         let (_, lease) = try makeActiveRuntime()
         let query = "这段问题不能进入 QA 导出包"
@@ -724,6 +910,241 @@ final class OwnerTruthContractsTests: XCTestCase {
                 return XCTFail("expected changed context rejection, got \(error)")
             }
         }
+    }
+
+    func testCorrectionRequestCommandAndReceiptBindExactAnswerCitationWithoutRawText() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let query = "请依据已确认记忆回答"
+        let answer = "我会只依据已确认的个人记忆继续回答。"
+        let correctionText = "不是父亲，是外祖父在院子里讲故事。"
+        let build = try OwnerTruthContextShadowBuild(
+            backendJSONObject: try contextShadowBuildResponse(for: lease, query: query),
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+            expectedIntent: "echo_chat",
+            expectedQuery: query
+        )
+        let answerReceipt = try OwnerTruthAnswerCitationReceipt(
+            backendJSONObject: answerCitationReceiptResponse(
+                for: build,
+                commandID: "owner-truth-answer-citation-correction-ios-001",
+                query: query,
+                answer: answer
+            ),
+            expectedContext: build,
+            expectedCommandID: "owner-truth-answer-citation-correction-ios-001",
+            expectedQuery: query,
+            expectedAnswerText: answer
+        )
+        let citationID = try XCTUnwrap(answerReceipt.citations.first?.citationID)
+        let command = try OwnerTruthCorrectionRequestCommand(
+            commandID: "owner-truth-correction-request-ios-001",
+            answerCitationReceipt: answerReceipt,
+            citationID: citationID,
+            correctionText: correctionText,
+            reasonCode: "ownerReportedCorrection"
+        )
+        let receipt = try OwnerTruthCorrectionRequestReceipt(
+            backendJSONObject: correctionRequestReceiptResponse(for: command),
+            expectedCommand: command
+        )
+
+        XCTAssertEqual(command.vaultID, OwnerTruthVaultID(lease.vaultId))
+        XCTAssertEqual(command.answerID, answerReceipt.answerID)
+        XCTAssertEqual(command.citationID, citationID)
+        XCTAssertEqual(command.memoryID, answerReceipt.citations[0].citation.memoryID)
+        XCTAssertEqual(command.expectedMemoryVersionID, answerReceipt.citations[0].citation.memoryVersionID)
+        XCTAssertEqual(receipt.outcome, .created)
+        XCTAssertEqual(receipt.status, .pendingReview)
+        XCTAssertEqual(receipt.answerID, command.answerID)
+        XCTAssertEqual(receipt.citationID, command.citationID)
+        XCTAssertEqual(receipt.correctionTextHash, digest(correctionText))
+        XCTAssertEqual(receipt.correctionTextLength, correctionText.unicodeScalars.count)
+
+        let encoded = try JSONEncoder().encode(receipt)
+        let encodedText = String(decoding: encoded, as: UTF8.self)
+        XCTAssertFalse(encodedText.contains(correctionText))
+        XCTAssertFalse(encodedText.contains(answer))
+        XCTAssertFalse(encodedText.contains(query))
+    }
+
+    func testCorrectionRequestCommandRejectsCitationOutsideVerifiedReceipt() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let query = "引用必须来自同一份已验证的回答回执"
+        let answer = "没有可验证的引用时不能提交纠正。"
+        let build = try OwnerTruthContextShadowBuild(
+            backendJSONObject: try contextShadowBuildResponse(for: lease, query: query),
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+            expectedIntent: "echo_chat",
+            expectedQuery: query
+        )
+        let answerReceipt = try OwnerTruthAnswerCitationReceipt(
+            backendJSONObject: answerCitationReceiptResponse(
+                for: build,
+                commandID: "owner-truth-answer-citation-correction-ios-002",
+                query: query,
+                answer: answer
+            ),
+            expectedContext: build,
+            expectedCommandID: "owner-truth-answer-citation-correction-ios-002",
+            expectedQuery: query,
+            expectedAnswerText: answer
+        )
+
+        XCTAssertThrowsError(
+            try OwnerTruthCorrectionRequestCommand(
+                commandID: "owner-truth-correction-request-ios-002",
+                answerCitationReceipt: answerReceipt,
+                citationID: recordID("00000000-0000-0000-0000-000000000399"),
+                correctionText: "这条修正不应绑定不存在的引用。",
+                reasonCode: "ownerReportedCorrection"
+            )
+        ) { error in
+            guard case .invalidCorrectionRequestCommand = error as? OwnerTruthRemoteContractError else {
+                return XCTFail("expected unverified citation rejection, got \(error)")
+            }
+        }
+    }
+
+    func testCorrectionRequestUseCaseSubmitsPendingCandidateWithoutMutatingLegacyState() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let query = "请记录一次可以纠正的回答"
+        let answer = "我会在确认后再更新个人记忆。"
+        let correctionText = "这段记忆的时间应改为夏天。"
+        let build = try OwnerTruthContextShadowBuild(
+            backendJSONObject: try contextShadowBuildResponse(for: lease, query: query),
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+            expectedIntent: "echo_chat",
+            expectedQuery: query
+        )
+        let answerReceipt = try OwnerTruthAnswerCitationReceipt(
+            backendJSONObject: answerCitationReceiptResponse(
+                for: build,
+                commandID: "owner-truth-answer-citation-correction-ios-003",
+                query: query,
+                answer: answer
+            ),
+            expectedContext: build,
+            expectedCommandID: "owner-truth-answer-citation-correction-ios-003",
+            expectedQuery: query,
+            expectedAnswerText: answer
+        )
+        let citationID = try XCTUnwrap(answerReceipt.citations.first?.citationID)
+        let expectedCommand = try OwnerTruthCorrectionRequestCommand(
+            commandID: "owner-truth-correction-request-ios-003",
+            answerCitationReceipt: answerReceipt,
+            citationID: citationID,
+            correctionText: correctionText,
+            reasonCode: "ownerReportedCorrection"
+        )
+        let client = CorrectionRequestClientSpy()
+        client.requestResult = .success(try OwnerTruthCorrectionRequestReceipt(
+            backendJSONObject: correctionRequestReceiptResponse(for: expectedCommand),
+            expectedCommand: expectedCommand
+        ))
+        let useCase = OwnerTruthCorrectionRequestUseCase(
+            accountLease: lease,
+            answerCitationReceipt: answerReceipt,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "owner-truth-correction-request-ios-003" }
+        )
+
+        useCase.send(.submit(
+            citationID: citationID,
+            correctionText: correctionText,
+            reasonCode: "ownerReportedCorrection"
+        ))
+
+        XCTAssertEqual(client.requestedCommands, [expectedCommand])
+        XCTAssertEqual(useCase.viewState.phase, .submitted)
+        XCTAssertEqual(useCase.viewState.notice, .requestCreated)
+        XCTAssertEqual(
+            useCase.viewState.latestReceipt?.candidateID,
+            recordID("00000000-0000-0000-0000-000000000351")
+        )
+        XCTAssertEqual(useCase.viewState.latestReceipt?.candidateVersion, 1)
+    }
+
+    func testCorrectionRequestUseCaseFailsClosedWhenContextQAGateIsDisabled() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let answerReceipt = try verifiedAnswerCitationReceipt(
+            for: lease,
+            query: "未开启 QA 时不得创建纠错请求",
+            answer: "关闭 QA gate 后不能访问纠错写入路径。",
+            commandID: "owner-truth-answer-citation-correction-gate"
+        )
+        let client = CorrectionRequestClientSpy()
+        let useCase = OwnerTruthCorrectionRequestUseCase(
+            accountLease: lease,
+            answerCitationReceipt: answerReceipt,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { false },
+            commandIDFactory: { "owner-truth-correction-request-gate" }
+        )
+
+        useCase.send(.submit(
+            citationID: try XCTUnwrap(answerReceipt.citations.first).citationID,
+            correctionText: "这条请求必须在 gate 关闭时被拒绝。",
+            reasonCode: "ownerReportedCorrection"
+        ))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .qaOnlyDisabled)
+        XCTAssertNil(useCase.viewState.latestReceipt)
+        XCTAssertTrue(client.requestedCommands.isEmpty)
+    }
+
+    func testCorrectionRequestUseCaseRejectsCompletionAfterAccountLeaseChanges() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let answerReceipt = try verifiedAnswerCitationReceipt(
+            for: lease,
+            query: "账户切换后不得接收纠错回执",
+            answer: "纠错结果必须绑定发起时的账户租约。",
+            commandID: "owner-truth-answer-citation-correction-stale"
+        )
+        let citationID = try XCTUnwrap(answerReceipt.citations.first).citationID
+        let expectedCommand = try OwnerTruthCorrectionRequestCommand(
+            commandID: "owner-truth-correction-request-stale",
+            answerCitationReceipt: answerReceipt,
+            citationID: citationID,
+            correctionText: "账户切换后的异步结果必须被丢弃。",
+            reasonCode: "ownerReportedCorrection"
+        )
+        let client = CorrectionRequestClientSpy()
+        client.deferRequest = true
+        let useCase = OwnerTruthCorrectionRequestUseCase(
+            accountLease: lease,
+            answerCitationReceipt: answerReceipt,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { expectedCommand.commandID }
+        )
+
+        useCase.send(.submit(
+            citationID: citationID,
+            correctionText: expectedCommand.correctionText,
+            reasonCode: expectedCommand.reasonCode
+        ))
+        XCTAssertEqual(useCase.viewState.phase, .submitting(citationID))
+        XCTAssertEqual(client.requestedCommands, [expectedCommand])
+
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferredRequest(.success(try OwnerTruthCorrectionRequestReceipt(
+            backendJSONObject: correctionRequestReceiptResponse(for: expectedCommand),
+            expectedCommand: expectedCommand
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(useCase.viewState.latestReceipt)
     }
 
     private func contextShadowBuildResponse(
@@ -882,6 +1303,57 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "fallbacks": context.fallbacks,
             ],
         ]
+    }
+
+    private func correctionRequestReceiptResponse(
+        for command: OwnerTruthCorrectionRequestCommand,
+        outcome: OwnerTruthCorrectionRequestOutcome = .created
+    ) -> [String: Any] {
+        [
+            "schemaVersion": "owner-truth-correction-request-response-v1",
+            "status": outcome.rawValue,
+            "correctionRequest": [
+                "schemaVersion": "owner-truth-correction-request-v1",
+                "outcome": outcome.rawValue,
+                "correctionRequestId": "00000000-0000-0000-0000-000000000350",
+                "candidateId": "00000000-0000-0000-0000-000000000351",
+                "candidateVersion": 1,
+                "answerId": command.answerID.rawValue.uuidString.lowercased(),
+                "citationId": command.citationID.rawValue.uuidString.lowercased(),
+                "memoryId": command.memoryID.rawValue.uuidString.lowercased(),
+                "expectedMemoryVersionId": command.expectedMemoryVersionID.rawValue.uuidString.lowercased(),
+                "correctionSourceId": "00000000-0000-0000-0000-000000000352",
+                "correctionTextHash": command.correctionTextHash,
+                "correctionTextLength": command.correctionTextLength,
+                "status": "pendingReview",
+            ],
+        ]
+    }
+
+    private func verifiedAnswerCitationReceipt(
+        for lease: AccountLease,
+        query: String,
+        answer: String,
+        commandID: String
+    ) throws -> OwnerTruthAnswerCitationReceipt {
+        let build = try OwnerTruthContextShadowBuild(
+            backendJSONObject: try contextShadowBuildResponse(for: lease, query: query),
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+            expectedIntent: "echo_chat",
+            expectedQuery: query
+        )
+        return try OwnerTruthAnswerCitationReceipt(
+            backendJSONObject: answerCitationReceiptResponse(
+                for: build,
+                commandID: commandID,
+                query: query,
+                answer: answer
+            ),
+            expectedContext: build,
+            expectedCommandID: commandID,
+            expectedQuery: query,
+            expectedAnswerText: answer
+        )
     }
 
     private func digest(_ value: String) -> String {
@@ -1079,4 +1551,35 @@ private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
 private enum CandidateReviewClientSpyError: Error {
     case missingInboxResult
     case missingReviewResult
+}
+
+private final class CorrectionRequestClientSpy: OwnerTruthCorrectionRequestClient {
+    var requestResult: Result<OwnerTruthCorrectionRequestReceipt, Error>?
+    var deferRequest = false
+    private var deferredRequestCompletion: ((Result<OwnerTruthCorrectionRequestReceipt, Error>) -> Void)?
+    private(set) var requestedCommands: [OwnerTruthCorrectionRequestCommand] = []
+
+    func requestOwnerTruthCorrection(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        command: OwnerTruthCorrectionRequestCommand,
+        completion: @escaping (Result<OwnerTruthCorrectionRequestReceipt, Error>) -> Void
+    ) {
+        requestedCommands.append(command)
+        if deferRequest {
+            deferredRequestCompletion = completion
+            return
+        }
+        completion(requestResult ?? .failure(CorrectionRequestClientSpyError.missingRequestResult))
+    }
+
+    func completeDeferredRequest(_ result: Result<OwnerTruthCorrectionRequestReceipt, Error>) {
+        let completion = deferredRequestCompletion
+        deferredRequestCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum CorrectionRequestClientSpyError: Error {
+    case missingRequestResult
 }

@@ -134,6 +134,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidKBLiteCompatibilityReadEnvelope(String)
     case invalidContextCitationShadowBuild(String)
     case invalidAnswerCitationReceipt(String)
+    case invalidCorrectionRequestCommand(String)
+    case invalidCorrectionRequestReceipt(String)
 
     var errorDescription: String? {
         switch self {
@@ -149,6 +151,10 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "上下文引用合同无效：\(detail)"
         case .invalidAnswerCitationReceipt(let detail):
             return "回答引用回执合同无效：\(detail)"
+        case .invalidCorrectionRequestCommand(let detail):
+            return "回答纠错请求命令无效：\(detail)"
+        case .invalidCorrectionRequestReceipt(let detail):
+            return "回答纠错请求回执合同无效：\(detail)"
         }
     }
 }
@@ -1404,6 +1410,10 @@ final class OwnerTruthCandidateReviewUseCase {
         generation: UInt
     ) {
         guard generation == operationGeneration else { return }
+        guard qaGateEnabled() else {
+            resetForUnavailable(.qaOnlyDisabled)
+            return
+        }
         guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
             resetForUnavailable(.staleAccountLease)
             return
@@ -1635,6 +1645,21 @@ enum OwnerTruthContextCitationQAGate {
     }
 }
 
+/// Creating a correction Candidate is a state-changing Owner Truth operation.
+/// Keep it behind a separate default-off switch from read-only Context/Citation
+/// evidence, so enabling an evidence export cannot accidentally permit writes.
+enum OwnerTruthCorrectionRequestQAGate {
+    static let launchArgument = "DJEnableOwnerTruthCorrectionRequestQA"
+
+    static var isEnabled: Bool {
+        #if DEBUG || UI_QA_SIMULATOR
+        return ProcessInfo.processInfo.arguments.contains(launchArgument)
+        #else
+        return false
+        #endif
+    }
+}
+
 enum OwnerTruthContextShadowState: String, Codable, Equatable, Sendable {
     case disabled
     case rebuilding
@@ -1654,6 +1679,10 @@ private enum OwnerTruthContextCitationContract {
     static let policyVersion = "owner-truth-context-shadow-build-policy-v1"
     static let answerCitationResponseSchemaVersion = "owner-truth-answer-citation-receipt-response-v1"
     static let answerCitationSchemaVersion = "owner-truth-answer-citation-v1"
+    static let correctionRequestResponseSchemaVersion = "owner-truth-correction-request-response-v1"
+    static let correctionRequestSchemaVersion = "owner-truth-correction-request-v1"
+    static let correctionRequestPendingReviewStatus = "pendingReview"
+    static let correctionRequestMaximumTextScalars = 20_000
     static let citationResolution = "current_confirmed_projection_entry"
     static let rankStrategy = "projectionCitationOrder"
     static let unavailableFallback = "owner_truth_context_unavailable_no_personal_memory"
@@ -1666,6 +1695,7 @@ private enum OwnerTruthContextCitationContract {
         "answerText",
         "claim",
         "content",
+        "correctionText",
         "memoryContent",
         "query",
         "statement",
@@ -1680,6 +1710,14 @@ private enum OwnerTruthContextCitationContract {
 
     static func receiptError(_ detail: String) -> OwnerTruthRemoteContractError {
         .invalidAnswerCitationReceipt(detail)
+    }
+
+    static func correctionCommandError(_ detail: String) -> OwnerTruthRemoteContractError {
+        .invalidCorrectionRequestCommand(detail)
+    }
+
+    static func correctionReceiptError(_ detail: String) -> OwnerTruthRemoteContractError {
+        .invalidCorrectionRequestReceipt(detail)
     }
 
     static func nonEmptyString(
@@ -1850,6 +1888,41 @@ private enum OwnerTruthContextCitationContract {
         value.unicodeScalars.count
     }
 
+    static func opaqueIdentifier(
+        _ value: String,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> String {
+        let normalized = normalizedText(value)
+        guard normalized.unicodeScalars.count <= 128,
+              let first = normalized.unicodeScalars.first,
+              isASCIIAlpha(first),
+              normalized.unicodeScalars.allSatisfy({ scalar in
+                  switch scalar.value {
+                  case 45, 46, 58, 95, 48...57, 65...90, 97...122:
+                      return true
+                  default:
+                      return false
+                  }
+              }) else {
+            throw error("\(field) must be a bounded opaque identifier")
+        }
+        return normalized
+    }
+
+    static func correctionText(
+        _ value: String,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> String {
+        let normalized = normalizedText(value)
+        guard !normalized.isEmpty,
+              scalarCount(normalized) <= correctionRequestMaximumTextScalars else {
+            throw error("\(field) must be non-empty and within the QA evidence limit")
+        }
+        return normalized
+    }
+
     static func ensureNoRawContent(
         _ object: [String: Any],
         field: String,
@@ -1857,6 +1930,40 @@ private enum OwnerTruthContextCitationContract {
     ) throws {
         for key in rawContentKeys where object[key] != nil && !(object[key] is NSNull) {
             throw error("\(field) contains prohibited raw field \(key)")
+        }
+    }
+
+    static func ensureNoRawContentRecursively(
+        _ value: Any,
+        field: String,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws {
+        if let object = value as? [String: Any] {
+            try ensureNoRawContent(object, field: field, error: error)
+            for (key, nestedValue) in object {
+                try ensureNoRawContentRecursively(
+                    nestedValue,
+                    field: "\(field).\(key)",
+                    error: error
+                )
+            }
+        } else if let values = value as? [Any] {
+            for (index, nestedValue) in values.enumerated() {
+                try ensureNoRawContentRecursively(
+                    nestedValue,
+                    field: "\(field)[\(index)]",
+                    error: error
+                )
+            }
+        }
+    }
+
+    private static func isASCIIAlpha(_ scalar: UnicodeScalar) -> Bool {
+        switch scalar.value {
+        case 65...90, 97...122:
+            return true
+        default:
+            return false
         }
     }
 
@@ -2842,6 +2949,460 @@ struct OwnerTruthAnswerCitationReceipt: Codable, Equatable, Sendable {
     }
 }
 
+enum OwnerTruthCorrectionRequestOutcome: String, Codable, Equatable, Sendable {
+    case created
+    case deduplicated
+}
+
+enum OwnerTruthCorrectionRequestStatus: String, Codable, Equatable, Sendable {
+    case pendingReview
+}
+
+/// One QA-only correction request derived from a citation already verified in
+/// an immutable Owner Truth answer receipt. The raw correction text exists
+/// only long enough to construct the backend request; it is never copied into
+/// a receipt or QA readout.
+struct OwnerTruthCorrectionRequestCommand: Equatable, Sendable {
+    let commandID: String
+    let vaultID: OwnerTruthVaultID
+    let answerID: OwnerTruthRecordID
+    let citationID: OwnerTruthRecordID
+    let memoryID: OwnerTruthRecordID
+    let expectedMemoryVersionID: OwnerTruthRecordID
+    let correctionText: String
+    let reasonCode: String
+
+    init(
+        commandID: String,
+        answerCitationReceipt: OwnerTruthAnswerCitationReceipt,
+        citationID: OwnerTruthRecordID,
+        correctionText: String,
+        reasonCode: String
+    ) throws {
+        let error = OwnerTruthContextCitationContract.correctionCommandError
+        let normalizedCommandID = try OwnerTruthContextCitationContract.opaqueIdentifier(
+            commandID,
+            field: "commandId",
+            error: error
+        )
+        let normalizedReasonCode = try OwnerTruthContextCitationContract.opaqueIdentifier(
+            reasonCode,
+            field: "reasonCode",
+            error: error
+        )
+        let normalizedCorrectionText = try OwnerTruthContextCitationContract.correctionText(
+            correctionText,
+            field: "correctionText",
+            error: error
+        )
+        guard let citation = answerCitationReceipt.citations.first(where: { $0.citationID == citationID }),
+              citation.resolved,
+              citation.resolution == OwnerTruthContextCitationContract.citationResolution else {
+            throw error("citationId must belong to the verified answer receipt")
+        }
+
+        self.commandID = normalizedCommandID
+        vaultID = citation.citation.vaultID
+        answerID = answerCitationReceipt.answerID
+        self.citationID = citation.citationID
+        memoryID = citation.citation.memoryID
+        expectedMemoryVersionID = citation.citation.memoryVersionID
+        self.correctionText = normalizedCorrectionText
+        self.reasonCode = normalizedReasonCode
+    }
+
+    init(
+        commandID: String,
+        receipt: OwnerTruthAnswerCitationReceipt,
+        citationID: OwnerTruthRecordID,
+        correctionText: String,
+        reasonCode: String
+    ) throws {
+        try self.init(
+            commandID: commandID,
+            answerCitationReceipt: receipt,
+            citationID: citationID,
+            correctionText: correctionText,
+            reasonCode: reasonCode
+        )
+    }
+
+    var correctionTextHash: String {
+        OwnerTruthContextCitationContract.digest(correctionText)
+    }
+
+    var correctionTextLength: Int {
+        OwnerTruthContextCitationContract.scalarCount(correctionText)
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "commandId": commandID,
+            "answerId": answerID.rawValue.uuidString.lowercased(),
+            "citationId": citationID.rawValue.uuidString.lowercased(),
+            "expectedMemoryVersionId": expectedMemoryVersionID.rawValue.uuidString.lowercased(),
+            "correctionText": correctionText,
+            "reasonCode": reasonCode,
+        ]
+    }
+
+    var backendJSONObject: [String: Any] {
+        backendPayload
+    }
+}
+
+/// A value-free confirmation that a correction has entered pending review.
+/// The private correction Source, answer text and memory contents are never
+/// represented in this mobile-domain receipt.
+struct OwnerTruthCorrectionRequestReceipt: Codable, Equatable, Sendable {
+    let outcome: OwnerTruthCorrectionRequestOutcome
+    let correctionRequestID: OwnerTruthRecordID
+    let candidateID: OwnerTruthRecordID
+    let candidateVersion: Int
+    let answerID: OwnerTruthRecordID
+    let citationID: OwnerTruthRecordID
+    let memoryID: OwnerTruthRecordID
+    let expectedMemoryVersionID: OwnerTruthRecordID
+    let correctionSourceID: OwnerTruthRecordID
+    let correctionTextHash: String
+    let correctionTextLength: Int
+    let status: OwnerTruthCorrectionRequestStatus
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedCommand: OwnerTruthCorrectionRequestCommand
+    ) throws {
+        let error = OwnerTruthContextCitationContract.correctionReceiptError
+        try OwnerTruthContextCitationContract.ensureNoRawContentRecursively(
+            object,
+            field: "correction request response",
+            error: error
+        )
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            object["schemaVersion"],
+            field: "schemaVersion",
+            error: error
+        ) == OwnerTruthContextCitationContract.correctionRequestResponseSchemaVersion,
+        let outcome = OwnerTruthCorrectionRequestOutcome(
+            rawValue: try OwnerTruthContextCitationContract.nonEmptyString(
+                object["status"],
+                field: "status",
+                error: error
+            )
+        ) else {
+            throw error("correction request response schemaVersion or status is invalid")
+        }
+        let request = try OwnerTruthContextCitationContract.object(
+            object["correctionRequest"],
+            field: "correctionRequest",
+            error: error
+        )
+        try OwnerTruthContextCitationContract.ensureNoRawContentRecursively(
+            request,
+            field: "correctionRequest",
+            error: error
+        )
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            request["schemaVersion"],
+            field: "correctionRequest.schemaVersion",
+            error: error
+        ) == OwnerTruthContextCitationContract.correctionRequestSchemaVersion,
+        try OwnerTruthContextCitationContract.nonEmptyString(
+            request["outcome"],
+            field: "correctionRequest.outcome",
+            error: error
+        ) == outcome.rawValue else {
+            throw error("correctionRequest schemaVersion or outcome is invalid")
+        }
+
+        self.outcome = outcome
+        correctionRequestID = try OwnerTruthContextCitationContract.recordID(
+            request["correctionRequestId"],
+            field: "correctionRequest.correctionRequestId",
+            error: error
+        )
+        candidateID = try OwnerTruthContextCitationContract.recordID(
+            request["candidateId"],
+            field: "correctionRequest.candidateId",
+            error: error
+        )
+        candidateVersion = try OwnerTruthContextCitationContract.positiveInt(
+            request["candidateVersion"],
+            field: "correctionRequest.candidateVersion",
+            error: error
+        )
+        answerID = try OwnerTruthContextCitationContract.recordID(
+            request["answerId"],
+            field: "correctionRequest.answerId",
+            error: error
+        )
+        citationID = try OwnerTruthContextCitationContract.recordID(
+            request["citationId"],
+            field: "correctionRequest.citationId",
+            error: error
+        )
+        memoryID = try OwnerTruthContextCitationContract.recordID(
+            request["memoryId"],
+            field: "correctionRequest.memoryId",
+            error: error
+        )
+        expectedMemoryVersionID = try OwnerTruthContextCitationContract.recordID(
+            request["expectedMemoryVersionId"],
+            field: "correctionRequest.expectedMemoryVersionId",
+            error: error
+        )
+        correctionSourceID = try OwnerTruthContextCitationContract.recordID(
+            request["correctionSourceId"],
+            field: "correctionRequest.correctionSourceId",
+            error: error
+        )
+        correctionTextHash = try OwnerTruthContextCitationContract.sha256(
+            request["correctionTextHash"],
+            field: "correctionRequest.correctionTextHash",
+            error: error
+        )
+        correctionTextLength = try OwnerTruthContextCitationContract.nonnegativeInt(
+            request["correctionTextLength"],
+            field: "correctionRequest.correctionTextLength",
+            error: error
+        )
+        guard let status = OwnerTruthCorrectionRequestStatus(
+            rawValue: try OwnerTruthContextCitationContract.nonEmptyString(
+                request["status"],
+                field: "correctionRequest.status",
+                error: error
+            )
+        ), status.rawValue == OwnerTruthContextCitationContract.correctionRequestPendingReviewStatus else {
+            throw error("correctionRequest.status must remain pendingReview")
+        }
+        self.status = status
+
+        guard answerID == expectedCommand.answerID,
+              citationID == expectedCommand.citationID,
+              memoryID == expectedCommand.memoryID,
+              expectedMemoryVersionID == expectedCommand.expectedMemoryVersionID else {
+            throw error("correctionRequest identity does not match the submitted citation command")
+        }
+        guard correctionTextHash == expectedCommand.correctionTextHash,
+              correctionTextLength == expectedCommand.correctionTextLength else {
+            throw error("correctionRequest correction text integrity does not match the submitted command")
+        }
+    }
+}
+
+enum OwnerTruthCorrectionRequestIntent: Equatable, Sendable {
+    case submit(citationID: OwnerTruthRecordID, correctionText: String, reasonCode: String)
+}
+
+enum OwnerTruthCorrectionRequestPhase: Equatable, Sendable {
+    case idle
+    case unavailable
+    case submitting(OwnerTruthRecordID)
+    case submitted
+    case failed
+}
+
+enum OwnerTruthCorrectionRequestNotice: Equatable, Sendable {
+    case qaOnlyDisabled
+    case accountUnavailable
+    case staleAccountLease
+    case invalidVault
+    case citationUnavailable
+    case invalidCorrection
+    case requestResultMismatch
+    case requestFailed
+    case requestCreated
+    case requestDeduplicated
+}
+
+struct OwnerTruthCorrectionRequestReceiptViewState: Equatable, Sendable {
+    let correctionRequestID: OwnerTruthRecordID
+    let candidateID: OwnerTruthRecordID
+    let candidateVersion: Int
+    let outcome: OwnerTruthCorrectionRequestOutcome
+}
+
+/// This state contains no answer, query, memory or correction text. It is a
+/// QA-only application seam that later UI may consume without becoming an
+/// authority mutation path.
+struct OwnerTruthCorrectionRequestViewState: Equatable, Sendable {
+    let phase: OwnerTruthCorrectionRequestPhase
+    let notice: OwnerTruthCorrectionRequestNotice?
+    let latestReceipt: OwnerTruthCorrectionRequestReceiptViewState?
+
+    static let idle = OwnerTruthCorrectionRequestViewState(
+        phase: .idle,
+        notice: nil,
+        latestReceipt: nil
+    )
+}
+
+/// Builds one pending correction Candidate from one exact verified Answer /
+/// Citation receipt. It intentionally stops before review or activation; the
+/// normal Archive and KBLite write paths remain untouched.
+final class OwnerTruthCorrectionRequestUseCase {
+    typealias CommandIDFactory = () -> String
+
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let answerCitationReceipt: OwnerTruthAnswerCitationReceipt
+    private let client: OwnerTruthCorrectionRequestClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
+    private let commandIDFactory: CommandIDFactory
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthCorrectionRequestViewState = .idle {
+        didSet {
+            onViewStateChange?(viewState)
+        }
+    }
+
+    var onViewStateChange: ((OwnerTruthCorrectionRequestViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        answerCitationReceipt: OwnerTruthAnswerCitationReceipt,
+        client: OwnerTruthCorrectionRequestClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCorrectionRequestQAGate.isEnabled },
+        commandIDFactory: @escaping CommandIDFactory = {
+            "owner-truth-correction-\(UUID().uuidString.lowercased())"
+        }
+    ) {
+        self.accountLease = accountLease
+        self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.answerCitationReceipt = answerCitationReceipt
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
+        self.commandIDFactory = commandIDFactory
+    }
+
+    func send(_ intent: OwnerTruthCorrectionRequestIntent) {
+        switch intent {
+        case .submit(let citationID, let correctionText, let reasonCode):
+            submit(
+                citationID: citationID,
+                correctionText: correctionText,
+                reasonCode: reasonCode
+            )
+        }
+    }
+
+    private func submit(citationID: OwnerTruthRecordID, correctionText: String, reasonCode: String) {
+        guard let vaultID = beginRequestOrFail() else { return }
+        let command: OwnerTruthCorrectionRequestCommand
+        do {
+            command = try OwnerTruthCorrectionRequestCommand(
+                commandID: commandIDFactory(),
+                answerCitationReceipt: answerCitationReceipt,
+                citationID: citationID,
+                correctionText: correctionText,
+                reasonCode: reasonCode
+            )
+        } catch let error as OwnerTruthRemoteContractError {
+            switch error {
+            case .invalidCorrectionRequestCommand:
+                transitionFailure(.invalidCorrection)
+            default:
+                transitionFailure(.citationUnavailable)
+            }
+            return
+        } catch {
+            transitionFailure(.requestFailed)
+            return
+        }
+        guard command.vaultID == vaultID else {
+            transitionFailure(.citationUnavailable)
+            return
+        }
+
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthCorrectionRequestViewState(
+            phase: .submitting(citationID),
+            notice: nil,
+            latestReceipt: nil
+        )
+        client.requestOwnerTruthCorrection(
+            vaultID: vaultID,
+            expectedOwnerSubjectID: accountLease.subjectId,
+            command: command
+        ) { [weak self] result in
+            self?.receive(result, command: command, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard qaGateEnabled() else {
+            resetForUnavailable(.qaOnlyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthCorrectionRequestReceipt, Error>,
+        command: OwnerTruthCorrectionRequestCommand,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let receipt):
+            guard receipt.answerID == command.answerID,
+                  receipt.citationID == command.citationID,
+                  receipt.memoryID == command.memoryID,
+                  receipt.expectedMemoryVersionID == command.expectedMemoryVersionID,
+                  receipt.status == .pendingReview else {
+                transitionFailure(.requestResultMismatch)
+                return
+            }
+            viewState = OwnerTruthCorrectionRequestViewState(
+                phase: .submitted,
+                notice: receipt.outcome == .created ? .requestCreated : .requestDeduplicated,
+                latestReceipt: OwnerTruthCorrectionRequestReceiptViewState(
+                    correctionRequestID: receipt.correctionRequestID,
+                    candidateID: receipt.candidateID,
+                    candidateVersion: receipt.candidateVersion,
+                    outcome: receipt.outcome
+                )
+            )
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthCorrectionRequestNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthCorrectionRequestViewState(
+            phase: .unavailable,
+            notice: notice,
+            latestReceipt: nil
+        )
+    }
+
+    private func transitionFailure(_ notice: OwnerTruthCorrectionRequestNotice) {
+        viewState = OwnerTruthCorrectionRequestViewState(
+            phase: .failed,
+            notice: notice,
+            latestReceipt: nil
+        )
+    }
+}
+
 /// A value-free bridge for existing Echo QA evidence. It has no runtime or
 /// model text and therefore can be exported alongside the current trace.
 struct OwnerTruthContextCitationTraceSummary: Codable, Equatable, Sendable {
@@ -3029,5 +3590,17 @@ protocol OwnerTruthContextCitationClient: AnyObject {
         query: String,
         answerText: String,
         completion: @escaping (Result<OwnerTruthAnswerCitationReceipt, Error>) -> Void
+    )
+}
+
+/// Narrow write port for the default-off Answer/Citation correction request.
+/// The transport layer owns authentication and the QA header; callers submit a
+/// command already derived from a verified citation receipt.
+protocol OwnerTruthCorrectionRequestClient: AnyObject {
+    func requestOwnerTruthCorrection(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        command: OwnerTruthCorrectionRequestCommand,
+        completion: @escaping (Result<OwnerTruthCorrectionRequestReceipt, Error>) -> Void
     )
 }
