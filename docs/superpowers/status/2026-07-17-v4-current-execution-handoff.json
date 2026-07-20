@@ -5,22 +5,23 @@
     "completedSubSlices": [
       "WI-S1-02-09-G0-DEAD-LETTER-ADMISSION-CONTRACT",
       "WI-S1-02-09-G0-WORKER-READINESS-AND-EVIDENCE-CONTRACT",
-      "WI-S1-02-09-G0-RESTORE-REPLAY-AND-MANIFEST-CONTRACT"
+      "WI-S1-02-09-G0-RESTORE-REPLAY-AND-MANIFEST-CONTRACT",
+      "WI-S1-02-09-G2-DURABLE-DEAD-LETTER-PERSISTENCE"
     ],
-    "currentSubSlice": "WI-S1-02-09-G2-DURABLE-DEAD-LETTER-REPLAY-AND-WORKER-LOSS",
+    "currentSubSlice": "WI-S1-02-09-G2-DURABLE-REPLAY-REQUEST-AND-WORKER-LOSS-EVIDENCE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "SCOPED_VERIFIED / DEAD_LETTER_AUTHORIZED_REPLAY_RESTORE_AND_READINESS_EVIDENCE_CONTRACTS",
-      "G2": "NOT_STARTED / DURABLE_DEAD_LETTER_REPLAY_AND_WORKER_EVIDENCE_REQUIRED",
+      "G2": "PARTIAL / DEAD_LETTER_ADMISSION_PERSISTED_ONLINE_0026 / REPLAY_REQUEST_AND_WORKER_LOSS_EVIDENCE_REQUIRED",
       "G3": "NOT_STARTED / PROVIDER_QUERY_AND_OPERATIONS_BASELINE_REQUIRED"
     },
     "id": "WI-S1-02-09",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-09 has deployed scoped G0 contracts for dead-letter admission, authorized/restored replay, readiness, and evidence mapping. It next moves to G2 durable persistence and worker-loss evidence without enabling Provider replay before the later gates."
+    "summary": "WI-S1-02-09 has deployed scoped G0 contracts and a first G2 durable dead-letter admission repository at backend main@fe43577. It next persists inert authorized replay requests and worker-loss evidence without changing terminal jobs or enabling Provider replay."
   },
   "baselines": {
-    "backend": "main@d6b7b45",
+    "backend": "main@fe43577",
     "ios": "feature/prd-stitch-ui-adaptation@272a1b5",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
