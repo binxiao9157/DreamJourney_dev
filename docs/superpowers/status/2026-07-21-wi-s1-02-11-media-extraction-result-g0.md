@@ -37,6 +37,17 @@ bash scripts/run-backend-verified-media-processor-shadow-gate.sh
 该 gate 覆盖：verified / disabled / revoked / retry / terminal / unknown admission，
 值最小化结果、空结果、失败可重试、无权 admission 拒绝，以及无副作用 import/AST 边界。
 
+## 后端交付复核
+
+- 后端提交：`f493abc feat(WI-S1-02-11): add media extraction result shadow`；
+- 已推送 `DreamJourneyBackend/main`，并部署到服务器
+  `/opt/services/dreamjourney/DreamJourneyBackend`；
+- API 容器运行提交为 `f493abc6901931d5b126fabf63de66a1681717f9`，健康检查为 healthy；
+- `GET /ready` 返回 `status=ready`；
+- 容器内仅运行合成合同 smoke：一个 verified image admission 产生一个值最小化 segment
+  result，断言 `candidateProposalPerformed=false`、`objectReadPerformed=false`、
+  `providerCallPerformed=false`。该 smoke 未读取对象、未访问 provider、未写 Postgres 业务数据。
+
 ## 当前成熟度与后续门
 
 本记录只是 `WI-S1-02-11` 的 G0 内部预检，不是该 Work Item 的完成证据：
