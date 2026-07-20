@@ -14,11 +14,26 @@
 
 ## 实现与版本
 
-- Backend：`main@e1922f2`，已推送、部署并通过 `/live`、`/ready`、`/config/runtime` 验证；
+- Backend：恢复基线 `main@e1922f2`；后续恢复审计增强 `main@dc50307` 已推送、部署并通过 `/ready`、migration verify 和隔离 Postgres smoke；
 - iOS：`feature/prd-stitch-ui-adaptation@dde3081`，本地已提交，未自动推送；
 - Backend 恢复入口：`scripts/db/run-recovery-deployed-smoke.sh`；
 - Backend 运维说明：`docs/backend/2026-07-17-postgres-recovery-operations.md`；
 - iOS 恢复模式：`normal/readOnly/signedOut/maintenance`，未知或非法状态 fail closed。
+
+### 2026-07-21 审计覆盖增强
+
+`dc50307` 将完整性 evidence 升级为 V3，消除固定 owner 表清单造成的新增表漏审风险：
+
+- 动态发现所有 `public.*.user_id` 表；
+- 审计所有 `owner_truth` 表相对 Vault 根的 scope；
+- 审计所有 `async_effects` 子表相对 operation 根的 owner/vault/epoch 一致性；
+- 将 value-free 的 `async_effects.worker_loss_observations` 显式列为豁免；
+- V1/V2 integrity evidence 仅作历史可读，不能促成 GO。
+
+部署后已运行一次性 disposable Postgres smoke：动态 public orphan、Owner Truth 缺失
+Vault 和 async scope mismatch 三类 fixture 均被归因并输出 NO_GO；临时
+`dj_recovery_audit_*` 数据库已由 smoke 清理。该增强不重新解释 2026-07-17 的历史
+361 条 orphan，也不替代真实 backup restore/replay 的 G2 复演。
 
 ## G2 真实演练
 
@@ -55,7 +70,7 @@ owner orphan 分布：`archive_items=115`、`care_snapshots=54`、`digital_human
 
 ## Gate 状态
 
-- G0：恢复合同、生产目标拒绝、证据绑定和 fail-closed smoke 通过；
+- G0：恢复合同、生产目标拒绝、V3 分域审计、证据绑定和 fail-closed smoke 通过；
 - G2：真实隔离恢复已执行，结论 `NO_GO`；
 - G3：缺失；
 - Registry：继续保持保守 `PLANNED/STOP`，不自行晋升。
