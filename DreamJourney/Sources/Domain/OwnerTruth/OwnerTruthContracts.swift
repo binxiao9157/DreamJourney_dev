@@ -1186,6 +1186,103 @@ protocol OwnerTruthInterviewCandidateConfirmationClient: AnyObject {
     )
 }
 
+/// A product confirmation command is intentionally distinct from the QA review
+/// command. The server fixes the acceptance reason at the policy boundary, so
+/// callers cannot supply or vary it.
+struct OwnerTruthInterviewCandidateConfirmationBatchCommand: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-candidate-confirmation-batch-command-v1"
+
+    let commandID: String
+    let reviewBatchID: OwnerTruthRecordID
+    let selections: [OwnerTruthInterviewCandidateBatchSelection]
+
+    init(
+        commandID: String,
+        reviewBatchID: OwnerTruthRecordID,
+        selections: [OwnerTruthInterviewCandidateBatchSelection]
+    ) throws {
+        let normalizedCommandID = commandID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedCommandID.isEmpty,
+              !selections.isEmpty,
+              Set(selections.map(\.candidateID)).count == selections.count else {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "confirmation batch action requires a unique non-empty selection and command id"
+            )
+        }
+        self.commandID = normalizedCommandID
+        self.reviewBatchID = reviewBatchID
+        self.selections = selections
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "commandId": commandID,
+            "selections": selections.map(\.backendJSONObject),
+        ]
+    }
+}
+
+/// Value-minimized result for a product confirmation action. It must never
+/// deserialize the QA receipt envelope or any candidate content.
+struct OwnerTruthInterviewCandidateConfirmationBatchResult: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-candidate-confirmation-batch-decision-response-v1"
+
+    let outcome: OwnerTruthCommandOutcome
+    let batchDecisionID: OwnerTruthRecordID
+    let reviewBatchID: OwnerTruthRecordID
+    let acceptedCandidateIDs: [OwnerTruthRecordID]
+    let memoryVersionCreated: Bool
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedCommand: OwnerTruthInterviewCandidateConfirmationBatchCommand
+    ) throws {
+        guard object["receipts"] == nil,
+              object["review"] == nil,
+              object["content"] == nil,
+              object["confirmation"] == nil,
+              OwnerTruthInterviewCandidateContract.requiredString(object["schemaVersion"]) == Self.schemaVersion,
+              let outcomeRaw = OwnerTruthInterviewCandidateContract.requiredString(object["status"]),
+              let outcome = OwnerTruthCommandOutcome(rawValue: outcomeRaw),
+              let batchDecisionID = OwnerTruthCandidateEvidenceReference.recordID(object["batchDecisionId"]),
+              let reviewBatchID = OwnerTruthCandidateEvidenceReference.recordID(object["reviewBatchId"]),
+              reviewBatchID == expectedCommand.reviewBatchID,
+              let acceptedCount = OwnerTruthInterviewCandidateContract.nonNegativeInt(object["acceptedCandidateCount"]),
+              let acceptedValues = object["acceptedCandidateIds"] as? [Any],
+              acceptedCount == acceptedValues.count,
+              acceptedCount == expectedCommand.selections.count else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateDecision(
+                "confirmation action response does not match the typed contract"
+            )
+        }
+        let acceptedCandidateIDs = acceptedValues.compactMap(OwnerTruthCandidateEvidenceReference.recordID)
+        let expectedIDs = Set(expectedCommand.selections.map(\.candidateID))
+        guard acceptedCandidateIDs.count == acceptedValues.count,
+              Set(acceptedCandidateIDs) == expectedIDs,
+              Set(acceptedCandidateIDs).count == acceptedCandidateIDs.count else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateDecision(
+                "confirmation action result does not match the requested Candidates"
+            )
+        }
+        try OwnerTruthInterviewCandidateContract.assertNoMemoryActivation(object["memoryActivation"])
+        self.outcome = outcome
+        self.batchDecisionID = batchDecisionID
+        self.reviewBatchID = reviewBatchID
+        self.acceptedCandidateIDs = acceptedCandidateIDs
+        self.memoryVersionCreated = false
+    }
+}
+
+/// Narrow write port for the default-off product confirmation route. It does
+/// not share the QA review transport or its receipt model.
+protocol OwnerTruthInterviewCandidateConfirmationActionClient: AnyObject {
+    func confirmOwnerTruthInterviewCandidateBatch(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateConfirmationBatchCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmationBatchResult, Error>) -> Void
+    )
+}
+
 private enum OwnerTruthInterviewCandidateContract {
     static func requiredString(_ value: Any?) -> String? {
         guard let value = value as? String else { return nil }
@@ -1868,6 +1965,219 @@ final class OwnerTruthInterviewCandidateConfirmationUseCase {
             phase: .failed,
             confirmation: nil,
             notice: .requestFailed
+        )
+    }
+}
+
+// MARK: - Default-off product confirmation action
+
+enum OwnerTruthInterviewCandidateConfirmationActionIntent: Equatable, Sendable {
+    case confirmBatch(candidateIDs: [OwnerTruthRecordID])
+}
+
+enum OwnerTruthInterviewCandidateConfirmationActionPhase: Equatable, Sendable {
+    case idle
+    case unavailable
+    case submitting
+    case confirmed
+    case failed
+}
+
+enum OwnerTruthInterviewCandidateConfirmationActionNotice: Equatable, Sendable {
+    case releasePolicyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case invalidSelection
+    case responseMismatch
+    case requestFailed
+    case batchConfirmed
+}
+
+struct OwnerTruthInterviewCandidateConfirmationActionViewState: Equatable, Sendable {
+    let phase: OwnerTruthInterviewCandidateConfirmationActionPhase
+    let latestResult: OwnerTruthInterviewCandidateConfirmationBatchResult?
+    let notice: OwnerTruthInterviewCandidateConfirmationActionNotice?
+
+    static let idle = OwnerTruthInterviewCandidateConfirmationActionViewState(
+        phase: .idle,
+        latestResult: nil,
+        notice: nil
+    )
+}
+
+/// Lease-fenced product confirmation writer. It accepts only ordinary batch
+/// candidates present in the confirmation projection, remains default-off,
+/// and keeps the same command id when retrying an unchanged selection.
+final class OwnerTruthInterviewCandidateConfirmationActionUseCase {
+    typealias CommandIDFactory = () -> String
+
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let confirmation: OwnerTruthInterviewCandidateConfirmation
+    private let client: OwnerTruthInterviewCandidateConfirmationActionClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAvailable: () -> Bool
+    private let commandIDFactory: CommandIDFactory
+    private var commandIDsBySelectionSignature: [String: String] = [:]
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthInterviewCandidateConfirmationActionViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthInterviewCandidateConfirmationActionViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        confirmation: OwnerTruthInterviewCandidateConfirmation,
+        client: OwnerTruthInterviewCandidateConfirmationActionClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool = { false },
+        commandIDFactory: @escaping CommandIDFactory = { UUID().uuidString.lowercased() }
+    ) {
+        self.accountLease = accountLease
+        self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.confirmation = confirmation
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+        self.commandIDFactory = commandIDFactory
+    }
+
+    func send(_ intent: OwnerTruthInterviewCandidateConfirmationActionIntent) {
+        switch intent {
+        case .confirmBatch(let candidateIDs):
+            confirmBatch(candidateIDs: candidateIDs)
+        }
+    }
+
+    private func confirmBatch(candidateIDs: [OwnerTruthRecordID]) {
+        guard let vaultID = beginRequestOrFail(),
+              let command = makeCommand(candidateIDs: candidateIDs) else {
+            return
+        }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthInterviewCandidateConfirmationActionViewState(
+            phase: .submitting,
+            latestResult: nil,
+            notice: nil
+        )
+        client.confirmOwnerTruthInterviewCandidateBatch(vaultID: vaultID, command: command) { [weak self] result in
+            self?.receive(result, expectedCommand: command, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return nil
+        }
+        guard let vaultID,
+              confirmation.vaultID == vaultID,
+              confirmation.vaultID.rawValue == accountLease.vaultId else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func makeCommand(
+        candidateIDs: [OwnerTruthRecordID]
+    ) -> OwnerTruthInterviewCandidateConfirmationBatchCommand? {
+        guard !candidateIDs.isEmpty,
+              Set(candidateIDs).count == candidateIDs.count else {
+            transitionFailure(.invalidSelection)
+            return nil
+        }
+        let candidatesByID = Dictionary(
+            uniqueKeysWithValues: confirmation.batchCandidates.map { ($0.id, $0) }
+        )
+        let selectedCandidates = candidateIDs.compactMap { candidatesByID[$0] }
+        guard selectedCandidates.count == candidateIDs.count,
+              selectedCandidates.allSatisfy({
+                  $0.reviewPath == .batch && $0.candidate.sensitivity == .standard
+              }) else {
+            transitionFailure(.invalidSelection)
+            return nil
+        }
+        let signature = candidateIDs
+            .map { $0.rawValue.uuidString.lowercased() }
+            .sorted()
+            .joined(separator: ",")
+        let commandID = commandIDsBySelectionSignature[signature] ?? commandIDFactory()
+        commandIDsBySelectionSignature[signature] = commandID
+        do {
+            return try OwnerTruthInterviewCandidateConfirmationBatchCommand(
+                commandID: commandID,
+                reviewBatchID: confirmation.reviewBatchID,
+                selections: try selectedCandidates.map {
+                    try OwnerTruthInterviewCandidateBatchSelection(
+                        candidateID: $0.id,
+                        expectedCandidateVersion: $0.candidate.candidateVersion
+                    )
+                }
+            )
+        } catch {
+            transitionFailure(.invalidSelection)
+            return nil
+        }
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthInterviewCandidateConfirmationBatchResult, Error>,
+        expectedCommand: OwnerTruthInterviewCandidateConfirmationBatchCommand,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let actionResult):
+            let expectedIDs = Set(expectedCommand.selections.map(\.candidateID))
+            guard confirmation.vaultID == vaultID,
+                  actionResult.reviewBatchID == confirmation.reviewBatchID,
+                  Set(actionResult.acceptedCandidateIDs) == expectedIDs,
+                  !actionResult.memoryVersionCreated else {
+                transitionFailure(.responseMismatch)
+                return
+            }
+            viewState = OwnerTruthInterviewCandidateConfirmationActionViewState(
+                phase: .confirmed,
+                latestResult: actionResult,
+                notice: .batchConfirmed
+            )
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthInterviewCandidateConfirmationActionNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthInterviewCandidateConfirmationActionViewState(
+            phase: .unavailable,
+            latestResult: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure(_ notice: OwnerTruthInterviewCandidateConfirmationActionNotice) {
+        viewState = OwnerTruthInterviewCandidateConfirmationActionViewState(
+            phase: .failed,
+            latestResult: nil,
+            notice: notice
         )
     }
 }

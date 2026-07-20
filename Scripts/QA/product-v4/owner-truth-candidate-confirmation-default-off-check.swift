@@ -41,6 +41,11 @@ require(
     "confirmation route must map to its dedicated feature"
 )
 require(
+    backendClient.contains("normalizedPath.hasSuffix(\"/confirmation/batch-accept\")") &&
+        backendClient.contains("method == .post"),
+    "confirmation batch action route must map to its dedicated feature"
+)
+require(
     backendClient.contains(".ownerTruthCandidateReview, .profileSettings"),
     "confirmation route must keep owner-text policy handling"
 )
@@ -68,6 +73,32 @@ require(
 require(
     !typedMethod.contains("X-DreamJourney-QA-Owner-Truth"),
     "typed confirmation client must never carry the QA review header"
+)
+
+guard let actionStart = backendClient.range(of: "func confirmOwnerTruthInterviewCandidateBatch("),
+      let actionEnd = backendClient.range(
+        of: "func fetchOwnerTruthInterviewSessionState(",
+        range: actionStart.upperBound..<backendClient.endIndex
+      ) else {
+    fatalError("owner-truth candidate confirmation default-off check failed: typed confirmation action is missing")
+}
+let actionMethod = String(backendClient[actionStart.lowerBound..<actionEnd.lowerBound])
+require(
+    actionMethod.contains("FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)"),
+    "typed confirmation action must capture the dedicated release-policy decision"
+)
+require(
+    actionMethod.contains("/confirmation/batch-accept\"") && actionMethod.contains("featureDecision: decision"),
+    "typed confirmation action must call the formal route with its captured decision"
+)
+require(
+    actionMethod.contains("OwnerTruthInterviewCandidateConfirmationBatchResult("),
+    "typed confirmation action must parse the value-minimized formal result"
+)
+require(
+    !actionMethod.contains("X-DreamJourney-QA-Owner-Truth") &&
+        !actionMethod.contains("/candidate-review/batch-accept"),
+    "typed confirmation action must never reuse QA headers or QA routes"
 )
 
 print("owner-truth candidate confirmation default-off check passed")

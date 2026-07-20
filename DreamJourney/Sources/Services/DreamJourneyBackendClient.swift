@@ -503,6 +503,11 @@ final class FeatureGateService {
            normalizedPath.hasSuffix("/confirmation") {
             return .ownerTruthCandidateReview
         }
+        if method == .post,
+           normalizedPath.contains("/interview-review-batches/"),
+           normalizedPath.hasSuffix("/confirmation/batch-accept") {
+            return .ownerTruthCandidateReview
+        }
         if normalizedPath == "/archive/image-analysis" { return .archiveLocalAnalysis }
         if normalizedPath == "/archive/photos" { return .archiveRemoteFetch }
         if normalizedPath == "/auth/password" { return .accountPasswordChange }
@@ -5221,6 +5226,47 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    /// Sends the default-off product confirmation action. It is intentionally
+    /// separate from the QA review endpoint and has no QA header bypass.
+    func confirmOwnerTruthInterviewCandidateBatch(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateConfirmationBatchCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmationBatchResult, Error>) -> Void
+    ) {
+        let decision = FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)
+        guard decision.allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                    reason: decision.reason
+                )))
+            }
+            return
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-review-batches/\(pathComponent(command.reviewBatchID.rawValue.uuidString))/confirmation/batch-accept"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            featureDecision: decision
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewCandidateConfirmationBatchResult(
+                        backendJSONObject: object,
+                        expectedCommand: command
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func fetchOwnerTruthInterviewSessionState(
         vaultID: OwnerTruthVaultID,
         sessionID: OwnerTruthRecordID,
@@ -7512,6 +7558,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
 extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationClient {}
+extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationActionClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewSessionStateClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewNaturalInputClient {}
 extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}

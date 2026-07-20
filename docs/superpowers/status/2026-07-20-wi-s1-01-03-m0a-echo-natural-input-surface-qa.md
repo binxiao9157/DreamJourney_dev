@@ -220,3 +220,33 @@ Gate 结论：该 typed consumer 获得 G0 scoped evidence；G2 复用已部署 
 Gate 结论：正式批量确认写合同已有 G0/G2 证据，但功能仍默认关闭、没有 G1 产品动作界面。
 下一步只能建立独立 typed iOS action consumer，并继续保留 AccountLease、策略重校验和无 QA
 header 边界；敏感候选逐条确认仍需后续独立合同。
+
+## 2026-07-21 Slice 3H 默认关闭确认 typed iOS action consumer
+
+- iOS 新增独立的 `OwnerTruthInterviewCandidateConfirmationBatchCommand`、
+  `OwnerTruthInterviewCandidateConfirmationBatchResult`、action client port 与
+  `OwnerTruthInterviewCandidateConfirmationActionUseCase`。它没有复用 QA
+  `candidate-review/batch-accept` 命令、路由、QA header 或 receipt model。
+- action use case 默认 `releasePolicyAvailable=false`。策略未明确放行时不发起网络请求；请求和
+  回调提交均验证 AccountLease，账号切换后的延迟 action 结果会被丢弃。
+- 仅允许 confirmation projection 中的普通 `batch` Candidate 进入批量确认。single/sensitive、
+  重复、为空或不在 projection 中的 Candidate ID 均在客户端失败关闭，不会调用后端。
+- 同一组 Candidate 的可重试请求复用同一 command ID；正式响应必须精确回传选中的 ID、保持
+  `memoryActivation=notApplicable` 且 `memoryVersionCreated=false`。出现 `receipts`、`review`、
+  `content` 或 `confirmation` 等 QA/正文信封字段时，结果会被拒绝。
+- `DreamJourneyBackendClient` 通过正式
+  `/confirmation/batch-accept` 路由重新获取 `ownerTruthCandidateReview` FeatureDecision，并将
+  captured decision 传入 `requestJSON`。没有 QA header，也没有新增 UI、Sheet、自动动作或发布入口。
+
+本轮验证：
+
+- `OwnerTruthContractsTests` 在 iPhone 17 Pro Simulator 通过：55 项、0 failures；新增覆盖策略
+  fail-closed、敏感/单条候选拒绝、稳定 command ID 重试、异步账号切换丢弃及最小化正式结果。
+- `swiftc -parse`（domain/client/tests）、
+  `Scripts/QA/product-v4/owner-truth-candidate-confirmation-default-off-check.swift` 与
+  `git diff --check` 均通过。
+- 通用 `generic/platform=iOS` Debug build（`CODE_SIGNING_ALLOWED=NO`）通过。
+
+Gate 结论：该 iOS consumer 获得 G0 scoped evidence，后端合同沿用已部署的 G2 证据。它仍是
+default-off，没有 G1 产品展示或动作入口，不能据此宣称公开 Candidate 确认已发布。下一步仅可
+做确认后的结果重读/状态收敛，或在独立产品 Gate 明确后再设计可见交互。
