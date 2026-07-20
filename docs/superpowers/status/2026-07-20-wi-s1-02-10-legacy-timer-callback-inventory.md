@@ -31,6 +31,14 @@ effect surfaces, 4 host-unverified surfaces, and 1 external Provider boundary.
 `HOST_UNVERIFIED_G2_REQUIRED` deliberately remains explicit for every host
 timer state that static source cannot prove.
 
+Backend commits `2184116` and `101e258` were pushed to `main` and deployed to
+`miao-server`. The API was rebuilt/recreated and `/ready` returned ready for
+database, schema, auth, and incident. A deployed-image source smoke passed
+with `docs` and `deploy` mounted read-only because those verification artifacts
+are intentionally not copied into the production image. It did not start a
+worker or scheduler, dispatch TimeLetters, call a Provider, or alter timer
+state.
+
 ### iOS
 
 iOS adds the paired static inventory and gate:

@@ -18,7 +18,7 @@
     "summary": "WI-S1-02-09 is INTERNAL_READY with its scoped G0/G2 evidence deployed at backend main@1d87023; real Provider query remains G3 EXTERNAL_BLOCKED and no replay or Provider call is enabled. WI-S1-02-10 completed its value-free legacy timer/callback source inventory; no cutover, retirement, worker enablement, or timer disablement was authorized. The next G0 slice is a lifecycle-safe TimeLetter local-notification guard because the inventory found no dedicated account-lifecycle cancellation for that pending request class."
   },
   "baselines": {
-    "backend": "main@1d87023",
+    "backend": "main@101e258",
     "ios": "feature/prd-stitch-ui-adaptation@272a1b5",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
