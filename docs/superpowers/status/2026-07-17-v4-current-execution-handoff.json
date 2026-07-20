@@ -2,29 +2,31 @@
   "activeWorkItem": {
     "authorityLock": "ASYNC_EFFECT",
     "backendPendingPaths": [],
-    "completedSubSlices": [
-      "WI-S1-02-08-G0-BUSINESS-MESSAGE-NOTIFICATION-CONTRACT"
-    ],
-    "currentSubSlice": "WI-S1-02-08-G0-DEVICE-SUBSCRIPTION-LIFECYCLE",
+    "completedSubSlices": [],
+    "currentSubSlice": "WI-S1-02-09-G0-DEAD-LETTER-ADMISSION-CONTRACT",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PARTIAL / BUSINESS_COMPLETION_MESSAGE_NOTIFICATION_CONTRACT_VERIFIED",
-      "G1": "NOT_STARTED / IOS_SERVER_PROJECTION_CONSUMER_REQUIRED",
-      "G2": "NOT_STARTED / DEVICE_SUBSCRIPTION_MESSAGE_INTENT_DELIVERY_PERSISTENCE_REQUIRED",
-      "G3": "NOT_STARTED / APNS_SANDBOX_ACCEPTANCE_REQUIRED",
-      "G4": "NOT_STARTED / TRUE_DEVICE_AND_NOTIFICATION_PRIVACY_REQUIRED"
+      "G0": "NOT_STARTED / DEAD_LETTER_ADMISSION_AND_AUTHORIZED_REPLAY_CONTRACT_REQUIRED",
+      "G2": "NOT_STARTED / DURABLE_DEAD_LETTER_REPLAY_AND_WORKER_EVIDENCE_REQUIRED",
+      "G3": "NOT_STARTED / PROVIDER_QUERY_AND_OPERATIONS_BASELINE_REQUIRED"
     },
-    "id": "WI-S1-02-08",
+    "id": "WI-S1-02-09",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-08 has a value-free G0 contract separating completed business receipts, redacted in-app message projections, and channel-specific notification intents. It currently makes no persistence, Device Token, local notification, APNs, or public UI claim; next is DeviceSubscription rotation/revoke and owner/generation route fencing."
+    "summary": "WI-S1-02-09 starts with a value-free G0 dead-letter admission and authorized replay contract. It must preserve stable business keys and receipt evidence, keep client replay unavailable, and avoid claiming a worker or Provider call before the later gates."
   },
   "baselines": {
-    "backend": "main@a5b8331",
+    "backend": "main@8517259",
     "ios": "feature/prd-stitch-ui-adaptation@272a1b5",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
+    {
+      "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-08-business-message-notification-contract.md",
+      "id": "WI-S1-02-08",
+      "implementationStatus": "INTERNAL_READY / G0_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED_8517259 / G1_G2_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN"
+    },
     {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-07-provider-effect-contract.md",
       "id": "WI-S1-02-07",
@@ -459,9 +461,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-02-09",
+    "id": "WI-S1-02-10",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Dead-letter, authorized replay and worker readiness follow the message/notification layering. It must preserve stable business keys and receipt evidence while keeping client replay unavailable."
+    "summary": "Legacy timer/callback drain, cutover, and retirement follow worker readiness. It must prevent duplicate side effects while preserving evidence and rollback controls."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -470,5 +472,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T10:12:04+0800"
+  "updatedAt": "2026-07-20T10:23:28+0800"
 }
