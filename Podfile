@@ -40,6 +40,13 @@ target 'DreamJourney' do
 
   # ===== 调试（仅 Debug） =====
   pod 'SwiftLint', '~> 0.55', :configurations => ['Debug']
+
+  # XCTest only imports the application module, but Swift explicit-module builds
+  # must still resolve the app's pod modules. Declaring the target here keeps
+  # its generated search paths stable after every `pod install`.
+  target 'DreamJourneyTests' do
+    inherit! :search_paths
+  end
 end
 
 post_install do |installer|
@@ -90,26 +97,41 @@ post_install do |installer|
     File.write(xcconfig_path, "#{lines.join("\n")}\n")
   end
 
-  ['debug', 'release'].each do |configuration|
-    xcconfig_path = File.join(
-      __dir__,
-      'Pods',
-      'Target Support Files',
-      'Pods-DreamJourney',
-      "Pods-DreamJourney.#{configuration}.xcconfig"
-    )
-    next unless File.exist?(xcconfig_path)
+  ['Pods-DreamJourney', 'Pods-DreamJourneyTests'].each do |support_target|
+    ['debug', 'release'].each do |configuration|
+      xcconfig_path = File.join(
+        __dir__,
+        'Pods',
+        'Target Support Files',
+        support_target,
+        "#{support_target}.#{configuration}.xcconfig"
+      )
+      next unless File.exist?(xcconfig_path)
 
-    lines = File.readlines(xcconfig_path, chomp: true)
-    lines.reject! do |line|
-      line.start_with?('OTHER_LDFLAGS[sdk=iphonesimulator*]') ||
-        line.start_with?('LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]') ||
-        line.start_with?('SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]')
+      lines = File.readlines(xcconfig_path, chomp: true)
+      if support_target == 'Pods-DreamJourneyTests'
+        # The hosted XCTest bundle imports the app module and therefore needs
+        # pod module search paths, not duplicate links to production provider
+        # binaries. The app under test remains the single runtime owner.
+        lines.map! do |line|
+          line.start_with?('OTHER_LDFLAGS =') ? 'OTHER_LDFLAGS = $(inherited)' : line
+        end
+      end
+      lines.reject! do |line|
+        # CocoaPods adds this because some optional pods only ship x86_64
+        # simulator slices. UI_QA_SIMULATOR already removes their device-only
+        # linkage below, so keeping the aggregate arm64-capable is required for
+        # Apple Silicon simulators to be selectable and runnable.
+        line.start_with?('EXCLUDED_ARCHS[sdk=iphonesimulator*]') ||
+          line.start_with?('OTHER_LDFLAGS[sdk=iphonesimulator*]') ||
+          line.start_with?('LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]') ||
+          line.start_with?('SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]')
+      end
+
+      insert_at = lines.index { |line| line.start_with?('OTHER_LDFLAGS =') } || lines.length - 1
+      lines.insert(insert_at + 1, simulator_library_paths, simulator_ldflags, simulator_swift_conditions)
+      File.write(xcconfig_path, "#{lines.join("\n")}\n")
+      stripTencentDigitalHumanRuntimeLinkage(xcconfig_path)
     end
-
-    insert_at = lines.index { |line| line.start_with?('OTHER_LDFLAGS =') } || lines.length - 1
-    lines.insert(insert_at + 1, simulator_library_paths, simulator_ldflags, simulator_swift_conditions)
-    File.write(xcconfig_path, "#{lines.join("\n")}\n")
-    stripTencentDigitalHumanRuntimeLinkage(xcconfig_path)
   end
 end

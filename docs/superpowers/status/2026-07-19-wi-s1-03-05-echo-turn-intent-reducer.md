@@ -1,13 +1,13 @@
 # WI-S1-03-05 Echo Turn Intent And Context Coordination
 
-日期：2026-07-19
+日期：2026-07-19；更新：2026-07-20
 
 ## 当前状态
 
 - Work Item：`WI-S1-03-05`
 - Authority lock：`IOS_COMPOSITION`
 - Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`
-- 当前结果：`IN_PROGRESS / G0_STATIC_AND_BUILD_FOR_TESTING_VERIFIED / G1_G2_G3_OPEN`
+- 当前结果：`IN_PROGRESS / G0_STATIC_AND_BUILD_FOR_TESTING_VERIFIED / G1_HOSTED_XCTEST_RUNTIME_FOUNDATION_VERIFIED / G1_ECHO_UI_FLOW_G2_G3_OPEN`
 - 本切片：`WI-S1-03-05-TURN_INTENT_CONTEXT_LEASE_TRANSPORT_AND_IDENTITY_G0_COMPLETE`
 - 范围：先将 Echo 的 provider-independent 回合状态收敛为纯 reducer，并让 context build 使用独立
   generation lease；不改公开页面、不接管现有数字人、语音 Provider 或后端 transport。
@@ -72,9 +72,33 @@ bash Scripts/QA/product-v4/run-ios-echo-application-coordinator-gate.sh
   还覆盖 transport 返回身份不匹配 packet 时，coordinator 在交给 Controller 前将其分类为拒绝；静态检查
   确认 Controller 不再直接组合 context transport 或直接执行 context response identity policy。
 
-曾尝试在已启动的 `iPhone 17 Pro` 模拟器执行这五条 XCTest，但当前 `DreamJourney` scheme 的
-`xcodebuild -showdestinations` 只提供 `Any iOS Simulator Device` placeholder，未提供可运行的
-simulator destination。因此测试未在 simulator runtime 实际执行；这不是测试失败，也不能记为 G1。
+### 2026-07-20 模拟器运行 Gate
+
+此前的实际阻断不是腾讯数智人 SDK 缺少 simulator slice：`VirtualmanStreamSDK.xcframework` 已包含
+`ios-arm64_x86_64-simulator`。根因是 CocoaPods 生成的 `Pods-DreamJourney` xcconfig 把
+`EXCLUDED_ARCHS[sdk=iphonesimulator*] = arm64` 继承给 App；同时 `DreamJourneyTests` 未在
+`Podfile` 中声明，后续 `pod install` 会让 test bundle 丢失 Pod 模块搜索路径。
+
+本轮将 `DreamJourneyTests` 作为 `inherit! :search_paths` 的 Pod 子 target，并把现有
+`UI_QA_SIMULATOR` 的 device-only linkage 过滤规则同时施加到 App/Test 两个聚合 target。测试 bundle
+仅保留 Pod 模块搜索路径，不再重复链接生产 Speech/Map provider binary；运行时仍由宿主 App 单独拥有。
+
+执行：
+
+```bash
+pod install
+bash Scripts/QA/product-v4/run-ios-simulator-runtime-gate.sh
+bash Scripts/QA/product-v4/run-ios-test-foundation-gate.sh
+```
+
+结果：
+
+- `xcodebuild -showdestinations` 已列出具体 arm64 `iPhone 17 Pro` simulator；
+- XcodeBuildMCP 在该 simulator 成功构建、安装并启动 App，正常落在登录页；
+- `run-ios-simulator-runtime-gate.sh` 在 booted iPhone 17 Pro 跑完 `DreamJourneyTests`，`82 passed, 0 failed`；
+- `run-ios-test-foundation-gate.sh` 的 SwiftPM `41` 个测试和 `generic/platform=iOS` 的
+  `build-for-testing` 均通过；
+- 新 gate 要求先执行 `pod install`，以保证 Pods test support config 已更新。
 
 ## 未完成边界
 
@@ -85,11 +109,11 @@ simulator destination。因此测试未在 simulator runtime 实际执行；这�
 - `EchoViewController` 仍持有现有 Provider 调度，尚未完成“ViewController 只发 Intent/渲染 ViewState”的
   完整迁移；
 - 没有修改 `/context/build`、数字人、声音复刻、KBLite Authority、后端合同或公开 UI；
-- G1 需要修复 scheme 的 simulator destination 后执行可运行 XCTest/UIQA；G2/G3 仍取决于后端与 Provider
-  runtime 的独立证据。
+- 已完成的是 hosted XCTest 的 simulator runtime 基础，不等于普通 Echo 的连续多轮、停止、返回与重启
+  UIQA；该部分仍作为 G1 open；G2/G3 仍取决于后端与 Provider runtime 的独立证据。
 
 ## 下一步
 
-当前 Work Item 的纯 G0 application-context 边界已足以交接给下一项 `WI-S1-03-06` 的 runtime session
-coordinator/callback fence。G1 仍受 scheme 没有 runnable simulator destination 阻断；G2/G3 仍需要后端与
-Provider runtime 独立证据，不能以本次代码提交替代。
+当前 Work Item 的 G0 application-context 边界与 hosted XCTest runtime 基础均已可复跑。后续仍需在
+普通 Echo 的 local/mock UIQA 中覆盖连续多轮、停止、返回与重启；G2/G3 的 context/reply 与 Provider
+runtime 仍需独立证据，不能以本次模拟器测试替代。

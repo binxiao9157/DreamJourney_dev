@@ -1,34 +1,23 @@
 {
   "activeWorkItem": {
-    "authorityLock": "OWNER_TRUTH",
+    "authorityLock": "IOS_COMPOSITION",
     "backendPendingPaths": [],
     "completedSubSlices": [
-      "WI-S1-01-11-G0-PERSONA_PROFILE_LEGACY_BOUNDARY_INVENTORY",
-      "WI-S1-01-11-G0-PERSONA_AUTHORITY_COMMAND_CONTRACT",
-      "WI-S1-01-11-G0-PERSONA_AUTHORITY_RECEIPT_CONTRACT",
-      "WI-S1-01-11-G0-PERSONA_AUTHORITY_ORIGIN_ADMISSION",
-      "WI-S1-01-11-G0-PERSONA_AUTHORITY_SERVER_RESOLVED_SCOPE_BINDING",
-      "WI-S1-01-11-G0-PERSONA_PERSISTENCE_ADMISSION",
-      "WI-S1-01-11-G0-MEMORIAL_AUTHORITY_NON_ADMISSION_BOUNDARY",
-      "WI-S1-01-11-G0-MEMORIAL_CONTROLLER_APPOINTMENT_CONTRACT",
-      "WI-S1-01-11-G0-MEMORIAL_CONTROLLER_REVIEW_NON_ADMISSION",
-      "WI-S1-01-11-G0-MEMORIAL_CAPABILITY_DECISION_NON_ADMISSION",
-      "WI-S1-01-11-G0-MEMORIAL_RIGHTS_CLAIM_CONFLICT_HOLD_NON_ADMISSION",
-      "WI-S1-01-11-G0-MEMORIAL_FAMILY_CONTRIBUTION_GRANT_NON_ADMISSION",
-      "WI-S1-01-11-G0-MEMORIAL_AUTHORITY_COMPOSITE_GATE"
+      "WI-S1-03-05-TURN_INTENT_CONTEXT_LEASE_TRANSPORT_AND_IDENTITY_G0_COMPLETE",
+      "WI-S1-03-05-G1-HOSTED_XCTEST_SIMULATOR_RUNTIME_FOUNDATION"
     ],
-    "currentSubSlice": "WI-S1-01-11-G0-MEMORIAL_AUTHORITY_G0_CLOSURE_EVIDENCE",
+    "currentSubSlice": "WI-S1-03-05-G1-ECHO_CONTINUOUS_TURN_UIQA",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "COMPLETE / MEMORIAL_AUTHORITY_COMPOSITE_GATE_DEPLOYED_b13b2b9",
-      "G1": "NOT_STARTED / NO_PUBLIC_PERSONA_EDITING_AUTHORIZED",
-      "G2": "NOT_STARTED / VERSIONED_PERSONA_STORE_AND_MIGRATION_PROOF_REQUIRED",
-      "G4": "NOT_STARTED / PRODUCT_PRIVACY_RIGHTS_APPROVAL_REQUIRED"
+      "G0": "COMPLETE / TURN_INTENT_CONTEXT_LEASE_TRANSPORT_AND_IDENTITY_VERIFIED",
+      "G1": "PARTIAL / HOSTED_XCTEST_SIMULATOR_RUNTIME_82_TESTS_VERIFIED / CONTINUOUS_ECHO_UIQA_OPEN",
+      "G2": "NOT_STARTED / BACKEND_CONTEXT_AND_REPLY_RUNTIME_EVIDENCE_REQUIRED",
+      "G3": "NOT_STARTED / PROVIDER_RUNTIME_EVIDENCE_REQUIRED"
     },
-    "id": "WI-S1-01-11",
+    "id": "WI-S1-03-05",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-01-12 remains INTERNAL_READY for its complete currently executable media G0 boundary at backend main@bfd7ca6; real media remains blocked by G2-G4. WI-S1-01-10 now has its complete executable G0 boundary at backend main@864e5d9 and deployed healthy: legacy parity cannot self-authorize authorityEpoch advancement or legacy-writer retirement. WI-S1-01-11 now has a deployed Persona/Profile legacy-boundary inventory at backend main@38ddb3d, a deployed default-off typed Self Persona command preflight at backend main@fe702e0, a deployed future immutable PersonaVersion/DecisionReceipt plan at backend main@33ab0ae, deployed origin/scope binding at backend main@0c45af0, a deployed default-off persistence admission boundary at backend main@dc18a40, a deployed Memorial non-admission boundary at backend main@77aa244, a deployed default-off Memorial Controller appointment plan at backend main@db17c59, a deployed controller_review non-admission assessment at backend main@ffcdb35, a deployed high-risk capability non-admission boundary at backend main@0f52ac0, a deployed rights claim / ConflictHold non-admission boundary at backend main@eedc8a5 and a deployed Family ContributionGrant non-admission boundary at backend main@41047af. Backend main@b13b2b9 composes those boundaries into a deployed 35-test G0 gate. A represented/deceased Persona cannot be a login principal; Family may only contribute Source/Candidate material; Assistant, Provider, runtime and unknown origins cannot write Memorial authority; verification gaps, active RightsClaims and active ConflictHolds fail closed. Bootstrap and transfer plans bind server-resolved controller context, require future version/CAS persistence, and never write or alter authorityEpoch in G0. Controller failure only exposes future rights-request, preservation and minimum-operation scope; it never permits new Publication, Provider effect or authority resumption before a new appointment. Memorial Voice/Portrait/DH/Publication purposes are independent, no legacy self/family runtime may be reused, and even complete synthetic prerequisite flags do not grant capability. A verified future conflict hold requires atomic epoch/scope suspension but does not mutate current data in G0. Family contribution remains confined to Source/Candidate/own withdrawal. No Persona/Profile authority, schema, legacy migration, user data or public UI changed. G0 is complete; G1/G2/G4 remain open. WI-S1-02-11 stays planned because its async-effect and media dependencies remain conservatively blocked."
+    "summary": "The simulator destination and XCTest Pod integration are now durable: App/Test aggregate xcconfigs retain arm64 simulator eligibility, hosted XCTest imports pod modules without directly linking production provider binaries, and the booted iPhone 17 Pro ran 82 tests with zero failures. This closes only the hosted-XCTest runtime foundation. Ordinary Echo continuous multi-turn, stop, leave/re-enter and restart UIQA remain open; context/reply backend runtime and provider evidence remain separate G2/G3 gates. No public Echo UI, Digital Human or Voice provider behavior changed."
   },
   "baselines": {
     "backend": "main@b13b2b9",
@@ -487,10 +476,10 @@
       "registryClosure": "SCOPED_G0_G1_G2_EVIDENCE_PRESENT_G4_OPEN"
     },
     {
-      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-05-echo-turn-intent-reducer.md",
-      "id": "WI-S1-03-05",
-      "implementationStatus": "IN_PROGRESS / G0_STATIC_AND_BUILD_FOR_TESTING_VERIFIED / G1_G2_G3_OPEN",
-      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_DEPENDENT_DELAYED_REPLY_OPEN"
+      "evidence": "docs/superpowers/status/2026-07-20-wi-s1-01-11-memorial-authority-composite-gate.md",
+      "id": "WI-S1-01-11",
+      "implementationStatus": "INTERNAL_READY / MEMORIAL_AUTHORITY_G0_COMPOSITE_BOUNDARY_DEPLOYED_b13b2b9 / DEFAULT_OFF / G1_G2_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G4_OPEN"
     },
     {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-05-time-letter-atomic-delivery.md",

@@ -12,6 +12,7 @@ MODEL = ROOT / "DreamJourney/Sources/App/AudioOwnerLeaseModel.swift"
 TEST_ROOT = ROOT / "DreamJourneyTests"
 SCHEME = ROOT / "DreamJourney.xcodeproj/xcshareddata/xcschemes/DreamJourney.xcscheme"
 PACKAGE = ROOT / "Package.swift"
+PODFILE = ROOT / "Podfile"
 
 
 def require(condition: bool, message: str) -> None:
@@ -32,6 +33,7 @@ def main() -> None:
     doubles = read(TEST_ROOT / "TestDoubles.swift")
     scheme = read(SCHEME)
     package = read(PACKAGE)
+    podfile = read(PODFILE)
 
     for required in (
         'Build configuration list for PBXNativeTarget "DreamJourneyTests"',
@@ -41,6 +43,7 @@ def main() -> None:
         'TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DreamJourney.app/DreamJourney"',
         'BUNDLE_LOADER = "$(TEST_HOST)"',
         'path = DreamJourneyTests;',
+        'Pods-DreamJourneyTests.debug.xcconfig',
         'AccountLeaseRuntimeTests.swift',
         'AudioOwnerLeaseModelTests.swift',
         'TestDoubles.swift',
@@ -63,6 +66,14 @@ def main() -> None:
         'path: "DreamJourneyTests"',
     ):
         require(required in package, f"unhosted XCTest package contract missing: {required}")
+
+    for required in (
+        "target 'DreamJourneyTests' do",
+        "inherit! :search_paths",
+        "['Pods-DreamJourney', 'Pods-DreamJourneyTests']",
+        "line.start_with?('EXCLUDED_ARCHS[sdk=iphonesimulator*]')",
+    ):
+        require(required in podfile, f"simulator XCTest pod integration missing: {required}")
 
     for required in (
         "@testable import DreamJourney",
@@ -96,7 +107,7 @@ def main() -> None:
 
     print(
         "Product V4 iOS XCTest foundation check passed: hosted and unhosted test targets, "
-        "deterministic doubles, account stale callback, and audio owner model are guarded"
+        "deterministic doubles, account stale callback, audio owner model, and simulator pod integration are guarded"
     )
 
 

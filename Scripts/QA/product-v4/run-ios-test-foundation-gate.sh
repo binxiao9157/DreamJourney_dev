@@ -9,9 +9,9 @@ swift test \
   --package-path "$ROOT" \
   --scratch-path "${DJ_SWIFT_TEST_SCRATCH_PATH:-$ROOT/.build/product-v4-xctest}"
 
-# Provider SDK binaries currently make the complete app unavailable to the
-# simulator target. Compile the hosted XCTest bundle with the iPhoneOS host by
-# default; CI can set DJ_IOS_TEST_DESTINATION to a real runnable destination.
+# Keep the generic iPhoneOS build-for-testing default for CI environments that
+# do not boot a simulator. A runnable destination executes hosted XCTest below;
+# the dedicated simulator runtime gate discovers a booted device automatically.
 if [[ -n "${DJ_IOS_TEST_DESTINATION:-}" ]]; then
   xcodebuild test \
     -workspace "$ROOT/DreamJourney.xcworkspace" \
