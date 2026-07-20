@@ -2,11 +2,14 @@
   "activeWorkItem": {
     "authorityLock": "ASYNC_EFFECT",
     "backendPendingPaths": [],
-    "completedSubSlices": [],
-    "currentSubSlice": "WI-S1-02-07-G0-PROVIDER-EFFECT-INVENTORY",
+    "completedSubSlices": [
+      "WI-S1-02-07-G0-PROVIDER-EFFECT-INVENTORY",
+      "WI-S1-02-07-G0-STABLE-REQUEST-UNKNOWN-CONTRACT"
+    ],
+    "currentSubSlice": "WI-S1-02-07-G2-PERSISTED-RECONCILIATION-DESIGN",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "NOT_STARTED / PROVIDER_EFFECT_INVENTORY_REQUIRED",
+      "G0": "SCOPED_CONTRACT_EVIDENCE_PRESENT / PROVIDER_CALLS_DISABLED",
       "G2": "NOT_STARTED / PERSISTED_PROVIDER_RECEIPT_REPLAY_REQUIRED",
       "G3": "NOT_STARTED / PROVIDER_SANDBOX_AND_DELETE_RECEIPT_SCOPE_REQUIRED",
       "G4": "NOT_STARTED / CAPABILITY_SPECIFIC_PRODUCT_PRIVACY_TRUE_DEVICE_GATES_REQUIRED"
@@ -14,10 +17,10 @@
     "id": "WI-S1-02-07",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-07 begins the Provider effect stable-request and unknown-reconcile inventory. It must not invoke real Providers, change public UI, or treat local/runtime events as server success."
+    "summary": "WI-S1-02-07 has a value-free Provider inventory plus stable-request and unknown-reconcile G0 contract. It still must not invoke real Providers, change public UI, or treat local/runtime events as server success; G2 must preserve unknown history through durable reconciliation evidence rather than mutate it in place."
   },
   "baselines": {
-    "backend": "main@53b420c",
+    "backend": "main@0b2ea04",
     "ios": "feature/prd-stitch-ui-adaptation@272a1b5",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
