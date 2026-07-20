@@ -2,18 +2,20 @@
   "activeWorkItem": {
     "authorityLock": "ASYNC_EFFECT",
     "backendPendingPaths": [],
-    "completedSubSlices": [],
-    "currentSubSlice": "WI-S1-02-10-G0-LEGACY_TIMER_CALLBACK_INVENTORY",
+    "completedSubSlices": [
+      "WI-S1-02-10-G0-LEGACY_TIMER_CALLBACK_INVENTORY"
+    ],
+    "currentSubSlice": "WI-S1-02-10-G0-TIME_LETTER_NOTIFICATION_LIFECYCLE_GUARD",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "NOT_STARTED / LEGACY_TIMER_CALLBACK_INVENTORY_REQUIRED",
+      "G0": "IN_PROGRESS / INVENTORY_COMPLETE_TIME_LETTER_NOTIFICATION_LIFECYCLE_GUARD_REQUIRED",
       "G2": "NOT_STARTED / HOST_PROCESS_AND_ROLLING_DEPLOY_EVIDENCE_REQUIRED",
       "G3": "NOT_STARTED / PROVIDER_CALLBACK_QUERY_APPLICABILITY_REQUIRED"
     },
     "id": "WI-S1-02-10",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-09 is INTERNAL_READY with its scoped G0/G2 evidence deployed at backend main@1d87023; real Provider query remains G3 EXTERNAL_BLOCKED and no replay or Provider call is enabled. WI-S1-02-10 begins with a value-free legacy timer/callback inventory only: no cutover, retirement, worker enablement, or timer disablement is authorized."
+    "summary": "WI-S1-02-09 is INTERNAL_READY with its scoped G0/G2 evidence deployed at backend main@1d87023; real Provider query remains G3 EXTERNAL_BLOCKED and no replay or Provider call is enabled. WI-S1-02-10 completed its value-free legacy timer/callback source inventory; no cutover, retirement, worker enablement, or timer disablement was authorized. The next G0 slice is a lifecycle-safe TimeLetter local-notification guard because the inventory found no dedicated account-lifecycle cancellation for that pending request class."
   },
   "baselines": {
     "backend": "main@1d87023",

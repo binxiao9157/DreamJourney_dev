@@ -1,0 +1,189 @@
+{
+  "schemaVersion": "dreamjourney.ios-legacy-timer-callback-inventory.v1",
+  "scope": "WI-S1-02-10 G0 iOS inventory only. It records product notification, polling, heartbeat, runtime timeout, and pure presentation timer surfaces without changing timers, notifications, callbacks, or public UI.",
+  "entries": [
+    {
+      "id": "echo-delayed-reply-local-notification",
+      "surface": "localNotification",
+      "classification": "PRODUCT_LOCAL_NOTIFICATION",
+      "ownerBoundary": "EchoDelayedReplyOperationScope",
+      "generationFence": "AccountLeaseRuntime request/timer/runtime/ui checkpoints",
+      "lifecycleDisposition": "account-lifecycle teardown is implemented",
+      "retirementState": "NOT_AUTHORIZED",
+      "sources": [
+        {
+          "path": "DreamJourney/Sources/Services/EchoDelayedReplyNotificationScheduler.swift",
+          "markers": [
+            "final class EchoDelayedReplyNotificationScheduler",
+            "EchoDelayedReplyOperationScope",
+            "UNTimeIntervalNotificationTrigger",
+            "teardownForAccountLifecycle"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift",
+          "markers": [
+            "EchoDelayedReplyNotificationScheduler.shared.teardownForAccountLifecycle"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "time-letter-local-notification",
+      "surface": "localNotification",
+      "classification": "PRODUCT_LOCAL_NOTIFICATION",
+      "ownerBoundary": "sealed-time-letter owner",
+      "generationFence": "AccountLeaseRuntime timer/runtime checkpoints",
+      "lifecycleDisposition": "known gap: no dedicated account-lifecycle cancellation is currently registered",
+      "retirementState": "NOT_AUTHORIZED",
+      "sources": [
+        {
+          "path": "DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift",
+          "markers": [
+            "final class TimeLetterReminderScheduler",
+            "func scheduleIfNeeded(_ item: MemoryArchiveItem)",
+            "accountLeaseRuntime.validate(accountLease, at: .timer)",
+            "UNCalendarNotificationTrigger"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "voice-clone-training-poll",
+      "surface": "repeatingTimer",
+      "classification": "RUNTIME_PROVIDER_POLL",
+      "ownerBoundary": "VoiceCloneTrainingRuntimeOperation",
+      "generationFence": "account lease plus current training runtime operation",
+      "lifecycleDisposition": "poll invalidates when the operation or account lease becomes stale",
+      "retirementState": "NOT_AUTHORIZED",
+      "sources": [
+        {
+          "path": "DreamJourney/Sources/Memoir/VoiceCloneService.swift",
+          "markers": [
+            "private var pollTimer: Timer?",
+            "isCurrentTrainingRuntimeOperation(operation, at: .timer)",
+            "pollTimer = Timer.scheduledTimer",
+            "pollTimer?.invalidate()"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "digital-human-session-heartbeat",
+      "surface": "delayedWorkItem",
+      "classification": "RUNTIME_LEASE_HEARTBEAT",
+      "ownerBoundary": "DigitalHumanSessionContract session owner/device",
+      "generationFence": "Echo AccountLease plus lifecycle token plus runtime callback token",
+      "lifecycleDisposition": "cancelled before session replacement and runtime release",
+      "retirementState": "NOT_AUTHORIZED",
+      "sources": [
+        {
+          "path": "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",
+          "markers": [
+            "private var digitalHumanSessionHeartbeatWorkItem: DispatchWorkItem?",
+            "private func scheduleDigitalHumanSessionHeartbeat(",
+            "validateEchoAccountLease(",
+            "private func cancelDigitalHumanSessionHeartbeat(reason: String)",
+            "releaseActiveDigitalHumanSessionLease(reason: reason)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dialog-engine-silence-timeout",
+      "surface": "oneShotTimer",
+      "classification": "RUNTIME_DIALOG_TIMEOUT",
+      "ownerBoundary": "active dialog binding",
+      "generationFence": "activeDialogAccountLease timer checkpoint",
+      "lifecycleDisposition": "timer is invalidated before reset and when dialog stops",
+      "retirementState": "NOT_AUTHORIZED",
+      "sources": [
+        {
+          "path": "DreamJourney/Sources/Services/DialogEngineManager.swift",
+          "markers": [
+            "private func resetSilenceTimer()",
+            "accountLeaseRuntime.validate(accountLease, at: .timer)",
+            "silenceTimer = Timer.scheduledTimer",
+            "private func invalidateSilenceTimer()"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "digital-human-audio-level-meter",
+      "surface": "repeatingTimer",
+      "classification": "PURE_PRESENTATION_TIMER",
+      "ownerBoundary": "active audio player or SDK fallback",
+      "generationFence": "runtime stop/reset only; no business mutation",
+      "lifecycleDisposition": "excluded from business timer retirement; stopped with audio metering",
+      "retirementState": "EXCLUDED_PURE_UI_OR_PLAYBACK",
+      "sources": [
+        {
+          "path": "DreamJourney/Sources/Modules/Echo/DigitalHumanAudioLevelMeter.swift",
+          "markers": [
+            "timer = Timer.scheduledTimer(withTimeInterval: 0.08",
+            "timer = Timer.scheduledTimer(withTimeInterval: 0.12",
+            "func stop(resetLevel: Bool = true)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "memoir-audio-progress",
+      "surface": "repeatingTimer",
+      "classification": "PURE_PRESENTATION_TIMER",
+      "ownerBoundary": "active memo audio player",
+      "generationFence": "player lifetime only; no business mutation",
+      "lifecycleDisposition": "excluded from business timer retirement; stopped with player lifecycle",
+      "retirementState": "EXCLUDED_PURE_UI_OR_PLAYBACK",
+      "sources": [
+        {
+          "path": "DreamJourney/Sources/Memoir/MemoirAudioPlayer.swift",
+          "markers": [
+            "private func startProgressTimer()",
+            "progressTimer = Timer.scheduledTimer",
+            "private func stopProgressTimer()"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "archive-audio-recording-duration",
+      "surface": "repeatingTimer",
+      "classification": "PURE_PRESENTATION_TIMER",
+      "ownerBoundary": "recording account lease",
+      "generationFence": "recordingAccountLease timer checkpoint",
+      "lifecycleDisposition": "stale recording is discarded rather than persisted by an old timer",
+      "retirementState": "EXCLUDED_PURE_UI_OR_PLAYBACK",
+      "sources": [
+        {
+          "path": "DreamJourney/Sources/Modules/Archive/MemoryArchiveAudioRecorderViewController.swift",
+          "markers": [
+            "private func startTimer(accountLease: AccountLease)",
+            "timer = Timer.scheduledTimer",
+            "validateRecordingAccountLease(accountLease, at: .timer)",
+            "discardStaleRecording()"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "footprint-banner-dismiss",
+      "surface": "oneShotTimer",
+      "classification": "PURE_PRESENTATION_TIMER",
+      "ownerBoundary": "in-memory banner view",
+      "generationFence": "view lifetime only; no business mutation",
+      "lifecycleDisposition": "excluded from business timer retirement",
+      "retirementState": "EXCLUDED_PURE_UI_OR_PLAYBACK",
+      "sources": [
+        {
+          "path": "DreamJourney/Sources/Modules/Map/FootprintNotificationBanner.swift",
+          "markers": [
+            "dismissTimer = Timer.scheduledTimer",
+            "withTimeInterval: 3.0"
+          ]
+        }
+      ]
+    }
+  ]
+}
