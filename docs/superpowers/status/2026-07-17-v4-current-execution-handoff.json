@@ -3,12 +3,13 @@
     "authorityLock": "OWNER_TRUTH",
     "backendPendingPaths": [],
     "completedSubSlices": [
-      "WI-S1-01-12-G0-VERIFIED_MEDIA_PROCESSOR_BOUNDARY_INVENTORY"
+      "WI-S1-01-12-G0-VERIFIED_MEDIA_PROCESSOR_BOUNDARY_INVENTORY",
+      "WI-S1-01-12-G0-INTENT_COMMIT_CONTRACT_SHADOW"
     ],
-    "currentSubSlice": "WI-S1-01-12-G0-INTENT_COMMIT_CONTRACT_SHADOW",
+    "currentSubSlice": "WI-S1-01-12-G0-LEGACY_MEDIA_NON_PROMOTION_INVENTORY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "IN_PROGRESS / MEDIA_BOUNDARY_INVENTORY_VERIFIED / INTENT_COMMIT_SHADOW_REQUIRED",
+      "G0": "IN_PROGRESS / MEDIA_BOUNDARY_AND_INTENT_COMMIT_SHADOW_VERIFIED / LEGACY_NON_PROMOTION_INVENTORY_NEXT",
       "G1": "NOT_STARTED / NO_PUBLIC_MEDIA_UI_CHANGE_AUTHORIZED",
       "G2": "NOT_STARTED / SOURCE_OBJECT_AND_STORAGE_EVIDENCE_REQUIRED",
       "G3": "NOT_STARTED / PROCESSOR_PROVIDER_CONTRACT_REQUIRED",
@@ -17,10 +18,10 @@
     "id": "WI-S1-01-12",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-10 is INTERNAL_READY for its scoped G0 work: inventory, lifecycle guard, retirement candidate manifest, cutover-fence model and default-off TimeLetter typed-effect admission shadow are implemented at backend main@f90c7c7 and deployed healthy. Its remaining G2 host/runtime and G3 Provider evidence is external/open; no worker, route, timer, legacy authority, mailbox/outbox or Provider call changed. WI-S1-01-12 has completed its first G0 sub-slice at backend main@eb4b609: a default-off, value-free inventory rejects mock/local/temp, unverified, inactive, cross-owner/vault/purpose and incomplete-receipt media before a future processor could be considered. No SourceObject authority, object storage, upload path, processor call, effect, Candidate/Memory write or public media UI was added. The active sub-slice now remains within WI-S1-01-12 and models intent/commit validation in shadow only."
+    "summary": "WI-S1-02-10 is INTERNAL_READY for its scoped G0 work: inventory, lifecycle guard, retirement candidate manifest, cutover-fence model and default-off TimeLetter typed-effect admission shadow are implemented at backend main@f90c7c7 and deployed healthy. Its remaining G2 host/runtime and G3 Provider evidence is external/open; no worker, route, timer, legacy authority, mailbox/outbox or Provider call changed. WI-S1-01-12 has now completed two G0 sub-slices: backend main@eb4b609 added a default-off verified-media boundary, and backend main@07ebaed added a default-off intent/commit contract shadow. The latter rejects expired, mock, unsafe, cross-owner/vault/purpose, path, MIME, hash, size and observed-HEAD mismatches; it classifies duplicate and orphan candidates without issuing URLs, receiving bytes, calling storage, persisting SourceObjects, scheduling effects, or writing Candidate/Memory/Persona data. The active sub-slice remains within WI-S1-01-12 and will inventory legacy media representations strictly to prevent non-authoritative promotion."
   },
   "baselines": {
-    "backend": "main@eb4b609",
+    "backend": "main@07ebaed",
     "ios": "feature/prd-stitch-ui-adaptation@e7bca7f",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
