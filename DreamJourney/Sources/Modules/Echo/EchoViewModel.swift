@@ -813,6 +813,7 @@ final class EchoViewModel {
                     }
                     guard self.echoReplyMessageStore.saveArrivedReply(
                         id: delayedReply.id,
+                        sourceAnswerID: answerContract.answer.answerID,
                         deliverAt: answerContract.answer.completedAt,
                         trigger: delayedReply.trigger.rawValue,
                         accountLease: accountLease,

@@ -1099,6 +1099,174 @@ final class EchoDelayedReplyAnswerReadContractTests: XCTestCase {
     }
 }
 
+final class EchoDelayedReplyInboxAnswerReferenceTests: XCTestCase {
+    func testAnswerPointerSurvivesStoreRecreationAndInboxRemainsRedacted() {
+        let suiteName = "EchoDelayedReplyInboxAnswerReferenceTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
+        runtime.publish(session: AccountSession(
+            subjectId: "owner-1",
+            vaultId: "vault-1",
+            sessionId: "session-1",
+            tokenFamilyId: "token-family-1",
+            sessionVersion: 1,
+            generation: 1,
+            generationId: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+            state: .active,
+            activatedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        ))
+        let lease = try! XCTUnwrap(runtime.capture(forSubjectId: "owner-1"))
+        let firstStore = EchoReplyMessageStore(defaults: defaults, accountLeaseRuntime: runtime)
+
+        XCTAssertTrue(firstStore.saveArrivedReply(
+            id: "reply-1",
+            sourceAnswerID: "answer-1",
+            deliverAt: Date(timeIntervalSince1970: 1_700_000_060),
+            trigger: EchoDelayedReplyTrigger.tenRoundBaseline.rawValue,
+            accountLease: lease,
+            resourceOwnerId: lease.subjectId,
+            operationId: "reply-1"
+        ))
+
+        let restoredStore = EchoReplyMessageStore(defaults: defaults, accountLeaseRuntime: runtime)
+        let source = try! XCTUnwrap(restoredStore.inboxSources(
+            accountLease: lease,
+            resourceOwnerId: lease.subjectId
+        ).first)
+        let message = try! XCTUnwrap(InAppMessage.fromEchoReply(source))
+        XCTAssertTrue(message.metadataOnly)
+        XCTAssertTrue(message.contentRedacted)
+        XCTAssertFalse(message.summary.contains("Answer"))
+
+        XCTAssertEqual(
+            restoredStore.inboxAnswerReference(
+                for: message,
+                accountLease: lease,
+                resourceOwnerId: lease.subjectId
+            ),
+            EchoReplyInboxAnswerReference(
+                resourceOwnerId: "owner-1",
+                delayedReplyID: "reply-1",
+                sourceAnswerID: "answer-1"
+            )
+        )
+    }
+}
+
+final class EchoDelayedReplyInboxAnswerReaderTests: XCTestCase {
+    func testReaderReturnsOnlyAnswerMatchingPersistedInboxPointer() throws {
+        let runtime = makeRuntime()
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-1"))
+        let client = EchoDelayedReplyAnswerReadClientStub()
+        client.result = .success(try completedAnswerContract(answerID: "answer-1"))
+        let reader = EchoDelayedReplyInboxAnswerReader(
+            client: client,
+            accountLeaseRuntime: runtime,
+            isEnabled: { true }
+        )
+        let expectation = expectation(description: "matching private Answer")
+
+        reader.read(
+            EchoReplyInboxAnswerReference(
+                resourceOwnerId: "owner-1",
+                delayedReplyID: "reply-1",
+                sourceAnswerID: "answer-1"
+            ),
+            accountLease: lease
+        ) { result in
+            guard case .success(let contract) = result else {
+                return XCTFail("matching inbox pointer should read private Answer")
+            }
+            XCTAssertEqual(contract.answer.answerID, "answer-1")
+            XCTAssertEqual(contract.answer.body, "服务器已经持久化的回信正文")
+            expectation.fulfill()
+        }
+
+        wait(for: [expectation], timeout: 1)
+    }
+
+    func testReaderRejectsAnswerThatDoesNotMatchPersistedInboxPointer() throws {
+        let runtime = makeRuntime()
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-1"))
+        let client = EchoDelayedReplyAnswerReadClientStub()
+        client.result = .success(try completedAnswerContract(answerID: "answer-1"))
+        let reader = EchoDelayedReplyInboxAnswerReader(
+            client: client,
+            accountLeaseRuntime: runtime,
+            isEnabled: { true }
+        )
+        let expectation = expectation(description: "mismatched private Answer")
+
+        reader.read(
+            EchoReplyInboxAnswerReference(
+                resourceOwnerId: "owner-1",
+                delayedReplyID: "reply-1",
+                sourceAnswerID: "other-answer"
+            ),
+            accountLease: lease
+        ) { result in
+            guard case .failure(let error as EchoDelayedReplyInboxAnswerReadError) = result else {
+                return XCTFail("mismatched Answer must fail closed")
+            }
+            XCTAssertEqual(error, .inboxPointerMismatch)
+            expectation.fulfill()
+        }
+
+        wait(for: [expectation], timeout: 1)
+    }
+
+    private func makeRuntime() -> AccountLeaseRuntime {
+        let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
+        runtime.publish(session: AccountSession(
+            subjectId: "owner-1",
+            vaultId: "vault-1",
+            sessionId: "session-1",
+            tokenFamilyId: "token-family-1",
+            sessionVersion: 1,
+            generation: 1,
+            generationId: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+            state: .active,
+            activatedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        ))
+        return runtime
+    }
+
+    private func completedAnswerContract(answerID: String) throws -> EchoDelayedReplyAnswerReadContract {
+        try EchoDelayedReplyAnswerReadContract(
+            backendJSONObject: [
+                "status": "completed",
+                "userId": "owner-1",
+                "delayedReplyId": "reply-1",
+                "answer": [
+                    "answerId": answerID,
+                    "body": "服务器已经持久化的回信正文",
+                    "completedAt": "2026-07-20T08:00:00Z",
+                    "conversationId": "conversation-1",
+                    "requestId": "request-1",
+                    "replyGeneration": 1,
+                    "contextReceipt": [
+                        "contextHash": String(repeating: "a", count: 64),
+                        "contextVersion": "echo-context-v4",
+                        "citationReceiptHash": String(repeating: "b", count: 64),
+                        "policyVersion": "echo-policy-v4",
+                    ],
+                ],
+                "receipt": [
+                    "deliveryState": "completed",
+                    "deliveryProtocolVersion": "echo-delayed-reply-v1",
+                    "mailboxProjectionBodyRedacted": true,
+                    "sourceAnswerId": answerID,
+                ],
+            ],
+            expectedUserID: "owner-1",
+            expectedDelayedReplyID: "reply-1"
+        )
+    }
+}
+
 final class EchoDelayedReplyAnswerReconciliationTests: XCTestCase {
     func testCompletedServerAnswerCreatesRedactedInboxPointerAndRetiresPendingReply() throws {
         let fixture = makeFixture()
@@ -1133,6 +1301,7 @@ final class EchoDelayedReplyAnswerReconciliationTests: XCTestCase {
         )
         XCTAssertEqual(inbox.count, 1)
         XCTAssertEqual(inbox.first?.echoReplyId, fixture.delayedReply.id)
+        XCTAssertEqual(inbox.first?.echoReplySourceAnswerID, "answer-1")
         XCTAssertEqual(inbox.first?.echoReplySummary, "之前等待的回响已经准备好，可以继续对话。")
         guard case .replied = fixture.viewModel.state else {
             return XCTFail("completed server Answer must move Echo to replied")

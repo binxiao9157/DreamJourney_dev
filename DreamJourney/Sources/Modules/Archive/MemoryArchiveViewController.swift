@@ -579,6 +579,10 @@ final class MemoryArchiveViewController: UIViewController {
     private let repository: MemoryArchiveRepository
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
     private let mediaStore = ArchiveMediaStore.shared
+    private lazy var delayedReplyInboxAnswerReader = EchoDelayedReplyInboxAnswerReader(
+        client: DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: accountLeaseRuntime
+    )
 
     private let scrollView = UIScrollView()
     private let contentView = UIView()
@@ -2893,7 +2897,7 @@ final class MemoryArchiveViewController: UIViewController {
         case .systemNotice:
             openSystemNoticeMessage(message)
         case .echoReply:
-            openEchoReplyMessage()
+            openEchoReplyMessage(message, accountLease: accountLease)
         }
     }
 
@@ -2923,6 +2927,51 @@ final class MemoryArchiveViewController: UIViewController {
         )
         alert.addAction(UIAlertAction(title: "知道了", style: .default))
         present(alert, animated: true)
+    }
+
+    private func openEchoReplyMessage(
+        _ message: InAppMessage,
+        accountLease: AccountLease
+    ) {
+        guard EchoDelayedReplyAnswerReconciliationQAGate.isEnabled,
+              DreamJourneyBackendClient.shared.isEchoDelayedReplyAnswerReconciliationQAConfigured,
+              let reference = EchoReplyMessageStore.shared.inboxAnswerReference(
+                  for: message,
+                  accountLease: accountLease,
+                  resourceOwnerId: accountLease.subjectId
+              ) else {
+            openEchoReplyMessage()
+            return
+        }
+
+        delayedReplyInboxAnswerReader.read(reference, accountLease: accountLease) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self,
+                      self.accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
+                    return
+                }
+                switch result {
+                case .success(let contract):
+                    self.presentQADelayedReplyAnswer(contract.answer.body)
+                case .failure:
+                    self.showToast("回响回信暂不可读取，请稍后重试", type: .info)
+                }
+            }
+        }
+    }
+
+    private func presentQADelayedReplyAnswer(_ body: String) {
+        let alert = UIAlertController(
+            title: "回响回信",
+            message: body,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "继续回响", style: .default) { [weak self] _ in
+            self?.openEchoReplyMessage()
+        })
+        alert.addAction(UIAlertAction(title: "关闭", style: .cancel))
+        let presenter = navigationController?.topViewController ?? self
+        presenter.present(alert, animated: true)
     }
 
     private func openEchoReplyMessage() {

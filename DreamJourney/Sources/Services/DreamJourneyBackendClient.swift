@@ -4116,6 +4116,88 @@ struct EchoDelayedReplyAnswerReadContract: Equatable {
     }
 }
 
+enum EchoDelayedReplyInboxAnswerReadError: LocalizedError, Equatable {
+    case disabled
+    case accountScopeChanged
+    case invalidReference
+    case inboxPointerMismatch
+
+    var errorDescription: String? {
+        switch self {
+        case .disabled:
+            return "延迟回信读取未启用"
+        case .accountScopeChanged:
+            return "账号状态已变化"
+        case .invalidReference:
+            return "延迟回信指针无效"
+        case .inboxPointerMismatch:
+            return "延迟回信指针与私有结果不一致"
+        }
+    }
+}
+
+/// Reads a private delayed-reply Answer only after its owner-scoped Inbox
+/// pointer identifies the same persisted Answer. It deliberately has no local
+/// fallback: an unreadable server Answer must remain an unreadable pointer.
+final class EchoDelayedReplyInboxAnswerReader {
+    private let client: EchoDelayedReplyAnswerReadClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let isEnabled: () -> Bool
+
+    init(
+        client: EchoDelayedReplyAnswerReadClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        isEnabled: @escaping () -> Bool = { EchoDelayedReplyAnswerReconciliationQAGate.isEnabled }
+    ) {
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.isEnabled = isEnabled
+    }
+
+    func read(
+        _ reference: EchoReplyInboxAnswerReference,
+        accountLease: AccountLease,
+        completion: @escaping (Result<EchoDelayedReplyAnswerReadContract, Error>) -> Void
+    ) {
+        let ownerID = reference.resourceOwnerId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let delayedReplyID = reference.delayedReplyID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sourceAnswerID = reference.sourceAnswerID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isEnabled() else {
+            completion(.failure(EchoDelayedReplyInboxAnswerReadError.disabled))
+            return
+        }
+        guard !ownerID.isEmpty,
+              !delayedReplyID.isEmpty,
+              !sourceAnswerID.isEmpty,
+              ownerID == accountLease.subjectId,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            completion(.failure(EchoDelayedReplyInboxAnswerReadError.invalidReference))
+            return
+        }
+
+        client.fetchEchoDelayedReplyAnswer(userID: ownerID, delayedReplyID: delayedReplyID) { [weak self] result in
+            guard let self else { return }
+            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(EchoDelayedReplyInboxAnswerReadError.accountScopeChanged))
+                return
+            }
+            switch result {
+            case .failure(let error):
+                completion(.failure(error))
+            case .success(let contract):
+                guard contract.userID == ownerID,
+                      contract.delayedReplyID == delayedReplyID,
+                      contract.answer.answerID == sourceAnswerID,
+                      contract.receipt.sourceAnswerID == sourceAnswerID else {
+                    completion(.failure(EchoDelayedReplyInboxAnswerReadError.inboxPointerMismatch))
+                    return
+                }
+                completion(.success(contract))
+            }
+        }
+    }
+}
+
 final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
     static let shared = DreamJourneyBackendClient()
 

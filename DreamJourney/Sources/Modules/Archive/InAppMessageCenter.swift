@@ -522,9 +522,12 @@ protocol EchoReplyMessageSource {
     var echoReplyStatus: String { get }
     var echoReplyDeliveredAt: String { get }
     var echoReplyTrigger: String { get }
+    var echoReplySourceAnswerID: String? { get }
 }
 
 extension EchoReplyMessageSource {
+    var echoReplySourceAnswerID: String? { nil }
+
     var isEchoReplyVisibleInMessageCenter: Bool {
         let status = echoReplyStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return status == "arrived" || status == "delivered" || status == "unread"
@@ -822,7 +825,7 @@ struct InAppMessage: Codable, Equatable {
             accessStatus: nil,
             recipientRole: "echoReply:\(source.echoReplyTrigger)",
             metadataOnly: true,
-            contentRedacted: false,
+            contentRedacted: true,
             isActionable: true,
             unavailableReason: nil
         )
@@ -916,6 +919,7 @@ struct StaticEchoReplyMessageSource:
     let echoReplyStatus: String
     let echoReplyDeliveredAt: String
     let echoReplyTrigger: String
+    let echoReplySourceAnswerID: String?
     let resourceOwnerId: String?
 
     init(
@@ -925,6 +929,7 @@ struct StaticEchoReplyMessageSource:
         echoReplyStatus: String,
         echoReplyDeliveredAt: String,
         echoReplyTrigger: String,
+        echoReplySourceAnswerID: String? = nil,
         resourceOwnerId: String? = nil
     ) {
         self.echoReplyId = echoReplyId
@@ -933,6 +938,7 @@ struct StaticEchoReplyMessageSource:
         self.echoReplyStatus = echoReplyStatus
         self.echoReplyDeliveredAt = echoReplyDeliveredAt
         self.echoReplyTrigger = echoReplyTrigger
+        self.echoReplySourceAnswerID = echoReplySourceAnswerID
         self.resourceOwnerId = resourceOwnerId
     }
 
@@ -969,7 +975,14 @@ private struct ScopedEchoReplyMessageSource:
     var echoReplyStatus: String { source.echoReplyStatus }
     var echoReplyDeliveredAt: String { source.echoReplyDeliveredAt }
     var echoReplyTrigger: String { source.echoReplyTrigger }
+    var echoReplySourceAnswerID: String? { source.echoReplySourceAnswerID }
     var inAppMessageResourceOwnerId: String? { resourceOwnerId }
+}
+
+struct EchoReplyInboxAnswerReference: Equatable {
+    let resourceOwnerId: String
+    let delayedReplyID: String
+    let sourceAnswerID: String
 }
 
 private func hasCompatibleDeclaredResourceOwner(_ source: Any, expectedOwnerId: String) -> Bool {
@@ -1373,6 +1386,7 @@ final class EchoReplyMessageStore {
     @discardableResult
     func saveArrivedReply(
         id: String,
+        sourceAnswerID: String,
         deliverAt: Date,
         trigger: String,
         accountLease: AccountLease,
@@ -1380,8 +1394,10 @@ final class EchoReplyMessageStore {
         operationId: String
     ) -> Bool {
         let normalizedId = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSourceAnswerID = sourceAnswerID.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedOperationId = operationId.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedId.isEmpty,
+              !normalizedSourceAnswerID.isEmpty,
               normalizedId == normalizedOperationId else {
             return false
         }
@@ -1393,6 +1409,7 @@ final class EchoReplyMessageStore {
                 echoReplyStatus: "unread",
                 echoReplyDeliveredAt: isoFormatter.string(from: deliverAt),
                 echoReplyTrigger: trigger,
+                echoReplySourceAnswerID: normalizedSourceAnswerID,
                 resourceOwnerId: resourceOwnerId
             )
             var current = inboxSources(
@@ -1413,6 +1430,40 @@ final class EchoReplyMessageStore {
                 operationId: Self.inboxOperationId
             )
         }
+    }
+
+    func inboxAnswerReference(
+        for message: InAppMessage,
+        accountLease: AccountLease,
+        resourceOwnerId: String
+    ) -> EchoReplyInboxAnswerReference? {
+        let normalizedOwnerId = resourceOwnerId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard message.kind == .echoReply,
+              message.ownerUserId == normalizedOwnerId,
+              accountLease.subjectId == normalizedOwnerId,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            return nil
+        }
+
+        guard let source = inboxSources(
+            accountLease: accountLease,
+            resourceOwnerId: normalizedOwnerId
+        ).first(where: { source in
+            message.id == "echo-reply-\(source.echoReplyId)"
+        }),
+        let declaredOwner = (source as? InAppMessageResourceOwnerSource)?.inAppMessageResourceOwnerId,
+        declaredOwner == normalizedOwnerId,
+        let sourceAnswerID = source.echoReplySourceAnswerID?.trimmingCharacters(in: .whitespacesAndNewlines),
+        !sourceAnswerID.isEmpty,
+        accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+            return nil
+        }
+
+        return EchoReplyInboxAnswerReference(
+            resourceOwnerId: normalizedOwnerId,
+            delayedReplyID: source.echoReplyId,
+            sourceAnswerID: sourceAnswerID
+        )
     }
 
     @discardableResult
@@ -1496,10 +1547,16 @@ final class EchoReplyMessageStore {
     }
 
     @discardableResult
-    func saveArrivedReply(id: String, deliverAt: Date, trigger: String) -> Bool {
+    func saveArrivedReply(
+        id: String,
+        sourceAnswerID: String,
+        deliverAt: Date,
+        trigger: String
+    ) -> Bool {
         guard let accountLease = accountLeaseRuntime.capture(forSubjectId: nil) else { return false }
         return saveArrivedReply(
             id: id,
+            sourceAnswerID: sourceAnswerID,
             deliverAt: deliverAt,
             trigger: trigger,
             accountLease: accountLease,
