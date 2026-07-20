@@ -4,24 +4,25 @@
     "backendPendingPaths": [],
     "completedSubSlices": [
       "WI-S1-01-03-CANDIDATE_SYNTHETIC_EXTRACTION_G0_G2_EVIDENCE",
-      "WI-S1-01-03-M0A-00-INTERVIEW_POLICY_G0_COMPLETE"
+      "WI-S1-01-03-M0A-00-INTERVIEW_POLICY_G0_COMPLETE",
+      "WI-S1-01-03-M0A-01-CONVERSATION_SESSION_BOOTSTRAP_G0_G2_DEPLOYED"
     ],
-    "currentSubSlice": "WI-S1-01-03-M0A-01-CONVERSATION_SESSION_BOOTSTRAP",
+    "currentSubSlice": "WI-S1-01-03-M0A-02-ORCHESTRATOR_SESSION_STATE_BRIDGE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_AND_M0A_INTERVIEW_POLICY_VERIFIED",
+      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_AND_PRIVATE_CONVERSATION_BOUNDARY_VERIFIED",
       "G1": "NOT_STARTED / ECHO_QA_DIAGNOSTICS_NOT_YET_CONNECTED",
-      "G2": "PARTIAL / CANDIDATE_EXTRACTION_POSTGRES_VERIFIED; CONVERSATION_SESSION_PERSISTENCE_NOT_STARTED",
+      "G2": "PARTIAL / CANDIDATE_EXTRACTION_AND_CONVERSATION_SESSION_POSTGRES_VERIFIED_AND_DEPLOYED",
       "G3": "EXTERNAL_DEFERRED / PROVIDER_GENERATION_REMAINS_SEPARATE"
     },
     "id": "WI-S1-01-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
     "priorEvidence": "docs/superpowers/status/2026-07-19-wi-s1-01-03-candidate-synthetic-extraction.md",
-    "summary": "The prior synthetic Source-to-pending-Candidate boundary remains deployed and default-off. M0-A now has a provider-neutral, value-free InterviewOrchestrator policy core deployed in backend main@85ee9e2. The active sub-slice is Conversation plus InterviewSession persistence bootstrap with command idempotency and expected-version CAS. It must not auto-promote Message to Source, Candidate, or MemoryVersion, call a Provider, or alter public Echo UI."
+    "summary": "The prior synthetic Source-to-pending-Candidate boundary remains deployed and default-off. M0-A now has a provider-neutral, value-free InterviewOrchestrator policy core plus deployed private Conversation/InterviewSession persistence in backend main@bc7ac93. The completed bootstrap enforces owner/vault isolation, command idempotency, expected-version CAS, append-only messages, and no automatic Message-to-Source/Candidate/MemoryVersion promotion. The active sub-slice only bridges persisted state into the existing Orchestrator; it must not call a Provider or alter public Echo UI."
   },
   "baselines": {
-    "backend": "main@85ee9e2",
+    "backend": "main@bc7ac93",
     "ios": "feature/prd-stitch-ui-adaptation@b901d85",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
