@@ -128,3 +128,35 @@ G4 cohort、产品和隐私放行仍开放，因此这不是公开发布结论�
 Gate 结论：该摘要/继续态为 G0、G1 scoped 和 G2 deployed evidence。产品入口仍默认隐藏、继续
 受发布策略控制；本轮没有把 QA Candidate review API 或候选内容开放到产品态。下一条边界只能
 先定义受策略保护的产品确认合同，不能复用 QA review 路由直接暴露私有候选内容。
+
+## 2026-07-21 Slice 3E 默认关闭的产品确认读取合同
+
+- 后端提交 `79a0504 feat(m0): add policy-bound candidate confirmation read` 已推送并部署至
+  `miao-server`。新增
+  `GET /v2/vaults/{vaultId}/interview-review-batches/{reviewBatchId}/confirmation`，它与既有
+  QA Candidate review 路由完全分离。
+- 新路由只接受服务端签发且仍有效的 `ownerTruthCandidateReview` captured policy；该 feature
+  默认不在 closed-pilot 可见集合中。缺少 capture、过期 capture 或只携带 QA header 均返回
+  `403 release_policy_denied`，不能借用 QA 通道绕过产品策略。
+- iOS 仅登记 feature 和后端路由归属，将其归为 owner text core；它是 non-persistent、默认关闭
+  的能力。本轮没有新增产品 UI、路由入口或自动读取逻辑，因此公开 Echo 不会出现候选内容。
+- 返回体只在未来获得正式 release-policy 许可时才包含 owner-scoped confirmation 与候选项；当前
+  没有把它接到自然输入 Sheet，也没有触及任何 Candidate 接受、记忆激活或发布写入。
+
+本轮验证：
+
+- 后端定向 Candidate confirmation API 测试通过；完整 `./scripts/verify_backend.sh` 通过
+  （1057 tests），并已更新 route ownership inventory 为 103 条、无未分类路由。
+- `swiftc -parse` 和通用 `generic/platform=iOS` Debug build 通过；iOS 路由归属映射不会改变
+  默认发布态。
+- `Scripts/QA/product-v4/owner-truth-candidate-confirmation-default-off-check.swift`、
+  `release-feature-matrix-check.swift` 与 feature-gate evaluator smoke 通过，确认新 feature 不在
+  默认启用集合、不持久化，且 confirmation 路由只映射到该独立 feature。
+- 部署容器 smoke 使用一次性 Postgres 临时库通过，确认
+  `deployedCandidateReviewPolicyDefaultClosed=true`、
+  `formalCandidateConfirmationDenied=true`、`productionBusinessDataMutated=false`，迁移头为
+  `0035`。
+
+Gate 结论：确认读取合同已有 G0/G2 证据，但仍为 default-off，尚未拥有 G1 产品消费面。下一步如
+需继续，只能先建立 typed iOS QA consumer 与受策略控制的可读展示，不能直接公开 Candidate
+内容或连接现有 QA review 写入路由。

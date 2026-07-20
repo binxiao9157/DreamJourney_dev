@@ -21,9 +21,10 @@
       "WI-S1-01-03-M0A-13-IOS_TYPED_NATURAL_INPUT_QA_CLIENT_G0_G1_SCOPED",
       "WI-S1-01-03-M0A-14-ECHO_NATURAL_INPUT_SURFACE_QA_G0_G1_SCOPED",
       "WI-S1-01-03-M0A-15-ECHO_NATURAL_INPUT_PRODUCT_SURFACE_G0_G1_G2_DEPLOYED",
-      "WI-S1-01-03-M0A-16-VALUE_MINIMIZED_CONTINUATION_AND_REVIEW_SURFACE_G0_G1_G2_DEPLOYED"
+      "WI-S1-01-03-M0A-16-VALUE_MINIMIZED_CONTINUATION_AND_REVIEW_SURFACE_G0_G1_G2_DEPLOYED",
+      "WI-S1-01-03-M0A-17-DEFAULT_OFF_PRODUCT_CONFIRMATION_READ_CONTRACT_G0_G2_DEPLOYED"
     ],
-    "currentSubSlice": "WI-S1-01-03-M0A-16-G2_DEPLOYED / NEXT:SLICE_3D_PRODUCT_CONFIRMATION_CONTRACT_BOUNDARY",
+    "currentSubSlice": "WI-S1-01-03-M0A-17-G2_DEPLOYED / NEXT:SLICE_3F_TYPED_CONFIRMATION_QA_CONSUMER",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_SESSION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_REVIEW_COMPOSITION_PRIVATE_STANDARD_PLUS_SINGLE_DECISION_NON_ACTIVATING_QA_CONSUMER_VALUE_MINIMIZED_INTERVIEW_SESSION_STATE_READ_NATURAL_INPUT_SESSION_COMMAND_LEASE_BOUND_IOS_NATURAL_INPUT_CLIENT_AND_CONTENT_FREE_CONTINUATION_PRESENTATION_VERIFIED; FORMAL_ECHO_TEXT_INPUT_CAPTURE_REQUIRED",
@@ -35,10 +36,15 @@
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
     "priorEvidence": "docs/superpowers/status/2026-07-20-wi-s1-01-03-m0a-echo-natural-input-surface-qa.md",
+    "latestEvidence": {
+      "backendCommit": "79a0504",
+      "deployedSmoke": "passed / temporaryPostgres=true / productionBusinessDataMutated=false / deployedCandidateReviewPolicyDefaultClosed=true / formalCandidateConfirmationDenied=true",
+      "scope": "G0_G2_DEPLOYED / DEFAULT_OFF / NO_PRODUCT_UI / QA_HEADER_CANNOT_BYPASS"
+    },
     "summary": "The private M0-A interview path is deployed through acknowledged-batch proposal admission, value-minimized review composition, partial acceptance for selected ordinary batch Candidates, individual terminal review for sensitive or explicitly single-review Candidates, a separate default-off iOS QA review consumer, a deployed value-minimized interview-session state read, and a lease-bound typed iOS natural-input client. The existing QA keyboard entry remains double-gated. A product natural-input surface is G0/G1 verified: it starts hidden in the existing full-screen Echo, requires both a fresh route visibility and write decision for echoTextInput, clears immediately on account rebind, and uses product wording without internal QA details. Formal backend writes require a captured server release-policy decision and reject absent policy without falling back to QA. `db95a5f` deployed the input authorization path; `8cb6a0d` deployed a content-free continuation presentation route and its isolated Postgres smoke verified rejected missing capture, matching capture, and presentation semantics without production business-data mutation. The product Sheet maps only server state to a natural summary and never exposes input text, Candidate content, review IDs, pacing, fatigue, or internal session details. Both UIQA surfaces use in-memory clients and never perform a private write, voice turn, or Digital Human request. This is not a public release: the product preview bypasses policy only inside UIQA, and G4 cohort/product/privacy decisions remain open. The next boundary is a separately policy-gated product confirmation contract; QA Candidate review routes must not be exposed directly. Registry status remains deliberately conservative."
   },
   "baselines": {
-    "backend": "main@8cb6a0d",
+    "backend": "main@79a0504",
     "ios": "feature/prd-stitch-ui-adaptation@0057d55",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },

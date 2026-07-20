@@ -498,6 +498,11 @@ final class FeatureGateService {
             || normalizedPath.hasPrefix("/echo/delayed-replies") {
             return .echoTextInput
         }
+        if method == .get,
+           normalizedPath.contains("/interview-review-batches/"),
+           normalizedPath.hasSuffix("/confirmation") {
+            return .ownerTruthCandidateReview
+        }
         if normalizedPath == "/archive/image-analysis" { return .archiveLocalAnalysis }
         if normalizedPath == "/archive/photos" { return .archiveRemoteFetch }
         if normalizedPath == "/auth/password" { return .accountPasswordChange }
@@ -570,7 +575,7 @@ final class FeatureGateService {
 
     private func riskClass(for feature: DJFeature) -> ReleasePolicyRiskClass {
         switch feature {
-        case .echoTextInput, .profileSettings, .legalCenter, .accountDeletion:
+        case .echoTextInput, .ownerTruthCandidateReview, .profileSettings, .legalCenter, .accountDeletion:
             return .ownerTextCore
         case .voiceCloneShell, .digitalHumanLivePanel, .archiveRemoteFetch:
             return .providerEffect
