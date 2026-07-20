@@ -6,22 +6,23 @@
       "WI-S1-02-09-G0-DEAD-LETTER-ADMISSION-CONTRACT",
       "WI-S1-02-09-G0-WORKER-READINESS-AND-EVIDENCE-CONTRACT",
       "WI-S1-02-09-G0-RESTORE-REPLAY-AND-MANIFEST-CONTRACT",
-      "WI-S1-02-09-G2-DURABLE-DEAD-LETTER-PERSISTENCE"
+      "WI-S1-02-09-G2-DURABLE-DEAD-LETTER-PERSISTENCE",
+      "WI-S1-02-09-G2-DURABLE-REPLAY-REQUEST-PERSISTENCE"
     ],
-    "currentSubSlice": "WI-S1-02-09-G2-DURABLE-REPLAY-REQUEST-AND-WORKER-LOSS-EVIDENCE",
+    "currentSubSlice": "WI-S1-02-09-G2-DURABLE-WORKER-LOSS-EVIDENCE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "SCOPED_VERIFIED / DEAD_LETTER_AUTHORIZED_REPLAY_RESTORE_AND_READINESS_EVIDENCE_CONTRACTS",
-      "G2": "PARTIAL / DEAD_LETTER_ADMISSION_PERSISTED_ONLINE_0026 / REPLAY_REQUEST_AND_WORKER_LOSS_EVIDENCE_REQUIRED",
+      "G2": "PARTIAL / DEAD_LETTER_ADMISSION_PERSISTED_ONLINE_0026 / INERT_REPLAY_REQUEST_PERSISTED_ONLINE_0027 / WORKER_LOSS_EVIDENCE_REQUIRED",
       "G3": "NOT_STARTED / PROVIDER_QUERY_AND_OPERATIONS_BASELINE_REQUIRED"
     },
     "id": "WI-S1-02-09",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-09 has deployed scoped G0 contracts and a first G2 durable dead-letter admission repository at backend main@fe43577. It next persists inert authorized replay requests and worker-loss evidence without changing terminal jobs or enabling Provider replay."
+    "summary": "WI-S1-02-09 has deployed scoped G0 contracts, durable dead-letter admission at backend main@fe43577, and inert restore-fenced replay-request persistence at main@9ade1ab. It next adds durable worker-loss evidence without changing terminal jobs or enabling Provider replay."
   },
   "baselines": {
-    "backend": "main@fe43577",
+    "backend": "main@9ade1ab",
     "ios": "feature/prd-stitch-ui-adaptation@272a1b5",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -477,5 +478,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T10:52:00+0800"
+  "updatedAt": "2026-07-20T11:21:00+0800"
 }
