@@ -78,8 +78,8 @@
     {
       "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-06-runtime-session-coordinator.md",
       "id": "WI-S1-03-06",
-      "implementationStatus": "INTERNAL_READY / G0_LIFECYCLE_FENCE_VERIFIED / IOS_LOCAL_COMMITTED / G1_G3_G4_OPEN",
-      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
+      "implementationStatus": "INTERNAL_READY / G0_LIFECYCLE_FENCE_VERIFIED / G1_SIMULATOR_LIFECYCLE_UIQA_VERIFIED / IOS_LOCAL_COMMITTED / G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_G1_EVIDENCE_PRESENT_G3_G4_OPEN"
     },
     {
       "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-07-audio-owner-lease.md",

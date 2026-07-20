@@ -1,13 +1,13 @@
 # WI-S1-03-06 Echo Runtime Session Coordinator
 
-日期：2026-07-19
+日期：2026-07-19；更新：2026-07-20
 
 ## 当前状态
 
 - Work Item：`WI-S1-03-06`
 - Authority lock：`IOS_COMPOSITION`
 - Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`
-- 当前结果：`INTERNAL_READY / G0_LIFECYCLE_FENCE_VERIFIED / G1_G3_G4_OPEN`
+- 当前结果：`INTERNAL_READY / G0_LIFECYCLE_FENCE_VERIFIED / G1_SIMULATOR_LIFECYCLE_UIQA_VERIFIED / G3_G4_OPEN`
 - 本切片：`WI-S1-03-06-LIFECYCLE_FALLBACK_RELEASE_G0_COMPLETE`
 - 范围：为 Echo 数字人建立本地 RuntimeLease，围住 session 创建、heartbeat、Provider state 和请求级文本/PCM
   回包；不改变全屏 UI、音频 owner、腾讯 Provider 合同或公开发布范围。
@@ -73,6 +73,30 @@ git diff --check
 构建仍会输出既有第三方地图静态库的缺失 object-file warning；本轮没有新增该类 warning，且测试构建结果为
 `TEST BUILD SUCCEEDED`。
 
+### 2026-07-20 G1 生命周期 UIQA 补证
+
+此前记录的 simulator destination 阻断已通过 hosted XCTest/Pods 配置修复。现使用
+`iPhone 17 Pro` 运行：
+
+```bash
+SIMULATOR_NAME='iPhone 17 Pro' \
+  bash Scripts/QA/prd-stitch-ui/run-echo-digital-human-lifecycle-smoke.sh
+swift Scripts/QA/prd-stitch-ui/echo-digital-human-lifecycle-uiqa-smoke-check.swift "$PWD"
+DJ_IOS_TEST_BUILD_DESTINATION='generic/platform=iOS' \
+  bash Scripts/QA/product-v4/run-ios-echo-runtime-session-coordinator-gate.sh
+```
+
+结果：`PASS`。
+
+- UIQA stub 验证 lifecycle suspend/restore、provider view preservation、后台宽限预约/取消/到期释放、
+  普通 Echo fallback 与 `microphoneAutoStart=false`；
+- 结果 JSON：`tmp/visual-qa/prd-stitch-ui/echo-digital-human-lifecycle-smoke/20260720-194712/echo-digital-human-lifecycle-smoke-result.json`；
+- 截图：`tmp/visual-qa/prd-stitch-ui/echo-digital-human-lifecycle-smoke/20260720-194712/01-echo-digital-human-lifecycle-smoke.png`；
+- Runtime coordinator static check、模型 smoke 与 generic iPhoneOS `build-for-testing` 均通过。
+
+此处运行的是 `TencentDigitalHumanRuntimeStub`，不创建真实腾讯 session、不使用 Provider 凭据或配额；
+因此只关闭 G1 本地生命周期交互证据，不关闭 G3/G4。
+
 ## 未完成边界
 
 - G0 覆盖已完成：角色快速切换、late session/callback、stop vs exit、background grace、quota/error 与 ordinary Echo
@@ -82,8 +106,8 @@ git diff --check
 - session release 仍是独立 backend cleanup 回包，尚未纳入完整 receipt/audit 模型；
 - Provider `onStateChange` 没有 request ID；必须在腾讯 SDK 能力允许或增加 provider event envelope 后，才能把
   provider state 本身提升为 request 级精确关联，当前不能把它误报为已关闭；
-- G1 仍受当前 scheme 没有 runnable simulator destination 阻断；G3 的腾讯配额、session cleanup 和
-  Provider runtime；G4 的真机渲染/生命周期都没有因本次 G0 而关闭；
+- G1 的本地 lifecycle UIQA 已通过；G3 的腾讯配额、session cleanup 和 Provider runtime，以及 G4 的
+  真机渲染/生命周期都没有因本次 G0/G1 证据而关闭；
 - 不涉及 `WI-S1-03-07` 的 AVAudioSession/AudioOwnerLease 仲裁，也不触及声音复刻质量。
 
 ## 下一步
