@@ -4,12 +4,13 @@
     "backendPendingPaths": [],
     "completedSubSlices": [
       "WI-S1-01-11-G0-PERSONA_PROFILE_LEGACY_BOUNDARY_INVENTORY",
-      "WI-S1-01-11-G0-PERSONA_AUTHORITY_COMMAND_CONTRACT"
+      "WI-S1-01-11-G0-PERSONA_AUTHORITY_COMMAND_CONTRACT",
+      "WI-S1-01-11-G0-PERSONA_AUTHORITY_RECEIPT_CONTRACT"
     ],
-    "currentSubSlice": "WI-S1-01-11-G0-PERSONA_AUTHORITY_RECEIPT_CONTRACT",
+    "currentSubSlice": "WI-S1-01-11-G0-PERSONA_AUTHORITY_ORIGIN_ADMISSION",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "IN_PROGRESS / PERSONA_AUTHORITY_RECEIPT_CONTRACT_REQUIRED",
+      "G0": "IN_PROGRESS / PERSONA_AUTHORITY_ORIGIN_ADMISSION_REQUIRED",
       "G1": "NOT_STARTED / NO_PUBLIC_PERSONA_EDITING_AUTHORIZED",
       "G2": "NOT_STARTED / VERSIONED_PERSONA_STORE_AND_MIGRATION_PROOF_REQUIRED",
       "G4": "NOT_STARTED / PRODUCT_PRIVACY_RIGHTS_APPROVAL_REQUIRED"
@@ -17,11 +18,11 @@
     "id": "WI-S1-01-11",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-01-12 remains INTERNAL_READY for its complete currently executable media G0 boundary at backend main@bfd7ca6; real media remains blocked by G2-G4. WI-S1-01-10 now has its complete executable G0 boundary at backend main@864e5d9 and deployed healthy: legacy parity cannot self-authorize authorityEpoch advancement or legacy-writer retirement. WI-S1-01-11 now has a deployed Persona/Profile legacy-boundary inventory at backend main@38ddb3d and a deployed default-off typed Self Persona command preflight at backend main@fe702e0. B15 candidates remain limited to displayName/gender/birthDate; identity, family, voice/provider, digital-human/embodiment and unknown data remain excluded or quarantined. The preflight accepts no write: it cannot create a Persona, write a version/receipt, call a Provider or treat a Memorial/deceased representation as a login principal. No Persona/Profile authority, schema, legacy migration, user data or public UI changed. The active next sub-slice is the immutable PersonaVersion/DecisionReceipt record contract."
+    "summary": "WI-S1-01-12 remains INTERNAL_READY for its complete currently executable media G0 boundary at backend main@bfd7ca6; real media remains blocked by G2-G4. WI-S1-01-10 now has its complete executable G0 boundary at backend main@864e5d9 and deployed healthy: legacy parity cannot self-authorize authorityEpoch advancement or legacy-writer retirement. WI-S1-01-11 now has a deployed Persona/Profile legacy-boundary inventory at backend main@38ddb3d, a deployed default-off typed Self Persona command preflight at backend main@fe702e0 and a deployed future immutable PersonaVersion/DecisionReceipt plan at backend main@33ab0ae. B15 candidates remain limited to displayName/gender/birthDate; identity, family, voice/provider, digital-human/embodiment and unknown data remain excluded or quarantined. Both the command and record plan accept no write: they cannot create a Persona, persist a version/receipt, call a Provider or treat a Memorial/deceased representation as a login principal. No Persona/Profile authority, schema, legacy migration, user data or public UI changed. The active next sub-slice is typed command-origin admission."
   },
   "baselines": {
-    "backend": "main@fe702e0",
-    "ios": "feature/prd-stitch-ui-adaptation@68f6342",
+    "backend": "main@33ab0ae",
+    "ios": "feature/prd-stitch-ui-adaptation@44858ca",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
