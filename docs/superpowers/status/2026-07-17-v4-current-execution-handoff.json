@@ -2,32 +2,31 @@
   "activeWorkItem": {
     "authorityLock": "ASYNC_EFFECT",
     "backendPendingPaths": [],
-    "completedSubSlices": [
-      "WI-S1-02-09-G0-DEAD-LETTER-ADMISSION-CONTRACT",
-      "WI-S1-02-09-G0-WORKER-READINESS-AND-EVIDENCE-CONTRACT",
-      "WI-S1-02-09-G0-RESTORE-REPLAY-AND-MANIFEST-CONTRACT",
-      "WI-S1-02-09-G2-DURABLE-DEAD-LETTER-PERSISTENCE",
-      "WI-S1-02-09-G2-DURABLE-REPLAY-REQUEST-PERSISTENCE",
-      "WI-S1-02-09-G2-DURABLE-WORKER-LOSS-EVIDENCE"
-    ],
-    "currentSubSlice": "WI-S1-02-09-G3-PROVIDER-QUERY-AND-OPERATIONS-BASELINE",
+    "completedSubSlices": [],
+    "currentSubSlice": "WI-S1-02-10-G0-LEGACY_TIMER_CALLBACK_INVENTORY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "SCOPED_VERIFIED / DEAD_LETTER_AUTHORIZED_REPLAY_RESTORE_AND_READINESS_EVIDENCE_CONTRACTS",
-      "G2": "SCOPED_VERIFIED / DEAD_LETTER_ADMISSION_ONLINE_0026 / INERT_REPLAY_REQUEST_ONLINE_0027 / WORKER_LOSS_EVIDENCE_ONLINE_0028",
-      "G3": "NOT_STARTED / PROVIDER_QUERY_AND_OPERATIONS_BASELINE_REQUIRED"
+      "G0": "NOT_STARTED / LEGACY_TIMER_CALLBACK_INVENTORY_REQUIRED",
+      "G2": "NOT_STARTED / HOST_PROCESS_AND_ROLLING_DEPLOY_EVIDENCE_REQUIRED",
+      "G3": "NOT_STARTED / PROVIDER_CALLBACK_QUERY_APPLICABILITY_REQUIRED"
     },
-    "id": "WI-S1-02-09",
+    "id": "WI-S1-02-10",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-09 has deployed scoped G0 contracts and all scoped G2 evidence: durable dead-letter admission at backend main@fe43577, inert restore-fenced replay authority at main@9ade1ab, and append-only worker-loss evidence at main@19bf02f. G3 Provider query/operations remains unstarted; no replay or Provider call is enabled."
+    "summary": "WI-S1-02-09 is INTERNAL_READY with its scoped G0/G2 evidence deployed at backend main@1d87023; real Provider query remains G3 EXTERNAL_BLOCKED and no replay or Provider call is enabled. WI-S1-02-10 begins with a value-free legacy timer/callback inventory only: no cutover, retirement, worker enablement, or timer disablement is authorized."
   },
   "baselines": {
-    "backend": "main@19bf02f",
+    "backend": "main@1d87023",
     "ios": "feature/prd-stitch-ui-adaptation@272a1b5",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
+    {
+      "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-09-provider-query-operations-baseline.md",
+      "id": "WI-S1-02-09",
+      "implementationStatus": "INTERNAL_READY / G0_G2_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED_1d87023 / G3_EXTERNAL_BLOCKED / PROVIDER_CALLS_AND_REPLAY_DISABLED",
+      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G3_EXTERNAL_BLOCKED"
+    },
     {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-08-business-message-notification-contract.md",
       "id": "WI-S1-02-08",
@@ -468,9 +467,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-02-10",
+    "id": "WI-S1-02-11",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Legacy timer/callback drain, cutover, and retirement follow worker readiness. It must prevent duplicate side effects while preserving evidence and rollback controls."
+    "summary": "Verified media processor and Candidate-only output follow the effect-kernel operations work. It remains default-off until its SourceObject and Provider gates are satisfied."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -479,5 +478,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T11:39:09+0800"
+  "updatedAt": "2026-07-20T12:00:00+0800"
 }
