@@ -113,17 +113,37 @@ xcodebuild -quiet -workspace DreamJourney.xcworkspace -scheme DreamJourney \
 
 以上静态检查、模拟器 `build-for-testing` 和无签名 iPhoneOS build 已通过。新增的 Answer contract / reconciliation 单测已随测试目标编译；实际 `xcodebuild test` 被现有 Scheme 的 simulator destination 解析为 generic placeholder 而无法启动，属于测试运行环境限制，不计作已执行的测试证据。
 
+## G1 iOS Inbox 私有 Answer 读取与消息状态闭环
+
+在提交 `272a1b5 feat(v4): read delayed Echo answers from inbox` 中，已将 G1 的 Inbox 指针读取收敛为下列边界：
+
+- `EchoReplyMessageStore` 到达记录只新增 `sourceAnswerId`，不保存 Answer 正文；`InAppMessage.fromEchoReply` 显式标记 `metadataOnly=true`、`contentRedacted=true`。
+- 重建同一 owner/account scoped store 后，Inbox 仍可恢复 `delayedReplyId + sourceAnswerId` 指针；错误账号、失效 lease、缺失指针或缺失 Answer ID 都 fail-closed。
+- `EchoDelayedReplyInboxAnswerReader` 仅在 QA gate 启用时调用 Owner-only Answer 接口，并要求本地指针、服务端 Answer ID 和 receipt `sourceAnswerId` 三者完全一致；不一致不会把别的 Answer 展示为当前回信。
+- 消息中心点击带 V4 指针的 Echo 回信时，QA 模式读取并展示私有 Answer；默认发布态、未配置后端或 legacy 指针仍沿用原有“进入回响”行为。读取失败只提示稍后重试，不以本地内容降级伪造答案。
+- 既有 `MemoryArchiveRepository` 的非时间信件 read/archive 分支继续使用 account-scoped local message state，因此 Echo 指针的已读和归档状态会跨页面/重启恢复，且不会修改服务端 Answer 正文。
+
+新增 gate：
+
+```bash
+Scripts/QA/product-v4/run-echo-delayed-reply-answer-inbox-gate.sh
+```
+
+它检查 source Answer pointer、正文脱敏、lease/owner fence、receipt 匹配、QA-only 打开路径、普通 Echo fallback、已读/归档持久化分支和对应测试名称。结果通过。
+
+验证补充：模拟器 `build-for-testing` 和无签名 iPhoneOS build 通过，`git diff --check` 通过。由于 Scheme 只暴露 generic simulator placeholder，实际 XCTest/UIQA 运行未能启动，仍不能作为 UI 交互运行证据。
+
 ## 尚未声明完成
 
 - 未运行实际 Postgres 原子并发 smoke：当前本地 shell 未配置 `DATABASE_URL`。脚本会创建并清理隔离临时数据库，待 G2 部署/运维阶段执行。
 - 未启用 typed scheduler/worker、Provider generation、accepted/query/unknown reconcile；这属于 `WI-S1-02-07` 及其后续 worker gate。
-- iOS 已完成 QA-only 的 server Answer 拉取与本地 pending 对账；重启后的 Answer 已读/归档/点击回响闭环，以及可重复的 simulator 交互运行证据尚未完成。
+- iOS 已完成 QA-only 的 server Answer 拉取、本地 pending 对账、Inbox private Answer pointer、已读/归档持久化复用和点击读取；可重复的 simulator 交互运行证据仍受当前 Scheme destination 环境阻断。
 - 未推送或部署后端，因此不能表述为线上回信完成。
 
 ## 后续顺序
 
-1. 在不改变公开 UI 的前提下继续 G1：补齐 Answer 通过 Inbox 指针打开、已读/归档和重启恢复后的私有读取闭环。
-2. 进入 G2 前，先推送 `53b420c`，部署 migration `0024`，再运行隔离 Postgres smoke：
+1. 保持当前 QA-only 边界，待 Scheme 暴露可运行 simulator destination 后补充实际 Inbox 点击/UIQA 证据；这不阻塞后端 G2。
+2. 进入 G2：推送 `53b420c`，部署 migration `0024`，再运行隔离 Postgres smoke：
 
 ```bash
 DATABASE_URL='...' \
