@@ -11,12 +11,13 @@
       "WI-S1-01-11-G0-PERSONA_PERSISTENCE_ADMISSION",
       "WI-S1-01-11-G0-MEMORIAL_AUTHORITY_NON_ADMISSION_BOUNDARY",
       "WI-S1-01-11-G0-MEMORIAL_CONTROLLER_APPOINTMENT_CONTRACT",
-      "WI-S1-01-11-G0-MEMORIAL_CONTROLLER_REVIEW_NON_ADMISSION"
+      "WI-S1-01-11-G0-MEMORIAL_CONTROLLER_REVIEW_NON_ADMISSION",
+      "WI-S1-01-11-G0-MEMORIAL_CAPABILITY_DECISION_NON_ADMISSION"
     ],
-    "currentSubSlice": "WI-S1-01-11-G0-MEMORIAL_CAPABILITY_DECISION_NON_ADMISSION",
+    "currentSubSlice": "WI-S1-01-11-G0-MEMORIAL_RIGHTS_CLAIM_CONFLICT_HOLD_NON_ADMISSION",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "IN_PROGRESS / MEMORIAL_CAPABILITY_DECISION_NON_ADMISSION_REQUIRED",
+      "G0": "IN_PROGRESS / MEMORIAL_RIGHTS_CLAIM_CONFLICT_HOLD_NON_ADMISSION_REQUIRED",
       "G1": "NOT_STARTED / NO_PUBLIC_PERSONA_EDITING_AUTHORIZED",
       "G2": "NOT_STARTED / VERSIONED_PERSONA_STORE_AND_MIGRATION_PROOF_REQUIRED",
       "G4": "NOT_STARTED / PRODUCT_PRIVACY_RIGHTS_APPROVAL_REQUIRED"
@@ -24,10 +25,10 @@
     "id": "WI-S1-01-11",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-01-12 remains INTERNAL_READY for its complete currently executable media G0 boundary at backend main@bfd7ca6; real media remains blocked by G2-G4. WI-S1-01-10 now has its complete executable G0 boundary at backend main@864e5d9 and deployed healthy: legacy parity cannot self-authorize authorityEpoch advancement or legacy-writer retirement. WI-S1-01-11 now has a deployed Persona/Profile legacy-boundary inventory at backend main@38ddb3d, a deployed default-off typed Self Persona command preflight at backend main@fe702e0, a deployed future immutable PersonaVersion/DecisionReceipt plan at backend main@33ab0ae, deployed origin/scope binding at backend main@0c45af0, a deployed default-off persistence admission boundary at backend main@dc18a40, a deployed Memorial non-admission boundary at backend main@77aa244, a deployed default-off Memorial Controller appointment plan at backend main@db17c59 and a deployed controller_review non-admission assessment at backend main@ffcdb35. A represented/deceased Persona cannot be a login principal; Family may only contribute Source/Candidate material; Assistant, Provider, runtime and unknown origins cannot write Memorial authority; verification gaps, active RightsClaims and active ConflictHolds fail closed. Bootstrap and transfer plans bind server-resolved controller context, require future version/CAS persistence, and never write or alter authorityEpoch in G0. Controller failure only exposes future rights-request, preservation and minimum-operation scope; it never permits new Publication, Provider effect or authority resumption before a new appointment. No Persona/Profile authority, schema, legacy migration, user data or public UI changed. The active next sub-slice is the default-off Memorial high-risk capability decision non-admission boundary."
+    "summary": "WI-S1-01-12 remains INTERNAL_READY for its complete currently executable media G0 boundary at backend main@bfd7ca6; real media remains blocked by G2-G4. WI-S1-01-10 now has its complete executable G0 boundary at backend main@864e5d9 and deployed healthy: legacy parity cannot self-authorize authorityEpoch advancement or legacy-writer retirement. WI-S1-01-11 now has a deployed Persona/Profile legacy-boundary inventory at backend main@38ddb3d, a deployed default-off typed Self Persona command preflight at backend main@fe702e0, a deployed future immutable PersonaVersion/DecisionReceipt plan at backend main@33ab0ae, deployed origin/scope binding at backend main@0c45af0, a deployed default-off persistence admission boundary at backend main@dc18a40, a deployed Memorial non-admission boundary at backend main@77aa244, a deployed default-off Memorial Controller appointment plan at backend main@db17c59, a deployed controller_review non-admission assessment at backend main@ffcdb35 and a deployed high-risk capability non-admission boundary at backend main@0f52ac0. A represented/deceased Persona cannot be a login principal; Family may only contribute Source/Candidate material; Assistant, Provider, runtime and unknown origins cannot write Memorial authority; verification gaps, active RightsClaims and active ConflictHolds fail closed. Bootstrap and transfer plans bind server-resolved controller context, require future version/CAS persistence, and never write or alter authorityEpoch in G0. Controller failure only exposes future rights-request, preservation and minimum-operation scope; it never permits new Publication, Provider effect or authority resumption before a new appointment. Memorial Voice/Portrait/DH/Publication purposes are independent, no legacy self/family runtime may be reused, and even complete synthetic prerequisite flags do not grant capability. No Persona/Profile authority, schema, legacy migration, user data or public UI changed. The active next sub-slice is the default-off Memorial RightsClaim/ConflictHold non-admission boundary."
   },
   "baselines": {
-    "backend": "main@ffcdb35",
+    "backend": "main@0f52ac0",
     "ios": "feature/prd-stitch-ui-adaptation@ca98ca3",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -507,5 +508,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T18:40:00+0800"
+  "updatedAt": "2026-07-20T18:44:00+0800"
 }
