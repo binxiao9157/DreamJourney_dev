@@ -1939,6 +1939,56 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
     }
 }
 
+/// A product-safe projection of one private interview session. It intentionally
+/// contains no transcript text, Candidate content, review IDs, pacing counters
+/// or internal fatigue state. The UI maps this bounded state to natural copy.
+enum OwnerTruthInterviewNaturalInputContinuationState: String, Equatable, Sendable {
+    case readyForNarrative
+    case narrativeRecorded
+    case reviewPending
+    case paused
+    case ended
+}
+
+struct OwnerTruthInterviewNaturalInputContinuation: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-session-presentation-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let state: OwnerTruthInterviewNaturalInputContinuationState
+    let canContinue: Bool
+    let canContinueLater: Bool
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        guard OwnerTruthInterviewNaturalInputContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthInterviewNaturalInputContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let presentation = object["presentation"] as? [String: Any],
+              let stateRaw = OwnerTruthInterviewNaturalInputContract.requiredString(
+                presentation["state"]
+              ),
+              let state = OwnerTruthInterviewNaturalInputContinuationState(rawValue: stateRaw),
+              let canContinue = OwnerTruthInterviewNaturalInputContract.requiredBool(
+                presentation["canContinue"]
+              ),
+              let canContinueLater = OwnerTruthInterviewNaturalInputContract.requiredBool(
+                presentation["canContinueLater"]
+              ) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "session presentation misses a required value-minimized field"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.state = state
+        self.canContinue = canContinue
+        self.canContinueLater = canContinueLater
+    }
+}
+
 struct OwnerTruthInterviewNaturalInputStartCommand: Equatable, Sendable {
     let commandID: String
     let threadID: OwnerTruthRecordID
@@ -2030,6 +2080,12 @@ protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
         command: OwnerTruthInterviewNaturalInputAppendCommand,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
     )
+
+    func fetchOwnerTruthInterviewNaturalInputContinuation(
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputContinuation, Error>) -> Void
+    )
 }
 
 enum OwnerTruthInterviewNaturalInputIntent: Equatable, Sendable {
@@ -2061,11 +2117,13 @@ enum OwnerTruthInterviewNaturalInputNotice: Equatable, Sendable {
 struct OwnerTruthInterviewNaturalInputViewState: Equatable, Sendable {
     let phase: OwnerTruthInterviewNaturalInputPhase
     let latestReceipt: OwnerTruthInterviewNaturalInputReceipt?
+    let continuation: OwnerTruthInterviewNaturalInputContinuation?
     let notice: OwnerTruthInterviewNaturalInputNotice?
 
     static let idle = OwnerTruthInterviewNaturalInputViewState(
         phase: .idle,
         latestReceipt: nil,
+        continuation: nil,
         notice: nil
     )
 }
@@ -2126,6 +2184,7 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             viewState = OwnerTruthInterviewNaturalInputViewState(
                 phase: .starting,
                 latestReceipt: nil,
+                continuation: nil,
                 notice: nil
             )
             client.startOwnerTruthInterviewNaturalInput(vaultID: vaultID, command: command) { [weak self] result in
@@ -2157,6 +2216,7 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             viewState = OwnerTruthInterviewNaturalInputViewState(
                 phase: .submitting,
                 latestReceipt: receipt,
+                continuation: viewState.continuation,
                 notice: nil
             )
             client.appendOwnerTruthInterviewNaturalInput(vaultID: vaultID, command: command) { [weak self] result in
@@ -2166,6 +2226,7 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             viewState = OwnerTruthInterviewNaturalInputViewState(
                 phase: .ready,
                 latestReceipt: receipt,
+                continuation: viewState.continuation,
                 notice: .invalidInput
             )
         }
@@ -2203,8 +2264,10 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             viewState = OwnerTruthInterviewNaturalInputViewState(
                 phase: .ready,
                 latestReceipt: receipt,
+                continuation: nil,
                 notice: nil
             )
+            refreshContinuation(vaultID: vaultID, receipt: receipt)
         case .failure:
             transitionFailure(.requestFailed)
         }
@@ -2226,8 +2289,10 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             viewState = OwnerTruthInterviewNaturalInputViewState(
                 phase: .ready,
                 latestReceipt: receipt,
+                continuation: nil,
                 notice: nil
             )
+            refreshContinuation(vaultID: vaultID, receipt: receipt)
         case .failure:
             transitionFailure(.requestFailed)
         }
@@ -2246,11 +2311,61 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         return true
     }
 
+    /// A continuation read is advisory product presentation only. It cannot
+    /// create Candidates, accept a review, or expose private conversation
+    /// content. A failed advisory read preserves the durable write receipt.
+    private func refreshContinuation(
+        vaultID: OwnerTruthVaultID,
+        receipt: OwnerTruthInterviewNaturalInputReceipt
+    ) {
+        guard viewState.phase == .ready,
+              viewState.latestReceipt == receipt else {
+            return
+        }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        client.fetchOwnerTruthInterviewNaturalInputContinuation(
+            vaultID: vaultID,
+            sessionID: receipt.sessionID
+        ) { [weak self] result in
+            self?.receiveContinuation(
+                result,
+                vaultID: vaultID,
+                receipt: receipt,
+                generation: generation
+            )
+        }
+    }
+
+    private func receiveContinuation(
+        _ result: Result<OwnerTruthInterviewNaturalInputContinuation, Error>,
+        vaultID: OwnerTruthVaultID,
+        receipt: OwnerTruthInterviewNaturalInputReceipt,
+        generation: UInt
+    ) {
+        guard canCommit(generation: generation),
+              viewState.phase == .ready,
+              viewState.latestReceipt == receipt else {
+            return
+        }
+        guard case .success(let continuation) = result,
+              continuation.vaultID == vaultID else {
+            return
+        }
+        viewState = OwnerTruthInterviewNaturalInputViewState(
+            phase: .ready,
+            latestReceipt: receipt,
+            continuation: continuation,
+            notice: nil
+        )
+    }
+
     private func transitionUnavailable(_ notice: OwnerTruthInterviewNaturalInputNotice) {
         operationGeneration &+= 1
         viewState = OwnerTruthInterviewNaturalInputViewState(
             phase: .unavailable,
             latestReceipt: nil,
+            continuation: nil,
             notice: notice
         )
     }
@@ -2259,6 +2374,7 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         viewState = OwnerTruthInterviewNaturalInputViewState(
             phase: .failed,
             latestReceipt: nil,
+            continuation: nil,
             notice: notice
         )
     }
@@ -2311,6 +2427,11 @@ private enum OwnerTruthInterviewNaturalInputContract {
             )
         }
         return integer
+    }
+
+    static func requiredBool(_ value: Any?) -> Bool? {
+        guard let value = value as? Bool else { return nil }
+        return value
     }
 }
 

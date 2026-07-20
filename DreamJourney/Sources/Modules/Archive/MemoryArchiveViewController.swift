@@ -6348,6 +6348,18 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         inputTextView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    var renderedStatusTextForUIQA: String {
+        statusLabel.text ?? ""
+    }
+
+    var renderedDetailTextForUIQA: String {
+        detailLabel.text ?? ""
+    }
+
+    var renderedStateForUIQA: OwnerTruthInterviewNaturalInputViewState {
+        renderedState
+    }
+
     init(
         accountLease: AccountLease,
         client: OwnerTruthInterviewNaturalInputClient = DreamJourneyBackendClient.shared,
@@ -6466,10 +6478,15 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
     private func render(_ state: OwnerTruthInterviewNaturalInputViewState) {
         renderedState = state
-        let isReady = state.phase == .ready
-        inputTextView.isEditable = isReady
-        submitButton.isEnabled = isReady
-        submitButton.alpha = isReady ? 1 : 0.45
+        let canSubmit: Bool
+        if presentation == .qa {
+            canSubmit = state.phase == .ready
+        } else {
+            canSubmit = state.phase == .ready && (state.continuation?.canContinue ?? true)
+        }
+        inputTextView.isEditable = canSubmit
+        submitButton.isEnabled = canSubmit
+        submitButton.alpha = canSubmit ? 1 : 0.45
         statusLabel.text = statusText(for: state)
         detailLabel.text = detailText(for: state)
         onViewStateRendered?(state)
@@ -6505,6 +6522,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
                     ? "可以提交一条自然输入"
                     : "自然输入已受控记录"
             }
+            if let continuation = state.continuation {
+                return productStatusText(for: continuation)
+            }
             return state.latestReceipt?.messageSequence == nil
                 ? "可以开始写下"
                 : "已记录，可以继续写下新的内容"
@@ -6531,6 +6551,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             }
         }
         guard presentation == .qa else {
+            if let continuation = state.continuation {
+                return productDetailText(for: continuation)
+            }
             return receipt.messageSequence == nil
                 ? "准备好后，写下你想讲的内容。"
                 : "已保存，可以继续写下新的内容。"
@@ -6546,6 +6569,44 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             lines.append("会话已创建，尚未提交输入。")
         }
         return lines.joined(separator: "\n")
+    }
+
+    private func productStatusText(
+        for continuation: OwnerTruthInterviewNaturalInputContinuation
+    ) -> String {
+        switch continuation.state {
+        case .readyForNarrative:
+            return "可以开始写下"
+        case .narrativeRecorded:
+            return "这段分享已经留好"
+        case .reviewPending:
+            return "有内容等待你确认"
+        case .paused:
+            return "这次先到这里"
+        case .ended:
+            return "这段分享已留好"
+        }
+    }
+
+    private func productDetailText(
+        for continuation: OwnerTruthInterviewNaturalInputContinuation
+    ) -> String {
+        switch continuation.state {
+        case .readyForNarrative:
+            return "准备好后，写下你想讲的内容。"
+        case .narrativeRecorded:
+            return "这段分享已经留好。想起来时，可以继续补充。"
+        case .reviewPending:
+            return "确认后才会进入你的记忆。"
+        case .paused:
+            return continuation.canContinueLater
+                ? "想继续时，可以再回来。"
+                : "已按你的选择，暂不再追问。"
+        case .ended:
+            return continuation.canContinueLater
+                ? "以后还可以开启新的故事。"
+                : "这段分享已留好。"
+        }
     }
 
     private func lifecycleText(_ lifecycle: OwnerTruthInterviewSessionLifecycle) -> String {
@@ -6715,6 +6776,7 @@ private final class InterviewNaturalInputUIQAScenario {
 
 private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalInputClient {
     private let vaultID: OwnerTruthVaultID?
+    private var sessionsWithNarrative = Set<UUID>()
 
     init(vaultID: OwnerTruthVaultID?) {
         self.vaultID = vaultID
@@ -6760,6 +6822,7 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
             completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
             return
         }
+        sessionsWithNarrative.insert(command.sessionID.rawValue)
         do {
             completion(.success(try OwnerTruthInterviewNaturalInputReceipt(
                 backendJSONObject: [
@@ -6775,6 +6838,36 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
                         "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
                         "messageId": command.messageID.rawValue.uuidString,
                         "messageSequence": 1,
+                    ],
+                ],
+                expectedVaultID: vaultID
+            )))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func fetchOwnerTruthInterviewNaturalInputContinuation(
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputContinuation, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        let state: OwnerTruthInterviewNaturalInputContinuationState = sessionsWithNarrative.contains(
+            sessionID.rawValue
+        ) ? .narrativeRecorded : .readyForNarrative
+        do {
+            completion(.success(try OwnerTruthInterviewNaturalInputContinuation(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewNaturalInputContinuation.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "presentation": [
+                        "state": state.rawValue,
+                        "canContinue": true,
+                        "canContinueLater": true,
                     ],
                 ],
                 expectedVaultID: vaultID

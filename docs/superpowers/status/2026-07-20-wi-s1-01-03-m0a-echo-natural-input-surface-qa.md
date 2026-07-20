@@ -97,3 +97,34 @@ G4 cohort、产品和隐私发布决策仍开放，因此不得将其称为公�
 
 Gate 结论：本 slice 的正式自然输入授权 G2 已部署验证；产品入口仍默认隐藏且受策略控制。
 G4 cohort、产品和隐私放行仍开放，因此这不是公开发布结论。
+
+## 2026-07-21 Slice 3D 继续/待确认摘要
+
+- 后端提交 `8cb6a0d feat(m0): add interview continuation presentation` 已推送并部署。
+  新增受既有自然输入授权约束的 `GET /v2/vaults/{vaultId}/interview-sessions/{sessionId}/presentation`。
+  它只返回 `readyForNarrative`、`narrativeRecorded`、`reviewPending`、`paused` 或 `ended`，以及
+  `canContinue` 和 `canContinueLater`；不返回输入文本、Candidate 内容、review ID、轮次、疲劳值
+  或内部 thread/session 状态。
+- iOS 产品态 Sheet 仅将上述状态映射为自然文案。例如，输入记录后显示“这段分享已经留好”，
+  并提示“想起来时，可以继续补充”；待确认时只提示“有内容等待你确认”，不泄露待确认内容。
+  服务端摘要读取失败不会撤销已经成功的自然输入回执。
+- 产品态 UIQA 在内存 client 中提交固定文本后验证 `narrativeRecorded` 摘要、已清空输入框和
+  既有全屏 Echo 视觉不变；整个验证不发起网络、持久化写入、语音回合或数字人 session。
+- 后端路由已登记为 `USER_SESSION`，避免正式授权路径被路由鉴权层误判为未分类。
+
+本轮验证：
+
+- 后端定向路由/自然输入测试通过，完整 `./scripts/verify_backend.sh` 通过（1055 tests）。
+- 已部署的自然输入 smoke 通过，确认 `contentFreePresentationVerified=true`、
+  `formalMatchingCapturePresentation=true`，并在一次性 Postgres 临时库中执行，
+  `productionBusinessDataMutated=false`。
+- `swiftc -parse`、
+  `Scripts/QA/product-v4/owner-truth-interview-natural-input-echo-surface-check.py`、
+  `Scripts/QA/prd-stitch-ui/run-owner-truth-interview-natural-input-product-surface-smoke.sh`、
+  `git diff --check` 与通用 `generic/platform=iOS` Debug build 均通过。
+- 本轮截图：
+  `tmp/visual-qa/product-v4/owner-truth-interview-natural-input-product-surface-smoke/20260721-051527/01-owner-truth-interview-natural-input-product-surface.png`。
+
+Gate 结论：该摘要/继续态为 G0、G1 scoped 和 G2 deployed evidence。产品入口仍默认隐藏、继续
+受发布策略控制；本轮没有把 QA Candidate review API 或候选内容开放到产品态。下一条边界只能
+先定义受策略保护的产品确认合同，不能复用 QA review 路由直接暴露私有候选内容。

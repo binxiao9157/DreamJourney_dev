@@ -9,6 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 ECHO = ROOT / "DreamJourney/Sources/Modules/Echo/EchoViewController.swift"
 NATURAL_INPUT_SURFACE = ROOT / "DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift"
+OWNER_TRUTH_CONTRACTS = ROOT / "DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift"
+BACKEND_CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 FEATURE_FLAGS = ROOT / "DreamJourney/Sources/App/FeatureFlagService.swift"
 APP_DELEGATE = ROOT / "DreamJourney/Sources/AppDelegate.swift"
 RUNNER = ROOT / "Scripts/QA/prd-stitch-ui/run-owner-truth-interview-natural-input-echo-surface-smoke.sh"
@@ -36,11 +38,21 @@ def body(source: str, marker: str) -> str:
 
 
 def main() -> None:
-    for path in (ECHO, NATURAL_INPUT_SURFACE, FEATURE_FLAGS, APP_DELEGATE, RUNNER):
+    for path in (
+        ECHO,
+        NATURAL_INPUT_SURFACE,
+        OWNER_TRUTH_CONTRACTS,
+        BACKEND_CLIENT,
+        FEATURE_FLAGS,
+        APP_DELEGATE,
+        RUNNER,
+    ):
         require(path.is_file(), f"missing Echo natural-input QA artifact: {path}")
 
     echo = ECHO.read_text(encoding="utf-8")
     natural_input_surface = NATURAL_INPUT_SURFACE.read_text(encoding="utf-8")
+    owner_truth_contracts = OWNER_TRUTH_CONTRACTS.read_text(encoding="utf-8")
+    backend_client = BACKEND_CLIENT.read_text(encoding="utf-8")
     flags = FEATURE_FLAGS.read_text(encoding="utf-8")
     delegate = APP_DELEGATE.read_text(encoding="utf-8")
     runner = RUNNER.read_text(encoding="utf-8")
@@ -101,6 +113,33 @@ def main() -> None:
             snippet in natural_input_surface,
             f"product natural-input presentation missing: {snippet}",
         )
+
+    # Slice 3D must give the owner an honest continuation/review boundary
+    # without returning transcript text, Candidate content or internal pacing.
+    for snippet in (
+        "OwnerTruthInterviewNaturalInputContinuation",
+        '"owner-truth-interview-session-presentation-v1"',
+        "case readyForNarrative",
+        "case narrativeRecorded",
+        "case reviewPending",
+        "fetchOwnerTruthInterviewNaturalInputContinuation",
+    ):
+        require(snippet in owner_truth_contracts, f"continuation contract missing: {snippet}")
+
+    for snippet in (
+        "/presentation\"",
+        "fetchOwnerTruthInterviewNaturalInputContinuation",
+        "ownerTruthInterviewNaturalInputTransport()",
+    ):
+        require(snippet in backend_client, f"policy-bound continuation transport missing: {snippet}")
+
+    for snippet in (
+        "这段分享已经留好。想起来时，可以继续补充。",
+        "有内容等待你确认",
+        "确认后才会进入你的记忆。",
+        "canContinue",
+    ):
+        require(snippet in natural_input_surface, f"value-minimized product summary missing: {snippet}")
 
     smoke_body = body(echo, "func runUIQAOwnerTruthInterviewNaturalInputEchoSurfaceSmoke(")
     for forbidden in (

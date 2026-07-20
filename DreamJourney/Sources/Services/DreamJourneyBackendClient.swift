@@ -5323,6 +5323,62 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    func fetchOwnerTruthInterviewNaturalInputContinuation(
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputContinuation, Error>) -> Void
+    ) {
+        let transport = ownerTruthInterviewNaturalInputTransport()
+        switch transport {
+        case .unavailable(let reason):
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthInterviewNaturalInput",
+                    reason: reason
+                )))
+            }
+            return
+        case .qa, .releasePolicy:
+            break
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions/\(pathComponent(sessionID.rawValue.uuidString))/presentation"
+        let additionalHeaders: [String: String]
+        let featureDecision: FeatureDecision?
+        switch transport {
+        case .qa:
+            additionalHeaders = ["X-DreamJourney-QA-Owner-Truth": "1"]
+            featureDecision = nil
+        case .releasePolicy(let capturedDecision):
+            additionalHeaders = [:]
+            featureDecision = capturedDecision
+        case .unavailable:
+            return
+        }
+        requestJSON(
+            path: path,
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            featureDecision: featureDecision,
+            additionalHeaders: additionalHeaders
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewNaturalInputContinuation(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     private enum OwnerTruthInterviewNaturalInputTransport {
         case qa
         case releasePolicy(FeatureDecision)

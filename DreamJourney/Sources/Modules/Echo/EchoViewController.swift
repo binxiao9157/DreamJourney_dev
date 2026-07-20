@@ -7521,27 +7521,66 @@ extension EchoViewController {
             self.present(navigationController, animated: false) {
                 let sheetPresented = self.presentedViewController === navigationController
                     && navigationController.topViewController === controller
-                var result: [String: Any] = [
-                    "completed": sheetPresented && controller.title == "今天想聊点什么？",
-                    "productEntryVisible": productEntryVisible,
-                    "qaEntryVisible": qaEntryVisible,
-                    "sheetPresented": sheetPresented,
-                    "entryAccessibilityIdentifier": self.ownerTruthInterviewNaturalInputProductEntryButton.accessibilityIdentifier ?? "",
-                    "sheetTitle": controller.title ?? "",
-                    "inMemoryPreview": true,
-                    "releasePolicyBypassedForPreview": true,
-                    "voiceTurnStarted": false,
-                    "digitalHumanSessionStarted": false,
-                    "backendNetworkStarted": false,
-                    "persistentInterviewWriteStarted": false,
-                    "launchArguments": [
-                        QALaunchScenario.ownerTruthInterviewNaturalInputProductSurfaceSmoke.rawValue
-                    ]
-                ]
                 if !sheetPresented {
-                    result["failureReason"] = "sheetNotPresented"
+                    completion([
+                        "completed": false,
+                        "productEntryVisible": productEntryVisible,
+                        "qaEntryVisible": qaEntryVisible,
+                        "sheetPresented": false,
+                        "failureReason": "sheetNotPresented"
+                    ])
+                    return
                 }
-                completion(result)
+
+                // The in-memory client lets the product-only UIQA surface
+                // verify the user-facing summary after an accepted input while
+                // preserving the invariant that no network, voice, Digital
+                // Human, or persistent interview write is started.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    controller.submitQAFixture(
+                        OwnerTruthInterviewNaturalInputUIQASmoke.fixtureText
+                    )
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                        let continuation = controller.renderedStateForUIQA.continuation
+                        let summaryState = continuation?.state.rawValue ?? ""
+                        let summaryStatus = controller.renderedStatusTextForUIQA
+                        let summaryDetail = controller.renderedDetailTextForUIQA
+                        let inputRecorded = controller.renderedStateForUIQA
+                            .latestReceipt?.messageSequence == 1
+                        let summaryRendered = summaryState == "narrativeRecorded"
+                            && summaryStatus == "这段分享已经留好"
+                            && summaryDetail == "这段分享已经留好。想起来时，可以继续补充。"
+                        var result: [String: Any] = [
+                            "completed": controller.title == "今天想聊点什么？"
+                                && inputRecorded
+                                && summaryRendered
+                                && controller.isTranscriptClearForQA,
+                            "productEntryVisible": productEntryVisible,
+                            "qaEntryVisible": qaEntryVisible,
+                            "sheetPresented": true,
+                            "entryAccessibilityIdentifier": self.ownerTruthInterviewNaturalInputProductEntryButton.accessibilityIdentifier ?? "",
+                            "sheetTitle": controller.title ?? "",
+                            "inputRecorded": inputRecorded,
+                            "summaryState": summaryState,
+                            "summaryStatus": summaryStatus,
+                            "summaryDetail": summaryDetail,
+                            "transcriptCleared": controller.isTranscriptClearForQA,
+                            "inMemoryPreview": true,
+                            "releasePolicyBypassedForPreview": true,
+                            "voiceTurnStarted": false,
+                            "digitalHumanSessionStarted": false,
+                            "backendNetworkStarted": false,
+                            "persistentInterviewWriteStarted": false,
+                            "launchArguments": [
+                                QALaunchScenario.ownerTruthInterviewNaturalInputProductSurfaceSmoke.rawValue
+                            ]
+                        ]
+                        if !(result["completed"] as? Bool ?? false) {
+                            result["failureReason"] = "productSummaryNotRendered"
+                        }
+                        completion(result)
+                    }
+                }
             }
         }
     }
