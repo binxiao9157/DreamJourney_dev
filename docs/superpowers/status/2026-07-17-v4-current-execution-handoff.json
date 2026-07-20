@@ -16,25 +16,26 @@
       "WI-S1-01-03-M0A-09-SENSITIVE_CANDIDATE_SINGLE_REVIEW_BOUNDARY_G0_G2_DEPLOYED",
       "WI-S1-01-03-M0A-10-INTERVIEW_CANDIDATE_REVIEW_QA_CONSUMER_G0_G1_SCOPED",
       "WI-S1-01-03-M0A-11-INTERVIEW_SESSION_STATE_READ_G0_G2_DEPLOYED",
-      "WI-S1-01-03-M0A-11-IOS_QA_SESSION_STATE_CONSUMER_G0_G1_SCOPED"
+      "WI-S1-01-03-M0A-11-IOS_QA_SESSION_STATE_CONSUMER_G0_G1_SCOPED",
+      "WI-S1-01-03-M0A-12-NATURAL_INPUT_SESSION_COMMAND_G0_G2_DEPLOYED"
     ],
-    "currentSubSlice": "WI-S1-01-03-M0A-11-COMPLETE / NEXT:SELECT_M0A_NATURAL_INPUT_BOUNDARY",
+    "currentSubSlice": "WI-S1-01-03-M0A-12-COMPLETE / NEXT:IOS_TYPED_NATURAL_INPUT_CLIENT",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_SESSION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_REVIEW_COMPOSITION_PRIVATE_STANDARD_PLUS_SINGLE_DECISION_NON_ACTIVATING_QA_CONSUMER_AND_VALUE_MINIMIZED_INTERVIEW_SESSION_STATE_READ_VERIFIED",
+      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_SESSION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_REVIEW_COMPOSITION_PRIVATE_STANDARD_PLUS_SINGLE_DECISION_NON_ACTIVATING_QA_CONSUMER_VALUE_MINIMIZED_INTERVIEW_SESSION_STATE_READ_AND_NATURAL_INPUT_SESSION_COMMAND_VERIFIED",
       "G1": "SCOPED_ONLY / INTERVIEW_CANDIDATE_REVIEW_AND_VALUE_MINIMIZED_INTERVIEW_SESSION_STATE_SIMULATOR_UIQA_VERIFIED; PUBLIC_ECHO_UI_NOT_CONNECTED",
-      "G2": "PARTIAL / CANDIDATE_EXTRACTION_CONVERSATION_SESSION_ORCHESTRATION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_REVIEW_COMPOSITION_PRIVATE_STANDARD_PLUS_SINGLE_DECISION_QA_REVIEW_API_AND_INTERVIEW_SESSION_STATE_READ_POSTGRES_VERIFIED_AND_DEPLOYED",
+      "G2": "PARTIAL / CANDIDATE_EXTRACTION_CONVERSATION_SESSION_ORCHESTRATION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_REVIEW_COMPOSITION_PRIVATE_STANDARD_PLUS_SINGLE_DECISION_QA_REVIEW_API_INTERVIEW_SESSION_STATE_READ_AND_NATURAL_INPUT_SESSION_COMMAND_POSTGRES_VERIFIED_AND_DEPLOYED",
       "G3": "EXTERNAL_DEFERRED / PROVIDER_GENERATION_REMAINS_SEPARATE"
     },
     "id": "WI-S1-01-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "priorEvidence": "docs/superpowers/status/2026-07-20-wi-s1-01-03-m0a-interview-session-state-read.md",
-    "summary": "The private M0-A interview path is deployed through acknowledged-batch proposal admission, value-minimized review composition, partial acceptance for selected ordinary batch Candidates, individual terminal review for sensitive or explicitly single-review Candidates, a separate default-off iOS QA review consumer, and a deployed value-minimized QA-only interview-session state read. The state read exposes only pacing/boundary/fence counters and never conversation content or owner-truth artifacts. Its typed iOS consumer is now verified by contract tests and a DEBUG/UI-QA simulator smoke; it captures the account lease and fails closed on a stale callback or disabled gate. Each decision remains bound to the Owner CAS/DecisionReceipt contract; no private review or state-read call creates a MemoryRecord, MemoryVersion, Projection, Provider request, legacy Archive/KBLite write, or public Echo UI. The next boundary is selection of the approved M0-A natural-input product slice; the diagnostic state-read remains default-off and must not be treated as public M0-A UI completion."
+    "priorEvidence": "docs/superpowers/status/2026-07-20-wi-s1-01-03-m0a-natural-input-backend-command.md",
+    "summary": "The private M0-A interview path is deployed through acknowledged-batch proposal admission, value-minimized review composition, partial acceptance for selected ordinary batch Candidates, individual terminal review for sensitive or explicitly single-review Candidates, a separate default-off iOS QA review consumer, a deployed value-minimized QA-only interview-session state read, and a deployed QA-only natural-input session command contract. The natural-input contract only starts private sessions and appends owner narrative messages under Owner CAS/version fences; it never returns content in receipts or creates a Source, Candidate, DecisionReceipt, MemoryVersion, Projection, provider request, legacy Archive/KBLite write, or public Echo UI. The next boundary is an iOS typed QA client that preserves the existing full-screen Echo visual structure, binds calls to AccountLease and remains unlinked from public Echo."
   },
   "baselines": {
-    "backend": "main@85a5647",
-    "ios": "feature/prd-stitch-ui-adaptation@d480ccc",
+    "backend": "main@bf83ace",
+    "ios": "feature/prd-stitch-ui-adaptation@0057d55",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
