@@ -9,24 +9,25 @@
       "WI-S1-01-03-M0A-02-ORCHESTRATOR_SESSION_STATE_BRIDGE_G0_G2_DEPLOYED",
       "WI-S1-01-03-M0A-03-PERSISTED_PACING_STATE_G0_G2_DEPLOYED",
       "WI-S1-01-03-M0A-04-REVIEW_BATCH_BOUNDARY_G0_G2_DEPLOYED",
-      "WI-S1-01-03-M0A-05-TOPIC_SWITCH_AND_THREAD_LIFECYCLE_G0_G2_DEPLOYED"
+      "WI-S1-01-03-M0A-05-TOPIC_SWITCH_AND_THREAD_LIFECYCLE_G0_G2_DEPLOYED",
+      "WI-S1-01-03-M0A-06-REVIEW_BATCH_TO_CANDIDATE_PROPOSAL_BOUNDARY_G0_G2_DEPLOYED"
     ],
-    "currentSubSlice": "WI-S1-01-03-M0A-06-REVIEW_BATCH_TO_CANDIDATE_PROPOSAL_BOUNDARY",
+    "currentSubSlice": "WI-S1-01-03-M0A-07-CANDIDATE_BATCH_REVIEW_COMPOSITION_BOUNDARY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_SESSION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_AND_TOPIC_SWITCH_THREAD_LIFECYCLE_VERIFIED",
+      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_SESSION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_VERIFIED",
       "G1": "NOT_STARTED / ECHO_QA_DIAGNOSTICS_NOT_YET_CONNECTED",
-      "G2": "PARTIAL / CANDIDATE_EXTRACTION_CONVERSATION_SESSION_ORCHESTRATION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_AND_TOPIC_SWITCH_POSTGRES_VERIFIED_AND_DEPLOYED",
+      "G2": "PARTIAL / CANDIDATE_EXTRACTION_CONVERSATION_SESSION_ORCHESTRATION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_POSTGRES_VERIFIED_AND_DEPLOYED",
       "G3": "EXTERNAL_DEFERRED / PROVIDER_GENERATION_REMAINS_SEPARATE"
     },
     "id": "WI-S1-01-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
     "priorEvidence": "docs/superpowers/status/2026-07-19-wi-s1-01-03-candidate-synthetic-extraction.md",
-    "summary": "The prior synthetic Source-to-pending-Candidate boundary remains deployed and default-off. M0-A now has a provider-neutral, value-free InterviewOrchestrator policy core, private Conversation/InterviewSession persistence, a deployed read-only session bridge, typed recoverable pacing state, review-batch acknowledgement boundaries, and a deployed topic-switch lifecycle fence in backend main@23c807a. A topic switch carries no topic text: it atomically pauses the old ConversationThread and InterviewSession under owner/vault/authority/CAS checks, prevents further old-thread turns, and permits a later explicit new-session start. It does not infer a replacement topic, create Candidate/DecisionReceipt/MemoryVersion, call a Provider, or change public Echo UI. Persisted boundary, owner turn count, deepening count, unreviewed batch count, pending review batch and fatigue remain authoritative. The active sub-slice is review-batch-to-Candidate proposal admission; it must preserve explicit confirmation and never activate a MemoryVersion directly."
+    "summary": "The prior synthetic Source-to-pending-Candidate boundary remains deployed and default-off. M0-A now has a provider-neutral InterviewOrchestrator policy core, private Conversation/InterviewSession persistence, a deployed read-only session bridge, typed recoverable pacing state, review-batch acknowledgement boundaries, a topic-switch lifecycle fence, and deployed acknowledged-batch proposal admission in backend main@0174aa1. An Owner must first acknowledge a frozen review batch, then explicitly admit it; acknowledgement alone writes no Source. Admission captures only that batch's owner messages into one immutable conversation Source, records append-only provenance, and accepts the existing default-off candidate-extraction effect. It preserves owner/vault/authority/CAS/replay checks and writes no Candidate decision, DecisionReceipt, MemoryVersion, Provider request or public Echo UI. The active sub-slice is Candidate batch review composition, which must retain partial-accept and sensitive-single-review boundaries without direct MemoryVersion activation."
   },
   "baselines": {
-    "backend": "main@23c807a",
+    "backend": "main@0174aa1",
     "ios": "feature/prd-stitch-ui-adaptation@d480ccc",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -506,5 +507,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T21:10:00+0800"
+  "updatedAt": "2026-07-20T21:23:00+0800"
 }
