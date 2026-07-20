@@ -231,6 +231,11 @@ assertContains(releaseRegression, "RUN_ECHO_READINESS_REPORT", "release regressi
 assertContains(releaseRegression, "run-echo-readiness-report.sh", "release regression should call Echo readiness report")
 assertContains(releaseRegression, "RUN_STAGE0_STRICT_READINESS_GATE", "release regression should expose the Stage 0 strict readiness contract gate")
 assertContains(releaseRegression, "run-stage0-strict-readiness-gate.sh", "release regression should call the Stage 0 strict readiness contract gate")
+assertContains(releaseRegression, "RUN_STAGE0_READINESS_ARTIFACT_GATE", "release regression should expose the optional Stage 0 readiness artifact gate")
+assertContains(releaseRegression, "run-stage0-readiness-artifact-gate.sh", "release regression should call the Stage 0 readiness artifact gate")
+assertContains(releaseRegression, "REQUIRE_STAGE0_BACKEND_READY=1", "readiness artifact gate should require a backend readiness artifact when enabled")
+assertContains(releaseRegression, "REQUIRE_STAGE0_ECHO_MANIFEST=1", "readiness artifact gate should require an Echo QA manifest when enabled")
+assertContains(releaseRegression, "STAGE0_READINESS_STRICT=1", "readiness artifact gate should fail closed when enabled")
 assertContains(releaseRegression, "RUN_DIGITAL_HUMAN_TTS_VISEME_GATE", "release regression should expose optional digital-human TTS/viseme gate")
 assertContains(releaseRegression, "run-digital-human-tts-viseme-gate.sh", "release regression should call digital-human TTS/viseme gate")
 assertContains(releaseRegression, "RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE", "release regression should expose optional Tencent backend PCM-drive mock smoke")
@@ -457,6 +462,9 @@ let requiredScripts = [
     "Scripts/QA/product-v4/stage0_strict_readiness.py",
     "Scripts/QA/product-v4/stage0_strict_readiness_contract_check.py",
     "Scripts/QA/product-v4/run-stage0-strict-readiness-gate.sh",
+    "Scripts/QA/product-v4/stage0_readiness_artifact_adapter.py",
+    "Scripts/QA/product-v4/stage0_readiness_artifact_adapter_check.py",
+    "Scripts/QA/product-v4/run-stage0-readiness-artifact-gate.sh",
     "Scripts/QA/prd-stitch-ui/release-policy-shadow-contract-check.swift",
     "DreamJourney/Sources/Services/ReleasePolicyStore.swift",
     "Scripts/QA/prd-stitch-ui/release-policy-cache-model-smoke.swift",
@@ -492,6 +500,7 @@ let requiredScripts = [
     "docs/superpowers/status/2026-07-16-wi-s0-07-02-evidence-sink.md",
     "docs/superpowers/status/2026-07-16-wi-s0-07-02-evidence-sink-manifest.json",
     "docs/superpowers/status/2026-07-21-wi-s0-07-09-strict-readiness-g0.md",
+    "docs/superpowers/status/2026-07-21-wi-s0-07-09-readiness-artifact-adapter-g0.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-01-release-policy-shadow.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-02-release-policy-cache.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-04-captured-policy-gate.md",

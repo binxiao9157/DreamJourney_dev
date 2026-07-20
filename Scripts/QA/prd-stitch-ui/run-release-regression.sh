@@ -43,6 +43,7 @@ RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE="${RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE
 RUN_BACKEND_DB_UOW_SMOKE="${RUN_BACKEND_DB_UOW_SMOKE:-0}"
 RUN_BACKEND_READINESS_SMOKE="${RUN_BACKEND_READINESS_SMOKE:-0}"
 RUN_STAGE0_STRICT_READINESS_GATE="${RUN_STAGE0_STRICT_READINESS_GATE:-1}"
+RUN_STAGE0_READINESS_ARTIFACT_GATE="${RUN_STAGE0_READINESS_ARTIFACT_GATE:-0}"
 RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE="${RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE:-0}"
 RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE="${RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE:-0}"
 RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE="${RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE:-0}"
@@ -199,6 +200,7 @@ Run ID: \`$RUN_ID\`
 - Backend database request UoW smoke: \`$RUN_BACKEND_DB_UOW_SMOKE\`
 - Backend schema/auth readiness smoke: \`$RUN_BACKEND_READINESS_SMOKE\`
 - Stage 0 strict readiness contract gate: \`$RUN_STAGE0_STRICT_READINESS_GATE\` (contract only; it does not close G2/G4)
+- Stage 0 readiness artifact gate: \`$RUN_STAGE0_READINESS_ARTIFACT_GATE\` (optional; requires current backend \`/ready\` and Echo QA manifest artifacts, and fails closed when either is absent)
 - Backend runtime capability five-axis smoke: \`$RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE\`
 - Release-policy deployed-to-cache smoke: \`$RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE\`
 - Backend captured release-policy command smoke: \`$RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE\`
@@ -257,6 +259,7 @@ Run ID: \`$RUN_ID\`
 - Optional Echo QA evidence bundle export UIQA smoke when \`RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE=1\`; this verifies Context V2 clue summary, digital-human session, voice synthesis, fallback summary, runtime diagnostics, and trace package export as one redacted QA-only v2 bundle.
 - Optional Echo digital-human lifecycle UIQA smoke when \`RUN_ECHO_DIGITAL_HUMAN_LIFECYCLE_SMOKE=1\`; this verifies app lifecycle pause/restore preserves the provider view, avoids microphone auto-start, and exports audio-owner state.
 - Optional Echo readiness report when \`RUN_ECHO_READINESS_REPORT=1\`; this produces a JSON/Markdown diagnostic package for backend, digital-human session, voice synthesis, APNs boundary, KBLite, context packet, and runtime diagnostics readiness.
+- Optional Stage 0 readiness artifact gate when \`RUN_STAGE0_READINESS_ARTIFACT_GATE=1\`; this converts an explicitly supplied current backend \`/ready\` response and Echo QA evidence manifest into fail-closed GateResults. It does not close G2/G4, fetch or export credentials, or treat absent artifacts as a pass.
 - Optional Echo Context Builder V2 backend smoke when \`RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE=1\`; this verifies \`contextVersion=echo-context-v2\`, selected/filtered/ranking trace, \`kbFact\`/\`persona\`/\`care\` source signals, \`selectedContextSourceCounts\`, failed-analysis filtering, unopened time-letter recipient filtering, pending family viewer blocking, and care snapshot summarization against the backend test client.
 - Optional backend environment smoke when \`RUN_BACKEND_ENV_SMOKE=1\` and backend URL/token are configured.
 - Optional deployed credential boundary smoke when \`RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE=1\`; release handoff forces this gate and verifies no-store, value-free realtime voice, and blocked digital-human broker contracts.
@@ -326,6 +329,7 @@ append_report_footer() {
 - Echo trace evidence package panel export UIQA smoke: \`echo-trace-evidence-package-panel-export-smoke/$RUN_ID/\`
 - Echo QA evidence bundle export UIQA smoke: \`echo-qa-evidence-bundle-export-smoke/$RUN_ID/\`
 - Echo digital-human lifecycle UIQA smoke: \`echo-digital-human-lifecycle-smoke/$RUN_ID/\`
+- Stage 0 readiness artifact gate: \`stage0-readiness-artifact-gate/$RUN_ID/\`
 - Echo Context Builder V2 backend smoke: \`echo-context-builder-v2-smoke/$RUN_ID/\`
 - Backend env smoke: \`backend-env-smoke/$RUN_ID/\`
 - Backend auth session/ownership shadow smoke: \`backend-auth-session-shadow-smoke/$RUN_ID/\`
@@ -395,6 +399,8 @@ run_step "Python QA scripts compile" "$STATIC_LOG_DIR/python-qa-compile.log" \
     "$SCRIPT_DIR/backend-family-account-lifecycle-smoke.py" \
     "$SCRIPT_DIR/backend-digital-human-session-smoke.py" \
     "$SCRIPT_DIR/backend-voice-clone-deployed-smoke.py" \
+    "$ROOT_DIR/Scripts/QA/product-v4/stage0_readiness_artifact_adapter.py" \
+    "$ROOT_DIR/Scripts/QA/product-v4/stage0_readiness_artifact_adapter_check.py" \
     "$SCRIPT_DIR/backend-voice-synthesis-viseme-smoke.py" \
     "$SCRIPT_DIR/public-release-scope-evidence.py"
 
@@ -572,6 +578,24 @@ if [[ "$RUN_STAGE0_STRICT_READINESS_GATE" == "1" ]]; then
     "$ROOT_DIR/Scripts/QA/product-v4/run-stage0-strict-readiness-gate.sh"
 else
   echo "Skipped by RUN_STAGE0_STRICT_READINESS_GATE=0" > "$STATIC_LOG_DIR/stage0-strict-readiness-contract.skipped.txt"
+fi
+
+if [[ "$RUN_STAGE0_READINESS_ARTIFACT_GATE" == "1" ]]; then
+  run_step "Stage 0 readiness artifact gate" "$STATIC_LOG_DIR/stage0-readiness-artifact-gate.log" \
+    env \
+      OUTPUT_ROOT="$OUTPUT_DIR/stage0-readiness-artifact-gate" \
+      RUN_ID="$RUN_ID" \
+      STAGE0_BACKEND_READY_FILE="${STAGE0_BACKEND_READY_FILE:-}" \
+      STAGE0_BACKEND_READY_URL="${STAGE0_BACKEND_READY_URL:-}" \
+      STAGE0_ECHO_MANIFEST_PATH="${STAGE0_ECHO_MANIFEST_PATH:-}" \
+      REQUIRE_STAGE0_BACKEND_READY=1 \
+      REQUIRE_STAGE0_ECHO_MANIFEST=1 \
+      STAGE0_READINESS_STRICT=1 \
+      "$ROOT_DIR/Scripts/QA/product-v4/run-stage0-readiness-artifact-gate.sh"
+else
+  mkdir -p "$OUTPUT_DIR/stage0-readiness-artifact-gate/$RUN_ID"
+  echo "Skipped by RUN_STAGE0_READINESS_ARTIFACT_GATE=0" \
+    > "$OUTPUT_DIR/stage0-readiness-artifact-gate/$RUN_ID/skipped.txt"
 fi
 
 run_step "Product V4 verified Postgres backup" "$STATIC_LOG_DIR/product-v4-db-backup.log" \
