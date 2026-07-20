@@ -6,24 +6,25 @@
       "WI-S1-01-03-CANDIDATE_SYNTHETIC_EXTRACTION_G0_G2_EVIDENCE",
       "WI-S1-01-03-M0A-00-INTERVIEW_POLICY_G0_COMPLETE",
       "WI-S1-01-03-M0A-01-CONVERSATION_SESSION_BOOTSTRAP_G0_G2_DEPLOYED",
-      "WI-S1-01-03-M0A-02-ORCHESTRATOR_SESSION_STATE_BRIDGE_G0_G2_DEPLOYED"
+      "WI-S1-01-03-M0A-02-ORCHESTRATOR_SESSION_STATE_BRIDGE_G0_G2_DEPLOYED",
+      "WI-S1-01-03-M0A-03-PERSISTED_PACING_STATE_G0_G2_DEPLOYED"
     ],
-    "currentSubSlice": "WI-S1-01-03-M0A-03-PERSISTED_PACING_STATE",
+    "currentSubSlice": "WI-S1-01-03-M0A-04-DECISION_ACKNOWLEDGEMENT_AND_REVIEW_BATCH_BOUNDARY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_AND_SESSION_BRIDGE_VERIFIED",
+      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_SESSION_BRIDGE_AND_PERSISTED_PACING_VERIFIED",
       "G1": "NOT_STARTED / ECHO_QA_DIAGNOSTICS_NOT_YET_CONNECTED",
-      "G2": "PARTIAL / CANDIDATE_EXTRACTION_CONVERSATION_SESSION_AND_ORCHESTRATION_BRIDGE_POSTGRES_VERIFIED_AND_DEPLOYED",
+      "G2": "PARTIAL / CANDIDATE_EXTRACTION_CONVERSATION_SESSION_ORCHESTRATION_BRIDGE_AND_PERSISTED_PACING_POSTGRES_VERIFIED_AND_DEPLOYED",
       "G3": "EXTERNAL_DEFERRED / PROVIDER_GENERATION_REMAINS_SEPARATE"
     },
     "id": "WI-S1-01-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
     "priorEvidence": "docs/superpowers/status/2026-07-19-wi-s1-01-03-candidate-synthetic-extraction.md",
-    "summary": "The prior synthetic Source-to-pending-Candidate boundary remains deployed and default-off. M0-A now has a provider-neutral, value-free InterviewOrchestrator policy core, private Conversation/InterviewSession persistence, and a deployed read-only session bridge in backend main@95ff2e0. The bridge takes persisted owner/vault/session state, boundary, authority epoch and owner turn count as authoritative; it emits only value-free policy decisions and never reads message text, calls a Provider, or promotes Message to Source/Candidate/MemoryVersion. The active sub-slice adds typed, recoverable pacing state; it must preserve the same private/default-off boundary and leave public Echo UI untouched."
+    "summary": "The prior synthetic Source-to-pending-Candidate boundary remains deployed and default-off. M0-A now has a provider-neutral, value-free InterviewOrchestrator policy core, private Conversation/InterviewSession persistence, a deployed read-only session bridge, and typed recoverable pacing state in backend main@d111311. Persisted boundary, owner turn count, deepening count, unreviewed batch count and fatigue are authoritative; callers cannot inject them into policy decisions. Explicit idempotent pacing commands preserve owner/vault/CAS/append-only boundaries and never create Source/Candidate/DecisionReceipt/MemoryVersion. The active sub-slice is the separate private decision acknowledgement and review-batch boundary; it must not auto-promote memories or change public Echo UI."
   },
   "baselines": {
-    "backend": "main@95ff2e0",
+    "backend": "main@d111311",
     "ios": "feature/prd-stitch-ui-adaptation@b901d85",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
