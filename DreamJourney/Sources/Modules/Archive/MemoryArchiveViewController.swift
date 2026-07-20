@@ -6563,15 +6563,24 @@ struct OwnerTruthInterviewNaturalInputUIQASmokeResult: Codable {
 enum OwnerTruthInterviewNaturalInputUIQASmoke {
     static let fixtureText = "这是 UIQA 专用的访谈自然输入。"
 
-    static func makeViewController(
+    /// Creates an in-memory preview surface for an Echo UIQA route check. It
+    /// intentionally does not attach the auto-submit scenario, so opening the
+    /// sheet proves layout and gating without making a backend request.
+    static func makePreviewViewController(
         accountLease: AccountLease
     ) -> OwnerTruthInterviewNaturalInputViewController {
         let client = InterviewNaturalInputUIQAClient(vaultID: OwnerTruthVaultID(accountLease.vaultId))
-        let controller = OwnerTruthInterviewNaturalInputViewController(
+        return OwnerTruthInterviewNaturalInputViewController(
             accountLease: accountLease,
             client: client,
             qaGateEnabled: { OwnerTruthCandidateReviewQAGate.isEnabled }
         )
+    }
+
+    static func makeViewController(
+        accountLease: AccountLease
+    ) -> OwnerTruthInterviewNaturalInputViewController {
+        let controller = makePreviewViewController(accountLease: accountLease)
         let scenario = InterviewNaturalInputUIQAScenario()
         controller.onViewStateRendered = { state in
             scenario.consume(state, controller: controller)

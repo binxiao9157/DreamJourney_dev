@@ -65,6 +65,7 @@ struct QALaunchConfiguration {
 /// but do not select one of the AppDelegate smoke flows.
 enum QALaunchFeature: String, CaseIterable {
     case archiveRemoteFetch = "DJEnableArchiveRemoteFetch"
+    case ownerTruthInterviewNaturalInputEntry = "DJShowOwnerTruthInterviewNaturalInputEntryQA"
     case showDigitalHumanLivePanel = "DJShowDigitalHumanLivePanel"
     case tencentDigitalHumanTextDriveSmoke = "DJRunTencentDigitalHumanTextDriveSmoke"
     case tencentDigitalHumanPCMDriveSmoke = "DJRunTencentDigitalHumanPCMDriveSmoke"
@@ -109,6 +110,7 @@ enum QALaunchScenario: String, CaseIterable {
     case ownerTruthInterviewCandidateReviewSmoke = "DJRunOwnerTruthInterviewCandidateReviewSmoke"
     case ownerTruthInterviewSessionStateSmoke = "DJRunOwnerTruthInterviewSessionStateSmoke"
     case ownerTruthInterviewNaturalInputSmoke = "DJRunOwnerTruthInterviewNaturalInputSmoke"
+    case ownerTruthInterviewNaturalInputEchoSurfaceSmoke = "DJRunOwnerTruthInterviewNaturalInputEchoSurfaceSmoke"
     case archiveFailedAnalysisRetrySmoke = "DJRunArchiveFailedAnalysisRetrySmoke"
     case echoDelayedReplyNotificationSmoke = "DJRunEchoDelayedReplyNotificationSmoke"
     case backendEnvironmentSmoke = "DJRunBackendEnvSmoke"
@@ -150,6 +152,7 @@ enum QALaunchScenario: String, CaseIterable {
         .ownerTruthInterviewCandidateReviewSmoke,
         .ownerTruthInterviewSessionStateSmoke,
         .ownerTruthInterviewNaturalInputSmoke,
+        .ownerTruthInterviewNaturalInputEchoSurfaceSmoke,
         .archiveFailedAnalysisRetrySmoke,
         .echoDelayedReplyNotificationSmoke,
         .backendEnvironmentSmoke,

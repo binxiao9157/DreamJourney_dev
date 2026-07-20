@@ -479,6 +479,26 @@ final class EchoViewController: UIViewController {
         return button
     }()
 
+    /// Kept out of every public build. This lets QA exercise the planned M0-A
+    /// natural-input surface without changing the released full-screen Echo.
+    private lazy var ownerTruthInterviewNaturalInputEntryButton: UIButton = {
+        var configuration = UIButton.Configuration.filled()
+        configuration.image = UIImage(systemName: "keyboard")
+        configuration.baseBackgroundColor = DJDesignTokens.Color.surface.withAlphaComponent(0.94)
+        configuration.baseForegroundColor = DJDesignTokens.Color.accentDeep
+        configuration.cornerStyle = .capsule
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+        let button = UIButton(configuration: configuration)
+        button.layer.shadowColor = UIColor.black.cgColor
+        button.layer.shadowOpacity = 0.08
+        button.layer.shadowOffset = CGSize(width: 0, height: 4)
+        button.layer.shadowRadius = 8
+        button.accessibilityLabel = "打开自然输入（QA）"
+        button.accessibilityIdentifier = "ownerTruthInterviewNaturalInputEntryButton"
+        button.addTarget(self, action: #selector(ownerTruthInterviewNaturalInputEntryTapped), for: .touchUpInside)
+        return button
+    }()
+
     private let micRingView: UIView = {
         let view = UIView()
         view.backgroundColor = DJDesignTokens.Color.accentDeep.withAlphaComponent(0.12)
@@ -678,6 +698,17 @@ final class EchoViewController: UIViewController {
             || configuration.contains("DJRunEchoTraceEvidencePackageExportSmoke")
             || configuration.contains("DJRunEchoTraceEvidencePackagePanelExportSmoke")
             || configuration.contains("DJRunEchoQAEvidenceBundleExportSmoke")
+        #else
+        return false
+        #endif
+    }
+
+    private var shouldShowOwnerTruthInterviewNaturalInputEntry: Bool {
+        #if DEBUG || UI_QA_SIMULATOR
+        return OwnerTruthCandidateReviewQAGate.isEnabled
+            && QALaunchConfiguration.shared.contains(
+                QALaunchFeature.ownerTruthInterviewNaturalInputEntry.rawValue
+            )
         #else
         return false
         #endif
@@ -923,6 +954,9 @@ final class EchoViewController: UIViewController {
         }
         view.addSubview(micRingView)
         view.addSubview(micButton)
+        if shouldShowOwnerTruthInterviewNaturalInputEntry {
+            view.addSubview(ownerTruthInterviewNaturalInputEntryButton)
+        }
 
         let personaTextStack = UIStackView(arrangedSubviews: [personaNameLabel, personaSubtitleLabel])
         personaTextStack.axis = .vertical
@@ -965,7 +999,8 @@ final class EchoViewController: UIViewController {
             echoRuntimeDiagnosticsPanelLabel,
             echoTraceEvidenceExportButton,
             micRingView,
-            micButton
+            micButton,
+            ownerTruthInterviewNaturalInputEntryButton
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
         digitalHumanLivePanelView?.translatesAutoresizingMaskIntoConstraints = false
 
@@ -1043,6 +1078,15 @@ final class EchoViewController: UIViewController {
             micRingView.widthAnchor.constraint(equalToConstant: 76),
             micRingView.heightAnchor.constraint(equalToConstant: 76)
         ])
+
+        if shouldShowOwnerTruthInterviewNaturalInputEntry {
+            NSLayoutConstraint.activate([
+                ownerTruthInterviewNaturalInputEntryButton.centerYAnchor.constraint(equalTo: micButton.centerYAnchor),
+                ownerTruthInterviewNaturalInputEntryButton.trailingAnchor.constraint(equalTo: micButton.leadingAnchor, constant: -18),
+                ownerTruthInterviewNaturalInputEntryButton.widthAnchor.constraint(equalToConstant: 40),
+                ownerTruthInterviewNaturalInputEntryButton.heightAnchor.constraint(equalToConstant: 40)
+            ])
+        }
 
         if shouldShowEchoRuntimeDiagnosticsPanel {
             NSLayoutConstraint.activate([
@@ -5390,6 +5434,32 @@ final class EchoViewController: UIViewController {
         }
     }
 
+    @objc private func ownerTruthInterviewNaturalInputEntryTapped() {
+        presentOwnerTruthInterviewNaturalInputSheet()
+    }
+
+    private func presentOwnerTruthInterviewNaturalInputSheet() {
+        guard shouldShowOwnerTruthInterviewNaturalInputEntry,
+              let accountLease = captureEchoAccountLease(reason: "ownerTruthNaturalInputEntry"),
+              validateEchoAccountLease(
+                at: .request,
+                expected: accountLease,
+                reason: "ownerTruthNaturalInputEntry"
+              ),
+              presentedViewController == nil else {
+            return
+        }
+
+        let controller = OwnerTruthInterviewNaturalInputViewController(accountLease: accountLease)
+        let navigationController = UINavigationController(rootViewController: controller)
+        navigationController.modalPresentationStyle = .pageSheet
+        if let sheet = navigationController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        present(navigationController, animated: true)
+    }
+
     private func startVoiceCapture() {
         guard let accountLease = echoAccountLease,
               validateEchoAccountLease(
@@ -7072,6 +7142,116 @@ extension EchoViewController {
                         "panelVisible": !panel.isHidden && panel.alpha > 0,
                     ])
                 }
+            }
+        }
+    }
+
+    /// Verifies the explicitly QA-only natural-input entry without starting a
+    /// voice turn, Digital Human session, or private interview write.
+    func runUIQAOwnerTruthInterviewNaturalInputEchoSurfaceSmoke(
+        retryCount: Int = 0,
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        guard shouldShowOwnerTruthInterviewNaturalInputEntry else {
+            completion([
+                "completed": false,
+                "entryVisible": false,
+                "sheetPresented": false,
+                "failureReason": "entryGateDisabled"
+            ])
+            return
+        }
+
+        guard let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                at: .request,
+                expected: accountLease,
+                reason: "uiqaOwnerTruthNaturalInputEchoSurface"
+              ) else {
+            guard retryCount < 12 else {
+                completion([
+                    "completed": false,
+                    "entryVisible": false,
+                    "sheetPresented": false,
+                    "failureReason": "accountLeaseUnavailable"
+                ])
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                self?.runUIQAOwnerTruthInterviewNaturalInputEchoSurfaceSmoke(
+                    retryCount: retryCount + 1,
+                    completion: completion
+                )
+            }
+            return
+        }
+
+        guard presentedViewController == nil else {
+            completion([
+                "completed": false,
+                "entryVisible": false,
+                "sheetPresented": false,
+                "failureReason": "unexpectedPresentedViewController"
+            ])
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self else {
+                completion([
+                    "completed": false,
+                    "entryVisible": false,
+                    "sheetPresented": false,
+                    "failureReason": "echoReleased"
+                ])
+                return
+            }
+
+            let entryVisible = self.ownerTruthInterviewNaturalInputEntryButton.window != nil
+                && !self.ownerTruthInterviewNaturalInputEntryButton.isHidden
+                && self.ownerTruthInterviewNaturalInputEntryButton.alpha > 0.01
+            guard entryVisible else {
+                completion([
+                    "completed": false,
+                    "entryVisible": false,
+                    "sheetPresented": false,
+                    "failureReason": "entryNotVisible"
+                ])
+                return
+            }
+
+            let controller = OwnerTruthInterviewNaturalInputUIQASmoke.makePreviewViewController(
+                accountLease: accountLease
+            )
+            let navigationController = UINavigationController(rootViewController: controller)
+            navigationController.modalPresentationStyle = .pageSheet
+            if let sheet = navigationController.sheetPresentationController {
+                sheet.detents = [.medium(), .large()]
+                sheet.prefersGrabberVisible = true
+            }
+            self.present(navigationController, animated: false) {
+                let sheetPresented = self.presentedViewController === navigationController
+                    && navigationController.topViewController === controller
+                var result: [String: Any] = [
+                    "completed": sheetPresented,
+                    "entryVisible": entryVisible,
+                    "sheetPresented": sheetPresented,
+                    "entryAccessibilityIdentifier": self.ownerTruthInterviewNaturalInputEntryButton.accessibilityIdentifier ?? "",
+                    "voiceTurnStarted": false,
+                    "digitalHumanSessionStarted": false,
+                    "backendNetworkStarted": false,
+                    "persistentInterviewWriteStarted": false,
+                    "publicRouteChanged": false,
+                    "launchArguments": [
+                        QALaunchScenario.ownerTruthInterviewNaturalInputEchoSurfaceSmoke.rawValue,
+                        OwnerTruthCandidateReviewQAGate.launchArgument,
+                        QALaunchFeature.ownerTruthInterviewNaturalInputEntry.rawValue
+                    ]
+                ]
+                if !sheetPresented {
+                    result["failureReason"] = "sheetNotPresented"
+                }
+                completion(result)
             }
         }
     }

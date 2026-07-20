@@ -365,6 +365,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewSessionStateSmoke() }
         case .ownerTruthInterviewNaturalInputSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewNaturalInputSmoke() }
+        case .ownerTruthInterviewNaturalInputEchoSurfaceSmoke:
+            scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewNaturalInputEchoSurfaceSmoke() }
         case .archiveFailedAnalysisRetrySmoke:
             seedFailedArchiveAnalysisRetryContext()
             scheduleUIQAScenario(scenario) { $0.runArchiveFailedAnalysisRetrySmoke() }
@@ -2017,6 +2019,30 @@ private extension AppDelegate {
         keyWindow.rootViewController = UINavigationController(rootViewController: controller)
         keyWindow.makeKeyAndVisible()
         print("[UI_QA] OwnerTruthInterviewNaturalInputSmoke started")
+    }
+
+    func runOwnerTruthInterviewNaturalInputEchoSurfaceSmoke(retryCount: Int = 0) {
+        QAEchoScenarioRunner.run(
+            retryCount: retryCount,
+            smokeName: "OwnerTruthInterviewNaturalInputEchoSurfaceSmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runOwnerTruthInterviewNaturalInputEchoSurfaceSmoke(retryCount: nextRetryCount)
+            },
+            writeResult: { [weak self] result in
+                self?.writeOwnerTruthInterviewNaturalInputEchoSurfaceSmokeResult(result)
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQAOwnerTruthInterviewNaturalInputEchoSurfaceSmoke(completion: completion)
+            },
+            completionLog: { result in
+                print(
+                    "[UI_QA] OwnerTruthInterviewNaturalInputEchoSurfaceSmoke completed " +
+                    "completed=\(result["completed"] as? Bool == true) " +
+                    "entryVisible=\(result["entryVisible"] as? Bool == true) " +
+                    "sheetPresented=\(result["sheetPresented"] as? Bool == true)"
+                )
+            }
+        )
     }
 
     func runArchiveAudioLifecycleSmoke(retryCount: Int = 0) {
@@ -4494,6 +4520,14 @@ private extension AppDelegate {
             result,
             fileName: "echo-qa-evidence-bundle-export-smoke-result.json",
             smokeName: "EchoQAEvidenceBundleExportSmoke"
+        )
+    }
+
+    func writeOwnerTruthInterviewNaturalInputEchoSurfaceSmokeResult(_ result: [String: Any]) {
+        writeEchoQAExportSmokeResult(
+            result,
+            fileName: "owner-truth-interview-natural-input-echo-surface-smoke-result.json",
+            smokeName: "OwnerTruthInterviewNaturalInputEchoSurfaceSmoke"
         )
     }
 
