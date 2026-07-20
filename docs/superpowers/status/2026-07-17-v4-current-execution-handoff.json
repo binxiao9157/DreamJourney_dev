@@ -4,23 +4,25 @@
     "backendPendingPaths": [],
     "completedSubSlices": [
       "WI-S1-02-07-G0-PROVIDER-EFFECT-INVENTORY",
-      "WI-S1-02-07-G0-STABLE-REQUEST-UNKNOWN-CONTRACT"
+      "WI-S1-02-07-G0-STABLE-REQUEST-UNKNOWN-CONTRACT",
+      "WI-S1-02-07-G2-PERSISTED-RECONCILIATION-DESIGN",
+      "WI-S1-02-07-G2-DEPLOYED-POSTGRES-SMOKE"
     ],
-    "currentSubSlice": "WI-S1-02-07-G2-PERSISTED-RECONCILIATION-DESIGN",
+    "currentSubSlice": "WI-S1-02-07-G3-PROVIDER-SPECIFIC-READINESS",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "SCOPED_CONTRACT_EVIDENCE_PRESENT / PROVIDER_CALLS_DISABLED",
-      "G2": "NOT_STARTED / PERSISTED_PROVIDER_RECEIPT_REPLAY_REQUIRED",
+      "G2": "SCOPED_POSTGRES_DEPLOYED_16ecfc0 / APPEND_ONLY_RECEIPT_PROJECTION_VERIFIED / PROVIDER_CALLS_DISABLED",
       "G3": "NOT_STARTED / PROVIDER_SANDBOX_AND_DELETE_RECEIPT_SCOPE_REQUIRED",
       "G4": "NOT_STARTED / CAPABILITY_SPECIFIC_PRODUCT_PRIVACY_TRUE_DEVICE_GATES_REQUIRED"
     },
     "id": "WI-S1-02-07",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-07 has a value-free Provider inventory plus stable-request and unknown-reconcile G0 contract. It still must not invoke real Providers, change public UI, or treat local/runtime events as server success; G2 must preserve unknown history through durable reconciliation evidence rather than mutate it in place."
+    "summary": "WI-S1-02-07 has value-free Provider inventory, stable-request/unknown G0 contract, and deployed G2 append-only reconciliation evidence. It still must not invoke real Providers, change public UI, or treat local/runtime events as server success; G3/G4 remain provider-specific external evidence."
   },
   "baselines": {
-    "backend": "main@0b2ea04",
+    "backend": "main@16ecfc0",
     "ios": "feature/prd-stitch-ui-adaptation@272a1b5",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -464,5 +466,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T09:21:00+0800"
+  "updatedAt": "2026-07-20T09:57:00+0800"
 }

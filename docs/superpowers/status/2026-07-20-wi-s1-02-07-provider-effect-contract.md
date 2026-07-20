@@ -1,6 +1,15 @@
-# WI-S1-02-07 Provider Effect Stable Request 与 Unknown Reconcile：G0 合同证据
+# WI-S1-02-07 Provider Effect Stable Request 与 Unknown Reconcile：G0/G2 证据
 
 日期：2026-07-20
+
+## 当前状态
+
+`INTERNAL_READY / G0_G2_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED_16ecfc0 /
+PROVIDER_CALLS_DISABLED / G3_G4_OPEN`
+
+本 Work Item 的稳定请求、unknown 收据和 Postgres reconciliation projection
+已经以 default-off 方式落库并完成线上隔离 smoke。它仍没有启用任何真实
+Provider 请求、worker、回调入口或公开 UI；G3/G4 不能由本轮代码替代。
 
 ## 本轮边界
 
@@ -96,17 +105,72 @@ PYTHON_BIN=.venv/bin/python scripts/verify_backend.sh
 结果：793 项单测、凭据边界 smoke、FastAPI smoke、知识库与 Provider
 redaction/cost smoke、备份合同、编译和 `git diff --check` 全部通过。
 
+## G2：持久化收据与只读 reconciliation projection
+
+后端提交：
+
+```text
+16ecfc0 feat(v4): persist provider reconciliation evidence
+```
+
+新增迁移 `0025_provider_effect_reconciliation_projection`，只做 additive
+schema 扩展：
+
+- `provider_effects` 增加 `capability`、`contract_version` 和
+  `provider_request_id_hash`；
+- `provider_receipts` 增加 `reason_code` 和 `observation_origin`；
+- `async_effects.provider_effect_reconciliation_projection` 只读投影
+  `recorded_state`、`effective_state`、`reconciliation_status` 和
+  `requires_manual_review`。
+
+这里不会把 base effect 的 `unknown` 更新为 `completed` 或 `failed`。后续
+Provider query/callback 只能追加 receipt：只有完成证据时投影为
+`reconciledCompleted`，只有失败证据时投影为 `reconciledFailed`；二者同时
+出现时回到 `unknown/reconciliationConflict` 并要求人工复核，禁止自动重发。
+
+`PostgresProviderEffectRepository` 绑定既有 `PostgresStore` 的 active UoW，
+没有独立 commit path。相同 receipt 会 dedupe；同一个 stable effect key 使用
+不同 `requestHash` 会拒绝；超时后原始 accepted receipt 的重放仍按 dedupe
+处理，不会被误当成二次提交。
+
+### 部署与线上验证
+
+服务器目录 `/opt/services/dreamjourney/DreamJourneyBackend` 已更新至
+`16ecfc0`。部署过程完成：
+
+1. `0025` dry-run 显示唯一 pending migration；
+2. apply/verify 均到 schema head `0025`；
+3. API 重建后 `/ready` 返回 database/schema/auth/incident 全部 `ready`；
+4. 容器内运行
+   `scripts/backend-provider-effect-reconciliation-postgres-smoke.py` 通过。
+
+该 smoke 使用临时 Postgres 数据库，不调用任何外部 Provider，覆盖：并发
+same request、request hash drift 拒绝、`unknown` 终态触发器、查询完成的投影、
+receipt replay、晚到 completed/failed 冲突 fail-closed 与事务 rollback。
+
+本地验证还包括：
+
+```bash
+cd /Users/yxj/Documents/Codex/Video/DreamJourneyBackend
+PYTHON_BIN=.venv/bin/python scripts/run-backend-provider-effect-reconciliation-contract-gate.sh
+PYTHON_BIN=.venv/bin/python scripts/verify_backend.sh
+```
+
+结果：reconciliation contract gate 16 项通过；完整 `verify_backend.sh` 的
+801 项单测及现有 smoke、编译和 diff 检查通过。
+
 ## 未声明完成
 
 - 还没有把任一现有 DeepSeek、火山、腾讯、对象存储或 APNs 调用迁移到
-  ProviderEffect port；
-- 没有持久化 effect/receipt、回放、callback、query worker 或 dead-letter；
+  `ProviderEffect` port；
+- 没有启用真实 callback/query worker、provider-specific dead-letter 或
+  operator remediation UI；
 - 没有真实 Provider sandbox、成本/配额/区域/删除收据或真机验收；
 - 任何 Provider capability 仍保持默认关闭，配置存在不等于能力 ready。
 
 ## 下一步
 
-进入 `WI-S1-02-07` 的 G2 设计与最小持久化闭环：基于 `0013` 的现有表，
-增加不破坏 unknown 终态保护的 reconciliation evidence/projection，并以
-隔离 Postgres smoke 验证 crash/replay、same key/hash drift、late receipt 与
-无自动重发。真实 Provider 仍不在该阶段启用。
+本 Work Item 的 G3/G4 仍需按具体 Provider、数据主体、成本/配额、删除回执
+和真机/产品隐私 Gate 分别取证，不能直接开启 Provider。日常开发应先选择不
+依赖该外部门的下一个 Authority Work Item；当前 Provider persistence 保持
+default-off、只记录 value-free 证据。
