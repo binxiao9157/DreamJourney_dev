@@ -831,6 +831,7 @@ private enum InAppMessageOwnerScopeModelSmoke {
         require(
             echoStore.saveArrivedReply(
                 id: "message-echo-id",
+                sourceAnswerID: "answer-message-echo-id",
                 deliverAt: Date(timeIntervalSince1970: 1_721_260_800),
                 trigger: "contentSignal",
                 accountLease: lease,
@@ -842,6 +843,7 @@ private enum InAppMessageOwnerScopeModelSmoke {
         require(
             echoStore.saveArrivedReply(
                 id: "message-echo-id-2",
+                sourceAnswerID: "answer-message-echo-id-2",
                 deliverAt: Date(timeIntervalSince1970: 1_721_260_801),
                 trigger: "contentSignal",
                 accountLease: lease,
@@ -861,6 +863,10 @@ private enum InAppMessageOwnerScopeModelSmoke {
         }
         require(message.ownerUserId == owner, "echo owner must come from the scoped envelope")
         require(message.ownerUserId != message.echoReplySourceId, "message id must not become principal")
+        require(
+            echoSource.echoReplySourceAnswerID == "answer-message-echo-id",
+            "arrived reply must retain the server answer reference within its owner scope"
+        )
         require(
             echoStore.removeArrivedReply(
                 id: "message-echo-id",

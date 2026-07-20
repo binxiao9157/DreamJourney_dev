@@ -34,7 +34,7 @@
       "classification": "PRODUCT_LOCAL_NOTIFICATION",
       "ownerBoundary": "sealed-time-letter owner",
       "generationFence": "AccountLeaseRuntime timer/runtime checkpoints",
-      "lifecycleDisposition": "known gap: no dedicated account-lifecycle cancellation is currently registered",
+      "lifecycleDisposition": "account-lifecycle teardown is implemented with old-lease request ownership verification",
       "retirementState": "NOT_AUTHORIZED",
       "sources": [
         {
@@ -43,7 +43,14 @@
             "final class TimeLetterReminderScheduler",
             "func scheduleIfNeeded(_ item: MemoryArchiveItem)",
             "accountLeaseRuntime.validate(accountLease, at: .timer)",
-            "UNCalendarNotificationTrigger"
+            "UNCalendarNotificationTrigger",
+            "func teardownForAccountLifecycle("
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift",
+          "markers": [
+            "TimeLetterReminderScheduler.shared.teardownForAccountLifecycle"
           ]
         }
       ]

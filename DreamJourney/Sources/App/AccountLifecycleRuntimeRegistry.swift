@@ -499,22 +499,37 @@ enum AccountLifecycleRuntimeRegistry {
             ),
         ]
 
-        let semaphore = DispatchSemaphore(value: 0)
-        let notificationResult = AccountLifecycleBooleanBox()
+        let echoNotificationSemaphore = DispatchSemaphore(value: 0)
+        let echoNotificationResult = AccountLifecycleBooleanBox()
         EchoDelayedReplyNotificationScheduler.shared.teardownForAccountLifecycle(
             oldAccountLease: oldAccountLease
         ) { success in
-            notificationResult.set(success)
-            semaphore.signal()
+            echoNotificationResult.set(success)
+            echoNotificationSemaphore.signal()
         }
-        let completed = semaphore.wait(timeout: .now() + 1) == .success
-        let notificationsCleared = notificationResult.value()
+        let echoNotificationsCompleted = echoNotificationSemaphore.wait(timeout: .now() + 1) == .success
+        let echoNotificationsCleared = echoNotificationResult.value()
 
-        guard localResults.allSatisfy({ $0 }), completed, notificationsCleared else {
+        let timeLetterNotificationSemaphore = DispatchSemaphore(value: 0)
+        let timeLetterNotificationResult = AccountLifecycleBooleanBox()
+        TimeLetterReminderScheduler.shared.teardownForAccountLifecycle(
+            oldAccountLease: oldAccountLease
+        ) { success in
+            timeLetterNotificationResult.set(success)
+            timeLetterNotificationSemaphore.signal()
+        }
+        let timeLetterNotificationsCompleted = timeLetterNotificationSemaphore.wait(timeout: .now() + 1) == .success
+        let timeLetterNotificationsCleared = timeLetterNotificationResult.value()
+
+        guard localResults.allSatisfy({ $0 }),
+              echoNotificationsCompleted,
+              echoNotificationsCleared,
+              timeLetterNotificationsCompleted,
+              timeLetterNotificationsCleared else {
             return .completed(
                 .failed,
                 remainingLocalData: true,
-                detailCode: completed
+                detailCode: echoNotificationsCompleted && timeLetterNotificationsCompleted
                     ? "messageNotificationTeardownFailed"
                     : "messageNotificationTeardownTimedOut"
             )

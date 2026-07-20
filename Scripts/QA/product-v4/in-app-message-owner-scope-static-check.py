@@ -266,13 +266,17 @@ def main() -> None:
     arrived = explicit_api_body(
         echo_store,
         "saveArrivedReply",
-        r"id\s*:\s*String\s*,\s*deliverAt\s*:\s*Date\s*,\s*trigger\s*:\s*String\s*,\s*",
+        r"id\s*:\s*String\s*,\s*sourceAnswerID\s*:\s*String\s*,\s*"
+        r"deliverAt\s*:\s*Date\s*,\s*trigger\s*:\s*String\s*,\s*",
     )
     require("capture(" not in arrived, "explicit arrived-reply save must retain its supplied lease")
     require_all(
         arrived,
         (
             "normalizedId == normalizedOperationId",
+            "normalizedSourceAnswerID",
+            "!normalizedSourceAnswerID.isEmpty",
+            "echoReplySourceAnswerID: normalizedSourceAnswerID",
             "return withLock",
             "inboxSources(",
             "accountLease: accountLease",
@@ -284,7 +288,8 @@ def main() -> None:
     arrived_wrapper = function_body(
         echo_store,
         r"func\s+saveArrivedReply\s*\(\s*id\s*:\s*String\s*,\s*"
-        r"deliverAt\s*:\s*Date\s*,\s*trigger\s*:\s*String\s*\)",
+        r"sourceAnswerID\s*:\s*String\s*,\s*deliverAt\s*:\s*Date\s*,\s*"
+        r"trigger\s*:\s*String\s*\)",
         "compatibility arrived-reply save",
     )
     require(

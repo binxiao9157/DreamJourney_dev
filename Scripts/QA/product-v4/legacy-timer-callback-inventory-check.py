@@ -119,8 +119,8 @@ def main() -> None:
 
     time_letter = entries_by_id["time-letter-local-notification"]
     require(
-        time_letter["lifecycleDisposition"].startswith("known gap:"),
-        "time-letter notification lifecycle teardown gap must remain explicit until fixed",
+        time_letter["lifecycleDisposition"].startswith("account-lifecycle teardown is implemented"),
+        "time-letter notification lifecycle teardown inventory must remain explicit",
     )
     pure_ui_entries = [
         entry for entry in entries_by_id.values()
@@ -132,7 +132,7 @@ def main() -> None:
         "iOS legacy timer/callback inventory check passed: "
         f"entries={len(entries_by_id)} timerSources={len(timer_sources)} "
         f"productOrRuntime={len(entries_by_id) - len(pure_ui_entries)} pureUI={len(pure_ui_entries)} "
-        "timeLetterLifecycleGap=explicit"
+        "timeLetterLifecycleTeardown=implemented"
     )
 
 

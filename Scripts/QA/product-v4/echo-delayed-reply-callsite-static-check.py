@@ -71,13 +71,24 @@ def main() -> None:
     ):
         require(snippet in restore, f"due delayed reply does not preserve the server-result boundary: {snippet}")
     require(
-        "markStoredDelayedReplyArrived" not in view_model,
+        "markStoredDelayedReplyArrived" not in restore,
         "a local delayed-reply timer must not manufacture an arrived reply",
     )
     require(
-        "echoReplyMessageStore.saveArrivedReply" not in view_model,
+        "echoReplyMessageStore.saveArrivedReply" not in restore,
         "a local delayed-reply timer must not create an Inbox completion",
     )
+
+    reconciliation = body_after(view_model, "func reconcilePendingDelayedReplyAnswerIfQAGated(")
+    for snippet in (
+        "answerContract.answer.answerID",
+        "answerContract.answer.completedAt",
+        "echoReplyMessageStore.saveArrivedReply(",
+    ):
+        require(
+            snippet in reconciliation,
+            f"server-backed delayed-reply reconciliation must retain: {snippet}",
+        )
 
     forbidden_patterns = (
         r"EchoDelayedReplyStore\.shared\.save\(delayedReply\)",

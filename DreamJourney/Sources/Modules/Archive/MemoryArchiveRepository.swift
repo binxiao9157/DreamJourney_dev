@@ -1507,43 +1507,68 @@ private enum ArchiveRepositoryError: LocalizedError {
     }
 }
 
-final class TimeLetterReminderScheduler {
+protocol TimeLetterReminderNotificationRequestCenter: AnyObject, Sendable {
+    func add(
+        _ request: UNNotificationRequest,
+        withCompletionHandler completionHandler: (@Sendable (Error?) -> Void)?
+    )
+    func getPendingNotificationRequests(
+        completionHandler: @escaping @Sendable ([UNNotificationRequest]) -> Void
+    )
+    func removePendingNotificationRequests(withIdentifiers identifiers: [String])
+}
+
+extension UNUserNotificationCenter: TimeLetterReminderNotificationRequestCenter {}
+
+final class TimeLetterReminderScheduler: @unchecked Sendable {
     static let shared = TimeLetterReminderScheduler()
 
-    private let notificationCenter = UNUserNotificationCenter.current()
-    private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private let notificationCenter: UNUserNotificationCenter?
+    private let requestCenter: TimeLetterReminderNotificationRequestCenter
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
 
-    private init() {}
+    init(
+        notificationCenter: UNUserNotificationCenter = .current(),
+        requestCenter: TimeLetterReminderNotificationRequestCenter? = nil,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+    ) {
+        self.notificationCenter = notificationCenter
+        self.requestCenter = requestCenter ?? notificationCenter
+        self.accountLeaseRuntime = accountLeaseRuntime
+    }
+
+    init(
+        requestCenter: TimeLetterReminderNotificationRequestCenter,
+        accountLeaseRuntime: AccountLeaseRuntimePort
+    ) {
+        notificationCenter = nil
+        self.requestCenter = requestCenter
+        self.accountLeaseRuntime = accountLeaseRuntime
+    }
 
     func scheduleIfNeeded(_ item: MemoryArchiveItem) {
         guard item.isSealedTimeLetter,
               let openAt = item.timeLetterOpenAt,
-              let accountLease = accountLeaseRuntime.capture(),
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: nil),
               item.ownerUserId == accountLease.subjectId else {
             return
         }
-        let accountLeaseIdentity = identityDigest([
-            "account-lease",
-            accountLease.subjectId,
-            accountLease.vaultId,
-            String(accountLease.generation),
-            accountLease.generationId.uuidString,
-            accountLease.authorityEpoch,
-        ])
-        let resourceOwnerIdentity = identityDigest(["resource-owner", item.ownerUserId])
-        let operationIdentity = identityDigest(["operation", item.id])
-        let identifier = notificationIdentifier(
+        let accountLeaseIdentity = Self.accountLeaseIdentity(for: accountLease)
+        let resourceOwnerIdentity = Self.identityDigest(["resource-owner", item.ownerUserId])
+        let operationIdentity = Self.identityDigest(["operation", item.id])
+        let identifier = Self.notificationIdentifier(
             itemId: item.id,
             resourceOwnerId: item.ownerUserId,
             accountLease: accountLease
         )
+        guard let notificationCenter else { return }
         notificationCenter.requestAuthorization(options: [.alert, .badge, .sound]) { [weak self] granted, _ in
             guard let self,
                   granted,
                   self.accountLeaseRuntime.validate(accountLease, at: .timer).allowed else {
                 return
             }
-            self.notificationCenter.removePendingNotificationRequests(withIdentifiers: [identifier])
+            self.requestCenter.removePendingNotificationRequests(withIdentifiers: [identifier])
 
             let content = UNMutableNotificationContent()
             content.title = "时间信件已到打开时间"
@@ -1575,18 +1600,53 @@ final class TimeLetterReminderScheduler {
             guard self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
                 return
             }
-            self.notificationCenter.add(request) { [weak self] _ in
+            self.requestCenter.add(request) { [weak self] _ in
                 guard let self else { return }
                 guard self.accountLeaseRuntime.validate(accountLease, at: .timer).allowed,
                       self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
-                    self.notificationCenter.removePendingNotificationRequests(withIdentifiers: [identifier])
+                    self.requestCenter.removePendingNotificationRequests(withIdentifiers: [identifier])
                     return
                 }
             }
         }
     }
 
-    private func notificationIdentifier(
+    func teardownForAccountLifecycle(
+        oldAccountLease: AccountLease?,
+        completion: @escaping @Sendable (Bool) -> Void
+    ) {
+        guard let oldAccountLease else {
+            completion(false)
+            return
+        }
+        requestCenter.getPendingNotificationRequests { [weak self] requests in
+            guard let self else {
+                completion(false)
+                return
+            }
+            let identifiers = requests.compactMap { request in
+                self.requestIsOwned(request, byLifecycleLease: oldAccountLease)
+                    ? request.identifier
+                    : nil
+            }
+            if !identifiers.isEmpty {
+                self.requestCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
+            }
+            self.requestCenter.getPendingNotificationRequests { [weak self] remaining in
+                guard let self else {
+                    completion(false)
+                    return
+                }
+                completion(
+                    !remaining.contains {
+                        self.requestIsOwned($0, byLifecycleLease: oldAccountLease)
+                    }
+                )
+            }
+        }
+    }
+
+    private static func notificationIdentifier(
         itemId: String,
         resourceOwnerId: String,
         accountLease: AccountLease
@@ -1604,7 +1664,35 @@ final class TimeLetterReminderScheduler {
         return "dj.timeLetter.reminder.\(digest)"
     }
 
-    private func identityDigest(_ values: [String]) -> String {
+    private static func accountLeaseIdentity(for accountLease: AccountLease) -> String {
+        identityDigest([
+            "account-lease",
+            accountLease.subjectId,
+            accountLease.vaultId,
+            String(accountLease.generation),
+            accountLease.generationId.uuidString,
+            accountLease.authorityEpoch,
+        ])
+    }
+
+    private func requestIsOwned(
+        _ request: UNNotificationRequest,
+        byLifecycleLease accountLease: AccountLease
+    ) -> Bool {
+        let userInfo = request.content.userInfo
+        guard request.identifier.hasPrefix("dj.timeLetter.reminder."),
+              userInfo["kind"] as? String == "timeLetter",
+              userInfo["accountLeaseIdentity"] as? String == Self.accountLeaseIdentity(for: accountLease),
+              let resourceOwnerIdentity = userInfo["resourceOwnerIdentity"] as? String,
+              !resourceOwnerIdentity.isEmpty,
+              let operationIdentity = userInfo["operationIdentity"] as? String,
+              !operationIdentity.isEmpty else {
+            return false
+        }
+        return true
+    }
+
+    private static func identityDigest(_ values: [String]) -> String {
         let canonical = values
             .map { "\($0.utf8.count):\($0)" }
             .joined(separator: "|")
