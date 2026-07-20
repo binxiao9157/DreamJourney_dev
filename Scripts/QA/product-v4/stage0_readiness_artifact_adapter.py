@@ -25,6 +25,7 @@ from stage0_strict_readiness import INPUT_SCHEMA_VERSION, format_timestamp, pars
 ADAPTER_SCHEMA_VERSION = "dreamjourney.stage0-readiness-artifact-adapter.v1"
 _COMMIT = re.compile(r"^[0-9a-f]{7,64}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_REDACTED_EVIDENCE_ID = re.compile(r"^sha256:[0-9a-f]{16,64}$")
 
 
 def _artifact_id(prefix: str, payload: bytes) -> str:
@@ -201,6 +202,10 @@ def _echo_manifest_gate(
     if manifest.get("manifestType") != "echoQaEvidenceBundle" or manifest.get("commandId") != "exportEchoQAEvidenceBundle":
         return _unknown(gate, required=required, reason="echoManifestTypeInvalid")
     evidence_id = safe_code(manifest.get("evidenceId"))
+    if evidence_id is None:
+        redacted_evidence_id = manifest.get("evidenceIdHash")
+        if isinstance(redacted_evidence_id, str) and _REDACTED_EVIDENCE_ID.fullmatch(redacted_evidence_id):
+            evidence_id = redacted_evidence_id
     if evidence_id is None:
         return _unknown(gate, required=required, reason="echoManifestEvidenceIdInvalid")
     source_commit = manifest.get("sourceCommit")

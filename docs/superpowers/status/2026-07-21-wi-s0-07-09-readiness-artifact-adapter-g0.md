@@ -13,7 +13,8 @@ value-free `GateResult`：
   `ready` 的 schema v1 响应；使用内容摘要生成 evidence id，不输出 URL、响应
   原文或配置值。
 - iOS `EchoQAEvidenceManifest`：只接受当前、`passed`、带受约束 source commit、
-  artifact hash、owner scope hash 和时间窗的导出 manifest；不输出这些原始标识。
+  artifact hash、owner scope hash 和时间窗的导出 manifest；同时接受受约束的
+  `evidenceIdHash`，以兼容 iOS 导出时的证据 ID 脱敏；不输出这些原始标识。
 - 适配输出固定为 `dreamjourney.stage0-readiness-input.v1`，再交给
   `stage0_strict_readiness.py` 聚合。
 
@@ -46,6 +47,18 @@ bash Scripts/QA/prd-stitch-ui/run-release-regression.sh
 
 也可将 `STAGE0_BACKEND_READY_FILE` 替换为 `STAGE0_BACKEND_READY_URL`；两者不能
 同时使用。输出只保留摘要与 GateResult，真实 artifact 应保留在受控证据目录。
+
+## 本轮实际只读聚合
+
+本轮使用当前线上 `GET /ready` 摘要和模拟器导出的脱敏 Echo QA manifest 执行 strict
+聚合。结果为 `2/2` required GateResult 当前通过：
+
+- `stage0.backendReadiness`：database/schema/auth 均为 `ready`；
+- `stage0.echoQaEvidence`：当前 manifest 为 `passed`，并使用导出的
+  `evidenceIdHash`，未回退为原始 evidence id。
+
+证据目录位于忽略的 `tmp/qa/stage0-readiness-real-artifacts/` 下，只保留脱敏摘要、
+QA bundle、manifest、截图与日志，不进入 Git。
 
 ## 验证边界
 

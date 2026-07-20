@@ -38,8 +38,13 @@ def backend_ready(*, status: str = "ready", component_status: str = "ready") -> 
     }
 
 
-def echo_manifest(*, status: str = "passed", expires_at: str = "2026-07-21T01:00:00Z") -> dict[str, object]:
-    return {
+def echo_manifest(
+    *,
+    status: str = "passed",
+    expires_at: str = "2026-07-21T01:00:00Z",
+    redacted_evidence_id: bool = False,
+) -> dict[str, object]:
+    manifest: dict[str, object] = {
         "schemaVersion": 1,
         "manifestVersion": 1,
         "evidenceId": "echo_manifest_1234567890abcdef12345678",
@@ -53,6 +58,10 @@ def echo_manifest(*, status: str = "passed", expires_at: str = "2026-07-21T01:00
         "expiresAt": expires_at,
         "manifestStatus": status,
     }
+    if redacted_evidence_id:
+        manifest.pop("evidenceId")
+        manifest["evidenceIdHash"] = "sha256:" + "c" * 16
+    return manifest
 
 
 class Stage0ReadinessArtifactAdapterTests(unittest.TestCase):
@@ -63,7 +72,7 @@ class Stage0ReadinessArtifactAdapterTests(unittest.TestCase):
 
     def test_current_backend_and_echo_artifacts_can_pass_local_gate(self) -> None:
         backend = backend_ready()
-        manifest = echo_manifest()
+        manifest = echo_manifest(redacted_evidence_id=True)
         report = self.report(
             backend_payload=backend,
             backend_artifact=json.dumps(backend).encode("utf-8"),
@@ -77,6 +86,20 @@ class Stage0ReadinessArtifactAdapterTests(unittest.TestCase):
         self.assertEqual(report["currentPassedRequiredGateCount"], 2)
         self.assertNotIn("0123456789abcdef", json.dumps(report))
         self.assertNotIn("b" * 64, json.dumps(report))
+
+    def test_raw_and_redacted_manifest_evidence_ids_are_both_supported(self) -> None:
+        backend = backend_ready()
+        for manifest in (echo_manifest(), echo_manifest(redacted_evidence_id=True)):
+            report = self.report(
+                backend_payload=backend,
+                backend_artifact=json.dumps(backend).encode("utf-8"),
+                echo_manifest_payload=manifest,
+                echo_manifest_artifact=json.dumps(manifest).encode("utf-8"),
+                require_backend_ready=True,
+                require_echo_manifest=True,
+            )
+            self.assertTrue(report["completed"])
+            self.assertEqual(report["status"], "passed")
 
     def test_missing_or_expired_artifacts_fail_closed(self) -> None:
         missing = self.report(
@@ -158,7 +181,7 @@ class Stage0ReadinessArtifactAdapterTests(unittest.TestCase):
             manifest_path = temporary / "echo-manifest.json"
             output_root = temporary / "output"
             backend_path.write_text(json.dumps(backend_ready()), encoding="utf-8")
-            manifest_path.write_text(json.dumps([echo_manifest()]), encoding="utf-8")
+            manifest_path.write_text(json.dumps([echo_manifest(redacted_evidence_id=True)]), encoding="utf-8")
             environment = {
                 **os.environ,
                 "OUTPUT_ROOT": str(output_root),
