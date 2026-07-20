@@ -250,3 +250,29 @@ header 边界；敏感候选逐条确认仍需后续独立合同。
 Gate 结论：该 iOS consumer 获得 G0 scoped evidence，后端合同沿用已部署的 G2 证据。它仍是
 default-off，没有 G1 产品展示或动作入口，不能据此宣称公开 Candidate 确认已发布。下一步仅可
 做确认后的结果重读/状态收敛，或在独立产品 Gate 明确后再设计可见交互。
+
+## 2026-07-21 Slice 3I 确认动作结果重读与状态收敛
+
+- 正式批量确认动作返回成功后，iOS 不再立即把状态标为完成；它先进入 `reconciling`，使用既有
+  默认关闭的正式 `/confirmation` 读取合同重新获取 confirmation projection。
+- 只有新的 projection 仍绑定同一 vault/review batch，且此次接受的所有 Candidate ID 已从 batch
+  和 single 两个集合中消失时，状态才变为 `confirmed`。这避免客户端把过期、错账户或未实际生效
+  的回执误显示为已完成。
+- 重读失败、回包仍包含已接受 Candidate、策略失效或 AccountLease 变化都会失败关闭。重读失败时
+  仅保留 value-minimized action result 供受控诊断，不暴露 Candidate 正文，也不重新调用 QA route。
+- 本轮仍没有新增产品 UI、自动确认、公开入口或后端变更；后端继续沿用已部署 `a9efa24` 的正式
+  read/write 合同。
+
+本轮验证：
+
+- `OwnerTruthContractsTests` 在 iPhone 17 Pro Simulator 通过：56 项、0 failures。新增覆盖“动作
+  成功但刷新 projection 仍含 Candidate”必须失败关闭；既有策略关闭、敏感/单条拒绝、稳定 command
+  ID 重试和账户切换保护继续通过。
+- confirmation default-off static check 已扩展并通过，要求 action use case 具有显式
+  `reconciling` 状态，且必须检查已接受 ID 从刷新 projection 中消失；它同时继续禁止 QA header
+  与 QA batch-accept 路由。
+- release feature matrix、feature-gate evaluator model smoke、`git diff --check` 与通用
+  `generic/platform=iOS` Debug build（`CODE_SIGNING_ALLOWED=NO`）均通过。
+
+Gate 结论：结果重读收敛为 G0 scoped evidence，G2 仍由已部署后端合同提供。下一个动作是对既有
+`WI-S1-01-04` 的 review authority 做证据缺口审计，不把 default-off 确认能力越级改成公开 UI。

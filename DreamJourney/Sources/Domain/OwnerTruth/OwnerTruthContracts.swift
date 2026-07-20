@@ -1979,6 +1979,7 @@ enum OwnerTruthInterviewCandidateConfirmationActionPhase: Equatable, Sendable {
     case idle
     case unavailable
     case submitting
+    case reconciling
     case confirmed
     case failed
 }
@@ -1990,6 +1991,7 @@ enum OwnerTruthInterviewCandidateConfirmationActionNotice: Equatable, Sendable {
     case staleAccountLease
     case invalidSelection
     case responseMismatch
+    case reconciliationFailed
     case requestFailed
     case batchConfirmed
 }
@@ -2016,6 +2018,7 @@ final class OwnerTruthInterviewCandidateConfirmationActionUseCase {
     private let vaultID: OwnerTruthVaultID?
     private let confirmation: OwnerTruthInterviewCandidateConfirmation
     private let client: OwnerTruthInterviewCandidateConfirmationActionClient
+    private let confirmationReader: OwnerTruthInterviewCandidateConfirmationClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let releasePolicyAvailable: () -> Bool
     private let commandIDFactory: CommandIDFactory
@@ -2032,6 +2035,7 @@ final class OwnerTruthInterviewCandidateConfirmationActionUseCase {
         accountLease: AccountLease,
         confirmation: OwnerTruthInterviewCandidateConfirmation,
         client: OwnerTruthInterviewCandidateConfirmationActionClient,
+        confirmationReader: OwnerTruthInterviewCandidateConfirmationClient,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = { false },
         commandIDFactory: @escaping CommandIDFactory = { UUID().uuidString.lowercased() }
@@ -2040,6 +2044,7 @@ final class OwnerTruthInterviewCandidateConfirmationActionUseCase {
         self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
         self.confirmation = confirmation
         self.client = client
+        self.confirmationReader = confirmationReader
         self.accountLeaseRuntime = accountLeaseRuntime
         self.releasePolicyAvailable = releasePolicyAvailable
         self.commandIDFactory = commandIDFactory
@@ -2155,12 +2160,63 @@ final class OwnerTruthInterviewCandidateConfirmationActionUseCase {
                 return
             }
             viewState = OwnerTruthInterviewCandidateConfirmationActionViewState(
+                phase: .reconciling,
+                latestResult: actionResult,
+                notice: nil
+            )
+            confirmationReader.fetchOwnerTruthInterviewCandidateConfirmation(
+                vaultID: vaultID,
+                reviewBatchID: confirmation.reviewBatchID
+            ) { [weak self] readResult in
+                self?.receiveReconciliation(
+                    readResult,
+                    actionResult: actionResult,
+                    expectedCandidateIDs: expectedIDs,
+                    vaultID: vaultID,
+                    generation: generation
+                )
+            }
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private func receiveReconciliation(
+        _ result: Result<OwnerTruthInterviewCandidateConfirmation, Error>,
+        actionResult: OwnerTruthInterviewCandidateConfirmationBatchResult,
+        expectedCandidateIDs: Set<OwnerTruthRecordID>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let reconciledConfirmation):
+            let remainingCandidateIDs = Set(
+                reconciledConfirmation.batchCandidates.map(\.id) +
+                    reconciledConfirmation.singleCandidates.map(\.id)
+            )
+            guard reconciledConfirmation.vaultID == vaultID,
+                  reconciledConfirmation.vaultID.rawValue == accountLease.vaultId,
+                  reconciledConfirmation.reviewBatchID == confirmation.reviewBatchID,
+                  remainingCandidateIDs.isDisjoint(with: expectedCandidateIDs) else {
+                transitionFailure(.reconciliationFailed, latestResult: actionResult)
+                return
+            }
+            viewState = OwnerTruthInterviewCandidateConfirmationActionViewState(
                 phase: .confirmed,
                 latestResult: actionResult,
                 notice: .batchConfirmed
             )
         case .failure:
-            transitionFailure(.requestFailed)
+            transitionFailure(.reconciliationFailed, latestResult: actionResult)
         }
     }
 
@@ -2173,10 +2229,13 @@ final class OwnerTruthInterviewCandidateConfirmationActionUseCase {
         )
     }
 
-    private func transitionFailure(_ notice: OwnerTruthInterviewCandidateConfirmationActionNotice) {
+    private func transitionFailure(
+        _ notice: OwnerTruthInterviewCandidateConfirmationActionNotice,
+        latestResult: OwnerTruthInterviewCandidateConfirmationBatchResult? = nil
+    ) {
         viewState = OwnerTruthInterviewCandidateConfirmationActionViewState(
             phase: .failed,
-            latestResult: nil,
+            latestResult: latestResult,
             notice: notice
         )
     }

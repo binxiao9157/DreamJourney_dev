@@ -19,6 +19,7 @@ let root = URL(fileURLWithPath: #filePath)
     .path
 let featureFlags = try read("\(root)/DreamJourney/Sources/App/FeatureFlagService.swift")
 let backendClient = try read("\(root)/DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
+let contracts = try read("\(root)/DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift")
 
 require(featureFlags.contains("case ownerTruthCandidateReview"), "feature must be modeled explicitly")
 require(
@@ -99,6 +100,30 @@ require(
     !actionMethod.contains("X-DreamJourney-QA-Owner-Truth") &&
         !actionMethod.contains("/candidate-review/batch-accept"),
     "typed confirmation action must never reuse QA headers or QA routes"
+)
+
+guard let actionUseCaseStart = contracts.range(of: "final class OwnerTruthInterviewCandidateConfirmationActionUseCase"),
+      let actionUseCaseEnd = contracts.range(
+        of: "// MARK: - Default-off interview session state read",
+        range: actionUseCaseStart.upperBound..<contracts.endIndex
+      ) else {
+    fatalError("owner-truth candidate confirmation default-off check failed: typed confirmation action use case is missing")
+}
+let actionUseCase = String(contracts[actionUseCaseStart.lowerBound..<actionUseCaseEnd.lowerBound])
+require(
+    actionUseCase.contains("confirmationReader: OwnerTruthInterviewCandidateConfirmationClient") &&
+        contracts.contains("case reconciling"),
+    "formal confirmation action must enter an explicit reconciliation state"
+)
+require(
+    actionUseCase.contains("receiveReconciliation(") &&
+        actionUseCase.contains("remainingCandidateIDs.isDisjoint(with: expectedCandidateIDs)"),
+    "formal confirmation action must verify its accepted candidates disappear from the refreshed projection"
+)
+require(
+    !actionUseCase.contains("X-DreamJourney-QA-Owner-Truth") &&
+        !actionUseCase.contains("/candidate-review/batch-accept"),
+    "formal confirmation action use case must not depend on QA review transport"
 )
 
 print("owner-truth candidate confirmation default-off check passed")
