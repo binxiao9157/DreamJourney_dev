@@ -73,7 +73,7 @@
       },
       "revoke": "cancel only proven old-lease requests; provider revoke not applicable",
       "approvers": ["iOS runtime owner", "Operations", "Security/Privacy"],
-      "evidenceIds": ["ios-legacy-timer-callback-inventory-v1", "time-letter-not-applicable"],
+      "evidenceIds": ["ios-legacy-timer-callback-inventory-v1", "echo-delayed-reply-notification-owner-scope"],
       "dependencyScan": "source-inventory-only-not-runtime-zero-use",
       "removal": {
         "removalCommit": "not-assigned",
