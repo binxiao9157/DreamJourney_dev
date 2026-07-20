@@ -1,4 +1,4 @@
-# WI-S1-02-06 Echo 延迟回信 Answer、Inbox 与 Receipt G0 证据
+# WI-S1-02-06 Echo 延迟回信 Answer、Inbox 与 Receipt G0/G1 证据
 
 日期：2026-07-20
 
@@ -26,7 +26,10 @@
 
 ## 代码与提交
 
-后端本地提交：`de6bc7d feat(v4): close delayed Echo reply receipt contract`。
+后端本地提交：
+
+- `de6bc7d feat(v4): close delayed Echo reply receipt contract`
+- `53b420c feat(v4): add delayed Echo reply answer read contract`
 
 关键入口：
 
@@ -46,7 +49,7 @@ PYTHON_BIN=.venv/bin/python \
 scripts/run-backend-echo-delayed-reply-answer-inbox-contract-gate.sh
 ```
 
-结果：`86` 项相关测试通过，覆盖：
+结果：`88` 项相关测试通过，覆盖：
 
 - V4 immutable envelope 与稳定目标键；
 - 不到期不生成效果；
@@ -58,19 +61,39 @@ scripts/run-backend-echo-delayed-reply-answer-inbox-contract-gate.sh
 - legacy API 对 V4 envelope 的显式拒绝；
 - migration `0024` 元数据和 Python 编译。
 
-完整后端验证也已通过：`783` 项单测、FastAPI smoke、凭据边界、知识库、Provider redaction/cost 和备份合同 smoke，以及 `git diff --check`。
+完整后端验证也已通过：`785` 项单测、FastAPI smoke、凭据边界、知识库、Provider redaction/cost 和备份合同 smoke，以及 `git diff --check`。
+
+## G1 服务端 Answer 收据读取合同
+
+在不改变公开 Echo 页面、不开启 V4 worker 和不将 Answer 正文复制进 Inbox 的前提下，后端新增 Owner-only 读取接口：
+
+```text
+GET /echo/delayed-replies/{userId}/{delayedReplyId}/answer
+```
+
+该接口仅从延迟回信聚合与私有 `echo_delayed_reply_answers` 读取结果；Inbox 继续只保存 `sourceAnswerId` 指针。它返回：
+
+- `200 completed`：Answer 正文、稳定 answer ID、conversation/request/generation 与 context/citation/policy 收据；
+- `409 echo_delayed_reply_answer_not_ready`：服务端尚未完成；
+- `409 echo_delayed_reply_answer_reconcile_required`：聚合已完成但 Answer 缺失或不一致，必须进入诚实的 reconcile；
+- `409 echo_delayed_reply_answer_legacy_unavailable`：旧协议记录不能伪装为 V4 结果；
+- `404 echo_delayed_reply_not_found`：当前 Owner 没有该记录。
+
+路径 Owner 校验、路由认证清单和真实 Postgres 左连接映射均有覆盖。读取合同不会启动本地时钟完成、Provider、通知或公开功能；iOS 仍保持本地 pending 状态，直到后续显式拉到已持久化的 Answer。
+
+验证：Answer/Inbox 本地 gate `88` 项通过；完整后端验证 `785` 项通过。真实 Postgres 隔离 smoke 仍待 G2 部署阶段执行。
 
 ## 尚未声明完成
 
 - 未运行实际 Postgres 原子并发 smoke：当前本地 shell 未配置 `DATABASE_URL`。脚本会创建并清理隔离临时数据库，待 G2 部署/运维阶段执行。
 - 未启用 typed scheduler/worker、Provider generation、accepted/query/unknown reconcile；这属于 `WI-S1-02-07` 及其后续 worker gate。
-- 未实现 iOS 的 server Answer 拉取、重启后的已读/归档/点击回响闭环，属于本工作项 G1。
+- iOS 的 server Answer 拉取、重启后的已读/归档/点击回响闭环尚未实现；当前仅完成 G1 的服务端读取子段。
 - 未推送或部署后端，因此不能表述为线上回信完成。
 
 ## 后续顺序
 
-1. 在不改变公开 UI 的前提下进入 G1：iOS 只消费服务端 Answer/receipt，处理重启、已读、归档与点击回响。
-2. 进入 G2 前，先推送 `de6bc7d`，部署 migration `0024`，再运行隔离 Postgres smoke：
+1. 在不改变公开 UI 的前提下继续 G1：iOS 只消费服务端 Answer/receipt，处理重启、已读、归档与点击回响。
+2. 进入 G2 前，先推送 `53b420c`，部署 migration `0024`，再运行隔离 Postgres smoke：
 
 ```bash
 DATABASE_URL='...' \

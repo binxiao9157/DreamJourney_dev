@@ -4,13 +4,14 @@
     "backendPendingPaths": [],
     "completedSubSlices": [
       "WI-S1-02-06-G0-ECHO-DELAYED-REPLY-ANSWER-INBOX-INVENTORY",
-      "WI-S1-02-06-G0-ECHO-DELAYED-REPLY-ANSWER-INBOX-CONTRACT"
+      "WI-S1-02-06-G0-ECHO-DELAYED-REPLY-ANSWER-INBOX-CONTRACT",
+      "WI-S1-02-06-G1-SERVER-ANSWER-READ-CONTRACT"
     ],
-    "currentSubSlice": "WI-S1-02-06-G1-SERVER-ANSWER-RECEIPT-RECONCILIATION-INVENTORY",
+    "currentSubSlice": "WI-S1-02-06-G1-IOS-SERVER-ANSWER-MAILBOX-RECONCILIATION",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "LOCAL_CONTRACT_VERIFIED / DEFAULT_OFF / BACKEND_COMMITTED_de6bc7d / POSTGRES_SMOKE_READY_NOT_RUN",
-      "G1": "NOT_STARTED",
+      "G0": "LOCAL_CONTRACT_VERIFIED / DEFAULT_OFF / BACKEND_COMMITTED_de6bc7d_53b420c / POSTGRES_SMOKE_READY_NOT_RUN",
+      "G1": "PARTIAL_SERVER_ANSWER_READ_CONTRACT_VERIFIED / IOS_RECONCILIATION_OPEN / DEFAULT_OFF",
       "G2": "NOT_STARTED",
       "G3": "NOT_STARTED"
     },
@@ -20,7 +21,7 @@
     "summary": "WI-S1-02-06 begins the Echo delayed-reply Answer, Inbox and receipt closure. It must keep delayed reply server-off by default, replace no public UI, and must not let the local timer or notification fabricate a completed business reply."
   },
   "baselines": {
-    "backend": "main@de6bc7d",
+    "backend": "main@53b420c",
     "ios": "feature/prd-stitch-ui-adaptation@54c6b7a",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -444,12 +445,6 @@
       "id": "WI-S1-02-05",
       "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G0_G2_ISOLATED_POSTGRES_VERIFIED / DEFAULT_OFF / G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G3_G4_OPEN"
-    },
-    {
-      "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-06-echo-delayed-reply-answer-inbox.md",
-      "id": "WI-S1-02-06",
-      "implementationStatus": "IN_PROGRESS / G0_LOCAL_CONTRACT_VERIFIED / BACKEND_LOCAL_COMMITTED / DEFAULT_OFF / G1_G2_G3_OPEN",
-      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_NO_DEPLOYMENT_OR_CUTOVER"
     }
   ],
   "nextWorkItem": {
@@ -464,5 +459,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T01:35:00+0800"
+  "updatedAt": "2026-07-20T08:33:44+0800"
 }
