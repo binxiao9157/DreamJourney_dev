@@ -354,6 +354,12 @@
       "registryClosure": "SCOPED_G2_EVIDENCE_PRESENT_EXTERNAL_RETENTION_OPS_REVIEW_OPEN"
     },
     {
+      "evidence": "docs/superpowers/status/2026-07-21-wi-s0-07-04-rights-evidence-projection-preflight.md",
+      "id": "WI-S0-07-04",
+      "implementationStatus": "INTERNAL_PREFLIGHT / BACKEND_DEPLOYED_b2d3abd / G0_G2_SCOPED_EVIDENCE_PRESENT / WI-S0-05-05_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_G2_PRECHECK_EVIDENCE_PRESENT_DEPENDENCY_AND_EXTERNAL_GATES_OPEN"
+    },
+    {
       "evidence": "docs/superpowers/status/2026-07-18-wi-s0-07-05-provider-cost-preflight.md",
       "id": "WI-S0-07-05",
       "implementationStatus": "INTERNAL_PREFLIGHT / BACKEND_DEPLOYED / G0_G2_ISOLATED_POSTGRES_VERIFIED / G3_COMMERCIAL_COST_BUDGET_CIRCUIT_OPEN",
