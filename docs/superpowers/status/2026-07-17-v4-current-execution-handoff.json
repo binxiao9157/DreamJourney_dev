@@ -2,21 +2,23 @@
   "activeWorkItem": {
     "authorityLock": "ASYNC_EFFECT",
     "backendPendingPaths": [],
-    "completedSubSlices": [],
-    "currentSubSlice": "WI-S1-02-09-G0-DEAD-LETTER-ADMISSION-CONTRACT",
+    "completedSubSlices": [
+      "WI-S1-02-09-G0-DEAD-LETTER-ADMISSION-CONTRACT"
+    ],
+    "currentSubSlice": "WI-S1-02-09-G0-WORKER-READINESS-AND-EVIDENCE-CONTRACT",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "NOT_STARTED / DEAD_LETTER_ADMISSION_AND_AUTHORIZED_REPLAY_CONTRACT_REQUIRED",
+      "G0": "PARTIAL / DEAD_LETTER_ADMISSION_AND_AUTHORIZED_REPLAY_CONTRACT_VERIFIED / WORKER_READINESS_AND_EVIDENCE_REQUIRED",
       "G2": "NOT_STARTED / DURABLE_DEAD_LETTER_REPLAY_AND_WORKER_EVIDENCE_REQUIRED",
       "G3": "NOT_STARTED / PROVIDER_QUERY_AND_OPERATIONS_BASELINE_REQUIRED"
     },
     "id": "WI-S1-02-09",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-09 starts with a value-free G0 dead-letter admission and authorized replay contract. It must preserve stable business keys and receipt evidence, keep client replay unavailable, and avoid claiming a worker or Provider call before the later gates."
+    "summary": "WI-S1-02-09 has a deployed value-free G0 dead-letter admission and authorized replay contract. It preserves stable business keys and receipt evidence, keeps client replay unavailable, and next adds worker readiness/evidence without claiming a worker or Provider call before later gates."
   },
   "baselines": {
-    "backend": "main@8517259",
+    "backend": "main@18efea0",
     "ios": "feature/prd-stitch-ui-adaptation@272a1b5",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -472,5 +474,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T10:23:28+0800"
+  "updatedAt": "2026-07-20T10:34:00+0800"
 }
