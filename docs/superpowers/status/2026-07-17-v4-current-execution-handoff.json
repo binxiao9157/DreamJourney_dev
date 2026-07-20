@@ -3,25 +3,31 @@
     "authorityLock": "OWNER_TRUTH",
     "backendPendingPaths": [],
     "completedSubSlices": [],
-    "currentSubSlice": "WI-S1-01-10-G0-CUTOVER_ADMISSION_INVENTORY",
+    "currentSubSlice": "WI-S1-01-11-G0-PERSONA_PROFILE_LEGACY_BOUNDARY_INVENTORY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "IN_PROGRESS / CUTOVER_ADMISSION_INVENTORY_REQUIRED",
-      "G1": "NOT_STARTED / NO_PUBLIC_TEXT_CORE_COHORT_CHANGE_AUTHORIZED",
-      "G2": "NOT_STARTED / PRODUCTION_SHAPE_GO_RECORD_REQUIRED",
+      "G0": "IN_PROGRESS / PERSONA_PROFILE_LEGACY_BOUNDARY_INVENTORY_REQUIRED",
+      "G1": "NOT_STARTED / NO_PUBLIC_PERSONA_EDITING_AUTHORIZED",
+      "G2": "NOT_STARTED / VERSIONED_PERSONA_STORE_AND_MIGRATION_PROOF_REQUIRED",
       "G4": "NOT_STARTED / PRODUCT_PRIVACY_RIGHTS_APPROVAL_REQUIRED"
     },
-    "id": "WI-S1-01-10",
+    "id": "WI-S1-01-11",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-01-12 is INTERNAL_READY for its complete currently executable G0 boundary at backend main@bfd7ca6 and deployed healthy: a future verified-object admission shadow, an intent/commit shadow and a legacy-media non-promotion inventory are all default-off, value-free and side-effect free. No SourceObject authority, object storage, upload route, worker, processor, Candidate/Memory/Persona write or public media UI was added. G2 private object storage/PG proof, G3 provider/scan/region/retention proof and G4 media/privacy/device approval remain open, so the plan automatically skips its blocked real-media lane. WI-S1-01-10 is now active for a pure cutover-admission inventory: it must prove that no authorityEpoch increase or legacy-writer retirement can occur absent a separate G2/G4 go record."
+    "summary": "WI-S1-01-12 remains INTERNAL_READY for its complete currently executable media G0 boundary at backend main@bfd7ca6; real media remains blocked by G2-G4. WI-S1-01-10 now has its complete executable G0 boundary at backend main@864e5d9 and deployed healthy: legacy parity cannot self-authorize authorityEpoch advancement or legacy-writer retirement, even with tampered shadow flags. No cohort, Vault epoch, legacy writer, database schema, user data or public UI changed. The real text-core cutover remains externally gated, so execution now starts WI-S1-01-11 with a Persona/Profile legacy-boundary inventory that must keep provider/runtime/family metadata out of Persona Authority."
   },
   "baselines": {
-    "backend": "main@bfd7ca6",
-    "ios": "feature/prd-stitch-ui-adaptation@55bae16",
+    "backend": "main@864e5d9",
+    "ios": "feature/prd-stitch-ui-adaptation@3d17db0",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
+    {
+      "evidence": "docs/superpowers/status/2026-07-20-wi-s1-01-10-cutover-admission-g0.md",
+      "id": "WI-S1-01-10",
+      "implementationStatus": "INTERNAL_READY / G0_CUTOVER_ADMISSION_BOUNDARY_VERIFIED / BACKEND_DEPLOYED_864e5d9 / DEFAULT_OFF / G1_G2_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G4_OPEN"
+    },
     {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-01-12-media-source-object-g0-boundary-complete.md",
       "id": "WI-S1-01-12",
@@ -480,9 +486,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-01-11",
+    "id": "WI-S1-02-11",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Persona and Memorial Profile Authority follows the text-core cutover boundary. It remains hidden and default-off until its independent policy and relationship gates are satisfied."
+    "summary": "Verified media processor and Candidate-only output remains planned after Persona/Profile boundary work and its independent SourceObject/effect gates. It stays default-off until those gates are satisfied."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -491,5 +497,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T17:28:00+0800"
+  "updatedAt": "2026-07-20T17:46:00+0800"
 }
