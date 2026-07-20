@@ -2,11 +2,13 @@
   "activeWorkItem": {
     "authorityLock": "OWNER_TRUTH",
     "backendPendingPaths": [],
-    "completedSubSlices": [],
-    "currentSubSlice": "WI-S1-01-11-G0-PERSONA_PROFILE_LEGACY_BOUNDARY_INVENTORY",
+    "completedSubSlices": [
+      "WI-S1-01-11-G0-PERSONA_PROFILE_LEGACY_BOUNDARY_INVENTORY"
+    ],
+    "currentSubSlice": "WI-S1-01-11-G0-PERSONA_AUTHORITY_COMMAND_CONTRACT",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "IN_PROGRESS / PERSONA_PROFILE_LEGACY_BOUNDARY_INVENTORY_REQUIRED",
+      "G0": "IN_PROGRESS / PERSONA_AUTHORITY_COMMAND_CONTRACT_REQUIRED",
       "G1": "NOT_STARTED / NO_PUBLIC_PERSONA_EDITING_AUTHORIZED",
       "G2": "NOT_STARTED / VERSIONED_PERSONA_STORE_AND_MIGRATION_PROOF_REQUIRED",
       "G4": "NOT_STARTED / PRODUCT_PRIVACY_RIGHTS_APPROVAL_REQUIRED"
@@ -14,11 +16,11 @@
     "id": "WI-S1-01-11",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-01-12 remains INTERNAL_READY for its complete currently executable media G0 boundary at backend main@bfd7ca6; real media remains blocked by G2-G4. WI-S1-01-10 now has its complete executable G0 boundary at backend main@864e5d9 and deployed healthy: legacy parity cannot self-authorize authorityEpoch advancement or legacy-writer retirement, even with tampered shadow flags. No cohort, Vault epoch, legacy writer, database schema, user data or public UI changed. The real text-core cutover remains externally gated, so execution now starts WI-S1-01-11 with a Persona/Profile legacy-boundary inventory that must keep provider/runtime/family metadata out of Persona Authority."
+    "summary": "WI-S1-01-12 remains INTERNAL_READY for its complete currently executable media G0 boundary at backend main@bfd7ca6; real media remains blocked by G2-G4. WI-S1-01-10 now has its complete executable G0 boundary at backend main@864e5d9 and deployed healthy: legacy parity cannot self-authorize authorityEpoch advancement or legacy-writer retirement. WI-S1-01-11 has completed its first G0 Persona/Profile legacy-boundary inventory at backend main@38ddb3d and deployed healthy: B15 candidate fields are limited to displayName/gender/birthDate, while identity, family, voice/provider, digital-human/embodiment and unknown data remain excluded or quarantined. No Persona/Profile authority, schema, legacy migration, user data or public UI changed. The active next sub-slice is the typed Persona Authority command contract."
   },
   "baselines": {
-    "backend": "main@864e5d9",
-    "ios": "feature/prd-stitch-ui-adaptation@3d17db0",
+    "backend": "main@38ddb3d",
+    "ios": "feature/prd-stitch-ui-adaptation@63354bb",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -497,5 +499,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T17:46:00+0800"
+  "updatedAt": "2026-07-20T17:53:00+0800"
 }
