@@ -4,20 +4,21 @@
     "backendPendingPaths": [],
     "completedSubSlices": [
       "WI-S1-03-05-TURN_INTENT_CONTEXT_LEASE_TRANSPORT_AND_IDENTITY_G0_COMPLETE",
-      "WI-S1-03-05-G1-HOSTED_XCTEST_SIMULATOR_RUNTIME_FOUNDATION"
+      "WI-S1-03-05-G1-HOSTED_XCTEST_SIMULATOR_RUNTIME_FOUNDATION",
+      "WI-S1-03-05-G1-ECHO_CONTINUOUS_TURN_UIQA"
     ],
-    "currentSubSlice": "WI-S1-03-05-G1-ECHO_CONTINUOUS_TURN_UIQA",
+    "currentSubSlice": "WI-S1-03-05-G2-BACKEND_CONTEXT_REPLY_RUNTIME_EVIDENCE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "COMPLETE / TURN_INTENT_CONTEXT_LEASE_TRANSPORT_AND_IDENTITY_VERIFIED",
-      "G1": "PARTIAL / HOSTED_XCTEST_SIMULATOR_RUNTIME_82_TESTS_VERIFIED / CONTINUOUS_ECHO_UIQA_OPEN",
+      "G1": "COMPLETE / HOSTED_XCTEST_SIMULATOR_RUNTIME_82_TESTS_VERIFIED / CONTINUOUS_ECHO_UIQA_COLD_START_AND_RESTART_VERIFIED",
       "G2": "NOT_STARTED / BACKEND_CONTEXT_AND_REPLY_RUNTIME_EVIDENCE_REQUIRED",
       "G3": "NOT_STARTED / PROVIDER_RUNTIME_EVIDENCE_REQUIRED"
     },
     "id": "WI-S1-03-05",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "The simulator destination and XCTest Pod integration are now durable: App/Test aggregate xcconfigs retain arm64 simulator eligibility, hosted XCTest imports pod modules without directly linking production provider binaries, and the booted iPhone 17 Pro ran 82 tests with zero failures. This closes only the hosted-XCTest runtime foundation. Ordinary Echo continuous multi-turn, stop, leave/re-enter and restart UIQA remain open; context/reply backend runtime and provider evidence remain separate G2/G3 gates. No public Echo UI, Digital Human or Voice provider behavior changed."
+    "summary": "The simulator destination and XCTest Pod integration are durable: App/Test aggregate xcconfigs retain arm64 simulator eligibility, hosted XCTest imports Pod modules without directly linking production provider binaries, and the booted iPhone 17 Pro ran 82 tests with zero failures. A provider-free UIQA scenario now proves two ordinary Echo turns, normal stop to idle, stale-reply rejection, leave/re-enter, and process restart. G2 context/reply backend runtime and G3 Provider runtime evidence remain separate gates. No public Echo UI, Digital Human, or Voice provider behavior changed."
   },
   "baselines": {
     "backend": "main@b13b2b9",

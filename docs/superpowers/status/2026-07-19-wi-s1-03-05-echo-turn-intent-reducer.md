@@ -7,7 +7,7 @@
 - Work Item：`WI-S1-03-05`
 - Authority lock：`IOS_COMPOSITION`
 - Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`
-- 当前结果：`IN_PROGRESS / G0_STATIC_AND_BUILD_FOR_TESTING_VERIFIED / G1_HOSTED_XCTEST_RUNTIME_FOUNDATION_VERIFIED / G1_ECHO_UI_FLOW_G2_G3_OPEN`
+- 当前结果：`IN_PROGRESS / G0_STATIC_AND_BUILD_FOR_TESTING_VERIFIED / G1_HOSTED_XCTEST_AND_ECHO_CONTINUOUS_UIQA_VERIFIED / G2_G3_OPEN`
 - 本切片：`WI-S1-03-05-TURN_INTENT_CONTEXT_LEASE_TRANSPORT_AND_IDENTITY_G0_COMPLETE`
 - 范围：先将 Echo 的 provider-independent 回合状态收敛为纯 reducer，并让 context build 使用独立
   generation lease；不改公开页面、不接管现有数字人、语音 Provider 或后端 transport。
@@ -100,6 +100,40 @@ bash Scripts/QA/product-v4/run-ios-test-foundation-gate.sh
   `build-for-testing` 均通过；
 - 新 gate 要求先执行 `pod install`，以保证 Pods test support config 已更新。
 
+### 2026-07-20 普通 Echo 连续回合 UIQA
+
+新增 provider-free 的 `DJRunEchoContinuousTurnSmoke`。它复用既有
+`QAEchoScenarioRunner` 和普通 `EchoViewController`，不启动麦克风、本地 TTS 或数字人 Provider，覆盖：
+
+- 连续两轮 `starting -> listening -> thinking -> speaking -> replied`；
+- 使用正常 `stopVoiceCapture()` 语义回到 `idle`；
+- stop 后迟到的普通 AI 回信不能重新写入 transcript 或恢复回合；
+- 离开 Echo tab 后再次进入仍保持 `idle`；
+- 冷启动和进程重启各跑一次；
+- provider-free 场景不创建数字人 live panel，仍输出当前 `audioOwner` 诊断值。
+
+离开再进入时，现有页面会按设计重置为一条开场引导。因此 gate 在离开前断言四条真实回合 transcript，
+重进后只断言普通 idle 恢复，不将该视觉重置误判为回合丢失。
+
+执行：
+
+```bash
+swift Scripts/QA/prd-stitch-ui/echo-continuous-turn-uiqa-smoke-check.swift "$PWD"
+python3 Scripts/QA/product-v4/qa-non-echo-dispatch-inventory-check.py
+bash Scripts/QA/prd-stitch-ui/run-echo-continuous-turn-uiqa-smoke.sh
+```
+
+结果：`PASS`。两次运行均完成，两份 JSON、两张截图和报告位于：
+
+```text
+tmp/visual-qa/prd-stitch-ui/echo-continuous-turn-uiqa-smoke/20260720-192714/
+```
+
+该 smoke 已接入 release regression 的可选开关：
+`RUN_ECHO_CONTINUOUS_TURN_UIQA_SMOKE=1`。完整 release regression 当前仍有一个独立的 archive
+static-model gate 依赖漂移，不将其归因于本 Work Item；本切片的专用 static、UIQA、宿主 XCTest 与
+generic iPhoneOS build 证据均已通过。
+
 ## 未完成边界
 
 本切片不是 `WI-S1-03-05` 的完整完成声明：
@@ -109,11 +143,11 @@ bash Scripts/QA/product-v4/run-ios-test-foundation-gate.sh
 - `EchoViewController` 仍持有现有 Provider 调度，尚未完成“ViewController 只发 Intent/渲染 ViewState”的
   完整迁移；
 - 没有修改 `/context/build`、数字人、声音复刻、KBLite Authority、后端合同或公开 UI；
-- 已完成的是 hosted XCTest 的 simulator runtime 基础，不等于普通 Echo 的连续多轮、停止、返回与重启
-  UIQA；该部分仍作为 G1 open；G2/G3 仍取决于后端与 Provider runtime 的独立证据。
+- 已完成的是 hosted XCTest runtime 和普通 Echo 的 provider-free 连续多轮、停止、返回与重启 UIQA；
+  G2/G3 仍取决于后端与 Provider runtime 的独立证据。
 
 ## 下一步
 
-当前 Work Item 的 G0 application-context 边界与 hosted XCTest runtime 基础均已可复跑。后续仍需在
-普通 Echo 的 local/mock UIQA 中覆盖连续多轮、停止、返回与重启；G2/G3 的 context/reply 与 Provider
-runtime 仍需独立证据，不能以本次模拟器测试替代。
+当前 Work Item 的 G0 application-context 边界、hosted XCTest runtime 与普通 Echo 的 provider-free
+连续回合 UIQA 均已可复跑。下一步进入 G2：补 `/context/build` 和 reply transport 的后端运行时证据；
+G3 的 Provider runtime 仍需独立证据，不能以本次模拟器测试替代。

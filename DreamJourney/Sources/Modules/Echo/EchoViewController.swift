@@ -7076,6 +7076,237 @@ extension EchoViewController {
         }
     }
 
+    /// Exercises the ordinary Echo controller path without starting a microphone,
+    /// local TTS, or Digital Human provider. The shell runner starts the app
+    /// twice, so this method only owns one deterministic in-process turn flow.
+    func runUIQAEchoContinuousTurnSmoke(completion: @escaping ([String: Any]) -> Void) {
+        guard let echoAccountLease,
+              validateEchoAccountLease(
+                at: .request,
+                expected: echoAccountLease,
+                reason: "uiqaContinuousTurnSmoke"
+              ) else {
+            completion([
+                "completed": false,
+                "failureReason": "missingEchoAccountLease",
+            ])
+            return
+        }
+
+        let roleContextKey = digitalHumanRuntimeContextKey(
+            for: DigitalHumanContextStore.shared.current
+        )
+        transcriptEntries.removeAll()
+        quoteLabel.text = nil
+        resetEchoViewModelToIdle()
+
+        func stateName() -> String {
+            switch currentState {
+            case .idle:
+                return "idle"
+            case .starting:
+                return "starting"
+            case .listening:
+                return "listening"
+            case .thinking:
+                return "thinking"
+            case .waitingReply:
+                return "waitingReply"
+            case .awaitingReplyDelivery:
+                return "awaitingReplyDelivery"
+            case .neutralSafety:
+                return "neutralSafety"
+            case .speaking:
+                return "speaking"
+            case .replied:
+                return "replied"
+            case .error:
+                return "error"
+            }
+        }
+
+        func runTurn(
+            userText: String,
+            replyText: String,
+            completion: @escaping (_ completed: Bool) -> Void
+        ) {
+            viewModel.prepareVoiceInteraction()
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    completion(false)
+                    return
+                }
+                let prepared = stateName() == "starting"
+                self.viewModel.beginVoiceInteraction()
+
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else {
+                        completion(false)
+                        return
+                    }
+                    let listening = stateName() == "listening"
+                    self.viewModel.finishUserVoice(
+                        text: userText,
+                        accountLease: echoAccountLease,
+                        resourceOwnerId: echoAccountLease.subjectId,
+                        roleContextKey: roleContextKey
+                    )
+
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self else {
+                            completion(false)
+                            return
+                        }
+                        let thinking = stateName() == "thinking"
+                        self.viewModel.receiveAIReply(replyText)
+
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self else {
+                                completion(false)
+                                return
+                            }
+                            let speaking = stateName() == "speaking"
+                            let delivered = self.viewModel.markReplyDelivered(
+                                accountLease: echoAccountLease
+                            )
+
+                            DispatchQueue.main.async { [weak self] in
+                                guard let self else {
+                                    completion(false)
+                                    return
+                                }
+                                completion(
+                                    prepared
+                                        && listening
+                                        && thinking
+                                        && speaking
+                                        && delivered
+                                        && stateName() == "replied"
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                completion([
+                    "completed": false,
+                    "failureReason": "controllerReleasedBeforeFirstTurn",
+                ])
+                return
+            }
+
+            runTurn(
+                userText: "今天想起了小时候一起散步的事。",
+                replyText: "我记得这份温柔的回忆。"
+            ) { [weak self] firstTurnCompleted in
+                guard let self else {
+                    completion([
+                        "completed": false,
+                        "failureReason": "controllerReleasedBeforeSecondTurn",
+                    ])
+                    return
+                }
+
+                runTurn(
+                    userText: "我还想再说一点那天的心情。",
+                    replyText: "好的，我会继续认真听你说。"
+                ) { [weak self] secondTurnCompleted in
+                    guard let self else {
+                        completion([
+                            "completed": false,
+                            "failureReason": "controllerReleasedBeforeStop",
+                        ])
+                        return
+                    }
+
+                    // Use the same controller stop semantics as the mic button.
+                    // No dialog is active in this local scenario, so it must
+                    // safely return the reducer to idle without touching a provider.
+                    self.stopVoiceCapture()
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self else {
+                            completion([
+                                "completed": false,
+                                "failureReason": "controllerReleasedAfterStop",
+                            ])
+                            return
+                        }
+
+                        let stoppedToIdle = stateName() == "idle"
+                        let transcriptCountBeforeStaleReply = self.transcriptEntries.count
+                        self.viewModel.receiveAIReply("这是一条停止后的旧回信，不应显示。")
+
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self,
+                                  let tabBarController = self.tabBarController,
+                                  (tabBarController.viewControllers?.count ?? 0) > 1 else {
+                                completion([
+                                    "completed": false,
+                                    "failureReason": "missingRootTabAfterStop",
+                                ])
+                                return
+                            }
+
+                            let staleReplyRejected = stateName() == "idle"
+                                && self.transcriptEntries.count == transcriptCountBeforeStaleReply
+                            let transcriptCountBeforeLeave = self.transcriptEntries.count
+                            tabBarController.selectedIndex = 0
+
+                            DispatchQueue.main.async { [weak self] in
+                                guard let self else {
+                                    completion([
+                                        "completed": false,
+                                        "failureReason": "controllerReleasedAfterLeave",
+                                    ])
+                                    return
+                                }
+                                let leftEchoTab = tabBarController.selectedIndex == 0
+                                tabBarController.selectedIndex = 1
+
+                                DispatchQueue.main.async { [weak self] in
+                                    guard let self else {
+                                        completion([
+                                            "completed": false,
+                                            "failureReason": "controllerReleasedAfterReentry",
+                                        ])
+                                        return
+                                    }
+                                    let reenteredEchoTab = tabBarController.selectedIndex == 1
+                                        && self.view.window != nil
+                                        && stateName() == "idle"
+                                    completion([
+                                        "completed": firstTurnCompleted
+                                            && secondTurnCompleted
+                                            && stoppedToIdle
+                                            && staleReplyRejected
+                                            && leftEchoTab
+                                            && reenteredEchoTab
+                                            && transcriptCountBeforeLeave == 4,
+                                        "firstTurnCompleted": firstTurnCompleted,
+                                        "secondTurnCompleted": secondTurnCompleted,
+                                        "stoppedToIdle": stoppedToIdle,
+                                        "staleReplyRejected": staleReplyRejected,
+                                        "leftEchoTab": leftEchoTab,
+                                        "reenteredEchoTab": reenteredEchoTab,
+                                        "finalState": stateName(),
+                                        "transcriptEntryCountBeforeLeave": transcriptCountBeforeLeave,
+                                        "transcriptEntryCount": self.transcriptEntries.count,
+                                        "digitalHumanPanelVisible": self.digitalHumanLivePanelView != nil,
+                                        "audioOwner": self.currentEchoAudioOwner.rawValue,
+                                    ])
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private var currentStateIsIdleForUIQA: Bool {
         if case .idle = currentState {
             return true

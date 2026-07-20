@@ -86,6 +86,7 @@ enum QALaunchFeature: String, CaseIterable {
 enum QALaunchScenario: String, CaseIterable {
     case digitalHumanLivePanelSmoke = "DJRunDigitalHumanLivePanelSmoke"
     case echoDigitalHumanLifecycleSmoke = "DJRunEchoDigitalHumanLifecycleSmoke"
+    case echoContinuousTurnSmoke = "DJRunEchoContinuousTurnSmoke"
     case digitalHumanRuntimeStubSmoke = "DJRunDigitalHumanRuntimeStubSmoke"
     case voiceCloneProfileSelectionSmoke = "DJRunVoiceCloneProfileSelectionSmoke"
     case voiceCloneSynthesisRuntimeSmoke = "DJRunVoiceCloneSynthesisRuntimeSmoke"
@@ -123,6 +124,7 @@ enum QALaunchScenario: String, CaseIterable {
     static let startupOrder: [QALaunchScenario] = [
         .digitalHumanLivePanelSmoke,
         .echoDigitalHumanLifecycleSmoke,
+        .echoContinuousTurnSmoke,
         .digitalHumanRuntimeStubSmoke,
         .voiceCloneProfileSelectionSmoke,
         .voiceCloneSynthesisRuntimeSmoke,
@@ -227,6 +229,7 @@ enum QALaunchScenario: String, CaseIterable {
             return nil
         case .digitalHumanLivePanelSmoke,
              .echoDigitalHumanLifecycleSmoke,
+             .echoContinuousTurnSmoke,
              .digitalHumanRuntimeStubSmoke,
              .tencentBackendPCMDriveMockSmoke,
              .echoTraceExportSmoke,

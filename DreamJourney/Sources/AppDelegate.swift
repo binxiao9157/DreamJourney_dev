@@ -314,6 +314,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runDigitalHumanLivePanelSmoke() }
         case .echoDigitalHumanLifecycleSmoke:
             scheduleUIQAScenario(scenario) { $0.runEchoDigitalHumanLifecycleSmoke() }
+        case .echoContinuousTurnSmoke:
+            scheduleUIQAScenario(scenario) { $0.runEchoContinuousTurnSmoke() }
         case .digitalHumanRuntimeStubSmoke:
             prepareUIQADigitalHumanRuntimeStubBackendSession { [weak self] authenticated in
                 guard authenticated else { return }
@@ -3591,6 +3593,31 @@ private extension AppDelegate {
         )
     }
 
+    func runEchoContinuousTurnSmoke(retryCount: Int = 0) {
+        QAEchoScenarioRunner.run(
+            retryCount: retryCount,
+            smokeName: "EchoContinuousTurnSmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runEchoContinuousTurnSmoke(retryCount: nextRetryCount)
+            },
+            writeResult: { [weak self] result in
+                self?.writeEchoContinuousTurnSmokeResult(result)
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQAEchoContinuousTurnSmoke(completion: completion)
+            },
+            completionLog: { result in
+                print(
+                    "[UI_QA] EchoContinuousTurnSmoke completed " +
+                    "completed=\(result["completed"] as? Bool == true) " +
+                    "firstTurn=\(result["firstTurnCompleted"] as? Bool == true) " +
+                    "secondTurn=\(result["secondTurnCompleted"] as? Bool == true) " +
+                    "staleReplyRejected=\(result["staleReplyRejected"] as? Bool == true)"
+                )
+            }
+        )
+    }
+
     func runEchoTraceEvidencePackageExportSmoke(retryCount: Int = 0) {
         QAEchoScenarioRunner.run(
             retryCount: retryCount,
@@ -4264,6 +4291,14 @@ private extension AppDelegate {
         } catch {
             print("[UI_QA] EchoDigitalHumanLifecycleSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
+    }
+
+    func writeEchoContinuousTurnSmokeResult(_ result: [String: Any]) {
+        writeEchoQAExportSmokeResult(
+            result,
+            fileName: "echo-continuous-turn-smoke-result.json",
+            smokeName: "EchoContinuousTurnSmoke"
+        )
     }
 
     func writeDigitalHumanRuntimeStubSmokeResult(_ result: [String: Any]) {

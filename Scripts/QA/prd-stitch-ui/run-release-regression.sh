@@ -30,6 +30,7 @@ RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE="${RUN_ECHO_TRACE_EVIDENCE_PACKAGE_
 RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE="${RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE:-0}"
 RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE="${RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE:-0}"
 RUN_ECHO_DIGITAL_HUMAN_LIFECYCLE_SMOKE="${RUN_ECHO_DIGITAL_HUMAN_LIFECYCLE_SMOKE:-0}"
+RUN_ECHO_CONTINUOUS_TURN_UIQA_SMOKE="${RUN_ECHO_CONTINUOUS_TURN_UIQA_SMOKE:-0}"
 RUN_ECHO_READINESS_REPORT="${RUN_ECHO_READINESS_REPORT:-0}"
 RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE="${RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE:-0}"
 RUN_BACKEND_ENV_SMOKE="${RUN_BACKEND_ENV_SMOKE:-0}"
@@ -678,6 +679,7 @@ for guard in \
   echo-audio-owner-lifecycle-guard-check.swift \
   echo-digital-human-lifecycle-audio-route-check.swift \
   echo-digital-human-lifecycle-uiqa-smoke-check.swift \
+  echo-continuous-turn-uiqa-smoke-check.swift \
   tencent-digital-human-trtc-compat-check.swift \
   tencent-digital-human-sdk-binary-check.swift \
   tencent-digital-human-cloud-runtime-smoke.swift \
@@ -849,6 +851,16 @@ if [[ "$RUN_ECHO_DIGITAL_HUMAN_LIFECYCLE_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/echo-digital-human-lifecycle-smoke/$RUN_ID"
   echo "Skipped by RUN_ECHO_DIGITAL_HUMAN_LIFECYCLE_SMOKE=0" > "$OUTPUT_DIR/echo-digital-human-lifecycle-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_ECHO_CONTINUOUS_TURN_UIQA_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/echo-continuous-turn-uiqa-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataEchoContinuousTurnUIQASmoke" \
+  "$SCRIPT_DIR/run-echo-continuous-turn-uiqa-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/echo-continuous-turn-uiqa-smoke/$RUN_ID"
+  echo "Skipped by RUN_ECHO_CONTINUOUS_TURN_UIQA_SMOKE=0" > "$OUTPUT_DIR/echo-continuous-turn-uiqa-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_ECHO_READINESS_REPORT" == "1" ]]; then

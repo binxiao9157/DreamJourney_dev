@@ -51,6 +51,7 @@ def main() -> None:
     shared_echo_route = {
         "digitalHumanLivePanelSmoke",
         "echoDigitalHumanLifecycleSmoke",
+        "echoContinuousTurnSmoke",
         "tencentBackendPCMDriveMockSmoke",
         "echoTraceExportSmoke",
         "echoRuntimeDiagnosticsExportSmoke",
