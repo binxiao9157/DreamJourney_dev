@@ -1,4 +1,4 @@
-# WI-S1-02-06 Echo 延迟回信 Answer、Inbox 与 Receipt G0/G1 证据
+# WI-S1-02-06 Echo 延迟回信 Answer、Inbox 与 Receipt G0/G1/G2 证据
 
 日期：2026-07-20
 
@@ -81,7 +81,7 @@ GET /echo/delayed-replies/{userId}/{delayedReplyId}/answer
 
 路径 Owner 校验、路由认证清单和真实 Postgres 左连接映射均有覆盖。读取合同不会启动本地时钟完成、Provider、通知或公开功能；iOS 仍保持本地 pending 状态，直到后续显式拉到已持久化的 Answer。
 
-验证：Answer/Inbox 本地 gate `88` 项通过；完整后端验证 `785` 项通过。真实 Postgres 隔离 smoke 仍待 G2 部署阶段执行。
+验证：Answer/Inbox 本地 gate `88` 项通过；完整后端验证 `785` 项通过。G2 隔离 Postgres smoke 已在部署后的容器镜像中执行并通过，详见下文。
 
 ## G1 iOS QA-only Answer 对账
 
@@ -133,21 +133,41 @@ Scripts/QA/product-v4/run-echo-delayed-reply-answer-inbox-gate.sh
 
 验证补充：模拟器 `build-for-testing` 和无签名 iPhoneOS build 通过，`git diff --check` 通过。由于 Scheme 只暴露 generic simulator placeholder，实际 XCTest/UIQA 运行未能启动，仍不能作为 UI 交互运行证据。
 
+## G2 生产部署与隔离 Postgres 证据
+
+后端已推送并部署到服务器，部署代码基线为：
+
+```text
+main@53b420c feat(v4): add delayed Echo reply answer read contract
+```
+
+部署只包含 additive migration `0024_echo_delayed_reply_answer_completion`：新增私有 Answer 表及索引，不包含删表、数据重写或公开功能开关。服务器执行结果：
+
+1. `migrate_db.py --dry-run --build-id 53b420c`：仅发现 `0024` 待执行；
+2. `migrate_db.py --apply --build-id 53b420c`：成功应用 `0024`；
+3. `migrate_db.py --verify --build-id 53b420c`：schema head 为 `0024`、状态 `ready`；
+4. 重新创建 API 容器后，容器 health 为 `healthy`；
+5. 公网 `https://dreamjourney-api.liftora.cn/ready` 返回 `ready`，database/schema/auth 组件均为 `ready`；
+6. 在部署镜像中运行 `scripts/run-backend-echo-delayed-reply-atomic-completion-postgres-smoke.sh`：通过。
+
+该 smoke 每次创建并清理独立临时数据库，覆盖：
+
+- 两个并发完成者只有一个 `completed`、一个 `already_terminal`；
+- 恰有一份私有 Answer、一份 owner Inbox 投影和一份 business receipt；
+- Inbox 与 receipt 不保存 Answer 正文；
+- legacy dispatcher 不会认领 V4 reply；
+- mailbox 写入失败时，Answer、Inbox 和 aggregate 变化整体回滚。
+
+这证明的是迁移、持久化和原子完成合同已经部署；它不证明 worker 已启用、模型 Provider 已生成真实答案、用户已在真机完成 QA 流程，默认发布态仍保持关闭。
+
 ## 尚未声明完成
 
-- 未运行实际 Postgres 原子并发 smoke：当前本地 shell 未配置 `DATABASE_URL`。脚本会创建并清理隔离临时数据库，待 G2 部署/运维阶段执行。
-- 未启用 typed scheduler/worker、Provider generation、accepted/query/unknown reconcile；这属于 `WI-S1-02-07` 及其后续 worker gate。
+- typed scheduler/worker、真实 Provider generation、accepted/query/unknown reconcile 尚未启用；这些属于 `WI-S1-02-07` 及后续 worker gate。
 - iOS 已完成 QA-only 的 server Answer 拉取、本地 pending 对账、Inbox private Answer pointer、已读/归档持久化复用和点击读取；可重复的 simulator 交互运行证据仍受当前 Scheme destination 环境阻断。
-- 未推送或部署后端，因此不能表述为线上回信完成。
+- G3 真实模型 Provider 质量/可用性与 G4 产品/真机验收均未关闭；不能表述为“线上延迟回信已公开完成”。
 
 ## 后续顺序
 
-1. 保持当前 QA-only 边界，待 Scheme 暴露可运行 simulator destination 后补充实际 Inbox 点击/UIQA 证据；这不阻塞后端 G2。
-2. 进入 G2：推送 `53b420c`，部署 migration `0024`，再运行隔离 Postgres smoke：
-
-```bash
-DATABASE_URL='...' \
-scripts/run-backend-echo-delayed-reply-atomic-completion-postgres-smoke.sh
-```
-
-3. Provider 真实调用仍必须通过 `WI-S1-02-07` 的 stable request/unknown reconcile，禁止在当前服务中直接重试或把通知当作业务完成。
+1. 保持 `WI-S1-02-06` default-off 和 QA-only 边界，不启用 worker 或 Provider 生成。
+2. 进入 `WI-S1-02-07` 的 G0：盘点现有模型、Voice/TTS、Digital Human、对象与通知 Provider 调用，建立 stable request / accepted / unknown / query-reconcile 的最小合同。
+3. 等 iOS Scheme 暴露可运行 simulator destination 后，补充真实 Inbox 点击/UIQA 证据；这不阻塞下一项 G0 合同工作。

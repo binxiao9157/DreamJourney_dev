@@ -2,25 +2,19 @@
   "activeWorkItem": {
     "authorityLock": "ASYNC_EFFECT",
     "backendPendingPaths": [],
-    "completedSubSlices": [
-      "WI-S1-02-06-G0-ECHO-DELAYED-REPLY-ANSWER-INBOX-INVENTORY",
-      "WI-S1-02-06-G0-ECHO-DELAYED-REPLY-ANSWER-INBOX-CONTRACT",
-      "WI-S1-02-06-G1-SERVER-ANSWER-READ-CONTRACT",
-      "WI-S1-02-06-G1-IOS-ANSWER-READ-RECONCILIATION",
-      "WI-S1-02-06-G1-IOS-INBOX-PRIVATE-ANSWER-READ"
-    ],
-    "currentSubSlice": "WI-S1-02-06-G2-POSTGRES-ATOMIC-COMPLETION-DEPLOYMENT-SMOKE",
+    "completedSubSlices": [],
+    "currentSubSlice": "WI-S1-02-07-G0-PROVIDER-EFFECT-INVENTORY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "LOCAL_CONTRACT_VERIFIED / DEFAULT_OFF / BACKEND_COMMITTED_de6bc7d_53b420c / POSTGRES_SMOKE_READY_NOT_RUN",
-      "G1": "SERVER_AND_IOS_ANSWER_READ_STATIC_BUILD_VERIFIED / QA_DEFAULT_OFF / SIMULATOR_UIQA_EXECUTION_EXTERNAL_BLOCKED",
-      "G2": "NOT_STARTED / BACKEND_53b420c_PUSH_DEPLOY_AND_POSTGRES_SMOKE_REQUIRED",
-      "G3": "NOT_STARTED"
+      "G0": "NOT_STARTED / PROVIDER_EFFECT_INVENTORY_REQUIRED",
+      "G2": "NOT_STARTED / PERSISTED_PROVIDER_RECEIPT_REPLAY_REQUIRED",
+      "G3": "NOT_STARTED / PROVIDER_SANDBOX_AND_DELETE_RECEIPT_SCOPE_REQUIRED",
+      "G4": "NOT_STARTED / CAPABILITY_SPECIFIC_PRODUCT_PRIVACY_TRUE_DEVICE_GATES_REQUIRED"
     },
-    "id": "WI-S1-02-06",
+    "id": "WI-S1-02-07",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-06 begins the Echo delayed-reply Answer, Inbox and receipt closure. It must keep delayed reply server-off by default, replace no public UI, and must not let the local timer or notification fabricate a completed business reply."
+    "summary": "WI-S1-02-07 begins the Provider effect stable-request and unknown-reconcile inventory. It must not invoke real Providers, change public UI, or treat local/runtime events as server success."
   },
   "baselines": {
     "backend": "main@53b420c",
@@ -28,6 +22,12 @@
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
+    {
+      "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-06-echo-delayed-reply-answer-inbox.md",
+      "id": "WI-S1-02-06",
+      "implementationStatus": "INTERNAL_READY / G0_G1_G2_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED_53b420c / DEFAULT_OFF / G3_PROVIDER_GENERATION_OPEN",
+      "registryClosure": "SCOPED_G0_G1_G2_EVIDENCE_PRESENT_G3_OPEN"
+    },
     {
       "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-08-crosspath-integration-review.md",
       "id": "WI-S1-03-08",
