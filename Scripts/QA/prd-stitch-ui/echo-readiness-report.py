@@ -359,14 +359,69 @@ def make_echo_trace_summary(
     }
 
 
-def make_report(checks: List[Dict[str, Any]]) -> str:
+def make_readiness_gate_result(checks: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Summarize required readiness checks without treating skipped work as ready."""
+    names_by_status: Dict[str, List[str]] = {}
+    for check in checks:
+        status = str(check.get("status") or "unknown")
+        names_by_status.setdefault(status, []).append(str(check.get("name") or "unnamed"))
+
+    failed_checks = names_by_status.get("failed", [])
+    blocked_checks = names_by_status.get("blocked", [])
+    not_run_checks = (
+        names_by_status.get("skipped", [])
+        + names_by_status.get("notRun", [])
+        + names_by_status.get("missing", [])
+    )
+    unknown_checks = [
+        name
+        for status, names in names_by_status.items()
+        if status not in {"passed", "failed", "blocked", "skipped", "notRun", "missing"}
+        for name in names
+    ]
+
+    if failed_checks:
+        status = "failed"
+        reason = "requiredCheckFailed"
+    elif blocked_checks:
+        status = "blocked"
+        reason = "requiredCheckBlocked"
+    elif not_run_checks:
+        status = "notRun"
+        reason = "requiredCheckNotRun"
+    elif unknown_checks:
+        status = "unknown"
+        reason = "requiredCheckUnknown"
+    elif checks and len(names_by_status.get("passed", [])) == len(checks):
+        status = "passed"
+        reason = "allRequiredChecksPassed"
+    else:
+        status = "unknown"
+        reason = "noRequiredChecksRecorded"
+
+    return {
+        "gate": "echoRuntimeReadiness",
+        "required": True,
+        "status": status,
+        "reason": reason,
+        "passedChecks": names_by_status.get("passed", []),
+        "failedChecks": failed_checks,
+        "blockedChecks": blocked_checks,
+        "notRunChecks": not_run_checks,
+        "unknownChecks": unknown_checks,
+    }
+
+
+def make_report(checks: List[Dict[str, Any]], readiness_gate: Dict[str, Any]) -> str:
     echo_trace = make_echo_trace_summary(checks)
     lines = [
-        "# Echo Readiness Report v2",
+        "# Echo Readiness Report v3",
         "",
         f"- Backend URL: `{BASE_URL or 'not configured'}`",
         f"- Backend token: `{'configured' if API_TOKEN else 'not configured'}`",
         f"- Voice synthesis probe: `{RUN_VOICE_SYNTHESIS}`",
+        f"- Readiness status: `{readiness_gate['status']}`",
+        f"- Readiness reason: `{readiness_gate['reason']}`",
         "",
         "| Check | Status | Detail |",
         "| --- | --- | --- |",
@@ -495,10 +550,15 @@ def main() -> None:
         ))
 
     echo_trace = make_echo_trace_summary(checks)
+    readiness_gate = make_readiness_gate_result(checks)
     result = {
-        "schemaVersion": 2,
-        "completed": all(check["status"] in ("passed", "skipped") for check in checks),
+        "schemaVersion": 3,
+        "completed": readiness_gate["status"] == "passed",
         "strict": STRICT,
+        "readinessStatus": readiness_gate["status"],
+        "readinessReason": readiness_gate["reason"],
+        "gateResult": readiness_gate,
+        "notRunChecks": readiness_gate["notRunChecks"],
         "backendURLConfigured": bool(BASE_URL),
         "backendTokenConfigured": bool(API_TOKEN),
         "echoTrace": echo_trace,
@@ -511,12 +571,15 @@ def main() -> None:
     json_path = OUTPUT_DIR / "echo-readiness-report.json"
     md_path = OUTPUT_DIR / "echo-readiness-report.md"
     json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    md_path.write_text(make_report(checks), encoding="utf-8")
+    md_path.write_text(make_report(checks, readiness_gate), encoding="utf-8")
     print(json.dumps({
         "completed": result["completed"],
+        "readinessStatus": result["readinessStatus"],
+        "readinessReason": result["readinessReason"],
         "jsonPath": str(json_path),
         "markdownPath": str(md_path),
-        "failedChecks": [check["name"] for check in checks if check["status"] == "failed"],
+        "failedChecks": readiness_gate["failedChecks"],
+        "notRunChecks": readiness_gate["notRunChecks"],
     }, ensure_ascii=False, indent=2))
     if STRICT and not result["completed"]:
         raise SystemExit(1)

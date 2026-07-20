@@ -22,7 +22,9 @@ Run ID: \`$RUN_ID\`
 
 Backend probing is optional. Provide \`BACKEND_BASE_URL\` and \`BACKEND_API_TOKEN\` to include deployed backend checks.
 Voice synthesis is opt-in via \`RUN_READINESS_VOICE_SYNTHESIS=1\` plus \`VOICE_CLONE_READY_PROFILE_ID\`.
-Use \`READINESS_STRICT=1\` when this report should fail the command on degraded checks.
+\`skipped\` probes are diagnostic-only and produce \`readinessStatus=notRun\`; they never
+make \`completed=true\`. Use \`READINESS_STRICT=1\` when a required check must fail the
+command unless every required probe passes.
 EOF
 
 echo "Echo readiness report written to $OUTPUT_DIR"

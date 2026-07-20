@@ -616,6 +616,7 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/echo-readiness-report.py",
     "Scripts/QA/prd-stitch-ui/run-echo-readiness-report.sh",
     "Scripts/QA/prd-stitch-ui/echo-readiness-report-check.swift",
+    "Scripts/QA/prd-stitch-ui/echo-readiness-report-strict-contract-check.py",
     "Scripts/QA/prd-stitch-ui/archive-media-backend-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/archive-media-upload-intent-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/archive-media-provider-switch-contract-check.swift",

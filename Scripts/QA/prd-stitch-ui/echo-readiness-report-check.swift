@@ -23,9 +23,10 @@ let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 
 for required in [
-    "\"schemaVersion\": 2",
-    "Echo Readiness Report v2",
+    "\"schemaVersion\": 3",
+    "Echo Readiness Report v3",
     "make_echo_trace_summary",
+    "make_readiness_gate_result",
     "make_context_clue_summary",
     "make_digital_human_session_summary",
     "make_voice_synthesis_summary",
@@ -56,6 +57,11 @@ for required in [
     "/voice/synthesis",
     "RUN_READINESS_VOICE_SYNTHESIS",
     "READINESS_STRICT",
+    "readinessStatus",
+    "readinessReason",
+    "requiredCheckNotRun",
+    "notRunChecks",
+    "gateResult",
     "echo-readiness-report.json",
     "echo-readiness-report.md",
     "local.apns_boundary",
@@ -64,6 +70,11 @@ for required in [
 ] {
     require(script.contains(required), "readiness script should cover \(required)")
 }
+
+require(
+    !script.contains("all(check[\"status\"] in (\"passed\", \"skipped\") for check in checks)"),
+    "skipped readiness checks must not be treated as completed"
+)
 
 for required in [
     "echo-readiness-report.py",
@@ -85,7 +96,8 @@ require(
 require(
     releaseQA.contains("run-echo-readiness-report.sh") &&
         releaseQA.contains("echo-readiness-report.py") &&
-        releaseQA.contains("echo-readiness-report-check.swift"),
+        releaseQA.contains("echo-readiness-report-check.swift") &&
+        releaseQA.contains("echo-readiness-report-strict-contract-check.py"),
     "release QA package should include Echo readiness report assets"
 )
 
