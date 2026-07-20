@@ -6297,11 +6297,43 @@ private enum InterviewSessionStateUIQAClientError: Error {
 
 // MARK: - Default-off interview natural-input QA
 
-/// This controller is isolated behind a UIQA launch argument. It proves the
-/// typed private write contract without adding an interview entry point to the
-/// public full-screen Echo experience.
+enum OwnerTruthInterviewNaturalInputPresentation: Equatable {
+    case qa
+    case product
+
+    var navigationTitle: String {
+        switch self {
+        case .qa:
+            return "自然输入（QA）"
+        case .product:
+            return "今天想聊点什么？"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .qa:
+            return "仅用于受控 QA：提交内容不在回执中回显，不会生成记忆、候选或审核结果。"
+        case .product:
+            return "写下此刻想分享的故事。"
+        }
+    }
+
+    var submitTitle: String {
+        switch self {
+        case .qa:
+            return "提交受控输入"
+        case .product:
+            return "发送"
+        }
+    }
+}
+
+/// The QA presentation remains isolated behind its launch gate. The product
+/// presentation is reached only through Echo's fresh release-policy gate.
 final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let useCase: OwnerTruthInterviewNaturalInputUseCase
+    private let presentation: OwnerTruthInterviewNaturalInputPresentation
     private let stackView = UIStackView()
     private let subtitleLabel = UILabel()
     private let statusLabel = UILabel()
@@ -6320,8 +6352,10 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         accountLease: AccountLease,
         client: OwnerTruthInterviewNaturalInputClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        presentation: OwnerTruthInterviewNaturalInputPresentation = .qa,
         qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
     ) {
+        self.presentation = presentation
         useCase = OwnerTruthInterviewNaturalInputUseCase(
             accountLease: accountLease,
             client: client,
@@ -6338,7 +6372,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "自然输入（QA）"
+        title = presentation.navigationTitle
         view.backgroundColor = DJDesignTokens.Color.background
         configureView()
         configureUseCase()
@@ -6373,7 +6407,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             trailing: DJDesignTokens.Spacing.page
         )
 
-        subtitleLabel.text = "仅用于受控 QA：提交内容不在回执中回显，不会生成记忆、候选或审核结果。"
+        subtitleLabel.text = presentation.subtitle
         subtitleLabel.font = DJDesignTokens.Font.body(14)
         subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
         subtitleLabel.numberOfLines = 0
@@ -6396,7 +6430,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         inputTextView.accessibilityIdentifier = "owner-truth-interview-natural-input-text"
         inputTextView.heightAnchor.constraint(equalToConstant: 108).isActive = true
 
-        submitButton.setTitle("提交受控输入", for: .normal)
+        submitButton.setTitle(presentation.submitTitle, for: .normal)
         submitButton.titleLabel?.font = DJDesignTokens.Font.body(16)
         submitButton.setTitleColor(.white, for: .normal)
         submitButton.backgroundColor = DJDesignTokens.Color.accent
@@ -6462,13 +6496,20 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private func statusText(for state: OwnerTruthInterviewNaturalInputViewState) -> String {
         switch state.phase {
         case .idle:
-            return "准备创建访谈会话"
+            return presentation == .qa ? "准备创建访谈会话" : "准备开始"
         case .starting:
-            return "正在创建受控会话"
+            return presentation == .qa ? "正在创建受控会话" : "正在准备"
         case .ready:
-            return state.latestReceipt?.messageSequence == nil ? "可以提交一条自然输入" : "自然输入已受控记录"
+            if presentation == .qa {
+                return state.latestReceipt?.messageSequence == nil
+                    ? "可以提交一条自然输入"
+                    : "自然输入已受控记录"
+            }
+            return state.latestReceipt?.messageSequence == nil
+                ? "可以开始写下"
+                : "已记录，可以继续写下新的内容"
         case .submitting:
-            return "正在记录自然输入"
+            return presentation == .qa ? "正在记录自然输入" : "正在保存"
         case .unavailable:
             return unavailableText(state.notice)
         case .failed:
@@ -6482,12 +6523,17 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             case .invalidInput:
                 return "请输入不超过 20000 字的内容。"
             case .contractMismatch:
-                return "会话回执不匹配，未保留输入内容。"
+                return presentation == .qa ? "会话回执不匹配，未保留输入内容。" : "保存失败，请稍后重试。"
             case .requestFailed:
-                return "请求失败，未保留输入内容。"
+                return presentation == .qa ? "请求失败，未保留输入内容。" : "保存失败，请稍后重试。"
             default:
                 return ""
             }
+        }
+        guard presentation == .qa else {
+            return receipt.messageSequence == nil
+                ? "准备好后，写下你想讲的内容。"
+                : "已保存，可以继续写下新的内容。"
         }
         var lines = [
             "会话：\(lifecycleText(receipt.lifecycle)) · \(boundaryText(receipt.boundary))",
@@ -6522,7 +6568,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private func unavailableText(_ notice: OwnerTruthInterviewNaturalInputNotice?) -> String {
         switch notice {
         case .qaOnlyDisabled:
-            return "QA 开关未启用"
+            return presentation == .qa ? "QA 开关未启用" : "当前暂不可用，请稍后再试。"
         case .invalidVault:
             return "当前档案空间不可用"
         case .accountUnavailable, .staleAccountLease:
@@ -6565,15 +6611,26 @@ enum OwnerTruthInterviewNaturalInputUIQASmoke {
 
     /// Creates an in-memory preview surface for an Echo UIQA route check. It
     /// intentionally does not attach the auto-submit scenario, so opening the
-    /// sheet proves layout and gating without making a backend request.
+    /// sheet proves layout and presentation without making a backend request.
     static func makePreviewViewController(
-        accountLease: AccountLease
+        accountLease: AccountLease,
+        presentation: OwnerTruthInterviewNaturalInputPresentation = .qa
     ) -> OwnerTruthInterviewNaturalInputViewController {
         let client = InterviewNaturalInputUIQAClient(vaultID: OwnerTruthVaultID(accountLease.vaultId))
+        let previewGateEnabled: () -> Bool
+        switch presentation {
+        case .qa:
+            previewGateEnabled = { OwnerTruthCandidateReviewQAGate.isEnabled }
+        case .product:
+            // This preview is reachable only from the UIQA simulator harness.
+            // Production still receives its gate from Echo's fresh policy decision.
+            previewGateEnabled = { true }
+        }
         return OwnerTruthInterviewNaturalInputViewController(
             accountLease: accountLease,
             client: client,
-            qaGateEnabled: { OwnerTruthCandidateReviewQAGate.isEnabled }
+            presentation: presentation,
+            qaGateEnabled: previewGateEnabled
         )
     }
 

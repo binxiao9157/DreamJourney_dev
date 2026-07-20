@@ -4522,6 +4522,19 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         hasExplicitBaseURL && OwnerTruthCandidateReviewQAGate.isEnabled
     }
 
+    /// A configured backend is not release authority. Outside QA, natural
+    /// input needs a fresh server policy decision before it can write.
+    var isOwnerTruthInterviewNaturalInputReleaseConfigured: Bool {
+        guard hasExplicitBaseURL else { return false }
+        if OwnerTruthCandidateReviewQAGate.isEnabled {
+            return true
+        }
+        if case .releasePolicy = ownerTruthInterviewNaturalInputTransport() {
+            return true
+        }
+        return false
+    }
+
     var isOwnerTruthKBLiteCompatibilityQAConfigured: Bool {
         hasExplicitBaseURL && OwnerTruthKBLiteCompatibilityQAGate.isEnabled
     }
@@ -5203,22 +5216,40 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         command: OwnerTruthInterviewNaturalInputStartCommand,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
     ) {
-        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+        let transport = ownerTruthInterviewNaturalInputTransport()
+        switch transport {
+        case .unavailable(let reason):
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
                     feature: "ownerTruthInterviewNaturalInput",
-                    reason: "qaOnlyDisabled"
+                    reason: reason
                 )))
             }
             return
+        case .qa, .releasePolicy:
+            break
         }
+
         let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions"
+        let additionalHeaders: [String: String]
+        let featureDecision: FeatureDecision?
+        switch transport {
+        case .qa:
+            additionalHeaders = ["X-DreamJourney-QA-Owner-Truth": "1"]
+            featureDecision = nil
+        case .releasePolicy(let capturedDecision):
+            additionalHeaders = [:]
+            featureDecision = capturedDecision
+        case .unavailable:
+            return
+        }
         requestJSON(
             path: path,
             method: .post,
             payload: command.backendPayload,
             authPolicy: .userRequired,
-            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+            featureDecision: featureDecision,
+            additionalHeaders: additionalHeaders
         ) { result in
             switch result {
             case .success(let object):
@@ -5241,22 +5272,40 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         command: OwnerTruthInterviewNaturalInputAppendCommand,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
     ) {
-        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+        let transport = ownerTruthInterviewNaturalInputTransport()
+        switch transport {
+        case .unavailable(let reason):
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
                     feature: "ownerTruthInterviewNaturalInput",
-                    reason: "qaOnlyDisabled"
+                    reason: reason
                 )))
             }
             return
+        case .qa, .releasePolicy:
+            break
         }
+
         let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions/\(pathComponent(command.sessionID.rawValue.uuidString))/messages"
+        let additionalHeaders: [String: String]
+        let featureDecision: FeatureDecision?
+        switch transport {
+        case .qa:
+            additionalHeaders = ["X-DreamJourney-QA-Owner-Truth": "1"]
+            featureDecision = nil
+        case .releasePolicy(let capturedDecision):
+            additionalHeaders = [:]
+            featureDecision = capturedDecision
+        case .unavailable:
+            return
+        }
         requestJSON(
             path: path,
             method: .post,
             payload: command.backendPayload,
             authPolicy: .userRequired,
-            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+            featureDecision: featureDecision,
+            additionalHeaders: additionalHeaders
         ) { result in
             switch result {
             case .success(let object):
@@ -5272,6 +5321,23 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
                 completion(.failure(error))
             }
         }
+    }
+
+    private enum OwnerTruthInterviewNaturalInputTransport {
+        case qa
+        case releasePolicy(FeatureDecision)
+        case unavailable(String)
+    }
+
+    private func ownerTruthInterviewNaturalInputTransport() -> OwnerTruthInterviewNaturalInputTransport {
+        if OwnerTruthCandidateReviewQAGate.isEnabled {
+            return .qa
+        }
+        let decision = FeatureGateService.shared.requestDecision(for: .echoTextInput)
+        guard decision.allowed else {
+            return .unavailable(decision.reason)
+        }
+        return .releasePolicy(decision)
     }
 
     func acceptOwnerTruthInterviewCandidateBatch(

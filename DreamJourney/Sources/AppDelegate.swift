@@ -367,6 +367,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewNaturalInputSmoke() }
         case .ownerTruthInterviewNaturalInputEchoSurfaceSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewNaturalInputEchoSurfaceSmoke() }
+        case .ownerTruthInterviewNaturalInputProductSurfaceSmoke:
+            scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewNaturalInputProductSurfaceSmoke() }
         case .archiveFailedAnalysisRetrySmoke:
             seedFailedArchiveAnalysisRetryContext()
             scheduleUIQAScenario(scenario) { $0.runArchiveFailedAnalysisRetrySmoke() }
@@ -2039,6 +2041,30 @@ private extension AppDelegate {
                     "completed=\(result["completed"] as? Bool == true) " +
                     "entryVisible=\(result["entryVisible"] as? Bool == true) " +
                     "sheetPresented=\(result["sheetPresented"] as? Bool == true)"
+                )
+            }
+        )
+    }
+
+    func runOwnerTruthInterviewNaturalInputProductSurfaceSmoke(retryCount: Int = 0) {
+        QAEchoScenarioRunner.run(
+            retryCount: retryCount,
+            smokeName: "OwnerTruthInterviewNaturalInputProductSurfaceSmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runOwnerTruthInterviewNaturalInputProductSurfaceSmoke(retryCount: nextRetryCount)
+            },
+            writeResult: { [weak self] result in
+                self?.writeOwnerTruthInterviewNaturalInputProductSurfaceSmokeResult(result)
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQAOwnerTruthInterviewNaturalInputProductSurfaceSmoke(completion: completion)
+            },
+            completionLog: { result in
+                print(
+                    "[UI_QA] OwnerTruthInterviewNaturalInputProductSurfaceSmoke completed " +
+                    "completed=\\(result[\"completed\"] as? Bool == true) " +
+                    "productEntryVisible=\\(result[\"productEntryVisible\"] as? Bool == true) " +
+                    "sheetPresented=\\(result[\"sheetPresented\"] as? Bool == true)"
                 )
             }
         )
@@ -4587,6 +4613,14 @@ private extension AppDelegate {
             result,
             fileName: "owner-truth-interview-natural-input-echo-surface-smoke-result.json",
             smokeName: "OwnerTruthInterviewNaturalInputEchoSurfaceSmoke"
+        )
+    }
+
+    func writeOwnerTruthInterviewNaturalInputProductSurfaceSmokeResult(_ result: [String: Any]) {
+        writeEchoQAExportSmokeResult(
+            result,
+            fileName: "owner-truth-interview-natural-input-product-surface-smoke-result.json",
+            smokeName: "OwnerTruthInterviewNaturalInputProductSurfaceSmoke"
         )
     }
 

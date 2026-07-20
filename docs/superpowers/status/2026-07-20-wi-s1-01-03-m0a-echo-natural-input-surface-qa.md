@@ -50,3 +50,50 @@ DJShowOwnerTruthInterviewNaturalInputEntryQA
 
 下一步需要记录 M0-A 公开产品 surface Gate，明确自然输入是否、何时以及以什么交互进入
 公开 Echo。在该 Gate 完成前，入口继续保持 QA-only/default-off。
+
+## 2026-07-21 受控产品入口更新
+
+本节取代上文“公开 Echo 未接入”的旧表述，但不改变 QA 入口的隔离边界。
+
+- 新增的产品入口位于现有全屏 Echo 内，显示文案为“今天想聊点什么？”。初始状态始终隐藏，
+  只有 iOS 获得新鲜 echoTextInput 发布策略，并同时满足 route 可见和 write decision 时
+  才显示；策略缺失、过期、刷新失败、账号切换或语音回合进行中都会重新隐藏。
+- 产品态 Sheet 只展示面向用户的标题、说明和发送操作；不展示 QA、线程版本或回执等内部
+  信息。既有背景、底部 Tab、话筒和语音主链路不变。
+- 产品客户端每次创建会话或追加文本都重新携带 captured policy。后端新增正式授权路径：
+  缺少或拒绝 echoTextInput policy 时返回 403 release_policy_denied，不能退回 QA header
+  或默认放行。QA 路径仍需要显式 QA header，兼容已有受控验证。
+- 新产品态 UIQA 使用内存 client，只验证布局和文案；结果中显式标记
+  inMemoryPreview=true 与 releasePolicyBypassedForPreview=true，不构成线上策略许可，也
+  不会发起网络写入、持久化写入、语音回合或数字人 session。
+
+本轮验证：
+
+- 后端 tests.test_owner_truth_interview_input_api、tests.test_owner_truth_interview_session_state_api
+  和 tests.test_release_policy 共 36 项通过，覆盖无 captured policy 拒绝、匹配 policy
+  允许及 QA 兼容。
+- owner-truth-interview-natural-input-echo-surface-check.py 通过，确认 QA 双 Gate 仍保留，
+  产品入口要求 fresh policy、route decision 和 write decision。
+- 两条 Simulator UIQA smoke 均通过；产品态截图位于
+  tmp/visual-qa/product-v4/owner-truth-interview-natural-input-product-surface-smoke/20260721-045259/01-owner-truth-interview-natural-input-product-surface.png。
+- Swift parse、git diff --check、Simulator UIQA build 与 generic/platform=iOS Debug build
+  均通过。
+
+Gate 结论：本轮为本地 G0/G1 scoped evidence。后端授权逻辑尚待部署和线上 Postgres smoke，
+G4 cohort、产品和隐私发布决策仍开放，因此不得将其称为公开发布。
+
+## 2026-07-21 后端 G2 部署验证
+
+- 后端提交 `db95a5f feat(m0): gate natural interview input by release policy` 已推送并部署至
+  `miao-server`，API 容器已重建且 `/ready` 的 database、schema、auth、incident 均为 ready。
+- 新增部署容器 smoke
+  `scripts/run-backend-owner-truth-interview-natural-input-deployed-smoke.sh`。它先读取线上
+  `echoTextInput` 策略快照，再在一次性 Postgres 临时数据库中验证：缺少 capture 必须返回
+  `release_policy_denied`，匹配 capture 可以创建、追加和读取会话，读取结果不回显叙事内容。
+- 部署 smoke 通过，摘要为：`formalMissingCaptureDenied=true`、
+  `formalMatchingCaptureStarted=true`、`formalMatchingCaptureAppended=true`、
+  `formalMatchingCaptureRead=true`、`contentFreeStateVerified=true`、
+  `productionBusinessDataMutated=false`，临时库迁移头为 `0035`。
+
+Gate 结论：本 slice 的正式自然输入授权 G2 已部署验证；产品入口仍默认隐藏且受策略控制。
+G4 cohort、产品和隐私放行仍开放，因此这不是公开发布结论。

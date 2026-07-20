@@ -499,6 +499,40 @@ final class EchoViewController: UIViewController {
         return button
     }()
 
+    /// The product entry starts hidden and is shown only after a fresh
+    /// release-policy decision permits the owner-text write.
+    private lazy var ownerTruthInterviewNaturalInputProductEntryButton: UIButton = {
+        var configuration = UIButton.Configuration.filled()
+        configuration.title = "今天想聊点什么？"
+        configuration.image = UIImage(systemName: "square.and.pencil")
+        configuration.imagePadding = 8
+        configuration.baseBackgroundColor = DJDesignTokens.Color.surface.withAlphaComponent(0.94)
+        configuration.baseForegroundColor = DJDesignTokens.Color.accentDeep
+        configuration.cornerStyle = .capsule
+        configuration.contentInsets = NSDirectionalEdgeInsets(
+            top: 10,
+            leading: 16,
+            bottom: 10,
+            trailing: 18
+        )
+        let button = UIButton(configuration: configuration)
+        button.titleLabel?.font = DJDesignTokens.Font.label(14)
+        button.layer.shadowColor = UIColor.black.cgColor
+        button.layer.shadowOpacity = 0.08
+        button.layer.shadowOffset = CGSize(width: 0, height: 4)
+        button.layer.shadowRadius = 8
+        button.isHidden = true
+        button.alpha = 0
+        button.accessibilityLabel = "今天想聊点什么"
+        button.accessibilityIdentifier = "ownerTruthInterviewNaturalInputProductEntryButton"
+        button.addTarget(
+            self,
+            action: #selector(ownerTruthInterviewNaturalInputProductEntryTapped),
+            for: .touchUpInside
+        )
+        return button
+    }()
+
     private let micRingView: UIView = {
         let view = UIView()
         view.backgroundColor = DJDesignTokens.Color.accentDeep.withAlphaComponent(0.12)
@@ -510,6 +544,10 @@ final class EchoViewController: UIViewController {
 
     private var micButtonBottomConstraint: NSLayoutConstraint?
     private var voiceStatusHeightConstraint: NSLayoutConstraint?
+    private var quoteBubbleBottomToVoiceStatusConstraint: NSLayoutConstraint?
+    private var quoteBubbleBottomToNaturalInputConstraint: NSLayoutConstraint?
+    private var isOwnerTruthInterviewNaturalInputProductPolicyPermitted = false
+    private var ownerTruthInterviewNaturalInputPolicyRefreshGeneration: UInt = 0
     private var currentState: EchoInteractionState = .idle
     private var transcriptEntries: [(text: String, isUser: Bool)] = []
     private var pendingAIText: String?
@@ -829,6 +867,7 @@ final class EchoViewController: UIViewController {
         let accountLease = captureEchoAccountLease(reason: "viewDidLoad")
         _ = captureDigitalHumanLifecycleToken(reason: "viewDidLoad")
         setupLayout()
+        refreshOwnerTruthInterviewNaturalInputProductEntryPolicy()
         bindViewModel(accountLease: accountLease)
         updatePersonaBadge()
         loadVoiceCloneRuntimeCapabilityIfNeeded()
@@ -876,6 +915,7 @@ final class EchoViewController: UIViewController {
         refreshDelayedReplyAnswerReconciliation(reason: "viewWillAppear")
         updatePersonaBadge()
         loadVoiceCloneRuntimeCapabilityIfNeeded()
+        refreshOwnerTruthInterviewNaturalInputProductEntryPolicy()
         refreshTranscriptPreviewForCurrentContextIfIdle()
     }
 
@@ -954,6 +994,7 @@ final class EchoViewController: UIViewController {
         }
         view.addSubview(micRingView)
         view.addSubview(micButton)
+        view.addSubview(ownerTruthInterviewNaturalInputProductEntryButton)
         if shouldShowOwnerTruthInterviewNaturalInputEntry {
             view.addSubview(ownerTruthInterviewNaturalInputEntryButton)
         }
@@ -1000,7 +1041,8 @@ final class EchoViewController: UIViewController {
             echoTraceEvidenceExportButton,
             micRingView,
             micButton,
-            ownerTruthInterviewNaturalInputEntryButton
+            ownerTruthInterviewNaturalInputEntryButton,
+            ownerTruthInterviewNaturalInputProductEntryButton
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
         digitalHumanLivePanelView?.translatesAutoresizingMaskIntoConstraints = false
 
@@ -1011,6 +1053,16 @@ final class EchoViewController: UIViewController {
         micButtonBottomConstraint = micBottomConstraint
         let voiceStatusHeight = voiceStatusView.heightAnchor.constraint(equalToConstant: 0)
         voiceStatusHeightConstraint = voiceStatusHeight
+        let quoteBubbleBottomToVoiceStatus = quoteBubble.bottomAnchor.constraint(
+            equalTo: voiceStatusView.topAnchor,
+            constant: -12
+        )
+        let quoteBubbleBottomToNaturalInput = quoteBubble.bottomAnchor.constraint(
+            equalTo: ownerTruthInterviewNaturalInputProductEntryButton.topAnchor,
+            constant: -12
+        )
+        quoteBubbleBottomToVoiceStatusConstraint = quoteBubbleBottomToVoiceStatus
+        quoteBubbleBottomToNaturalInputConstraint = quoteBubbleBottomToNaturalInput
 
         NSLayoutConstraint.activate([
             scenicView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -1040,7 +1092,7 @@ final class EchoViewController: UIViewController {
 
             quoteBubble.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
             quoteBubble.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
-            quoteBubble.bottomAnchor.constraint(equalTo: voiceStatusView.topAnchor, constant: -12),
+            quoteBubbleBottomToVoiceStatus,
             quoteBubble.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.74),
 
             archiveContextStatusView.leadingAnchor.constraint(equalTo: quoteBubble.leadingAnchor),
@@ -1068,6 +1120,25 @@ final class EchoViewController: UIViewController {
             voiceStatusLabel.leadingAnchor.constraint(equalTo: voiceStatusView.leadingAnchor, constant: 16),
             voiceStatusLabel.trailingAnchor.constraint(equalTo: voiceStatusView.trailingAnchor, constant: -16),
 
+            ownerTruthInterviewNaturalInputProductEntryButton.centerXAnchor.constraint(equalTo: micButton.centerXAnchor),
+            ownerTruthInterviewNaturalInputProductEntryButton.bottomAnchor.constraint(
+                equalTo: voiceStatusView.topAnchor,
+                constant: -10
+            ),
+            ownerTruthInterviewNaturalInputProductEntryButton.leadingAnchor.constraint(
+                greaterThanOrEqualTo: view.leadingAnchor,
+                constant: DJDesignTokens.Spacing.page
+            ),
+            ownerTruthInterviewNaturalInputProductEntryButton.trailingAnchor.constraint(
+                lessThanOrEqualTo: view.trailingAnchor,
+                constant: -DJDesignTokens.Spacing.page
+            ),
+            ownerTruthInterviewNaturalInputProductEntryButton.heightAnchor.constraint(equalToConstant: 42),
+            ownerTruthInterviewNaturalInputProductEntryButton.widthAnchor.constraint(
+                lessThanOrEqualTo: view.widthAnchor,
+                multiplier: 0.74
+            ),
+
             micButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             micBottomConstraint,
             micButton.widthAnchor.constraint(equalToConstant: 56),
@@ -1087,6 +1158,8 @@ final class EchoViewController: UIViewController {
                 ownerTruthInterviewNaturalInputEntryButton.heightAnchor.constraint(equalToConstant: 40)
             ])
         }
+
+        updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
 
         if shouldShowEchoRuntimeDiagnosticsPanel {
             NSLayoutConstraint.activate([
@@ -1269,6 +1342,9 @@ final class EchoViewController: UIViewController {
     }
 
     private func rebindEchoAccountScope(reason: String) {
+        ownerTruthInterviewNaturalInputPolicyRefreshGeneration &+= 1
+        isOwnerTruthInterviewNaturalInputProductPolicyPermitted = false
+        updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
         invalidateDigitalHumanLifecycle(reason: reason)
         activeVoiceInteractionLifecycleToken = nil
         releaseDigitalHumanRuntime(
@@ -1318,6 +1394,7 @@ final class EchoViewController: UIViewController {
             updatePersonaBadge()
             viewModel.refreshArchiveContextStatus()
             loadVoiceCloneRuntimeCapabilityIfNeeded(force: true)
+            refreshOwnerTruthInterviewNaturalInputProductEntryPolicy()
             prepareCloudDigitalHumanRuntimeIfNeeded()
         }
     }
@@ -2638,6 +2715,7 @@ final class EchoViewController: UIViewController {
 
     private func render(state: EchoInteractionState) {
         currentState = state
+        updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
         renderDigitalHumanLivePanel(for: state)
 
         switch state {
@@ -5435,11 +5513,24 @@ final class EchoViewController: UIViewController {
     }
 
     @objc private func ownerTruthInterviewNaturalInputEntryTapped() {
-        presentOwnerTruthInterviewNaturalInputSheet()
+        presentOwnerTruthInterviewNaturalInputSheet(presentation: .qa)
     }
 
-    private func presentOwnerTruthInterviewNaturalInputSheet() {
-        guard shouldShowOwnerTruthInterviewNaturalInputEntry,
+    @objc private func ownerTruthInterviewNaturalInputProductEntryTapped() {
+        presentOwnerTruthInterviewNaturalInputSheet(presentation: .product)
+    }
+
+    private func presentOwnerTruthInterviewNaturalInputSheet(
+        presentation: OwnerTruthInterviewNaturalInputPresentation
+    ) {
+        let isEntryAvailable: Bool
+        switch presentation {
+        case .qa:
+            isEntryAvailable = shouldShowOwnerTruthInterviewNaturalInputEntry
+        case .product:
+            isEntryAvailable = isOwnerTruthInterviewNaturalInputProductEntryVisible
+        }
+        guard isEntryAvailable,
               let accountLease = captureEchoAccountLease(reason: "ownerTruthNaturalInputEntry"),
               validateEchoAccountLease(
                 at: .request,
@@ -5450,7 +5541,19 @@ final class EchoViewController: UIViewController {
             return
         }
 
-        let controller = OwnerTruthInterviewNaturalInputViewController(accountLease: accountLease)
+        let controller = OwnerTruthInterviewNaturalInputViewController(
+            accountLease: accountLease,
+            presentation: presentation,
+            qaGateEnabled: { [weak self] in
+                guard let self else { return false }
+                switch presentation {
+                case .qa:
+                    return self.shouldShowOwnerTruthInterviewNaturalInputEntry
+                case .product:
+                    return self.isOwnerTruthInterviewNaturalInputProductEntryVisible
+                }
+            }
+        )
         let navigationController = UINavigationController(rootViewController: controller)
         navigationController.modalPresentationStyle = .pageSheet
         if let sheet = navigationController.sheetPresentationController {
@@ -5458,6 +5561,69 @@ final class EchoViewController: UIViewController {
             sheet.prefersGrabberVisible = true
         }
         present(navigationController, animated: true)
+    }
+
+    private var isOwnerTruthInterviewNaturalInputProductEntryVisible: Bool {
+        isOwnerTruthInterviewNaturalInputProductPolicyPermitted
+            && !shouldShowOwnerTruthInterviewNaturalInputEntry
+            && canShowOwnerTruthInterviewNaturalInputProductEntry(for: currentState)
+    }
+
+    private func canShowOwnerTruthInterviewNaturalInputProductEntry(
+        for state: EchoInteractionState
+    ) -> Bool {
+        switch state {
+        case .idle, .replied, .error:
+            return true
+        case .starting, .listening, .thinking, .waitingReply, .awaitingReplyDelivery, .neutralSafety, .speaking:
+            return false
+        }
+    }
+
+    private func refreshOwnerTruthInterviewNaturalInputProductEntryPolicy() {
+        ownerTruthInterviewNaturalInputPolicyRefreshGeneration &+= 1
+        let refreshGeneration = ownerTruthInterviewNaturalInputPolicyRefreshGeneration
+
+        guard !shouldShowOwnerTruthInterviewNaturalInputEntry,
+              DreamJourneyBackendClient.shared.isReleasePolicyConfigured else {
+            isOwnerTruthInterviewNaturalInputProductPolicyPermitted = false
+            updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
+            return
+        }
+
+        FeatureGateService.shared.refreshPolicy { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self,
+                      self.ownerTruthInterviewNaturalInputPolicyRefreshGeneration == refreshGeneration,
+                      !self.shouldShowOwnerTruthInterviewNaturalInputEntry else {
+                    return
+                }
+                switch result {
+                case .success:
+                    let surfaceDecision = FeatureGateService.shared.captureRoute(
+                        feature: .echoTextInput,
+                        risk: .ownerTextCore,
+                        localEnabled: FeatureFlagService.shared.isEnabled(.echoTextInput)
+                    )
+                    let writeDecision = FeatureGateService.shared.requestDecision(for: .echoTextInput)
+                    self.isOwnerTruthInterviewNaturalInputProductPolicyPermitted = surfaceDecision.allowed
+                        && writeDecision.allowed
+                case .failure:
+                    self.isOwnerTruthInterviewNaturalInputProductPolicyPermitted = false
+                }
+                self.updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
+            }
+        }
+    }
+
+    private func updateOwnerTruthInterviewNaturalInputProductEntryVisibility() {
+        let isVisible = isOwnerTruthInterviewNaturalInputProductEntryVisible
+        ownerTruthInterviewNaturalInputProductEntryButton.isHidden = !isVisible
+        ownerTruthInterviewNaturalInputProductEntryButton.alpha = isVisible ? 1 : 0
+        ownerTruthInterviewNaturalInputProductEntryButton.isUserInteractionEnabled = isVisible
+        quoteBubbleBottomToVoiceStatusConstraint?.isActive = !isVisible
+        quoteBubbleBottomToNaturalInputConstraint?.isActive = isVisible
+        view.setNeedsLayout()
     }
 
     private func startVoiceCapture() {
@@ -7246,6 +7412,130 @@ extension EchoViewController {
                         QALaunchScenario.ownerTruthInterviewNaturalInputEchoSurfaceSmoke.rawValue,
                         OwnerTruthCandidateReviewQAGate.launchArgument,
                         QALaunchFeature.ownerTruthInterviewNaturalInputEntry.rawValue
+                    ]
+                ]
+                if !sheetPresented {
+                    result["failureReason"] = "sheetNotPresented"
+                }
+                completion(result)
+            }
+        }
+    }
+
+    /// Verifies only the product presentation under the UIQA simulator. The
+    /// harness uses an in-memory client and never treats this as a release
+    /// policy grant or a backend write.
+    func runUIQAOwnerTruthInterviewNaturalInputProductSurfaceSmoke(
+        retryCount: Int = 0,
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        guard !shouldShowOwnerTruthInterviewNaturalInputEntry else {
+            completion([
+                "completed": false,
+                "productEntryVisible": false,
+                "sheetPresented": false,
+                "failureReason": "qaEntryMustRemainDisabled"
+            ])
+            return
+        }
+
+        guard let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                at: .request,
+                expected: accountLease,
+                reason: "uiqaOwnerTruthNaturalInputProductSurface"
+              ) else {
+            guard retryCount < 12 else {
+                completion([
+                    "completed": false,
+                    "productEntryVisible": false,
+                    "sheetPresented": false,
+                    "failureReason": "accountLeaseUnavailable"
+                ])
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                self?.runUIQAOwnerTruthInterviewNaturalInputProductSurfaceSmoke(
+                    retryCount: retryCount + 1,
+                    completion: completion
+                )
+            }
+            return
+        }
+
+        guard presentedViewController == nil else {
+            completion([
+                "completed": false,
+                "productEntryVisible": false,
+                "sheetPresented": false,
+                "failureReason": "unexpectedPresentedViewController"
+            ])
+            return
+        }
+
+        // Cancel any asynchronous policy refresh from normal controller setup.
+        // The preview below is explicitly marked UIQA-only and does not replace
+        // the production fresh-policy requirement.
+        ownerTruthInterviewNaturalInputPolicyRefreshGeneration &+= 1
+        isOwnerTruthInterviewNaturalInputProductPolicyPermitted = true
+        updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self else {
+                completion([
+                    "completed": false,
+                    "productEntryVisible": false,
+                    "sheetPresented": false,
+                    "failureReason": "echoReleased"
+                ])
+                return
+            }
+
+            let productEntryVisible = self.ownerTruthInterviewNaturalInputProductEntryButton.window != nil
+                && !self.ownerTruthInterviewNaturalInputProductEntryButton.isHidden
+                && self.ownerTruthInterviewNaturalInputProductEntryButton.alpha > 0.01
+            let qaEntryVisible = self.ownerTruthInterviewNaturalInputEntryButton.window != nil
+                && !self.ownerTruthInterviewNaturalInputEntryButton.isHidden
+                && self.ownerTruthInterviewNaturalInputEntryButton.alpha > 0.01
+            guard productEntryVisible, !qaEntryVisible else {
+                completion([
+                    "completed": false,
+                    "productEntryVisible": productEntryVisible,
+                    "qaEntryVisible": qaEntryVisible,
+                    "sheetPresented": false,
+                    "failureReason": "productEntryVisibilityMismatch"
+                ])
+                return
+            }
+
+            let controller = OwnerTruthInterviewNaturalInputUIQASmoke.makePreviewViewController(
+                accountLease: accountLease,
+                presentation: .product
+            )
+            let navigationController = UINavigationController(rootViewController: controller)
+            navigationController.modalPresentationStyle = .pageSheet
+            if let sheet = navigationController.sheetPresentationController {
+                sheet.detents = [.medium(), .large()]
+                sheet.prefersGrabberVisible = true
+            }
+            self.present(navigationController, animated: false) {
+                let sheetPresented = self.presentedViewController === navigationController
+                    && navigationController.topViewController === controller
+                var result: [String: Any] = [
+                    "completed": sheetPresented && controller.title == "今天想聊点什么？",
+                    "productEntryVisible": productEntryVisible,
+                    "qaEntryVisible": qaEntryVisible,
+                    "sheetPresented": sheetPresented,
+                    "entryAccessibilityIdentifier": self.ownerTruthInterviewNaturalInputProductEntryButton.accessibilityIdentifier ?? "",
+                    "sheetTitle": controller.title ?? "",
+                    "inMemoryPreview": true,
+                    "releasePolicyBypassedForPreview": true,
+                    "voiceTurnStarted": false,
+                    "digitalHumanSessionStarted": false,
+                    "backendNetworkStarted": false,
+                    "persistentInterviewWriteStarted": false,
+                    "launchArguments": [
+                        QALaunchScenario.ownerTruthInterviewNaturalInputProductSurfaceSmoke.rawValue
                     ]
                 ]
                 if !sheetPresented {

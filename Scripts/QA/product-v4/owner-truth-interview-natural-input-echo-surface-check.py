@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guard the QA-only Echo surface for V4 M0-A natural input."""
+"""Guard V4 M0-A QA and policy-controlled Echo natural-input surfaces."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 ECHO = ROOT / "DreamJourney/Sources/Modules/Echo/EchoViewController.swift"
+NATURAL_INPUT_SURFACE = ROOT / "DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift"
 FEATURE_FLAGS = ROOT / "DreamJourney/Sources/App/FeatureFlagService.swift"
 APP_DELEGATE = ROOT / "DreamJourney/Sources/AppDelegate.swift"
 RUNNER = ROOT / "Scripts/QA/prd-stitch-ui/run-owner-truth-interview-natural-input-echo-surface-smoke.sh"
@@ -35,10 +36,11 @@ def body(source: str, marker: str) -> str:
 
 
 def main() -> None:
-    for path in (ECHO, FEATURE_FLAGS, APP_DELEGATE, RUNNER):
+    for path in (ECHO, NATURAL_INPUT_SURFACE, FEATURE_FLAGS, APP_DELEGATE, RUNNER):
         require(path.is_file(), f"missing Echo natural-input QA artifact: {path}")
 
     echo = ECHO.read_text(encoding="utf-8")
+    natural_input_surface = NATURAL_INPUT_SURFACE.read_text(encoding="utf-8")
     flags = FEATURE_FLAGS.read_text(encoding="utf-8")
     delegate = APP_DELEGATE.read_text(encoding="utf-8")
     runner = RUNNER.read_text(encoding="utf-8")
@@ -68,6 +70,37 @@ def main() -> None:
         "func runUIQAOwnerTruthInterviewNaturalInputEchoSurfaceSmoke(",
     ):
         require(snippet in echo, f"Echo natural-input QA surface missing: {snippet}")
+
+    # The product surface must remain invisible without fresh policy authority.
+    # Its visibility needs both a release-visible route decision and a write
+    # decision, so a read-only fallback cannot expose a new private write.
+    for snippet in (
+        'accessibilityIdentifier = "ownerTruthInterviewNaturalInputProductEntryButton"',
+        'configuration.title = "今天想聊点什么？"',
+        "button.isHidden = true",
+        "FeatureGateService.shared.refreshPolicy",
+        "FeatureGateService.shared.captureRoute(",
+        "FeatureGateService.shared.requestDecision(for: .echoTextInput)",
+        "surfaceDecision.allowed",
+        "writeDecision.allowed",
+        "presentOwnerTruthInterviewNaturalInputSheet(presentation: .product)",
+        "isOwnerTruthInterviewNaturalInputProductEntryVisible",
+        "isOwnerTruthInterviewNaturalInputProductPolicyPermitted = false",
+        "refreshOwnerTruthInterviewNaturalInputProductEntryPolicy()",
+    ):
+        require(snippet in echo, f"policy-controlled product entry missing: {snippet}")
+
+    for snippet in (
+        "enum OwnerTruthInterviewNaturalInputPresentation",
+        "case product",
+        'return "今天想聊点什么？"',
+        'return "写下此刻想分享的故事。"',
+        'return "发送"',
+    ):
+        require(
+            snippet in natural_input_surface,
+            f"product natural-input presentation missing: {snippet}",
+        )
 
     smoke_body = body(echo, "func runUIQAOwnerTruthInterviewNaturalInputEchoSurfaceSmoke(")
     for forbidden in (
@@ -100,7 +133,7 @@ def main() -> None:
 
     print(
         "Owner Truth natural-input Echo surface check passed: "
-        "double-gated, QA-only, and side-effect free"
+        "QA isolation retained and product entry policy-controlled"
     )
 
 
