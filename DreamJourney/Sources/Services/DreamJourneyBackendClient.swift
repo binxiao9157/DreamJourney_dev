@@ -5022,6 +5022,121 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    func fetchOwnerTruthInterviewCandidateReview(
+        vaultID: OwnerTruthVaultID,
+        reviewBatchID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateReviewBatch, Error>) -> Void
+    ) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthInterviewCandidateReview",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-review-batches/\(pathComponent(reviewBatchID.rawValue.uuidString))/candidate-review"
+        requestJSON(
+            path: path,
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewCandidateReviewBatch(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID,
+                        expectedReviewBatchID: reviewBatchID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func acceptOwnerTruthInterviewCandidateBatch(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateBatchAcceptCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateBatchAcceptResult, Error>) -> Void
+    ) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthInterviewCandidateReview",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-review-batches/\(pathComponent(command.reviewBatchID.rawValue.uuidString))/candidate-review/batch-accept"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewCandidateBatchAcceptResult(
+                        backendJSONObject: object,
+                        expectedCommand: command
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func reviewOwnerTruthInterviewCandidateSingle(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateSingleReviewCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateSingleReviewResult, Error>) -> Void
+    ) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthInterviewCandidateReview",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-review-batches/\(pathComponent(command.reviewBatchID.rawValue.uuidString))/candidate-review/candidates/\(pathComponent(command.candidateID.rawValue.uuidString))/decision"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewCandidateSingleReviewResult(
+                        backendJSONObject: object,
+                        expectedCommand: command
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func fetchOwnerTruthKBLiteCompatibilityReadEnvelope(
         vaultID: OwnerTruthVaultID,
         expectedOwnerSubjectID: String,
@@ -6980,6 +7095,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
 }
 
 extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}
+extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}
 extension DreamJourneyBackendClient: OwnerTruthContextCitationClient {}
 extension DreamJourneyBackendClient: OwnerTruthCorrectionRequestClient {}

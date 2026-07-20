@@ -106,6 +106,7 @@ enum QALaunchScenario: String, CaseIterable {
     case archiveAudioLifecycleSmoke = "DJRunArchiveAudioLifecycleSmoke"
     case archiveHiddenShellSmoke = "DJRunArchiveHiddenShellSmoke"
     case ownerTruthCandidateInboxSmoke = "DJRunOwnerTruthCandidateInboxSmoke"
+    case ownerTruthInterviewCandidateReviewSmoke = "DJRunOwnerTruthInterviewCandidateReviewSmoke"
     case archiveFailedAnalysisRetrySmoke = "DJRunArchiveFailedAnalysisRetrySmoke"
     case echoDelayedReplyNotificationSmoke = "DJRunEchoDelayedReplyNotificationSmoke"
     case backendEnvironmentSmoke = "DJRunBackendEnvSmoke"
@@ -144,6 +145,7 @@ enum QALaunchScenario: String, CaseIterable {
         .archiveAudioLifecycleSmoke,
         .archiveHiddenShellSmoke,
         .ownerTruthCandidateInboxSmoke,
+        .ownerTruthInterviewCandidateReviewSmoke,
         .archiveFailedAnalysisRetrySmoke,
         .echoDelayedReplyNotificationSmoke,
         .backendEnvironmentSmoke,
@@ -183,6 +185,7 @@ enum QALaunchScenario: String, CaseIterable {
              .archiveAudioLifecycleSmoke,
              .archiveHiddenShellSmoke,
              .ownerTruthCandidateInboxSmoke,
+             .ownerTruthInterviewCandidateReviewSmoke,
              .archiveFailedAnalysisRetrySmoke,
              .timeLetterDispatchReminderSmoke:
             return .loginAndResetFeatureFlags

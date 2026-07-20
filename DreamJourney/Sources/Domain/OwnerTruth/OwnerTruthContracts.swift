@@ -131,6 +131,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidInbox(String)
     case invalidDecision(String)
     case invalidCommand(String)
+    case invalidInterviewCandidateReview(String)
+    case invalidInterviewCandidateDecision(String)
     case invalidKBLiteCompatibilityReadEnvelope(String)
     case invalidContextCitationShadowBuild(String)
     case invalidAnswerCitationReceipt(String)
@@ -145,6 +147,10 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "候选审核回执合同无效：\(detail)"
         case .invalidCommand(let detail):
             return "候选审核命令无效：\(detail)"
+        case .invalidInterviewCandidateReview(let detail):
+            return "访谈候选审核合同无效：\(detail)"
+        case .invalidInterviewCandidateDecision(let detail):
+            return "访谈候选审核回执合同无效：\(detail)"
         case .invalidKBLiteCompatibilityReadEnvelope(let detail):
             return "兼容读取合同无效：\(detail)"
         case .invalidContextCitationShadowBuild(let detail):
@@ -698,6 +704,887 @@ protocol OwnerTruthCandidateReviewClient: AnyObject {
         command: OwnerTruthCandidateReviewCommand,
         completion: @escaping (Result<OwnerTruthCandidateDecisionResult, Error>) -> Void
     )
+}
+
+// MARK: - Default-off interview Candidate review
+
+/// The private interview lane has its own review contract. It must not reuse
+/// the generic Candidate Inbox because the generic route may activate a
+/// MemoryVersion, while this lane deliberately stops at a DecisionReceipt.
+enum OwnerTruthInterviewCandidateReviewReadiness: String, Codable, Equatable, Sendable {
+    case awaitingExtraction
+    case reviewReady
+    case noCandidates
+    case extractionFailed
+    case extractionQuarantined
+}
+
+enum OwnerTruthInterviewCandidateReviewPath: String, Codable, Equatable, Sendable {
+    case batch
+    case single
+}
+
+struct OwnerTruthInterviewCandidateReviewItem: Equatable, Sendable, Identifiable {
+    let candidate: OwnerTruthCandidateInboxItem
+    let extractionID: OwnerTruthRecordID
+    let reviewPath: OwnerTruthInterviewCandidateReviewPath
+
+    var id: OwnerTruthRecordID { candidate.id }
+
+    init(
+        backendJSONObject object: [String: Any],
+        vaultID: OwnerTruthVaultID,
+        expectedPath: OwnerTruthInterviewCandidateReviewPath
+    ) throws {
+        guard let extractionID = OwnerTruthCandidateEvidenceReference.recordID(object["extractionId"]),
+              let rawPath = OwnerTruthInterviewCandidateContract.requiredString(object["reviewPath"]),
+              let reviewPath = OwnerTruthInterviewCandidateReviewPath(rawValue: rawPath),
+              reviewPath == expectedPath else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateReview(
+                "review item has an invalid path or extraction reference"
+            )
+        }
+        self.candidate = try OwnerTruthCandidateInboxItem(
+            backendJSONObject: object,
+            vaultID: vaultID
+        )
+        self.extractionID = extractionID
+        self.reviewPath = reviewPath
+    }
+}
+
+struct OwnerTruthInterviewCandidateReviewBatch: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-candidate-review-read-v1"
+    static let compositionSchemaVersion = "owner-truth-interview-candidate-review-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let reviewBatchID: OwnerTruthRecordID
+    let admissionID: OwnerTruthRecordID
+    let sourceID: OwnerTruthRecordID
+    let sourceVersion: Int
+    let authorityEpoch: Int
+    let readiness: OwnerTruthInterviewCandidateReviewReadiness
+    let latestExtractionStatus: String?
+    let batchCandidates: [OwnerTruthInterviewCandidateReviewItem]
+    let singleCandidates: [OwnerTruthInterviewCandidateReviewItem]
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID,
+        expectedReviewBatchID: OwnerTruthRecordID
+    ) throws {
+        guard OwnerTruthInterviewCandidateContract.requiredString(object["schemaVersion"]) == Self.schemaVersion,
+              OwnerTruthInterviewCandidateContract.requiredString(object["vaultId"]) == expectedVaultID.rawValue,
+              let review = object["review"] as? [String: Any],
+              OwnerTruthInterviewCandidateContract.requiredString(review["schemaVersion"])
+                == Self.compositionSchemaVersion,
+              let reviewBatchID = OwnerTruthCandidateEvidenceReference.recordID(review["reviewBatchId"]),
+              reviewBatchID == expectedReviewBatchID,
+              let admissionID = OwnerTruthCandidateEvidenceReference.recordID(review["admissionId"]),
+              let sourceID = OwnerTruthCandidateEvidenceReference.recordID(review["sourceId"]),
+              let sourceVersion = OwnerTruthCandidateEvidenceReference.positiveInt(review["sourceVersion"]),
+              let authorityEpoch = OwnerTruthInterviewCandidateContract.nonNegativeInt(review["authorityEpoch"]),
+              let readinessRaw = OwnerTruthInterviewCandidateContract.requiredString(review["readiness"]),
+              let readiness = OwnerTruthInterviewCandidateReviewReadiness(rawValue: readinessRaw),
+              let batchObjects = object["batchCandidates"] as? [[String: Any]],
+              let singleObjects = object["singleCandidates"] as? [[String: Any]],
+              let batchCount = OwnerTruthInterviewCandidateContract.nonNegativeInt(review["batchCandidateCount"]),
+              let singleCount = OwnerTruthInterviewCandidateContract.nonNegativeInt(review["singleCandidateCount"]),
+              batchCount == batchObjects.count,
+              singleCount == singleObjects.count else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateReview(
+                "review batch response misses a required typed field"
+            )
+        }
+
+        let batchCandidates = try batchObjects.map {
+            try OwnerTruthInterviewCandidateReviewItem(
+                backendJSONObject: $0,
+                vaultID: expectedVaultID,
+                expectedPath: .batch
+            )
+        }
+        let singleCandidates = try singleObjects.map {
+            try OwnerTruthInterviewCandidateReviewItem(
+                backendJSONObject: $0,
+                vaultID: expectedVaultID,
+                expectedPath: .single
+            )
+        }
+        let identifiers = batchCandidates.map(\.id) + singleCandidates.map(\.id)
+        guard Set(identifiers).count == identifiers.count else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateReview(
+                "review batch contains the same Candidate more than once"
+            )
+        }
+        if readiness == .reviewReady {
+            guard !identifiers.isEmpty else {
+                throw OwnerTruthRemoteContractError.invalidInterviewCandidateReview(
+                    "reviewReady response must contain at least one pending Candidate"
+                )
+            }
+        } else if !identifiers.isEmpty {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateReview(
+                "non-ready response must not expose pending Candidates"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.reviewBatchID = reviewBatchID
+        self.admissionID = admissionID
+        self.sourceID = sourceID
+        self.sourceVersion = sourceVersion
+        self.authorityEpoch = authorityEpoch
+        self.readiness = readiness
+        self.latestExtractionStatus = try OwnerTruthInterviewCandidateContract.optionalString(
+            review["latestExtractionStatus"],
+            field: "latestExtractionStatus"
+        )
+        self.batchCandidates = batchCandidates
+        self.singleCandidates = singleCandidates
+    }
+}
+
+struct OwnerTruthInterviewCandidateBatchSelection: Equatable, Sendable {
+    let candidateID: OwnerTruthRecordID
+    let expectedCandidateVersion: Int
+
+    init(candidateID: OwnerTruthRecordID, expectedCandidateVersion: Int) throws {
+        guard expectedCandidateVersion > 0 else {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "expectedCandidateVersion must be positive"
+            )
+        }
+        self.candidateID = candidateID
+        self.expectedCandidateVersion = expectedCandidateVersion
+    }
+
+    var backendJSONObject: [String: Any] {
+        [
+            "candidateId": candidateID.rawValue.uuidString.lowercased(),
+            "expectedCandidateVersion": expectedCandidateVersion,
+        ]
+    }
+}
+
+struct OwnerTruthInterviewCandidateBatchAcceptCommand: Equatable, Sendable {
+    let commandID: String
+    let reviewBatchID: OwnerTruthRecordID
+    let selections: [OwnerTruthInterviewCandidateBatchSelection]
+    let reasonCode: String
+
+    init(
+        commandID: String,
+        reviewBatchID: OwnerTruthRecordID,
+        selections: [OwnerTruthInterviewCandidateBatchSelection],
+        reasonCode: String
+    ) throws {
+        let normalizedCommandID = commandID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedReasonCode = reasonCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedCommandID.isEmpty,
+              !normalizedReasonCode.isEmpty,
+              !selections.isEmpty,
+              Set(selections.map(\.candidateID)).count == selections.count else {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "batch acceptance requires a unique non-empty selection and command metadata"
+            )
+        }
+        self.commandID = normalizedCommandID
+        self.reviewBatchID = reviewBatchID
+        self.selections = selections
+        self.reasonCode = normalizedReasonCode
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "commandId": commandID,
+            "selections": selections.map(\.backendJSONObject),
+            "reasonCode": reasonCode,
+        ]
+    }
+}
+
+struct OwnerTruthInterviewCandidateSingleReviewCommand: Equatable, Sendable {
+    let reviewBatchID: OwnerTruthRecordID
+    let candidateID: OwnerTruthRecordID
+    let review: OwnerTruthCandidateReviewCommand
+
+    init(
+        reviewBatchID: OwnerTruthRecordID,
+        candidateID: OwnerTruthRecordID,
+        review: OwnerTruthCandidateReviewCommand
+    ) {
+        self.reviewBatchID = reviewBatchID
+        self.candidateID = candidateID
+        self.review = review
+    }
+
+    var backendPayload: [String: Any] { review.backendPayload }
+}
+
+struct OwnerTruthInterviewCandidateReviewReceipt: Equatable, Sendable {
+    let id: OwnerTruthRecordID
+    let candidateID: OwnerTruthRecordID
+    let decision: OwnerTruthCandidateDecision
+    let candidateVersion: Int
+    let correctedValueID: OwnerTruthRecordID?
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let id = OwnerTruthCandidateEvidenceReference.recordID(object["receiptId"]),
+              let candidateID = OwnerTruthCandidateEvidenceReference.recordID(object["candidateId"]),
+              let decisionRaw = OwnerTruthInterviewCandidateContract.requiredString(object["decision"]),
+              let decision = OwnerTruthCandidateDecision(rawValue: decisionRaw),
+              decision.isTerminal,
+              let candidateVersion = OwnerTruthCandidateEvidenceReference.positiveInt(object["candidateVersion"]) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateDecision(
+                "review receipt misses a required typed field"
+            )
+        }
+        self.id = id
+        self.candidateID = candidateID
+        self.decision = decision
+        self.candidateVersion = candidateVersion
+        self.correctedValueID = try OwnerTruthInterviewCandidateContract.optionalRecordID(
+            object["correctedValueId"],
+            field: "correctedValueId"
+        )
+    }
+}
+
+struct OwnerTruthInterviewCandidateBatchAcceptResult: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-candidate-batch-decision-response-v1"
+
+    let outcome: OwnerTruthCommandOutcome
+    let batchDecisionID: OwnerTruthRecordID
+    let reviewBatchID: OwnerTruthRecordID
+    let receipts: [OwnerTruthInterviewCandidateReviewReceipt]
+    let memoryVersionCreated: Bool
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedCommand: OwnerTruthInterviewCandidateBatchAcceptCommand
+    ) throws {
+        guard OwnerTruthInterviewCandidateContract.requiredString(object["schemaVersion"]) == Self.schemaVersion,
+              let outcomeRaw = OwnerTruthInterviewCandidateContract.requiredString(object["status"]),
+              let outcome = OwnerTruthCommandOutcome(rawValue: outcomeRaw),
+              let batchDecisionID = OwnerTruthCandidateEvidenceReference.recordID(object["batchDecisionId"]),
+              let reviewBatchID = OwnerTruthCandidateEvidenceReference.recordID(object["reviewBatchId"]),
+              reviewBatchID == expectedCommand.reviewBatchID,
+              let receiptObjects = object["receipts"] as? [[String: Any]],
+              let acceptedCount = OwnerTruthCandidateEvidenceReference.positiveInt(object["acceptedCandidateCount"]),
+              acceptedCount == receiptObjects.count,
+              acceptedCount == expectedCommand.selections.count else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateDecision(
+                "batch decision response does not match the requested selection"
+            )
+        }
+        let receipts = try receiptObjects.map(OwnerTruthInterviewCandidateReviewReceipt.init(backendJSONObject:))
+        let expectedIDs = Set(expectedCommand.selections.map(\.candidateID))
+        guard Set(receipts.map(\.candidateID)) == expectedIDs,
+              receipts.allSatisfy({ $0.decision == .accepted }) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateDecision(
+                "batch decision receipt does not match the accepted Candidates"
+            )
+        }
+        try OwnerTruthInterviewCandidateContract.assertNoMemoryActivation(
+            object["memoryActivation"]
+        )
+        self.outcome = outcome
+        self.batchDecisionID = batchDecisionID
+        self.reviewBatchID = reviewBatchID
+        self.receipts = receipts
+        self.memoryVersionCreated = false
+    }
+}
+
+struct OwnerTruthInterviewCandidateSingleReviewResult: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-candidate-single-review-response-v1"
+
+    let outcome: OwnerTruthCommandOutcome
+    let batchDecisionID: OwnerTruthRecordID
+    let reviewBatchID: OwnerTruthRecordID
+    let receipt: OwnerTruthInterviewCandidateReviewReceipt
+    let memoryVersionCreated: Bool
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedCommand: OwnerTruthInterviewCandidateSingleReviewCommand
+    ) throws {
+        guard OwnerTruthInterviewCandidateContract.requiredString(object["schemaVersion"]) == Self.schemaVersion,
+              let outcomeRaw = OwnerTruthInterviewCandidateContract.requiredString(object["status"]),
+              let outcome = OwnerTruthCommandOutcome(rawValue: outcomeRaw),
+              let batchDecisionID = OwnerTruthCandidateEvidenceReference.recordID(object["batchDecisionId"]),
+              let reviewBatchID = OwnerTruthCandidateEvidenceReference.recordID(object["reviewBatchId"]),
+              reviewBatchID == expectedCommand.reviewBatchID,
+              let receiptObject = object["receipt"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateDecision(
+                "single decision response misses a required typed field"
+            )
+        }
+        let receipt = try OwnerTruthInterviewCandidateReviewReceipt(
+            backendJSONObject: receiptObject
+        )
+        guard receipt.candidateID == expectedCommand.candidateID,
+              receipt.decision == expectedCommand.review.action.terminalDecision else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateDecision(
+                "single decision receipt does not match the requested Candidate"
+            )
+        }
+        try OwnerTruthInterviewCandidateContract.assertNoMemoryActivation(
+            object["memoryActivation"]
+        )
+        self.outcome = outcome
+        self.batchDecisionID = batchDecisionID
+        self.reviewBatchID = reviewBatchID
+        self.receipt = receipt
+        self.memoryVersionCreated = false
+    }
+}
+
+/// Narrow port for the QA-only M0-A interview review surface. Its return types
+/// intentionally do not expose generic MemoryVersion activation information.
+protocol OwnerTruthInterviewCandidateReviewClient: AnyObject {
+    func fetchOwnerTruthInterviewCandidateReview(
+        vaultID: OwnerTruthVaultID,
+        reviewBatchID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateReviewBatch, Error>) -> Void
+    )
+
+    func acceptOwnerTruthInterviewCandidateBatch(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateBatchAcceptCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateBatchAcceptResult, Error>) -> Void
+    )
+
+    func reviewOwnerTruthInterviewCandidateSingle(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateSingleReviewCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateSingleReviewResult, Error>) -> Void
+    )
+}
+
+private enum OwnerTruthInterviewCandidateContract {
+    static func requiredString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    static func optionalString(_ value: Any?, field: String) throws -> String? {
+        guard let value, !(value is NSNull) else { return nil }
+        guard let normalized = requiredString(value) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateReview(
+                "\(field) must be a non-empty string or null"
+            )
+        }
+        return normalized
+    }
+
+    static func nonNegativeInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value >= 0 {
+            return value
+        }
+        if let value = value as? NSNumber,
+           CFGetTypeID(value) != CFBooleanGetTypeID(),
+           value.doubleValue.rounded() == value.doubleValue,
+           value.intValue >= 0 {
+            return value.intValue
+        }
+        if let value = value as? String,
+           let parsed = Int(value.trimmingCharacters(in: .whitespacesAndNewlines)),
+           parsed >= 0 {
+            return parsed
+        }
+        return nil
+    }
+
+    static func optionalRecordID(_ value: Any?, field: String) throws -> OwnerTruthRecordID? {
+        guard let value, !(value is NSNull) else { return nil }
+        guard let identifier = OwnerTruthCandidateEvidenceReference.recordID(value) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateDecision(
+                "\(field) must be a UUID or null"
+            )
+        }
+        return identifier
+    }
+
+    static func assertNoMemoryActivation(_ value: Any?) throws {
+        guard let activation = value as? [String: Any],
+              requiredString(activation["status"]) == OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+              let memoryVersionCreated = activation["memoryVersionCreated"] as? Bool,
+              !memoryVersionCreated else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateDecision(
+                "interview review must not activate a MemoryVersion"
+            )
+        }
+    }
+}
+
+/// Intent and ViewState boundary for the private M0-A interview review surface.
+/// It is deliberately separate from `OwnerTruthCandidateReviewUseCase`: a
+/// terminal interview review creates only a DecisionReceipt, never a
+/// MemoryVersion or a legacy Archive/KBLite write.
+enum OwnerTruthInterviewCandidateReviewIntent: Equatable, Sendable {
+    case refresh
+    case acceptBatch(candidateIDs: [OwnerTruthRecordID])
+    case acceptSingle(candidateID: OwnerTruthRecordID)
+    case correctSingle(candidateID: OwnerTruthRecordID, correctedSummary: String)
+    case rejectSingle(candidateID: OwnerTruthRecordID)
+}
+
+enum OwnerTruthInterviewCandidateReviewPhase: Equatable, Sendable {
+    case idle
+    case unavailable
+    case loading
+    case ready
+    case submitting
+    case empty
+    case failed
+}
+
+enum OwnerTruthInterviewCandidateReviewNotice: Equatable, Sendable {
+    case qaOnlyDisabled
+    case accountUnavailable
+    case staleAccountLease
+    case invalidVault
+    case invalidSelection
+    case candidateUnavailable
+    case correctionRequired
+    case reviewResultMismatch
+    case requestFailed
+    case batchAccepted
+    case singleAccepted
+    case singleCorrected
+    case singleRejected
+}
+
+struct OwnerTruthInterviewCandidateReviewItemViewState: Equatable, Sendable, Identifiable {
+    let id: OwnerTruthRecordID
+    let reviewPath: OwnerTruthInterviewCandidateReviewPath
+    let proposalPreview: String
+    let memoryKind: OwnerTruthMemoryKind
+    let sensitivity: OwnerTruthSensitivityLevel
+    let evidenceCount: Int
+    let candidateVersion: Int
+    let supportsCorrection: Bool
+}
+
+struct OwnerTruthInterviewCandidateReviewReceiptViewState: Equatable, Sendable {
+    let candidateIDs: [OwnerTruthRecordID]
+    let decisions: [OwnerTruthCandidateDecision]
+    let memoryVersionCreated: Bool
+}
+
+struct OwnerTruthInterviewCandidateReviewViewState: Equatable, Sendable {
+    let phase: OwnerTruthInterviewCandidateReviewPhase
+    let readiness: OwnerTruthInterviewCandidateReviewReadiness?
+    let batchItems: [OwnerTruthInterviewCandidateReviewItemViewState]
+    let singleItems: [OwnerTruthInterviewCandidateReviewItemViewState]
+    let notice: OwnerTruthInterviewCandidateReviewNotice?
+    let latestReceipt: OwnerTruthInterviewCandidateReviewReceiptViewState?
+
+    static let idle = OwnerTruthInterviewCandidateReviewViewState(
+        phase: .idle,
+        readiness: nil,
+        batchItems: [],
+        singleItems: [],
+        notice: nil,
+        latestReceipt: nil
+    )
+}
+
+/// Lease-fenced client adapter for M0-A review composition.  The use case is
+/// QA-only and intentionally cannot reach the generic Candidate inbox route.
+final class OwnerTruthInterviewCandidateReviewUseCase {
+    typealias CommandIDFactory = () -> String
+
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let reviewBatchID: OwnerTruthRecordID
+    private let client: OwnerTruthInterviewCandidateReviewClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
+    private let commandIDFactory: CommandIDFactory
+
+    private var batchCandidatesByID: [OwnerTruthRecordID: OwnerTruthInterviewCandidateReviewItem] = [:]
+    private var batchCandidateIDs: [OwnerTruthRecordID] = []
+    private var singleCandidatesByID: [OwnerTruthRecordID: OwnerTruthInterviewCandidateReviewItem] = [:]
+    private var singleCandidateIDs: [OwnerTruthRecordID] = []
+    private var readiness: OwnerTruthInterviewCandidateReviewReadiness?
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthInterviewCandidateReviewViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthInterviewCandidateReviewViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        reviewBatchID: OwnerTruthRecordID,
+        client: OwnerTruthInterviewCandidateReviewClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled },
+        commandIDFactory: @escaping CommandIDFactory = { UUID().uuidString.lowercased() }
+    ) {
+        self.accountLease = accountLease
+        self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.reviewBatchID = reviewBatchID
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
+        self.commandIDFactory = commandIDFactory
+    }
+
+    func send(_ intent: OwnerTruthInterviewCandidateReviewIntent) {
+        switch intent {
+        case .refresh:
+            refresh()
+        case .acceptBatch(let candidateIDs):
+            submitBatch(candidateIDs: candidateIDs)
+        case .acceptSingle(let candidateID):
+            submitSingle(candidateID: candidateID, action: .accept, correctedSummary: nil)
+        case .correctSingle(let candidateID, let correctedSummary):
+            submitSingle(candidateID: candidateID, action: .correct, correctedSummary: correctedSummary)
+        case .rejectSingle(let candidateID):
+            submitSingle(candidateID: candidateID, action: .reject, correctedSummary: nil)
+        }
+    }
+
+    private func refresh() {
+        guard let vaultID = beginRequestOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = state(phase: .loading, notice: nil, latestReceipt: nil)
+        client.fetchOwnerTruthInterviewCandidateReview(
+            vaultID: vaultID,
+            reviewBatchID: reviewBatchID
+        ) { [weak self] result in
+            self?.receiveReviewBatch(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func submitBatch(candidateIDs: [OwnerTruthRecordID]) {
+        guard let vaultID = beginRequestOrFail() else { return }
+        let uniqueCandidateIDs = Array(Set(candidateIDs))
+        guard !uniqueCandidateIDs.isEmpty,
+              uniqueCandidateIDs.count == candidateIDs.count,
+              uniqueCandidateIDs.allSatisfy({ batchCandidatesByID[$0] != nil }) else {
+            transitionFailure(.invalidSelection)
+            return
+        }
+        let selections: [OwnerTruthInterviewCandidateBatchSelection]
+        do {
+            selections = try uniqueCandidateIDs.compactMap { candidateID in
+                guard let candidate = batchCandidatesByID[candidateID] else { return nil }
+                return try OwnerTruthInterviewCandidateBatchSelection(
+                    candidateID: candidateID,
+                    expectedCandidateVersion: candidate.candidate.candidateVersion
+                )
+            }
+            guard selections.count == uniqueCandidateIDs.count else {
+                transitionFailure(.invalidSelection)
+                return
+            }
+            let command = try OwnerTruthInterviewCandidateBatchAcceptCommand(
+                commandID: commandIDFactory(),
+                reviewBatchID: reviewBatchID,
+                selections: selections,
+                reasonCode: "ownerReviewed"
+            )
+            operationGeneration &+= 1
+            let generation = operationGeneration
+            viewState = state(phase: .submitting, notice: nil, latestReceipt: nil)
+            client.acceptOwnerTruthInterviewCandidateBatch(vaultID: vaultID, command: command) { [weak self] result in
+                self?.receiveBatchDecision(
+                    result,
+                    expectedCandidateIDs: uniqueCandidateIDs,
+                    generation: generation
+                )
+            }
+        } catch {
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private func submitSingle(
+        candidateID: OwnerTruthRecordID,
+        action: OwnerTruthCandidateReviewAction,
+        correctedSummary: String?
+    ) {
+        guard let vaultID = beginRequestOrFail() else { return }
+        guard let candidate = singleCandidatesByID[candidateID] else {
+            transitionFailure(.candidateUnavailable)
+            return
+        }
+        guard let review = makeSingleReview(
+            candidate: candidate,
+            action: action,
+            correctedSummary: correctedSummary
+        ) else { return }
+        let command = OwnerTruthInterviewCandidateSingleReviewCommand(
+            reviewBatchID: reviewBatchID,
+            candidateID: candidateID,
+            review: review
+        )
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = state(phase: .submitting, notice: nil, latestReceipt: nil)
+        client.reviewOwnerTruthInterviewCandidateSingle(vaultID: vaultID, command: command) { [weak self] result in
+            self?.receiveSingleDecision(
+                result,
+                expectedCandidateID: candidateID,
+                expectedAction: action,
+                generation: generation
+            )
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard qaGateEnabled() else {
+            resetForUnavailable(.qaOnlyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func makeSingleReview(
+        candidate: OwnerTruthInterviewCandidateReviewItem,
+        action: OwnerTruthCandidateReviewAction,
+        correctedSummary: String?
+    ) -> OwnerTruthCandidateReviewCommand? {
+        do {
+            switch action {
+            case .accept:
+                return try OwnerTruthCandidateReviewCommand(
+                    commandID: commandIDFactory(),
+                    expectedCandidateVersion: candidate.candidate.candidateVersion,
+                    action: .accept,
+                    reasonCode: "ownerReviewed"
+                )
+            case .reject:
+                return try OwnerTruthCandidateReviewCommand(
+                    commandID: commandIDFactory(),
+                    expectedCandidateVersion: candidate.candidate.candidateVersion,
+                    action: .reject,
+                    reasonCode: "ownerReviewed"
+                )
+            case .correct:
+                let normalizedSummary = correctedSummary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard !normalizedSummary.isEmpty else {
+                    transitionFailure(.correctionRequired)
+                    return nil
+                }
+                var correctedValue = candidate.candidate.content
+                correctedValue[Self.correctionTextKey(for: candidate.candidate)] = .string(normalizedSummary)
+                return try OwnerTruthCandidateReviewCommand(
+                    commandID: commandIDFactory(),
+                    expectedCandidateVersion: candidate.candidate.candidateVersion,
+                    action: .correct,
+                    correctedValue: correctedValue,
+                    correctedValueSchemaVersion: candidate.candidate.contentSchemaVersion,
+                    reasonCode: "ownerCorrected"
+                )
+            }
+        } catch {
+            transitionFailure(.requestFailed)
+            return nil
+        }
+    }
+
+    private func receiveReviewBatch(
+        _ result: Result<OwnerTruthInterviewCandidateReviewBatch, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard qaGateEnabled() else {
+            resetForUnavailable(.qaOnlyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let batch):
+            guard batch.vaultID == vaultID,
+                  batch.vaultID.rawValue == accountLease.vaultId,
+                  batch.reviewBatchID == reviewBatchID else {
+                transitionFailure(.requestFailed)
+                return
+            }
+            batchCandidatesByID = Dictionary(uniqueKeysWithValues: batch.batchCandidates.map { ($0.id, $0) })
+            batchCandidateIDs = batch.batchCandidates.map(\.id)
+            singleCandidatesByID = Dictionary(uniqueKeysWithValues: batch.singleCandidates.map { ($0.id, $0) })
+            singleCandidateIDs = batch.singleCandidates.map(\.id)
+            readiness = batch.readiness
+            viewState = state(
+                phase: batch.batchCandidates.isEmpty && batch.singleCandidates.isEmpty ? .empty : .ready,
+                notice: nil,
+                latestReceipt: nil
+            )
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private func receiveBatchDecision(
+        _ result: Result<OwnerTruthInterviewCandidateBatchAcceptResult, Error>,
+        expectedCandidateIDs: [OwnerTruthRecordID],
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let decision):
+            let receiptIDs = decision.receipts.map(\.candidateID)
+            guard !decision.memoryVersionCreated,
+                  Set(receiptIDs) == Set(expectedCandidateIDs),
+                  decision.receipts.allSatisfy({ $0.decision == .accepted }) else {
+                transitionFailure(.reviewResultMismatch)
+                return
+            }
+            for candidateID in expectedCandidateIDs {
+                batchCandidatesByID.removeValue(forKey: candidateID)
+            }
+            batchCandidateIDs.removeAll { expectedCandidateIDs.contains($0) }
+            let receipt = OwnerTruthInterviewCandidateReviewReceiptViewState(
+                candidateIDs: receiptIDs,
+                decisions: decision.receipts.map(\.decision),
+                memoryVersionCreated: false
+            )
+            viewState = state(
+                phase: remainingCandidateCount == 0 ? .empty : .ready,
+                notice: .batchAccepted,
+                latestReceipt: receipt
+            )
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private func receiveSingleDecision(
+        _ result: Result<OwnerTruthInterviewCandidateSingleReviewResult, Error>,
+        expectedCandidateID: OwnerTruthRecordID,
+        expectedAction: OwnerTruthCandidateReviewAction,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let decision):
+            guard !decision.memoryVersionCreated,
+                  decision.receipt.candidateID == expectedCandidateID,
+                  decision.receipt.decision == expectedAction.terminalDecision else {
+                transitionFailure(.reviewResultMismatch)
+                return
+            }
+            singleCandidatesByID.removeValue(forKey: expectedCandidateID)
+            singleCandidateIDs.removeAll { $0 == expectedCandidateID }
+            let notice: OwnerTruthInterviewCandidateReviewNotice
+            switch expectedAction {
+            case .accept: notice = .singleAccepted
+            case .correct: notice = .singleCorrected
+            case .reject: notice = .singleRejected
+            }
+            let receipt = OwnerTruthInterviewCandidateReviewReceiptViewState(
+                candidateIDs: [decision.receipt.candidateID],
+                decisions: [decision.receipt.decision],
+                memoryVersionCreated: false
+            )
+            viewState = state(
+                phase: remainingCandidateCount == 0 ? .empty : .ready,
+                notice: notice,
+                latestReceipt: receipt
+            )
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private var remainingCandidateCount: Int {
+        batchCandidateIDs.count + singleCandidateIDs.count
+    }
+
+    private func state(
+        phase: OwnerTruthInterviewCandidateReviewPhase,
+        notice: OwnerTruthInterviewCandidateReviewNotice?,
+        latestReceipt: OwnerTruthInterviewCandidateReviewReceiptViewState?
+    ) -> OwnerTruthInterviewCandidateReviewViewState {
+        OwnerTruthInterviewCandidateReviewViewState(
+            phase: phase,
+            readiness: readiness,
+            batchItems: batchCandidateIDs.compactMap { itemViewState(for: batchCandidatesByID[$0]) },
+            singleItems: singleCandidateIDs.compactMap { itemViewState(for: singleCandidatesByID[$0]) },
+            notice: notice,
+            latestReceipt: latestReceipt
+        )
+    }
+
+    private func itemViewState(
+        for item: OwnerTruthInterviewCandidateReviewItem?
+    ) -> OwnerTruthInterviewCandidateReviewItemViewState? {
+        guard let item else { return nil }
+        return OwnerTruthInterviewCandidateReviewItemViewState(
+            id: item.id,
+            reviewPath: item.reviewPath,
+            proposalPreview: Self.proposalPreview(for: item.candidate),
+            memoryKind: item.candidate.memoryKind,
+            sensitivity: item.candidate.sensitivity,
+            evidenceCount: item.candidate.sourceReferences.count,
+            candidateVersion: item.candidate.candidateVersion,
+            supportsCorrection: item.reviewPath == .single
+        )
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthInterviewCandidateReviewNotice) {
+        operationGeneration &+= 1
+        batchCandidatesByID.removeAll()
+        batchCandidateIDs.removeAll()
+        singleCandidatesByID.removeAll()
+        singleCandidateIDs.removeAll()
+        readiness = nil
+        viewState = state(phase: .unavailable, notice: notice, latestReceipt: nil)
+    }
+
+    private func transitionFailure(_ notice: OwnerTruthInterviewCandidateReviewNotice) {
+        viewState = state(phase: .failed, notice: notice, latestReceipt: nil)
+    }
+
+    private static func proposalPreview(for candidate: OwnerTruthCandidateInboxItem) -> String {
+        for key in ["summary", "title", "text"] {
+            guard case .string(let rawValue)? = candidate.content[key] else { continue }
+            let normalized = rawValue
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !normalized.isEmpty {
+                return String(normalized.prefix(160))
+            }
+        }
+        return "待确认访谈线索"
+    }
+
+    private static func correctionTextKey(for candidate: OwnerTruthCandidateInboxItem) -> String {
+        for key in ["summary", "title", "text"] where candidate.content[key] != nil {
+            return key
+        }
+        return "summary"
+    }
 }
 
 // MARK: - Default-off Owner Truth Projection compatibility read

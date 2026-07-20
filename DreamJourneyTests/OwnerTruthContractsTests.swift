@@ -348,6 +348,274 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.items.map(\.id), [candidateID])
     }
 
+    func testInterviewCandidateReviewDecodesSeparatedPathsAndNonActivationReceipt() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-owner-a"))
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000045")
+        let standardID = recordID("00000000-0000-0000-0000-000000000046")
+        let sensitiveID = recordID("00000000-0000-0000-0000-000000000047")
+        let sourceID = "00000000-0000-0000-0000-000000000048"
+        let extractionID = "00000000-0000-0000-0000-000000000049"
+        let response: [String: Any] = [
+            "schemaVersion": OwnerTruthInterviewCandidateReviewBatch.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "review": [
+                "schemaVersion": OwnerTruthInterviewCandidateReviewBatch.compositionSchemaVersion,
+                "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                "admissionId": "00000000-0000-0000-0000-000000000050",
+                "sourceId": sourceID,
+                "sourceVersion": 1,
+                "authorityEpoch": 0,
+                "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
+                "latestExtractionStatus": "succeeded",
+                "batchCandidateCount": 1,
+                "singleCandidateCount": 1,
+            ],
+            "batchCandidates": [[
+                "candidateId": standardID.rawValue.uuidString,
+                "sourceId": sourceID,
+                "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
+                "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+                "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
+                "sensitivity": OwnerTruthSensitivityLevel.standard.rawValue,
+                "contentSchemaVersion": "owner-truth-candidate-content-v1",
+                "content": ["summary": "院子里听家人讲故事"],
+                "contentHash": "interview-standard-hash",
+                "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                "reviewMode": "batch",
+                "candidateVersion": 1,
+                "extractionId": extractionID,
+                "reviewPath": OwnerTruthInterviewCandidateReviewPath.batch.rawValue,
+            ]],
+            "singleCandidates": [[
+                "candidateId": sensitiveID.rawValue.uuidString,
+                "sourceId": sourceID,
+                "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
+                "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+                "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
+                "sensitivity": OwnerTruthSensitivityLevel.sensitive.rawValue,
+                "contentSchemaVersion": "owner-truth-candidate-content-v1",
+                "content": ["summary": "需要逐条确认的敏感经历"],
+                "contentHash": "interview-sensitive-hash",
+                "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                "reviewMode": "single",
+                "candidateVersion": 1,
+                "extractionId": extractionID,
+                "reviewPath": OwnerTruthInterviewCandidateReviewPath.single.rawValue,
+            ]],
+        ]
+
+        let review = try OwnerTruthInterviewCandidateReviewBatch(
+            backendJSONObject: response,
+            expectedVaultID: vaultID,
+            expectedReviewBatchID: reviewBatchID
+        )
+        XCTAssertEqual(review.batchCandidates.map(\.id), [standardID])
+        XCTAssertEqual(review.singleCandidates.map(\.id), [sensitiveID])
+        XCTAssertEqual(review.batchCandidates.first?.reviewPath, .batch)
+        XCTAssertEqual(review.singleCandidates.first?.reviewPath, .single)
+
+        let command = try OwnerTruthInterviewCandidateBatchAcceptCommand(
+            commandID: "interview-batch-accept-ios-001",
+            reviewBatchID: reviewBatchID,
+            selections: [
+                try OwnerTruthInterviewCandidateBatchSelection(
+                    candidateID: standardID,
+                    expectedCandidateVersion: 1
+                )
+            ],
+            reasonCode: "ownerReviewed"
+        )
+        let accepted = try OwnerTruthInterviewCandidateBatchAcceptResult(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewCandidateBatchAcceptResult.schemaVersion,
+                "status": OwnerTruthCommandOutcome.created.rawValue,
+                "batchDecisionId": "00000000-0000-0000-0000-000000000051",
+                "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                "acceptedCandidateCount": 1,
+                "receipts": [[
+                    "receiptId": "00000000-0000-0000-0000-000000000052",
+                    "candidateId": standardID.rawValue.uuidString,
+                    "decision": OwnerTruthCandidateDecision.accepted.rawValue,
+                    "candidateVersion": 2,
+                    "correctedValueId": NSNull(),
+                ]],
+                "memoryActivation": [
+                    "status": OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+                    "memoryVersionCreated": false,
+                ],
+            ],
+            expectedCommand: command
+        )
+        XCTAssertEqual(accepted.receipts.map(\.candidateID), [standardID])
+        XCTAssertFalse(accepted.memoryVersionCreated)
+    }
+
+    func testInterviewCandidateReviewRejectsMemoryVersionActivationClaim() throws {
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000053")
+        let candidateID = recordID("00000000-0000-0000-0000-000000000054")
+        let review = try OwnerTruthCandidateReviewCommand(
+            commandID: "interview-single-reject-ios-001",
+            expectedCandidateVersion: 1,
+            action: .reject,
+            reasonCode: "ownerReviewed"
+        )
+        let command = OwnerTruthInterviewCandidateSingleReviewCommand(
+            reviewBatchID: reviewBatchID,
+            candidateID: candidateID,
+            review: review
+        )
+
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewCandidateSingleReviewResult(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewCandidateSingleReviewResult.schemaVersion,
+                    "status": OwnerTruthCommandOutcome.created.rawValue,
+                    "batchDecisionId": "00000000-0000-0000-0000-000000000055",
+                    "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                    "receipt": [
+                        "receiptId": "00000000-0000-0000-0000-000000000056",
+                        "candidateId": candidateID.rawValue.uuidString,
+                        "decision": OwnerTruthCandidateDecision.rejected.rawValue,
+                        "candidateVersion": 2,
+                        "correctedValueId": NSNull(),
+                    ],
+                    "memoryActivation": [
+                        "status": OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+                        "memoryVersionCreated": true,
+                    ],
+                ],
+                expectedCommand: command
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? OwnerTruthRemoteContractError,
+                .invalidInterviewCandidateDecision(
+                    "interview review must not activate a MemoryVersion"
+                )
+            )
+        }
+    }
+
+    func testInterviewCandidateReviewUseCaseKeepsBatchAndSingleReceiptsSeparated() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000057")
+        let batchCandidateID = recordID("00000000-0000-0000-0000-000000000058")
+        let singleCandidateID = recordID("00000000-0000-0000-0000-000000000059")
+        let client = InterviewCandidateReviewClientSpy()
+        client.readResult = .success(try interviewCandidateReviewBatch(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: singleCandidateID
+        ))
+        let useCase = OwnerTruthInterviewCandidateReviewUseCase(
+            accountLease: lease,
+            reviewBatchID: reviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "interview-review-command" }
+        )
+
+        useCase.send(.refresh)
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.batchItems.map(\.id), [batchCandidateID])
+        XCTAssertEqual(useCase.viewState.singleItems.map(\.id), [singleCandidateID])
+
+        client.batchResult = .success(try interviewBatchAcceptResult(
+            reviewBatchID: reviewBatchID,
+            candidateIDs: [batchCandidateID]
+        ))
+        useCase.send(.acceptBatch(candidateIDs: [batchCandidateID]))
+
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertTrue(useCase.viewState.batchItems.isEmpty)
+        XCTAssertEqual(useCase.viewState.singleItems.map(\.id), [singleCandidateID])
+        XCTAssertEqual(useCase.viewState.notice, .batchAccepted)
+        XCTAssertEqual(useCase.viewState.latestReceipt?.candidateIDs, [batchCandidateID])
+        XCTAssertFalse(useCase.viewState.latestReceipt?.memoryVersionCreated ?? true)
+        XCTAssertEqual(client.requestedBatchCommand?.selections.map(\.candidateID), [batchCandidateID])
+
+        client.singleResult = .success(try interviewSingleReviewResult(
+            reviewBatchID: reviewBatchID,
+            candidateID: singleCandidateID,
+            decision: .rejected
+        ))
+        useCase.send(.rejectSingle(candidateID: singleCandidateID))
+
+        XCTAssertEqual(useCase.viewState.phase, .empty)
+        XCTAssertTrue(useCase.viewState.batchItems.isEmpty)
+        XCTAssertTrue(useCase.viewState.singleItems.isEmpty)
+        XCTAssertEqual(useCase.viewState.notice, .singleRejected)
+        XCTAssertEqual(useCase.viewState.latestReceipt?.decisions, [.rejected])
+        XCTAssertFalse(useCase.viewState.latestReceipt?.memoryVersionCreated ?? true)
+        XCTAssertEqual(client.requestedSingleCommand?.candidateID, singleCandidateID)
+        XCTAssertEqual(client.requestedSingleCommand?.review.action, .reject)
+    }
+
+    func testInterviewCandidateReviewUseCaseRejectsSingleCandidateFromBatchRoute() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000060")
+        let batchCandidateID = recordID("00000000-0000-0000-0000-000000000061")
+        let singleCandidateID = recordID("00000000-0000-0000-0000-000000000062")
+        let client = InterviewCandidateReviewClientSpy()
+        client.readResult = .success(try interviewCandidateReviewBatch(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: singleCandidateID
+        ))
+        let useCase = OwnerTruthInterviewCandidateReviewUseCase(
+            accountLease: lease,
+            reviewBatchID: reviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.refresh)
+        useCase.send(.acceptBatch(candidateIDs: [singleCandidateID]))
+
+        XCTAssertEqual(useCase.viewState.phase, .failed)
+        XCTAssertEqual(useCase.viewState.notice, .invalidSelection)
+        XCTAssertNil(client.requestedBatchCommand)
+        XCTAssertEqual(useCase.viewState.batchItems.map(\.id), [batchCandidateID])
+        XCTAssertEqual(useCase.viewState.singleItems.map(\.id), [singleCandidateID])
+    }
+
+    func testInterviewCandidateReviewUseCaseDiscardsDeferredReadAfterAccountChange() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000063")
+        let client = InterviewCandidateReviewClientSpy()
+        client.deferRead = true
+        let useCase = OwnerTruthInterviewCandidateReviewUseCase(
+            accountLease: lease,
+            reviewBatchID: reviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.refresh)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferredRead(.success(try interviewCandidateReviewBatch(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: recordID("00000000-0000-0000-0000-000000000064"),
+            singleCandidateID: recordID("00000000-0000-0000-0000-000000000065")
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertTrue(useCase.viewState.batchItems.isEmpty)
+        XCTAssertTrue(useCase.viewState.singleItems.isEmpty)
+    }
+
     func testKBLiteCompatibilityReadEnvelopeAcceptsOnlyConfirmedProjectionFacts() throws {
         let (_, lease) = try makeActiveRuntime()
         let envelope = try compatibilityReadEnvelope(for: lease)
@@ -1601,6 +1869,156 @@ final class OwnerTruthContractsTests: XCTestCase {
         OwnerTruthRecordID(rawValue: UUID(uuidString: rawValue)!)
     }
 
+    private func interviewCandidateReviewBatch(
+        vaultID: String,
+        reviewBatchID: OwnerTruthRecordID,
+        batchCandidateID: OwnerTruthRecordID,
+        singleCandidateID: OwnerTruthRecordID
+    ) throws -> OwnerTruthInterviewCandidateReviewBatch {
+        let sourceID = "00000000-0000-0000-0000-000000000141"
+        let extractionID = "00000000-0000-0000-0000-000000000142"
+        return try OwnerTruthInterviewCandidateReviewBatch(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewCandidateReviewBatch.schemaVersion,
+                "vaultId": vaultID,
+                "review": [
+                    "schemaVersion": OwnerTruthInterviewCandidateReviewBatch.compositionSchemaVersion,
+                    "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                    "admissionId": "00000000-0000-0000-0000-000000000143",
+                    "sourceId": sourceID,
+                    "sourceVersion": 1,
+                    "authorityEpoch": 0,
+                    "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
+                    "latestExtractionStatus": "succeeded",
+                    "batchCandidateCount": 1,
+                    "singleCandidateCount": 1,
+                ],
+                "batchCandidates": [[
+                    "candidateId": batchCandidateID.rawValue.uuidString,
+                    "sourceId": sourceID,
+                    "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
+                    "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+                    "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
+                    "sensitivity": OwnerTruthSensitivityLevel.standard.rawValue,
+                    "contentSchemaVersion": "owner-truth-candidate-content-v1",
+                    "content": ["summary": "院子里听家人讲故事"],
+                    "contentHash": "interview-usecase-batch-hash",
+                    "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                    "reviewMode": "batch",
+                    "candidateVersion": 1,
+                    "extractionId": extractionID,
+                    "reviewPath": OwnerTruthInterviewCandidateReviewPath.batch.rawValue,
+                ]],
+                "singleCandidates": [[
+                    "candidateId": singleCandidateID.rawValue.uuidString,
+                    "sourceId": sourceID,
+                    "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
+                    "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+                    "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
+                    "sensitivity": OwnerTruthSensitivityLevel.sensitive.rawValue,
+                    "contentSchemaVersion": "owner-truth-candidate-content-v1",
+                    "content": ["summary": "需要逐条确认的敏感经历"],
+                    "contentHash": "interview-usecase-single-hash",
+                    "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                    "reviewMode": "single",
+                    "candidateVersion": 1,
+                    "extractionId": extractionID,
+                    "reviewPath": OwnerTruthInterviewCandidateReviewPath.single.rawValue,
+                ]],
+            ],
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID)),
+            expectedReviewBatchID: reviewBatchID
+        )
+    }
+
+    private func interviewBatchAcceptResult(
+        reviewBatchID: OwnerTruthRecordID,
+        candidateIDs: [OwnerTruthRecordID]
+    ) throws -> OwnerTruthInterviewCandidateBatchAcceptResult {
+        let command = try OwnerTruthInterviewCandidateBatchAcceptCommand(
+            commandID: "interview-batch-receipt-command",
+            reviewBatchID: reviewBatchID,
+            selections: try candidateIDs.map {
+                try OwnerTruthInterviewCandidateBatchSelection(
+                    candidateID: $0,
+                    expectedCandidateVersion: 1
+                )
+            },
+            reasonCode: "ownerReviewed"
+        )
+        return try OwnerTruthInterviewCandidateBatchAcceptResult(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewCandidateBatchAcceptResult.schemaVersion,
+                "status": OwnerTruthCommandOutcome.created.rawValue,
+                "batchDecisionId": "00000000-0000-0000-0000-000000000144",
+                "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                "acceptedCandidateCount": candidateIDs.count,
+                "receipts": candidateIDs.enumerated().map { offset, candidateID in
+                    [
+                        "receiptId": String(format: "00000000-0000-0000-0000-%012d", 145 + offset),
+                        "candidateId": candidateID.rawValue.uuidString,
+                        "decision": OwnerTruthCandidateDecision.accepted.rawValue,
+                        "candidateVersion": 2,
+                        "correctedValueId": NSNull(),
+                    ] as [String: Any]
+                },
+                "memoryActivation": [
+                    "status": OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+                    "memoryVersionCreated": false,
+                ],
+            ],
+            expectedCommand: command
+        )
+    }
+
+    private func interviewSingleReviewResult(
+        reviewBatchID: OwnerTruthRecordID,
+        candidateID: OwnerTruthRecordID,
+        decision: OwnerTruthCandidateDecision
+    ) throws -> OwnerTruthInterviewCandidateSingleReviewResult {
+        let action: OwnerTruthCandidateReviewAction
+        switch decision {
+        case .accepted: action = .accept
+        case .corrected: action = .correct
+        case .rejected: action = .reject
+        case .pending, .invalidated:
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateDecision("test requires a terminal owner action")
+        }
+        let review = try OwnerTruthCandidateReviewCommand(
+            commandID: "interview-single-receipt-command",
+            expectedCandidateVersion: 1,
+            action: action,
+            correctedValue: action == .correct ? ["summary": .string("更正后的访谈线索")] : nil,
+            correctedValueSchemaVersion: action == .correct ? "owner-truth-candidate-content-v1" : nil,
+            reasonCode: action == .correct ? "ownerCorrected" : "ownerReviewed"
+        )
+        let command = OwnerTruthInterviewCandidateSingleReviewCommand(
+            reviewBatchID: reviewBatchID,
+            candidateID: candidateID,
+            review: review
+        )
+        return try OwnerTruthInterviewCandidateSingleReviewResult(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewCandidateSingleReviewResult.schemaVersion,
+                "status": OwnerTruthCommandOutcome.created.rawValue,
+                "batchDecisionId": "00000000-0000-0000-0000-000000000149",
+                "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                "receipt": [
+                    "receiptId": "00000000-0000-0000-0000-000000000150",
+                    "candidateId": candidateID.rawValue.uuidString,
+                    "decision": decision.rawValue,
+                    "candidateVersion": 2,
+                    "correctedValueId": NSNull(),
+                ],
+                "memoryActivation": [
+                    "status": OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+                    "memoryVersionCreated": false,
+                ],
+            ],
+            expectedCommand: command
+        )
+    }
+
     private func candidateInbox(
         vaultID: String,
         candidateID: OwnerTruthRecordID
@@ -1706,6 +2124,59 @@ private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
 private enum CandidateReviewClientSpyError: Error {
     case missingInboxResult
     case missingReviewResult
+}
+
+private final class InterviewCandidateReviewClientSpy: OwnerTruthInterviewCandidateReviewClient {
+    var readResult: Result<OwnerTruthInterviewCandidateReviewBatch, Error>?
+    var batchResult: Result<OwnerTruthInterviewCandidateBatchAcceptResult, Error>?
+    var singleResult: Result<OwnerTruthInterviewCandidateSingleReviewResult, Error>?
+    var deferRead = false
+    private var deferredReadCompletion: ((Result<OwnerTruthInterviewCandidateReviewBatch, Error>) -> Void)?
+
+    private(set) var requestedBatchCommand: OwnerTruthInterviewCandidateBatchAcceptCommand?
+    private(set) var requestedSingleCommand: OwnerTruthInterviewCandidateSingleReviewCommand?
+
+    func fetchOwnerTruthInterviewCandidateReview(
+        vaultID: OwnerTruthVaultID,
+        reviewBatchID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateReviewBatch, Error>) -> Void
+    ) {
+        if deferRead {
+            deferredReadCompletion = completion
+            return
+        }
+        completion(readResult ?? .failure(InterviewCandidateReviewClientSpyError.missingReadResult))
+    }
+
+    func acceptOwnerTruthInterviewCandidateBatch(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateBatchAcceptCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateBatchAcceptResult, Error>) -> Void
+    ) {
+        requestedBatchCommand = command
+        completion(batchResult ?? .failure(InterviewCandidateReviewClientSpyError.missingBatchResult))
+    }
+
+    func reviewOwnerTruthInterviewCandidateSingle(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateSingleReviewCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateSingleReviewResult, Error>) -> Void
+    ) {
+        requestedSingleCommand = command
+        completion(singleResult ?? .failure(InterviewCandidateReviewClientSpyError.missingSingleResult))
+    }
+
+    func completeDeferredRead(_ result: Result<OwnerTruthInterviewCandidateReviewBatch, Error>) {
+        let completion = deferredReadCompletion
+        deferredReadCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum InterviewCandidateReviewClientSpyError: Error {
+    case missingReadResult
+    case missingBatchResult
+    case missingSingleResult
 }
 
 private final class CorrectionRequestClientSpy: OwnerTruthCorrectionRequestClient {

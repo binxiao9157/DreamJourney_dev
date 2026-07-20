@@ -188,9 +188,90 @@ def main() -> None:
         "Candidate Inbox UIQA smoke must render the typed inbox page",
     )
 
+    # M0-A interview-review composition is intentionally a different lane from
+    # the generic Candidate Inbox: accepting a review only consumes a
+    # DecisionReceipt and must never activate a MemoryVersion.
+    for required in (
+        "enum OwnerTruthInterviewCandidateReviewPath",
+        "struct OwnerTruthInterviewCandidateReviewBatch",
+        "struct OwnerTruthInterviewCandidateBatchAcceptCommand",
+        "struct OwnerTruthInterviewCandidateSingleReviewCommand",
+        "protocol OwnerTruthInterviewCandidateReviewClient",
+        "enum OwnerTruthInterviewCandidateReviewIntent",
+        "final class OwnerTruthInterviewCandidateReviewUseCase",
+        "interview review must not activate a MemoryVersion",
+        "self.memoryVersionCreated = false",
+    ):
+        require(required in contracts, f"Interview Candidate review contract missing: {required}")
+
+    for function_name, route_suffix in (
+        (
+            "fetchOwnerTruthInterviewCandidateReview",
+            "/interview-review-batches/",
+        ),
+        (
+            "acceptOwnerTruthInterviewCandidateBatch",
+            "/candidate-review/batch-accept",
+        ),
+        (
+            "reviewOwnerTruthInterviewCandidateSingle",
+            "/candidate-review/candidates/",
+        ),
+    ):
+        body = function_body(client, function_name)
+        require("OwnerTruthCandidateReviewQAGate.isEnabled" in body, f"QA gate missing from {function_name}")
+        require('"X-DreamJourney-QA-Owner-Truth": "1"' in body, f"QA header missing from {function_name}")
+        require("authPolicy: .userRequired" in body, f"user session required for {function_name}")
+        require("let path = \"/v2/vaults/" in body, f"interview review vault route missing: {function_name}")
+        require(route_suffix in body, f"interview review route drifted: {function_name}")
+
+    for required in (
+        "extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateReviewClient {}",
+    ):
+        require(required in client, f"Interview Candidate review backend client missing: {required}")
+
+    for test_name in (
+        "func testInterviewCandidateReviewDecodesSeparatedPathsAndNonActivationReceipt()",
+        "func testInterviewCandidateReviewRejectsMemoryVersionActivationClaim()",
+        "func testInterviewCandidateReviewUseCaseKeepsBatchAndSingleReceiptsSeparated()",
+        "func testInterviewCandidateReviewUseCaseRejectsSingleCandidateFromBatchRoute()",
+        "func testInterviewCandidateReviewUseCaseDiscardsDeferredReadAfterAccountChange()",
+    ):
+        require(test_name in tests, f"Interview Candidate review test missing: {test_name}")
+
+    for required in (
+        "final class OwnerTruthInterviewCandidateReviewViewController",
+        "OwnerTruthInterviewCandidateReviewUseCase",
+        "owner-truth-interview-candidate-review-list",
+        "OwnerTruthInterviewCandidateReviewUIQASmoke",
+        "runUIQAAcceptFirstBatchCandidate",
+        "runUIQARejectFirstSingleCandidate",
+        "InterviewCandidateReviewUIQAScenario",
+        "allCandidatesRemoved",
+    ):
+        require(required in archive, f"Interview Candidate review QA UI missing: {required}")
+    require(
+        "memoryVersionCreated: false" in archive,
+        "Interview Candidate UIQA receipt must stay non-activating",
+    )
+    require(
+        '"DJRunOwnerTruthInterviewCandidateReviewSmoke"' in feature_flags,
+        "Interview Candidate UIQA smoke launch route must stay in the QA scenario registry",
+    )
+    require(
+        "case .ownerTruthInterviewCandidateReviewSmoke" in app_delegate,
+        "Interview Candidate UIQA smoke must route through the typed scenario registry",
+    )
+    require(
+        "OwnerTruthInterviewCandidateReviewUIQASmoke.makeViewController(" in app_delegate
+        and "accountLease: accountLease" in app_delegate,
+        "Interview Candidate UIQA smoke must render the typed review page",
+    )
+
     print(
         "Product V4 iOS Owner Truth candidate client check passed: typed inbox/decision "
-        "contracts plus the hidden lease-fenced Archive Inbox remain QA-only, owner-authenticated, and default-off"
+        "contracts plus the hidden lease-fenced Archive Inbox and non-activating interview review remain "
+        "QA-only, owner-authenticated, and default-off"
     )
 
 

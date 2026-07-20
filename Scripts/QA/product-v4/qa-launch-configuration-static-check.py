@@ -142,6 +142,7 @@ def main() -> None:
         "DJRunArchiveFailedAnalysisRetrySmoke": "archiveFailedAnalysisRetrySmoke",
         "DJRunEchoDelayedReplyNotificationSmoke": "echoDelayedReplyNotificationSmoke",
         "DJRunOwnerTruthCandidateInboxSmoke": "ownerTruthCandidateInboxSmoke",
+        "DJRunOwnerTruthInterviewCandidateReviewSmoke": "ownerTruthInterviewCandidateReviewSmoke",
         "DJRunTimeLetterDispatchReminderSmoke": "timeLetterDispatchReminderSmoke",
         "DJShowEchoVoiceStatePreview": "echoVoiceStatePreview",
     }.items():

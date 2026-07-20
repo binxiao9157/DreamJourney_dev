@@ -4156,6 +4156,422 @@ private final class OwnerTruthCandidateInboxCell: UITableViewCell {
     }
 }
 
+/// QA-only review surface for the M0-A interview lane.  It intentionally uses
+/// a separate use case and client contract from the generic Candidate Inbox:
+/// its terminal actions only consume interview DecisionReceipts and never
+/// create a MemoryVersion.
+final class OwnerTruthInterviewCandidateReviewViewController: UIViewController {
+    private let accountLease: AccountLease
+    private let useCase: OwnerTruthInterviewCandidateReviewUseCase
+    private let tableView = UITableView(frame: .zero, style: .insetGrouped)
+    private let headerStack = UIStackView()
+    private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let statusLabel = UILabel()
+    private let emptyStateLabel = UILabel()
+    private lazy var refreshButton = UIBarButtonItem(
+        barButtonSystemItem: .refresh,
+        target: self,
+        action: #selector(refreshTapped)
+    )
+
+    private var renderedState: OwnerTruthInterviewCandidateReviewViewState = .idle
+    var onViewStateRendered: ((OwnerTruthInterviewCandidateReviewViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        reviewBatchID: OwnerTruthRecordID,
+        client: OwnerTruthInterviewCandidateReviewClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
+    ) {
+        self.accountLease = accountLease
+        self.useCase = OwnerTruthInterviewCandidateReviewUseCase(
+            accountLease: accountLease,
+            reviewBatchID: reviewBatchID,
+            client: client,
+            accountLeaseRuntime: accountLeaseRuntime,
+            qaGateEnabled: qaGateEnabled
+        )
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "访谈候选审核"
+        view.backgroundColor = DJDesignTokens.Color.background
+        navigationItem.rightBarButtonItem = refreshButton
+        refreshButton.accessibilityIdentifier = "owner-truth-interview-candidate-review-refresh"
+        configureHeader()
+        configureTableView()
+        configureUseCase()
+        render(useCase.viewState)
+        useCase.send(.refresh)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+        navigationController?.navigationBar.titleTextAttributes = [
+            .foregroundColor: DJDesignTokens.Color.textPrimary,
+            .font: DJDesignTokens.Font.title(18),
+        ]
+    }
+
+    private func configureHeader() {
+        headerStack.axis = .vertical
+        headerStack.alignment = .fill
+        headerStack.spacing = 6
+        headerStack.isLayoutMarginsRelativeArrangement = true
+        headerStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 18,
+            leading: DJDesignTokens.Spacing.page,
+            bottom: 10,
+            trailing: DJDesignTokens.Spacing.page
+        )
+
+        titleLabel.text = "访谈后的待确认线索"
+        titleLabel.font = DJDesignTokens.Font.title(23)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+
+        subtitleLabel.text = "仅用于受控 QA 审核；操作只生成审核回执，不会写入记忆版本或公开档案。"
+        subtitleLabel.font = DJDesignTokens.Font.body(14)
+        subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
+        subtitleLabel.numberOfLines = 0
+
+        statusLabel.font = DJDesignTokens.Font.label(12)
+        statusLabel.textColor = DJDesignTokens.Color.textSecondary
+        statusLabel.numberOfLines = 0
+        statusLabel.accessibilityIdentifier = "owner-truth-interview-candidate-review-status"
+
+        [titleLabel, subtitleLabel, statusLabel].forEach(headerStack.addArrangedSubview)
+    }
+
+    private func configureTableView() {
+        tableView.backgroundColor = .clear
+        tableView.separatorStyle = .singleLine
+        tableView.separatorColor = DJDesignTokens.Color.divider.withAlphaComponent(0.55)
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.register(
+            OwnerTruthInterviewCandidateReviewCell.self,
+            forCellReuseIdentifier: OwnerTruthInterviewCandidateReviewCell.reuseIdentifier
+        )
+        tableView.accessibilityIdentifier = "owner-truth-interview-candidate-review-list"
+
+        emptyStateLabel.font = DJDesignTokens.Font.body(15)
+        emptyStateLabel.textColor = DJDesignTokens.Color.textTertiary
+        emptyStateLabel.textAlignment = .center
+        emptyStateLabel.numberOfLines = 0
+        emptyStateLabel.isHidden = true
+        emptyStateLabel.accessibilityIdentifier = "owner-truth-interview-candidate-review-empty"
+        tableView.backgroundView = emptyStateLabel
+
+        view.addSubview(headerStack)
+        view.addSubview(tableView)
+        headerStack.translatesAutoresizingMaskIntoConstraints = false
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            headerStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            headerStack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            headerStack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.topAnchor.constraint(equalTo: headerStack.bottomAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+    }
+
+    private func configureUseCase() {
+        useCase.onViewStateChange = { [weak self] state in
+            guard let self else { return }
+            if Thread.isMainThread {
+                render(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.render(state)
+                }
+            }
+        }
+    }
+
+    private func render(_ state: OwnerTruthInterviewCandidateReviewViewState) {
+        renderedState = state
+        let isSubmitting = state.phase == .submitting
+        tableView.isUserInteractionEnabled = !isSubmitting
+        refreshButton.isEnabled = !isSubmitting
+        statusLabel.text = statusText(for: state)
+        statusLabel.accessibilityLabel = statusLabel.text
+        emptyStateLabel.text = emptyText(for: state)
+        emptyStateLabel.isHidden = emptyStateLabel.text == nil
+        tableView.reloadData()
+        onViewStateRendered?(state)
+    }
+
+    private func statusText(for state: OwnerTruthInterviewCandidateReviewViewState) -> String {
+        switch state.phase {
+        case .idle:
+            return "准备读取访谈候选"
+        case .unavailable:
+            return noticeText(state.notice) ?? "审核入口暂不可用"
+        case .loading:
+            return "正在读取待确认访谈线索"
+        case .ready:
+            return "普通候选 \(state.batchItems.count) 条 · 需要逐条确认 \(state.singleItems.count) 条"
+        case .submitting:
+            return "正在提交审核回执"
+        case .empty:
+            return noticeText(state.notice) ?? "当前批次没有待确认线索"
+        case .failed:
+            return noticeText(state.notice) ?? "读取或提交失败，可重新载入"
+        }
+    }
+
+    private func emptyText(for state: OwnerTruthInterviewCandidateReviewViewState) -> String? {
+        guard state.batchItems.isEmpty, state.singleItems.isEmpty else { return nil }
+        switch state.phase {
+        case .empty:
+            return "当前没有需要确认的访谈线索。"
+        case .unavailable:
+            return "审核入口仅在受控 QA 环境可用。"
+        case .failed:
+            return "暂时无法读取访谈线索，请点右上角重新载入。"
+        default:
+            return nil
+        }
+    }
+
+    private func noticeText(_ notice: OwnerTruthInterviewCandidateReviewNotice?) -> String? {
+        guard let notice else { return nil }
+        switch notice {
+        case .qaOnlyDisabled:
+            return "审核入口仅在受控 QA 环境可用"
+        case .accountUnavailable, .staleAccountLease:
+            return "账号已变化，请重新进入审核入口"
+        case .invalidVault:
+            return "当前档案空间不可用于访谈审核"
+        case .invalidSelection, .candidateUnavailable:
+            return "候选状态已变化，请重新载入"
+        case .correctionRequired:
+            return "请填写更正后的线索描述"
+        case .reviewResultMismatch:
+            return "审核回执不匹配，未更新候选状态"
+        case .requestFailed:
+            return "读取或提交失败，可重新载入后重试"
+        case .batchAccepted:
+            return "已确认所选普通线索；未创建记忆版本"
+        case .singleAccepted:
+            return "已确认该线索；未创建记忆版本"
+        case .singleCorrected:
+            return "已记录更正审核回执；未创建记忆版本"
+        case .singleRejected:
+            return "已拒绝该线索；未创建记忆版本"
+        }
+    }
+
+    private func item(at indexPath: IndexPath) -> OwnerTruthInterviewCandidateReviewItemViewState? {
+        let sections = visibleSections
+        guard sections.indices.contains(indexPath.section),
+              sections[indexPath.section].items.indices.contains(indexPath.row) else {
+            return nil
+        }
+        return sections[indexPath.section].items[indexPath.row]
+    }
+
+    private var visibleSections: [(title: String, items: [OwnerTruthInterviewCandidateReviewItemViewState])] {
+        var sections: [(String, [OwnerTruthInterviewCandidateReviewItemViewState])] = []
+        if !renderedState.batchItems.isEmpty {
+            sections.append(("可批量确认", renderedState.batchItems))
+        }
+        if !renderedState.singleItems.isEmpty {
+            sections.append(("需要逐条确认", renderedState.singleItems))
+        }
+        return sections
+    }
+
+    @objc private func refreshTapped() {
+        useCase.send(.refresh)
+    }
+
+    private func showActions(
+        for item: OwnerTruthInterviewCandidateReviewItemViewState,
+        sourceView: UIView
+    ) {
+        switch item.reviewPath {
+        case .batch:
+            let alert = UIAlertController(
+                title: "确认普通线索",
+                message: "这会将本条加入当前批量审核回执；不会生成记忆版本。",
+                preferredStyle: .actionSheet
+            )
+            alert.addAction(UIAlertAction(title: "确认本条", style: .default) { [weak self] _ in
+                self?.useCase.send(.acceptBatch(candidateIDs: [item.id]))
+            })
+            alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+            if let popover = alert.popoverPresentationController {
+                popover.sourceView = sourceView
+                popover.sourceRect = sourceView.bounds
+            }
+            present(alert, animated: true)
+        case .single:
+            let alert = UIAlertController(
+                title: "逐条审核线索",
+                message: "敏感或需要明确确认的线索必须单独审核；不会生成记忆版本。",
+                preferredStyle: .actionSheet
+            )
+            alert.addAction(UIAlertAction(title: "确认", style: .default) { [weak self] _ in
+                self?.useCase.send(.acceptSingle(candidateID: item.id))
+            })
+            if item.supportsCorrection {
+                alert.addAction(UIAlertAction(title: "更正后确认", style: .default) { [weak self] _ in
+                    self?.presentCorrectionAlert(for: item)
+                })
+            }
+            alert.addAction(UIAlertAction(title: "拒绝", style: .destructive) { [weak self] _ in
+                self?.useCase.send(.rejectSingle(candidateID: item.id))
+            })
+            alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+            if let popover = alert.popoverPresentationController {
+                popover.sourceView = sourceView
+                popover.sourceRect = sourceView.bounds
+            }
+            present(alert, animated: true)
+        }
+    }
+
+    private func presentCorrectionAlert(for item: OwnerTruthInterviewCandidateReviewItemViewState) {
+        let alert = UIAlertController(
+            title: "更正访谈线索",
+            message: "更正内容只随审核回执保存，仍不会创建记忆版本。",
+            preferredStyle: .alert
+        )
+        alert.addTextField { textField in
+            textField.text = item.proposalPreview
+            textField.clearButtonMode = .whileEditing
+            textField.accessibilityIdentifier = "owner-truth-interview-candidate-review-correction-input"
+        }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "提交更正", style: .default) { [weak self, weak alert] _ in
+            self?.useCase.send(.correctSingle(
+                candidateID: item.id,
+                correctedSummary: alert?.textFields?.first?.text ?? ""
+            ))
+        })
+        present(alert, animated: true)
+    }
+
+    #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+    func runUIQAAcceptFirstBatchCandidate() {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled,
+              let candidateID = renderedState.batchItems.first?.id else {
+            return
+        }
+        useCase.send(.acceptBatch(candidateIDs: [candidateID]))
+    }
+
+    func runUIQARejectFirstSingleCandidate() {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled,
+              let candidateID = renderedState.singleItems.first?.id else {
+            return
+        }
+        useCase.send(.rejectSingle(candidateID: candidateID))
+    }
+    #endif
+}
+
+extension OwnerTruthInterviewCandidateReviewViewController: UITableViewDataSource, UITableViewDelegate {
+    func numberOfSections(in tableView: UITableView) -> Int {
+        max(1, visibleSections.count)
+    }
+
+    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        guard visibleSections.indices.contains(section) else { return nil }
+        return visibleSections[section].title
+    }
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        guard visibleSections.indices.contains(section) else { return 0 }
+        return visibleSections[section].items.count
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        cellForRowAt indexPath: IndexPath
+    ) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(
+            withIdentifier: OwnerTruthInterviewCandidateReviewCell.reuseIdentifier,
+            for: indexPath
+        ) as! OwnerTruthInterviewCandidateReviewCell
+        if let item = item(at: indexPath) {
+            cell.configure(item)
+        }
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        guard let item = item(at: indexPath),
+              let cell = tableView.cellForRow(at: indexPath) else {
+            return
+        }
+        tableView.deselectRow(at: indexPath, animated: true)
+        showActions(for: item, sourceView: cell)
+    }
+}
+
+private final class OwnerTruthInterviewCandidateReviewCell: UITableViewCell {
+    static let reuseIdentifier = "OwnerTruthInterviewCandidateReviewCell"
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        accessoryType = .disclosureIndicator
+        backgroundColor = DJDesignTokens.Color.surface
+        selectionStyle = .default
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(_ item: OwnerTruthInterviewCandidateReviewItemViewState) {
+        var content = UIListContentConfiguration.subtitleCell()
+        content.text = item.proposalPreview
+        content.textProperties.font = DJDesignTokens.Font.body(16)
+        content.textProperties.color = DJDesignTokens.Color.textPrimary
+        content.secondaryText = "\(memoryKindText(item.memoryKind)) · \(sensitivityText(item.sensitivity)) · \(item.evidenceCount) 条证据"
+        content.secondaryTextProperties.font = DJDesignTokens.Font.label(12)
+        content.secondaryTextProperties.color = DJDesignTokens.Color.textSecondary
+        content.image = UIImage(systemName: item.reviewPath == .batch ? "checklist" : "exclamationmark.bubble")
+        content.imageProperties.tintColor = item.reviewPath == .batch
+            ? DJDesignTokens.Color.accentDeep
+            : DJDesignTokens.Color.textSecondary
+        contentConfiguration = content
+        accessibilityIdentifier = "owner-truth-interview-candidate-review-item-\(item.reviewPath.rawValue)"
+        accessibilityLabel = "\(item.reviewPath == .batch ? "可批量确认" : "需要逐条确认")，\(item.proposalPreview)"
+    }
+
+    private func memoryKindText(_ value: OwnerTruthMemoryKind) -> String {
+        switch value {
+        case .experience: return "经历"
+        case .knowledge: return "知识"
+        case .emotion: return "感受"
+        }
+    }
+
+    private func sensitivityText(_ value: OwnerTruthSensitivityLevel) -> String {
+        switch value {
+        case .standard: return "普通"
+        case .sensitive: return "敏感"
+        case .restricted: return "受限"
+        }
+    }
+}
+
 #if UI_QA_SIMULATOR && targetEnvironment(simulator)
 struct OwnerTruthCandidateInboxUIQASmokeResult: Codable {
     static let fileName = "owner-truth-candidate-inbox-uiqa-result.json"
@@ -4390,6 +4806,359 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
 private enum CandidateInboxUIQAClientError: Error {
     case invalidVault
     case invalidReview
+}
+
+struct OwnerTruthInterviewCandidateReviewUIQASmokeResult: Codable {
+    static let fileName = "owner-truth-interview-candidate-review-uiqa-result.json"
+
+    let completed: Bool
+    let qaGateEnabled: Bool
+    let batchCandidateVisible: Bool
+    let singleCandidateVisible: Bool
+    let batchReceiptConsumed: Bool
+    let singleReceiptConsumed: Bool
+    let memoryVersionCreated: Bool
+    let allCandidatesRemoved: Bool
+    let launchArguments: [String]
+    let failureReason: String?
+
+    func writeToDocuments(fileManager: FileManager = .default) throws -> URL {
+        let documentsURL = try fileManager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let resultURL = documentsURL.appendingPathComponent(Self.fileName, isDirectory: false)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(self).write(to: resultURL, options: [.atomic])
+        return resultURL
+    }
+}
+
+enum OwnerTruthInterviewCandidateReviewUIQASmoke {
+    static let reviewBatchID = OwnerTruthRecordID(
+        rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000261")!
+    )
+
+    static func makeViewController(
+        accountLease: AccountLease
+    ) -> OwnerTruthInterviewCandidateReviewViewController {
+        let client = InterviewCandidateReviewUIQAClient(
+            vaultID: OwnerTruthVaultID(accountLease.vaultId),
+            reviewBatchID: reviewBatchID
+        )
+        let controller = OwnerTruthInterviewCandidateReviewViewController(
+            accountLease: accountLease,
+            reviewBatchID: reviewBatchID,
+            client: client,
+            qaGateEnabled: { OwnerTruthCandidateReviewQAGate.isEnabled }
+        )
+        let scenario = InterviewCandidateReviewUIQAScenario()
+        controller.onViewStateRendered = { [weak controller] state in
+            scenario.consume(state, controller: controller)
+        }
+        return controller
+    }
+
+    static func writeFailure(_ reason: String) {
+        let result = OwnerTruthInterviewCandidateReviewUIQASmokeResult(
+            completed: false,
+            qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+            batchCandidateVisible: false,
+            singleCandidateVisible: false,
+            batchReceiptConsumed: false,
+            singleReceiptConsumed: false,
+            memoryVersionCreated: false,
+            allCandidatesRemoved: false,
+            launchArguments: [
+                QALaunchScenario.ownerTruthInterviewCandidateReviewSmoke.rawValue,
+                OwnerTruthCandidateReviewQAGate.launchArgument,
+            ],
+            failureReason: reason
+        )
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] OwnerTruthInterviewCandidateReviewSmoke failed result=\(resultURL.path) reason=\(reason)")
+        } catch {
+            print("[UI_QA] OwnerTruthInterviewCandidateReviewSmoke failed reason=\(reason) write=\(error.localizedDescription)")
+        }
+    }
+}
+
+private final class InterviewCandidateReviewUIQAScenario {
+    private var didWrite = false
+    private var didSubmitBatch = false
+    private var didSubmitSingle = false
+    private var batchCandidateVisible = false
+    private var singleCandidateVisible = false
+    private var batchReceiptConsumed = false
+    private var singleReceiptConsumed = false
+    private var memoryVersionCreated = false
+
+    func consume(
+        _ state: OwnerTruthInterviewCandidateReviewViewState,
+        controller: OwnerTruthInterviewCandidateReviewViewController?
+    ) {
+        if case .ready = state.phase,
+           !didSubmitBatch,
+           let firstBatchItem = state.batchItems.first {
+            batchCandidateVisible = !firstBatchItem.proposalPreview.isEmpty
+            singleCandidateVisible = !state.singleItems.isEmpty
+            didSubmitBatch = true
+            DispatchQueue.main.async { [weak controller] in
+                controller?.runUIQAAcceptFirstBatchCandidate()
+            }
+            return
+        }
+
+        if case .ready = state.phase,
+           state.notice == .batchAccepted,
+           !didSubmitSingle,
+           let receipt = state.latestReceipt,
+           !receipt.memoryVersionCreated,
+           !state.singleItems.isEmpty {
+            batchReceiptConsumed = true
+            memoryVersionCreated = memoryVersionCreated || receipt.memoryVersionCreated
+            didSubmitSingle = true
+            DispatchQueue.main.async { [weak controller] in
+                controller?.runUIQARejectFirstSingleCandidate()
+            }
+            return
+        }
+
+        guard !didWrite,
+              case .empty = state.phase,
+              state.notice == .singleRejected,
+              let receipt = state.latestReceipt,
+              !receipt.memoryVersionCreated,
+              state.batchItems.isEmpty,
+              state.singleItems.isEmpty else {
+            return
+        }
+
+        didWrite = true
+        singleReceiptConsumed = true
+        memoryVersionCreated = memoryVersionCreated || receipt.memoryVersionCreated
+        let result = OwnerTruthInterviewCandidateReviewUIQASmokeResult(
+            completed: OwnerTruthCandidateReviewQAGate.isEnabled
+                && didSubmitBatch
+                && didSubmitSingle
+                && batchCandidateVisible
+                && singleCandidateVisible
+                && batchReceiptConsumed
+                && singleReceiptConsumed
+                && !memoryVersionCreated,
+            qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+            batchCandidateVisible: batchCandidateVisible,
+            singleCandidateVisible: singleCandidateVisible,
+            batchReceiptConsumed: batchReceiptConsumed,
+            singleReceiptConsumed: singleReceiptConsumed,
+            memoryVersionCreated: memoryVersionCreated,
+            allCandidatesRemoved: state.batchItems.isEmpty && state.singleItems.isEmpty,
+            launchArguments: [
+                QALaunchScenario.ownerTruthInterviewCandidateReviewSmoke.rawValue,
+                OwnerTruthCandidateReviewQAGate.launchArgument,
+            ],
+            failureReason: nil
+        )
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] OwnerTruthInterviewCandidateReviewSmoke completed result=\(resultURL.path)")
+        } catch {
+            print("[UI_QA] OwnerTruthInterviewCandidateReviewSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+}
+
+private final class InterviewCandidateReviewUIQAClient: OwnerTruthInterviewCandidateReviewClient {
+    private let vaultID: OwnerTruthVaultID?
+    private let reviewBatchID: OwnerTruthRecordID
+    private let batchCandidateID = OwnerTruthRecordID(
+        rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000262")!
+    )
+    private let singleCandidateID = OwnerTruthRecordID(
+        rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000263")!
+    )
+    private var batchCandidatePending = true
+    private var singleCandidatePending = true
+
+    init(vaultID: OwnerTruthVaultID?, reviewBatchID: OwnerTruthRecordID) {
+        self.vaultID = vaultID
+        self.reviewBatchID = reviewBatchID
+    }
+
+    func fetchOwnerTruthInterviewCandidateReview(
+        vaultID: OwnerTruthVaultID,
+        reviewBatchID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateReviewBatch, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID, self.reviewBatchID == reviewBatchID else {
+            completion(.failure(InterviewCandidateReviewUIQAClientError.invalidVault))
+            return
+        }
+        do {
+            let batchCandidates: [[String: Any]] = batchCandidatePending ? [candidateJSONObject(
+                candidateID: batchCandidateID,
+                reviewPath: .batch,
+                sensitivity: .standard,
+                summary: "在院子里听家人讲故事"
+            )] : []
+            let singleCandidates: [[String: Any]] = singleCandidatePending ? [candidateJSONObject(
+                candidateID: singleCandidateID,
+                reviewPath: .single,
+                sensitivity: .sensitive,
+                summary: "需要明确确认的家庭往事"
+            )] : []
+            let readiness = batchCandidates.isEmpty && singleCandidates.isEmpty
+                ? OwnerTruthInterviewCandidateReviewReadiness.noCandidates
+                : .reviewReady
+            let batch = try OwnerTruthInterviewCandidateReviewBatch(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewCandidateReviewBatch.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "review": [
+                        "schemaVersion": OwnerTruthInterviewCandidateReviewBatch.compositionSchemaVersion,
+                        "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                        "admissionId": "00000000-0000-0000-0000-000000000264",
+                        "sourceId": "00000000-0000-0000-0000-000000000265",
+                        "sourceVersion": 1,
+                        "authorityEpoch": 0,
+                        "readiness": readiness.rawValue,
+                        "latestExtractionStatus": "succeeded",
+                        "batchCandidateCount": batchCandidates.count,
+                        "singleCandidateCount": singleCandidates.count,
+                    ],
+                    "batchCandidates": batchCandidates,
+                    "singleCandidates": singleCandidates,
+                ],
+                expectedVaultID: vaultID,
+                expectedReviewBatchID: reviewBatchID
+            )
+            completion(.success(batch))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func acceptOwnerTruthInterviewCandidateBatch(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateBatchAcceptCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateBatchAcceptResult, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID,
+              command.reviewBatchID == reviewBatchID,
+              batchCandidatePending,
+              command.selections.count == 1,
+              command.selections.first?.candidateID == batchCandidateID,
+              command.selections.first?.expectedCandidateVersion == 1 else {
+            completion(.failure(InterviewCandidateReviewUIQAClientError.invalidBatchDecision))
+            return
+        }
+        batchCandidatePending = false
+        do {
+            let result = try OwnerTruthInterviewCandidateBatchAcceptResult(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewCandidateBatchAcceptResult.schemaVersion,
+                    "status": OwnerTruthCommandOutcome.created.rawValue,
+                    "batchDecisionId": "00000000-0000-0000-0000-000000000266",
+                    "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                    "acceptedCandidateCount": 1,
+                    "receipts": [[
+                        "receiptId": "00000000-0000-0000-0000-000000000267",
+                        "candidateId": batchCandidateID.rawValue.uuidString,
+                        "decision": OwnerTruthCandidateDecision.accepted.rawValue,
+                        "candidateVersion": 2,
+                        "correctedValueId": NSNull(),
+                    ]],
+                    "memoryActivation": [
+                        "status": OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+                        "memoryVersionCreated": false,
+                    ],
+                ],
+                expectedCommand: command
+            )
+            completion(.success(result))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func reviewOwnerTruthInterviewCandidateSingle(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateSingleReviewCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateSingleReviewResult, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID,
+              command.reviewBatchID == reviewBatchID,
+              singleCandidatePending,
+              command.candidateID == singleCandidateID,
+              command.review.action == .reject,
+              command.review.expectedCandidateVersion == 1 else {
+            completion(.failure(InterviewCandidateReviewUIQAClientError.invalidSingleDecision))
+            return
+        }
+        singleCandidatePending = false
+        do {
+            let result = try OwnerTruthInterviewCandidateSingleReviewResult(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewCandidateSingleReviewResult.schemaVersion,
+                    "status": OwnerTruthCommandOutcome.created.rawValue,
+                    "batchDecisionId": "00000000-0000-0000-0000-000000000268",
+                    "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                    "receipt": [
+                        "receiptId": "00000000-0000-0000-0000-000000000269",
+                        "candidateId": singleCandidateID.rawValue.uuidString,
+                        "decision": OwnerTruthCandidateDecision.rejected.rawValue,
+                        "candidateVersion": 2,
+                        "correctedValueId": NSNull(),
+                    ],
+                    "memoryActivation": [
+                        "status": OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+                        "memoryVersionCreated": false,
+                    ],
+                ],
+                expectedCommand: command
+            )
+            completion(.success(result))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    private func candidateJSONObject(
+        candidateID: OwnerTruthRecordID,
+        reviewPath: OwnerTruthInterviewCandidateReviewPath,
+        sensitivity: OwnerTruthSensitivityLevel,
+        summary: String
+    ) -> [String: Any] {
+        [
+            "candidateId": candidateID.rawValue.uuidString,
+            "sourceId": "00000000-0000-0000-0000-000000000265",
+            "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
+            "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+            "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
+            "sensitivity": sensitivity.rawValue,
+            "contentSchemaVersion": "owner-truth-candidate-content-v1",
+            "content": ["summary": summary],
+            "contentHash": "uiqa-interview-candidate-\(candidateID.rawValue.uuidString)",
+            "sourceRefs": [[
+                "sourceId": "00000000-0000-0000-0000-000000000265",
+                "sourceVersion": 1,
+            ]],
+            "reviewMode": reviewPath.rawValue,
+            "candidateVersion": 1,
+            "extractionId": "00000000-0000-0000-0000-000000000270",
+            "reviewPath": reviewPath.rawValue,
+        ]
+    }
+}
+
+private enum InterviewCandidateReviewUIQAClientError: Error {
+    case invalidVault
+    case invalidBatchDecision
+    case invalidSingleDecision
 }
 #endif
 

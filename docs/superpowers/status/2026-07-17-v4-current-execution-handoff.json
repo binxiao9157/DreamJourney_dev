@@ -13,21 +13,22 @@
       "WI-S1-01-03-M0A-06-REVIEW_BATCH_TO_CANDIDATE_PROPOSAL_BOUNDARY_G0_G2_DEPLOYED",
       "WI-S1-01-03-M0A-07-CANDIDATE_BATCH_REVIEW_COMPOSITION_BOUNDARY_G0_G2_DEPLOYED",
       "WI-S1-01-03-M0A-08-PARTIAL_STANDARD_CANDIDATE_DECISION_BOUNDARY_G0_G2_DEPLOYED",
-      "WI-S1-01-03-M0A-09-SENSITIVE_CANDIDATE_SINGLE_REVIEW_BOUNDARY_G0_G2_DEPLOYED"
+      "WI-S1-01-03-M0A-09-SENSITIVE_CANDIDATE_SINGLE_REVIEW_BOUNDARY_G0_G2_DEPLOYED",
+      "WI-S1-01-03-M0A-10-INTERVIEW_CANDIDATE_REVIEW_QA_CONSUMER_G0_G1_SCOPED"
     ],
-    "currentSubSlice": "WI-S1-01-03-M0A-COMPLETE / NEXT:WI-S1-01-04-G0-CANDIDATE_REVIEW_AUTHORITY_BASELINE",
+    "currentSubSlice": "WI-S1-01-03-M0A-10-COMPLETE / NEXT:SELECT_NEXT_UNBLOCKED_M0A_UI_BOUNDARY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_SESSION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_REVIEW_COMPOSITION_AND_PRIVATE_STANDARD_PLUS_SINGLE_DECISION_VERIFIED",
-      "G1": "NOT_STARTED / ECHO_QA_DIAGNOSTICS_NOT_YET_CONNECTED",
-      "G2": "PARTIAL / CANDIDATE_EXTRACTION_CONVERSATION_SESSION_ORCHESTRATION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_REVIEW_COMPOSITION_AND_PRIVATE_STANDARD_PLUS_SINGLE_DECISION_POSTGRES_VERIFIED_AND_DEPLOYED",
+      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_SESSION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_REVIEW_COMPOSITION_PRIVATE_STANDARD_PLUS_SINGLE_DECISION_AND_NON_ACTIVATING_QA_CONSUMER_VERIFIED",
+      "G1": "SCOPED_ONLY / INTERVIEW_CANDIDATE_REVIEW_SIMULATOR_UIQA_VERIFIED; PUBLIC_ECHO_UI_NOT_CONNECTED",
+      "G2": "PARTIAL / CANDIDATE_EXTRACTION_CONVERSATION_SESSION_ORCHESTRATION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_REVIEW_COMPOSITION_PRIVATE_STANDARD_PLUS_SINGLE_DECISION_AND_QA_REVIEW_API_POSTGRES_VERIFIED_AND_DEPLOYED",
       "G3": "EXTERNAL_DEFERRED / PROVIDER_GENERATION_REMAINS_SEPARATE"
     },
     "id": "WI-S1-01-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "priorEvidence": "docs/superpowers/status/2026-07-20-wi-s1-01-03-m0a-sensitive-candidate-single-review.md",
-    "summary": "The private M0-A interview path is deployed through acknowledged-batch proposal admission, value-minimized review composition, partial acceptance for selected ordinary batch Candidates, and individual terminal review for sensitive or explicitly single-review Candidates in backend main@85a5647. Each decision reuses the existing Owner CAS/DecisionReceipt contract while a value-minimized immutable root-command ledger prevents semantic command reuse. No private review call activates a MemoryRecord, MemoryVersion, Projection, Provider request, or public Echo UI. The next planned boundary is WI-S1-01-04 G0: inventory and close the remaining Candidate review authority gap without claiming its G1/G2/G4 gates."
+    "priorEvidence": "docs/superpowers/status/2026-07-20-wi-s1-01-03-m0a-interview-candidate-review-qa-consumer.md",
+    "summary": "The private M0-A interview path is deployed through acknowledged-batch proposal admission, value-minimized review composition, partial acceptance for selected ordinary batch Candidates, individual terminal review for sensitive or explicitly single-review Candidates, and a separate default-off iOS QA consumer. The iOS consumer makes the batch/single split explicit and rejects any response that claims MemoryVersion activation. Each decision remains bound to the Owner CAS/DecisionReceipt contract; no private review call creates a MemoryRecord, MemoryVersion, Projection, Provider request, legacy Archive/KBLite write, or public Echo UI. The next boundary must be selected from an unblocked M0-A UI dependency without treating this QA-only evidence as public completion."
   },
   "baselines": {
     "backend": "main@85a5647",
@@ -510,5 +511,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T22:00:00+0800"
+  "updatedAt": "2026-07-20T22:42:00+0800"
 }
