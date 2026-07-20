@@ -4,22 +4,23 @@
     "backendPendingPaths": [],
     "completedSubSlices": [
       "WI-S1-02-09-G0-DEAD-LETTER-ADMISSION-CONTRACT",
-      "WI-S1-02-09-G0-WORKER-READINESS-AND-EVIDENCE-CONTRACT"
+      "WI-S1-02-09-G0-WORKER-READINESS-AND-EVIDENCE-CONTRACT",
+      "WI-S1-02-09-G0-RESTORE-REPLAY-AND-MANIFEST-CONTRACT"
     ],
-    "currentSubSlice": "WI-S1-02-09-G0-RESTORE-REPLAY-AND-MANIFEST-CONTRACT",
+    "currentSubSlice": "WI-S1-02-09-G2-DURABLE-DEAD-LETTER-REPLAY-AND-WORKER-LOSS",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PARTIAL / DEAD_LETTER_ADMISSION_AND_WORKER_READINESS_EVIDENCE_CONTRACTS_VERIFIED / RESTORE_REPLAY_AND_MANIFEST_REQUIRED",
+      "G0": "SCOPED_VERIFIED / DEAD_LETTER_AUTHORIZED_REPLAY_RESTORE_AND_READINESS_EVIDENCE_CONTRACTS",
       "G2": "NOT_STARTED / DURABLE_DEAD_LETTER_REPLAY_AND_WORKER_EVIDENCE_REQUIRED",
       "G3": "NOT_STARTED / PROVIDER_QUERY_AND_OPERATIONS_BASELINE_REQUIRED"
     },
     "id": "WI-S1-02-09",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-09 has deployed value-free G0 dead-letter admission/replay and worker readiness/evidence contracts. It preserves stable business keys, keeps client replay unavailable, and next adds restore/replay plus manifest boundaries without claiming a worker or Provider call before later gates."
+    "summary": "WI-S1-02-09 has deployed scoped G0 contracts for dead-letter admission, authorized/restored replay, readiness, and evidence mapping. It next moves to G2 durable persistence and worker-loss evidence without enabling Provider replay before the later gates."
   },
   "baselines": {
-    "backend": "main@97f5ca6",
+    "backend": "main@d6b7b45",
     "ios": "feature/prd-stitch-ui-adaptation@272a1b5",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -475,5 +476,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T10:44:00+0800"
+  "updatedAt": "2026-07-20T10:52:00+0800"
 }
