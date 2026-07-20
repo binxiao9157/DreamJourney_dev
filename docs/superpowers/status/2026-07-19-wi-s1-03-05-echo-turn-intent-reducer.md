@@ -7,7 +7,7 @@
 - Work Item：`WI-S1-03-05`
 - Authority lock：`IOS_COMPOSITION`
 - Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`
-- 当前结果：`IN_PROGRESS / G0_STATIC_AND_BUILD_FOR_TESTING_VERIFIED / G1_HOSTED_XCTEST_AND_ECHO_CONTINUOUS_UIQA_VERIFIED / G2_POSTGRES_RUNTIME_VERIFIED / G3_OPEN`
+- 当前结果：`INTERNAL_READY / G0_STATIC_AND_BUILD_FOR_TESTING_VERIFIED / G1_HOSTED_XCTEST_AND_ECHO_CONTINUOUS_UIQA_VERIFIED / G2_POSTGRES_RUNTIME_VERIFIED / G3_EXTERNAL_DEFERRED`
 - 本切片：`WI-S1-03-05-TURN_INTENT_CONTEXT_LEASE_TRANSPORT_AND_IDENTITY_G0_COMPLETE`
 - 范围：先将 Echo 的 provider-independent 回合状态收敛为纯 reducer，并让 context build 使用独立
   generation lease；不改公开页面、不接管现有数字人、语音 Provider 或后端 transport。
@@ -174,9 +174,12 @@ generic iPhoneOS build 证据均已通过。
   以及 Context Packet 到默认关闭 delayed-reply Answer 的隔离 Postgres runtime 证据；
   G3 仍取决于真实 Provider runtime 的独立证据。
 
-## 下一步
+## 后续边界
 
 当前 Work Item 的 G0 application-context 边界、G1 hosted XCTest/普通 Echo 连续回合 UIQA，以及
-G2 `/context/build` 到 Answer 的后端运行时证据均已可复跑。下一步仅剩 G3：真实 Provider runtime
-必须使用独立的、可审计的 credential/quota/quality receipt；不能以本次模拟器或隔离 Postgres smoke
-替代。
+G2 `/context/build` 到 Answer 的后端运行时证据均已可复跑。G3 的真实 Provider runtime 仍必须使用独立、
+可审计的 credential/quota/quality receipt，不能由本次模拟器或隔离 Postgres smoke 替代。
+
+按终版路线的 Stage 1 规则，Voice/Digital Human 的真实 Provider 门不能阻塞 Owner 文字核心。因此本项保持
+`INTERNAL_READY / G3_EXTERNAL_DEFERRED`，当前执行租约移交给 M0-A 的 Owner Truth Conversation/InterviewSession
+bootstrap；不会因该移交删除或弱化 G3。

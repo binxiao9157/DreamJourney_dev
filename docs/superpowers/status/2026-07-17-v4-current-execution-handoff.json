@@ -1,29 +1,28 @@
 {
   "activeWorkItem": {
-    "authorityLock": "IOS_COMPOSITION",
+    "authorityLock": "OWNER_TRUTH",
     "backendPendingPaths": [],
     "completedSubSlices": [
-      "WI-S1-03-05-TURN_INTENT_CONTEXT_LEASE_TRANSPORT_AND_IDENTITY_G0_COMPLETE",
-      "WI-S1-03-05-G1-HOSTED_XCTEST_SIMULATOR_RUNTIME_FOUNDATION",
-      "WI-S1-03-05-G1-ECHO_CONTINUOUS_TURN_UIQA",
-      "WI-S1-03-05-G2-BACKEND_CONTEXT_REPLY_RUNTIME_EVIDENCE"
+      "WI-S1-01-03-CANDIDATE_SYNTHETIC_EXTRACTION_G0_G2_EVIDENCE",
+      "WI-S1-01-03-M0A-00-INTERVIEW_POLICY_G0_COMPLETE"
     ],
-    "currentSubSlice": "WI-S1-03-05-G3-PROVIDER_RUNTIME_EVIDENCE",
+    "currentSubSlice": "WI-S1-01-03-M0A-01-CONVERSATION_SESSION_BOOTSTRAP",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "COMPLETE / TURN_INTENT_CONTEXT_LEASE_TRANSPORT_AND_IDENTITY_VERIFIED",
-      "G1": "COMPLETE / HOSTED_XCTEST_SIMULATOR_RUNTIME_82_TESTS_VERIFIED / CONTINUOUS_ECHO_UIQA_COLD_START_AND_RESTART_VERIFIED",
-      "G2": "COMPLETE / BACKEND_MAIN_4cc7792_DEPLOYED / ISOLATED_POSTGRES_CONTEXT_TO_ANSWER_RUNTIME_SMOKE_PASSED / CROSS_OWNER_DENY_AND_MAILBOX_REDACTION_VERIFIED",
-      "G3": "NOT_STARTED / PROVIDER_RUNTIME_EVIDENCE_REQUIRED"
+      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_AND_M0A_INTERVIEW_POLICY_VERIFIED",
+      "G1": "NOT_STARTED / ECHO_QA_DIAGNOSTICS_NOT_YET_CONNECTED",
+      "G2": "PARTIAL / CANDIDATE_EXTRACTION_POSTGRES_VERIFIED; CONVERSATION_SESSION_PERSISTENCE_NOT_STARTED",
+      "G3": "EXTERNAL_DEFERRED / PROVIDER_GENERATION_REMAINS_SEPARATE"
     },
-    "id": "WI-S1-03-05",
+    "id": "WI-S1-01-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "The simulator destination and XCTest Pod integration are durable: App/Test aggregate xcconfigs retain arm64 simulator eligibility, hosted XCTest imports Pod modules without directly linking production provider binaries, and the booted iPhone 17 Pro ran 82 tests with zero failures. A provider-free UIQA scenario proves two ordinary Echo turns, normal stop to idle, stale-reply rejection, leave/re-enter, and process restart. G2 is now deployed and verified by an isolated Postgres Context Packet to delayed-reply Answer smoke with cross-owner denial and mailbox redaction. G3 Provider runtime remains a separate gate. No public Echo UI, Digital Human, or Voice provider behavior changed."
+    "priorEvidence": "docs/superpowers/status/2026-07-19-wi-s1-01-03-candidate-synthetic-extraction.md",
+    "summary": "The prior synthetic Source-to-pending-Candidate boundary remains deployed and default-off. M0-A now has a provider-neutral, value-free InterviewOrchestrator policy core deployed in backend main@85ee9e2. The active sub-slice is Conversation plus InterviewSession persistence bootstrap with command idempotency and expected-version CAS. It must not auto-promote Message to Source, Candidate, or MemoryVersion, call a Provider, or alter public Echo UI."
   },
   "baselines": {
-    "backend": "main@4cc7792",
-    "ios": "feature/prd-stitch-ui-adaptation@ca98ca3",
+    "backend": "main@85ee9e2",
+    "ios": "feature/prd-stitch-ui-adaptation@b901d85",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -412,10 +411,10 @@
       "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT"
     },
     {
-      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-01-03-candidate-synthetic-extraction.md",
-      "id": "WI-S1-01-03",
-      "implementationStatus": "INTERNAL_READY / G0_G2_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED / G3_PROVIDER_EVIDENCE_OPEN / WORKER_DISABLED / NO_PUBLIC_AUTHORITY",
-      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G3_OPEN"
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-05-echo-turn-intent-reducer.md",
+      "id": "WI-S1-03-05",
+      "implementationStatus": "INTERNAL_READY / G0_G1_G2_EVIDENCE_PRESENT / G3_EXTERNAL_DEFERRED / NO_PUBLIC_PROVIDER_CLAIM",
+      "registryClosure": "SCOPED_G0_G1_G2_EVIDENCE_PRESENT_G3_EXTERNAL_DEFERRED"
     },
     {
       "evidence": "docs/superpowers/status/2026-07-19-wi-s1-01-04-candidate-inbox-action-uiqa.md",
