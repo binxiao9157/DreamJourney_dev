@@ -3947,7 +3947,176 @@ enum EchoTraceAccountLifecycle {
     }
 }
 
-final class DreamJourneyBackendClient {
+protocol EchoDelayedReplyAnswerReadClient: AnyObject {
+    func fetchEchoDelayedReplyAnswer(
+        userID: String,
+        delayedReplyID: String,
+        completion: @escaping (Result<EchoDelayedReplyAnswerReadContract, Error>) -> Void
+    )
+}
+
+enum EchoDelayedReplyAnswerReadContractError: LocalizedError, Equatable {
+    case invalidResponse(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidResponse(let detail):
+            return "延迟回信结果不符合合同：\(detail)"
+        }
+    }
+}
+
+struct EchoDelayedReplyAnswerReadContract: Equatable {
+    struct ContextReceipt: Equatable {
+        let contextHash: String
+        let contextVersion: String
+        let citationReceiptHash: String
+        let policyVersion: String
+    }
+
+    struct Answer: Equatable {
+        let answerID: String
+        let body: String
+        let completedAt: Date
+        let conversationID: String
+        let requestID: String
+        let replyGeneration: Int
+        let contextReceipt: ContextReceipt
+    }
+
+    struct Receipt: Equatable {
+        let deliveryState: String
+        let deliveryProtocolVersion: String
+        let mailboxProjectionBodyRedacted: Bool
+        let sourceAnswerID: String
+    }
+
+    let userID: String
+    let delayedReplyID: String
+    let answer: Answer
+    let receipt: Receipt
+
+    init(
+        backendJSONObject: [String: Any],
+        expectedUserID: String,
+        expectedDelayedReplyID: String
+    ) throws {
+        let expectedUserID = try Self.requiredString(expectedUserID, field: "expectedUserId")
+        let expectedDelayedReplyID = try Self.requiredString(
+            expectedDelayedReplyID,
+            field: "expectedDelayedReplyId"
+        )
+        guard try Self.requiredString(backendJSONObject["status"], field: "status") == "completed" else {
+            throw EchoDelayedReplyAnswerReadContractError.invalidResponse("status must be completed")
+        }
+
+        let userID = try Self.requiredString(backendJSONObject["userId"], field: "userId")
+        let delayedReplyID = try Self.requiredString(
+            backendJSONObject["delayedReplyId"],
+            field: "delayedReplyId"
+        )
+        guard userID == expectedUserID, delayedReplyID == expectedDelayedReplyID else {
+            throw EchoDelayedReplyAnswerReadContractError.invalidResponse("owner or delayed reply mismatch")
+        }
+
+        guard let answerJSON = backendJSONObject["answer"] as? [String: Any],
+              let contextJSON = answerJSON["contextReceipt"] as? [String: Any],
+              let receiptJSON = backendJSONObject["receipt"] as? [String: Any] else {
+            throw EchoDelayedReplyAnswerReadContractError.invalidResponse("answer, contextReceipt or receipt missing")
+        }
+
+        let answerID = try Self.requiredString(answerJSON["answerId"], field: "answer.answerId")
+        let replyGeneration = try Self.positiveInt(
+            answerJSON["replyGeneration"],
+            field: "answer.replyGeneration"
+        )
+        let contextReceipt = ContextReceipt(
+            contextHash: try Self.requiredString(contextJSON["contextHash"], field: "contextReceipt.contextHash"),
+            contextVersion: try Self.requiredString(contextJSON["contextVersion"], field: "contextReceipt.contextVersion"),
+            citationReceiptHash: try Self.requiredString(
+                contextJSON["citationReceiptHash"],
+                field: "contextReceipt.citationReceiptHash"
+            ),
+            policyVersion: try Self.requiredString(contextJSON["policyVersion"], field: "contextReceipt.policyVersion")
+        )
+        let answer = Answer(
+            answerID: answerID,
+            body: try Self.requiredString(answerJSON["body"], field: "answer.body"),
+            completedAt: try Self.requiredISO8601Date(
+                answerJSON["completedAt"],
+                field: "answer.completedAt"
+            ),
+            conversationID: try Self.requiredString(answerJSON["conversationId"], field: "answer.conversationId"),
+            requestID: try Self.requiredString(answerJSON["requestId"], field: "answer.requestId"),
+            replyGeneration: replyGeneration,
+            contextReceipt: contextReceipt
+        )
+
+        guard receiptJSON["mailboxProjectionBodyRedacted"] as? Bool == true else {
+            throw EchoDelayedReplyAnswerReadContractError.invalidResponse(
+                "mailbox projection must remain body redacted"
+            )
+        }
+        let receipt = Receipt(
+            deliveryState: try Self.requiredString(receiptJSON["deliveryState"], field: "receipt.deliveryState"),
+            deliveryProtocolVersion: try Self.requiredString(
+                receiptJSON["deliveryProtocolVersion"],
+                field: "receipt.deliveryProtocolVersion"
+            ),
+            mailboxProjectionBodyRedacted: true,
+            sourceAnswerID: try Self.requiredString(receiptJSON["sourceAnswerId"], field: "receipt.sourceAnswerId")
+        )
+        guard receipt.deliveryState == "completed",
+              receipt.deliveryProtocolVersion == "echo-delayed-reply-v1",
+              receipt.sourceAnswerID == answerID else {
+            throw EchoDelayedReplyAnswerReadContractError.invalidResponse("receipt does not match Answer")
+        }
+
+        self.userID = userID
+        self.delayedReplyID = delayedReplyID
+        self.answer = answer
+        self.receipt = receipt
+    }
+
+    private static func requiredString(_ value: Any?, field: String) throws -> String {
+        let normalized = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !normalized.isEmpty else {
+            throw EchoDelayedReplyAnswerReadContractError.invalidResponse("\(field) is missing")
+        }
+        return normalized
+    }
+
+    private static func positiveInt(_ value: Any?, field: String) throws -> Int {
+        let integer: Int?
+        if let value = value as? Int {
+            integer = value
+        } else if let value = value as? NSNumber {
+            integer = value.intValue
+        } else {
+            integer = nil
+        }
+        guard let integer, integer > 0 else {
+            throw EchoDelayedReplyAnswerReadContractError.invalidResponse("\(field) must be positive")
+        }
+        return integer
+    }
+
+    private static func requiredISO8601Date(_ value: Any?, field: String) throws -> Date {
+        let rawValue = try requiredString(value, field: field)
+        let formatter = ISO8601DateFormatter()
+        if let parsed = formatter.date(from: rawValue) {
+            return parsed
+        }
+
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let parsed = formatter.date(from: rawValue) else {
+            throw EchoDelayedReplyAnswerReadContractError.invalidResponse("\(field) is not ISO-8601")
+        }
+        return parsed
+    }
+}
+
+final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
     static let shared = DreamJourneyBackendClient()
 
     struct BackendErrorContext: Equatable {
@@ -4110,6 +4279,10 @@ final class DreamJourneyBackendClient {
 
     var isEchoDelayedReplyPushConfigured: Bool {
         hasExplicitBaseURL
+    }
+
+    var isEchoDelayedReplyAnswerReconciliationQAConfigured: Bool {
+        hasExplicitBaseURL && EchoDelayedReplyAnswerReconciliationQAGate.isEnabled
     }
 
     var isPushDeviceTokenRegistrationConfigured: Bool {
@@ -5800,6 +5973,54 @@ final class DreamJourneyBackendClient {
             authPolicy: .userRequired,
             completion: completion
         )
+    }
+
+    func fetchEchoDelayedReplyAnswer(
+        userID: String,
+        delayedReplyID: String,
+        completion: @escaping (Result<EchoDelayedReplyAnswerReadContract, Error>) -> Void
+    ) {
+        guard EchoDelayedReplyAnswerReconciliationQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "echoDelayedReplyAnswerReconciliation",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        let normalizedUserID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedDelayedReplyID = delayedReplyID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedUserID.isEmpty, !normalizedDelayedReplyID.isEmpty else {
+            DispatchQueue.main.async {
+                completion(.failure(EchoDelayedReplyAnswerReadContractError.invalidResponse(
+                    "userId or delayedReplyId is missing"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/echo/delayed-replies/\(pathComponent(normalizedUserID))/\(pathComponent(normalizedDelayedReplyID))/answer",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            sessionUserId: normalizedUserID
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try EchoDelayedReplyAnswerReadContract(
+                        backendJSONObject: object,
+                        expectedUserID: normalizedUserID,
+                        expectedDelayedReplyID: normalizedDelayedReplyID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
     }
 
     private func requestJSON(

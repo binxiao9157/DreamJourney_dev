@@ -1033,3 +1033,308 @@ private func makeEchoContextPacket(
     }
     return packet
 }
+
+final class EchoDelayedReplyAnswerReadContractTests: XCTestCase {
+    func testCompletedAnswerRequiresOwnerScopedPrivateAnswerAndRedactedInboxReceipt() throws {
+        let contract = try EchoDelayedReplyAnswerReadContract(
+            backendJSONObject: completedAnswerPayload(),
+            expectedUserID: "owner-1",
+            expectedDelayedReplyID: "reply-1"
+        )
+
+        XCTAssertEqual(contract.userID, "owner-1")
+        XCTAssertEqual(contract.delayedReplyID, "reply-1")
+        XCTAssertEqual(contract.answer.answerID, "answer-1")
+        XCTAssertEqual(contract.answer.body, "服务器已经持久化的回信正文")
+        XCTAssertEqual(
+            contract.answer.completedAt,
+            ISO8601DateFormatter().date(from: "2026-07-20T08:00:00Z")
+        )
+        XCTAssertEqual(contract.answer.contextReceipt.contextVersion, "echo-context-v4")
+        XCTAssertTrue(contract.receipt.mailboxProjectionBodyRedacted)
+        XCTAssertEqual(contract.receipt.sourceAnswerID, contract.answer.answerID)
+    }
+
+    func testAnswerReadRejectsAReceiptThatCouldExposeAnInboxBody() {
+        var payload = completedAnswerPayload()
+        var receipt = payload["receipt"] as! [String: Any]
+        receipt["mailboxProjectionBodyRedacted"] = false
+        payload["receipt"] = receipt
+
+        XCTAssertThrowsError(
+            try EchoDelayedReplyAnswerReadContract(
+                backendJSONObject: payload,
+                expectedUserID: "owner-1",
+                expectedDelayedReplyID: "reply-1"
+            )
+        )
+    }
+
+    private func completedAnswerPayload() -> [String: Any] {
+        [
+            "status": "completed",
+            "userId": "owner-1",
+            "delayedReplyId": "reply-1",
+            "answer": [
+                "answerId": "answer-1",
+                "body": "服务器已经持久化的回信正文",
+                "completedAt": "2026-07-20T08:00:00Z",
+                "conversationId": "conversation-1",
+                "requestId": "request-1",
+                "replyGeneration": 1,
+                "contextReceipt": [
+                    "contextHash": String(repeating: "a", count: 64),
+                    "contextVersion": "echo-context-v4",
+                    "citationReceiptHash": String(repeating: "b", count: 64),
+                    "policyVersion": "echo-policy-v4",
+                ],
+            ],
+            "receipt": [
+                "deliveryState": "completed",
+                "deliveryProtocolVersion": "echo-delayed-reply-v1",
+                "mailboxProjectionBodyRedacted": true,
+                "sourceAnswerId": "answer-1",
+            ],
+        ]
+    }
+}
+
+final class EchoDelayedReplyAnswerReconciliationTests: XCTestCase {
+    func testCompletedServerAnswerCreatesRedactedInboxPointerAndRetiresPendingReply() throws {
+        let fixture = makeFixture()
+        fixture.client.result = .success(try completedAnswerContract())
+        var appendedText: String?
+        fixture.viewModel.onTranscriptAppend = { text, isUser in
+            if !isUser {
+                appendedText = text
+            }
+        }
+
+        let expectation = expectation(description: "server answer reconciled")
+        fixture.viewModel.reconcilePendingDelayedReplyAnswerIfQAGated(
+            accountLease: fixture.lease,
+            roleContextKey: fixture.callsiteContext.roleContextKey
+        ) { outcome in
+            XCTAssertEqual(outcome, .delivered(answerID: "answer-1"))
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1)
+
+        XCTAssertNil(fixture.delayedReplyStore.load(
+            resourceOwnerId: fixture.lease.subjectId,
+            operationId: fixture.delayedReply.id,
+            accountLease: fixture.lease
+        ))
+        XCTAssertNil(fixture.viewModel.pendingDelayedReply)
+        XCTAssertEqual(appendedText, "服务器已经持久化的回信正文")
+        let inbox = fixture.messageStore.inboxSources(
+            accountLease: fixture.lease,
+            resourceOwnerId: fixture.lease.subjectId
+        )
+        XCTAssertEqual(inbox.count, 1)
+        XCTAssertEqual(inbox.first?.echoReplyId, fixture.delayedReply.id)
+        XCTAssertEqual(inbox.first?.echoReplySummary, "之前等待的回响已经准备好，可以继续对话。")
+        guard case .replied = fixture.viewModel.state else {
+            return XCTFail("completed server Answer must move Echo to replied")
+        }
+    }
+
+    func testNotReadyServerAnswerLeavesPendingReplyAndInboxUntouched() throws {
+        let fixture = makeFixture()
+        fixture.client.result = .failure(DreamJourneyBackendClient.ClientError.backendError(
+            statusCode: 409,
+            context: .init(
+                code: "echo_delayed_reply_answer_not_ready",
+                detail: "Answer is not ready"
+            )
+        ))
+
+        let expectation = expectation(description: "server answer remains pending")
+        fixture.viewModel.reconcilePendingDelayedReplyAnswerIfQAGated(
+            accountLease: fixture.lease,
+            roleContextKey: fixture.callsiteContext.roleContextKey
+        ) { outcome in
+            XCTAssertEqual(outcome, .serverAnswerNotReady)
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1)
+
+        XCTAssertNotNil(fixture.delayedReplyStore.load(
+            resourceOwnerId: fixture.lease.subjectId,
+            operationId: fixture.delayedReply.id,
+            accountLease: fixture.lease
+        ))
+        XCTAssertEqual(
+            fixture.messageStore.inboxSources(
+                accountLease: fixture.lease,
+                resourceOwnerId: fixture.lease.subjectId
+            ).count,
+            0
+        )
+        guard case .awaitingReplyDelivery = fixture.viewModel.state else {
+            return XCTFail("not-ready server Answer must keep Echo awaiting delivery")
+        }
+    }
+
+    private func makeFixture() -> DelayedReplyFixture {
+        let suiteName = "EchoDelayedReplyAnswerReconciliationTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
+        runtime.publish(session: AccountSession(
+            subjectId: "owner-1",
+            vaultId: "vault-1",
+            sessionId: "session-1",
+            tokenFamilyId: "token-family-1",
+            sessionVersion: 1,
+            generation: 1,
+            generationId: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+            state: .active,
+            activatedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        ))
+        let lease = runtime.capture(forSubjectId: "owner-1")!
+        let delayedReplyStore = EchoDelayedReplyStore(
+            defaults: defaults,
+            accountLeaseRuntime: runtime
+        )
+        let callsiteScopeStore = EchoDelayedReplyCallsiteScopeStore(
+            defaults: defaults,
+            accountLeaseRuntime: runtime
+        )
+        let messageStore = EchoReplyMessageStore(
+            defaults: defaults,
+            accountLeaseRuntime: runtime
+        )
+        let client = EchoDelayedReplyAnswerReadClientStub()
+        let delayedReply = EchoDelayedReply(
+            id: "reply-1",
+            scheduledAt: Date(timeIntervalSince1970: 1_700_000_000),
+            deliverAt: Date(timeIntervalSince1970: 1_700_000_060),
+            minutes: 1,
+            userTurnCount: 10,
+            trigger: .tenRoundBaseline
+        )
+        let callsiteContext = EchoDelayedReplyCallsiteContext(
+            accountLease: lease,
+            resourceOwnerId: lease.subjectId,
+            operationId: delayedReply.id,
+            roleContextKey: "owner-1|owner-1|selfAssistant|self"
+        )!
+        XCTAssertTrue(delayedReplyStore.save(
+            delayedReply,
+            resourceOwnerId: lease.subjectId,
+            operationId: delayedReply.id,
+            accountLease: lease
+        ))
+        XCTAssertTrue(callsiteScopeStore.save(callsiteContext))
+        let viewModel = EchoViewModel(
+            accountLeaseRuntime: runtime,
+            delayedReplyStore: delayedReplyStore,
+            delayedReplyCallsiteScopeStore: callsiteScopeStore,
+            delayedReplyAnswerReadClient: client,
+            delayedReplyAnswerReconciliationEnabled: { true },
+            echoReplyMessageStore: messageStore
+        )
+        XCTAssertTrue(viewModel.restoreStoredDelayedReplyIfAvailable(
+            accountLease: lease,
+            resourceOwnerId: lease.subjectId,
+            roleContextKey: callsiteContext.roleContextKey,
+            now: Date(timeIntervalSince1970: 1_700_000_120)
+        ))
+        return DelayedReplyFixture(
+            suiteName: suiteName,
+            defaults: defaults,
+            lease: lease,
+            delayedReply: delayedReply,
+            callsiteContext: callsiteContext,
+            delayedReplyStore: delayedReplyStore,
+            messageStore: messageStore,
+            client: client,
+            viewModel: viewModel
+        )
+    }
+
+    private func completedAnswerContract() throws -> EchoDelayedReplyAnswerReadContract {
+        try EchoDelayedReplyAnswerReadContract(
+            backendJSONObject: [
+                "status": "completed",
+                "userId": "owner-1",
+                "delayedReplyId": "reply-1",
+                "answer": [
+                    "answerId": "answer-1",
+                    "body": "服务器已经持久化的回信正文",
+                    "completedAt": "2026-07-20T08:00:00Z",
+                    "conversationId": "conversation-1",
+                    "requestId": "request-1",
+                    "replyGeneration": 1,
+                    "contextReceipt": [
+                        "contextHash": String(repeating: "a", count: 64),
+                        "contextVersion": "echo-context-v4",
+                        "citationReceiptHash": String(repeating: "b", count: 64),
+                        "policyVersion": "echo-policy-v4",
+                    ],
+                ],
+                "receipt": [
+                    "deliveryState": "completed",
+                    "deliveryProtocolVersion": "echo-delayed-reply-v1",
+                    "mailboxProjectionBodyRedacted": true,
+                    "sourceAnswerId": "answer-1",
+                ],
+            ],
+            expectedUserID: "owner-1",
+            expectedDelayedReplyID: "reply-1"
+        )
+    }
+}
+
+private final class DelayedReplyFixture {
+    let suiteName: String
+    let defaults: UserDefaults
+    let lease: AccountLease
+    let delayedReply: EchoDelayedReply
+    let callsiteContext: EchoDelayedReplyCallsiteContext
+    let delayedReplyStore: EchoDelayedReplyStore
+    let messageStore: EchoReplyMessageStore
+    let client: EchoDelayedReplyAnswerReadClientStub
+    let viewModel: EchoViewModel
+
+    init(
+        suiteName: String,
+        defaults: UserDefaults,
+        lease: AccountLease,
+        delayedReply: EchoDelayedReply,
+        callsiteContext: EchoDelayedReplyCallsiteContext,
+        delayedReplyStore: EchoDelayedReplyStore,
+        messageStore: EchoReplyMessageStore,
+        client: EchoDelayedReplyAnswerReadClientStub,
+        viewModel: EchoViewModel
+    ) {
+        self.suiteName = suiteName
+        self.defaults = defaults
+        self.lease = lease
+        self.delayedReply = delayedReply
+        self.callsiteContext = callsiteContext
+        self.delayedReplyStore = delayedReplyStore
+        self.messageStore = messageStore
+        self.client = client
+        self.viewModel = viewModel
+    }
+
+    deinit {
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+}
+
+private final class EchoDelayedReplyAnswerReadClientStub: EchoDelayedReplyAnswerReadClient {
+    var result: Result<EchoDelayedReplyAnswerReadContract, Error>?
+
+    func fetchEchoDelayedReplyAnswer(
+        userID: String,
+        delayedReplyID: String,
+        completion: @escaping (Result<EchoDelayedReplyAnswerReadContract, Error>) -> Void
+    ) {
+        completion(result ?? .failure(EchoDelayedReplyAnswerReadContractError.invalidResponse(
+            "missing test result"
+        )))
+    }
+}

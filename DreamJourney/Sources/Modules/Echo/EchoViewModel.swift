@@ -159,6 +159,20 @@ final class EchoDelayedReplyCallsiteScopeStore {
     }
 }
 
+/// Outcome of the narrow, QA-only read path from a server-persisted delayed
+/// reply Answer into the local Echo session. None of these states permit a
+/// local due time to manufacture a business reply.
+enum EchoDelayedReplyAnswerReconciliationOutcome: Equatable {
+    case disabled
+    case notEligible
+    case staleScope
+    case serverAnswerNotReady
+    case serverReconciliationRequired
+    case serverReadFailed
+    case inboxCommitFailed
+    case delivered(answerID: String)
+}
+
 enum EchoInteractionState {
     case idle
     case starting
@@ -532,6 +546,9 @@ final class EchoViewModel {
     private let delayedReplyStore: EchoDelayedReplyStore
     private let delayedReplyCallsiteScopeStore: EchoDelayedReplyCallsiteScopeStore
     private let delayedReplyNotificationScheduler: EchoDelayedReplyNotificationScheduler
+    private let delayedReplyAnswerReadClient: EchoDelayedReplyAnswerReadClient
+    private let delayedReplyAnswerReconciliationEnabled: () -> Bool
+    private let echoReplyMessageStore: EchoReplyMessageStore
 
     private(set) var context: DigitalHumanContext
     private(set) var archiveContextStatus: EchoArchiveContextStatus = .empty
@@ -540,6 +557,7 @@ final class EchoViewModel {
     private(set) var pendingDelayedReplyContext: EchoDelayedReplyCallsiteContext?
     private var currentSessionUserTurnCount = 0
     private var turnIntentReducer = EchoTurnIntentReducer()
+    private var delayedReplyAnswerReconciliationOperationID: String?
 
     var onStateChange: ((EchoInteractionState) -> Void)?
     var onTranscriptAppend: ((String, Bool) -> Void)?
@@ -567,7 +585,12 @@ final class EchoViewModel {
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         delayedReplyStore: EchoDelayedReplyStore = .shared,
         delayedReplyCallsiteScopeStore: EchoDelayedReplyCallsiteScopeStore? = nil,
-        delayedReplyNotificationScheduler: EchoDelayedReplyNotificationScheduler = .shared
+        delayedReplyNotificationScheduler: EchoDelayedReplyNotificationScheduler = .shared,
+        delayedReplyAnswerReadClient: EchoDelayedReplyAnswerReadClient = DreamJourneyBackendClient.shared,
+        delayedReplyAnswerReconciliationEnabled: @escaping () -> Bool = {
+            EchoDelayedReplyAnswerReconciliationQAGate.isEnabled
+        },
+        echoReplyMessageStore: EchoReplyMessageStore = .shared
     ) {
         self.contextStore = contextStore
         self.memoryManager = memoryManager
@@ -577,6 +600,9 @@ final class EchoViewModel {
         self.delayedReplyCallsiteScopeStore = delayedReplyCallsiteScopeStore
             ?? EchoDelayedReplyCallsiteScopeStore(accountLeaseRuntime: accountLeaseRuntime)
         self.delayedReplyNotificationScheduler = delayedReplyNotificationScheduler
+        self.delayedReplyAnswerReadClient = delayedReplyAnswerReadClient
+        self.delayedReplyAnswerReconciliationEnabled = delayedReplyAnswerReconciliationEnabled
+        self.echoReplyMessageStore = echoReplyMessageStore
         self.context = contextStore.current
     }
 
@@ -705,24 +731,120 @@ final class EchoViewModel {
         onTranscriptAppend?(normalizedText, false)
     }
 
-    func markReplyDelivered(accountLease: AccountLease) {
-        guard !isNeutralSafetyMode else { return }
+    @discardableResult
+    func markReplyDelivered(accountLease: AccountLease) -> Bool {
+        guard !isNeutralSafetyMode else { return false }
         guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed,
-              turnIntentReducer.accepts(.replyDelivered) else { return }
+              turnIntentReducer.accepts(.replyDelivered) else { return false }
         if let callsiteContext = pendingDelayedReplyContext {
             guard callsiteContext.accountLease == accountLease,
                   retirePendingDelayedReply(callsiteContext) else {
-                return
+                return false
             }
         }
         pendingDelayedReply = nil
         pendingDelayedReplyContext = nil
-        _ = applyTurnIntent(.replyDelivered, state: .replied)
+        return applyTurnIntent(.replyDelivered, state: .replied)
     }
 
-    func markReplyDelivered() {
-        guard let accountLease = accountLeaseRuntime.capture(forSubjectId: nil) else { return }
-        markReplyDelivered(accountLease: accountLease)
+    @discardableResult
+    func markReplyDelivered() -> Bool {
+        guard let accountLease = accountLeaseRuntime.capture(forSubjectId: nil) else { return false }
+        return markReplyDelivered(accountLease: accountLease)
+    }
+
+    /// Reconciles a locally due delayed reply only after the server returns a
+    /// completed private Answer with its matching redacted Inbox receipt. This
+    /// stays behind a QA launch argument until the worker and deployed
+    /// Postgres gates are complete.
+    func reconcilePendingDelayedReplyAnswerIfQAGated(
+        accountLease: AccountLease,
+        roleContextKey: String,
+        completion: @escaping (EchoDelayedReplyAnswerReconciliationOutcome) -> Void
+    ) {
+        guard delayedReplyAnswerReconciliationEnabled() else {
+            completion(.disabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+              case .awaitingReplyDelivery = state,
+              let delayedReply = pendingDelayedReply,
+              let callsiteContext = pendingDelayedReplyContext,
+              callsiteContext.accountLease == accountLease,
+              callsiteContext.resourceOwnerId == accountLease.subjectId,
+              callsiteContext.operationId == delayedReply.id,
+              callsiteContext.roleContextKey == roleContextKey,
+              matchesPendingDelayedReplyContext(callsiteContext),
+              delayedReplyAnswerReconciliationOperationID == nil else {
+            completion(.notEligible)
+            return
+        }
+
+        delayedReplyAnswerReconciliationOperationID = delayedReply.id
+
+        delayedReplyAnswerReadClient.fetchEchoDelayedReplyAnswer(
+            userID: callsiteContext.resourceOwnerId,
+            delayedReplyID: delayedReply.id
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                defer {
+                    if self.delayedReplyAnswerReconciliationOperationID == delayedReply.id {
+                        self.delayedReplyAnswerReconciliationOperationID = nil
+                    }
+                }
+                guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed,
+                      self.matchesPendingDelayedReplyContext(callsiteContext),
+                      self.pendingDelayedReply?.id == delayedReply.id,
+                      self.pendingDelayedReplyContext?.roleContextKey == roleContextKey,
+                      case .awaitingReplyDelivery = self.state else {
+                    completion(.staleScope)
+                    return
+                }
+
+                switch result {
+                case .failure(let error):
+                    completion(Self.reconciliationOutcome(for: error))
+                case .success(let answerContract):
+                    guard answerContract.userID == callsiteContext.resourceOwnerId,
+                          answerContract.delayedReplyID == delayedReply.id else {
+                        completion(.staleScope)
+                        return
+                    }
+                    guard self.echoReplyMessageStore.saveArrivedReply(
+                        id: delayedReply.id,
+                        deliverAt: answerContract.answer.completedAt,
+                        trigger: delayedReply.trigger.rawValue,
+                        accountLease: accountLease,
+                        resourceOwnerId: callsiteContext.resourceOwnerId,
+                        operationId: callsiteContext.operationId
+                    ) else {
+                        completion(.inboxCommitFailed)
+                        return
+                    }
+                    guard self.markReplyDelivered(accountLease: accountLease) else {
+                        _ = self.echoReplyMessageStore.removeArrivedReply(
+                            id: delayedReply.id,
+                            accountLease: accountLease,
+                            resourceOwnerId: callsiteContext.resourceOwnerId,
+                            operationId: callsiteContext.operationId
+                        )
+                        completion(.staleScope)
+                        return
+                    }
+
+                    self.delayedReplyNotificationScheduler.cancelPendingDelayedReply(
+                        resourceOwnerId: callsiteContext.resourceOwnerId,
+                        operationId: callsiteContext.operationId,
+                        accountLease: accountLease
+                    )
+                    self.memoryManager.refreshForCurrentContext()
+                    self.memoryManager.recordAITurn(text: answerContract.answer.body)
+                    self.onTranscriptAppend?(answerContract.answer.body, false)
+                    completion(.delivered(answerID: answerContract.answer.answerID))
+                }
+            }
+        }
     }
 
     func resetToIdle(accountLease: AccountLease) {
@@ -898,6 +1020,22 @@ final class EchoViewModel {
         }
         _ = delayedReplyCallsiteScopeStore.clear(callsiteContext)
         return true
+    }
+
+    private static func reconciliationOutcome(
+        for error: Error
+    ) -> EchoDelayedReplyAnswerReconciliationOutcome {
+        guard case let DreamJourneyBackendClient.ClientError.backendError(_, context) = error else {
+            return .serverReadFailed
+        }
+        switch context.code {
+        case "echo_delayed_reply_answer_not_ready":
+            return .serverAnswerNotReady
+        case "echo_delayed_reply_answer_reconcile_required":
+            return .serverReconciliationRequired
+        default:
+            return .serverReadFailed
+        }
     }
 
     private static func roleContextKey(for context: DigitalHumanContext) -> String {

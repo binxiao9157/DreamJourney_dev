@@ -814,6 +814,7 @@ final class EchoViewController: UIViewController {
         if !restoredDelayedReply {
             render(state: .idle)
         }
+        refreshDelayedReplyAnswerReconciliation(reason: "viewDidLoad")
         renderArchiveContextStatus(viewModel.archiveContextStatus)
     }
 
@@ -841,6 +842,7 @@ final class EchoViewController: UIViewController {
             DialogEngineManager.shared.delegate = nil
         }
         viewModel.refreshArchiveContextStatus()
+        refreshDelayedReplyAnswerReconciliation(reason: "viewWillAppear")
         updatePersonaBadge()
         loadVoiceCloneRuntimeCapabilityIfNeeded()
         refreshTranscriptPreviewForCurrentContextIfIdle()
@@ -1263,6 +1265,7 @@ final class EchoViewController: UIViewController {
                 )
             )
         }
+        refreshDelayedReplyAnswerReconciliation(reason: reason)
         seedTranscriptPreview()
         if view.window != nil,
            bindDialogEngineToEchoAccountLease(reason: reason) {
@@ -1295,6 +1298,7 @@ final class EchoViewController: UIViewController {
                 )
             )
         }
+        refreshDelayedReplyAnswerReconciliation(reason: "contextDidChange")
         let didReleaseStaleRuntime = reconcileDigitalHumanRuntimeWithCurrentContext(reason: "contextDidChange")
         viewModel.refreshArchiveContextStatus()
         updatePersonaBadge()
@@ -1356,6 +1360,7 @@ final class EchoViewController: UIViewController {
     @objc private func echoAppDidBecomeActive() {
         cancelCloudDigitalHumanBackgroundRelease(reason: "didBecomeActive")
         restoreEchoAfterAppLifecycleIfNeeded(reason: "didBecomeActive")
+        refreshDelayedReplyAnswerReconciliation(reason: "didBecomeActive")
         prepareCloudDigitalHumanRuntimeAfterForegroundIfNeeded(reason: "didBecomeActive")
     }
 
@@ -2099,6 +2104,55 @@ final class EchoViewController: UIViewController {
             return
         }
         viewModel.markReplyDelivered(accountLease: echoAccountLease)
+    }
+
+    private func refreshDelayedReplyAnswerReconciliation(reason: String) {
+        guard let echoAccountLease,
+              validateEchoAccountLease(
+                at: .request,
+                expected: echoAccountLease,
+                reason: "delayedReplyAnswerReconciliation:\(reason)"
+              ) else {
+            return
+        }
+        let roleContextKey = digitalHumanRuntimeContextKey(
+            for: DigitalHumanContextStore.shared.current
+        )
+        _ = viewModel.restoreStoredDelayedReplyIfAvailable(
+            accountLease: echoAccountLease,
+            resourceOwnerId: echoAccountLease.subjectId,
+            roleContextKey: roleContextKey
+        )
+        viewModel.reconcilePendingDelayedReplyAnswerIfQAGated(
+            accountLease: echoAccountLease,
+            roleContextKey: roleContextKey
+        ) { [weak self] outcome in
+            guard let self,
+                  self.validateEchoAccountLease(
+                    at: .ui,
+                    expected: echoAccountLease,
+                    reason: "delayedReplyAnswerReconciliationCompletion:\(reason)"
+                  ) else {
+                return
+            }
+            switch outcome {
+            case .delivered:
+                PrivacySafeDiagnostics.log(
+                    subsystem: "Echo",
+                    event: "delayedReplyAnswerReconciled",
+                    states: ["source": "serverAnswer"]
+                )
+            case .serverAnswerNotReady, .serverReconciliationRequired, .serverReadFailed,
+                    .inboxCommitFailed, .staleScope:
+                PrivacySafeDiagnostics.log(
+                    subsystem: "Echo",
+                    event: "delayedReplyAnswerReconciliationDeferred",
+                    states: ["reason": "\(outcome)"]
+                )
+            case .disabled, .notEligible:
+                break
+            }
+        }
     }
 
     private func resetEchoViewModelToIdle() {
