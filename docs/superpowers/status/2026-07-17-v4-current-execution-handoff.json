@@ -5,13 +5,14 @@
     "completedSubSlices": [
       "WI-S1-02-06-G0-ECHO-DELAYED-REPLY-ANSWER-INBOX-INVENTORY",
       "WI-S1-02-06-G0-ECHO-DELAYED-REPLY-ANSWER-INBOX-CONTRACT",
-      "WI-S1-02-06-G1-SERVER-ANSWER-READ-CONTRACT"
+      "WI-S1-02-06-G1-SERVER-ANSWER-READ-CONTRACT",
+      "WI-S1-02-06-G1-IOS-ANSWER-READ-RECONCILIATION"
     ],
-    "currentSubSlice": "WI-S1-02-06-G1-IOS-SERVER-ANSWER-MAILBOX-RECONCILIATION",
+    "currentSubSlice": "WI-S1-02-06-G1-IOS-ANSWER-INBOX-READ-ARCHIVE-CLOSURE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "LOCAL_CONTRACT_VERIFIED / DEFAULT_OFF / BACKEND_COMMITTED_de6bc7d_53b420c / POSTGRES_SMOKE_READY_NOT_RUN",
-      "G1": "PARTIAL_SERVER_ANSWER_READ_CONTRACT_VERIFIED / IOS_RECONCILIATION_OPEN / DEFAULT_OFF",
+      "G1": "PARTIAL_SERVER_AND_IOS_ANSWER_RECONCILIATION_VERIFIED / QA_DEFAULT_OFF / MESSAGE_READ_ARCHIVE_OPEN",
       "G2": "NOT_STARTED",
       "G3": "NOT_STARTED"
     },
@@ -22,7 +23,7 @@
   },
   "baselines": {
     "backend": "main@53b420c",
-    "ios": "feature/prd-stitch-ui-adaptation@54c6b7a",
+    "ios": "feature/prd-stitch-ui-adaptation@6671000",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -459,5 +460,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T08:33:44+0800"
+  "updatedAt": "2026-07-20T08:52:00+0800"
 }

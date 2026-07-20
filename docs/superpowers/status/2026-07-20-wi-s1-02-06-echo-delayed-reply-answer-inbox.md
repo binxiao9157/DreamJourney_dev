@@ -83,16 +83,46 @@ GET /echo/delayed-replies/{userId}/{delayedReplyId}/answer
 
 验证：Answer/Inbox 本地 gate `88` 项通过；完整后端验证 `785` 项通过。真实 Postgres 隔离 smoke 仍待 G2 部署阶段执行。
 
+## G1 iOS QA-only Answer 对账
+
+iOS 已增加一个默认关闭的、只用于 Debug/UIQA 的服务端 Answer 对账路径。它不改变公开 Echo UI，也不会让本地到期时间、通知或 Inbox 指针伪造业务完成。
+
+- 仅当启动参数包含 `DJEnableEchoDelayedReplyAnswerReconciliationQA` 时启用；Release 编译恒为关闭。
+- 客户端通过 Owner-only `GET /echo/delayed-replies/{userId}/{delayedReplyId}/answer` 读取；本地会校验 ISO-8601 完成时间、`completed` 状态、reply generation、私有 Answer 正文、匹配的 receipt，以及 Inbox projection 必须保持 redacted。
+- 只处理当前 account lease、resource owner、role context 和 operation ID 均匹配的 `.awaitingReplyDelivery` 记录；同一条待处理记录有单飞保护，生命周期重复触发不会发起并发对账。
+- 对账成功时，先保存仅含 `sourceAnswerId` 的 Inbox 指针；只有保存成功后才清除本地 pending 记录。若本地 retire 失败，会回滚刚写入的 Inbox 指针。Answer 正文只进入当前对话记忆和 transcript，不复制到 Inbox。
+- `409 echo_delayed_reply_answer_not_ready`、`409 echo_delayed_reply_answer_reconcile_required` 或其他读失败都会保留 `.awaitingReplyDelivery` 和本地 pending，不写 Inbox、不取消重试机会。
+- 触发点仅限 QA 下的页面恢复、前台恢复、account scope 重新绑定和数字人上下文变更；日志只记录 privacy-safe 的延迟状态和 Answer ID，不记录正文。
+
+相关 iOS 代码提交：
+
+- `6671000 feat(v4): reconcile delayed Echo answers in QA`
+- 本地 QA 开关补丁将在本状态证据提交中一并固化，避免单独检出 `6671000` 时丢失默认关闭边界。
+
+验证：
+
+```bash
+git diff --check
+xcodebuild -quiet -workspace DreamJourney.xcworkspace -scheme DreamJourney \
+  -configuration Debug -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' build-for-testing
+xcodebuild -quiet -workspace DreamJourney.xcworkspace -scheme DreamJourney \
+  -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' \
+  CODE_SIGNING_ALLOWED=NO build
+```
+
+以上静态检查、模拟器 `build-for-testing` 和无签名 iPhoneOS build 已通过。新增的 Answer contract / reconciliation 单测已随测试目标编译；实际 `xcodebuild test` 被现有 Scheme 的 simulator destination 解析为 generic placeholder 而无法启动，属于测试运行环境限制，不计作已执行的测试证据。
+
 ## 尚未声明完成
 
 - 未运行实际 Postgres 原子并发 smoke：当前本地 shell 未配置 `DATABASE_URL`。脚本会创建并清理隔离临时数据库，待 G2 部署/运维阶段执行。
 - 未启用 typed scheduler/worker、Provider generation、accepted/query/unknown reconcile；这属于 `WI-S1-02-07` 及其后续 worker gate。
-- iOS 的 server Answer 拉取、重启后的已读/归档/点击回响闭环尚未实现；当前仅完成 G1 的服务端读取子段。
+- iOS 已完成 QA-only 的 server Answer 拉取与本地 pending 对账；重启后的 Answer 已读/归档/点击回响闭环，以及可重复的 simulator 交互运行证据尚未完成。
 - 未推送或部署后端，因此不能表述为线上回信完成。
 
 ## 后续顺序
 
-1. 在不改变公开 UI 的前提下继续 G1：iOS 只消费服务端 Answer/receipt，处理重启、已读、归档与点击回响。
+1. 在不改变公开 UI 的前提下继续 G1：补齐 Answer 通过 Inbox 指针打开、已读/归档和重启恢复后的私有读取闭环。
 2. 进入 G2 前，先推送 `53b420c`，部署 migration `0024`，再运行隔离 Postgres smoke：
 
 ```bash

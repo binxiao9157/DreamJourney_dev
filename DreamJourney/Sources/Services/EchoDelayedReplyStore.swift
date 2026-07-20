@@ -15,6 +15,21 @@ enum EchoDelayedReplyTrigger: String, Codable {
     case contentSignal
 }
 
+/// Server Answer reconciliation remains a narrow QA cohort until the delayed
+/// reply worker and deployed Postgres gates have completed. Public Echo never
+/// uses a local due time as proof that a business reply arrived.
+enum EchoDelayedReplyAnswerReconciliationQAGate {
+    static let launchArgument = "DJEnableEchoDelayedReplyAnswerReconciliationQA"
+
+    static var isEnabled: Bool {
+        #if DEBUG || UI_QA_SIMULATOR
+        return ProcessInfo.processInfo.arguments.contains(launchArgument)
+        #else
+        return false
+        #endif
+    }
+}
+
 struct EchoDelayedReplyOperationScope: Equatable {
     let accountLease: AccountLease
     let resourceOwnerId: String
