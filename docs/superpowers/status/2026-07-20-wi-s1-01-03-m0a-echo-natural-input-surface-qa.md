@@ -186,3 +186,37 @@ Gate 结论：确认读取合同已有 G0/G2 证据，但仍为 default-off，�
 
 Gate 结论：该 typed consumer 获得 G0 scoped evidence；G2 复用已部署 confirmation read 合同。
 没有新增 G1 可视 surface，也没有缩短 G4 产品/隐私放行路径。
+
+## 2026-07-21 Slice 3G 默认关闭的产品批量确认动作合同
+
+- 后端提交 `a9efa24 feat(m0): add policy-bound confirmation batch action` 已推送并部署至
+  `miao-server`。新增
+  `POST /v2/vaults/{vaultId}/interview-review-batches/{reviewBatchId}/confirmation/batch-accept`；
+  它与既有 QA `candidate-review/batch-accept` 路由完全隔离。
+- 正式动作必须持有仍有效的 `ownerTruthCandidateReview` captured policy。没有 policy、过期
+  policy 或只携带 `X-DreamJourney-QA-Owner-Truth` 都返回 `403 release_policy_denied`；QA
+  header 不构成产品动作授权。
+- 客户端只传 command ID 和已选的普通 Candidate/version。服务端固定
+  `ownerConfirmedAtBoundary` 原因码，不接受客户端任意 reason code。敏感或 single-review
+  Candidate 仍返回 `409 ownerTruthInterviewCandidateSingleReviewRequired`，不会被批量接受。
+- 返回体使用独立
+  `owner-truth-interview-candidate-confirmation-batch-decision-response-v1` schema，仅包含
+  command/batch 标识、被接受 Candidate ID、数量和“未激活 MemoryVersion”的负向证明；不返回
+  Candidate 正文、QA review、完整 receipt 或内部 authority 信息。
+- 此动作只产生 terminal Candidate DecisionReceipt；不创建或激活 MemoryVersion，也不写入
+  legacy Archive/KBLite。没有新增 iOS 产品 UI 或自动动作，公开发布态继续不可见。
+
+本轮验证：
+
+- 新增 API 测试覆盖：默认关闭、QA header 无法绕过、有效 captured policy 的 owner 可接受普通
+  Candidate、重放去重、非 owner 拒绝、敏感 Candidate 拒绝、响应脱敏和无 MemoryVersion 激活。
+- `./scripts/verify_backend.sh` 通过：1058 tests、全部既有合同/烟测门、FastAPI smoke 与
+  `git diff --check` 通过。
+- 服务器已 fast-forward 至 `a9efa24` 并重建 `api` 容器。部署容器 smoke 在一次性 Postgres
+  临时库通过：`formalCandidateConfirmationActionDenied=true`、
+  `formalCandidateConfirmationDenied=true`、`deployedCandidateReviewPolicyDefaultClosed=true`、
+  `productionBusinessDataMutated=false`，迁移头为 `0035`。
+
+Gate 结论：正式批量确认写合同已有 G0/G2 证据，但功能仍默认关闭、没有 G1 产品动作界面。
+下一步只能建立独立 typed iOS action consumer，并继续保留 AccountLease、策略重校验和无 QA
+header 边界；敏感候选逐条确认仍需后续独立合同。
