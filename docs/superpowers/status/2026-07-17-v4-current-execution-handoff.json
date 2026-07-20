@@ -2,30 +2,32 @@
   "activeWorkItem": {
     "authorityLock": "OWNER_TRUTH",
     "backendPendingPaths": [],
-    "completedSubSlices": [
-      "WI-S1-01-12-G0-VERIFIED_MEDIA_PROCESSOR_BOUNDARY_INVENTORY",
-      "WI-S1-01-12-G0-INTENT_COMMIT_CONTRACT_SHADOW"
-    ],
-    "currentSubSlice": "WI-S1-01-12-G0-LEGACY_MEDIA_NON_PROMOTION_INVENTORY",
+    "completedSubSlices": [],
+    "currentSubSlice": "WI-S1-01-10-G0-CUTOVER_ADMISSION_INVENTORY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "IN_PROGRESS / MEDIA_BOUNDARY_AND_INTENT_COMMIT_SHADOW_VERIFIED / LEGACY_NON_PROMOTION_INVENTORY_NEXT",
-      "G1": "NOT_STARTED / NO_PUBLIC_MEDIA_UI_CHANGE_AUTHORIZED",
-      "G2": "NOT_STARTED / SOURCE_OBJECT_AND_STORAGE_EVIDENCE_REQUIRED",
-      "G3": "NOT_STARTED / PROCESSOR_PROVIDER_CONTRACT_REQUIRED",
-      "G4": "NOT_STARTED / MEDIA_AND_PROVIDER_POLICY_APPROVAL_REQUIRED"
+      "G0": "IN_PROGRESS / CUTOVER_ADMISSION_INVENTORY_REQUIRED",
+      "G1": "NOT_STARTED / NO_PUBLIC_TEXT_CORE_COHORT_CHANGE_AUTHORIZED",
+      "G2": "NOT_STARTED / PRODUCTION_SHAPE_GO_RECORD_REQUIRED",
+      "G4": "NOT_STARTED / PRODUCT_PRIVACY_RIGHTS_APPROVAL_REQUIRED"
     },
-    "id": "WI-S1-01-12",
+    "id": "WI-S1-01-10",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-10 is INTERNAL_READY for its scoped G0 work: inventory, lifecycle guard, retirement candidate manifest, cutover-fence model and default-off TimeLetter typed-effect admission shadow are implemented at backend main@f90c7c7 and deployed healthy. Its remaining G2 host/runtime and G3 Provider evidence is external/open; no worker, route, timer, legacy authority, mailbox/outbox or Provider call changed. WI-S1-01-12 has now completed two G0 sub-slices: backend main@eb4b609 added a default-off verified-media boundary, and backend main@07ebaed added a default-off intent/commit contract shadow. The latter rejects expired, mock, unsafe, cross-owner/vault/purpose, path, MIME, hash, size and observed-HEAD mismatches; it classifies duplicate and orphan candidates without issuing URLs, receiving bytes, calling storage, persisting SourceObjects, scheduling effects, or writing Candidate/Memory/Persona data. The active sub-slice remains within WI-S1-01-12 and will inventory legacy media representations strictly to prevent non-authoritative promotion."
+    "summary": "WI-S1-01-12 is INTERNAL_READY for its complete currently executable G0 boundary at backend main@bfd7ca6 and deployed healthy: a future verified-object admission shadow, an intent/commit shadow and a legacy-media non-promotion inventory are all default-off, value-free and side-effect free. No SourceObject authority, object storage, upload route, worker, processor, Candidate/Memory/Persona write or public media UI was added. G2 private object storage/PG proof, G3 provider/scan/region/retention proof and G4 media/privacy/device approval remain open, so the plan automatically skips its blocked real-media lane. WI-S1-01-10 is now active for a pure cutover-admission inventory: it must prove that no authorityEpoch increase or legacy-writer retirement can occur absent a separate G2/G4 go record."
   },
   "baselines": {
-    "backend": "main@07ebaed",
-    "ios": "feature/prd-stitch-ui-adaptation@e7bca7f",
+    "backend": "main@bfd7ca6",
+    "ios": "feature/prd-stitch-ui-adaptation@55bae16",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
+    {
+      "evidence": "docs/superpowers/status/2026-07-20-wi-s1-01-12-media-source-object-g0-boundary-complete.md",
+      "id": "WI-S1-01-12",
+      "implementationStatus": "INTERNAL_READY / G0_MEDIA_BOUNDARY_INTENT_COMMIT_LEGACY_NON_PROMOTION_VERIFIED / BACKEND_DEPLOYED_bfd7ca6 / DEFAULT_OFF / G2_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G2_G3_G4_OPEN"
+    },
     {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-10-time-letter-typed-effect-admission-shadow.md",
       "id": "WI-S1-02-10",
@@ -478,9 +480,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-02-11",
+    "id": "WI-S1-01-11",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Verified media processor and Candidate-only output follow the effect-kernel operations work. It remains default-off until its SourceObject and Provider gates are satisfied."
+    "summary": "Persona and Memorial Profile Authority follows the text-core cutover boundary. It remains hidden and default-off until its independent policy and relationship gates are satisfied."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -489,5 +491,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T17:10:00+0800"
+  "updatedAt": "2026-07-20T17:28:00+0800"
 }
