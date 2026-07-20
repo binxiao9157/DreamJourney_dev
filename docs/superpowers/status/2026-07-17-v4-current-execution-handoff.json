@@ -4,19 +4,20 @@
     "backendPendingPaths": [],
     "completedSubSlices": [
       "WI-S1-02-10-G0-LEGACY_TIMER_CALLBACK_INVENTORY",
-      "WI-S1-02-10-G0-TIME_LETTER_NOTIFICATION_LIFECYCLE_GUARD"
+      "WI-S1-02-10-G0-TIME_LETTER_NOTIFICATION_LIFECYCLE_GUARD",
+      "WI-S1-02-10-G0-RETIREMENT_CANDIDATE_MANIFEST"
     ],
-    "currentSubSlice": "WI-S1-02-10-G0-RETIREMENT_CANDIDATE_MANIFEST",
+    "currentSubSlice": "WI-S1-02-10-G0-CUTOVER_FENCE_MODEL",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "IN_PROGRESS / INVENTORY_AND_TIME_LETTER_LIFECYCLE_GUARD_COMPLETE_RETIREMENT_CANDIDATE_MANIFEST_REQUIRED",
+      "G0": "IN_PROGRESS / INVENTORY_TIME_LETTER_LIFECYCLE_GUARD_AND_RETIREMENT_CANDIDATE_MANIFEST_COMPLETE_CUTOVER_FENCE_MODEL_REQUIRED",
       "G2": "NOT_STARTED / HOST_PROCESS_AND_ROLLING_DEPLOY_EVIDENCE_REQUIRED",
       "G3": "NOT_STARTED / PROVIDER_CALLBACK_QUERY_APPLICABILITY_REQUIRED"
     },
     "id": "WI-S1-02-10",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-09 is INTERNAL_READY with its scoped G0/G2 evidence deployed at backend main@1d87023; real Provider query remains G3 EXTERNAL_BLOCKED and no replay or Provider call is enabled. WI-S1-02-10 completed its value-free legacy timer/callback inventory and a lifecycle-safe TimeLetter local-notification teardown guard. No cutover, retirement, worker enablement, timer disablement, or server delivery change was authorized. The next G0 slice is a retirement candidate manifest that can record required evidence without treating any legacy surface as ready for deletion."
+    "summary": "WI-S1-02-09 is INTERNAL_READY with its scoped G0/G2 evidence deployed at backend main@1d87023; real Provider query remains G3 EXTERNAL_BLOCKED and no replay or Provider call is enabled. WI-S1-02-10 completed its value-free legacy timer/callback inventory, a lifecycle-safe TimeLetter local-notification teardown guard, and a cross-repository retirement candidate manifest. No cutover, retirement, worker enablement, timer disablement, route removal, credential revoke, or server delivery change was authorized. The next G0 slice is a deterministic cutover-fence model that must preserve one active Authority and fail closed without changing runtime state."
   },
   "baselines": {
     "backend": "main@101e258",

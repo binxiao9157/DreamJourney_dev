@@ -1,0 +1,868 @@
+{
+  "schemaVersion": "dreamjourney.async-effect-retirement-candidate-manifest.v1",
+  "workItem": "WI-S1-02-10",
+  "authorityLock": "ASYNC_EFFECT",
+  "status": "CANDIDATES_RECORDED_NOT_AUTHORIZED",
+  "scope": "G0 value-free retirement planning only. This manifest references existing source inventories and records future evidence requirements. It does not observe a host, authorize a cutover, enable a worker, disable a timer, remove a route, revoke a credential, or change product runtime behavior.",
+  "g0Prohibitions": [
+    "no-runtime-observation",
+    "no-retirement-approval",
+    "no-timer-or-worker-state-change",
+    "no-route-or-script-removal",
+    "no-provider-query-or-callback-enable",
+    "no-credential-revoke"
+  ],
+  "reopenTriggers": [
+    "runtime-hit",
+    "new-old-client",
+    "in-flight-not-terminal",
+    "unknown-in-flight",
+    "restore-or-replay-failure",
+    "approval-invalidated"
+  ],
+  "sourceInventories": [
+    {
+      "repository": "ios",
+      "path": "Scripts/QA/product-v4/legacy-timer-callback-inventory-v1.json",
+      "schemaVersion": "dreamjourney.ios-legacy-timer-callback-inventory.v1"
+    },
+    {
+      "repository": "backend",
+      "path": "docs/backend/legacy-timer-callback-inventory-v1.json",
+      "schemaVersion": "dreamjourney.legacy-timer-callback-inventory.v1"
+    }
+  ],
+  "entries": [
+    {
+      "id": "ios.echo-delayed-reply-local-notification",
+      "repository": "ios",
+      "inventoryRef": "echo-delayed-reply-local-notification",
+      "surfaceType": "localNotification",
+      "pathOrResource": [
+        "DreamJourney/Sources/Services/EchoDelayedReplyNotificationScheduler.swift",
+        "DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift"
+      ],
+      "owner": "EchoDelayedReplyOperationScope",
+      "introducedBy": "pre-v4-device-reminder-path",
+      "version": "runtime-version-unobserved-g2-required",
+      "stableKeyPolicy": "answer identity plus account-lease generation; device reminder cannot become business delivery authority",
+      "shadowParity": "server in-app message and notification intent authority is not yet authorized",
+      "candidateDisposition": "CANDIDATE_BLOCKED",
+      "successorAuthority": "server-notification-intent-or-inapp-message-not-authorized",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not_observed",
+        "requirements": [
+          "old-account-lease pending request teardown",
+          "new-generation request preservation",
+          "no stale deeplink after account switch"
+        ]
+      },
+      "zeroUseWindow": {
+        "state": "not_observed",
+        "source": "g2-device-and-runtime-counter-required",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g2-required",
+        "useCount": "unknown-g2-required",
+        "inFlight": "unknown-g2-required",
+        "oldClient": "unknown-g2-required",
+        "restoreReplay": "unknown-g2-required"
+      },
+      "revoke": "cancel only proven old-lease requests; provider revoke not applicable",
+      "approvers": ["iOS runtime owner", "Operations", "Security/Privacy"],
+      "evidenceIds": ["ios-legacy-timer-callback-inventory-v1", "time-letter-not-applicable"],
+      "dependencyScan": "source-inventory-only-not-runtime-zero-use",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "restore a newer notification adapter only; never recreate a device reminder as business authority"
+    },
+    {
+      "id": "ios.time-letter-local-notification",
+      "repository": "ios",
+      "inventoryRef": "time-letter-local-notification",
+      "surfaceType": "localNotification",
+      "pathOrResource": [
+        "DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift",
+        "DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift"
+      ],
+      "owner": "sealed-time-letter owner",
+      "introducedBy": "pre-v4-device-reminder-path",
+      "version": "runtime-version-unobserved-g2-required",
+      "stableKeyPolicy": "sealed letter owner and archive identity plus account-lease generation; local reminder is not delivery authority",
+      "shadowParity": "server time-letter delivery and in-app mailbox authority exists separately but cutover is not authorized",
+      "candidateDisposition": "CANDIDATE_BLOCKED",
+      "successorAuthority": "server-time-letter-delivery-and-inapp-message-not-authorized",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not_observed",
+        "requirements": [
+          "proved old-lease local notification cleanup",
+          "recipient visibility authorization remains server-side",
+          "new-generation request preservation"
+        ]
+      },
+      "zeroUseWindow": {
+        "state": "not_observed",
+        "source": "g2-device-and-runtime-counter-required",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g2-required",
+        "useCount": "unknown-g2-required",
+        "inFlight": "unknown-g2-required",
+        "oldClient": "unknown-g2-required",
+        "restoreReplay": "unknown-g2-required"
+      },
+      "revoke": "remove only requests with complete old-lease ownership proof; no provider revoke",
+      "approvers": ["Archive owner", "iOS runtime owner", "Operations", "Security/Privacy"],
+      "evidenceIds": ["ios-legacy-timer-callback-inventory-v1", "time-letter-notification-lifecycle-guard"],
+      "dependencyScan": "source-inventory-only-not-runtime-zero-use",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "preserve sealed-letter and mailbox receipts; restore only a successor adapter through a new approved release"
+    },
+    {
+      "id": "ios.voice-clone-training-poll",
+      "repository": "ios",
+      "inventoryRef": "voice-clone-training-poll",
+      "surfaceType": "repeatingTimer",
+      "pathOrResource": ["DreamJourney/Sources/Memoir/VoiceCloneService.swift"],
+      "owner": "VoiceCloneTrainingRuntimeOperation",
+      "introducedBy": "pre-v4-provider-poll-path",
+      "version": "runtime-version-unobserved-g2-required",
+      "stableKeyPolicy": "training runtime operation plus account lease; a poll result cannot replace a newer profile state",
+      "shadowParity": "provider query/reconciliation worker is not authorized and external Provider proof remains G3",
+      "candidateDisposition": "CANDIDATE_BLOCKED",
+      "successorAuthority": "provider-query-reconciliation-worker-not-authorized",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not_observed",
+        "requirements": [
+          "training operation terminal or explicitly unknown",
+          "no stale poll completion after account lease change",
+          "provider query authorization"
+        ]
+      },
+      "zeroUseWindow": {
+        "state": "not_observed",
+        "source": "g2-runtime-counter-and-g3-provider-required",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g2-required",
+        "useCount": "unknown-g2-required",
+        "inFlight": "unknown-g2-g3-required",
+        "oldClient": "unknown-g2-required",
+        "restoreReplay": "unknown-g2-g3-required"
+      },
+      "revoke": "provider training/query lifecycle requires G3 owner evidence",
+      "approvers": ["Voice domain owner", "Operations", "Provider credential owner", "Security/Privacy"],
+      "evidenceIds": ["ios-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-not-runtime-zero-use",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "reconcile provider facts through an approved successor; do not restart an unknown training request"
+    },
+    {
+      "id": "ios.digital-human-session-heartbeat",
+      "repository": "ios",
+      "inventoryRef": "digital-human-session-heartbeat",
+      "surfaceType": "delayedWorkItem",
+      "pathOrResource": ["DreamJourney/Sources/Modules/Echo/EchoViewController.swift"],
+      "owner": "DigitalHumanSessionContract session owner/device",
+      "introducedBy": "current-runtime-lease-heartbeat",
+      "version": "runtime-version-unobserved-g2-required",
+      "stableKeyPolicy": "digital-human session owner/device/expiry lease identity",
+      "shadowParity": "no approved replacement heartbeat authority",
+      "candidateDisposition": "RETAIN_CURRENT_RUNTIME_NOT_CANDIDATE",
+      "successorAuthority": "not-applicable-current-runtime",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not-applicable-before-successor",
+        "requirements": ["retain cancellation before session replacement and runtime release"]
+      },
+      "zeroUseWindow": {
+        "state": "not-applicable-before-successor",
+        "source": "current-runtime-lease-required",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g2-required",
+        "useCount": "unknown-g2-required",
+        "inFlight": "unknown-g2-g3-required",
+        "oldClient": "unknown-g2-required",
+        "restoreReplay": "unknown-g2-g3-required"
+      },
+      "revoke": "release is a runtime lease action, not a retirement action",
+      "approvers": ["Digital human domain owner", "Operations", "Provider credential owner"],
+      "evidenceIds": ["ios-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-not-runtime-zero-use",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "retain server TTL and reconcile path; never restore a stale client heartbeat as authority"
+    },
+    {
+      "id": "ios.dialog-engine-silence-timeout",
+      "repository": "ios",
+      "inventoryRef": "dialog-engine-silence-timeout",
+      "surfaceType": "oneShotTimer",
+      "pathOrResource": ["DreamJourney/Sources/Services/DialogEngineManager.swift"],
+      "owner": "active dialog binding",
+      "introducedBy": "current-runtime-dialog-timeout",
+      "version": "runtime-version-unobserved-g2-required",
+      "stableKeyPolicy": "active dialog binding and account lease timer checkpoint",
+      "shadowParity": "no approved replacement timeout authority",
+      "candidateDisposition": "RETAIN_CURRENT_RUNTIME_NOT_CANDIDATE",
+      "successorAuthority": "not-applicable-current-runtime",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not-applicable-before-successor",
+        "requirements": ["invalidate before reset and dialog stop"]
+      },
+      "zeroUseWindow": {
+        "state": "not-applicable-before-successor",
+        "source": "current-runtime-dialog-required",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g2-required",
+        "useCount": "unknown-g2-required",
+        "inFlight": "unknown-g2-required",
+        "oldClient": "unknown-g2-required",
+        "restoreReplay": "not-applicable"
+      },
+      "revoke": "not applicable to a local dialog timeout",
+      "approvers": ["Dialog runtime owner", "iOS runtime owner"],
+      "evidenceIds": ["ios-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-not-runtime-zero-use",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "forward-fix dialog timeout behavior; do not duplicate dialog completion authority"
+    },
+    {
+      "id": "ios.digital-human-audio-level-meter",
+      "repository": "ios",
+      "inventoryRef": "digital-human-audio-level-meter",
+      "surfaceType": "repeatingTimer",
+      "pathOrResource": ["DreamJourney/Sources/Modules/Echo/DigitalHumanAudioLevelMeter.swift"],
+      "owner": "active audio player or SDK fallback",
+      "introducedBy": "pure-presentation-playback-meter",
+      "version": "not-applicable-pure-ui-playback",
+      "stableKeyPolicy": "not applicable; no business mutation",
+      "shadowParity": "not applicable; excluded from business effect retirement",
+      "candidateDisposition": "EXCLUDED_PURE_UI_OR_PLAYBACK",
+      "successorAuthority": "not-applicable",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not-applicable",
+        "requirements": ["stop with audio metering lifecycle"]
+      },
+      "zeroUseWindow": {
+        "state": "not-applicable",
+        "source": "pure-ui-playback-exclusion",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-applicable",
+        "useCount": "not-applicable",
+        "inFlight": "not-applicable",
+        "oldClient": "not-applicable",
+        "restoreReplay": "not-applicable"
+      },
+      "revoke": "not applicable",
+      "approvers": ["iOS runtime owner"],
+      "evidenceIds": ["ios-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-pure-ui-exclusion",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "not a business authority; ordinary UI playback maintenance applies"
+    },
+    {
+      "id": "ios.memoir-audio-progress",
+      "repository": "ios",
+      "inventoryRef": "memoir-audio-progress",
+      "surfaceType": "repeatingTimer",
+      "pathOrResource": ["DreamJourney/Sources/Memoir/MemoirAudioPlayer.swift"],
+      "owner": "active memoir audio player",
+      "introducedBy": "pure-presentation-playback-progress",
+      "version": "not-applicable-pure-ui-playback",
+      "stableKeyPolicy": "not applicable; no business mutation",
+      "shadowParity": "not applicable; excluded from business effect retirement",
+      "candidateDisposition": "EXCLUDED_PURE_UI_OR_PLAYBACK",
+      "successorAuthority": "not-applicable",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not-applicable",
+        "requirements": ["stop with player lifecycle"]
+      },
+      "zeroUseWindow": {
+        "state": "not-applicable",
+        "source": "pure-ui-playback-exclusion",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-applicable",
+        "useCount": "not-applicable",
+        "inFlight": "not-applicable",
+        "oldClient": "not-applicable",
+        "restoreReplay": "not-applicable"
+      },
+      "revoke": "not applicable",
+      "approvers": ["iOS runtime owner"],
+      "evidenceIds": ["ios-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-pure-ui-exclusion",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "not a business authority; ordinary UI playback maintenance applies"
+    },
+    {
+      "id": "ios.archive-audio-recording-duration",
+      "repository": "ios",
+      "inventoryRef": "archive-audio-recording-duration",
+      "surfaceType": "repeatingTimer",
+      "pathOrResource": ["DreamJourney/Sources/Modules/Archive/MemoryArchiveAudioRecorderViewController.swift"],
+      "owner": "recording account lease",
+      "introducedBy": "pure-presentation-recording-duration",
+      "version": "not-applicable-pure-ui-playback",
+      "stableKeyPolicy": "not applicable; stale recording is discarded rather than persisted",
+      "shadowParity": "not applicable; excluded from business effect retirement",
+      "candidateDisposition": "EXCLUDED_PURE_UI_OR_PLAYBACK",
+      "successorAuthority": "not-applicable",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not-applicable",
+        "requirements": ["stop with recording lifecycle and discard stale recording"]
+      },
+      "zeroUseWindow": {
+        "state": "not-applicable",
+        "source": "pure-ui-playback-exclusion",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-applicable",
+        "useCount": "not-applicable",
+        "inFlight": "not-applicable",
+        "oldClient": "not-applicable",
+        "restoreReplay": "not-applicable"
+      },
+      "revoke": "not applicable",
+      "approvers": ["Archive owner", "iOS runtime owner"],
+      "evidenceIds": ["ios-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-pure-ui-exclusion",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "not a business authority; ordinary recording UI maintenance applies"
+    },
+    {
+      "id": "ios.footprint-banner-dismiss",
+      "repository": "ios",
+      "inventoryRef": "footprint-banner-dismiss",
+      "surfaceType": "oneShotTimer",
+      "pathOrResource": ["DreamJourney/Sources/Modules/Map/FootprintNotificationBanner.swift"],
+      "owner": "in-memory banner view",
+      "introducedBy": "pure-presentation-banner-dismiss",
+      "version": "not-applicable-pure-ui-playback",
+      "stableKeyPolicy": "not applicable; no business mutation",
+      "shadowParity": "not applicable; excluded from business effect retirement",
+      "candidateDisposition": "EXCLUDED_PURE_UI_OR_PLAYBACK",
+      "successorAuthority": "not-applicable",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not-applicable",
+        "requirements": ["dismiss with view lifecycle"]
+      },
+      "zeroUseWindow": {
+        "state": "not-applicable",
+        "source": "pure-ui-playback-exclusion",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-applicable",
+        "useCount": "not-applicable",
+        "inFlight": "not-applicable",
+        "oldClient": "not-applicable",
+        "restoreReplay": "not-applicable"
+      },
+      "revoke": "not applicable",
+      "approvers": ["iOS runtime owner"],
+      "evidenceIds": ["ios-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-pure-ui-exclusion",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "not a business authority; ordinary UI maintenance applies"
+    },
+    {
+      "id": "backend.api-startup-store-lifecycle",
+      "repository": "backend",
+      "inventoryRef": "api-startup-store-lifecycle",
+      "surfaceType": "apiStartupLifecycle",
+      "pathOrResource": ["app/main.py"],
+      "owner": "api-process-store-lifecycle",
+      "introducedBy": "current-process-store-lifecycle",
+      "version": "runtime-version-unobserved-g2-required",
+      "stableKeyPolicy": "not applicable; startup and shutdown do not dispatch a business effect",
+      "shadowParity": "not applicable; process lifecycle remains required",
+      "candidateDisposition": "PROCESS_LIFECYCLE_NOT_CANDIDATE",
+      "successorAuthority": "not-applicable-current-process-lifecycle",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not-applicable-before-process-architecture-change",
+        "requirements": ["store close must remain paired with startup initialization"]
+      },
+      "zeroUseWindow": {
+        "state": "not-applicable-before-successor",
+        "source": "current-process-lifecycle-required",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g2-required",
+        "useCount": "unknown-g2-required",
+        "inFlight": "unknown-g2-required",
+        "oldClient": "not-applicable",
+        "restoreReplay": "unknown-g2-required"
+      },
+      "revoke": "not applicable",
+      "approvers": ["Backend runtime owner", "Operations"],
+      "evidenceIds": ["backend-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-not-runtime-zero-use",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "process lifecycle changes require a separate architecture migration and restore evidence"
+    },
+    {
+      "id": "backend.time-letter-api-direct-dispatch",
+      "repository": "backend",
+      "inventoryRef": "time-letter-api-direct-dispatch",
+      "surfaceType": "apiDueRoute",
+      "pathOrResource": ["app/main.py"],
+      "owner": "authenticated-route-and-store-idempotency",
+      "introducedBy": "pre-v4-direct-time-letter-dispatch",
+      "version": "runtime-version-unobserved-g2-required",
+      "stableKeyPolicy": "time-letter owner/resource/due-state must be replaced by one typed worker business stable key",
+      "shadowParity": "typed async effect scheduler is default-disabled shadow only; parity is not observed",
+      "candidateDisposition": "CANDIDATE_BLOCKED",
+      "successorAuthority": "typed-time-letter-worker-not-authorized",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not_observed",
+        "requirements": [
+          "single scheduler lease",
+          "direct route no longer creates business effects",
+          "backlog and dead-letter terminal",
+          "restore and replay evidence"
+        ]
+      },
+      "zeroUseWindow": {
+        "state": "not_observed",
+        "source": "g2-route-metric-and-worker-counter-required",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g2-required",
+        "useCount": "unknown-g2-required",
+        "inFlight": "unknown-g2-required",
+        "oldClient": "unknown-g2-required",
+        "restoreReplay": "unknown-g2-required"
+      },
+      "revoke": "future route deny or facade only after typed worker authority and approvals",
+      "approvers": ["Async effect owner", "TimeLetter owner", "Operations", "Security/Privacy"],
+      "evidenceIds": ["backend-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-not-runtime-zero-use",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "post-cutover pause or reconcile with typed worker; never restore direct route as second authority"
+    },
+    {
+      "id": "backend.time-letter-cli-direct-dispatch",
+      "repository": "backend",
+      "inventoryRef": "time-letter-cli-direct-dispatch",
+      "surfaceType": "hostCliDispatch",
+      "pathOrResource": ["scripts/dispatch_due_time_letters.py"],
+      "owner": "host-operator-and-store-idempotency",
+      "introducedBy": "pre-v4-direct-time-letter-dispatch",
+      "version": "runtime-version-unobserved-g2-required",
+      "stableKeyPolicy": "time-letter owner/resource/due-state must converge on the typed worker business stable key",
+      "shadowParity": "typed async effect scheduler is default-disabled shadow only; parity is not observed",
+      "candidateDisposition": "CANDIDATE_BLOCKED",
+      "successorAuthority": "typed-time-letter-worker-not-authorized",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not_observed",
+        "requirements": [
+          "host invocation inventory",
+          "single scheduler lease",
+          "no direct effect after cutover",
+          "terminal in-flight and restore evidence"
+        ]
+      },
+      "zeroUseWindow": {
+        "state": "not_observed",
+        "source": "g2-host-process-and-route-counter-required",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g2-required",
+        "useCount": "unknown-g2-required",
+        "inFlight": "unknown-g2-required",
+        "oldClient": "not-applicable-host-cli",
+        "restoreReplay": "unknown-g2-required"
+      },
+      "revoke": "remove host invocation only after Operations-approved drain and route/worker proof",
+      "approvers": ["Async effect owner", "TimeLetter owner", "Operations", "Security/Privacy"],
+      "evidenceIds": ["backend-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-not-runtime-zero-use",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "post-cutover use typed standby worker or reconcile; never restart direct CLI as a second authority"
+    },
+    {
+      "id": "backend.time-letter-host-scheduler-documentation",
+      "repository": "backend",
+      "inventoryRef": "time-letter-host-scheduler-documentation",
+      "surfaceType": "hostTimerCandidate",
+      "pathOrResource": ["docs/backend/server-update-operations.md"],
+      "owner": "host-operator-required",
+      "introducedBy": "documented-host-time-letter-scheduler",
+      "version": "host-version-unobserved-g2-required",
+      "stableKeyPolicy": "time-letter owner/resource/due-state must converge on one typed worker business stable key",
+      "shadowParity": "not observed; host process state is explicitly unverified",
+      "candidateDisposition": "CANDIDATE_BLOCKED",
+      "successorAuthority": "typed-time-letter-worker-not-authorized",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not_observed",
+        "requirements": [
+          "host systemd or cron inventory",
+          "single scheduler lease",
+          "no direct effect after cutover",
+          "terminal in-flight and restore evidence"
+        ]
+      },
+      "zeroUseWindow": {
+        "state": "not_observed",
+        "source": "g2-host-process-counter-required",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g2-required",
+        "useCount": "unknown-g2-required",
+        "inFlight": "unknown-g2-required",
+        "oldClient": "not-applicable-host-timer",
+        "restoreReplay": "unknown-g2-required"
+      },
+      "revoke": "disable host unit or cron only after Operations-approved drain; documentation cannot prove host absence",
+      "approvers": ["Async effect owner", "TimeLetter owner", "Operations", "Security/Privacy"],
+      "evidenceIds": ["backend-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-host-unverified",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "post-cutover use typed standby worker or reconcile; do not re-enable unknown host timer"
+    },
+    {
+      "id": "backend.async-effect-scheduler-shadow",
+      "repository": "backend",
+      "inventoryRef": "async-effect-scheduler-shadow",
+      "surfaceType": "typedSchedulerFoundation",
+      "pathOrResource": ["app/async_effects/scheduler.py"],
+      "owner": "scheduler-lease-foundation",
+      "introducedBy": "v4-typed-async-effect-foundation",
+      "version": "runtime-version-unobserved-g2-required",
+      "stableKeyPolicy": "typed operation stable key and scheduler lease; default-disabled foundation owns no business effect",
+      "shadowParity": "default-disabled shadow; no runnable typed handler is authorized",
+      "candidateDisposition": "FOUNDATION_NOT_CANDIDATE",
+      "successorAuthority": "not-applicable-foundation",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not-applicable-before-foundation-replacement",
+        "requirements": ["retain default-disabled safety until a separately approved replacement exists"]
+      },
+      "zeroUseWindow": {
+        "state": "not-applicable-before-successor",
+        "source": "foundation-not-retirement-candidate",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g2-required",
+        "useCount": "unknown-g2-required",
+        "inFlight": "unknown-g2-required",
+        "oldClient": "not-applicable",
+        "restoreReplay": "unknown-g2-required"
+      },
+      "revoke": "not applicable; this is the future safety foundation",
+      "approvers": ["Async effect owner", "Operations"],
+      "evidenceIds": ["backend-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-not-runtime-zero-use",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "retain default-disabled foundation; no retirement decision in this work item"
+    },
+    {
+      "id": "backend.digital-human-session-heartbeat-route",
+      "repository": "backend",
+      "inventoryRef": "digital-human-session-heartbeat-route",
+      "surfaceType": "clientLeaseHeartbeatCallback",
+      "pathOrResource": ["app/main.py", "app/services/route_ownership.py"],
+      "owner": "principal-owned-digital-human-session",
+      "introducedBy": "current-runtime-session-lease",
+      "version": "runtime-version-unobserved-g2-required",
+      "stableKeyPolicy": "session owner/device/expiry lease identity",
+      "shadowParity": "no approved replacement heartbeat authority",
+      "candidateDisposition": "RETAIN_CURRENT_RUNTIME_NOT_CANDIDATE",
+      "successorAuthority": "not-applicable-current-runtime",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not-applicable-before-successor",
+        "requirements": ["retain session owner/device/expiry authorization"]
+      },
+      "zeroUseWindow": {
+        "state": "not-applicable-before-successor",
+        "source": "current-runtime-lease-required",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g2-required",
+        "useCount": "unknown-g2-required",
+        "inFlight": "unknown-g2-required",
+        "oldClient": "unknown-g2-required",
+        "restoreReplay": "unknown-g2-required"
+      },
+      "revoke": "release/reconcile session lease; this is not a retirement action",
+      "approvers": ["Digital human domain owner", "Operations", "Provider credential owner"],
+      "evidenceIds": ["backend-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-not-runtime-zero-use",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "reconcile a session through the current lease boundary; do not restore a stale heartbeat route"
+    },
+    {
+      "id": "backend.provider-effect-external-callback-boundary",
+      "repository": "backend",
+      "inventoryRef": "provider-effect-external-callback-boundary",
+      "surfaceType": "providerCallbackOrQuery",
+      "pathOrResource": ["app/async_effects/provider_query_operations.py"],
+      "owner": "provider-query-authorization-required",
+      "introducedBy": "external-provider-boundary",
+      "version": "provider-contract-version-unobserved-g3-required",
+      "stableKeyPolicy": "provider receipt reconciliation identity; no dispatch follows from an unknown result",
+      "shadowParity": "external callback/query is disabled and cannot be treated as observed parity",
+      "candidateDisposition": "EXTERNAL_BOUNDARY_NOT_CANDIDATE",
+      "successorAuthority": "not-applicable-until-provider-g3-authorization",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "external-g3-required",
+        "requirements": ["provider callback/query applicability", "provider receipt reconciliation", "credential owner approval"]
+      },
+      "zeroUseWindow": {
+        "state": "external-g3-required",
+        "source": "provider-runtime-observation-required",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g3-required",
+        "useCount": "unknown-g3-required",
+        "inFlight": "unknown-g3-required",
+        "oldClient": "not-applicable",
+        "restoreReplay": "unknown-g3-required"
+      },
+      "revoke": "Provider credential or callback retirement remains G3 and provider-owner controlled",
+      "approvers": ["Provider credential owner", "Async effect owner", "Operations", "Security/Privacy"],
+      "evidenceIds": ["backend-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-external-boundary",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "query or reconcile only after authorization; never send a duplicate provider request"
+    },
+    {
+      "id": "backend.operations-db-backup-timer",
+      "repository": "backend",
+      "inventoryRef": "operations-db-backup-timer",
+      "surfaceType": "systemdOperationsTimer",
+      "pathOrResource": ["deploy/systemd/dreamjourney-db-backup.timer"],
+      "owner": "backup-operations",
+      "introducedBy": "operations-maintenance-timer",
+      "version": "host-version-unobserved-g2-required",
+      "stableKeyPolicy": "backup manifest and retention policy identity; no product business effect stable key",
+      "shadowParity": "host state is unverified; maintenance timer is not part of typed business effect cutover",
+      "candidateDisposition": "OPERATIONS_MAINTENANCE_NOT_CANDIDATE",
+      "successorAuthority": "not-applicable-operations-maintenance",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not-applicable-before-operations-plan",
+        "requirements": ["Operations-owned backup and restore continuity"]
+      },
+      "zeroUseWindow": {
+        "state": "not-applicable-before-operations-plan",
+        "source": "operations-maintenance-not-product-retirement-candidate",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g2-required",
+        "useCount": "unknown-g2-required",
+        "inFlight": "unknown-g2-required",
+        "oldClient": "not-applicable",
+        "restoreReplay": "unknown-g2-required"
+      },
+      "revoke": "not applicable without an Operations-owned replacement plan",
+      "approvers": ["Operations", "Data owner"],
+      "evidenceIds": ["backend-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-host-unverified",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "backup capability is a prerequisite for migration; never retire it through this business-effect work item"
+    },
+    {
+      "id": "backend.operations-db-backup-retention-audit-timer",
+      "repository": "backend",
+      "inventoryRef": "operations-db-backup-retention-audit-timer",
+      "surfaceType": "systemdOperationsTimer",
+      "pathOrResource": ["deploy/systemd/dreamjourney-db-backup-retention-audit.timer"],
+      "owner": "backup-operations",
+      "introducedBy": "operations-maintenance-timer",
+      "version": "host-version-unobserved-g2-required",
+      "stableKeyPolicy": "audit-only retention policy identity; no product business effect stable key",
+      "shadowParity": "host state is unverified; maintenance timer is not part of typed business effect cutover",
+      "candidateDisposition": "OPERATIONS_MAINTENANCE_NOT_CANDIDATE",
+      "successorAuthority": "not-applicable-operations-maintenance",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not-applicable-before-operations-plan",
+        "requirements": ["Operations-owned audit continuity"]
+      },
+      "zeroUseWindow": {
+        "state": "not-applicable-before-operations-plan",
+        "source": "operations-maintenance-not-product-retirement-candidate",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g2-required",
+        "useCount": "unknown-g2-required",
+        "inFlight": "unknown-g2-required",
+        "oldClient": "not-applicable",
+        "restoreReplay": "unknown-g2-required"
+      },
+      "revoke": "not applicable without an Operations-owned replacement plan",
+      "approvers": ["Operations", "Data owner"],
+      "evidenceIds": ["backend-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-host-unverified",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "retain audit evidence until an Operations-approved replacement exists"
+    },
+    {
+      "id": "backend.operations-evidence-manifest-retention-timer",
+      "repository": "backend",
+      "inventoryRef": "operations-evidence-manifest-retention-timer",
+      "surfaceType": "systemdOperationsTimer",
+      "pathOrResource": ["deploy/systemd/dreamjourney-evidence-manifest-retention.timer"],
+      "owner": "evidence-operations",
+      "introducedBy": "operations-maintenance-timer",
+      "version": "host-version-unobserved-g2-required",
+      "stableKeyPolicy": "evidence retention policy identity; no product business effect stable key",
+      "shadowParity": "host state is unverified; maintenance timer is not part of typed business effect cutover",
+      "candidateDisposition": "OPERATIONS_MAINTENANCE_NOT_CANDIDATE",
+      "successorAuthority": "not-applicable-operations-maintenance",
+      "status": "discovered",
+      "retirementDecision": "not_authorized",
+      "drainCheckpoint": {
+        "state": "not-applicable-before-operations-plan",
+        "requirements": ["Operations-owned evidence retention continuity"]
+      },
+      "zeroUseWindow": {
+        "state": "not-applicable-before-operations-plan",
+        "source": "operations-maintenance-not-product-retirement-candidate",
+        "approvedWindow": "not-set"
+      },
+      "runtimeEvidence": {
+        "lastObservedAt": "not-observed-g2-required",
+        "useCount": "unknown-g2-required",
+        "inFlight": "unknown-g2-required",
+        "oldClient": "not-applicable",
+        "restoreReplay": "unknown-g2-required"
+      },
+      "revoke": "not applicable without an Operations-owned replacement plan",
+      "approvers": ["Operations", "Evidence owner", "Security/Privacy"],
+      "evidenceIds": ["backend-legacy-timer-callback-inventory-v1"],
+      "dependencyScan": "source-inventory-only-host-unverified",
+      "removal": {
+        "removalCommit": "not-assigned",
+        "deployId": "not-assigned",
+        "postMonitorWindow": "not-set"
+      },
+      "recoveryBoundary": "retain audit evidence until an Operations-approved replacement exists"
+    }
+  ]
+}
