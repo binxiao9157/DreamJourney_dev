@@ -35,6 +35,23 @@ git diff --check
 - 全量后端回归 `806` 项通过，FastAPI memory smoke、既有 Provider G0/G2 gate、知识库及备份合同 smoke 均通过。
 - 本次没有数据库 migration、API route、Device Token 写入、APNs 调用或本地通知调度，因此不把它记作 G2/G3/G4 或真实送达证据。
 
+## 后端基线同步
+
+后端已推送并部署到服务器：
+
+```text
+origin/main@a5b8331
+server /opt/services/dreamjourney/DreamJourneyBackend@a5b8331
+```
+
+部署过程只重建并重启 `api` 容器，未修改 `.env`、`.env.backup*` 或业务数据。`/ready` 返回 database、schema、auth、incident 均为 `ready`。生产镜像不携带 `tests/`；因此通过将服务器 checkout 的 `tests/` 以只读 volume 挂载到一次性容器，重新运行：
+
+```bash
+scripts/run-backend-business-message-notification-contract-gate.sh
+```
+
+结果为 `5` 项通过。该验证证明已部署代码可加载并满足 G0 合同；没有添加 migration、没有写入 Postgres projection，也没有调用通知 Provider。
+
 ## Gate 边界
 
 | Gate | 状态 | 说明 |
@@ -48,4 +65,3 @@ git diff --check
 ## 下一子闭环
 
 继续 `WI-S1-02-08` 的 G0：补 `DeviceSubscription` token-hash、rotation/revoke 与 notification route 的 owner/generation fail-closed 合同；仍不接 APNs 或真实 Device Token。
-

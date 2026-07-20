@@ -20,7 +20,7 @@
     "summary": "WI-S1-02-08 has a value-free G0 contract separating completed business receipts, redacted in-app message projections, and channel-specific notification intents. It currently makes no persistence, Device Token, local notification, APNs, or public UI claim; next is DeviceSubscription rotation/revoke and owner/generation route fencing."
   },
   "baselines": {
-    "backend": "main@16ecfc0",
+    "backend": "main@a5b8331",
     "ios": "feature/prd-stitch-ui-adaptation@272a1b5",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -470,5 +470,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T10:09:55+0800"
+  "updatedAt": "2026-07-20T10:12:04+0800"
 }
