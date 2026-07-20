@@ -7,24 +7,25 @@
       "WI-S1-01-03-M0A-00-INTERVIEW_POLICY_G0_COMPLETE",
       "WI-S1-01-03-M0A-01-CONVERSATION_SESSION_BOOTSTRAP_G0_G2_DEPLOYED",
       "WI-S1-01-03-M0A-02-ORCHESTRATOR_SESSION_STATE_BRIDGE_G0_G2_DEPLOYED",
-      "WI-S1-01-03-M0A-03-PERSISTED_PACING_STATE_G0_G2_DEPLOYED"
+      "WI-S1-01-03-M0A-03-PERSISTED_PACING_STATE_G0_G2_DEPLOYED",
+      "WI-S1-01-03-M0A-04-REVIEW_BATCH_BOUNDARY_G0_G2_DEPLOYED"
     ],
-    "currentSubSlice": "WI-S1-01-03-M0A-04-DECISION_ACKNOWLEDGEMENT_AND_REVIEW_BATCH_BOUNDARY",
+    "currentSubSlice": "WI-S1-01-03-M0A-05-TOPIC_SWITCH_AND_THREAD_LIFECYCLE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_SESSION_BRIDGE_AND_PERSISTED_PACING_VERIFIED",
+      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_SESSION_BRIDGE_PERSISTED_PACING_AND_REVIEW_BOUNDARY_VERIFIED",
       "G1": "NOT_STARTED / ECHO_QA_DIAGNOSTICS_NOT_YET_CONNECTED",
-      "G2": "PARTIAL / CANDIDATE_EXTRACTION_CONVERSATION_SESSION_ORCHESTRATION_BRIDGE_AND_PERSISTED_PACING_POSTGRES_VERIFIED_AND_DEPLOYED",
+      "G2": "PARTIAL / CANDIDATE_EXTRACTION_CONVERSATION_SESSION_ORCHESTRATION_BRIDGE_PERSISTED_PACING_AND_REVIEW_BOUNDARY_POSTGRES_VERIFIED_AND_DEPLOYED",
       "G3": "EXTERNAL_DEFERRED / PROVIDER_GENERATION_REMAINS_SEPARATE"
     },
     "id": "WI-S1-01-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
     "priorEvidence": "docs/superpowers/status/2026-07-19-wi-s1-01-03-candidate-synthetic-extraction.md",
-    "summary": "The prior synthetic Source-to-pending-Candidate boundary remains deployed and default-off. M0-A now has a provider-neutral, value-free InterviewOrchestrator policy core, private Conversation/InterviewSession persistence, a deployed read-only session bridge, and typed recoverable pacing state in backend main@d111311. Persisted boundary, owner turn count, deepening count, unreviewed batch count and fatigue are authoritative; callers cannot inject them into policy decisions. Explicit idempotent pacing commands preserve owner/vault/CAS/append-only boundaries and never create Source/Candidate/DecisionReceipt/MemoryVersion. The active sub-slice is the separate private decision acknowledgement and review-batch boundary; it must not auto-promote memories or change public Echo UI."
+    "summary": "The prior synthetic Source-to-pending-Candidate boundary remains deployed and default-off. M0-A now has a provider-neutral, value-free InterviewOrchestrator policy core, private Conversation/InterviewSession persistence, a deployed read-only session bridge, typed recoverable pacing state, and private review-batch acknowledgement boundaries in backend main@1b8083f. Persisted boundary, owner turn count, deepening count, unreviewed batch count, pending review batch and fatigue are authoritative; callers cannot inject them into policy decisions. Review acknowledgement consumes only its frozen turn window so newer owner turns remain pending. All commands preserve owner/vault/CAS/append-only boundaries and never create Source/Candidate/DecisionReceipt/MemoryVersion. The active sub-slice is topic-switch and thread lifecycle; it must remain private/default-off and must not change public Echo UI."
   },
   "baselines": {
-    "backend": "main@d111311",
+    "backend": "main@1b8083f",
     "ios": "feature/prd-stitch-ui-adaptation@b901d85",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -504,5 +505,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T19:06:00+0800"
+  "updatedAt": "2026-07-20T20:58:00+0800"
 }
