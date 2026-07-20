@@ -1,31 +1,34 @@
 {
   "activeWorkItem": {
-    "authorityLock": "ASYNC_EFFECT",
+    "authorityLock": "OWNER_TRUTH",
     "backendPendingPaths": [],
-    "completedSubSlices": [
-      "WI-S1-02-10-G0-LEGACY_TIMER_CALLBACK_INVENTORY",
-      "WI-S1-02-10-G0-TIME_LETTER_NOTIFICATION_LIFECYCLE_GUARD",
-      "WI-S1-02-10-G0-RETIREMENT_CANDIDATE_MANIFEST",
-      "WI-S1-02-10-G0-CUTOVER_FENCE_MODEL"
-    ],
-    "currentSubSlice": "WI-S1-02-10-G0-TIME_LETTER_TYPED_EFFECT_ADMISSION_SHADOW",
+    "completedSubSlices": [],
+    "currentSubSlice": "WI-S1-01-12-G0-VERIFIED_MEDIA_PROCESSOR_BOUNDARY_INVENTORY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "IN_PROGRESS / INVENTORY_TIME_LETTER_LIFECYCLE_GUARD_RETIREMENT_CANDIDATE_MANIFEST_AND_CUTOVER_FENCE_MODEL_COMPLETE_TIME_LETTER_TYPED_EFFECT_ADMISSION_SHADOW_REQUIRED",
-      "G2": "NOT_STARTED / HOST_PROCESS_AND_ROLLING_DEPLOY_EVIDENCE_REQUIRED",
-      "G3": "NOT_STARTED / PROVIDER_CALLBACK_QUERY_APPLICABILITY_REQUIRED"
+      "G0": "IN_PROGRESS / VERIFIED_MEDIA_PROCESSOR_BOUNDARY_INVENTORY_REQUIRED",
+      "G1": "NOT_STARTED / NO_PUBLIC_MEDIA_UI_CHANGE_AUTHORIZED",
+      "G2": "NOT_STARTED / SOURCE_OBJECT_AND_STORAGE_EVIDENCE_REQUIRED",
+      "G3": "NOT_STARTED / PROCESSOR_PROVIDER_CONTRACT_REQUIRED",
+      "G4": "NOT_STARTED / MEDIA_AND_PROVIDER_POLICY_APPROVAL_REQUIRED"
     },
-    "id": "WI-S1-02-10",
+    "id": "WI-S1-01-12",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-09 is INTERNAL_READY with its scoped G0/G2 evidence deployed at backend main@1d87023; real Provider query remains G3 EXTERNAL_BLOCKED and no replay or Provider call is enabled. WI-S1-02-10 completed its value-free legacy timer/callback inventory, a lifecycle-safe TimeLetter local-notification teardown guard, a cross-repository retirement candidate manifest, and a deterministic fail-closed cutover-fence model. No cutover, retirement, worker enablement, timer disablement, route removal, credential revoke, or server delivery change was authorized. The next G0 slice may add only a default-off TimeLetter typed-effect admission shadow while the legacy direct route/CLI remain authoritative."
+    "summary": "WI-S1-02-10 is INTERNAL_READY for its scoped G0 work: inventory, lifecycle guard, retirement candidate manifest, cutover-fence model and default-off TimeLetter typed-effect admission shadow are implemented at backend main@f90c7c7 and deployed healthy. Its remaining G2 host/runtime and G3 Provider evidence is external/open; no worker, route, timer, legacy authority, mailbox/outbox or Provider call changed. Execution now moves to WI-S1-01-12, starting with a value-free inventory of the verified-media processor boundary. It must not create SourceObject authority, object storage, an upload path, a processor call or public media UI."
   },
   "baselines": {
-    "backend": "main@101e258",
+    "backend": "main@f90c7c7",
     "ios": "feature/prd-stitch-ui-adaptation@272a1b5",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
+    {
+      "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-10-time-letter-typed-effect-admission-shadow.md",
+      "id": "WI-S1-02-10",
+      "implementationStatus": "INTERNAL_READY / G0_SCOPED_TYPED_ADMISSION_SHADOW_VERIFIED / BACKEND_DEPLOYED_f90c7c7 / G2_G3_OPEN / DEFAULT_OFF",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G2_G3_OPEN"
+    },
     {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-09-provider-query-operations-baseline.md",
       "id": "WI-S1-02-09",
