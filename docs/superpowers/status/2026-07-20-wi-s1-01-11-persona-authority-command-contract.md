@@ -11,7 +11,7 @@ future **Self Persona Authority** command.
 The contract accepts only this versioned command shape:
 
 - Owner/Vault context with `actorSubjectId == ownerSubjectId`.
-- `personaId`, `commandId`, and `expectedVersion`.
+- A server-resolved `PersonaId` context plus `commandId` and `expectedVersion`.
 - A non-empty profile with the V1 allowlist only:
   `displayName`, `gender`, `birthDate`.
 
@@ -36,7 +36,8 @@ An accepted result deliberately means only
 
 Public evidence contains only hashes, field names and versions. It does not
 include a display name, date of birth, subject ID, vault ID, Persona ID or raw
-payload value.
+payload value. Subsequent G0 work removed `personaId` from the client payload;
+the current authoritative command shape uses only the server-resolved context.
 
 ## Verification And Deployment
 

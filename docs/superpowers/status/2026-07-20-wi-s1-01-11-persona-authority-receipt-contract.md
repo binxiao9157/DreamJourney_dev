@@ -17,6 +17,10 @@ For an admitted command the plan computes, but does not persist:
   PersonaVersion reference, command/actor/scope hashes, before/after state,
   expected/after version, policy version and authority epoch.
 
+The target Persona ID is resolved by the trusted command context rather than
+accepted from a client payload. Subsequent G0 scope-binding work proves that a
+client-supplied `personaId` is rejected before this plan is constructed.
+
 The next version must be exactly `expectedVersion + 1`. The Version and
 Receipt must reference each other, target the same Persona, use the same
 command hash and carry the same authority epoch. A stale or rejected command
