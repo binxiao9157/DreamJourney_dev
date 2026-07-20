@@ -616,6 +616,67 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(useCase.viewState.singleItems.isEmpty)
     }
 
+    func testInterviewSessionStateDecodesValueMinimizedEnvelope() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let state = try interviewSessionState(vaultID: lease.vaultId)
+
+        XCTAssertEqual(state.vaultID.rawValue, lease.vaultId)
+        XCTAssertEqual(state.lifecycle, .active)
+        XCTAssertEqual(state.boundary, .open)
+        XCTAssertEqual(state.rowVersion, 1)
+        XCTAssertEqual(state.threadVersion, 2)
+        XCTAssertEqual(state.ownerTurnCount, 3)
+        XCTAssertEqual(state.deepeningTurnCount, 1)
+        XCTAssertEqual(state.candidateBatchTurnCount, 0)
+        XCTAssertEqual(state.fatigue, .normal)
+        XCTAssertFalse(state.hasPendingReviewBatch)
+        XCTAssertEqual(state.authorityEpoch, 4)
+    }
+
+    func testInterviewSessionStateUseCaseDiscardsDeferredReadAfterAccountChange() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = InterviewSessionStateClientSpy()
+        client.deferRead = true
+        let useCase = OwnerTruthInterviewSessionStateUseCase(
+            accountLease: lease,
+            sessionID: recordID("00000000-0000-0000-0000-000000000066"),
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.refresh)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferredRead(.success(try interviewSessionState(vaultID: lease.vaultId)))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(useCase.viewState.session)
+    }
+
+    func testInterviewSessionStateUseCaseFailsClosedWhenQAGateIsDisabled() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = InterviewSessionStateClientSpy()
+        let useCase = OwnerTruthInterviewSessionStateUseCase(
+            accountLease: lease,
+            sessionID: recordID("00000000-0000-0000-0000-000000000067"),
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { false }
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .qaOnlyDisabled)
+        XCTAssertEqual(client.requestCount, 0)
+    }
+
     func testKBLiteCompatibilityReadEnvelopeAcceptsOnlyConfirmedProjectionFacts() throws {
         let (_, lease) = try makeActiveRuntime()
         let envelope = try compatibilityReadEnvelope(for: lease)
@@ -1931,6 +1992,34 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private func interviewSessionState(
+        vaultID: String,
+        lifecycle: OwnerTruthInterviewSessionLifecycle = .active,
+        boundary: OwnerTruthInterviewSessionBoundary = .open,
+        fatigue: OwnerTruthInterviewSessionFatigue = .normal,
+        hasPendingReviewBatch: Bool = false
+    ) throws -> OwnerTruthInterviewSessionState {
+        try OwnerTruthInterviewSessionState(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewSessionState.schemaVersion,
+                "vaultId": vaultID,
+                "session": [
+                    "state": lifecycle.rawValue,
+                    "boundary": boundary.rawValue,
+                    "rowVersion": 1,
+                    "threadVersion": 2,
+                    "ownerTurnCount": 3,
+                    "deepeningTurnCount": 1,
+                    "candidateBatchTurnCount": 0,
+                    "fatigue": fatigue.rawValue,
+                    "hasPendingReviewBatch": hasPendingReviewBatch,
+                    "authorityEpoch": 4,
+                ],
+            ],
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID))
+        )
+    }
+
     private func interviewBatchAcceptResult(
         reviewBatchID: OwnerTruthRecordID,
         candidateIDs: [OwnerTruthRecordID]
@@ -2177,6 +2266,36 @@ private enum InterviewCandidateReviewClientSpyError: Error {
     case missingReadResult
     case missingBatchResult
     case missingSingleResult
+}
+
+private final class InterviewSessionStateClientSpy: OwnerTruthInterviewSessionStateClient {
+    var readResult: Result<OwnerTruthInterviewSessionState, Error>?
+    var deferRead = false
+    private var deferredReadCompletion: ((Result<OwnerTruthInterviewSessionState, Error>) -> Void)?
+    private(set) var requestCount = 0
+
+    func fetchOwnerTruthInterviewSessionState(
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewSessionState, Error>) -> Void
+    ) {
+        requestCount += 1
+        if deferRead {
+            deferredReadCompletion = completion
+            return
+        }
+        completion(readResult ?? .failure(InterviewSessionStateClientSpyError.missingReadResult))
+    }
+
+    func completeDeferredRead(_ result: Result<OwnerTruthInterviewSessionState, Error>) {
+        let completion = deferredReadCompletion
+        deferredReadCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum InterviewSessionStateClientSpyError: Error {
+    case missingReadResult
 }
 
 private final class CorrectionRequestClientSpy: OwnerTruthCorrectionRequestClient {

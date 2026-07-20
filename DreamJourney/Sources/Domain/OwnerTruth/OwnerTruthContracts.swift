@@ -133,6 +133,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidCommand(String)
     case invalidInterviewCandidateReview(String)
     case invalidInterviewCandidateDecision(String)
+    case invalidInterviewSessionState(String)
     case invalidKBLiteCompatibilityReadEnvelope(String)
     case invalidContextCitationShadowBuild(String)
     case invalidAnswerCitationReceipt(String)
@@ -151,6 +152,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "访谈候选审核合同无效：\(detail)"
         case .invalidInterviewCandidateDecision(let detail):
             return "访谈候选审核回执合同无效：\(detail)"
+        case .invalidInterviewSessionState(let detail):
+            return "访谈会话状态合同无效：\(detail)"
         case .invalidKBLiteCompatibilityReadEnvelope(let detail):
             return "兼容读取合同无效：\(detail)"
         case .invalidContextCitationShadowBuild(let detail):
@@ -1584,6 +1587,266 @@ final class OwnerTruthInterviewCandidateReviewUseCase {
             return key
         }
         return "summary"
+    }
+}
+
+// MARK: - Default-off interview session state read
+
+/// This is a narrow QA-only read model for the persisted interview session.
+/// It intentionally excludes conversation text, identifiers that are not
+/// required by the UI, and every owner-truth artifact payload.
+enum OwnerTruthInterviewSessionLifecycle: String, Codable, Equatable, Sendable {
+    case active
+    case paused
+    case ended
+}
+
+enum OwnerTruthInterviewSessionBoundary: String, Codable, Equatable, Sendable {
+    case open
+    case skipOnce
+    case cooldown
+    case doNotAsk
+}
+
+enum OwnerTruthInterviewSessionFatigue: String, Codable, Equatable, Sendable {
+    case normal
+    case guarded
+    case exhausted
+}
+
+struct OwnerTruthInterviewSessionState: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-session-state-read-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let lifecycle: OwnerTruthInterviewSessionLifecycle
+    let boundary: OwnerTruthInterviewSessionBoundary
+    let rowVersion: Int
+    let threadVersion: Int
+    let ownerTurnCount: Int
+    let deepeningTurnCount: Int
+    let candidateBatchTurnCount: Int
+    let fatigue: OwnerTruthInterviewSessionFatigue
+    let hasPendingReviewBatch: Bool
+    let authorityEpoch: Int
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        guard OwnerTruthInterviewSessionStateContract.requiredString(object["schemaVersion"]) == Self.schemaVersion,
+              OwnerTruthInterviewSessionStateContract.requiredString(object["vaultId"]) == expectedVaultID.rawValue,
+              let session = object["session"] as? [String: Any],
+              let lifecycleRaw = OwnerTruthInterviewSessionStateContract.requiredString(session["state"]),
+              let lifecycle = OwnerTruthInterviewSessionLifecycle(rawValue: lifecycleRaw),
+              let boundaryRaw = OwnerTruthInterviewSessionStateContract.requiredString(session["boundary"]),
+              let boundary = OwnerTruthInterviewSessionBoundary(rawValue: boundaryRaw),
+              let rowVersion = OwnerTruthInterviewSessionStateContract.positiveInt(session["rowVersion"]),
+              let threadVersion = OwnerTruthInterviewSessionStateContract.positiveInt(session["threadVersion"]),
+              let ownerTurnCount = OwnerTruthInterviewSessionStateContract.nonNegativeInt(session["ownerTurnCount"]),
+              let deepeningTurnCount = OwnerTruthInterviewSessionStateContract.nonNegativeInt(session["deepeningTurnCount"]),
+              let candidateBatchTurnCount = OwnerTruthInterviewSessionStateContract.nonNegativeInt(session["candidateBatchTurnCount"]),
+              let fatigueRaw = OwnerTruthInterviewSessionStateContract.requiredString(session["fatigue"]),
+              let fatigue = OwnerTruthInterviewSessionFatigue(rawValue: fatigueRaw),
+              let hasPendingReviewBatch = session["hasPendingReviewBatch"] as? Bool,
+              let authorityEpoch = OwnerTruthInterviewSessionStateContract.nonNegativeInt(session["authorityEpoch"]) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewSessionState(
+                "state response misses a required value-minimized field"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.lifecycle = lifecycle
+        self.boundary = boundary
+        self.rowVersion = rowVersion
+        self.threadVersion = threadVersion
+        self.ownerTurnCount = ownerTurnCount
+        self.deepeningTurnCount = deepeningTurnCount
+        self.candidateBatchTurnCount = candidateBatchTurnCount
+        self.fatigue = fatigue
+        self.hasPendingReviewBatch = hasPendingReviewBatch
+        self.authorityEpoch = authorityEpoch
+    }
+}
+
+/// Transport is kept separate from the use case so the QA view can use a
+/// deterministic mock without opening a public network or Echo path.
+protocol OwnerTruthInterviewSessionStateClient: AnyObject {
+    func fetchOwnerTruthInterviewSessionState(
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewSessionState, Error>) -> Void
+    )
+}
+
+enum OwnerTruthInterviewSessionStateIntent: Equatable, Sendable {
+    case refresh
+}
+
+enum OwnerTruthInterviewSessionStatePhase: Equatable, Sendable {
+    case idle
+    case loading
+    case ready
+    case unavailable
+    case failed
+}
+
+enum OwnerTruthInterviewSessionStateNotice: Equatable, Sendable {
+    case qaOnlyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case requestFailed
+}
+
+struct OwnerTruthInterviewSessionStateViewState: Equatable, Sendable {
+    let phase: OwnerTruthInterviewSessionStatePhase
+    let session: OwnerTruthInterviewSessionState?
+    let notice: OwnerTruthInterviewSessionStateNotice?
+
+    static let idle = OwnerTruthInterviewSessionStateViewState(
+        phase: .idle,
+        session: nil,
+        notice: nil
+    )
+}
+
+/// Owns only the QA read lifecycle. Account lease checks fence both request
+/// submission and asynchronous commit so a previous account cannot paint a
+/// later account's diagnostic screen.
+final class OwnerTruthInterviewSessionStateUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let sessionID: OwnerTruthRecordID
+    private let client: OwnerTruthInterviewSessionStateClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthInterviewSessionStateViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthInterviewSessionStateViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        sessionID: OwnerTruthRecordID,
+        client: OwnerTruthInterviewSessionStateClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
+    ) {
+        self.accountLease = accountLease
+        self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.sessionID = sessionID
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
+    }
+
+    func send(_ intent: OwnerTruthInterviewSessionStateIntent) {
+        switch intent {
+        case .refresh:
+            refresh()
+        }
+    }
+
+    private func refresh() {
+        guard let vaultID = beginRequestOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthInterviewSessionStateViewState(
+            phase: .loading,
+            session: nil,
+            notice: nil
+        )
+        client.fetchOwnerTruthInterviewSessionState(
+            vaultID: vaultID,
+            sessionID: sessionID
+        ) { [weak self] result in
+            self?.receive(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard qaGateEnabled() else {
+            transitionUnavailable(.qaOnlyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            transitionUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            transitionUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthInterviewSessionState, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard qaGateEnabled() else {
+            transitionUnavailable(.qaOnlyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            transitionUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let session):
+            guard session.vaultID == vaultID,
+                  session.vaultID.rawValue == accountLease.vaultId else {
+                transitionFailure()
+                return
+            }
+            viewState = OwnerTruthInterviewSessionStateViewState(
+                phase: .ready,
+                session: session,
+                notice: nil
+            )
+        case .failure:
+            transitionFailure()
+        }
+    }
+
+    private func transitionUnavailable(_ notice: OwnerTruthInterviewSessionStateNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthInterviewSessionStateViewState(
+            phase: .unavailable,
+            session: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure() {
+        viewState = OwnerTruthInterviewSessionStateViewState(
+            phase: .failed,
+            session: nil,
+            notice: .requestFailed
+        )
+    }
+}
+
+private enum OwnerTruthInterviewSessionStateContract {
+    static func requiredString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    static func positiveInt(_ value: Any?) -> Int? {
+        guard let value = value as? Int, value > 0 else { return nil }
+        return value
+    }
+
+    static func nonNegativeInt(_ value: Any?) -> Int? {
+        guard let value = value as? Int, value >= 0 else { return nil }
+        return value
     }
 }
 

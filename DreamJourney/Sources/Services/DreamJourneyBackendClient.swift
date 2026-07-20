@@ -4423,6 +4423,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         hasExplicitBaseURL && OwnerTruthCandidateReviewQAGate.isEnabled
     }
 
+    var isOwnerTruthInterviewSessionStateQAConfigured: Bool {
+        hasExplicitBaseURL && OwnerTruthCandidateReviewQAGate.isEnabled
+    }
+
     var isOwnerTruthKBLiteCompatibilityQAConfigured: Bool {
         hasExplicitBaseURL && OwnerTruthKBLiteCompatibilityQAGate.isEnabled
     }
@@ -5051,6 +5055,44 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
                         backendJSONObject: object,
                         expectedVaultID: vaultID,
                         expectedReviewBatchID: reviewBatchID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func fetchOwnerTruthInterviewSessionState(
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewSessionState, Error>) -> Void
+    ) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthInterviewSessionState",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions/\(pathComponent(sessionID.rawValue.uuidString))/state"
+        requestJSON(
+            path: path,
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewSessionState(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
                     )))
                 } catch {
                     completion(.failure(error))
@@ -7096,6 +7138,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
 
 extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateReviewClient {}
+extension DreamJourneyBackendClient: OwnerTruthInterviewSessionStateClient {}
 extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}
 extension DreamJourneyBackendClient: OwnerTruthContextCitationClient {}
 extension DreamJourneyBackendClient: OwnerTruthCorrectionRequestClient {}
