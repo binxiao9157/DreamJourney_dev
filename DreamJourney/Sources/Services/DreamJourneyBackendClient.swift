@@ -4427,6 +4427,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         hasExplicitBaseURL && OwnerTruthCandidateReviewQAGate.isEnabled
     }
 
+    var isOwnerTruthInterviewNaturalInputQAConfigured: Bool {
+        hasExplicitBaseURL && OwnerTruthCandidateReviewQAGate.isEnabled
+    }
+
     var isOwnerTruthKBLiteCompatibilityQAConfigured: Bool {
         hasExplicitBaseURL && OwnerTruthKBLiteCompatibilityQAGate.isEnabled
     }
@@ -5091,6 +5095,82 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
             case .success(let object):
                 do {
                     completion(.success(try OwnerTruthInterviewSessionState(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func startOwnerTruthInterviewNaturalInput(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewNaturalInputStartCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthInterviewNaturalInput",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewNaturalInputReceipt(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func appendOwnerTruthInterviewNaturalInput(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewNaturalInputAppendCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthInterviewNaturalInput",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions/\(pathComponent(command.sessionID.rawValue.uuidString))/messages"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewNaturalInputReceipt(
                         backendJSONObject: object,
                         expectedVaultID: vaultID
                     )))
@@ -7139,6 +7219,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
 extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewSessionStateClient {}
+extension DreamJourneyBackendClient: OwnerTruthInterviewNaturalInputClient {}
 extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}
 extension DreamJourneyBackendClient: OwnerTruthContextCitationClient {}
 extension DreamJourneyBackendClient: OwnerTruthCorrectionRequestClient {}

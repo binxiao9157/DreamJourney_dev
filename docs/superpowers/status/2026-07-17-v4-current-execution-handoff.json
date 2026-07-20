@@ -17,21 +17,22 @@
       "WI-S1-01-03-M0A-10-INTERVIEW_CANDIDATE_REVIEW_QA_CONSUMER_G0_G1_SCOPED",
       "WI-S1-01-03-M0A-11-INTERVIEW_SESSION_STATE_READ_G0_G2_DEPLOYED",
       "WI-S1-01-03-M0A-11-IOS_QA_SESSION_STATE_CONSUMER_G0_G1_SCOPED",
-      "WI-S1-01-03-M0A-12-NATURAL_INPUT_SESSION_COMMAND_G0_G2_DEPLOYED"
+      "WI-S1-01-03-M0A-12-NATURAL_INPUT_SESSION_COMMAND_G0_G2_DEPLOYED",
+      "WI-S1-01-03-M0A-13-IOS_TYPED_NATURAL_INPUT_QA_CLIENT_G0_G1_SCOPED"
     ],
-    "currentSubSlice": "WI-S1-01-03-M0A-12-COMPLETE / NEXT:IOS_TYPED_NATURAL_INPUT_CLIENT",
+    "currentSubSlice": "WI-S1-01-03-M0A-13-COMPLETE / NEXT:SELECT_M0A_PRODUCT_SURFACE_GATE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_SESSION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_REVIEW_COMPOSITION_PRIVATE_STANDARD_PLUS_SINGLE_DECISION_NON_ACTIVATING_QA_CONSUMER_VALUE_MINIMIZED_INTERVIEW_SESSION_STATE_READ_AND_NATURAL_INPUT_SESSION_COMMAND_VERIFIED",
-      "G1": "SCOPED_ONLY / INTERVIEW_CANDIDATE_REVIEW_AND_VALUE_MINIMIZED_INTERVIEW_SESSION_STATE_SIMULATOR_UIQA_VERIFIED; PUBLIC_ECHO_UI_NOT_CONNECTED",
+      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_SESSION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_REVIEW_COMPOSITION_PRIVATE_STANDARD_PLUS_SINGLE_DECISION_NON_ACTIVATING_QA_CONSUMER_VALUE_MINIMIZED_INTERVIEW_SESSION_STATE_READ_NATURAL_INPUT_SESSION_COMMAND_AND_LEASE_BOUND_IOS_NATURAL_INPUT_CLIENT_VERIFIED",
+      "G1": "SCOPED_ONLY / INTERVIEW_CANDIDATE_REVIEW_VALUE_MINIMIZED_INTERVIEW_SESSION_STATE_AND_NATURAL_INPUT_SIMULATOR_UIQA_VERIFIED; PUBLIC_ECHO_UI_NOT_CONNECTED",
       "G2": "PARTIAL / CANDIDATE_EXTRACTION_CONVERSATION_SESSION_ORCHESTRATION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_REVIEW_COMPOSITION_PRIVATE_STANDARD_PLUS_SINGLE_DECISION_QA_REVIEW_API_INTERVIEW_SESSION_STATE_READ_AND_NATURAL_INPUT_SESSION_COMMAND_POSTGRES_VERIFIED_AND_DEPLOYED",
       "G3": "EXTERNAL_DEFERRED / PROVIDER_GENERATION_REMAINS_SEPARATE"
     },
     "id": "WI-S1-01-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "priorEvidence": "docs/superpowers/status/2026-07-20-wi-s1-01-03-m0a-natural-input-backend-command.md",
-    "summary": "The private M0-A interview path is deployed through acknowledged-batch proposal admission, value-minimized review composition, partial acceptance for selected ordinary batch Candidates, individual terminal review for sensitive or explicitly single-review Candidates, a separate default-off iOS QA review consumer, a deployed value-minimized QA-only interview-session state read, and a deployed QA-only natural-input session command contract. The natural-input contract only starts private sessions and appends owner narrative messages under Owner CAS/version fences; it never returns content in receipts or creates a Source, Candidate, DecisionReceipt, MemoryVersion, Projection, provider request, legacy Archive/KBLite write, or public Echo UI. The next boundary is an iOS typed QA client that preserves the existing full-screen Echo visual structure, binds calls to AccountLease and remains unlinked from public Echo."
+    "priorEvidence": "docs/superpowers/status/2026-07-20-wi-s1-01-03-m0a-natural-input-ios-qa.md",
+    "summary": "The private M0-A interview path is deployed through acknowledged-batch proposal admission, value-minimized review composition, partial acceptance for selected ordinary batch Candidates, individual terminal review for sensitive or explicitly single-review Candidates, a separate default-off iOS QA review consumer, a deployed value-minimized QA-only interview-session state read, a deployed QA-only natural-input session command contract, and a lease-bound typed iOS natural-input QA client. Natural input only starts private sessions and appends owner narrative messages under Owner CAS/version fences; receipts and ViewState never retain message text, and a valid submission clears the UI input immediately. The flow creates no Source, Candidate, DecisionReceipt, MemoryVersion, Projection, provider request, legacy Archive/KBLite write, or public Echo UI. The next boundary is a recorded M0-A product-surface Gate; the existing full-screen Echo remains unmodified until that Gate is complete."
   },
   "baselines": {
     "backend": "main@bf83ace",
@@ -514,5 +515,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T23:13:00+0800"
+  "updatedAt": "2026-07-20T23:39:00+0800"
 }

@@ -6294,3 +6294,431 @@ private final class InterviewSessionStateUIQAClient: OwnerTruthInterviewSessionS
 private enum InterviewSessionStateUIQAClientError: Error {
     case invalidRequest
 }
+
+// MARK: - Default-off interview natural-input QA
+
+/// This controller is isolated behind a UIQA launch argument. It proves the
+/// typed private write contract without adding an interview entry point to the
+/// public full-screen Echo experience.
+final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
+    private let useCase: OwnerTruthInterviewNaturalInputUseCase
+    private let stackView = UIStackView()
+    private let subtitleLabel = UILabel()
+    private let statusLabel = UILabel()
+    private let detailLabel = UILabel()
+    private let inputTextView = UITextView()
+    private let submitButton = UIButton(type: .system)
+
+    private var renderedState: OwnerTruthInterviewNaturalInputViewState = .idle
+    var onViewStateRendered: ((OwnerTruthInterviewNaturalInputViewState) -> Void)?
+
+    var isTranscriptClearForQA: Bool {
+        inputTextView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthInterviewNaturalInputClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
+    ) {
+        useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: accountLease,
+            client: client,
+            accountLeaseRuntime: accountLeaseRuntime,
+            qaGateEnabled: qaGateEnabled
+        )
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "自然输入（QA）"
+        view.backgroundColor = DJDesignTokens.Color.background
+        configureView()
+        configureUseCase()
+        render(useCase.viewState)
+        useCase.send(.start)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+        navigationController?.navigationBar.titleTextAttributes = [
+            .foregroundColor: DJDesignTokens.Color.textPrimary,
+            .font: DJDesignTokens.Font.title(18),
+        ]
+    }
+
+    func submitQAFixture(_ text: String) {
+        inputTextView.text = text
+        submitInput()
+    }
+
+    private func configureView() {
+        stackView.axis = .vertical
+        stackView.alignment = .fill
+        stackView.spacing = 14
+        stackView.isLayoutMarginsRelativeArrangement = true
+        stackView.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 24,
+            leading: DJDesignTokens.Spacing.page,
+            bottom: 24,
+            trailing: DJDesignTokens.Spacing.page
+        )
+
+        subtitleLabel.text = "仅用于受控 QA：提交内容不在回执中回显，不会生成记忆、候选或审核结果。"
+        subtitleLabel.font = DJDesignTokens.Font.body(14)
+        subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
+        subtitleLabel.numberOfLines = 0
+
+        statusLabel.font = DJDesignTokens.Font.title(20)
+        statusLabel.textColor = DJDesignTokens.Color.textPrimary
+        statusLabel.numberOfLines = 0
+        statusLabel.accessibilityIdentifier = "owner-truth-interview-natural-input-status"
+
+        detailLabel.font = DJDesignTokens.Font.body(15)
+        detailLabel.textColor = DJDesignTokens.Color.textSecondary
+        detailLabel.numberOfLines = 0
+        detailLabel.accessibilityIdentifier = "owner-truth-interview-natural-input-detail"
+
+        inputTextView.font = DJDesignTokens.Font.body(16)
+        inputTextView.textColor = DJDesignTokens.Color.textPrimary
+        inputTextView.backgroundColor = DJDesignTokens.Color.surface
+        inputTextView.layer.cornerRadius = 12
+        inputTextView.textContainerInset = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        inputTextView.accessibilityIdentifier = "owner-truth-interview-natural-input-text"
+        inputTextView.heightAnchor.constraint(equalToConstant: 108).isActive = true
+
+        submitButton.setTitle("提交受控输入", for: .normal)
+        submitButton.titleLabel?.font = DJDesignTokens.Font.body(16)
+        submitButton.setTitleColor(.white, for: .normal)
+        submitButton.backgroundColor = DJDesignTokens.Color.accent
+        submitButton.layer.cornerRadius = 10
+        submitButton.heightAnchor.constraint(equalToConstant: 46).isActive = true
+        submitButton.addTarget(self, action: #selector(submitTapped), for: .touchUpInside)
+        submitButton.accessibilityIdentifier = "owner-truth-interview-natural-input-submit"
+
+        [subtitleLabel, statusLabel, detailLabel, inputTextView, submitButton].forEach(
+            stackView.addArrangedSubview
+        )
+        view.addSubview(stackView)
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stackView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            stackView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+    }
+
+    private func configureUseCase() {
+        useCase.onViewStateChange = { [weak self] state in
+            guard let self else { return }
+            if Thread.isMainThread {
+                render(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.render(state)
+                }
+            }
+        }
+    }
+
+    private func render(_ state: OwnerTruthInterviewNaturalInputViewState) {
+        renderedState = state
+        let isReady = state.phase == .ready
+        inputTextView.isEditable = isReady
+        submitButton.isEnabled = isReady
+        submitButton.alpha = isReady ? 1 : 0.45
+        statusLabel.text = statusText(for: state)
+        detailLabel.text = detailText(for: state)
+        onViewStateRendered?(state)
+    }
+
+    @objc private func submitTapped() {
+        submitInput()
+    }
+
+    private func submitInput() {
+        let text = inputTextView.text ?? ""
+        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isBoundedInput = !normalizedText.isEmpty
+            && normalizedText.count <= OwnerTruthInterviewNaturalInputAppendCommand.maximumCharacterCount
+
+        // Clear an accepted private input before issuing the command so a
+        // synchronous fake client cannot race the UI back to `.ready` first.
+        if isBoundedInput {
+            inputTextView.text = ""
+        }
+        useCase.send(.submit(text: text))
+    }
+
+    private func statusText(for state: OwnerTruthInterviewNaturalInputViewState) -> String {
+        switch state.phase {
+        case .idle:
+            return "准备创建访谈会话"
+        case .starting:
+            return "正在创建受控会话"
+        case .ready:
+            return state.latestReceipt?.messageSequence == nil ? "可以提交一条自然输入" : "自然输入已受控记录"
+        case .submitting:
+            return "正在记录自然输入"
+        case .unavailable:
+            return unavailableText(state.notice)
+        case .failed:
+            return "自然输入暂不可用"
+        }
+    }
+
+    private func detailText(for state: OwnerTruthInterviewNaturalInputViewState) -> String {
+        guard let receipt = state.latestReceipt else {
+            switch state.notice {
+            case .invalidInput:
+                return "请输入不超过 20000 字的内容。"
+            case .contractMismatch:
+                return "会话回执不匹配，未保留输入内容。"
+            case .requestFailed:
+                return "请求失败，未保留输入内容。"
+            default:
+                return ""
+            }
+        }
+        var lines = [
+            "会话：\(lifecycleText(receipt.lifecycle)) · \(boundaryText(receipt.boundary))",
+            "线程版本：\(receipt.threadVersion) · 会话版本：\(receipt.sessionVersion)",
+            "回执状态：\(receipt.outcome.rawValue)",
+        ]
+        if let messageSequence = receipt.messageSequence {
+            lines.append("已记录输入：第 \(messageSequence) 条（文本不回显）")
+        } else {
+            lines.append("会话已创建，尚未提交输入。")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func lifecycleText(_ lifecycle: OwnerTruthInterviewSessionLifecycle) -> String {
+        switch lifecycle {
+        case .active: return "进行中"
+        case .paused: return "已暂停"
+        case .ended: return "已结束"
+        }
+    }
+
+    private func boundaryText(_ boundary: OwnerTruthInterviewSessionBoundary) -> String {
+        switch boundary {
+        case .open: return "可继续"
+        case .skipOnce: return "本轮跳过"
+        case .cooldown: return "冷却中"
+        case .doNotAsk: return "不再追问"
+        }
+    }
+
+    private func unavailableText(_ notice: OwnerTruthInterviewNaturalInputNotice?) -> String {
+        switch notice {
+        case .qaOnlyDisabled:
+            return "QA 开关未启用"
+        case .invalidVault:
+            return "当前档案空间不可用"
+        case .accountUnavailable, .staleAccountLease:
+            return "账号已变化，请重新进入"
+        case .invalidInput, .contractMismatch, .requestFailed, nil:
+            return "自然输入暂不可用"
+        }
+    }
+}
+
+struct OwnerTruthInterviewNaturalInputUIQASmokeResult: Codable {
+    static let fileName = "owner-truth-interview-natural-input-uiqa-result.json"
+
+    let completed: Bool
+    let qaGateEnabled: Bool
+    let sessionCreated: Bool
+    let inputRecorded: Bool
+    let messageSequence: Int?
+    let transcriptCleared: Bool
+    let launchArguments: [String]
+    let failureReason: String?
+
+    func writeToDocuments(fileManager: FileManager = .default) throws -> URL {
+        let documentsURL = try fileManager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let resultURL = documentsURL.appendingPathComponent(Self.fileName, isDirectory: false)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(self).write(to: resultURL, options: [.atomic])
+        return resultURL
+    }
+}
+
+enum OwnerTruthInterviewNaturalInputUIQASmoke {
+    static let fixtureText = "这是 UIQA 专用的访谈自然输入。"
+
+    static func makeViewController(
+        accountLease: AccountLease
+    ) -> OwnerTruthInterviewNaturalInputViewController {
+        let client = InterviewNaturalInputUIQAClient(vaultID: OwnerTruthVaultID(accountLease.vaultId))
+        let controller = OwnerTruthInterviewNaturalInputViewController(
+            accountLease: accountLease,
+            client: client,
+            qaGateEnabled: { OwnerTruthCandidateReviewQAGate.isEnabled }
+        )
+        let scenario = InterviewNaturalInputUIQAScenario()
+        controller.onViewStateRendered = { state in
+            scenario.consume(state, controller: controller)
+        }
+        return controller
+    }
+
+    static func writeFailure(_ reason: String) {
+        let result = OwnerTruthInterviewNaturalInputUIQASmokeResult(
+            completed: false,
+            qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+            sessionCreated: false,
+            inputRecorded: false,
+            messageSequence: nil,
+            transcriptCleared: false,
+            launchArguments: [
+                QALaunchScenario.ownerTruthInterviewNaturalInputSmoke.rawValue,
+                OwnerTruthCandidateReviewQAGate.launchArgument,
+            ],
+            failureReason: reason
+        )
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] OwnerTruthInterviewNaturalInputSmoke failed result=\(resultURL.path) reason=\(reason)")
+        } catch {
+            print("[UI_QA] OwnerTruthInterviewNaturalInputSmoke failed reason=\(reason) write=\(error.localizedDescription)")
+        }
+    }
+}
+
+private final class InterviewNaturalInputUIQAScenario {
+    private var didSubmit = false
+    private var didWrite = false
+
+    func consume(
+        _ state: OwnerTruthInterviewNaturalInputViewState,
+        controller: OwnerTruthInterviewNaturalInputViewController
+    ) {
+        guard !didWrite, state.phase == .ready, let receipt = state.latestReceipt else { return }
+        guard receipt.messageSequence != nil else {
+            guard !didSubmit else { return }
+            didSubmit = true
+            DispatchQueue.main.async {
+                controller.submitQAFixture(OwnerTruthInterviewNaturalInputUIQASmoke.fixtureText)
+            }
+            return
+        }
+        didWrite = true
+        let transcriptCleared = controller.isTranscriptClearForQA
+        let result = OwnerTruthInterviewNaturalInputUIQASmokeResult(
+            completed: OwnerTruthCandidateReviewQAGate.isEnabled
+                && receipt.lifecycle == .active
+                && receipt.boundary == .open
+                && receipt.messageSequence == 1
+                && transcriptCleared,
+            qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+            sessionCreated: true,
+            inputRecorded: true,
+            messageSequence: receipt.messageSequence,
+            transcriptCleared: transcriptCleared,
+            launchArguments: [
+                QALaunchScenario.ownerTruthInterviewNaturalInputSmoke.rawValue,
+                OwnerTruthCandidateReviewQAGate.launchArgument,
+            ],
+            failureReason: nil
+        )
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] OwnerTruthInterviewNaturalInputSmoke completed result=\(resultURL.path)")
+        } catch {
+            print("[UI_QA] OwnerTruthInterviewNaturalInputSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+}
+
+private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalInputClient {
+    private let vaultID: OwnerTruthVaultID?
+
+    init(vaultID: OwnerTruthVaultID?) {
+        self.vaultID = vaultID
+    }
+
+    func startOwnerTruthInterviewNaturalInput(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewNaturalInputStartCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        do {
+            completion(.success(try OwnerTruthInterviewNaturalInputReceipt(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "receipt": [
+                        "status": OwnerTruthCommandOutcome.created.rawValue,
+                        "threadId": command.threadID.rawValue.uuidString,
+                        "sessionId": command.sessionID.rawValue.uuidString,
+                        "threadVersion": 1,
+                        "sessionVersion": 1,
+                        "state": OwnerTruthInterviewSessionLifecycle.active.rawValue,
+                        "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
+                    ],
+                ],
+                expectedVaultID: vaultID
+            )))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func appendOwnerTruthInterviewNaturalInput(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewNaturalInputAppendCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        do {
+            completion(.success(try OwnerTruthInterviewNaturalInputReceipt(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "receipt": [
+                        "status": OwnerTruthCommandOutcome.created.rawValue,
+                        "threadId": command.threadID.rawValue.uuidString,
+                        "sessionId": command.sessionID.rawValue.uuidString,
+                        "threadVersion": command.expectedThreadVersion + 1,
+                        "sessionVersion": command.expectedSessionVersion + 1,
+                        "state": OwnerTruthInterviewSessionLifecycle.active.rawValue,
+                        "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
+                        "messageId": command.messageID.rawValue.uuidString,
+                        "messageSequence": 1,
+                    ],
+                ],
+                expectedVaultID: vaultID
+            )))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+}
+
+private enum InterviewNaturalInputUIQAClientError: Error {
+    case invalidRequest
+}

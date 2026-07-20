@@ -134,6 +134,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidInterviewCandidateReview(String)
     case invalidInterviewCandidateDecision(String)
     case invalidInterviewSessionState(String)
+    case invalidInterviewNaturalInput(String)
     case invalidKBLiteCompatibilityReadEnvelope(String)
     case invalidContextCitationShadowBuild(String)
     case invalidAnswerCitationReceipt(String)
@@ -154,6 +155,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "访谈候选审核回执合同无效：\(detail)"
         case .invalidInterviewSessionState(let detail):
             return "访谈会话状态合同无效：\(detail)"
+        case .invalidInterviewNaturalInput(let detail):
+            return "访谈自然输入合同无效：\(detail)"
         case .invalidKBLiteCompatibilityReadEnvelope(let detail):
             return "兼容读取合同无效：\(detail)"
         case .invalidContextCitationShadowBuild(let detail):
@@ -1847,6 +1850,467 @@ private enum OwnerTruthInterviewSessionStateContract {
     static func nonNegativeInt(_ value: Any?) -> Int? {
         guard let value = value as? Int, value >= 0 else { return nil }
         return value
+    }
+}
+
+// MARK: - Default-off interview natural-input command
+
+/// A write receipt intentionally has no conversation text. It is sufficient
+/// for a QA client to preserve optimistic version fences without turning the
+/// private interview record into a visible transcript.
+struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-session-command-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let outcome: OwnerTruthCommandOutcome
+    let threadID: OwnerTruthRecordID
+    let sessionID: OwnerTruthRecordID
+    let threadVersion: Int
+    let sessionVersion: Int
+    let lifecycle: OwnerTruthInterviewSessionLifecycle
+    let boundary: OwnerTruthInterviewSessionBoundary
+    let messageID: OwnerTruthRecordID?
+    let messageSequence: Int?
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        guard OwnerTruthInterviewNaturalInputContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthInterviewNaturalInputContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let receipt = object["receipt"] as? [String: Any],
+              let outcomeRaw = OwnerTruthInterviewNaturalInputContract.requiredString(receipt["status"]),
+              let outcome = OwnerTruthCommandOutcome(rawValue: outcomeRaw),
+              let threadID = OwnerTruthInterviewNaturalInputContract.recordID(receipt["threadId"]),
+              let sessionID = OwnerTruthInterviewNaturalInputContract.recordID(receipt["sessionId"]),
+              let threadVersion = OwnerTruthInterviewNaturalInputContract.positiveInt(receipt["threadVersion"]),
+              let sessionVersion = OwnerTruthInterviewNaturalInputContract.positiveInt(receipt["sessionVersion"]),
+              let lifecycleRaw = OwnerTruthInterviewNaturalInputContract.requiredString(receipt["state"]),
+              let lifecycle = OwnerTruthInterviewSessionLifecycle(rawValue: lifecycleRaw),
+              let boundaryRaw = OwnerTruthInterviewNaturalInputContract.requiredString(receipt["boundary"]),
+              let boundary = OwnerTruthInterviewSessionBoundary(rawValue: boundaryRaw) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "command receipt misses a required value-minimized field"
+            )
+        }
+
+        let messageID = try OwnerTruthInterviewNaturalInputContract.optionalRecordID(
+            receipt["messageId"],
+            field: "messageId"
+        )
+        let messageSequence = try OwnerTruthInterviewNaturalInputContract.optionalPositiveInt(
+            receipt["messageSequence"],
+            field: "messageSequence"
+        )
+        guard (messageID == nil) == (messageSequence == nil) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "message metadata must be present together or absent together"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.outcome = outcome
+        self.threadID = threadID
+        self.sessionID = sessionID
+        self.threadVersion = threadVersion
+        self.sessionVersion = sessionVersion
+        self.lifecycle = lifecycle
+        self.boundary = boundary
+        self.messageID = messageID
+        self.messageSequence = messageSequence
+    }
+
+    func matches(_ command: OwnerTruthInterviewNaturalInputStartCommand) -> Bool {
+        threadID == command.threadID
+            && sessionID == command.sessionID
+            && messageID == nil
+            && messageSequence == nil
+    }
+
+    func matches(_ command: OwnerTruthInterviewNaturalInputAppendCommand) -> Bool {
+        threadID == command.threadID
+            && sessionID == command.sessionID
+            && messageID == command.messageID
+            && messageSequence != nil
+            && threadVersion > command.expectedThreadVersion
+            && sessionVersion > command.expectedSessionVersion
+    }
+}
+
+struct OwnerTruthInterviewNaturalInputStartCommand: Equatable, Sendable {
+    let commandID: String
+    let threadID: OwnerTruthRecordID
+    let sessionID: OwnerTruthRecordID
+
+    init(
+        commandID: String,
+        threadID: OwnerTruthRecordID,
+        sessionID: OwnerTruthRecordID
+    ) throws {
+        guard let commandID = OwnerTruthInterviewNaturalInputContract.nonEmptyString(commandID) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "start command id must be non-empty"
+            )
+        }
+        self.commandID = commandID
+        self.threadID = threadID
+        self.sessionID = sessionID
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "commandId": commandID,
+            "threadId": threadID.rawValue.uuidString.lowercased(),
+            "sessionId": sessionID.rawValue.uuidString.lowercased(),
+        ]
+    }
+}
+
+struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
+    static let maximumCharacterCount = 20_000
+
+    let commandID: String
+    let threadID: OwnerTruthRecordID
+    let sessionID: OwnerTruthRecordID
+    let messageID: OwnerTruthRecordID
+    let expectedThreadVersion: Int
+    let expectedSessionVersion: Int
+    let text: String
+
+    init(
+        commandID: String,
+        threadID: OwnerTruthRecordID,
+        sessionID: OwnerTruthRecordID,
+        messageID: OwnerTruthRecordID,
+        expectedThreadVersion: Int,
+        expectedSessionVersion: Int,
+        text: String
+    ) throws {
+        guard let commandID = OwnerTruthInterviewNaturalInputContract.nonEmptyString(commandID),
+              let text = OwnerTruthInterviewNaturalInputContract.nonEmptyString(text),
+              text.count <= Self.maximumCharacterCount,
+              expectedThreadVersion > 0,
+              expectedSessionVersion > 0 else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "append command requires non-empty bounded text and positive versions"
+            )
+        }
+        self.commandID = commandID
+        self.threadID = threadID
+        self.sessionID = sessionID
+        self.messageID = messageID
+        self.expectedThreadVersion = expectedThreadVersion
+        self.expectedSessionVersion = expectedSessionVersion
+        self.text = text
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "commandId": commandID,
+            "threadId": threadID.rawValue.uuidString.lowercased(),
+            "messageId": messageID.rawValue.uuidString.lowercased(),
+            "expectedThreadVersion": expectedThreadVersion,
+            "expectedSessionVersion": expectedSessionVersion,
+            "text": text,
+        ]
+    }
+}
+
+protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
+    func startOwnerTruthInterviewNaturalInput(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewNaturalInputStartCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    )
+
+    func appendOwnerTruthInterviewNaturalInput(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewNaturalInputAppendCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    )
+}
+
+enum OwnerTruthInterviewNaturalInputIntent: Equatable, Sendable {
+    case start
+    case submit(text: String)
+}
+
+enum OwnerTruthInterviewNaturalInputPhase: Equatable, Sendable {
+    case idle
+    case starting
+    case ready
+    case submitting
+    case unavailable
+    case failed
+}
+
+enum OwnerTruthInterviewNaturalInputNotice: Equatable, Sendable {
+    case qaOnlyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case invalidInput
+    case contractMismatch
+    case requestFailed
+}
+
+/// View state deliberately contains receipt metadata only. The submitted text
+/// is passed to the transport and then discarded by this QA client.
+struct OwnerTruthInterviewNaturalInputViewState: Equatable, Sendable {
+    let phase: OwnerTruthInterviewNaturalInputPhase
+    let latestReceipt: OwnerTruthInterviewNaturalInputReceipt?
+    let notice: OwnerTruthInterviewNaturalInputNotice?
+
+    static let idle = OwnerTruthInterviewNaturalInputViewState(
+        phase: .idle,
+        latestReceipt: nil,
+        notice: nil
+    )
+}
+
+/// Account-lease fenced coordinator for the two-step natural-input write
+/// contract. It has no public navigation responsibility and no authority to
+/// create candidates, memories or provider effects.
+final class OwnerTruthInterviewNaturalInputUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let client: OwnerTruthInterviewNaturalInputClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
+    private let identifierFactory: () -> UUID
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthInterviewNaturalInputViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthInterviewNaturalInputViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthInterviewNaturalInputClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled },
+        identifierFactory: @escaping () -> UUID = UUID.init
+    ) {
+        self.accountLease = accountLease
+        self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
+        self.identifierFactory = identifierFactory
+    }
+
+    func send(_ intent: OwnerTruthInterviewNaturalInputIntent) {
+        switch intent {
+        case .start:
+            start()
+        case .submit(let text):
+            submit(text: text)
+        }
+    }
+
+    private func start() {
+        guard viewState.latestReceipt == nil, viewState.phase != .starting else { return }
+        guard let vaultID = beginRequestOrFail() else { return }
+        do {
+            let command = try OwnerTruthInterviewNaturalInputStartCommand(
+                commandID: identifierFactory().uuidString.lowercased(),
+                threadID: OwnerTruthRecordID(rawValue: identifierFactory()),
+                sessionID: OwnerTruthRecordID(rawValue: identifierFactory())
+            )
+            operationGeneration &+= 1
+            let generation = operationGeneration
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .starting,
+                latestReceipt: nil,
+                notice: nil
+            )
+            client.startOwnerTruthInterviewNaturalInput(vaultID: vaultID, command: command) { [weak self] result in
+                self?.receiveStart(result, vaultID: vaultID, command: command, generation: generation)
+            }
+        } catch {
+            transitionFailure(.invalidInput)
+        }
+    }
+
+    private func submit(text: String) {
+        guard let receipt = viewState.latestReceipt,
+              viewState.phase == .ready else {
+            return
+        }
+        guard let vaultID = beginRequestOrFail() else { return }
+        do {
+            let command = try OwnerTruthInterviewNaturalInputAppendCommand(
+                commandID: identifierFactory().uuidString.lowercased(),
+                threadID: receipt.threadID,
+                sessionID: receipt.sessionID,
+                messageID: OwnerTruthRecordID(rawValue: identifierFactory()),
+                expectedThreadVersion: receipt.threadVersion,
+                expectedSessionVersion: receipt.sessionVersion,
+                text: text
+            )
+            operationGeneration &+= 1
+            let generation = operationGeneration
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .submitting,
+                latestReceipt: receipt,
+                notice: nil
+            )
+            client.appendOwnerTruthInterviewNaturalInput(vaultID: vaultID, command: command) { [weak self] result in
+                self?.receiveAppend(result, vaultID: vaultID, command: command, generation: generation)
+            }
+        } catch {
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .ready,
+                latestReceipt: receipt,
+                notice: .invalidInput
+            )
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard qaGateEnabled() else {
+            transitionUnavailable(.qaOnlyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            transitionUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            transitionUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receiveStart(
+        _ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewNaturalInputStartCommand,
+        generation: UInt
+    ) {
+        guard canCommit(generation: generation) else { return }
+        switch result {
+        case .success(let receipt):
+            guard receipt.vaultID == vaultID, receipt.matches(command) else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .ready,
+                latestReceipt: receipt,
+                notice: nil
+            )
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private func receiveAppend(
+        _ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewNaturalInputAppendCommand,
+        generation: UInt
+    ) {
+        guard canCommit(generation: generation) else { return }
+        switch result {
+        case .success(let receipt):
+            guard receipt.vaultID == vaultID, receipt.matches(command) else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .ready,
+                latestReceipt: receipt,
+                notice: nil
+            )
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private func canCommit(generation: UInt) -> Bool {
+        guard generation == operationGeneration else { return false }
+        guard qaGateEnabled() else {
+            transitionUnavailable(.qaOnlyDisabled)
+            return false
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            transitionUnavailable(.staleAccountLease)
+            return false
+        }
+        return true
+    }
+
+    private func transitionUnavailable(_ notice: OwnerTruthInterviewNaturalInputNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthInterviewNaturalInputViewState(
+            phase: .unavailable,
+            latestReceipt: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure(_ notice: OwnerTruthInterviewNaturalInputNotice) {
+        viewState = OwnerTruthInterviewNaturalInputViewState(
+            phase: .failed,
+            latestReceipt: nil,
+            notice: notice
+        )
+    }
+}
+
+private enum OwnerTruthInterviewNaturalInputContract {
+    static func requiredString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        return nonEmptyString(value)
+    }
+
+    static func nonEmptyString(_ value: String) -> String? {
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    static func recordID(_ value: Any?) -> OwnerTruthRecordID? {
+        guard let value = requiredString(value), let uuid = UUID(uuidString: value) else {
+            return nil
+        }
+        return OwnerTruthRecordID(rawValue: uuid)
+    }
+
+    static func optionalRecordID(_ value: Any?, field: String) throws -> OwnerTruthRecordID? {
+        guard let value, !(value is NSNull) else { return nil }
+        guard let identifier = recordID(value) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "\(field) must be a UUID or null"
+            )
+        }
+        return identifier
+    }
+
+    static func positiveInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value > 0 { return value }
+        if let value = value as? NSNumber,
+           CFGetTypeID(value) != CFBooleanGetTypeID(),
+           value.doubleValue.rounded() == value.doubleValue,
+           value.intValue > 0 {
+            return value.intValue
+        }
+        return nil
+    }
+
+    static func optionalPositiveInt(_ value: Any?, field: String) throws -> Int? {
+        guard let value, !(value is NSNull) else { return nil }
+        guard let integer = positiveInt(value) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "\(field) must be a positive integer or null"
+            )
+        }
+        return integer
     }
 }
 
