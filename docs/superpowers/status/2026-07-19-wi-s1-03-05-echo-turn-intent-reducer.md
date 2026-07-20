@@ -7,7 +7,7 @@
 - Work Item：`WI-S1-03-05`
 - Authority lock：`IOS_COMPOSITION`
 - Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`
-- 当前结果：`IN_PROGRESS / G0_STATIC_AND_BUILD_FOR_TESTING_VERIFIED / G1_HOSTED_XCTEST_AND_ECHO_CONTINUOUS_UIQA_VERIFIED / G2_G3_OPEN`
+- 当前结果：`IN_PROGRESS / G0_STATIC_AND_BUILD_FOR_TESTING_VERIFIED / G1_HOSTED_XCTEST_AND_ECHO_CONTINUOUS_UIQA_VERIFIED / G2_POSTGRES_RUNTIME_VERIFIED / G3_OPEN`
 - 本切片：`WI-S1-03-05-TURN_INTENT_CONTEXT_LEASE_TRANSPORT_AND_IDENTITY_G0_COMPLETE`
 - 范围：先将 Echo 的 provider-independent 回合状态收敛为纯 reducer，并让 context build 使用独立
   generation lease；不改公开页面、不接管现有数字人、语音 Provider 或后端 transport。
@@ -134,6 +134,33 @@ tmp/visual-qa/prd-stitch-ui/echo-continuous-turn-uiqa-smoke/20260720-192714/
 static-model gate 依赖漂移，不将其归因于本 Work Item；本切片的专用 static、UIQA、宿主 XCTest 与
 generic iPhoneOS build 证据均已通过。
 
+### 2026-07-20 G2 Context/Reply 隔离 Postgres 运行时证据
+
+后端新增 `scripts/backend-echo-context-reply-runtime-postgres-smoke.py` 与
+`scripts/run-backend-echo-context-reply-runtime-postgres-smoke.sh`。该 smoke 在临时 Postgres
+数据库内使用真实 FastAPI 路由和默认关闭的 delayed-reply completion service，不调用模型、语音或
+数字人 Provider，也不写入线上业务库。
+
+后端 `main@4cc7792` 已部署到服务器 API 容器。容器内 smoke 通过，value-free 结果为：
+
+```json
+{
+  "answerBoundToContext": true,
+  "contextIdentityMatched": true,
+  "crossOwnerAnswerDenied": true,
+  "crossOwnerContextDenied": true,
+  "crossOwnerMailboxDenied": true,
+  "mailboxBodyRedacted": true,
+  "migrationHead": "0028",
+  "publicV4RouteDisabled": true,
+  "status": "passed"
+}
+```
+
+同时，`/ready` 返回 `status=ready`，database、schema、auth 与 incident component 均为
+`ready`。这只关闭本 Work Item 的 G2 Context/Reply runtime 证据，不等同于模型生成、腾讯数字人或
+声音 Provider 已通过 G3。
+
 ## 未完成边界
 
 本切片不是 `WI-S1-03-05` 的完整完成声明：
@@ -143,11 +170,13 @@ generic iPhoneOS build 证据均已通过。
 - `EchoViewController` 仍持有现有 Provider 调度，尚未完成“ViewController 只发 Intent/渲染 ViewState”的
   完整迁移；
 - 没有修改 `/context/build`、数字人、声音复刻、KBLite Authority、后端合同或公开 UI；
-- 已完成的是 hosted XCTest runtime 和普通 Echo 的 provider-free 连续多轮、停止、返回与重启 UIQA；
-  G2/G3 仍取决于后端与 Provider runtime 的独立证据。
+- 已完成的是 hosted XCTest runtime、普通 Echo 的 provider-free 连续多轮、停止、返回与重启 UIQA，
+  以及 Context Packet 到默认关闭 delayed-reply Answer 的隔离 Postgres runtime 证据；
+  G3 仍取决于真实 Provider runtime 的独立证据。
 
 ## 下一步
 
-当前 Work Item 的 G0 application-context 边界、hosted XCTest runtime 与普通 Echo 的 provider-free
-连续回合 UIQA 均已可复跑。下一步进入 G2：补 `/context/build` 和 reply transport 的后端运行时证据；
-G3 的 Provider runtime 仍需独立证据，不能以本次模拟器测试替代。
+当前 Work Item 的 G0 application-context 边界、G1 hosted XCTest/普通 Echo 连续回合 UIQA，以及
+G2 `/context/build` 到 Answer 的后端运行时证据均已可复跑。下一步仅剩 G3：真实 Provider runtime
+必须使用独立的、可审计的 credential/quota/quality receipt；不能以本次模拟器或隔离 Postgres smoke
+替代。

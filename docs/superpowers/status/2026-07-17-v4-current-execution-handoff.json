@@ -5,23 +5,24 @@
     "completedSubSlices": [
       "WI-S1-03-05-TURN_INTENT_CONTEXT_LEASE_TRANSPORT_AND_IDENTITY_G0_COMPLETE",
       "WI-S1-03-05-G1-HOSTED_XCTEST_SIMULATOR_RUNTIME_FOUNDATION",
-      "WI-S1-03-05-G1-ECHO_CONTINUOUS_TURN_UIQA"
+      "WI-S1-03-05-G1-ECHO_CONTINUOUS_TURN_UIQA",
+      "WI-S1-03-05-G2-BACKEND_CONTEXT_REPLY_RUNTIME_EVIDENCE"
     ],
-    "currentSubSlice": "WI-S1-03-05-G2-BACKEND_CONTEXT_REPLY_RUNTIME_EVIDENCE",
+    "currentSubSlice": "WI-S1-03-05-G3-PROVIDER_RUNTIME_EVIDENCE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "COMPLETE / TURN_INTENT_CONTEXT_LEASE_TRANSPORT_AND_IDENTITY_VERIFIED",
       "G1": "COMPLETE / HOSTED_XCTEST_SIMULATOR_RUNTIME_82_TESTS_VERIFIED / CONTINUOUS_ECHO_UIQA_COLD_START_AND_RESTART_VERIFIED",
-      "G2": "NOT_STARTED / BACKEND_CONTEXT_AND_REPLY_RUNTIME_EVIDENCE_REQUIRED",
+      "G2": "COMPLETE / BACKEND_MAIN_4cc7792_DEPLOYED / ISOLATED_POSTGRES_CONTEXT_TO_ANSWER_RUNTIME_SMOKE_PASSED / CROSS_OWNER_DENY_AND_MAILBOX_REDACTION_VERIFIED",
       "G3": "NOT_STARTED / PROVIDER_RUNTIME_EVIDENCE_REQUIRED"
     },
     "id": "WI-S1-03-05",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "The simulator destination and XCTest Pod integration are durable: App/Test aggregate xcconfigs retain arm64 simulator eligibility, hosted XCTest imports Pod modules without directly linking production provider binaries, and the booted iPhone 17 Pro ran 82 tests with zero failures. A provider-free UIQA scenario now proves two ordinary Echo turns, normal stop to idle, stale-reply rejection, leave/re-enter, and process restart. G2 context/reply backend runtime and G3 Provider runtime evidence remain separate gates. No public Echo UI, Digital Human, or Voice provider behavior changed."
+    "summary": "The simulator destination and XCTest Pod integration are durable: App/Test aggregate xcconfigs retain arm64 simulator eligibility, hosted XCTest imports Pod modules without directly linking production provider binaries, and the booted iPhone 17 Pro ran 82 tests with zero failures. A provider-free UIQA scenario proves two ordinary Echo turns, normal stop to idle, stale-reply rejection, leave/re-enter, and process restart. G2 is now deployed and verified by an isolated Postgres Context Packet to delayed-reply Answer smoke with cross-owner denial and mailbox redaction. G3 Provider runtime remains a separate gate. No public Echo UI, Digital Human, or Voice provider behavior changed."
   },
   "baselines": {
-    "backend": "main@b13b2b9",
+    "backend": "main@4cc7792",
     "ios": "feature/prd-stitch-ui-adaptation@ca98ca3",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
