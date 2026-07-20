@@ -3,23 +3,21 @@
     "authorityLock": "ASYNC_EFFECT",
     "backendPendingPaths": [],
     "completedSubSlices": [
-      "WI-S1-02-07-G0-PROVIDER-EFFECT-INVENTORY",
-      "WI-S1-02-07-G0-STABLE-REQUEST-UNKNOWN-CONTRACT",
-      "WI-S1-02-07-G2-PERSISTED-RECONCILIATION-DESIGN",
-      "WI-S1-02-07-G2-DEPLOYED-POSTGRES-SMOKE"
+      "WI-S1-02-08-G0-BUSINESS-MESSAGE-NOTIFICATION-CONTRACT"
     ],
-    "currentSubSlice": "WI-S1-02-07-G3-PROVIDER-SPECIFIC-READINESS",
+    "currentSubSlice": "WI-S1-02-08-G0-DEVICE-SUBSCRIPTION-LIFECYCLE",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "SCOPED_CONTRACT_EVIDENCE_PRESENT / PROVIDER_CALLS_DISABLED",
-      "G2": "SCOPED_POSTGRES_DEPLOYED_16ecfc0 / APPEND_ONLY_RECEIPT_PROJECTION_VERIFIED / PROVIDER_CALLS_DISABLED",
-      "G3": "NOT_STARTED / PROVIDER_SANDBOX_AND_DELETE_RECEIPT_SCOPE_REQUIRED",
-      "G4": "NOT_STARTED / CAPABILITY_SPECIFIC_PRODUCT_PRIVACY_TRUE_DEVICE_GATES_REQUIRED"
+      "G0": "PARTIAL / BUSINESS_COMPLETION_MESSAGE_NOTIFICATION_CONTRACT_VERIFIED",
+      "G1": "NOT_STARTED / IOS_SERVER_PROJECTION_CONSUMER_REQUIRED",
+      "G2": "NOT_STARTED / DEVICE_SUBSCRIPTION_MESSAGE_INTENT_DELIVERY_PERSISTENCE_REQUIRED",
+      "G3": "NOT_STARTED / APNS_SANDBOX_ACCEPTANCE_REQUIRED",
+      "G4": "NOT_STARTED / TRUE_DEVICE_AND_NOTIFICATION_PRIVACY_REQUIRED"
     },
-    "id": "WI-S1-02-07",
+    "id": "WI-S1-02-08",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-07 has value-free Provider inventory, stable-request/unknown G0 contract, and deployed G2 append-only reconciliation evidence. It still must not invoke real Providers, change public UI, or treat local/runtime events as server success; G3/G4 remain provider-specific external evidence."
+    "summary": "WI-S1-02-08 has a value-free G0 contract separating completed business receipts, redacted in-app message projections, and channel-specific notification intents. It currently makes no persistence, Device Token, local notification, APNs, or public UI claim; next is DeviceSubscription rotation/revoke and owner/generation route fencing."
   },
   "baselines": {
     "backend": "main@16ecfc0",
@@ -27,6 +25,12 @@
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
+    {
+      "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-07-provider-effect-contract.md",
+      "id": "WI-S1-02-07",
+      "implementationStatus": "INTERNAL_READY / G0_G2_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED_16ecfc0 / PROVIDER_CALLS_DISABLED / G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G3_G4_OPEN"
+    },
     {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-06-echo-delayed-reply-answer-inbox.md",
       "id": "WI-S1-02-06",
@@ -455,9 +459,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-02-07",
+    "id": "WI-S1-02-09",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Provider effect stable request and unknown reconcile follows the Echo delayed-reply Answer/Inbox/receipt closure. It must keep Provider effects default-off and must never silently retry or reinterpret an unknown Provider acceptance as a terminal success."
+    "summary": "Dead-letter, authorized replay and worker readiness follow the message/notification layering. It must preserve stable business keys and receipt evidence while keeping client replay unavailable."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -466,5 +470,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T09:57:00+0800"
+  "updatedAt": "2026-07-20T10:09:55+0800"
 }
