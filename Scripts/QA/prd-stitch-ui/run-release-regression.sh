@@ -42,6 +42,7 @@ RUN_BACKEND_RELEASE_POLICY_SMOKE="${RUN_BACKEND_RELEASE_POLICY_SMOKE:-0}"
 RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE="${RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE:-0}"
 RUN_BACKEND_DB_UOW_SMOKE="${RUN_BACKEND_DB_UOW_SMOKE:-0}"
 RUN_BACKEND_READINESS_SMOKE="${RUN_BACKEND_READINESS_SMOKE:-0}"
+RUN_STAGE0_STRICT_READINESS_GATE="${RUN_STAGE0_STRICT_READINESS_GATE:-1}"
 RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE="${RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE:-0}"
 RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE="${RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE:-0}"
 RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE="${RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE:-0}"
@@ -197,6 +198,7 @@ Run ID: \`$RUN_ID\`
 - Backend evidence persistence smoke: \`$RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE\`
 - Backend database request UoW smoke: \`$RUN_BACKEND_DB_UOW_SMOKE\`
 - Backend schema/auth readiness smoke: \`$RUN_BACKEND_READINESS_SMOKE\`
+- Stage 0 strict readiness contract gate: \`$RUN_STAGE0_STRICT_READINESS_GATE\` (contract only; it does not close G2/G4)
 - Backend runtime capability five-axis smoke: \`$RUN_BACKEND_RUNTIME_CAPABILITY_SMOKE\`
 - Release-policy deployed-to-cache smoke: \`$RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE\`
 - Backend captured release-policy command smoke: \`$RUN_BACKEND_RELEASE_POLICY_COMMAND_SMOKE\`
@@ -564,6 +566,13 @@ run_step "Product V4 versioned database migrator" "$STATIC_LOG_DIR/product-v4-db
 
 run_step "Product V4 schema/auth readiness" "$STATIC_LOG_DIR/product-v4-readiness.log" \
   env BACKEND_ROOT="$BACKEND_ROOT" python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-readiness-check.py"
+
+if [[ "$RUN_STAGE0_STRICT_READINESS_GATE" == "1" ]]; then
+  run_step "Stage 0 strict readiness contract" "$STATIC_LOG_DIR/stage0-strict-readiness-contract.log" \
+    "$ROOT_DIR/Scripts/QA/product-v4/run-stage0-strict-readiness-gate.sh"
+else
+  echo "Skipped by RUN_STAGE0_STRICT_READINESS_GATE=0" > "$STATIC_LOG_DIR/stage0-strict-readiness-contract.skipped.txt"
+fi
 
 run_step "Product V4 verified Postgres backup" "$STATIC_LOG_DIR/product-v4-db-backup.log" \
   env BACKEND_ROOT="$BACKEND_ROOT" python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-db-backup-check.py"

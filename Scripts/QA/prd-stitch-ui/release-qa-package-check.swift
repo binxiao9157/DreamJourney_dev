@@ -229,6 +229,8 @@ assertContains(releaseRegression, "RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE", "r
 assertContains(releaseRegression, "run-echo-qa-evidence-bundle-export-smoke.sh", "release regression should call Echo QA evidence bundle export smoke")
 assertContains(releaseRegression, "RUN_ECHO_READINESS_REPORT", "release regression should expose optional Echo readiness report")
 assertContains(releaseRegression, "run-echo-readiness-report.sh", "release regression should call Echo readiness report")
+assertContains(releaseRegression, "RUN_STAGE0_STRICT_READINESS_GATE", "release regression should expose the Stage 0 strict readiness contract gate")
+assertContains(releaseRegression, "run-stage0-strict-readiness-gate.sh", "release regression should call the Stage 0 strict readiness contract gate")
 assertContains(releaseRegression, "RUN_DIGITAL_HUMAN_TTS_VISEME_GATE", "release regression should expose optional digital-human TTS/viseme gate")
 assertContains(releaseRegression, "run-digital-human-tts-viseme-gate.sh", "release regression should call digital-human TTS/viseme gate")
 assertContains(releaseRegression, "RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE", "release regression should expose optional Tencent backend PCM-drive mock smoke")
@@ -452,6 +454,9 @@ let requiredScripts = [
     "Scripts/QA/product-v4/product-v4-qa-mobile-credential-artifact-check.py",
     "Scripts/QA/product-v4/product-v4-digital-human-secure-path-check.py",
     "Scripts/QA/product-v4/product-v4-credential-rotation-receipt-check.py",
+    "Scripts/QA/product-v4/stage0_strict_readiness.py",
+    "Scripts/QA/product-v4/stage0_strict_readiness_contract_check.py",
+    "Scripts/QA/product-v4/run-stage0-strict-readiness-gate.sh",
     "Scripts/QA/prd-stitch-ui/release-policy-shadow-contract-check.swift",
     "DreamJourney/Sources/Services/ReleasePolicyStore.swift",
     "Scripts/QA/prd-stitch-ui/release-policy-cache-model-smoke.swift",
@@ -486,6 +491,7 @@ let requiredScripts = [
     "docs/superpowers/status/2026-07-16-wi-s0-07-01-event-mapping-manifest.json",
     "docs/superpowers/status/2026-07-16-wi-s0-07-02-evidence-sink.md",
     "docs/superpowers/status/2026-07-16-wi-s0-07-02-evidence-sink-manifest.json",
+    "docs/superpowers/status/2026-07-21-wi-s0-07-09-strict-readiness-g0.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-01-release-policy-shadow.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-02-release-policy-cache.md",
     "docs/superpowers/status/2026-07-16-wi-s0-06-04-captured-policy-gate.md",
