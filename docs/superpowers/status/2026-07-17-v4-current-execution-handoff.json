@@ -11,24 +11,25 @@
       "WI-S1-01-03-M0A-04-REVIEW_BATCH_BOUNDARY_G0_G2_DEPLOYED",
       "WI-S1-01-03-M0A-05-TOPIC_SWITCH_AND_THREAD_LIFECYCLE_G0_G2_DEPLOYED",
       "WI-S1-01-03-M0A-06-REVIEW_BATCH_TO_CANDIDATE_PROPOSAL_BOUNDARY_G0_G2_DEPLOYED",
-      "WI-S1-01-03-M0A-07-CANDIDATE_BATCH_REVIEW_COMPOSITION_BOUNDARY_G0_G2_DEPLOYED"
+      "WI-S1-01-03-M0A-07-CANDIDATE_BATCH_REVIEW_COMPOSITION_BOUNDARY_G0_G2_DEPLOYED",
+      "WI-S1-01-03-M0A-08-PARTIAL_STANDARD_CANDIDATE_DECISION_BOUNDARY_G0_G2_DEPLOYED"
     ],
-    "currentSubSlice": "WI-S1-01-03-M0A-08-PARTIAL_STANDARD_CANDIDATE_DECISION_BOUNDARY",
+    "currentSubSlice": "WI-S1-01-03-M0A-09-SENSITIVE_CANDIDATE_SINGLE_REVIEW_BOUNDARY",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_SESSION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_AND_REVIEW_COMPOSITION_VERIFIED",
+      "G0": "PARTIAL / SYNTHETIC_CANDIDATE_EXTRACTION_INTERVIEW_POLICY_PRIVATE_CONVERSATION_SESSION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_REVIEW_COMPOSITION_AND_PARTIAL_STANDARD_DECISION_VERIFIED",
       "G1": "NOT_STARTED / ECHO_QA_DIAGNOSTICS_NOT_YET_CONNECTED",
-      "G2": "PARTIAL / CANDIDATE_EXTRACTION_CONVERSATION_SESSION_ORCHESTRATION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_AND_REVIEW_COMPOSITION_POSTGRES_VERIFIED_AND_DEPLOYED",
+      "G2": "PARTIAL / CANDIDATE_EXTRACTION_CONVERSATION_SESSION_ORCHESTRATION_BRIDGE_PERSISTED_PACING_REVIEW_BOUNDARY_TOPIC_SWITCH_AND_ACKNOWLEDGED_BATCH_PROPOSAL_ADMISSION_REVIEW_COMPOSITION_AND_PARTIAL_STANDARD_DECISION_POSTGRES_VERIFIED_AND_DEPLOYED",
       "G3": "EXTERNAL_DEFERRED / PROVIDER_GENERATION_REMAINS_SEPARATE"
     },
     "id": "WI-S1-01-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "priorEvidence": "docs/superpowers/status/2026-07-20-wi-s1-01-03-m0a-candidate-batch-review-composition.md",
-    "summary": "The private M0-A interview path is deployed through acknowledged-batch proposal admission and a read-only Candidate review composition in backend main@d45eda3. A text-bearing conversation Source can now reuse the existing Candidate extraction contract. Composition returns pending Candidate identifiers and review paths only: ordinary explicitly batch-eligible Candidates are batch-reviewable; sensitive or ambiguous Candidates are forced to single review. It preserves owner/vault/authority/admission/source/extraction provenance checks and writes no Candidate decision, DecisionReceipt, MemoryVersion, Provider request or public Echo UI. The active sub-slice may add only explicit partial decisions for the batch-eligible standard Candidates, while keeping sensitive Candidates single-review and MemoryVersion activation separate."
+    "priorEvidence": "docs/superpowers/status/2026-07-20-wi-s1-01-03-m0a-partial-standard-candidate-decision.md",
+    "summary": "The private M0-A interview path is deployed through acknowledged-batch proposal admission, value-minimized review composition, and partial acceptance for selected ordinary batch Candidates in backend main@ef32088. Each selected Candidate reuses the existing Owner CAS/DecisionReceipt contract, while a separate immutable root-command ledger prevents semantic command reuse. Omitted Candidates remain pending; sensitive or explicitly single-review Candidates are rejected by the batch command and remain individual-only. The path writes no MemoryRecord, MemoryVersion, Projection, Provider request or public Echo UI. The active sub-slice must add only an equally private single-review boundary for sensitive/single Candidates, preserving the separate MemoryVersion activation step."
   },
   "baselines": {
-    "backend": "main@d45eda3",
+    "backend": "main@ef32088",
     "ios": "feature/prd-stitch-ui-adaptation@d480ccc",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -508,5 +509,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T21:45:00+0800"
+  "updatedAt": "2026-07-20T22:00:00+0800"
 }
