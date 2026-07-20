@@ -5178,6 +5178,49 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    /// Reads the future product confirmation projection. This is deliberately
+    /// separate from the QA review transport: it has a captured release-policy
+    /// decision, carries no QA header, and exposes no decision mutation APIs.
+    func fetchOwnerTruthInterviewCandidateConfirmation(
+        vaultID: OwnerTruthVaultID,
+        reviewBatchID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmation, Error>) -> Void
+    ) {
+        let decision = FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)
+        guard decision.allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                    reason: decision.reason
+                )))
+            }
+            return
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-review-batches/\(pathComponent(reviewBatchID.rawValue.uuidString))/confirmation"
+        requestJSON(
+            path: path,
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            featureDecision: decision
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewCandidateConfirmation(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID,
+                        expectedReviewBatchID: reviewBatchID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func fetchOwnerTruthInterviewSessionState(
         vaultID: OwnerTruthVaultID,
         sessionID: OwnerTruthRecordID,
@@ -7468,6 +7511,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
 
 extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateReviewClient {}
+extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewSessionStateClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewNaturalInputClient {}
 extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}

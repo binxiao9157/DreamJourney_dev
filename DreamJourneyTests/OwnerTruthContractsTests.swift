@@ -616,6 +616,76 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(useCase.viewState.singleItems.isEmpty)
     }
 
+    func testInterviewCandidateConfirmationDecodesDedicatedPolicyEnvelope() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000068")
+        let batchCandidateID = recordID("00000000-0000-0000-0000-000000000069")
+        let singleCandidateID = recordID("00000000-0000-0000-0000-000000000070")
+
+        let confirmation = try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: singleCandidateID
+        )
+
+        XCTAssertEqual(confirmation.vaultID.rawValue, lease.vaultId)
+        XCTAssertEqual(confirmation.reviewBatchID, reviewBatchID)
+        XCTAssertEqual(confirmation.readiness, .reviewReady)
+        XCTAssertEqual(confirmation.batchCandidates.map(\.id), [batchCandidateID])
+        XCTAssertEqual(confirmation.singleCandidates.map(\.id), [singleCandidateID])
+    }
+
+    func testInterviewCandidateConfirmationUseCaseFailsClosedWithoutReleasePolicy() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = InterviewCandidateConfirmationClientSpy()
+        let useCase = OwnerTruthInterviewCandidateConfirmationUseCase(
+            accountLease: lease,
+            reviewBatchID: recordID("00000000-0000-0000-0000-000000000073"),
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { false }
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .releasePolicyDisabled)
+        XCTAssertEqual(client.requestCount, 0)
+    }
+
+    func testInterviewCandidateConfirmationUseCaseDiscardsDeferredReadAfterAccountChange() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000074")
+        let client = InterviewCandidateConfirmationClientSpy()
+        client.deferRead = true
+        let useCase = OwnerTruthInterviewCandidateConfirmationUseCase(
+            accountLease: lease,
+            reviewBatchID: reviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.refresh)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferredRead(.success(try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: recordID("00000000-0000-0000-0000-000000000075"),
+            singleCandidateID: recordID("00000000-0000-0000-0000-000000000076")
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(useCase.viewState.confirmation)
+    }
+
     func testInterviewSessionStateDecodesValueMinimizedEnvelope() throws {
         let (_, lease) = try makeActiveRuntime()
         let state = try interviewSessionState(vaultID: lease.vaultId)
@@ -2104,6 +2174,68 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private func interviewCandidateConfirmation(
+        vaultID: String,
+        reviewBatchID: OwnerTruthRecordID,
+        batchCandidateID: OwnerTruthRecordID,
+        singleCandidateID: OwnerTruthRecordID
+    ) throws -> OwnerTruthInterviewCandidateConfirmation {
+        let sourceID = "00000000-0000-0000-0000-000000000151"
+        let extractionID = "00000000-0000-0000-0000-000000000152"
+        return try OwnerTruthInterviewCandidateConfirmation(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewCandidateConfirmation.schemaVersion,
+                "vaultId": vaultID,
+                "confirmation": [
+                    "schemaVersion": OwnerTruthInterviewCandidateConfirmation.compositionSchemaVersion,
+                    "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                    "admissionId": "00000000-0000-0000-0000-000000000153",
+                    "sourceId": sourceID,
+                    "sourceVersion": 1,
+                    "authorityEpoch": 0,
+                    "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
+                    "latestExtractionStatus": "succeeded",
+                    "batchCandidateCount": 1,
+                    "singleCandidateCount": 1,
+                ],
+                "batchCandidates": [[
+                    "candidateId": batchCandidateID.rawValue.uuidString,
+                    "sourceId": sourceID,
+                    "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
+                    "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+                    "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
+                    "sensitivity": OwnerTruthSensitivityLevel.standard.rawValue,
+                    "contentSchemaVersion": "owner-truth-candidate-content-v1",
+                    "content": ["summary": "确认前只读的普通候选"],
+                    "contentHash": "interview-confirmation-batch-hash",
+                    "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                    "reviewMode": "batch",
+                    "candidateVersion": 1,
+                    "extractionId": extractionID,
+                    "reviewPath": OwnerTruthInterviewCandidateReviewPath.batch.rawValue,
+                ]],
+                "singleCandidates": [[
+                    "candidateId": singleCandidateID.rawValue.uuidString,
+                    "sourceId": sourceID,
+                    "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
+                    "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+                    "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
+                    "sensitivity": OwnerTruthSensitivityLevel.sensitive.rawValue,
+                    "contentSchemaVersion": "owner-truth-candidate-content-v1",
+                    "content": ["summary": "确认前只读的敏感候选"],
+                    "contentHash": "interview-confirmation-single-hash",
+                    "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                    "reviewMode": "single",
+                    "candidateVersion": 1,
+                    "extractionId": extractionID,
+                    "reviewPath": OwnerTruthInterviewCandidateReviewPath.single.rawValue,
+                ]],
+            ],
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID)),
+            expectedReviewBatchID: reviewBatchID
+        )
+    }
+
     private func interviewSessionState(
         vaultID: String,
         lifecycle: OwnerTruthInterviewSessionLifecycle = .active,
@@ -2426,6 +2558,36 @@ private enum InterviewCandidateReviewClientSpyError: Error {
     case missingSingleResult
 }
 
+private final class InterviewCandidateConfirmationClientSpy: OwnerTruthInterviewCandidateConfirmationClient {
+    var readResult: Result<OwnerTruthInterviewCandidateConfirmation, Error>?
+    var deferRead = false
+    private var deferredReadCompletion: ((Result<OwnerTruthInterviewCandidateConfirmation, Error>) -> Void)?
+    private(set) var requestCount = 0
+
+    func fetchOwnerTruthInterviewCandidateConfirmation(
+        vaultID: OwnerTruthVaultID,
+        reviewBatchID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmation, Error>) -> Void
+    ) {
+        requestCount += 1
+        if deferRead {
+            deferredReadCompletion = completion
+            return
+        }
+        completion(readResult ?? .failure(InterviewCandidateConfirmationClientSpyError.missingReadResult))
+    }
+
+    func completeDeferredRead(_ result: Result<OwnerTruthInterviewCandidateConfirmation, Error>) {
+        let completion = deferredReadCompletion
+        deferredReadCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum InterviewCandidateConfirmationClientSpyError: Error {
+    case missingReadResult
+}
+
 private final class InterviewSessionStateClientSpy: OwnerTruthInterviewSessionStateClient {
     var readResult: Result<OwnerTruthInterviewSessionState, Error>?
     var deferRead = false
@@ -2459,6 +2621,7 @@ private enum InterviewSessionStateClientSpyError: Error {
 private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalInputClient {
     var startHandler: ((OwnerTruthInterviewNaturalInputStartCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var appendHandler: ((OwnerTruthInterviewNaturalInputAppendCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
+    var continuationHandler: ((OwnerTruthRecordID) -> Result<OwnerTruthInterviewNaturalInputContinuation, Error>)?
     var deferAppend = false
     private var deferredAppendCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
 
@@ -2487,6 +2650,16 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
         completion(appendHandler?(command) ?? .failure(InterviewNaturalInputClientSpyError.missingAppendResult))
     }
 
+    func fetchOwnerTruthInterviewNaturalInputContinuation(
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputContinuation, Error>) -> Void
+    ) {
+        completion(continuationHandler?(sessionID) ?? .failure(
+            InterviewNaturalInputClientSpyError.missingContinuationResult
+        ))
+    }
+
     func completeDeferredAppend(_ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>) {
         let completion = deferredAppendCompletion
         deferredAppendCompletion = nil
@@ -2497,6 +2670,7 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
 private enum InterviewNaturalInputClientSpyError: Error {
     case missingStartResult
     case missingAppendResult
+    case missingContinuationResult
 }
 
 private final class CorrectionRequestClientSpy: OwnerTruthCorrectionRequestClient {

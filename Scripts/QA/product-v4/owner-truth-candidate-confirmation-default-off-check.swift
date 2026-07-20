@@ -45,4 +45,29 @@ require(
     "confirmation route must keep owner-text policy handling"
 )
 
+guard let methodStart = backendClient.range(of: "func fetchOwnerTruthInterviewCandidateConfirmation("),
+      let methodEnd = backendClient.range(
+        of: "func fetchOwnerTruthInterviewSessionState(",
+        range: methodStart.upperBound..<backendClient.endIndex
+      ) else {
+    fatalError("owner-truth candidate confirmation default-off check failed: typed client method is missing")
+}
+let typedMethod = String(backendClient[methodStart.lowerBound..<methodEnd.lowerBound])
+require(
+    typedMethod.contains("FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)"),
+    "typed confirmation client must capture the dedicated release-policy decision"
+)
+require(
+    typedMethod.contains("/confirmation\"") && typedMethod.contains("featureDecision: decision"),
+    "typed confirmation client must call the confirmation route with its captured decision"
+)
+require(
+    typedMethod.contains("OwnerTruthInterviewCandidateConfirmation("),
+    "typed confirmation client must parse the confirmation-only contract"
+)
+require(
+    !typedMethod.contains("X-DreamJourney-QA-Owner-Truth"),
+    "typed confirmation client must never carry the QA review header"
+)
+
 print("owner-truth candidate confirmation default-off check passed")

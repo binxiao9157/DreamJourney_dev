@@ -160,3 +160,29 @@ Gate 结论：该摘要/继续态为 G0、G1 scoped 和 G2 deployed evidence。�
 Gate 结论：确认读取合同已有 G0/G2 证据，但仍为 default-off，尚未拥有 G1 产品消费面。下一步如
 需继续，只能先建立 typed iOS QA consumer 与受策略控制的可读展示，不能直接公开 Candidate
 内容或连接现有 QA review 写入路由。
+
+## 2026-07-21 Slice 3F 默认关闭确认 typed iOS consumer
+
+- iOS 新增 `OwnerTruthInterviewCandidateConfirmation`、只读 client port 和
+  `OwnerTruthInterviewCandidateConfirmationUseCase`。它只解析后端 confirmation envelope；没有
+  Candidate 接受、修正、拒绝、MemoryVersion 激活或 legacy Archive/KBLite 写入能力。
+- use case 默认 `releasePolicyAvailable=false`。未显式提供已捕获的产品策略时，刷新请求直接
+  失败关闭为 `releasePolicyDisabled`，不发起网络请求；请求和回调提交都执行 AccountLease 校验，
+  账号切换后的延迟结果会被丢弃。
+- `DreamJourneyBackendClient` 读取正式 `/confirmation` 路由时重新捕获
+  `ownerTruthCandidateReview` FeatureDecision，并将其传入 `requestJSON`。该请求不带
+  `X-DreamJourney-QA-Owner-Truth`，不能借用 QA review 通道，也不依赖其写入 API。
+- 本轮没有新增产品入口、Sheet、自动读取、候选内容展示或发布策略放行；默认公开版本仍看不到
+  任何确认内容。是否进入产品确认 surface 仍是后续独立的产品/G1 决策。
+- 为使定向 XCTest 重新成为可信门，补齐了既有自然输入测试桩遗漏的 continuation read 协议方法；
+  其默认失败是 advisory read 行为，不影响已成功的输入回执，也不改变产品功能。
+
+本轮验证：
+
+- `OwnerTruthContractsTests` 在 iPhone 17 Pro Simulator 通过：51 项、0 failures。
+- `swiftc -parse`、candidate confirmation default-off static check、release feature matrix check、
+  feature-gate evaluator model smoke、`git diff --check` 全部通过。
+- 通用 `generic/platform=iOS` Debug build（`CODE_SIGNING_ALLOWED=NO`）通过。
+
+Gate 结论：该 typed consumer 获得 G0 scoped evidence；G2 复用已部署 confirmation read 合同。
+没有新增 G1 可视 surface，也没有缩短 G4 产品/隐私放行路径。
