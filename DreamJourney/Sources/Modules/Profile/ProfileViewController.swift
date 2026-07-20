@@ -574,6 +574,9 @@ final class ProfileViewController: UIViewController {
         if isFeatureRouteAllowed(.legalCenter, risk: .ownerTextCore) {
             rows.append(.legalCenter)
         }
+        if isFeatureRouteAllowed(.accountDeletion, risk: .ownerTextCore) {
+            rows.append(.dataExport)
+        }
         rows.append(.logout)
         if isFeatureRouteAllowed(.accountDeletion, risk: .ownerTextCore) {
             rows.append(.accountDeletion)
@@ -697,6 +700,8 @@ final class ProfileViewController: UIViewController {
             showVoiceCloneShell()
         case .legalCenter:
             showLegalCenter()
+        case .dataExport:
+            showAccountDataExport()
         case .logout:
             UserManager.shared.logout()
         case .accountDeletion:
@@ -770,7 +775,7 @@ final class ProfileViewController: UIViewController {
         }
         let alert = UIAlertController(
             title: "注销账户",
-            message: "注销后不支持数据导出。你的数据会保留 30 天；30 天内用同手机号重新注册可恢复数据，恢复机会只有 1 次。超过 30 天后将不可逆删除。",
+            message: "注销前可导出个人数据副本；提交注销后不再提供导出。你的数据会保留 30 天；30 天内用同手机号重新注册可恢复数据，恢复机会只有 1 次。超过 30 天后将不可逆删除。",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
@@ -784,7 +789,7 @@ final class ProfileViewController: UIViewController {
     private func showFinalAccountDeletionConfirmation(user: UserModel) {
         let alert = UIAlertController(
             title: "再次确认注销",
-            message: "提交后会立即退出当前账号，并进入 30 天恢复期。请确认你已经理解：不支持数据导出，恢复机会只有 1 次。",
+            message: "提交后会立即退出当前账号，并进入 30 天恢复期。请确认你已经理解：此后不再提供数据导出，恢复机会只有 1 次。",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
@@ -792,6 +797,96 @@ final class ProfileViewController: UIViewController {
             self?.submitAccountDeletion(user: user)
         })
         present(alert, animated: true)
+    }
+
+    private func showAccountDataExport() {
+        guard DreamJourneyBackendClient.shared.isAccountDataExportConfigured else {
+            showToast("后端账号服务未配置，暂时无法导出", type: .error)
+            return
+        }
+        guard let user = UserManager.shared.currentUser,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id),
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            showToast("账号状态已变化，请重新登录后再试", type: .info)
+            return
+        }
+
+        let alert = UIAlertController(
+            title: "导出个人数据",
+            message: "将生成本应用可直接导出的个人数据副本。媒体二进制、登录凭据和第三方服务留存的数据不包含在副本中；分享完成后，临时文件会从本机删除。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "生成并分享", style: .default) { [weak self] _ in
+            self?.requestAccountDataExport(user: user, accountLease: accountLease)
+        })
+        present(alert, animated: true)
+    }
+
+    private func requestAccountDataExport(user: UserModel, accountLease: AccountLease) {
+        showToast("正在准备个人数据副本", type: .info)
+        DreamJourneyBackendClient.shared.exportAccountData(userId: user.id) { [weak self] result in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+                return
+            }
+            switch result {
+            case .success(let export):
+                do {
+                    let fileURL = try self.writeAccountDataExport(export)
+                    self.presentAccountDataExportShareSheet(fileURL: fileURL)
+                } catch {
+                    self.showToast("导出失败：\(error.localizedDescription)", type: .error)
+                }
+            case .failure(let error):
+                self.showToast("导出失败：\(error.localizedDescription)", type: .error)
+            }
+        }
+    }
+
+    private func writeAccountDataExport(_ export: AccountDataExportContract) throws -> URL {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("DreamJourneyDataExports", isDirectory: true)
+        if fileManager.fileExists(atPath: directory.path) {
+            try fileManager.removeItem(at: directory)
+        }
+        try fileManager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: [.protectionKey: FileProtectionType.complete]
+        )
+
+        let fileURL = directory.appendingPathComponent(
+            "dreamjourney-personal-data-\(UUID().uuidString).json",
+            isDirectory: false
+        )
+        try export.prettyPrintedJSONData().write(to: fileURL, options: .atomic)
+        try fileManager.setAttributes(
+            [.protectionKey: FileProtectionType.complete],
+            ofItemAtPath: fileURL.path
+        )
+        return fileURL
+    }
+
+    private func presentAccountDataExportShareSheet(fileURL: URL) {
+        let activityViewController = UIActivityViewController(
+            activityItems: [fileURL],
+            applicationActivities: nil
+        )
+        activityViewController.completionWithItemsHandler = { _, _, _, _ in
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+        if let popover = activityViewController.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(
+                x: view.bounds.midX,
+                y: view.bounds.midY,
+                width: 0,
+                height: 0
+            )
+        }
+        present(activityViewController, animated: true)
     }
 
     private func submitAccountDeletion(user: UserModel) {
@@ -1098,6 +1193,7 @@ private enum ProfileRowAction {
     case familyManagement
     case voiceClone
     case legalCenter
+    case dataExport
     case logout
     case accountDeletion
 
@@ -1111,6 +1207,8 @@ private enum ProfileRowAction {
             return "音色复刻"
         case .legalCenter:
             return "法律法规"
+        case .dataExport:
+            return "导出个人数据"
         case .logout:
             return "退出登录"
         case .accountDeletion:
@@ -1128,6 +1226,8 @@ private enum ProfileRowAction {
             return "waveform.badge.mic"
         case .legalCenter:
             return "chevron.right"
+        case .dataExport:
+            return "square.and.arrow.up"
         case .logout:
             return "rectangle.portrait.and.arrow.right"
         case .accountDeletion:
@@ -1139,7 +1239,7 @@ private enum ProfileRowAction {
         switch self {
         case .accountDeletion:
             return true
-        case .profileSettings, .familyManagement, .voiceClone, .legalCenter, .logout:
+        case .profileSettings, .familyManagement, .voiceClone, .legalCenter, .dataExport, .logout:
             return false
         }
     }

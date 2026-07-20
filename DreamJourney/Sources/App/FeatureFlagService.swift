@@ -177,11 +177,15 @@ enum QALaunchScenario: String, CaseIterable {
         switch self {
         case .globalPrivateStoreRetirementSmoke,
              .backendEnvironmentSmoke,
-             .archiveToEchoSmoke,
              .seedEchoArchiveContext,
              .seedArchiveAnalysisInsights,
              .seedPendingArchiveAnalysis:
             return .none
+        // The archive seed is created after Scene composition, but the
+        // prevalidated test credential must exist before that composition
+        // so AccountLease-protected archive storage is available.
+        case .archiveToEchoSmoke:
+            return .login
         case .voiceCloneProfileSelectionSmoke,
              .voiceCloneSynthesisRuntimeSmoke,
              .profileCareBackendFailureRetrySmoke,

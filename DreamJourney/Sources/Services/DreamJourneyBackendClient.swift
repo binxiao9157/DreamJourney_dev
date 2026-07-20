@@ -501,6 +501,9 @@ final class FeatureGateService {
         if normalizedPath == "/archive/image-analysis" { return .archiveLocalAnalysis }
         if normalizedPath == "/archive/photos" { return .archiveRemoteFetch }
         if normalizedPath == "/auth/password" { return .accountPasswordChange }
+        if normalizedPath == "/auth/data-export" {
+            return .accountDeletion
+        }
         if normalizedPath == "/auth/delete" || normalizedPath == "/auth/restore" {
             return .accountDeletion
         }
@@ -1355,6 +1358,90 @@ struct AccountDeletionAcceptanceContract {
         self.sessionRevocationScope = sessionRevocationScope
         self.accessRevocationEventId = accessRevocationEventId
         self.accessRevocationStatus = accessRevocationStatus
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+}
+
+enum AccountDataExportContractError: LocalizedError {
+    case malformedResponse
+    case ownerScopeMismatch
+    case cannotSerialize
+
+    var errorDescription: String? {
+        switch self {
+        case .malformedResponse:
+            return "数据副本回执不完整，请稍后重试"
+        case .ownerScopeMismatch:
+            return "账号状态已变化，未生成数据副本"
+        case .cannotSerialize:
+            return "数据副本无法安全写入本机"
+        }
+    }
+}
+
+/// A bounded, owner-scoped application-data export. Provider records,
+/// credentials, and media bytes remain explicitly outside this contract.
+struct AccountDataExportContract {
+    let schemaVersion: Int
+    let status: String
+    let generatedAt: String
+    let ownerUserId: String
+    let title: String
+    let summary: String
+    let moduleSummaryCount: Int
+    let externalBoundaryCount: Int
+    private let rawJSONObject: [String: Any]
+
+    init(json: [String: Any], expectedUserId: String) throws {
+        guard let status = json["status"] as? String,
+              status == "ready",
+              let generatedAt = json["generatedAt"] as? String,
+              let ownerUserId = json["ownerUserId"] as? String,
+              !ownerUserId.isEmpty,
+              let humanReadable = json["humanReadable"] as? [String: Any],
+              let title = humanReadable["title"] as? String,
+              let summary = humanReadable["summary"] as? String,
+              let machineReadable = json["machineReadable"] as? [String: Any],
+              machineReadable["objects"] is [[String: Any]],
+              let moduleSummaries = humanReadable["moduleSummaries"] as? [[String: Any]],
+              let externalBoundaries = json["externalBoundaries"] as? [[String: Any]] else {
+            throw AccountDataExportContractError.malformedResponse
+        }
+        guard ownerUserId == expectedUserId else {
+            throw AccountDataExportContractError.ownerScopeMismatch
+        }
+
+        schemaVersion = Self.intValue(json["schemaVersion"]) ?? 1
+        self.status = status
+        self.generatedAt = generatedAt
+        self.ownerUserId = ownerUserId
+        self.title = title
+        self.summary = summary
+        moduleSummaryCount = moduleSummaries.count
+        externalBoundaryCount = externalBoundaries.count
+        rawJSONObject = json
+    }
+
+    func prettyPrintedJSONData() throws -> Data {
+        guard JSONSerialization.isValidJSONObject(rawJSONObject) else {
+            throw AccountDataExportContractError.cannotSerialize
+        }
+        return try JSONSerialization.data(
+            withJSONObject: rawJSONObject,
+            options: [.prettyPrinted, .sortedKeys]
+        )
     }
 
     private static func intValue(_ value: Any?) -> Int? {
@@ -4379,6 +4466,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         hasExplicitBaseURL
     }
 
+    var isAccountDataExportConfigured: Bool {
+        hasExplicitBaseURL
+    }
+
     var isRealtimeVoiceConfigConfigured: Bool {
         hasExplicitBaseURL
     }
@@ -5763,6 +5854,38 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
                 }
             }
         )
+    }
+
+    func exportAccountData(
+        userId: String,
+        completion: @escaping (Result<AccountDataExportContract, Error>) -> Void
+    ) {
+        let normalizedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedUserId.isEmpty else {
+            completion(.failure(ClientError.accountScopeChanged))
+            return
+        }
+        requestJSON(
+            path: "/auth/data-export",
+            method: .post,
+            payload: nil,
+            authPolicy: .userRequired,
+            sessionUserId: normalizedUserId
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try AccountDataExportContract(
+                        json: object,
+                        expectedUserId: normalizedUserId
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
     }
 
     func restoreAccount(

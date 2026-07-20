@@ -377,7 +377,6 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runBackendEnvSmoke() }
         case .archiveToEchoSmoke:
             DialogPromptDebugRecorder.reset()
-            seedPendingArchiveAnalysisContext()
             scheduleUIQAScenario(scenario) { $0.runArchiveToEchoSmoke() }
         case .archiveMediaEchoContextSmoke:
             DialogPromptDebugRecorder.reset()
@@ -2858,15 +2857,20 @@ private extension AppDelegate {
         print("[UI_QA] Seeded echo archive context available=\(snapshot.availableItemCount)")
     }
 
-    func seedPendingArchiveAnalysisContext() {
+    @discardableResult
+    func seedPendingArchiveAnalysisContext() -> Bool {
         UserManager.shared.login(phone: "13800009999", nickname: "UI QA")
         UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.items.user_9999")
 
         let item = MemoryArchiveItemFactory.makePhotoItem(localPath: "/tmp/uiqa-pending-photo.jpg")
-        MemoryArchiveRepository.shared.add(item, syncToBackend: false)
+        let didAdd = MemoryArchiveRepository.shared.add(item, syncToBackend: false)
 
         let snapshot = MemoryArchiveRepository.shared.contextSnapshot()
-        print("[UI_QA] Seeded pending archive analysis available=\(snapshot.availableItemCount)")
+        print(
+            "[UI_QA] Seeded pending archive analysis " +
+            "inserted=\(didAdd) available=\(snapshot.availableItemCount)"
+        )
+        return didAdd
     }
 
     func prepareArchiveMediaEchoContextSmoke(retryCount: Int = 0) {
@@ -2979,18 +2983,28 @@ private extension AppDelegate {
         }
     }
 
-    func runArchiveToEchoSmoke(retryCount: Int = 0) {
+    func runArchiveToEchoSmoke(retryCount: Int = 0, hasSeededItem: Bool = false) {
         guard let tabBarController = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap({ $0.windows })
             .first(where: { $0.isKeyWindow })?
             .rootViewController as? WarmTabBarController else {
             guard retryCount < 20 else {
+                writeArchiveToEchoSmokeResult(
+                    completed: false,
+                    containsArchiveContext: false,
+                    availableItemCount: 0,
+                    entries: "",
+                    failureReason: "missingRootTab"
+                )
                 print("[UI_QA] ArchiveToEchoSmoke failed reason=missingRootTab")
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                self?.runArchiveToEchoSmoke(retryCount: retryCount + 1)
+                self?.runArchiveToEchoSmoke(
+                    retryCount: retryCount + 1,
+                    hasSeededItem: hasSeededItem
+                )
             }
             return
         }
@@ -2999,9 +3013,49 @@ private extension AppDelegate {
               viewControllers.count > 1,
               let archiveNavigationController = viewControllers.first as? UINavigationController,
               let echoNavigationController = viewControllers[1] as? UINavigationController,
-              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController,
-              let item = MemoryArchiveRepository.shared.allItems().first else {
+              let echoViewController = echoNavigationController.viewControllers.first as? EchoViewController else {
+            writeArchiveToEchoSmokeResult(
+                completed: false,
+                containsArchiveContext: false,
+                availableItemCount: 0,
+                entries: "",
+                failureReason: "missingSmokeDependencies"
+            )
             print("[UI_QA] ArchiveToEchoSmoke failed reason=missingSmokeDependencies")
+            return
+        }
+
+        guard hasSeededItem else {
+            let didSeedItem = self.seedPendingArchiveAnalysisContext()
+            guard didSeedItem else {
+                writeArchiveToEchoSmokeResult(
+                    completed: false,
+                    containsArchiveContext: false,
+                    availableItemCount: 0,
+                    entries: "",
+                    failureReason: "archiveSeedUnavailable"
+                )
+                print("[UI_QA] ArchiveToEchoSmoke failed reason=archiveSeedUnavailable")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.runArchiveToEchoSmoke(
+                    retryCount: retryCount,
+                    hasSeededItem: true
+                )
+            }
+            return
+        }
+
+        guard let item = MemoryArchiveRepository.shared.allItems().first else {
+            writeArchiveToEchoSmokeResult(
+                completed: false,
+                containsArchiveContext: false,
+                availableItemCount: 0,
+                entries: "",
+                failureReason: "seededArchiveItemUnavailable"
+            )
+            print("[UI_QA] ArchiveToEchoSmoke failed reason=seededArchiveItemUnavailable")
             return
         }
 
@@ -3930,16 +3984,21 @@ private extension AppDelegate {
     }
 
     func writeArchiveToEchoSmokeResult(
+        completed: Bool = true,
         containsArchiveContext: Bool,
         availableItemCount: Int,
-        entries: String
+        entries: String,
+        failureReason: String? = nil
     ) {
-        let result: [String: Any] = [
-            "completed": true,
+        var result: [String: Any] = [
+            "completed": completed,
             "containsArchiveContext": containsArchiveContext,
             "availableItemCount": availableItemCount,
             "entries": entries
         ]
+        if let failureReason {
+            result["failureReason"] = failureReason
+        }
 
         guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
               let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {

@@ -92,6 +92,7 @@ fi
 echo "[archive-to-echo-smoke] $COMPLETION_LINE"
 
 if [[ -s "$RESULT_FILE" ]]; then
+  grep -Eq '"completed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Scenario reported failure: $(cat "$RESULT_FILE")"
   grep -Eq '"containsArchiveContext"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Prompt did not include archive context."
   grep -Eq '"availableItemCount"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Analyzed archive item was not available to echo."
   grep -q '相册影像' "$RESULT_FILE" || fail "Expected photo archive entry was not present."

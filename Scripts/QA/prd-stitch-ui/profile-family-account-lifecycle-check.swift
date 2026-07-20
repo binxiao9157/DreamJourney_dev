@@ -53,6 +53,9 @@ for required in [
     "path: \"/auth/delete\"",
     "func restoreAccount(",
     "path: \"/auth/restore\"",
+    "func exportAccountData(",
+    "path: \"/auth/data-export\"",
+    "AccountDataExportContract",
     "isAccountDeletionConfigured",
 ] {
     assertContains(backendClient, required, "iOS backend client should expose family/account lifecycle contract \(required)")
@@ -90,9 +93,11 @@ for required in [
 assertNotContains(familyView, "复制邀请邮票", "Family UI should not keep old stamp-copy invite copy")
 
 for required in [
+    "showAccountDataExport",
+    "导出个人数据",
+    "注销前可导出个人数据副本",
     "showFinalAccountDeletionConfirmation",
     "submitAccountDeletion",
-    "不支持数据导出",
     "数据会保留 30 天",
     "恢复机会只有 1 次",
     "确认注销账户",
@@ -101,6 +106,7 @@ for required in [
     assertContains(profileView, required, "Profile should implement two-step account deletion UI \(required)")
 }
 assertNotContains(profileView, "提交注销申请（未开放）", "Account deletion should no longer be blocked shell")
+assertNotContains(profileView, "不支持数据导出", "V4 data-rights UI should not retain the superseded no-export copy")
 
 assertContains(
     timeLetterEntry,
@@ -123,11 +129,21 @@ for required in [
     "soft_delete_user",
     "restore_user",
     "purge_expired_deleted_users",
-    "\"dataExportSupported\"] = False",
+    "\"dataExportSupported\"] = True",
+    "\"dataExportState\"] = \"availableBeforeDeletionOnly\"",
     "\"restoreLimit\"] = 1",
 ] {
     assertContains(backendStore, required, "In-memory store should implement soft delete lifecycle \(required)")
     assertContains(backendPostgres, required, "Postgres store should implement soft delete lifecycle \(required)")
+}
+
+let backendDataRightsTests = backend("tests/test_data_rights_module_inventory.py")
+for required in [
+    "test_export_route_requires_active_owner_session_and_disables_response_caching",
+    "/auth/data-export",
+    "raw-device-token-should-not-export",
+] {
+    assertContains(backendDataRightsTests, required, "Backend data export tests should preserve the V4 privacy boundary \(required)")
 }
 
 for required in [
