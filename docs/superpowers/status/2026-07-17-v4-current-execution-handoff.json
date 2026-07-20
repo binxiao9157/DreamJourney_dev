@@ -2,11 +2,13 @@
   "activeWorkItem": {
     "authorityLock": "OWNER_TRUTH",
     "backendPendingPaths": [],
-    "completedSubSlices": [],
-    "currentSubSlice": "WI-S1-01-12-G0-VERIFIED_MEDIA_PROCESSOR_BOUNDARY_INVENTORY",
+    "completedSubSlices": [
+      "WI-S1-01-12-G0-VERIFIED_MEDIA_PROCESSOR_BOUNDARY_INVENTORY"
+    ],
+    "currentSubSlice": "WI-S1-01-12-G0-INTENT_COMMIT_CONTRACT_SHADOW",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "IN_PROGRESS / VERIFIED_MEDIA_PROCESSOR_BOUNDARY_INVENTORY_REQUIRED",
+      "G0": "IN_PROGRESS / MEDIA_BOUNDARY_INVENTORY_VERIFIED / INTENT_COMMIT_SHADOW_REQUIRED",
       "G1": "NOT_STARTED / NO_PUBLIC_MEDIA_UI_CHANGE_AUTHORIZED",
       "G2": "NOT_STARTED / SOURCE_OBJECT_AND_STORAGE_EVIDENCE_REQUIRED",
       "G3": "NOT_STARTED / PROCESSOR_PROVIDER_CONTRACT_REQUIRED",
@@ -15,11 +17,11 @@
     "id": "WI-S1-01-12",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
-    "summary": "WI-S1-02-10 is INTERNAL_READY for its scoped G0 work: inventory, lifecycle guard, retirement candidate manifest, cutover-fence model and default-off TimeLetter typed-effect admission shadow are implemented at backend main@f90c7c7 and deployed healthy. Its remaining G2 host/runtime and G3 Provider evidence is external/open; no worker, route, timer, legacy authority, mailbox/outbox or Provider call changed. Execution now moves to WI-S1-01-12, starting with a value-free inventory of the verified-media processor boundary. It must not create SourceObject authority, object storage, an upload path, a processor call or public media UI."
+    "summary": "WI-S1-02-10 is INTERNAL_READY for its scoped G0 work: inventory, lifecycle guard, retirement candidate manifest, cutover-fence model and default-off TimeLetter typed-effect admission shadow are implemented at backend main@f90c7c7 and deployed healthy. Its remaining G2 host/runtime and G3 Provider evidence is external/open; no worker, route, timer, legacy authority, mailbox/outbox or Provider call changed. WI-S1-01-12 has completed its first G0 sub-slice at backend main@eb4b609: a default-off, value-free inventory rejects mock/local/temp, unverified, inactive, cross-owner/vault/purpose and incomplete-receipt media before a future processor could be considered. No SourceObject authority, object storage, upload path, processor call, effect, Candidate/Memory write or public media UI was added. The active sub-slice now remains within WI-S1-01-12 and models intent/commit validation in shadow only."
   },
   "baselines": {
-    "backend": "main@f90c7c7",
-    "ios": "feature/prd-stitch-ui-adaptation@272a1b5",
+    "backend": "main@eb4b609",
+    "ios": "feature/prd-stitch-ui-adaptation@e7bca7f",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -486,5 +488,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-20T12:00:00+0800"
+  "updatedAt": "2026-07-20T17:10:00+0800"
 }
