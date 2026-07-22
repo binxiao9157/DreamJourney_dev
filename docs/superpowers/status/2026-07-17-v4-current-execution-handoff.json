@@ -91,6 +91,12 @@
       "registryClosure": "SCOPED_G0_G2_BACKUP_EVIDENCE_PRESENT_RECOVERY_NO_GO"
     },
     {
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-migration-c02-identity-promotion-preflight.md",
+      "id": "WI-MIG-01-03",
+      "implementationStatus": "INTERNAL_READY / C02_IDENTITY_PROMOTION_PREFLIGHT_G0_VERIFIED / BACKEND_PUSHED_703c65b / SHADOW_ONLY / NO_IDENTITY_OR_OWNER_DATA_WRITE / G1_G2_G4_OPEN / NO_CUTOVER",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G4_OPEN"
+    },
+    {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-01-10-cutover-admission-g0.md",
       "id": "WI-S1-01-10",
       "implementationStatus": "INTERNAL_READY / G0_CUTOVER_ADMISSION_BOUNDARY_VERIFIED / BACKEND_DEPLOYED_864e5d9 / DEFAULT_OFF / G1_G2_G4_OPEN",
