@@ -85,6 +85,12 @@
       "registryClosure": "SCOPED_G0_SOURCE_EVIDENCE_PRESENT_G2_G3_G4_OPEN"
     },
     {
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-migration-c01-schema-lineage.md",
+      "id": "WI-MIG-01-02",
+      "implementationStatus": "INTERNAL_READY / C01_SCHEMA_LINEAGE_G0_G2_OPERATIONAL_BACKUP_VERIFIED / BACKEND_DEPLOYED_cd65163 / RECOVERY_G2_NO_GO_PENDING_ISOLATED_RESTORE_IDENTITY_AUTHORITY_REPLAY_AND_OPERATIONS_EVIDENCE",
+      "registryClosure": "SCOPED_G0_G2_BACKUP_EVIDENCE_PRESENT_RECOVERY_NO_GO"
+    },
+    {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-01-10-cutover-admission-g0.md",
       "id": "WI-S1-01-10",
       "implementationStatus": "INTERNAL_READY / G0_CUTOVER_ADMISSION_BOUNDARY_VERIFIED / BACKEND_DEPLOYED_864e5d9 / DEFAULT_OFF / G1_G2_G4_OPEN",
