@@ -5635,6 +5635,48 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    func restoreOwnerTruthInterviewCooldown(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewRestoreCooldownCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        // The server intentionally exposes cooldown restoration only to the
+        // default-off Owner Truth QA contract. Do not fall through to an
+        // echoTextInput release-policy decision here.
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthInterviewRestoreCooldown",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions/\(pathComponent(command.sessionID.rawValue.uuidString))/restore-cooldown"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewNaturalInputReceipt(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func fetchOwnerTruthInterviewNaturalInputContinuation(
         vaultID: OwnerTruthVaultID,
         sessionID: OwnerTruthRecordID,

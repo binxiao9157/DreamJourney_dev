@@ -111,6 +111,7 @@ grep -Eq '"boundary"[[:space:]]*:[[:space:]]*"skipOnce"' "$RESULT_FILE" || fail 
 grep -Eq '"boundary"[[:space:]]*:[[:space:]]*"cooldown"' "$RESULT_FILE" || fail "cooldown result missing."
 grep -Eq '"boundary"[[:space:]]*:[[:space:]]*"doNotAsk"' "$RESULT_FILE" || fail "doNotAsk result missing."
 grep -Eq '"doNotAskRestoreCompleted"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "explicit doNotAsk restore result missing."
+grep -Eq '"cooldownRestoreCompleted"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "elapsed cooldown restore result missing."
 grep -Eq '"lifecycle"[[:space:]]*:[[:space:]]*"active"' "$RESULT_FILE" || fail "skipOnce must remain active."
 grep -Eq '"lifecycle"[[:space:]]*:[[:space:]]*"paused"' "$RESULT_FILE" || fail "paused boundary result missing."
 grep -Eq '"DJRunOwnerTruthInterviewBoundarySmoke"' "$RESULT_FILE" || fail "Boundary launch scenario drifted."

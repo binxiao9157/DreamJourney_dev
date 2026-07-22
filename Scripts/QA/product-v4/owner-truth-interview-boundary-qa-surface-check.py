@@ -12,6 +12,7 @@ CONTRACTS = ROOT / "DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.s
 FLAGS = ROOT / "DreamJourney/Sources/App/FeatureFlagService.swift"
 DELEGATE = ROOT / "DreamJourney/Sources/AppDelegate.swift"
 RUNNER = ROOT / "Scripts/QA/prd-stitch-ui/run-owner-truth-interview-boundary-smoke.sh"
+CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 
 
 def require(condition: bool, message: str) -> None:
@@ -36,7 +37,7 @@ def body(source: str, marker: str) -> str:
 
 
 def main() -> None:
-    for path in (SURFACE, CONTRACTS, FLAGS, DELEGATE, RUNNER):
+    for path in (SURFACE, CONTRACTS, FLAGS, DELEGATE, RUNNER, CLIENT):
         require(path.is_file(), f"missing interview-boundary QA artifact: {path}")
 
     surface = SURFACE.read_text(encoding="utf-8")
@@ -44,22 +45,26 @@ def main() -> None:
     flags = FLAGS.read_text(encoding="utf-8")
     delegate = DELEGATE.read_text(encoding="utf-8")
     runner = RUNNER.read_text(encoding="utf-8")
+    client = CLIENT.read_text(encoding="utf-8")
 
     for snippet in (
         "private let skipOnceButton",
         "private let cooldownButton",
         "private let doNotAskButton",
         "private let restoreDoNotAskButton",
+        "private let restoreCooldownButton",
         "configureBoundaryControls()",
         "owner-truth-interview-boundary-skip-once",
         "owner-truth-interview-boundary-cooldown",
         "owner-truth-interview-boundary-do-not-ask",
         "owner-truth-interview-boundary-restore-do-not-ask",
+        "owner-truth-interview-boundary-restore-cooldown",
         "case .skipOnce",
         "case .cooldown",
         "case .doNotAsk",
         "triggerBoundaryButtonForQA",
         "triggerDoNotAskRestoreForQA",
+        "triggerCooldownRestoreForQA",
     ):
         require(snippet in surface, f"missing QA boundary surface: {snippet}")
 
@@ -95,6 +100,24 @@ def main() -> None:
         "doNotAsk restoration must use a separate typed command",
     )
     require(
+        "case restoreCooldown" in contracts
+        and "OwnerTruthInterviewRestoreCooldownCommand" in contracts,
+        "cooldown restoration must use a separate typed command",
+    )
+    require(
+        '"cooldownUntil"' not in body(
+            contracts, "struct OwnerTruthInterviewRestoreCooldownCommand"
+        ),
+        "cooldown restoration must not accept a client-controlled deadline",
+    )
+    require(
+        "restore-cooldown" in client
+        and "OwnerTruthCandidateReviewQAGate.isEnabled" in body(
+            client, "func restoreOwnerTruthInterviewCooldown("
+        ),
+        "cooldown restoration must remain on the QA-only transport",
+    )
+    require(
         'case ownerTruthInterviewBoundarySmoke = "DJRunOwnerTruthInterviewBoundarySmoke"' in flags,
         "boundary UIQA requires an explicit launch scenario",
     )
@@ -107,6 +130,11 @@ def main() -> None:
         "DJRunOwnerTruthInterviewBoundarySmoke",
     ):
         require(argument in runner, f"boundary UIQA runner missing launch argument: {argument}")
+
+    require(
+        '"cooldownRestoreCompleted"' in runner,
+        "boundary UIQA runner must require cooldown restoration evidence",
+    )
 
     for forbidden in (
         "appendOwnerTruthInterviewNaturalInput",

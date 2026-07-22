@@ -6349,6 +6349,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let cooldownButton = UIButton(type: .system)
     private let doNotAskButton = UIButton(type: .system)
     private let restoreDoNotAskButton = UIButton(type: .system)
+    private let restoreCooldownButton = UIButton(type: .system)
 
     private var renderedState: OwnerTruthInterviewNaturalInputViewState = .idle
     var onViewStateRendered: ((OwnerTruthInterviewNaturalInputViewState) -> Void)?
@@ -6379,6 +6380,12 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         presentation == .qa
             && restoreDoNotAskButton.superview != nil
             && !restoreDoNotAskButton.isHidden
+    }
+
+    var isCooldownRestoreActionVisibleForQA: Bool {
+        presentation == .qa
+            && restoreCooldownButton.superview != nil
+            && !restoreCooldownButton.isHidden
     }
 
     init(
@@ -6510,6 +6517,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         let canRestoreDoNotAsk = presentation == .qa
             && state.phase == .ready
             && state.latestReceipt?.boundary == .doNotAsk
+        let canRestoreCooldown = presentation == .qa
+            && state.phase == .ready
+            && state.latestReceipt?.boundary == .cooldown
         inputTextView.isEditable = canSubmit
         submitButton.isEnabled = canSubmit
         submitButton.alpha = canSubmit ? 1 : 0.45
@@ -6520,6 +6530,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         restoreDoNotAskButton.isHidden = !canRestoreDoNotAsk
         restoreDoNotAskButton.isEnabled = canRestoreDoNotAsk
         restoreDoNotAskButton.alpha = canRestoreDoNotAsk ? 1 : 0.45
+        restoreCooldownButton.isHidden = !canRestoreCooldown
+        restoreCooldownButton.isEnabled = canRestoreCooldown
+        restoreCooldownButton.alpha = canRestoreCooldown ? 1 : 0.45
         statusLabel.text = statusText(for: state)
         detailLabel.text = detailText(for: state)
         onViewStateRendered?(state)
@@ -6577,7 +6590,19 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             accessibilityIdentifier: "owner-truth-interview-boundary-restore-do-not-ask",
             action: #selector(restoreDoNotAskTapped)
         )
-        [skipOnceButton, cooldownButton, doNotAskButton, restoreDoNotAskButton].forEach(boundaryActionsStack.addArrangedSubview)
+        configureBoundaryButton(
+            restoreCooldownButton,
+            title: "继续待续话题",
+            accessibilityIdentifier: "owner-truth-interview-boundary-restore-cooldown",
+            action: #selector(restoreCooldownTapped)
+        )
+        [
+            skipOnceButton,
+            cooldownButton,
+            doNotAskButton,
+            restoreDoNotAskButton,
+            restoreCooldownButton,
+        ].forEach(boundaryActionsStack.addArrangedSubview)
         #else
         boundaryActionsStack.isHidden = true
         #endif
@@ -6629,6 +6654,15 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    @objc private func restoreCooldownTapped() {
+        guard presentation == .qa,
+              renderedState.phase == .ready,
+              renderedState.latestReceipt?.boundary == .cooldown else {
+            return
+        }
+        useCase.send(.restoreCooldown)
+    }
+
     private func submitBoundary(_ boundary: OwnerTruthInterviewSessionBoundary) {
         guard presentation == .qa,
               renderedState.phase == .ready,
@@ -6659,6 +6693,15 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             return
         }
         useCase.send(.restoreDoNotAsk)
+    }
+
+    func triggerCooldownRestoreForQA() {
+        guard presentation == .qa,
+              renderedState.phase == .ready,
+              renderedState.latestReceipt?.boundary == .cooldown else {
+            return
+        }
+        useCase.send(.restoreCooldown)
     }
 
     private func statusText(for state: OwnerTruthInterviewNaturalInputViewState) -> String {
@@ -6945,6 +6988,7 @@ struct OwnerTruthInterviewBoundaryUIQASmokeResult: Codable {
     let qaGateEnabled: Bool
     let boundaryButtonsVisible: Bool
     let doNotAskRestoreCompleted: Bool
+    let cooldownRestoreCompleted: Bool
     let actionResults: [ActionResult]
     let launchArguments: [String]
     let failureReason: String?
@@ -6986,6 +7030,7 @@ enum OwnerTruthInterviewBoundaryUIQASmoke {
                 qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
                 boundaryButtonsVisible: false,
                 doNotAskRestoreCompleted: false,
+                cooldownRestoreCompleted: false,
                 actionResults: [],
                 launchArguments: [
                     QALaunchScenario.ownerTruthInterviewBoundarySmoke.rawValue,
@@ -7000,7 +7045,8 @@ enum OwnerTruthInterviewBoundaryUIQASmoke {
     fileprivate static func writeCompleted(
         boundaryButtonsVisible: Bool,
         actionResults: [OwnerTruthInterviewBoundaryUIQASmokeResult.ActionResult],
-        doNotAskRestoreCompleted: Bool
+        doNotAskRestoreCompleted: Bool,
+        cooldownRestoreCompleted: Bool
     ) {
         let expectedBoundaries = [
             OwnerTruthInterviewSessionBoundary.skipOnce.rawValue,
@@ -7011,6 +7057,7 @@ enum OwnerTruthInterviewBoundaryUIQASmoke {
             && boundaryButtonsVisible
             && actionResults.map(\.boundary) == expectedBoundaries
             && doNotAskRestoreCompleted
+            && cooldownRestoreCompleted
             && actionResults[0].lifecycle == OwnerTruthInterviewSessionLifecycle.active.rawValue
             && actionResults[0].canContinue
             && actionResults[1].lifecycle == OwnerTruthInterviewSessionLifecycle.paused.rawValue
@@ -7025,6 +7072,7 @@ enum OwnerTruthInterviewBoundaryUIQASmoke {
                 qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
                 boundaryButtonsVisible: boundaryButtonsVisible,
                 doNotAskRestoreCompleted: doNotAskRestoreCompleted,
+                cooldownRestoreCompleted: cooldownRestoreCompleted,
                 actionResults: actionResults,
                 launchArguments: [
                     QALaunchScenario.ownerTruthInterviewBoundarySmoke.rawValue,
@@ -7059,6 +7107,7 @@ private final class InterviewNaturalInputBoundaryUIQAScenario {
     private var currentIndex = 0
     private var didTriggerCurrentBoundary = false
     private var awaitingDoNotAskRestore = false
+    private var awaitingCooldownRestore = false
     private var actionResults: [OwnerTruthInterviewBoundaryUIQASmokeResult.ActionResult] = []
     private var didFinish = false
 
@@ -7078,7 +7127,8 @@ private final class InterviewNaturalInputBoundaryUIQAScenario {
             OwnerTruthInterviewBoundaryUIQASmoke.writeCompleted(
                 boundaryButtonsVisible: true,
                 actionResults: actionResults,
-                doNotAskRestoreCompleted: false
+                doNotAskRestoreCompleted: false,
+                cooldownRestoreCompleted: false
             )
             return
         }
@@ -7104,6 +7154,25 @@ private final class InterviewNaturalInputBoundaryUIQAScenario {
         boundary: OwnerTruthInterviewSessionBoundary
     ) {
         guard !didFinish, state.phase == .ready, let receipt = state.latestReceipt else { return }
+        if awaitingCooldownRestore {
+            guard receipt.boundary == .open,
+                  receipt.lifecycle == .active,
+                  let continuation = state.continuation,
+                  continuation.canContinue,
+                  controller.areBoundaryActionsVisibleForQA else {
+                if state.continuation != nil {
+                    fail("cooldownRestoreFailed")
+                }
+                return
+            }
+            awaitingCooldownRestore = false
+            currentIndex += 1
+            didTriggerCurrentBoundary = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+                self?.showNextBoundary()
+            }
+            return
+        }
         if awaitingDoNotAskRestore {
             guard receipt.boundary == .open,
                   receipt.lifecycle == .active,
@@ -7119,7 +7188,8 @@ private final class InterviewNaturalInputBoundaryUIQAScenario {
             OwnerTruthInterviewBoundaryUIQASmoke.writeCompleted(
                 boundaryButtonsVisible: true,
                 actionResults: actionResults,
-                doNotAskRestoreCompleted: true
+                doNotAskRestoreCompleted: true,
+                cooldownRestoreCompleted: true
             )
             return
         }
@@ -7156,6 +7226,17 @@ private final class InterviewNaturalInputBoundaryUIQAScenario {
             awaitingDoNotAskRestore = true
             DispatchQueue.main.async {
                 controller.triggerDoNotAskRestoreForQA()
+            }
+            return
+        }
+        if boundary == .cooldown {
+            guard controller.isCooldownRestoreActionVisibleForQA else {
+                fail("cooldownRestoreUnavailable")
+                return
+            }
+            awaitingCooldownRestore = true
+            DispatchQueue.main.async {
+                controller.triggerCooldownRestoreForQA()
             }
             return
         }
@@ -7315,6 +7396,42 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
     ) {
         guard self.vaultID == vaultID,
               boundariesBySessionID[command.sessionID.rawValue] == .doNotAsk else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        boundariesBySessionID[command.sessionID.rawValue] = .open
+        do {
+            completion(.success(try OwnerTruthInterviewNaturalInputReceipt(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "receipt": [
+                        "status": OwnerTruthCommandOutcome.created.rawValue,
+                        "threadId": command.threadID.rawValue.uuidString,
+                        "sessionId": command.sessionID.rawValue.uuidString,
+                        "threadVersion": 1,
+                        "sessionVersion": command.expectedSessionVersion + 1,
+                        "state": OwnerTruthInterviewSessionLifecycle.active.rawValue,
+                        "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
+                    ],
+                ],
+                expectedVaultID: vaultID
+            )))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func restoreOwnerTruthInterviewCooldown(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewRestoreCooldownCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        // Server clock enforcement is covered by the deployed Postgres smoke.
+        // This in-memory client only proves the QA control calls the typed
+        // restore contract and returns to an active/open presentation.
+        guard self.vaultID == vaultID,
+              boundariesBySessionID[command.sessionID.rawValue] == .cooldown else {
             completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
             return
         }

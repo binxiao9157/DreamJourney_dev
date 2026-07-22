@@ -1163,6 +1163,35 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    func testInterviewRestoreCooldownCommandUsesValueFreePayloadAndMatchesActiveReceipt() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let command = try OwnerTruthInterviewRestoreCooldownCommand(
+            commandID: "natural-input-restore-cooldown",
+            threadID: recordID("00000000-0000-0000-0000-000000000076"),
+            sessionID: recordID("00000000-0000-0000-0000-000000000077"),
+            expectedSessionVersion: 2
+        )
+
+        XCTAssertEqual(Set(command.backendPayload.keys), [
+            "commandId",
+            "threadId",
+            "expectedSessionVersion",
+        ])
+        XCTAssertEqual(command.backendPayload["commandId"] as? String, command.commandID)
+        XCTAssertEqual(
+            command.backendPayload["threadId"] as? String,
+            command.threadID.rawValue.uuidString.lowercased()
+        )
+        XCTAssertEqual(command.backendPayload["expectedSessionVersion"] as? Int, 2)
+        XCTAssertFalse(String(describing: command.backendPayload).contains("cooldownUntil"))
+
+        let receipt = try interviewNaturalInputReceipt(vaultID: vaultID, restoreCooldown: command)
+        XCTAssertTrue(receipt.matches(command))
+        XCTAssertEqual(receipt.lifecycle, .active)
+        XCTAssertEqual(receipt.boundary, .open)
+    }
+
     func testInterviewNaturalInputUseCaseStartsAndAppendsWithoutRetainingText() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
@@ -1265,6 +1294,87 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.continuation?.state, .paused)
         XCTAssertEqual(useCase.viewState.continuation?.canContinue, false)
         XCTAssertEqual(useCase.viewState.continuation?.canContinueLater, true)
+    }
+
+    func testInterviewNaturalInputUseCaseRestoresCooldownWithLeaseFence() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        client.boundaryHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, boundary: command) }
+        }
+        client.restoreCooldownHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, restoreCooldown: command) }
+        }
+        client.continuationHandler = { _ in
+            Result {
+                try self.interviewNaturalInputContinuation(
+                    vaultID: vaultID,
+                    state: client.restoreCooldownCommand == nil ? .paused : .readyForNarrative,
+                    canContinue: client.restoreCooldownCommand != nil,
+                    canContinueLater: true
+                )
+            }
+        }
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.start)
+        useCase.send(.setBoundary(.cooldown))
+        XCTAssertEqual(useCase.viewState.latestReceipt?.boundary, .cooldown)
+
+        useCase.send(.restoreCooldown)
+
+        XCTAssertNotNil(client.restoreCooldownCommand)
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.latestReceipt?.boundary, .open)
+        XCTAssertEqual(useCase.viewState.latestReceipt?.lifecycle, .active)
+        XCTAssertTrue(useCase.viewState.continuation?.canContinue ?? false)
+    }
+
+    func testInterviewNaturalInputUseCaseDiscardsDeferredCooldownRestoreAfterAccountChange() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        client.boundaryHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, boundary: command) }
+        }
+        client.deferRestoreCooldown = true
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.start)
+        useCase.send(.setBoundary(.cooldown))
+        useCase.send(.restoreCooldown)
+        let command = try XCTUnwrap(client.restoreCooldownCommand)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferredRestoreCooldown(.success(try interviewNaturalInputReceipt(
+            vaultID: vaultID,
+            restoreCooldown: command
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(useCase.viewState.latestReceipt)
     }
 
     func testInterviewNaturalInputUseCaseBoundaryFailsClosedForOpenMismatchAndStaleCompletion() throws {
@@ -2879,6 +2989,28 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private func interviewNaturalInputReceipt(
+        vaultID: OwnerTruthVaultID,
+        restoreCooldown: OwnerTruthInterviewRestoreCooldownCommand
+    ) throws -> OwnerTruthInterviewNaturalInputReceipt {
+        try OwnerTruthInterviewNaturalInputReceipt(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "receipt": [
+                    "status": OwnerTruthCommandOutcome.created.rawValue,
+                    "threadId": restoreCooldown.threadID.rawValue.uuidString,
+                    "sessionId": restoreCooldown.sessionID.rawValue.uuidString,
+                    "threadVersion": 1,
+                    "sessionVersion": restoreCooldown.expectedSessionVersion + 1,
+                    "state": OwnerTruthInterviewSessionLifecycle.active.rawValue,
+                    "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+    }
+
     private func interviewNaturalInputContinuation(
         vaultID: OwnerTruthVaultID,
         state: OwnerTruthInterviewNaturalInputContinuationState,
@@ -3273,15 +3405,21 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
     var startHandler: ((OwnerTruthInterviewNaturalInputStartCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var appendHandler: ((OwnerTruthInterviewNaturalInputAppendCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var boundaryHandler: ((OwnerTruthInterviewBoundaryCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
+    var restoreDoNotAskHandler: ((OwnerTruthInterviewRestoreDoNotAskCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
+    var restoreCooldownHandler: ((OwnerTruthInterviewRestoreCooldownCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var continuationHandler: ((OwnerTruthRecordID) -> Result<OwnerTruthInterviewNaturalInputContinuation, Error>)?
     var deferAppend = false
     var deferBoundary = false
+    var deferRestoreCooldown = false
     private var deferredAppendCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
     private var deferredBoundaryCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
+    private var deferredRestoreCooldownCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
 
     private(set) var startCommand: OwnerTruthInterviewNaturalInputStartCommand?
     private(set) var appendCommand: OwnerTruthInterviewNaturalInputAppendCommand?
     private(set) var boundaryCommand: OwnerTruthInterviewBoundaryCommand?
+    private(set) var restoreDoNotAskCommand: OwnerTruthInterviewRestoreDoNotAskCommand?
+    private(set) var restoreCooldownCommand: OwnerTruthInterviewRestoreCooldownCommand?
 
     func startOwnerTruthInterviewNaturalInput(
         vaultID: OwnerTruthVaultID,
@@ -3320,6 +3458,32 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
         ))
     }
 
+    func restoreOwnerTruthInterviewDoNotAsk(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewRestoreDoNotAskCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        restoreDoNotAskCommand = command
+        completion(restoreDoNotAskHandler?(command) ?? .failure(
+            InterviewNaturalInputClientSpyError.missingRestoreDoNotAskResult
+        ))
+    }
+
+    func restoreOwnerTruthInterviewCooldown(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewRestoreCooldownCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        restoreCooldownCommand = command
+        if deferRestoreCooldown {
+            deferredRestoreCooldownCompletion = completion
+            return
+        }
+        completion(restoreCooldownHandler?(command) ?? .failure(
+            InterviewNaturalInputClientSpyError.missingRestoreCooldownResult
+        ))
+    }
+
     func fetchOwnerTruthInterviewNaturalInputContinuation(
         vaultID: OwnerTruthVaultID,
         sessionID: OwnerTruthRecordID,
@@ -3341,12 +3505,20 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
         deferredBoundaryCompletion = nil
         completion?(result)
     }
+
+    func completeDeferredRestoreCooldown(_ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>) {
+        let completion = deferredRestoreCooldownCompletion
+        deferredRestoreCooldownCompletion = nil
+        completion?(result)
+    }
 }
 
 private enum InterviewNaturalInputClientSpyError: Error {
     case missingStartResult
     case missingAppendResult
     case missingBoundaryResult
+    case missingRestoreDoNotAskResult
+    case missingRestoreCooldownResult
     case missingContinuationResult
 }
 
