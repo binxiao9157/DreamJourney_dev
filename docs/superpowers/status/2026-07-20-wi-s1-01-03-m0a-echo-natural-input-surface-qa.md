@@ -276,3 +276,25 @@ default-off，没有 G1 产品展示或动作入口，不能据此宣称公开 C
 
 Gate 结论：结果重读收敛为 G0 scoped evidence，G2 仍由已部署后端合同提供。下一个动作是对既有
 `WI-S1-01-04` 的 review authority 做证据缺口审计，不把 default-off 确认能力越级改成公开 UI。
+
+## 2026-07-22 Slice 3J 确认投影租约与 authority composition 绑定
+
+- confirmation projection 在正式读取完成并通过 AccountLease completion fence 后，才在 iOS 内存中
+  绑定该 lease；该绑定不是 Codable 字段，永不发送给后端。未绑定投影或同 vault 的另一账号/代际
+  lease 都不能发起 batch confirm，直接失败关闭为 stale lease。
+- action 成功后的重读除了验证被接受 Candidate 已消失外，还必须保持相同的
+  `admissionID`、`sourceID`、`sourceVersion` 和 `authorityEpoch`。Candidate 集合允许因确认而变化，
+  但围绕该动作的 authority composition 不能漂移。
+- 该修复只收紧 default-off typed consumer 的本地安全边界；正式后端 Owner/AuthZ/policy 仍是最终
+  Authority。没有新增 UI、路由、持久化、公开入口或 QA bypass。
+
+本轮验证：
+
+- `OwnerTruthContractsTests` 在 iPhone 17 Pro Simulator 通过：59 项、0 failures。新增覆盖成功读后
+  lease 绑定、同 vault 但不同 lease 的拒绝，以及重读期间 authority composition 漂移时失败关闭。
+- `swiftc -parse`、candidate confirmation default-off static check、release feature matrix check、
+  feature-gate evaluator model smoke 与 `git diff --check` 均通过。
+- 通用 `generic/platform=iOS` Debug build（`CODE_SIGNING_ALLOWED=NO`）通过。
+
+Gate 结论：该 Slice 为 G0 scoped evidence。正式确认能力继续 default-off，G2 仍复用已部署的后端
+合同；下一步保持为 `WI-S1-01-04` 的 review authority evidence gap audit，不能因此提前开放产品确认 UI。

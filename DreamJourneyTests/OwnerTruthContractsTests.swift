@@ -627,7 +627,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             reviewBatchID: reviewBatchID,
             batchCandidateID: batchCandidateID,
             singleCandidateID: singleCandidateID
-        )
+        ).bound(to: lease)
 
         XCTAssertEqual(confirmation.vaultID.rawValue, lease.vaultId)
         XCTAssertEqual(confirmation.reviewBatchID, reviewBatchID)
@@ -684,6 +684,30 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.phase, .unavailable)
         XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
         XCTAssertNil(useCase.viewState.confirmation)
+    }
+
+    func testInterviewCandidateConfirmationUseCaseBindsSuccessfulReadToAccountLease() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000077")
+        let client = InterviewCandidateConfirmationClientSpy()
+        client.readResult = .success(try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: recordID("00000000-0000-0000-0000-000000000078"),
+            singleCandidateID: recordID("00000000-0000-0000-0000-000000000079")
+        ))
+        let useCase = OwnerTruthInterviewCandidateConfirmationUseCase(
+            accountLease: lease,
+            reviewBatchID: reviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertTrue(try XCTUnwrap(useCase.viewState.confirmation).isBound(to: lease))
     }
 
     func testInterviewCandidateConfirmationActionDecodesValueMinimizedResult() throws {
@@ -747,7 +771,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             reviewBatchID: reviewBatchID,
             batchCandidateID: batchCandidateID,
             singleCandidateID: singleCandidateID
-        )
+        ).bound(to: lease)
         let client = InterviewCandidateConfirmationActionClientSpy()
         let reader = InterviewCandidateConfirmationClientSpy()
         let disabled = OwnerTruthInterviewCandidateConfirmationActionUseCase(
@@ -790,7 +814,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             reviewBatchID: reviewBatchID,
             batchCandidateID: batchCandidateID,
             singleCandidateID: singleCandidateID
-        )
+        ).bound(to: lease)
         let client = InterviewCandidateConfirmationActionClientSpy()
         let reader = InterviewCandidateConfirmationClientSpy()
         client.result = .failure(InterviewCandidateConfirmationActionClientSpyError.missingActionResult)
@@ -838,7 +862,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             reviewBatchID: reviewBatchID,
             batchCandidateID: batchCandidateID,
             singleCandidateID: singleCandidateID
-        )
+        ).bound(to: lease)
         let client = InterviewCandidateConfirmationActionClientSpy()
         let reader = InterviewCandidateConfirmationClientSpy()
         client.deferResult = true
@@ -879,7 +903,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             reviewBatchID: reviewBatchID,
             batchCandidateID: batchCandidateID,
             singleCandidateID: singleCandidateID
-        )
+        ).bound(to: lease)
         let client = InterviewCandidateConfirmationActionClientSpy()
         client.result = .success(try interviewCandidateConfirmationActionResult(
             reviewBatchID: reviewBatchID,
@@ -901,6 +925,81 @@ final class OwnerTruthContractsTests: XCTestCase {
         useCase.send(.confirmBatch(candidateIDs: [batchCandidateID]))
 
         XCTAssertEqual(reader.requestCount, 1)
+        XCTAssertEqual(useCase.viewState.phase, .failed)
+        XCTAssertEqual(useCase.viewState.notice, .reconciliationFailed)
+        XCTAssertEqual(useCase.viewState.latestResult?.acceptedCandidateIDs, [batchCandidateID])
+    }
+
+    func testInterviewCandidateConfirmationActionUseCaseRejectsDifferentLeaseWithSameVault() throws {
+        let (runtime, originalLease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000093")
+        let batchCandidateID = recordID("00000000-0000-0000-0000-000000000094")
+        let confirmation = try interviewCandidateConfirmation(
+            vaultID: originalLease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: recordID("00000000-0000-0000-0000-000000000095")
+        ).bound(to: originalLease)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: originalLease.vaultId,
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        let replacementLease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-b"))
+        let client = InterviewCandidateConfirmationActionClientSpy()
+        let useCase = OwnerTruthInterviewCandidateConfirmationActionUseCase(
+            accountLease: replacementLease,
+            confirmation: confirmation,
+            client: client,
+            confirmationReader: InterviewCandidateConfirmationClientSpy(),
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.confirmBatch(candidateIDs: [batchCandidateID]))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertTrue(client.requestedCommands.isEmpty)
+    }
+
+    func testInterviewCandidateConfirmationActionUseCaseRejectsAuthorityCompositionDrift() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000096")
+        let batchCandidateID = recordID("00000000-0000-0000-0000-000000000097")
+        let singleCandidateID = recordID("00000000-0000-0000-0000-000000000098")
+        let confirmation = try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: singleCandidateID
+        ).bound(to: lease)
+        let client = InterviewCandidateConfirmationActionClientSpy()
+        client.result = .success(try interviewCandidateConfirmationActionResult(
+            reviewBatchID: reviewBatchID,
+            candidateIDs: [batchCandidateID],
+            commandID: "confirmation-authority-drift-command"
+        ))
+        let reader = InterviewCandidateConfirmationClientSpy()
+        reader.readResult = .success(try reconciledInterviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            remainingSingleCandidateID: singleCandidateID,
+            sourceVersion: 2
+        ))
+        let useCase = OwnerTruthInterviewCandidateConfirmationActionUseCase(
+            accountLease: lease,
+            confirmation: confirmation,
+            client: client,
+            confirmationReader: reader,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true },
+            commandIDFactory: { "confirmation-authority-drift-command" }
+        )
+
+        useCase.send(.confirmBatch(candidateIDs: [batchCandidateID]))
+
         XCTAssertEqual(useCase.viewState.phase, .failed)
         XCTAssertEqual(useCase.viewState.notice, .reconciliationFailed)
         XCTAssertEqual(useCase.viewState.latestResult?.acceptedCandidateIDs, [batchCandidateID])
@@ -2459,9 +2558,12 @@ final class OwnerTruthContractsTests: XCTestCase {
     private func reconciledInterviewCandidateConfirmation(
         vaultID: String,
         reviewBatchID: OwnerTruthRecordID,
-        remainingSingleCandidateID: OwnerTruthRecordID
+        remainingSingleCandidateID: OwnerTruthRecordID,
+        admissionID: String = "00000000-0000-0000-0000-000000000153",
+        sourceID: String = "00000000-0000-0000-0000-000000000151",
+        sourceVersion: Int = 1,
+        authorityEpoch: Int = 0
     ) throws -> OwnerTruthInterviewCandidateConfirmation {
-        let sourceID = "00000000-0000-0000-0000-000000000161"
         let extractionID = "00000000-0000-0000-0000-000000000162"
         return try OwnerTruthInterviewCandidateConfirmation(
             backendJSONObject: [
@@ -2470,10 +2572,10 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "confirmation": [
                     "schemaVersion": OwnerTruthInterviewCandidateConfirmation.compositionSchemaVersion,
                     "reviewBatchId": reviewBatchID.rawValue.uuidString,
-                    "admissionId": "00000000-0000-0000-0000-000000000163",
+                    "admissionId": admissionID,
                     "sourceId": sourceID,
-                    "sourceVersion": 1,
-                    "authorityEpoch": 0,
+                    "sourceVersion": sourceVersion,
+                    "authorityEpoch": authorityEpoch,
                     "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
                     "latestExtractionStatus": "succeeded",
                     "batchCandidateCount": 0,
@@ -2490,7 +2592,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                     "contentSchemaVersion": "owner-truth-candidate-content-v1",
                     "content": ["summary": "仍需要逐条确认的敏感经历"],
                     "contentHash": "interview-confirmation-reconciled-single-hash",
-                    "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                    "sourceRefs": [["sourceId": sourceID, "sourceVersion": sourceVersion]],
                     "reviewMode": "single",
                     "candidateVersion": 1,
                     "extractionId": extractionID,

@@ -117,8 +117,10 @@ require(
 )
 require(
     actionUseCase.contains("receiveReconciliation(") &&
-        actionUseCase.contains("remainingCandidateIDs.isDisjoint(with: expectedCandidateIDs)"),
-    "formal confirmation action must verify its accepted candidates disappear from the refreshed projection"
+        actionUseCase.contains("remainingCandidateIDs.isDisjoint(with: expectedCandidateIDs)") &&
+        actionUseCase.contains("confirmation.isBound(to: accountLease)") &&
+        actionUseCase.contains("reconciledConfirmation.hasSameAuthorityComposition(as: confirmation)"),
+    "formal confirmation action must bind its projection to the AccountLease and reconcile the same authority composition"
 )
 require(
     !actionUseCase.contains("X-DreamJourney-QA-Owner-Truth") &&

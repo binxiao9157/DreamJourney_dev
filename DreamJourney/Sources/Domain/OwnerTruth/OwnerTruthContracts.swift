@@ -854,6 +854,17 @@ struct OwnerTruthInterviewCandidateReviewBatch: Equatable, Sendable {
     }
 }
 
+/// In-memory binding added only after a confirmation projection has passed a
+/// request/commit AccountLease validation. It is deliberately not Codable and
+/// never crosses the backend boundary.
+private struct OwnerTruthInterviewCandidateConfirmationLeaseBinding: Equatable, Sendable {
+    let accountLease: AccountLease
+
+    func matches(_ accountLease: AccountLease) -> Bool {
+        self.accountLease == accountLease
+    }
+}
+
 /// Read-only confirmation material behind the separately captured product
 /// policy. It deliberately has a distinct schema from the QA review route so
 /// a future product surface cannot accidentally reuse a QA-only transport.
@@ -871,6 +882,7 @@ struct OwnerTruthInterviewCandidateConfirmation: Equatable, Sendable {
     let latestExtractionStatus: String?
     let batchCandidates: [OwnerTruthInterviewCandidateReviewItem]
     let singleCandidates: [OwnerTruthInterviewCandidateReviewItem]
+    private var leaseBinding: OwnerTruthInterviewCandidateConfirmationLeaseBinding?
 
     init(
         backendJSONObject object: [String: Any],
@@ -955,6 +967,35 @@ struct OwnerTruthInterviewCandidateConfirmation: Equatable, Sendable {
         )
         self.batchCandidates = batchCandidates
         self.singleCandidates = singleCandidates
+        self.leaseBinding = nil
+    }
+
+    /// A decoded remote projection is not actionable until the reader binds it
+    /// to the AccountLease that passed the read completion fence.
+    func bound(to accountLease: AccountLease) -> Self {
+        var copy = self
+        copy.leaseBinding = OwnerTruthInterviewCandidateConfirmationLeaseBinding(
+            accountLease: accountLease
+        )
+        return copy
+    }
+
+    func isBound(to accountLease: AccountLease) -> Bool {
+        leaseBinding?.matches(accountLease) == true
+    }
+
+    /// Candidate membership legitimately changes after a decision. The
+    /// surrounding admission/source/epoch identity must not drift while the
+    /// action is being reconciled.
+    func hasSameAuthorityComposition(
+        as other: OwnerTruthInterviewCandidateConfirmation
+    ) -> Bool {
+        vaultID == other.vaultID
+            && reviewBatchID == other.reviewBatchID
+            && admissionID == other.admissionID
+            && sourceID == other.sourceID
+            && sourceVersion == other.sourceVersion
+            && authorityEpoch == other.authorityEpoch
     }
 }
 
@@ -1937,13 +1978,14 @@ final class OwnerTruthInterviewCandidateConfirmationUseCase {
                 transitionFailure()
                 return
             }
+            let boundConfirmation = confirmation.bound(to: accountLease)
             let phase: OwnerTruthInterviewCandidateConfirmationPhase =
-                confirmation.batchCandidates.isEmpty && confirmation.singleCandidates.isEmpty
+                boundConfirmation.batchCandidates.isEmpty && boundConfirmation.singleCandidates.isEmpty
                 ? .empty
                 : .ready
             viewState = OwnerTruthInterviewCandidateConfirmationViewState(
                 phase: phase,
-                confirmation: confirmation,
+                confirmation: boundConfirmation,
                 notice: nil
             )
         case .failure:
@@ -2085,6 +2127,10 @@ final class OwnerTruthInterviewCandidateConfirmationActionUseCase {
             resetForUnavailable(.invalidVault)
             return nil
         }
+        guard confirmation.isBound(to: accountLease) else {
+            resetForUnavailable(.staleAccountLease)
+            return nil
+        }
         guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
             resetForUnavailable(.accountUnavailable)
             return nil
@@ -2206,6 +2252,7 @@ final class OwnerTruthInterviewCandidateConfirmationActionUseCase {
             guard reconciledConfirmation.vaultID == vaultID,
                   reconciledConfirmation.vaultID.rawValue == accountLease.vaultId,
                   reconciledConfirmation.reviewBatchID == confirmation.reviewBatchID,
+                  reconciledConfirmation.hasSameAuthorityComposition(as: confirmation),
                   remainingCandidateIDs.isDisjoint(with: expectedCandidateIDs) else {
                 transitionFailure(.reconciliationFailed, latestResult: actionResult)
                 return
