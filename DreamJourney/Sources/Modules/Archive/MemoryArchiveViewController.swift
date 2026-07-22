@@ -6344,6 +6344,10 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let detailLabel = UILabel()
     private let inputTextView = UITextView()
     private let submitButton = UIButton(type: .system)
+    private let boundaryActionsStack = UIStackView()
+    private let skipOnceButton = UIButton(type: .system)
+    private let cooldownButton = UIButton(type: .system)
+    private let doNotAskButton = UIButton(type: .system)
 
     private var renderedState: OwnerTruthInterviewNaturalInputViewState = .idle
     var onViewStateRendered: ((OwnerTruthInterviewNaturalInputViewState) -> Void)?
@@ -6362,6 +6366,12 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
     var renderedStateForUIQA: OwnerTruthInterviewNaturalInputViewState {
         renderedState
+    }
+
+    var areBoundaryActionsVisibleForQA: Bool {
+        presentation == .qa
+            && boundaryActionsStack.superview != nil
+            && !boundaryActionsStack.isHidden
     }
 
     init(
@@ -6455,9 +6465,11 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         submitButton.addTarget(self, action: #selector(submitTapped), for: .touchUpInside)
         submitButton.accessibilityIdentifier = "owner-truth-interview-natural-input-submit"
 
-        [subtitleLabel, statusLabel, detailLabel, inputTextView, submitButton].forEach(
-            stackView.addArrangedSubview
-        )
+        configureBoundaryControls()
+        [subtitleLabel, statusLabel, detailLabel, inputTextView, submitButton].forEach(stackView.addArrangedSubview)
+        if presentation == .qa {
+            stackView.addArrangedSubview(boundaryActionsStack)
+        }
         view.addSubview(stackView)
         stackView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -6482,15 +6494,19 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
     private func render(_ state: OwnerTruthInterviewNaturalInputViewState) {
         renderedState = state
-        let canSubmit: Bool
-        if presentation == .qa {
-            canSubmit = state.phase == .ready
-        } else {
-            canSubmit = state.phase == .ready && (state.continuation?.canContinue ?? true)
-        }
+        let canContinue = state.continuation?.canContinue ?? true
+        let canSubmit = state.phase == .ready && canContinue
+        let canSetBoundary = presentation == .qa
+            && state.phase == .ready
+            && state.latestReceipt?.boundary == .open
+            && canContinue
         inputTextView.isEditable = canSubmit
         submitButton.isEnabled = canSubmit
         submitButton.alpha = canSubmit ? 1 : 0.45
+        [skipOnceButton, cooldownButton, doNotAskButton].forEach { button in
+            button.isEnabled = canSetBoundary
+            button.alpha = canSetBoundary ? 1 : 0.45
+        }
         statusLabel.text = statusText(for: state)
         detailLabel.text = detailText(for: state)
         onViewStateRendered?(state)
@@ -6514,6 +6530,91 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         useCase.send(.submit(text: text))
     }
 
+    private func configureBoundaryControls() {
+        #if DEBUG || UI_QA_SIMULATOR
+        guard presentation == .qa else {
+            boundaryActionsStack.isHidden = true
+            return
+        }
+        boundaryActionsStack.axis = .vertical
+        boundaryActionsStack.alignment = .fill
+        boundaryActionsStack.spacing = 8
+
+        configureBoundaryButton(
+            skipOnceButton,
+            title: "本轮跳过",
+            accessibilityIdentifier: "owner-truth-interview-boundary-skip-once",
+            action: #selector(skipOnceTapped)
+        )
+        configureBoundaryButton(
+            cooldownButton,
+            title: "以后再聊",
+            accessibilityIdentifier: "owner-truth-interview-boundary-cooldown",
+            action: #selector(cooldownTapped)
+        )
+        configureBoundaryButton(
+            doNotAskButton,
+            title: "不再问",
+            accessibilityIdentifier: "owner-truth-interview-boundary-do-not-ask",
+            action: #selector(doNotAskTapped)
+        )
+        [skipOnceButton, cooldownButton, doNotAskButton].forEach(boundaryActionsStack.addArrangedSubview)
+        #else
+        boundaryActionsStack.isHidden = true
+        #endif
+    }
+
+    private func configureBoundaryButton(
+        _ button: UIButton,
+        title: String,
+        accessibilityIdentifier: String,
+        action: Selector
+    ) {
+        button.setTitle(title, for: .normal)
+        button.titleLabel?.font = DJDesignTokens.Font.body(15)
+        button.setTitleColor(DJDesignTokens.Color.textPrimary, for: .normal)
+        button.backgroundColor = DJDesignTokens.Color.surface
+        button.layer.cornerRadius = 10
+        button.heightAnchor.constraint(equalToConstant: 42).isActive = true
+        button.addTarget(self, action: action, for: .touchUpInside)
+        button.accessibilityIdentifier = accessibilityIdentifier
+    }
+
+    @objc private func skipOnceTapped() {
+        submitBoundary(.skipOnce)
+    }
+
+    @objc private func cooldownTapped() {
+        submitBoundary(.cooldown)
+    }
+
+    @objc private func doNotAskTapped() {
+        submitBoundary(.doNotAsk)
+    }
+
+    private func submitBoundary(_ boundary: OwnerTruthInterviewSessionBoundary) {
+        guard presentation == .qa,
+              renderedState.phase == .ready,
+              renderedState.latestReceipt?.boundary == .open else {
+            return
+        }
+        useCase.send(.setBoundary(boundary))
+    }
+
+    func triggerBoundaryButtonForQA(_ boundary: OwnerTruthInterviewSessionBoundary) {
+        guard presentation == .qa else { return }
+        switch boundary {
+        case .skipOnce:
+            skipOnceButton.sendActions(for: .touchUpInside)
+        case .cooldown:
+            cooldownButton.sendActions(for: .touchUpInside)
+        case .doNotAsk:
+            doNotAskButton.sendActions(for: .touchUpInside)
+        case .open:
+            return
+        }
+    }
+
     private func statusText(for state: OwnerTruthInterviewNaturalInputViewState) -> String {
         switch state.phase {
         case .idle:
@@ -6522,6 +6623,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             return presentation == .qa ? "正在创建受控会话" : "正在准备"
         case .ready:
             if presentation == .qa {
+                if let boundary = state.latestReceipt?.boundary, boundary != .open {
+                    return "边界已更新：\(boundaryText(boundary))"
+                }
                 return state.latestReceipt?.messageSequence == nil
                     ? "可以提交一条自然输入"
                     : "自然输入已受控记录"
@@ -6780,9 +6884,242 @@ private final class InterviewNaturalInputUIQAScenario {
     }
 }
 
+struct OwnerTruthInterviewBoundaryUIQASmokeResult: Codable {
+    struct ActionResult: Codable {
+        let boundary: String
+        let lifecycle: String
+        let continuationState: String
+        let canContinue: Bool
+        let canContinueLater: Bool
+    }
+
+    static let fileName = "owner-truth-interview-boundary-uiqa-result.json"
+
+    let completed: Bool
+    let qaGateEnabled: Bool
+    let boundaryButtonsVisible: Bool
+    let actionResults: [ActionResult]
+    let launchArguments: [String]
+    let failureReason: String?
+
+    func writeToDocuments(fileManager: FileManager = .default) throws -> URL {
+        let documentsURL = try fileManager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let resultURL = documentsURL.appendingPathComponent(Self.fileName, isDirectory: false)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(self).write(to: resultURL, options: [.atomic])
+        return resultURL
+    }
+}
+
+enum OwnerTruthInterviewBoundaryUIQASmoke {
+    private static var activeScenario: InterviewNaturalInputBoundaryUIQAScenario?
+
+    static func start(
+        accountLease: AccountLease,
+        navigationController: UINavigationController
+    ) {
+        let scenario = InterviewNaturalInputBoundaryUIQAScenario(
+            accountLease: accountLease,
+            navigationController: navigationController
+        )
+        activeScenario = scenario
+        scenario.start()
+    }
+
+    static func writeFailure(_ reason: String) {
+        write(
+            OwnerTruthInterviewBoundaryUIQASmokeResult(
+                completed: false,
+                qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+                boundaryButtonsVisible: false,
+                actionResults: [],
+                launchArguments: [
+                    QALaunchScenario.ownerTruthInterviewBoundarySmoke.rawValue,
+                    OwnerTruthCandidateReviewQAGate.launchArgument,
+                ],
+                failureReason: reason
+            ),
+            logPrefix: "failed"
+        )
+    }
+
+    fileprivate static func writeCompleted(
+        boundaryButtonsVisible: Bool,
+        actionResults: [OwnerTruthInterviewBoundaryUIQASmokeResult.ActionResult]
+    ) {
+        let expectedBoundaries = [
+            OwnerTruthInterviewSessionBoundary.skipOnce.rawValue,
+            OwnerTruthInterviewSessionBoundary.cooldown.rawValue,
+            OwnerTruthInterviewSessionBoundary.doNotAsk.rawValue,
+        ]
+        let completed = OwnerTruthCandidateReviewQAGate.isEnabled
+            && boundaryButtonsVisible
+            && actionResults.map(\.boundary) == expectedBoundaries
+            && actionResults[0].lifecycle == OwnerTruthInterviewSessionLifecycle.active.rawValue
+            && actionResults[0].canContinue
+            && actionResults[1].lifecycle == OwnerTruthInterviewSessionLifecycle.paused.rawValue
+            && !actionResults[1].canContinue
+            && actionResults[1].canContinueLater
+            && actionResults[2].lifecycle == OwnerTruthInterviewSessionLifecycle.paused.rawValue
+            && !actionResults[2].canContinue
+            && !actionResults[2].canContinueLater
+        write(
+            OwnerTruthInterviewBoundaryUIQASmokeResult(
+                completed: completed,
+                qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+                boundaryButtonsVisible: boundaryButtonsVisible,
+                actionResults: actionResults,
+                launchArguments: [
+                    QALaunchScenario.ownerTruthInterviewBoundarySmoke.rawValue,
+                    OwnerTruthCandidateReviewQAGate.launchArgument,
+                ],
+                failureReason: completed ? nil : "unexpectedBoundaryResult"
+            ),
+            logPrefix: completed ? "completed" : "failed"
+        )
+        activeScenario = nil
+    }
+
+    fileprivate static func writeScenarioFailure(_ reason: String) {
+        activeScenario = nil
+        writeFailure(reason)
+    }
+
+    private static func write(_ result: OwnerTruthInterviewBoundaryUIQASmokeResult, logPrefix: String) {
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] OwnerTruthInterviewBoundarySmoke \(logPrefix) result=\(resultURL.path)")
+        } catch {
+            print("[UI_QA] OwnerTruthInterviewBoundarySmoke \(logPrefix) write=\(error.localizedDescription)")
+        }
+    }
+}
+
+private final class InterviewNaturalInputBoundaryUIQAScenario {
+    private let accountLease: AccountLease
+    private weak var navigationController: UINavigationController?
+    private let boundaries: [OwnerTruthInterviewSessionBoundary] = [.skipOnce, .cooldown, .doNotAsk]
+    private var currentIndex = 0
+    private var didTriggerCurrentBoundary = false
+    private var actionResults: [OwnerTruthInterviewBoundaryUIQASmokeResult.ActionResult] = []
+    private var didFinish = false
+
+    init(accountLease: AccountLease, navigationController: UINavigationController) {
+        self.accountLease = accountLease
+        self.navigationController = navigationController
+    }
+
+    func start() {
+        showNextBoundary()
+    }
+
+    private func showNextBoundary() {
+        guard !didFinish else { return }
+        guard currentIndex < boundaries.count else {
+            didFinish = true
+            OwnerTruthInterviewBoundaryUIQASmoke.writeCompleted(
+                boundaryButtonsVisible: true,
+                actionResults: actionResults
+            )
+            return
+        }
+        guard let navigationController else {
+            fail("navigationControllerUnavailable")
+            return
+        }
+        let boundary = boundaries[currentIndex]
+        let controller = OwnerTruthInterviewNaturalInputUIQASmoke.makePreviewViewController(
+            accountLease: accountLease
+        )
+        controller.onViewStateRendered = { [weak self, weak controller] state in
+            guard let self, let controller else { return }
+            self.consume(state, controller: controller, boundary: boundary)
+        }
+        navigationController.setViewControllers([controller], animated: false)
+        controller.loadViewIfNeeded()
+    }
+
+    private func consume(
+        _ state: OwnerTruthInterviewNaturalInputViewState,
+        controller: OwnerTruthInterviewNaturalInputViewController,
+        boundary: OwnerTruthInterviewSessionBoundary
+    ) {
+        guard !didFinish, state.phase == .ready, let receipt = state.latestReceipt else { return }
+        if !didTriggerCurrentBoundary {
+            guard receipt.boundary == .open, controller.areBoundaryActionsVisibleForQA else {
+                fail("boundaryControlsUnavailable")
+                return
+            }
+            didTriggerCurrentBoundary = true
+            DispatchQueue.main.async {
+                controller.triggerBoundaryButtonForQA(boundary)
+            }
+            return
+        }
+        guard receipt.boundary == boundary, let continuation = state.continuation else { return }
+        guard validates(receipt: receipt, continuation: continuation, for: boundary) else {
+            fail("unexpectedBoundaryContinuation")
+            return
+        }
+        actionResults.append(
+            OwnerTruthInterviewBoundaryUIQASmokeResult.ActionResult(
+                boundary: boundary.rawValue,
+                lifecycle: receipt.lifecycle.rawValue,
+                continuationState: continuation.state.rawValue,
+                canContinue: continuation.canContinue,
+                canContinueLater: continuation.canContinueLater
+            )
+        )
+        currentIndex += 1
+        didTriggerCurrentBoundary = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+            self?.showNextBoundary()
+        }
+    }
+
+    private func validates(
+        receipt: OwnerTruthInterviewNaturalInputReceipt,
+        continuation: OwnerTruthInterviewNaturalInputContinuation,
+        for boundary: OwnerTruthInterviewSessionBoundary
+    ) -> Bool {
+        switch boundary {
+        case .skipOnce:
+            return receipt.lifecycle == .active
+                && continuation.state == .readyForNarrative
+                && continuation.canContinue
+                && continuation.canContinueLater
+        case .cooldown:
+            return receipt.lifecycle == .paused
+                && continuation.state == .paused
+                && !continuation.canContinue
+                && continuation.canContinueLater
+        case .doNotAsk:
+            return receipt.lifecycle == .paused
+                && continuation.state == .paused
+                && !continuation.canContinue
+                && !continuation.canContinueLater
+        case .open:
+            return false
+        }
+    }
+
+    private func fail(_ reason: String) {
+        guard !didFinish else { return }
+        didFinish = true
+        OwnerTruthInterviewBoundaryUIQASmoke.writeScenarioFailure(reason)
+    }
+}
+
 private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalInputClient {
     private let vaultID: OwnerTruthVaultID?
     private var sessionsWithNarrative = Set<UUID>()
+    private var boundariesBySessionID: [UUID: OwnerTruthInterviewSessionBoundary] = [:]
 
     init(vaultID: OwnerTruthVaultID?) {
         self.vaultID = vaultID
@@ -6862,6 +7199,7 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
             completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
             return
         }
+        boundariesBySessionID[command.sessionID.rawValue] = command.boundary
         let lifecycle: OwnerTruthInterviewSessionLifecycle = command.boundary == .skipOnce
             ? .active
             : .paused
@@ -6896,18 +7234,31 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
             completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
             return
         }
-        let state: OwnerTruthInterviewNaturalInputContinuationState = sessionsWithNarrative.contains(
-            sessionID.rawValue
-        ) ? .narrativeRecorded : .readyForNarrative
+        let boundary = boundariesBySessionID[sessionID.rawValue] ?? .open
+        let presentation: (
+            state: OwnerTruthInterviewNaturalInputContinuationState,
+            canContinue: Bool,
+            canContinueLater: Bool
+        )
+        switch boundary {
+        case .open, .skipOnce:
+            presentation = sessionsWithNarrative.contains(sessionID.rawValue)
+                ? (.narrativeRecorded, true, true)
+                : (.readyForNarrative, true, true)
+        case .cooldown:
+            presentation = (.paused, false, true)
+        case .doNotAsk:
+            presentation = (.paused, false, false)
+        }
         do {
             completion(.success(try OwnerTruthInterviewNaturalInputContinuation(
                 backendJSONObject: [
                     "schemaVersion": OwnerTruthInterviewNaturalInputContinuation.schemaVersion,
                     "vaultId": vaultID.rawValue,
                     "presentation": [
-                        "state": state.rawValue,
-                        "canContinue": true,
-                        "canContinueLater": true,
+                        "state": presentation.state.rawValue,
+                        "canContinue": presentation.canContinue,
+                        "canContinueLater": presentation.canContinueLater,
                     ],
                 ],
                 expectedVaultID: vaultID
