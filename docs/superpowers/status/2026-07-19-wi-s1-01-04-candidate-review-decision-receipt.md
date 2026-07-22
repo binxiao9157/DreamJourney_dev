@@ -89,3 +89,21 @@ Postgres 并发单写均有证据。隐藏 iOS action-level UIQA 已验证一条
   `DATABASE_URL`。
 
 该补充不开放产品入口、不改变 iOS UI，也不将 `G1/G4` 或独立正式烟测标记为完成。
+
+## 2026-07-22 原子性与并发证据补充
+
+对正式确认路径进行了范围受限的权限/回执审计，未发现可利用的 QA 重放、跨 Owner、
+authority epoch、Source/version 或错误完成声明缺口。审计后补齐两项此前缺少的隔离
+Postgres 验证，后端提交为 `d5c5977`：
+
+- 两个带不同 fresh policy decision 的正式请求并发使用同一个 `commandId` 时，只能产生
+  一组 root command、DecisionReceipt 和 receipt link，另一请求必须幂等返回。
+- 两条 Candidate 的批量确认中，若数据库在第二条 receipt link 处注入失败，root command、
+  两个 terminal Candidate receipt、已写入的 link 和 Candidate decision 都必须在同一 UoW
+  回滚，两个 Candidate 保持 `pending`。
+
+`scripts/verify_backend.sh` 已通过（`1065` tests、FastAPI smoke、合同 gate、编译与
+`git diff --check`）。`d5c5977` 已推送、部署，线上 `/ready` 的
+database/schema/auth/incident 均为 `ready`。隔离正式路由 smoke 仍刻意要求独立
+`OWNER_TRUTH_FORMAL_SMOKE_ADMIN_DATABASE_URL`；当前服务器没有该专用连接，因此新增
+并发/回滚断言尚未对真实 disposable Postgres 执行，不得据此提升 `G2` 或 Registry 状态。
