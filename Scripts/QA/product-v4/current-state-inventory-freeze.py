@@ -34,6 +34,12 @@ REQUIRED_SURFACE_FIELDS = {
     "status",
     "sources",
 }
+EXPECTED_BACKEND_STATIC_FIELDS = {
+    "migrationManifestCount",
+    "migrationHead",
+    "migrationHeadSha256",
+    "routeAuditExpectedCount",
+}
 ALLOWED_REPOSITORIES = {"ios", "backend"}
 ALLOWED_STATUSES = {
     "SOURCE_INVENTORIED",
@@ -118,6 +124,32 @@ def load_manifest(path: Path) -> dict[str, Any]:
     value_free(payload)
     require(payload.get("schemaVersion") == MANIFEST_SCHEMA, "unsupported inventory manifest schema")
     require(payload.get("workItem") == "WI-MIG-01-01", "inventory must remain bound to WI-MIG-01-01")
+    expected_backend_static = payload.get("expectedBackendStatic")
+    require(isinstance(expected_backend_static, Mapping), "expected backend static baseline is missing")
+    require(
+        set(expected_backend_static) == EXPECTED_BACKEND_STATIC_FIELDS,
+        "expected backend static baseline fields drifted",
+    )
+    require(
+        isinstance(expected_backend_static["migrationManifestCount"], int)
+        and expected_backend_static["migrationManifestCount"] > 0,
+        "expected migration manifest count must be positive",
+    )
+    require(
+        isinstance(expected_backend_static["routeAuditExpectedCount"], int)
+        and expected_backend_static["routeAuditExpectedCount"] > 0,
+        "expected route audit count must be positive",
+    )
+    require(
+        isinstance(expected_backend_static["migrationHead"], str)
+        and expected_backend_static["migrationHead"].endswith(".json"),
+        "expected migration head must be a manifest name",
+    )
+    require(
+        isinstance(expected_backend_static["migrationHeadSha256"], str)
+        and re.fullmatch(r"[0-9a-f]{64}", expected_backend_static["migrationHeadSha256"]) is not None,
+        "expected migration head hash must be sha256",
+    )
     return payload
 
 
@@ -223,6 +255,12 @@ def build_report(
     backend_root: Path,
     observed_at: str,
 ) -> dict[str, Any]:
+    actual_backend_static = backend_static_baseline(backend_root)
+    expected_backend_static = dict(manifest["expectedBackendStatic"])
+    require(
+        actual_backend_static == expected_backend_static,
+        "backend static baseline drifted; refresh expectedBackendStatic before issuing a new C00 freeze",
+    )
     report_surfaces: list[dict[str, Any]] = []
     status_counts: Counter[str] = Counter()
     plane_counts: Counter[str] = Counter()
@@ -260,7 +298,7 @@ def build_report(
         "baselines": {
             "ios": git_baseline(ROOT),
             "backend": git_baseline(backend_root),
-            "backendStatic": backend_static_baseline(backend_root),
+            "backendStatic": actual_backend_static,
         },
         "summary": {
             "surfaceCount": len(report_surfaces),

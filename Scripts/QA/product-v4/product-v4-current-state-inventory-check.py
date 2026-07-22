@@ -73,6 +73,7 @@ def main() -> None:
         require(first_path.read_bytes() == second_path.read_bytes(), "freeze output must be deterministic for one source baseline")
 
         report = json.loads(first_path.read_text(encoding="utf-8"))
+        manifest_payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
         require(report.get("schemaVersion") == "dreamjourney.current-state-inventory-report.v1", "report schema drift")
         require(report.get("workItem") == "WI-MIG-01-01", "report work item drift")
         require(report.get("sourceOnly") is True, "C00 report must remain source-only")
@@ -89,8 +90,12 @@ def main() -> None:
         require({surface.get("packageId") for surface in surfaces} == REQUIRED_PACKAGES, "package inventory set drifted")
         require(all(len(str(surface.get("evidenceHash") or "")) == 64 for surface in surfaces), "surface evidence hashes are incomplete")
         require(all(surface.get("sourceFiles") for surface in surfaces), "every surface needs source evidence")
-        require(report.get("baselines", {}).get("backendStatic", {}).get("routeAuditExpectedCount") == 104, "route audit baseline drifted")
-        require(report.get("baselines", {}).get("backendStatic", {}).get("migrationHead") == "0037_owner_truth_interview_confirmation_feature_constraint.json", "migration freeze head drifted")
+        expected_backend_static = manifest_payload.get("expectedBackendStatic")
+        require(isinstance(expected_backend_static, dict), "manifest must own the backend static freeze baseline")
+        require(
+            report.get("baselines", {}).get("backendStatic") == expected_backend_static,
+            "backend static baseline drifted from the manifest-owned freeze",
+        )
 
         broken_manifest = temp / "broken.json"
         payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
@@ -100,10 +105,18 @@ def main() -> None:
         require(broken.returncode != 0, "marker drift must block a freeze report")
         require("missing-c00-marker" in broken.stderr, "marker drift must be actionable")
 
+        stale_baseline_manifest = temp / "stale-baseline.json"
+        payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        payload["expectedBackendStatic"]["routeAuditExpectedCount"] += 1
+        stale_baseline_manifest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        stale = freeze(temp / "stale-baseline-report.json", manifest=stale_baseline_manifest)
+        require(stale.returncode != 0, "backend baseline drift must block a freeze report")
+        require("backend static baseline drifted" in stale.stderr, "backend baseline drift must be actionable")
+
     runner = RUNNER.read_text(encoding="utf-8")
     require("current-state-inventory-freeze.py" in runner, "C00 runner must call the freeze generator")
     require("product-v4-current-state-inventory-check.py" in runner, "C00 runner must call the static check")
-    print("Product V4 C00 current-state inventory check passed: 13 packages, W/I/P/Q/O/V covered")
+    print("Product V4 C00 current-state inventory check passed: 13 packages, W/I/P/Q/O/V covered, backend baseline frozen")
 
 
 if __name__ == "__main__":

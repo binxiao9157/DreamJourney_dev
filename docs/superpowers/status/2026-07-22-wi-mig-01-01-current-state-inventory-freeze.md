@@ -55,6 +55,29 @@ The release report is at:
 | G3 | Open | Object storage and Provider execution/exit evidence are not inferred from source. |
 | G4 | Open | Privacy, legal, product, and production go/no-go decisions remain separate. |
 
+## 2026-07-23 Refresh
+
+The original checker carried its backend route and migration baseline as
+hard-coded test literals. That became stale after the formal interview routes
+and migration `0038` were added, so the gate correctly failed instead of
+silently treating the old source snapshot as current.
+
+The manifest now owns the explicit value-free backend freeze baseline:
+
+- `routeAuditExpectedCount=106`
+- `migrationManifestCount=38`
+- `migrationHead=0038_owner_truth_interview_do_not_ask_restore_receipts.json`
+- SHA-256 of that migration manifest
+
+The generator compares the live source baseline to this manifest before it
+emits a report. A route, migration count, migration head, or migration manifest
+hash drift now fails the C00 gate until the freeze is deliberately refreshed.
+The iOS runtime surface also hashes only committed, value-free configuration
+anchors: `Info.plist`, Backend/Voice SDK example xcconfig files, and the
+tracked Tencent XCFramework metadata. Local `*.local.xcconfig`,
+`LocalConfig.plist`, credential values, and the currently user-modified Xcode
+project file remain outside this source-only report.
+
 ## Next Boundary
 
 `WI-MIG-01-02 / C01` may be planned only around a real isolated backup and

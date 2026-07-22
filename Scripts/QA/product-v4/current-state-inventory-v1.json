@@ -2,6 +2,12 @@
   "schemaVersion": "dreamjourney.current-state-inventory.v1",
   "workItem": "WI-MIG-01-01",
   "scope": "C00 source-only current-state inventory and freeze. It hashes checked-in source evidence only; it does not inspect .env values, host processes, production data, object bytes, Provider payloads, or installed-client population.",
+  "expectedBackendStatic": {
+    "migrationManifestCount": 38,
+    "migrationHead": "0038_owner_truth_interview_do_not_ask_restore_receipts.json",
+    "migrationHeadSha256": "580f14580077c8e4ecdbfbcee6e3c878a55b40cf539ccb5f607808c51c75d7d0",
+    "routeAuditExpectedCount": 106
+  },
   "requiredPlanes": ["W", "I", "P", "Q", "O", "V"],
   "requiredPackageIds": [
     "WP-S0-01",
@@ -266,6 +272,26 @@
           "repository": "ios",
           "path": "DreamJourney/Sources/Services/DigitalHuman/DigitalHumanRuntimeFactory.swift",
           "markers": ["final class DigitalHumanRuntimeFactory"]
+        },
+        {
+          "repository": "ios",
+          "path": "DreamJourney/Resources/Info.plist",
+          "markers": ["DreamJourneyBackendBaseURL", "DreamJourneyAppGroupIdentifier"]
+        },
+        {
+          "repository": "ios",
+          "path": "DreamJourney/Config/Backend.example.xcconfig",
+          "markers": ["DREAMJOURNEY_BACKEND_BASE_URL", "Keep Backend.local.xcconfig out of git."]
+        },
+        {
+          "repository": "ios",
+          "path": "DreamJourney/Config/VoiceSDK.example.xcconfig",
+          "markers": ["Direct mobile Provider credential injection is retired.", "Do not add local credential settings here."]
+        },
+        {
+          "repository": "ios",
+          "path": "Vendor/TencentDigitalHuman/VirtualmanStreamSDK.xcframework/Info.plist",
+          "markers": ["XCFrameworkFormatVersion", "ios-arm64_x86_64-simulator"]
         }
       ]
     },
