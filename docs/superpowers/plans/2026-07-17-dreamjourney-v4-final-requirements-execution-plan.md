@@ -159,7 +159,7 @@ GIC 需求在本计划中的唯一落点：
 
 `WI-S0-06-09` 新规即时安全止损已经完成代码合同、后端部署和 scoped G0/G2 验证；M1-M4 仍默认关闭。`WI-S0-04-05` 已完成恢复工具、运行时围栏和真实 Postgres 隔离恢复演练，但 G2 结论仍为 `NO_GO`：历史数据存在 owner orphan 且全库 replay bundle 缺失，因此不得恢复切流。两项状态分别见 `docs/superpowers/status/2026-07-17-wi-s0-06-09-safety-stop-loss.md` 与 `docs/superpowers/status/2026-07-17-wi-s0-04-05-postgres-recovery.md`。
 
-`WI-S0-01-01..08`、`WI-S0-02-01..06`、`WI-S0-05-01..04`、`WI-S0-05-06`、`WI-S0-07-01..09` 已分别形成 scoped 实现/验证证据；`WI-S1-01..03` 的多项 default-off M0 子切片也已在 handoff 中登记。当前不重复这些已交付边界。`WI-S0-05-05` 仍受真实对象/Provider/备份删除的 G3/G4 限制。`WI-S1-01-03` 的正式用户边界命令已经以 owner-scoped、captured-policy 路由和 typed iOS client 完成 scoped G0/G2：仅允许 `skipOnce`、`cooldown`、`doNotAsk`，保持默认关闭，不开放新的公开 Echo 入口，也不把这些控制当作 Provider 或 Memory Authority 写入。后续从 current handoff 选择下一个尚无 scoped G0 证据、且不依赖 G3/G4 或恢复切流的 M0 子项。
+`WI-S0-01-01..08`、`WI-S0-02-01..06`、`WI-S0-05-01..04`、`WI-S0-05-06`、`WI-S0-07-01..09` 已分别形成 scoped 实现/验证证据；`WI-S1-01..03` 的多项 default-off M0 子切片也已在 handoff 中登记。当前不重复这些已交付边界。`WI-S0-05-05` 仍受真实对象/Provider/备份删除的 G3/G4 限制。`WI-S1-01-03` 的正式用户边界命令已经以 owner-scoped、captured-policy 路由和 typed iOS client 完成 scoped G0/G2：仅允许 `skipOnce`、`cooldown`、`doNotAsk`，保持默认关闭，不开放新的公开 Echo 入口，也不把这些控制当作 Provider 或 Memory Authority 写入。M0A-25 已将该命令接入 `OwnerTruthInterviewNaturalInputUseCase` 的 AccountLease request/commit 围栏，并验证 stale completion、回执不匹配和 paused continuation。后续先盘点 handoff 内已有 `WP-S1-01` scoped 证据，选择第一个未覆盖且不依赖 G3/G4 或恢复切流的 P0 小闭环；不得因 Registry 仍为 `PLANNED` 重复编码。
 
 ### 3.3 工作区保护
 
@@ -522,7 +522,7 @@ M3 老人健康或成人纪念互动、M4 知识许可和收益不进入自动�
 
 1. 保持 `WI-S0-04-05` 的恢复切流 `NO_GO` 和 `WI-S0-05-05` 的真实外部清理 Gate；它们不得阻塞互不依赖的本地合同开发，也不得被 mock 或本地状态冒充关闭。
 2. `WI-S0-05-06` 的 typed、owner-scoped 数据权利状态 mapper 已完成 scoped G0；不重复实现。`WI-S0-07-09` 的 strict readiness 适配器已完成 scoped G0，G2/G4 仍保持外部门。
-3. `WI-S1-01-03` 的用户边界正式命令已完成：复用既有持久化 Conversation/Session 状态，为 `skipOnce`、`cooldown`、`doNotAsk` 增加 owner-scoped、captured `echoTextInput` policy 的默认关闭写入路由，并补 typed iOS client 与负向合同。不得将它扩展为 `open`、Provider、问题正文、Candidate/Memory 写入或公开 Echo UI。
-4. 下一个子闭环仍属于 `WI-S1-01-03`：将正式边界命令接入现有 `OwnerTruthInterviewNaturalInputUseCase` 的 AccountLease request/commit 围栏，并为 stale completion、回执不匹配和 paused continuation 补负向合同。不得新增公开 UI、`open`、Provider、问题正文、Candidate/Memory 写入或生产 Authority 切流。
+3. `WI-S1-01-03` 的用户边界正式命令及其 iOS AccountLease use case 均已完成：复用既有持久化 Conversation/Session 状态，为 `skipOnce`、`cooldown`、`doNotAsk` 增加 owner-scoped、captured `echoTextInput` policy 的默认关闭写入路由；用例层在 request/commit 两侧校验 lease/generation，并拒绝 `open`、回执错配和 stale completion。不得将它扩展为 Provider、问题正文、Candidate/Memory 写入或公开 Echo UI。
+4. 下一步先对 `WP-S1-01` 已登记的 scoped 证据做短盘点，再选择第一个真正缺失的 P0/G0 小闭环。不得仅因 Registry 保守地保留 `PLANNED` 重复实现已部署的 Memory/Projection/QA 边界，也不得开启 G3/G4 或生产 Authority 切流。
 
 在 Phase 0 完成前，不启动新的 M0 功能编码；在 Stage 0 退出前，M0 只允许 additive schema、typed contract、fake 和 shadow，不切生产 Authority。

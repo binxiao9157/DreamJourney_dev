@@ -84,7 +84,11 @@ def main() -> None:
     active = handoff["activeWorkItem"]
     require(active["state"] == "IN_PROGRESS", "active Work Item must be IN_PROGRESS")
     require(active["id"] in registry_ids, "active Work Item missing from Registry")
-    require(active["id"] not in evidence_ids, "active Work Item already listed as evidence-complete")
+    if active["id"] in evidence_ids:
+        require(
+            bool(active.get("currentSubSlice")),
+            "an evidence-backed active Work Item must identify its current sub-slice",
+        )
     require(
         active["authorityLock"] == registry_items[active["id"]]["authorityLock"],
         "active Authority lock drift",
@@ -94,8 +98,18 @@ def main() -> None:
 
     next_item = handoff["nextWorkItem"]
     require(next_item["id"] in registry_ids, "next Work Item missing from Registry")
-    require(next_item["id"] not in evidence_ids, "next Work Item already listed as evidence-complete")
-    require(next_item["state"] == "PLANNED_AFTER_CURRENT", "next Work Item state drift")
+    if next_item["state"] == "RECONCILE_AFTER_CURRENT":
+        require(
+            next_item["id"] == active["id"],
+            "a reconciliation step must stay within the active Work Item",
+        )
+        require(
+            next_item["id"] in evidence_ids,
+            "a reconciliation step requires an evidence-backed active Work Item",
+        )
+    else:
+        require(next_item["id"] not in evidence_ids, "next Work Item already listed as evidence-complete")
+        require(next_item["state"] == "PLANNED_AFTER_CURRENT", "next Work Item state drift")
 
     print(
         "Product V4 current handoff check passed: "
