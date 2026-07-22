@@ -119,6 +119,7 @@ let requiredDocs = [
     "docs/superpowers/status/2026-07-11-knowledge-mutation-privacy-canonicalization.md",
     "docs/superpowers/status/2026-07-11-family-knowledge-authorization-boundary.md",
     "docs/superpowers/status/2026-07-15-wi-s0-03-01-credential-inventory.md",
+    "docs/superpowers/status/2026-07-22-wi-mig-01-01-current-state-inventory-freeze.md",
     "docs/superpowers/status/2026-06-19-archive-image-analysis-live-chain.md",
     "docs/superpowers/status/2026-06-19-archive-image-analysis-runtime-contract.md",
     "docs/superpowers/status/2026-06-19-archive-image-analysis-runtime-ui.md",
@@ -192,6 +193,7 @@ assertContains(matrix, "## Promotion Rule", "release matrix should require an ex
 
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let credentialInventoryRunner = read("Scripts/QA/prd-stitch-ui/run-credential-inventory-scan.sh")
+let currentStateInventoryRunner = read("Scripts/QA/product-v4/run-current-state-inventory-freeze-gate.sh")
 let knowledgeGovernanceGate = read("Scripts/QA/prd-stitch-ui/run-knowledge-governance-gate.sh")
 let knowledgeSourceIdentityGate = read("Scripts/QA/prd-stitch-ui/run-knowledge-source-identity-gate.sh")
 let knowledgePrivacyMaintenanceGate = read("Scripts/QA/prd-stitch-ui/run-knowledge-privacy-maintenance-gate.sh")
@@ -211,8 +213,11 @@ assertContains(releaseRegression, "product-v4-ios-client-auth-boundary-check.py"
 assertContains(releaseRegression, "product-v4-qa-mobile-credential-artifact-check.py", "release regression should always enforce the QA mobile credential artifact boundary")
 assertContains(releaseRegression, "product-v4-digital-human-secure-path-check.py", "release regression should always enforce the digital-human secure path")
 assertContains(releaseRegression, "product-v4-credential-rotation-receipt-check.py", "release regression should always enforce the value-free rotation receipt")
+assertContains(releaseRegression, "run-current-state-inventory-freeze-gate.sh", "release regression should enforce the C00 current-state inventory freeze")
 assertContains(credentialInventoryRunner, "credential-inventory-scanner.py", "credential inventory runner should invoke the value-free scanner")
 assertContains(credentialInventoryRunner, "CREDENTIAL_SCAN_ENFORCE", "credential inventory runner should support release enforcement")
+assertContains(currentStateInventoryRunner, "current-state-inventory-freeze.py", "C00 inventory runner should generate a value-free freeze report")
+assertContains(currentStateInventoryRunner, "product-v4-current-state-inventory-check.py", "C00 inventory runner should run its deterministic static check")
 assertContains(releaseRegression, "RUN_PUBLIC_MVP_REGRESSION", "release regression should expose the public MVP minimum regression gate")
 assertContains(releaseRegression, "RUN_PUBLIC_MVP_REGRESSION forces RUN_P0_ARCHIVE_ECHO_REGRESSION and RUN_P0_PROFILE_CARE_REGRESSION", "public MVP gate should force both P0 gates")
 assertContains(releaseRegression, "RUN_P0_ARCHIVE_ECHO_REGRESSION", "release regression should expose public MVP Archive -> Echo P0 gate")
@@ -459,6 +464,10 @@ let requiredScripts = [
     "Scripts/QA/product-v4/product-v4-qa-mobile-credential-artifact-check.py",
     "Scripts/QA/product-v4/product-v4-digital-human-secure-path-check.py",
     "Scripts/QA/product-v4/product-v4-credential-rotation-receipt-check.py",
+    "Scripts/QA/product-v4/current-state-inventory-v1.json",
+    "Scripts/QA/product-v4/current-state-inventory-freeze.py",
+    "Scripts/QA/product-v4/product-v4-current-state-inventory-check.py",
+    "Scripts/QA/product-v4/run-current-state-inventory-freeze-gate.sh",
     "Scripts/QA/product-v4/stage0_strict_readiness.py",
     "Scripts/QA/product-v4/stage0_strict_readiness_contract_check.py",
     "Scripts/QA/product-v4/run-stage0-strict-readiness-gate.sh",

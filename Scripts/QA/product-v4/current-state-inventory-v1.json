@@ -1,0 +1,348 @@
+{
+  "schemaVersion": "dreamjourney.current-state-inventory.v1",
+  "workItem": "WI-MIG-01-01",
+  "scope": "C00 source-only current-state inventory and freeze. It hashes checked-in source evidence only; it does not inspect .env values, host processes, production data, object bytes, Provider payloads, or installed-client population.",
+  "requiredPlanes": ["W", "I", "P", "Q", "O", "V"],
+  "requiredPackageIds": [
+    "WP-S0-01",
+    "WP-S0-02",
+    "WP-S0-03",
+    "WP-S0-04",
+    "WP-S0-05",
+    "WP-S0-06",
+    "WP-S0-07",
+    "WP-S1-01",
+    "WP-S1-02",
+    "WP-S1-03",
+    "WP-S3-01",
+    "WP-V0-01",
+    "WP-MIG-01"
+  ],
+  "surfaces": [
+    {
+      "surfaceId": "I.account-local-state",
+      "plane": "I",
+      "packageId": "WP-S0-01",
+      "owner": "iOS account and privacy boundary",
+      "version": "account-store-inventory-v1",
+      "reader": "AccountSessionActor and account-scoped private UI",
+      "writer": "typed backend session and owner-scoped local stores",
+      "effect": "local account lifecycle only",
+      "credentialClass": "opaque session reference only",
+      "runtimeCount": "STATIC_SOURCE_ONLY",
+      "status": "SOURCE_INVENTORIED",
+      "sources": [
+        {
+          "repository": "ios",
+          "path": "Scripts/QA/product-v4/account-store-inventory-v1.json",
+          "markers": ["dreamjourney.account-store-inventory.v1", "AccountStoreInventory"]
+        },
+        {
+          "repository": "ios",
+          "path": "DreamJourney/Sources/App/AccountSessionActor.swift",
+          "markers": ["actor AccountSessionActor"]
+        }
+      ]
+    },
+    {
+      "surfaceId": "I.identity-route-authorization",
+      "plane": "I",
+      "packageId": "WP-S0-02",
+      "owner": "backend identity and authorization boundary",
+      "version": "route-ownership-registry-v1",
+      "reader": "authenticated route middleware and typed resource resolvers",
+      "writer": "server-derived principal and ownership policy only",
+      "effect": "principal-bound allow or deny decision",
+      "credentialClass": "server-side token family validation",
+      "runtimeCount": "STATIC_SOURCE_ONLY",
+      "status": "SOURCE_INVENTORIED",
+      "sources": [
+        {
+          "repository": "backend",
+          "path": "app/services/route_ownership.py",
+          "markers": ["class RouteOwnershipRegistry"]
+        },
+        {
+          "repository": "backend",
+          "path": "app/services/authorization_policy.py",
+          "markers": ["principal_bound: bool = False"]
+        }
+      ]
+    },
+    {
+      "surfaceId": "V.credential-containment",
+      "plane": "V",
+      "packageId": "WP-S0-03",
+      "owner": "security credential control",
+      "version": "credential-inventory-v1",
+      "reader": "value-free scanner and release gate",
+      "writer": "managed server secret boundary only",
+      "effect": "detect and block exposed credential material",
+      "credentialClass": "server-only credential inventory",
+      "runtimeCount": "STATIC_SOURCE_ONLY",
+      "status": "SOURCE_INVENTORIED",
+      "sources": [
+        {
+          "repository": "ios",
+          "path": "Scripts/QA/product-v4/credential-inventory-scanner.py",
+          "markers": ["dreamjourney.credential-inventory.v1"]
+        },
+        {
+          "repository": "ios",
+          "path": "Scripts/QA/product-v4/credential-inventory-policy.json",
+          "markers": ["dreamjourney.credential-inventory-policy.v1", "credentialTypes"]
+        }
+      ]
+    },
+    {
+      "surfaceId": "W.database-foundation-and-recovery",
+      "plane": "W",
+      "packageId": "WP-S0-04",
+      "owner": "backend database and recovery operations",
+      "version": "versioned-migrator-v1",
+      "reader": "API readiness, migration runner, and recovery verification",
+      "writer": "versioned migration runner outside API startup",
+      "effect": "schema and recovery evidence only",
+      "credentialClass": "database connection configuration is not inventoried by value",
+      "runtimeCount": "HOST_UNVERIFIED",
+      "status": "HOST_UNVERIFIED_G2_REQUIRED",
+      "sources": [
+        {
+          "repository": "backend",
+          "path": "app/db/migrator.py",
+          "markers": ["class MigrationDefinition", "def load_migrations"]
+        },
+        {
+          "repository": "backend",
+          "path": "scripts/migrate_db.py",
+          "markers": ["Run DreamJourney versioned Postgres migrations outside API startup."]
+        }
+      ]
+    },
+    {
+      "surfaceId": "O.rights-and-deletion-boundary",
+      "plane": "O",
+      "packageId": "WP-S0-05",
+      "owner": "privacy rights and external deletion boundary",
+      "version": "data-rights-module-inventory-v1",
+      "reader": "owner-scoped export and cleanup projection",
+      "writer": "rights request and terminal cleanup receipts",
+      "effect": "application-data cleanup; external objects, providers, and backups remain explicit",
+      "credentialClass": "credentials are never exportable",
+      "runtimeCount": "EXTERNAL_BOUNDARY_UNVERIFIED",
+      "status": "EXTERNAL_G3_G4_REQUIRED",
+      "sources": [
+        {
+          "repository": "backend",
+          "path": "app/services/data_rights_module_inventory.py",
+          "markers": ["Owner-scoped export and terminal-cleanup contracts", "externalBoundaries"]
+        },
+        {
+          "repository": "backend",
+          "path": "app/services/data_rights_contract.py",
+          "markers": ["DataRights"]
+        }
+      ]
+    },
+    {
+      "surfaceId": "P.release-scope-control",
+      "plane": "P",
+      "packageId": "WP-S0-06",
+      "owner": "product release policy boundary",
+      "version": "release-policy-v1",
+      "reader": "runtime capability snapshot and iOS policy cache",
+      "writer": "server release-policy decision capture",
+      "effect": "default-off feature exposure control",
+      "credentialClass": "no credential material in policy payload",
+      "runtimeCount": "STATIC_SOURCE_ONLY",
+      "status": "SOURCE_INVENTORIED",
+      "sources": [
+        {
+          "repository": "backend",
+          "path": "app/services/release_policy.py",
+          "markers": ["class ReleasePolicyService"]
+        },
+        {
+          "repository": "ios",
+          "path": "DreamJourney/Sources/Services/ReleasePolicyStore.swift",
+          "markers": ["final class ReleasePolicyStore"]
+        }
+      ]
+    },
+    {
+      "surfaceId": "Q.operations-evidence-and-retention",
+      "plane": "Q",
+      "packageId": "WP-S0-07",
+      "owner": "operations evidence boundary",
+      "version": "evidence-manifest-v1",
+      "reader": "operations readiness and retention audit",
+      "writer": "append-only value-free evidence manifest sink",
+      "effect": "operations retention timer is host-owned",
+      "credentialClass": "evidence contains hashes and metadata only",
+      "runtimeCount": "HOST_UNVERIFIED",
+      "status": "HOST_UNVERIFIED_G2_REQUIRED",
+      "sources": [
+        {
+          "repository": "backend",
+          "path": "app/observability/evidence_manifest.py",
+          "markers": ["class EvidenceManifestService", "value-free manifests"]
+        },
+        {
+          "repository": "backend",
+          "path": "deploy/systemd/dreamjourney-evidence-manifest-retention.timer",
+          "markers": ["Schedule DreamJourney evidence manifest retention"]
+        }
+      ]
+    },
+    {
+      "surfaceId": "W.owner-truth-authority",
+      "plane": "W",
+      "packageId": "WP-S1-01",
+      "owner": "owner truth authority boundary",
+      "version": "owner-truth-contracts-v1",
+      "reader": "private Owner Truth context and review paths",
+      "writer": "candidate decision and confirmation authority only",
+      "effect": "private, default-off authority transitions",
+      "credentialClass": "no provider credential in authority records",
+      "runtimeCount": "STATIC_SOURCE_ONLY",
+      "status": "SOURCE_INVENTORIED",
+      "sources": [
+        {
+          "repository": "backend",
+          "path": "app/domain/owner_truth/contracts.py",
+          "markers": ["class OwnerTruthMemoryVersion", "class CandidateDecision"]
+        },
+        {
+          "repository": "backend",
+          "path": "app/services/owner_truth_interview_candidate_review.py",
+          "markers": ["OwnerTruth"]
+        }
+      ]
+    },
+    {
+      "surfaceId": "Q.async-effect-and-timer-boundary",
+      "plane": "Q",
+      "packageId": "WP-S1-02",
+      "owner": "async effect authority boundary",
+      "version": "legacy-timer-callback-inventory-v1",
+      "reader": "typed scheduler shadow and provider query evidence",
+      "writer": "explicit idempotent effect admission only",
+      "effect": "legacy direct dispatch remains unauthorized",
+      "credentialClass": "provider queries remain value-free and disabled",
+      "runtimeCount": "HOST_AND_PROVIDER_UNVERIFIED",
+      "status": "EXTERNAL_G3_REQUIRED",
+      "sources": [
+        {
+          "repository": "backend",
+          "path": "app/async_effects/legacy_timer_callback_inventory.py",
+          "markers": ["dreamjourney.legacy-timer-callback-inventory.v1"]
+        },
+        {
+          "repository": "backend",
+          "path": "app/async_effects/provider_query_operations.py",
+          "markers": ["providerQueryExecutionEnabled"]
+        }
+      ]
+    },
+    {
+      "surfaceId": "V.ios-runtime-composition",
+      "plane": "V",
+      "packageId": "WP-S1-03",
+      "owner": "iOS runtime lifecycle boundary",
+      "version": "lifecycle-consumer-inventory-v1",
+      "reader": "root lifecycle forwarder and runtime consumers",
+      "writer": "lease-fenced local runtime state",
+      "effect": "lifecycle forwarding and runtime teardown only",
+      "credentialClass": "runtime does not persist provider credentials",
+      "runtimeCount": "STATIC_SOURCE_ONLY",
+      "status": "SOURCE_INVENTORIED",
+      "sources": [
+        {
+          "repository": "ios",
+          "path": "Scripts/QA/product-v4/app-lifecycle-consumer-inventory-v1.json",
+          "markers": ["echo-runtime", "ai-recording-runtime"]
+        },
+        {
+          "repository": "ios",
+          "path": "DreamJourney/Sources/Services/DigitalHuman/DigitalHumanRuntimeFactory.swift",
+          "markers": ["final class DigitalHumanRuntimeFactory"]
+        }
+      ]
+    },
+    {
+      "surfaceId": "P.family-publication-visitor-boundary",
+      "plane": "P",
+      "packageId": "WP-S3-01",
+      "owner": "publication policy and family authority boundary",
+      "version": "memorial-capability-shadow-v1",
+      "reader": "future publication capability admission shadow",
+      "writer": "no public publication writer is enabled",
+      "effect": "default-off non-admission only",
+      "credentialClass": "no public provider credential path",
+      "runtimeCount": "EXTERNAL_POLICY_UNVERIFIED",
+      "status": "EXTERNAL_G4_REQUIRED",
+      "sources": [
+        {
+          "repository": "backend",
+          "path": "app/services/owner_truth_memorial_capability_non_admission_shadow.py",
+          "markers": ["Publication capability", "PUBLICATION_TEXT"]
+        },
+        {
+          "repository": "backend",
+          "path": "app/services/release_policy.py",
+          "markers": ["ReleaseAudience"]
+        }
+      ]
+    },
+    {
+      "surfaceId": "V.voice-and-digital-human-governance",
+      "plane": "V",
+      "packageId": "WP-V0-01",
+      "owner": "voice and digital-human governance boundary",
+      "version": "voice-clone-and-runtime-v1",
+      "reader": "voice profile state and digital-human runtime factory",
+      "writer": "server provider adapter and QA-only runtime path",
+      "effect": "real provider use remains separately gated",
+      "credentialClass": "provider credential remains server-only",
+      "runtimeCount": "PROVIDER_AND_DEVICE_UNVERIFIED",
+      "status": "EXTERNAL_G3_G4_REQUIRED",
+      "sources": [
+        {
+          "repository": "backend",
+          "path": "app/services/voice_clone.py",
+          "markers": ["class VoiceCloneProviderFactory"]
+        },
+        {
+          "repository": "ios",
+          "path": "DreamJourney/Sources/Memoir/VoiceCloneService.swift",
+          "markers": ["final class VoiceCloneService"]
+        }
+      ]
+    },
+    {
+      "surfaceId": "W.migration-freeze-and-legacy-inventory",
+      "plane": "W",
+      "packageId": "WP-MIG-01",
+      "owner": "migration evidence and operations boundary",
+      "version": "lean-migration-c00-v1",
+      "reader": "migration inventory, backup, restore, and go-no-go review",
+      "writer": "read-only inventory report only",
+      "effect": "no schema, configuration, data, Provider, or client distribution mutation",
+      "credentialClass": "credential values are excluded from the freeze report",
+      "runtimeCount": "HOST_UNVERIFIED",
+      "status": "HOST_UNVERIFIED_G2_REQUIRED",
+      "sources": [
+        {
+          "repository": "backend",
+          "path": "app/domain/owner_truth/legacy_migration.py",
+          "markers": ["class LegacyMigrationInventory"]
+        },
+        {
+          "repository": "backend",
+          "path": "scripts/db/backup_postgres.sh",
+          "markers": ["schemaHead"]
+        }
+      ]
+    }
+  ]
+}

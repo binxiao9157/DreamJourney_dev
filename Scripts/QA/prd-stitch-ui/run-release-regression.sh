@@ -343,6 +343,7 @@ append_report_footer() {
 - Knowledge receipt maintenance static contract: \`static-guards/knowledge-receipt-maintenance-contract-check.log\`
 - Knowledge receipt maintenance full gate: \`static-guards/knowledge-receipt-maintenance-gate.log\`
 - Credential inventory scan: \`credential-inventory/$RUN_ID/credential-inventory.json\`
+- C00 current-state inventory freeze: \`current-state-inventory/$RUN_ID/current-state-inventory.json\`
 - Backend archive image-analysis smoke: \`backend-archive-image-analysis-smoke/$RUN_ID/\`
 - Backend hidden media sync smoke: \`backend-hidden-media-sync-smoke/$RUN_ID/\`
 - Backend time-letter lifecycle smoke: \`backend-time-letter-lifecycle-smoke/$RUN_ID/\`
@@ -569,6 +570,13 @@ run_step "Product V4 database request UoW" "$STATIC_LOG_DIR/product-v4-db-uow.lo
 
 run_step "Product V4 versioned database migrator" "$STATIC_LOG_DIR/product-v4-db-migration.log" \
   env BACKEND_ROOT="$BACKEND_ROOT" python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-db-migration-check.py"
+
+run_step "Product V4 C00 current-state inventory freeze" "$STATIC_LOG_DIR/product-v4-current-state-inventory.log" \
+  env \
+    BACKEND_ROOT="$BACKEND_ROOT" \
+    RUN_ID="$RUN_ID" \
+    OUTPUT_ROOT="$OUTPUT_DIR/current-state-inventory" \
+    "$ROOT_DIR/Scripts/QA/product-v4/run-current-state-inventory-freeze-gate.sh"
 
 run_step "Product V4 schema/auth readiness" "$STATIC_LOG_DIR/product-v4-readiness.log" \
   env BACKEND_ROOT="$BACKEND_ROOT" python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-readiness-check.py"
