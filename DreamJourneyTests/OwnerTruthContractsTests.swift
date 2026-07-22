@@ -1112,6 +1112,46 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertFalse(String(describing: receipt).contains(append.text))
     }
 
+    func testInterviewBoundaryCommandUsesBoundedPayloadAndMatchesValueMinimizedReceipt() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let command = try OwnerTruthInterviewBoundaryCommand(
+            commandID: "natural-input-boundary",
+            threadID: recordID("00000000-0000-0000-0000-000000000074"),
+            sessionID: recordID("00000000-0000-0000-0000-000000000075"),
+            expectedSessionVersion: 1,
+            boundary: .cooldown
+        )
+
+        let payload = command.backendPayload
+        XCTAssertEqual(Set(payload.keys), [
+            "commandId",
+            "threadId",
+            "expectedSessionVersion",
+            "boundary",
+        ])
+        XCTAssertEqual(payload["commandId"] as? String, command.commandID)
+        XCTAssertEqual(payload["threadId"] as? String, command.threadID.rawValue.uuidString.lowercased())
+        XCTAssertEqual(payload["expectedSessionVersion"] as? Int, 1)
+        XCTAssertEqual(payload["boundary"] as? String, OwnerTruthInterviewSessionBoundary.cooldown.rawValue)
+
+        let receipt = try interviewNaturalInputReceipt(vaultID: vaultID, boundary: command)
+        XCTAssertTrue(receipt.matches(command))
+        XCTAssertNil(receipt.messageID)
+        XCTAssertNil(receipt.messageSequence)
+        XCTAssertFalse(String(describing: receipt).contains("text"))
+
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewBoundaryCommand(
+                commandID: "must-not-reopen",
+                threadID: command.threadID,
+                sessionID: command.sessionID,
+                expectedSessionVersion: 1,
+                boundary: .open
+            )
+        )
+    }
+
     func testInterviewNaturalInputUseCaseStartsAndAppendsWithoutRetainingText() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
@@ -2697,6 +2737,28 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private func interviewNaturalInputReceipt(
+        vaultID: OwnerTruthVaultID,
+        boundary: OwnerTruthInterviewBoundaryCommand
+    ) throws -> OwnerTruthInterviewNaturalInputReceipt {
+        try OwnerTruthInterviewNaturalInputReceipt(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "receipt": [
+                    "status": OwnerTruthCommandOutcome.created.rawValue,
+                    "threadId": boundary.threadID.rawValue.uuidString,
+                    "sessionId": boundary.sessionID.rawValue.uuidString,
+                    "threadVersion": 1,
+                    "sessionVersion": boundary.expectedSessionVersion + 1,
+                    "state": OwnerTruthInterviewSessionLifecycle.paused.rawValue,
+                    "boundary": boundary.boundary.rawValue,
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+    }
+
     private func interviewBatchAcceptResult(
         reviewBatchID: OwnerTruthRecordID,
         candidateIDs: [OwnerTruthRecordID]
@@ -3070,12 +3132,14 @@ private enum InterviewSessionStateClientSpyError: Error {
 private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalInputClient {
     var startHandler: ((OwnerTruthInterviewNaturalInputStartCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var appendHandler: ((OwnerTruthInterviewNaturalInputAppendCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
+    var boundaryHandler: ((OwnerTruthInterviewBoundaryCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var continuationHandler: ((OwnerTruthRecordID) -> Result<OwnerTruthInterviewNaturalInputContinuation, Error>)?
     var deferAppend = false
     private var deferredAppendCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
 
     private(set) var startCommand: OwnerTruthInterviewNaturalInputStartCommand?
     private(set) var appendCommand: OwnerTruthInterviewNaturalInputAppendCommand?
+    private(set) var boundaryCommand: OwnerTruthInterviewBoundaryCommand?
 
     func startOwnerTruthInterviewNaturalInput(
         vaultID: OwnerTruthVaultID,
@@ -3099,6 +3163,17 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
         completion(appendHandler?(command) ?? .failure(InterviewNaturalInputClientSpyError.missingAppendResult))
     }
 
+    func setOwnerTruthInterviewBoundary(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewBoundaryCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        boundaryCommand = command
+        completion(boundaryHandler?(command) ?? .failure(
+            InterviewNaturalInputClientSpyError.missingBoundaryResult
+        ))
+    }
+
     func fetchOwnerTruthInterviewNaturalInputContinuation(
         vaultID: OwnerTruthVaultID,
         sessionID: OwnerTruthRecordID,
@@ -3119,6 +3194,7 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
 private enum InterviewNaturalInputClientSpyError: Error {
     case missingStartResult
     case missingAppendResult
+    case missingBoundaryResult
     case missingContinuationResult
 }
 

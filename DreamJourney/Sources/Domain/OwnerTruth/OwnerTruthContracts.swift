@@ -2676,6 +2676,15 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
             && threadVersion > command.expectedThreadVersion
             && sessionVersion > command.expectedSessionVersion
     }
+
+    func matches(_ command: OwnerTruthInterviewBoundaryCommand) -> Bool {
+        threadID == command.threadID
+            && sessionID == command.sessionID
+            && boundary == command.boundary
+            && messageID == nil
+            && messageSequence == nil
+            && sessionVersion > command.expectedSessionVersion
+    }
 }
 
 /// A product-safe projection of one private interview session. It intentionally
@@ -2807,6 +2816,47 @@ struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
     }
 }
 
+/// An explicit private-interview boundary. This command deliberately has no
+/// free-form reason, transcript text or reopen operation: product policy must
+/// introduce any reactivation flow as a separate reviewed contract.
+struct OwnerTruthInterviewBoundaryCommand: Equatable, Sendable {
+    let commandID: String
+    let threadID: OwnerTruthRecordID
+    let sessionID: OwnerTruthRecordID
+    let expectedSessionVersion: Int
+    let boundary: OwnerTruthInterviewSessionBoundary
+
+    init(
+        commandID: String,
+        threadID: OwnerTruthRecordID,
+        sessionID: OwnerTruthRecordID,
+        expectedSessionVersion: Int,
+        boundary: OwnerTruthInterviewSessionBoundary
+    ) throws {
+        guard let commandID = OwnerTruthInterviewNaturalInputContract.nonEmptyString(commandID),
+              expectedSessionVersion > 0,
+              boundary != .open else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "boundary command requires a positive version and a supported owner control"
+            )
+        }
+        self.commandID = commandID
+        self.threadID = threadID
+        self.sessionID = sessionID
+        self.expectedSessionVersion = expectedSessionVersion
+        self.boundary = boundary
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "commandId": commandID,
+            "threadId": threadID.rawValue.uuidString.lowercased(),
+            "expectedSessionVersion": expectedSessionVersion,
+            "boundary": boundary.rawValue,
+        ]
+    }
+}
+
 protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
     func startOwnerTruthInterviewNaturalInput(
         vaultID: OwnerTruthVaultID,
@@ -2817,6 +2867,12 @@ protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
     func appendOwnerTruthInterviewNaturalInput(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewNaturalInputAppendCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    )
+
+    func setOwnerTruthInterviewBoundary(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewBoundaryCommand,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
     )
 

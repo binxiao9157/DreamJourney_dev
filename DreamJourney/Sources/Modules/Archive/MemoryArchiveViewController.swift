@@ -6853,6 +6853,40 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
         }
     }
 
+    func setOwnerTruthInterviewBoundary(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewBoundaryCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        let lifecycle: OwnerTruthInterviewSessionLifecycle = command.boundary == .skipOnce
+            ? .active
+            : .paused
+        do {
+            completion(.success(try OwnerTruthInterviewNaturalInputReceipt(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "receipt": [
+                        "status": OwnerTruthCommandOutcome.created.rawValue,
+                        "threadId": command.threadID.rawValue.uuidString,
+                        "sessionId": command.sessionID.rawValue.uuidString,
+                        "threadVersion": 1,
+                        "sessionVersion": command.expectedSessionVersion + 1,
+                        "state": lifecycle.rawValue,
+                        "boundary": command.boundary.rawValue,
+                    ],
+                ],
+                expectedVaultID: vaultID
+            )))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
     func fetchOwnerTruthInterviewNaturalInputContinuation(
         vaultID: OwnerTruthVaultID,
         sessionID: OwnerTruthRecordID,
