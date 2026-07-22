@@ -71,3 +71,21 @@ use case，仍需显式 QA launch argument 才可见。
 Postgres 并发单写均有证据。隐藏 iOS action-level UIQA 已验证一条 `accept` 命令可消费
 回执、激活 MemoryVersion 并从 pending Inbox 移除。`G1/G4` 仍开放，公开审核入口与
 发布策略均未启用。
+
+## 2026-07-22 正式确认权限审计补充
+
+后端 `b94e541`、`70fee28`、`a954ac9` 为默认关闭的正式确认路径补充了最小化授权证据：
+
+- 根确认命令记录 release-policy / account-generation / decision 的哈希化证明，不保存
+  bearer token、原始 session 或原始 decision ID。
+- 每个 terminal `DecisionReceipt` 与根命令、派生子命令哈希、准入 Source 版本建立不可变
+  关联；QA 根命令不能被正式确认请求重放。
+- `0036` 已在线上 Postgres 应用并验证，`/ready` 的 database/schema/auth/incident 均为
+  `ready`。首次部署发现 Postgres 63 字符对象名截断冲突；两次失败尝试均确认没有留下
+  schema 半结构后才清除失败运行记录，最终迁移成功。
+- 本地完整 `scripts/verify_backend.sh` 通过（`1065` tests）。正式 disposable Postgres
+  route smoke 已随代码部署，但服务器尚未配置独立
+  `OWNER_TRUTH_FORMAL_SMOKE_ADMIN_DATABASE_URL`，因此未执行；不会回退使用业务
+  `DATABASE_URL`。
+
+该补充不开放产品入口、不改变 iOS UI，也不将 `G1/G4` 或独立正式烟测标记为完成。
