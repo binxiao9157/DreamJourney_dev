@@ -718,10 +718,19 @@ enum AccountLifecycleRuntimeRegistry {
                 detailCode: "accountDataExportTeardownFailed"
             )
         }
+        guard AccountDataRightsReceiptStore.teardownForAccountLifecycle(
+            oldAccountLease: context.oldAccountLease
+        ) else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "accountDataRightsReceiptTeardownFailed"
+            )
+        }
         return .completed(
             requestedOutcome,
             remainingLocalData: false,
-            detailCode: "widgetAndTemporaryExportsCleared"
+            detailCode: "widgetExportsAndDataRightsReceiptsCleared"
         )
     }
 

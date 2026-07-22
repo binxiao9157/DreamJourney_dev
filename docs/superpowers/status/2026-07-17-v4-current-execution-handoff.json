@@ -190,6 +190,12 @@
       "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G4_OPEN"
     },
     {
+      "evidence": "docs/superpowers/status/2026-07-23-wi-s0-05-06-data-rights-status-g0.md",
+      "id": "WI-S0-05-06",
+      "implementationStatus": "INTERNAL_READY / IOS_G0_TYPED_DATA_RIGHTS_STATUS_AND_OWNER_SCOPED_RECEIPT_VERIFIED / NO_PUBLIC_STATUS_UI / G1_G2_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN"
+    },
+    {
       "evidence": "docs/superpowers/status/2026-07-17-wi-s0-02-01-strong-identity-binding.md",
       "id": "WI-S0-02-01",
       "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / G0_G2_SCOPED_VERIFIED / G4_IDENTITY_PROVIDER_BLOCKED / LEGACY_REBIND_OPEN",
@@ -527,9 +533,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S0-05-06",
+    "id": "WI-S1-01-03",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Implement the G0 typed, owner-scoped iOS Data Rights status and receipt boundary over existing account-delete receipts. It must remain fail-closed for partial or unsupported layers, must not add an unauthenticated status query or public UI, and must not claim Provider/object/backup deletion before G3/G4 evidence."
+    "summary": "Select the next non-duplicate G0 sub-slice within the active Owner Truth extraction/Candidate proposal lane. Reuse the deployed interview and formal-confirmation evidence, avoid reopening completed writers, and keep product UI default-off until its own Gate permits exposure."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -538,5 +544,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-23T00:00:00+0800"
+  "updatedAt": "2026-07-23T01:15:53+0800"
 }

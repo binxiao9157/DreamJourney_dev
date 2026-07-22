@@ -681,6 +681,48 @@
       ]
     },
     {
+      "catalogId": "S14",
+      "surfaceId": "S14.account-data-rights-receipt-cache",
+      "dataClass": "value-minimized account deletion/data-rights request status receipt",
+      "ownerScope": "captured AccountLease subject/vault/session/generation/generationId/authorityEpoch digest; no raw account identifier is persisted in the value",
+      "storage": "standard UserDefaults under a hashed AccountLease scope key",
+      "pathOrKey": "dj.accountDataRightsReceipt.v1.<accountLeaseScopeDigest>",
+      "writer": "ProfileViewController after validated /auth/delete access-first receipt",
+      "readers": "future Data Rights status UI while the same lease remains active",
+      "cleanup": "remove the exact scoped receipt and legacy unscoped key on logout, suspension, deletion, or lease teardown",
+      "migration": "legacy unscoped receipt is removed; compact delete summaries remain pending external evidence and never prove provider/object/backup cleanup",
+      "retention": "only while the captured account lease remains active",
+      "testOwner": "WI-S0-05-06",
+      "status": "REGISTERED_OWNER_SCOPED_DATA_RIGHTS_RECEIPT",
+      "nextWorkItem": "WI-S0-05-06",
+      "sourcePaths": [
+        "DreamJourney/Sources/Modules/Profile/ProfileViewController.swift",
+        "DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Modules/Profile/ProfileViewController.swift",
+          "contains": [
+            "AccountDataRightsReceiptStore",
+            "dj.accountDataRightsReceipt.v1.",
+            "AccountLeaseScopeDigest"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift",
+          "contains": [
+            "AccountDataRightsReceiptStore.teardownForAccountLifecycle",
+            "accountDataRightsReceiptTeardownFailed"
+          ]
+        }
+      ],
+      "currentChecks": [
+        "Scripts/QA/product-v4/account-data-rights-status-owner-scope-check.py",
+        "Scripts/QA/product-v4/account-deletion-lifecycle-static-check.py",
+        "Scripts/QA/product-v4/product-v4-account-store-inventory-check.py"
+      ]
+    },
+    {
       "catalogId": "S15",
       "surfaceId": "S15.release-policy-and-feature-cache",
       "dataClass": "release policy, recovery runtime policy, runtime capability, and QA feature override",

@@ -1,6 +1,96 @@
 import CryptoKit
 import UIKit
 
+private enum AccountLeaseScopeDigest {
+    static func value(for accountLease: AccountLease) -> String {
+        let source = [
+            accountLease.subjectId,
+            accountLease.vaultId,
+            accountLease.sessionId,
+            String(accountLease.generation),
+            accountLease.generationId.uuidString,
+            accountLease.authorityEpoch,
+        ].joined(separator: "\u{1F}")
+        return SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+enum AccountDataRightsReceiptStoreError: LocalizedError {
+    case ownerScopeMismatch
+    case cannotSerialize
+
+    var errorDescription: String? {
+        switch self {
+        case .ownerScopeMismatch:
+            return "账号状态已变化，未保留注销回执"
+        case .cannotSerialize:
+            return "注销回执格式无效"
+        }
+    }
+}
+
+/// A short-lived, value-minimized local mirror of the accepted data-rights
+/// receipt. It is an owner-scoped transition aid only; it never upgrades a
+/// compact server response into proof of provider/object/backup cleanup.
+enum AccountDataRightsReceiptStore {
+    private static let storageKeyPrefix = "dj.accountDataRightsReceipt.v1."
+    private static let legacyStorageKey = "dj.accountDataRightsReceipt.v1"
+
+    static func write(
+        _ snapshot: AccountDataRightsStatusSnapshot,
+        accountLease: AccountLease,
+        defaults: UserDefaults = .standard
+    ) throws {
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            throw AccountDataRightsReceiptStoreError.ownerScopeMismatch
+        }
+        let data: Data
+        do {
+            data = try JSONEncoder().encode(snapshot)
+        } catch {
+            throw AccountDataRightsReceiptStoreError.cannotSerialize
+        }
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .commit).allowed else {
+            throw AccountDataRightsReceiptStoreError.ownerScopeMismatch
+        }
+        let key = scopedStorageKey(for: accountLease)
+        defaults.set(data, forKey: key)
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .commit).allowed else {
+            defaults.removeObject(forKey: key)
+            throw AccountDataRightsReceiptStoreError.ownerScopeMismatch
+        }
+    }
+
+    static func load(
+        accountLease: AccountLease,
+        defaults: UserDefaults = .standard
+    ) -> AccountDataRightsStatusSnapshot? {
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed,
+              let data = defaults.data(forKey: scopedStorageKey(for: accountLease)),
+              let snapshot = try? JSONDecoder().decode(AccountDataRightsStatusSnapshot.self, from: data),
+              !snapshot.externalCleanupVerified else {
+            return nil
+        }
+        return snapshot
+    }
+
+    @discardableResult
+    static func teardownForAccountLifecycle(
+        oldAccountLease: AccountLease?,
+        defaults: UserDefaults = .standard
+    ) -> Bool {
+        defaults.removeObject(forKey: legacyStorageKey)
+        if let oldAccountLease {
+            defaults.removeObject(forKey: scopedStorageKey(for: oldAccountLease))
+        }
+        return true
+    }
+
+    private static func scopedStorageKey(for accountLease: AccountLease) -> String {
+        storageKeyPrefix + AccountLeaseScopeDigest.value(for: accountLease)
+    }
+}
+
 /// Account exports are transient private artifacts. They are scoped to the
 /// captured lease so a later account cannot enumerate or delete another
 /// account's export while handling a lifecycle transition.
@@ -114,15 +204,7 @@ enum AccountDataExportTemporaryStore {
     }
 
     private static func scopeDigest(for accountLease: AccountLease) -> String {
-        let source = [
-            accountLease.subjectId,
-            accountLease.vaultId,
-            accountLease.sessionId,
-            String(accountLease.generation),
-            accountLease.generationId.uuidString,
-            accountLease.authorityEpoch,
-        ].joined(separator: "\u{1F}")
-        return SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
+        AccountLeaseScopeDigest.value(for: accountLease)
     }
 
     private static func retireLegacyUnscopedExports(
@@ -1055,6 +1137,18 @@ final class ProfileViewController: UIViewController {
                 guard deletionAcceptance.isAccessFirstAccepted else {
                     self?.showToast("注销回执不完整，暂未清理本地数据", type: .error)
                     return
+                }
+                if let snapshot = deletionAcceptance.dataRightsStatusSnapshot {
+                    do {
+                        try AccountDataRightsReceiptStore.write(
+                            snapshot,
+                            accountLease: accountLease
+                        )
+                    } catch {
+                        // The backend access-first receipt remains authoritative.
+                        // A local status mirror must not block account deletion.
+                        print("[AccountDataRights] receipt cache unavailable: \(error.localizedDescription)")
+                    }
                 }
                 let started = UserManager.shared.completeAccountDeletion(
                     accountLease: accountLease

@@ -1312,6 +1312,110 @@ enum AccountDeletionAcceptanceContractError: LocalizedError {
     }
 }
 
+/// The delete endpoint proves access revocation, but its compact `rights`
+/// summary does not prove that every provider, object store, or backup has
+/// finished physical cleanup. Keep that distinction explicit in the client so
+/// future status UI cannot turn a soft-delete receipt into a completion claim.
+enum AccountDataRightsExternalCleanupState: String, Codable, Equatable {
+    case pendingExternalEvidence
+    case partial
+    case unsupported
+    case failed
+    case unknown
+}
+
+struct AccountDataRightsStatusSnapshot: Codable, Equatable {
+    let schemaVersion: Int
+    let requestId: String
+    let requestStatus: String
+    let requestContractVersion: Int
+    let executionCount: Int
+    let receiptCount: Int
+    let deletionState: String
+    let accessState: String
+    let accessRevocationStatus: String
+    let retentionDays: Int
+    let restoreLimit: Int
+    let restoreBySamePhone: Bool
+    let dataExportSupported: Bool
+    let dataExportState: String
+    let externalCleanupState: AccountDataRightsExternalCleanupState
+    let externalCleanupVerified: Bool
+
+    init?(json: [String: Any]) {
+        guard let deletion = json["deletion"] as? [String: Any],
+              let deletionState = deletion["deletionState"] as? String,
+              let accessState = deletion["accessState"] as? String,
+              let accessRevocation = json["accessRevocation"] as? [String: Any],
+              let accessRevocationStatus = accessRevocation["status"] as? String,
+              let policy = json["policy"] as? [String: Any],
+              let retentionDays = Self.intValue(policy["retentionDays"]),
+              let restoreLimit = Self.intValue(policy["restoreLimit"]),
+              let restoreBySamePhone = policy["restoreBySamePhone"] as? Bool,
+              let dataExportSupported = policy["dataExportSupported"] as? Bool,
+              let dataExportState = policy["dataExportState"] as? String,
+              let rights = json["rights"] as? [String: Any],
+              let requestId = rights["requestId"] as? String,
+              !requestId.isEmpty,
+              let requestStatus = rights["status"] as? String,
+              let requestContractVersion = Self.intValue(rights["contractVersion"]),
+              let executionCount = Self.intValue(rights["executionCount"]),
+              let receiptCount = Self.intValue(rights["receiptCount"]) else {
+            return nil
+        }
+
+        self.schemaVersion = Self.intValue(json["contractVersion"]) ?? 1
+        self.requestId = requestId
+        self.requestStatus = requestStatus
+        self.requestContractVersion = requestContractVersion
+        self.executionCount = executionCount
+        self.receiptCount = receiptCount
+        self.deletionState = deletionState
+        self.accessState = accessState
+        self.accessRevocationStatus = accessRevocationStatus
+        self.retentionDays = retentionDays
+        self.restoreLimit = restoreLimit
+        self.restoreBySamePhone = restoreBySamePhone
+        self.dataExportSupported = dataExportSupported
+        self.dataExportState = dataExportState
+        self.externalCleanupState = Self.externalCleanupState(for: requestStatus)
+        // `/auth/delete` only returns a compact request summary. It never
+        // carries provider/object/backup evidence, so this receipt cannot
+        // certify physical cleanup.
+        self.externalCleanupVerified = false
+    }
+
+    private static func externalCleanupState(
+        for requestStatus: String
+    ) -> AccountDataRightsExternalCleanupState {
+        switch requestStatus {
+        case "unsupported":
+            return .unsupported
+        case "partial":
+            return .partial
+        case "failed":
+            return .failed
+        case "pending", "dispatched", "accepted", "completed":
+            return .pendingExternalEvidence
+        default:
+            return .unknown
+        }
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+}
+
 struct AccountDeletionAcceptanceContract {
     let contractVersion: Int
     let status: String
@@ -1322,6 +1426,7 @@ struct AccountDeletionAcceptanceContract {
     let sessionRevocationScope: String
     let accessRevocationEventId: String
     let accessRevocationStatus: String
+    let dataRightsStatusSnapshot: AccountDataRightsStatusSnapshot?
 
     var isAccessFirstAccepted: Bool {
         status == "softDeleted"
@@ -1368,6 +1473,7 @@ struct AccountDeletionAcceptanceContract {
         self.sessionRevocationScope = sessionRevocationScope
         self.accessRevocationEventId = accessRevocationEventId
         self.accessRevocationStatus = accessRevocationStatus
+        dataRightsStatusSnapshot = AccountDataRightsStatusSnapshot(json: json)
     }
 
     private static func intValue(_ value: Any?) -> Int? {
