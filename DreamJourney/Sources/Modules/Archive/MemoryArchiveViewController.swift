@@ -5929,6 +5929,8 @@ private final class PaddingLabel: UILabel {
 
 // MARK: - Default-off interview session state QA
 
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+
 /// This controller has no product navigation entry. It exists only for the
 /// UI-QA launch scenario and renders the value-minimized state returned by the
 /// private interview session read contract.
@@ -6295,6 +6297,8 @@ private enum InterviewSessionStateUIQAClientError: Error {
     case invalidRequest
 }
 
+#endif
+
 // MARK: - Default-off interview natural-input QA
 
 enum OwnerTruthInterviewNaturalInputPresentation: Equatable {
@@ -6640,6 +6644,8 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     }
 }
 
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+
 struct OwnerTruthInterviewNaturalInputUIQASmokeResult: Codable {
     static let fileName = "owner-truth-interview-natural-input-uiqa-result.json"
 
@@ -6881,3 +6887,5 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
 private enum InterviewNaturalInputUIQAClientError: Error {
     case invalidRequest
 }
+
+#endif

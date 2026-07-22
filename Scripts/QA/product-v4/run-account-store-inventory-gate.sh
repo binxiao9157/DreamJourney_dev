@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT_DIR"
 
+python3 Scripts/QA/product-v4/account-data-export-owner-scope-check.py
+python3 Scripts/QA/product-v4/owner-truth-kblite-compatibility-cache-boundary-check.py
 python3 Scripts/QA/product-v4/product-v4-account-store-inventory-check.py
 swift Scripts/QA/prd-stitch-ui/auth-session-ownership-shadow-check.swift
 Scripts/QA/product-v4/run-archive-local-storage-gate.sh

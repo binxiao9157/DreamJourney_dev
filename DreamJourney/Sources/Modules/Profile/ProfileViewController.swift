@@ -1,4 +1,161 @@
+import CryptoKit
 import UIKit
+
+/// Account exports are transient private artifacts. They are scoped to the
+/// captured lease so a later account cannot enumerate or delete another
+/// account's export while handling a lifecycle transition.
+enum AccountDataExportTemporaryStore {
+    private static let rootDirectoryName = "DreamJourneyDataExports"
+    private static let fileNamePrefix = "dreamjourney-personal-data-"
+    private static let fileExtension = "json"
+
+    static func write(
+        _ export: AccountDataExportContract,
+        accountLease: AccountLease,
+        fileManager: FileManager = .default
+    ) throws -> URL {
+        guard export.ownerUserId == accountLease.subjectId,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            throw AccountDataExportContractError.ownerScopeMismatch
+        }
+
+        let rootDirectory = rootDirectory(using: fileManager)
+        try fileManager.createDirectory(
+            at: rootDirectory,
+            withIntermediateDirectories: true,
+            attributes: [.protectionKey: FileProtectionType.complete]
+        )
+        try retireLegacyUnscopedExports(in: rootDirectory, fileManager: fileManager)
+
+        let scopedDirectory = scopedDirectory(for: accountLease, using: fileManager)
+        try fileManager.createDirectory(
+            at: scopedDirectory,
+            withIntermediateDirectories: true,
+            attributes: [.protectionKey: FileProtectionType.complete]
+        )
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .commit).allowed else {
+            throw AccountDataExportContractError.ownerScopeMismatch
+        }
+
+        let fileURL = scopedDirectory.appendingPathComponent(
+            "\(fileNamePrefix)\(UUID().uuidString).\(fileExtension)",
+            isDirectory: false
+        )
+        do {
+            try export.prettyPrintedJSONData().write(to: fileURL, options: .atomic)
+            try fileManager.setAttributes(
+                [.protectionKey: FileProtectionType.complete],
+                ofItemAtPath: fileURL.path
+            )
+        } catch {
+            try? fileManager.removeItem(at: fileURL)
+            throw error
+        }
+
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .commit).allowed else {
+            try? fileManager.removeItem(at: fileURL)
+            throw AccountDataExportContractError.ownerScopeMismatch
+        }
+        return fileURL
+    }
+
+    static func remove(
+        _ fileURL: URL,
+        accountLease: AccountLease,
+        fileManager: FileManager = .default
+    ) {
+        let scopedDirectory = scopedDirectory(for: accountLease, using: fileManager)
+            .standardizedFileURL
+        let normalizedFileURL = fileURL.standardizedFileURL
+        guard normalizedFileURL.deletingLastPathComponent() == scopedDirectory,
+              normalizedFileURL.lastPathComponent.hasPrefix(fileNamePrefix),
+              normalizedFileURL.pathExtension == fileExtension else {
+            return
+        }
+        try? fileManager.removeItem(at: normalizedFileURL)
+        removeRootDirectoryIfEmpty(using: fileManager)
+    }
+
+    @discardableResult
+    static func teardownForAccountLifecycle(
+        oldAccountLease: AccountLease?,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        do {
+            let rootDirectory = rootDirectory(using: fileManager)
+            if fileManager.fileExists(atPath: rootDirectory.path) {
+                try retireLegacyUnscopedExports(in: rootDirectory, fileManager: fileManager)
+            }
+            if let oldAccountLease {
+                let scopedDirectory = scopedDirectory(for: oldAccountLease, using: fileManager)
+                if fileManager.fileExists(atPath: scopedDirectory.path) {
+                    try fileManager.removeItem(at: scopedDirectory)
+                }
+            }
+            removeRootDirectoryIfEmpty(using: fileManager)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private static func rootDirectory(using fileManager: FileManager) -> URL {
+        fileManager.temporaryDirectory.appendingPathComponent(rootDirectoryName, isDirectory: true)
+    }
+
+    private static func scopedDirectory(
+        for accountLease: AccountLease,
+        using fileManager: FileManager
+    ) -> URL {
+        rootDirectory(using: fileManager).appendingPathComponent(
+            scopeDigest(for: accountLease),
+            isDirectory: true
+        )
+    }
+
+    private static func scopeDigest(for accountLease: AccountLease) -> String {
+        let source = [
+            accountLease.subjectId,
+            accountLease.vaultId,
+            accountLease.sessionId,
+            String(accountLease.generation),
+            accountLease.generationId.uuidString,
+            accountLease.authorityEpoch,
+        ].joined(separator: "\u{1F}")
+        return SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func retireLegacyUnscopedExports(
+        in rootDirectory: URL,
+        fileManager: FileManager
+    ) throws {
+        for itemURL in try fileManager.contentsOfDirectory(
+            at: rootDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) {
+            let resourceValues = try itemURL.resourceValues(forKeys: [.isDirectoryKey])
+            guard resourceValues.isDirectory != true,
+                  itemURL.lastPathComponent.hasPrefix(fileNamePrefix),
+                  itemURL.pathExtension == fileExtension else {
+                continue
+            }
+            try fileManager.removeItem(at: itemURL)
+        }
+    }
+
+    private static func removeRootDirectoryIfEmpty(using fileManager: FileManager) {
+        let rootDirectory = rootDirectory(using: fileManager)
+        guard let contents = try? fileManager.contentsOfDirectory(
+            at: rootDirectory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ), contents.isEmpty else {
+            return
+        }
+        try? fileManager.removeItem(at: rootDirectory)
+    }
+}
 
 private enum ProfileLayout {
     static let contentTopMargin: CGFloat = 18
@@ -833,8 +990,14 @@ final class ProfileViewController: UIViewController {
             switch result {
             case .success(let export):
                 do {
-                    let fileURL = try self.writeAccountDataExport(export)
-                    self.presentAccountDataExportShareSheet(fileURL: fileURL)
+                    let fileURL = try self.writeAccountDataExport(
+                        export,
+                        accountLease: accountLease
+                    )
+                    self.presentAccountDataExportShareSheet(
+                        fileURL: fileURL,
+                        accountLease: accountLease
+                    )
                 } catch {
                     self.showToast("导出失败：\(error.localizedDescription)", type: .error)
                 }
@@ -844,38 +1007,23 @@ final class ProfileViewController: UIViewController {
         }
     }
 
-    private func writeAccountDataExport(_ export: AccountDataExportContract) throws -> URL {
-        let fileManager = FileManager.default
-        let directory = fileManager.temporaryDirectory
-            .appendingPathComponent("DreamJourneyDataExports", isDirectory: true)
-        if fileManager.fileExists(atPath: directory.path) {
-            try fileManager.removeItem(at: directory)
-        }
-        try fileManager.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true,
-            attributes: [.protectionKey: FileProtectionType.complete]
-        )
-
-        let fileURL = directory.appendingPathComponent(
-            "dreamjourney-personal-data-\(UUID().uuidString).json",
-            isDirectory: false
-        )
-        try export.prettyPrintedJSONData().write(to: fileURL, options: .atomic)
-        try fileManager.setAttributes(
-            [.protectionKey: FileProtectionType.complete],
-            ofItemAtPath: fileURL.path
-        )
-        return fileURL
+    private func writeAccountDataExport(
+        _ export: AccountDataExportContract,
+        accountLease: AccountLease
+    ) throws -> URL {
+        try AccountDataExportTemporaryStore.write(export, accountLease: accountLease)
     }
 
-    private func presentAccountDataExportShareSheet(fileURL: URL) {
+    private func presentAccountDataExportShareSheet(
+        fileURL: URL,
+        accountLease: AccountLease
+    ) {
         let activityViewController = UIActivityViewController(
             activityItems: [fileURL],
             applicationActivities: nil
         )
         activityViewController.completionWithItemsHandler = { _, _, _, _ in
-            try? FileManager.default.removeItem(at: fileURL)
+            AccountDataExportTemporaryStore.remove(fileURL, accountLease: accountLease)
         }
         if let popover = activityViewController.popoverPresentationController {
             popover.sourceView = view

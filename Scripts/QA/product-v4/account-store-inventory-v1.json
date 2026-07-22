@@ -44,6 +44,11 @@
       {
         "path": "DreamJourney/Sources/Services/ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift",
         "reason": "QA-only synthetic harness; writes isolated temporary fixtures and a user-invoked evidence report, not production account state"
+      },
+      {
+        "path": "DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift",
+        "reason": "Default-off Owner Truth compatibility cache has no runtime instantiation; enabling it requires a registered lifecycle adapter before production use.",
+        "guard": "Scripts/QA/product-v4/owner-truth-kblite-compatibility-cache-boundary-check.py"
       }
     ]
   },
@@ -797,23 +802,32 @@
     {
       "catalogId": "S05",
       "surfaceId": "S05.temporary-knowledge-share-exports",
-      "dataClass": "full private knowledge JSON and family-book PDF exports",
-      "ownerScope": "current graph snapshot only; filenames are not owner authority",
+      "dataClass": "full private knowledge JSON, family-book PDF, and owner-scoped personal-data JSON exports",
+      "ownerScope": "personal-data export is bound to the captured subject/vault/session/generation/generationId/authorityEpoch digest; knowledge and family exports remain current graph snapshots only",
       "storage": "OS temporary directory and external share destinations",
-      "pathOrKey": "knowledge export JSON; family_book_<timestamp>.pdf",
-      "writer": "KBSyncViewController and KBLitePDFExporter",
+      "pathOrKey": "DreamJourneyDataExports/<scopeDigest>/dreamjourney-personal-data-<UUID>.json; knowledge export JSON; family_book_<timestamp>.pdf",
+      "writer": "ProfileViewController, KBSyncViewController, and KBLitePDFExporter",
       "readers": "UIActivityViewController and user-selected external destinations",
-      "cleanup": "current implementation has no deterministic post-share removal; WI-S0-01-08 owns cleanup",
-      "migration": "never import or auto-claim a prior temporary export as current owner state",
+      "cleanup": "personal-data export removes its exact lease-scoped file after sharing and clears its scope plus legacy unscoped personal-data remnants during lifecycle teardown; knowledge/family export cleanup gaps remain owned by WI-S0-01-08",
+      "migration": "legacy unscoped personal-data files are retired on the next personal export or lifecycle teardown and never mounted; knowledge/family exports are never imported or auto-claimed as current owner state",
       "retention": "currently OS-temporary lifetime; target delete after share completion or cancellation",
       "testOwner": "WI-S0-01-08",
       "status": "REGISTERED_CLEANUP_GAP",
       "nextWorkItem": "WI-S0-01-08",
       "sourcePaths": [
+        "DreamJourney/Sources/Modules/Profile/ProfileViewController.swift",
         "DreamJourney/Sources/Modules/Knowledge/KBSyncViewController.swift",
         "DreamJourney/Sources/Services/KBLitePDFExporter.swift"
       ],
       "sourceAnchors": [
+        {
+          "path": "DreamJourney/Sources/Modules/Profile/ProfileViewController.swift",
+          "contains": [
+            "AccountDataExportTemporaryStore",
+            "DreamJourneyDataExports",
+            "scopeDigest"
+          ]
+        },
         {
           "path": "DreamJourney/Sources/Modules/Knowledge/KBSyncViewController.swift",
           "contains": [
@@ -829,6 +843,7 @@
         }
       ],
       "currentChecks": [
+        "Scripts/QA/product-v4/account-data-export-owner-scope-check.py",
         "Scripts/QA/prd-stitch-ui/knowledge-family-sync-import-authorization-check.swift"
       ]
     },

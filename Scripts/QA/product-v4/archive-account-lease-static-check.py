@@ -192,10 +192,10 @@ def main() -> None:
     includes(
         scheduler,
         (
-            "let accountLease = accountLeaseRuntime.capture()",
+            "let accountLease = accountLeaseRuntime.capture(forSubjectId: nil)",
             "validate(accountLease, at: .timer)",
             "validate(accountLease, at: .runtime)",
-            "notificationCenter.add(request)",
+            "self.requestCenter.add(request)",
         ),
         "time-letter notification scheduler",
     )

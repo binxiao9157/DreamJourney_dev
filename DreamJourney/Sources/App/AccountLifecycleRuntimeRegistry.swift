@@ -709,6 +709,15 @@ enum AccountLifecycleRuntimeRegistry {
                 detailCode: "widgetProjectionTeardownFailed"
             )
         }
+        guard AccountDataExportTemporaryStore.teardownForAccountLifecycle(
+            oldAccountLease: context.oldAccountLease
+        ) else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "accountDataExportTeardownFailed"
+            )
+        }
         return .completed(
             requestedOutcome,
             remainingLocalData: false,

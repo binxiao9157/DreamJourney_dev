@@ -146,10 +146,19 @@ def main() -> None:
     discovery = payload.get("discovery") or {}
     markers = discovery.get("markers") or []
     roots = discovery.get("roots") or []
-    exclusions = {
-        item["path"]: item["reason"]
-        for item in discovery.get("exclusions") or []
-    }
+    exclusions: dict[str, str] = {}
+    for item in discovery.get("exclusions") or []:
+        relative_path = item.get("path", "")
+        reason = item.get("reason", "")
+        guard_path = item.get("guard")
+        require(relative_path and reason, "private-surface exclusion requires path and reason")
+        require(relative_path not in exclusions, f"duplicate private-surface exclusion: {relative_path}")
+        if guard_path is not None:
+            require(
+                isinstance(guard_path, str) and (ROOT / guard_path).is_file(),
+                f"private-surface exclusion guard is missing: {relative_path}",
+            )
+        exclusions[relative_path] = reason
     require(markers and roots, "discovery policy is incomplete")
     candidates: set[str] = set()
     for relative_root in roots:
