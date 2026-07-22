@@ -527,9 +527,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-02-11",
+    "id": "WI-S0-05-06",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "Verified media processor and Candidate-only output remains planned after Persona/Profile boundary work and its independent SourceObject/effect gates. It stays default-off until those gates are satisfied."
+    "summary": "Implement the G0 typed, owner-scoped iOS Data Rights status and receipt boundary over existing account-delete receipts. It must remain fail-closed for partial or unsupported layers, must not add an unauthenticated status query or public UI, and must not claim Provider/object/backup deletion before G3/G4 evidence."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -538,5 +538,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-21T05:41:00+0800"
+  "updatedAt": "2026-07-23T00:00:00+0800"
 }

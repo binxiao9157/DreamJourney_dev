@@ -155,11 +155,11 @@ GIC 需求在本计划中的唯一落点：
 
 ### 3.2 当前活动任务
 
-`WI-S0-06-09` 新规即时安全止损已经完成代码合同、后端部署和 scoped G0/G2 验证；证据见 `docs/superpowers/status/2026-07-17-wi-s0-06-09-safety-stop-loss.md`。M1-M4 仍默认关闭，G1/G4 外部门保持开放。
+截至 2026-07-23，`docs/superpowers/status/2026-07-17-v4-current-execution-handoff.json` 已登记 `78/115` 个具有实现或验证证据的 Work Item。该数字只表示**证据覆盖**，不等同于公开发布完成率；Registry 继续保留 `PLANNED/STOP`，直到全部适用 Gate 有独立证据，不能把 G3/G4 或真实设备/法务门误算为“未开发”。
 
-`WI-S0-04-05` 已完成恢复工具、运行时围栏和真实 Postgres 隔离恢复演练，Backend 已部署至 `e1922f2`，iOS 恢复策略已提交至 `dde3081`。G2 实测结论为 `NO_GO`：历史数据存在 361 条 owner orphan，且全库 replay bundle 缺失；G3 仍未关闭。证据见 `docs/superpowers/status/2026-07-17-wi-s0-04-05-postgres-recovery.md`。
+`WI-S0-06-09` 新规即时安全止损已经完成代码合同、后端部署和 scoped G0/G2 验证；M1-M4 仍默认关闭。`WI-S0-04-05` 已完成恢复工具、运行时围栏和真实 Postgres 隔离恢复演练，但 G2 结论仍为 `NO_GO`：历史数据存在 owner orphan 且全库 replay bundle 缺失，因此不得恢复切流。两项状态分别见 `docs/superpowers/status/2026-07-17-wi-s0-06-09-safety-stop-loss.md` 与 `docs/superpowers/status/2026-07-17-wi-s0-04-05-postgres-recovery.md`。
 
-该 NO_GO 不允许恢复切流，但不阻止继续不依赖切流的账户本地状态隔离工作。`WI-S0-01-06` 已完成 Conversation、Memoir、Memory/Map、Home 私有媒体的 owner-scoped store、旧全局数据 quarantine/receipt、固定 fallback writer 退役，并通过 G0 总 Gate、G1 模拟器 A/B 隔离和通用 iOS 构建；G4 显式认领产品文案仍保持开放。证据见 `docs/superpowers/status/2026-07-18-wi-s0-01-06-global-private-store-retirement.md`。当前活动任务为 `WI-S0-01-07`，Authority lease 继续为 `ACCOUNT_LOCAL_STATE`；先推进 Reply/Message/Notification owner scope，再推进 Voice/TTS/Digital Human 本地状态和 lifecycle adapter，完成后进入 `WI-S0-01-08`。
+`WI-S0-01-01..08`、`WI-S0-02-01..06`、`WI-S0-05-01..04`、`WI-S0-07-01..09` 已分别形成 scoped 实现/验证证据；`WI-S1-01..03` 的多项 default-off M0 子切片也已在 handoff 中登记。当前不重复这些已交付边界。`WI-S0-05-05` 仍受真实对象/Provider/备份删除的 G3/G4 限制；下一个可独立推进的 P0 子闭环是 `WI-S0-05-06` 的 G0 基础：将已有账户删除回执映射为 typed、owner-scoped 的本地状态模型和 receipt cache。该子闭环不新增未认证的状态查询、不开放新产品入口、不把 `partial`/`unsupported` 显示为完成，也不以本地状态声称外部删除已完成。
 
 ### 3.3 工作区保护
 
@@ -518,12 +518,11 @@ M3 老人健康或成人纪念互动、M4 知识许可和收益不进入自动�
 
 ## 18. 当前下一步
 
-从本文启用后严格按以下顺序开始：
+从当前基线继续时严格按以下顺序执行：
 
-1. 执行 Phase 0 Slice 0A-0C，晋升终版需求并重算证据。
-2. `WI-S0-04-05` restore/replay/runbook 和 G0 测试已实现并部署。
-3. G2 isolated restore/replay 已执行，结论 `NO_GO`；owner orphan 与 replay authority 作为显式 blocker 保留。
-4. 当前执行 `WI-S0-06-09` 新规安全止损。
-5. 再按 Phase 1 的 Identity -> Account Isolation -> Rights -> Operations 顺序关闭 Stage 0。
+1. 保持 `WI-S0-04-05` 的恢复切流 `NO_GO` 和 `WI-S0-05-05` 的真实外部清理 Gate；它们不得阻塞互不依赖的本地合同开发，也不得被 mock 或本地状态冒充关闭。
+2. 执行 `WI-S0-05-06` G0：账户删除回执的 typed 状态 mapper、AccountLease owner scope、临时状态/receipt 生命周期和 `partial`/`unsupported` fail-closed 展示合同。
+3. 验证并独立提交该子闭环后，重读 current handoff 的 next Work Item；优先选择尚无 scoped G0 证据、且不依赖 G3/G4 或恢复切流的 P0/M0 子项。
+4. 继续按 Phase 1 的 Identity -> Account Isolation -> Rights -> Operations 顺序收敛 Stage 0；M0 只允许 additive schema、typed contract、fake 和 shadow，不切生产 Authority。
 
 在 Phase 0 完成前，不启动新的 M0 功能编码；在 Stage 0 退出前，M0 只允许 additive schema、typed contract、fake 和 shadow，不切生产 Authority。
