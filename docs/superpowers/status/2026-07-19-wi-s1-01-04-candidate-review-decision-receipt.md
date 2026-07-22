@@ -107,3 +107,28 @@ Postgres 验证，后端提交为 `d5c5977`：
 database/schema/auth/incident 均为 `ready`。隔离正式路由 smoke 仍刻意要求独立
 `OWNER_TRUTH_FORMAL_SMOKE_ADMIN_DATABASE_URL`；当前服务器没有该专用连接，因此新增
 并发/回滚断言尚未对真实 disposable Postgres 执行，不得据此提升 `G2` 或 Registry 状态。
+
+## 2026-07-22 正式确认 feature 约束补充
+
+审计发现一个仅在未来内部复用时可能出现的边界缺口：正式确认服务此前只要求
+`authorization_capture.feature` 非空，因此其他 feature 的正式 capture 理论上可被错误传入。
+现有 HTTP 正式路由始终固定传入 `ownerTruthCandidateReview`，未发现已知外部绕过；但该
+服务不应依赖调用方约定。
+
+后端 `0ab1e73` 已以双层约束修复：
+
+- 服务层在进入 Unit of Work 前拒绝任何非 `ownerTruthCandidateReview` 的正式 capture，
+  因此不会写 root、receipt、link 或 Candidate terminal decision。
+- 新增向前兼容的 `0037` migration：保留 `{}` 作为 legacy QA-only 证据形态，对所有
+  非空证据要求 feature 精确为 `ownerTruthCandidateReview`；数据库约束和 insert trigger
+  均执行同一规则。
+- 正式 disposable Postgres smoke 增加“结构完整但 feature 错误”的直接插入负向断言，
+  供专用临时数据库配置后执行。
+
+验证结果：本地 `scripts/verify_backend.sh` 通过（`1067` tests、FastAPI smoke、所有现有
+contract gate、编译与 `git diff --check`）。`0ab1e73` 已推送并部署；服务器 dry-run、apply
+和 verify 均显示 schema head 为 `0037`，`/ready` 全组件为 `ready`，新约束为 validated，
+线上已有非空证据中非目标 feature 计数为 `0`。
+
+这仍不是 disposable Postgres 正式路由 smoke 的替代，也不提升 `G2` 或 Registry 状态；它只
+收紧了已部署正式确认路径的 authority evidence 边界。
