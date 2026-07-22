@@ -2688,6 +2688,16 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
             && messageSequence == nil
             && sessionVersion > command.expectedSessionVersion
     }
+
+    func matches(_ command: OwnerTruthInterviewRestoreDoNotAskCommand) -> Bool {
+        threadID == command.threadID
+            && sessionID == command.sessionID
+            && lifecycle == .active
+            && boundary == .open
+            && messageID == nil
+            && messageSequence == nil
+            && sessionVersion > command.expectedSessionVersion
+    }
 }
 
 /// A product-safe projection of one private interview session. It intentionally
@@ -2860,6 +2870,42 @@ struct OwnerTruthInterviewBoundaryCommand: Equatable, Sendable {
     }
 }
 
+/// A separately named, explicitly confirmed action that can reopen only a
+/// persisted `doNotAsk` boundary. It is not a generic `boundary=open` write.
+struct OwnerTruthInterviewRestoreDoNotAskCommand: Equatable, Sendable {
+    let commandID: String
+    let threadID: OwnerTruthRecordID
+    let sessionID: OwnerTruthRecordID
+    let expectedSessionVersion: Int
+
+    init(
+        commandID: String,
+        threadID: OwnerTruthRecordID,
+        sessionID: OwnerTruthRecordID,
+        expectedSessionVersion: Int
+    ) throws {
+        guard let commandID = OwnerTruthInterviewNaturalInputContract.nonEmptyString(commandID),
+              expectedSessionVersion > 0 else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "doNotAsk restore requires a non-empty command id and positive version"
+            )
+        }
+        self.commandID = commandID
+        self.threadID = threadID
+        self.sessionID = sessionID
+        self.expectedSessionVersion = expectedSessionVersion
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "commandId": commandID,
+            "threadId": threadID.rawValue.uuidString.lowercased(),
+            "expectedSessionVersion": expectedSessionVersion,
+            "confirmed": true,
+        ]
+    }
+}
+
 protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
     func startOwnerTruthInterviewNaturalInput(
         vaultID: OwnerTruthVaultID,
@@ -2879,6 +2925,12 @@ protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
     )
 
+    func restoreOwnerTruthInterviewDoNotAsk(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewRestoreDoNotAskCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    )
+
     func fetchOwnerTruthInterviewNaturalInputContinuation(
         vaultID: OwnerTruthVaultID,
         sessionID: OwnerTruthRecordID,
@@ -2890,6 +2942,7 @@ enum OwnerTruthInterviewNaturalInputIntent: Equatable, Sendable {
     case start
     case submit(text: String)
     case setBoundary(OwnerTruthInterviewSessionBoundary)
+    case restoreDoNotAsk
 }
 
 enum OwnerTruthInterviewNaturalInputPhase: Equatable, Sendable {
@@ -2968,6 +3021,8 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             submit(text: text)
         case .setBoundary(let boundary):
             setBoundary(boundary)
+        case .restoreDoNotAsk:
+            restoreDoNotAsk()
         }
     }
 
@@ -3068,6 +3123,41 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         }
     }
 
+    private func restoreDoNotAsk() {
+        guard let receipt = viewState.latestReceipt,
+              viewState.phase == .ready,
+              receipt.boundary == .doNotAsk else {
+            return
+        }
+        guard let vaultID = beginRequestOrFail() else { return }
+        do {
+            let command = try OwnerTruthInterviewRestoreDoNotAskCommand(
+                commandID: identifierFactory().uuidString.lowercased(),
+                threadID: receipt.threadID,
+                sessionID: receipt.sessionID,
+                expectedSessionVersion: receipt.sessionVersion
+            )
+            operationGeneration &+= 1
+            let generation = operationGeneration
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .submitting,
+                latestReceipt: receipt,
+                continuation: viewState.continuation,
+                notice: nil
+            )
+            client.restoreOwnerTruthInterviewDoNotAsk(vaultID: vaultID, command: command) { [weak self] result in
+                self?.receiveDoNotAskRestore(result, vaultID: vaultID, command: command, generation: generation)
+            }
+        } catch {
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .ready,
+                latestReceipt: receipt,
+                continuation: viewState.continuation,
+                notice: .invalidInput
+            )
+        }
+    }
+
     private func beginRequestOrFail() -> OwnerTruthVaultID? {
         guard qaGateEnabled() else {
             transitionUnavailable(.qaOnlyDisabled)
@@ -3138,6 +3228,31 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         _ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>,
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewBoundaryCommand,
+        generation: UInt
+    ) {
+        guard canCommit(generation: generation) else { return }
+        switch result {
+        case .success(let receipt):
+            guard receipt.vaultID == vaultID, receipt.matches(command) else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .ready,
+                latestReceipt: receipt,
+                continuation: nil,
+                notice: nil
+            )
+            refreshContinuation(vaultID: vaultID, receipt: receipt)
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private func receiveDoNotAskRestore(
+        _ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewRestoreDoNotAskCommand,
         generation: UInt
     ) {
         guard canCommit(generation: generation) else { return }

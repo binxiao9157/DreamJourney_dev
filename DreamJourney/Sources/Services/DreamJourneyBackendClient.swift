@@ -5579,6 +5579,62 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    func restoreOwnerTruthInterviewDoNotAsk(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewRestoreDoNotAskCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        let transport = ownerTruthInterviewNaturalInputTransport()
+        switch transport {
+        case .unavailable(let reason):
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthInterviewRestoreDoNotAsk",
+                    reason: reason
+                )))
+            }
+            return
+        case .qa, .releasePolicy:
+            break
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions/\(pathComponent(command.sessionID.rawValue.uuidString))/restore-do-not-ask"
+        let additionalHeaders: [String: String]
+        let featureDecision: FeatureDecision?
+        switch transport {
+        case .qa:
+            additionalHeaders = ["X-DreamJourney-QA-Owner-Truth": "1"]
+            featureDecision = nil
+        case .releasePolicy(let capturedDecision):
+            additionalHeaders = [:]
+            featureDecision = capturedDecision
+        case .unavailable:
+            return
+        }
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            featureDecision: featureDecision,
+            additionalHeaders: additionalHeaders
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewNaturalInputReceipt(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func fetchOwnerTruthInterviewNaturalInputContinuation(
         vaultID: OwnerTruthVaultID,
         sessionID: OwnerTruthRecordID,

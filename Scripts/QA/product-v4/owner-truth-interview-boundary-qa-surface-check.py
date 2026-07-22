@@ -49,14 +49,17 @@ def main() -> None:
         "private let skipOnceButton",
         "private let cooldownButton",
         "private let doNotAskButton",
+        "private let restoreDoNotAskButton",
         "configureBoundaryControls()",
         "owner-truth-interview-boundary-skip-once",
         "owner-truth-interview-boundary-cooldown",
         "owner-truth-interview-boundary-do-not-ask",
+        "owner-truth-interview-boundary-restore-do-not-ask",
         "case .skipOnce",
         "case .cooldown",
         "case .doNotAsk",
         "triggerBoundaryButtonForQA",
+        "triggerDoNotAskRestoreForQA",
     ):
         require(snippet in surface, f"missing QA boundary surface: {snippet}")
 
@@ -75,12 +78,21 @@ def main() -> None:
     )
     require(
         "setBoundary(.open)" not in surface,
-        "QA boundary surface must not expose a reopen operation",
+        "QA boundary surface must not reopen through the generic boundary command",
+    )
+    require(
+        "UIAlertController(" in surface and "确认恢复" in surface,
+        "doNotAsk restoration must require an explicit QA confirmation prompt",
     )
 
     require(
         "case setBoundary(OwnerTruthInterviewSessionBoundary)" in contracts,
         "boundary UI must reuse the lease-fenced natural-input use case",
+    )
+    require(
+        "case restoreDoNotAsk" in contracts
+        and "OwnerTruthInterviewRestoreDoNotAskCommand" in contracts,
+        "doNotAsk restoration must use a separate typed command",
     )
     require(
         'case ownerTruthInterviewBoundarySmoke = "DJRunOwnerTruthInterviewBoundarySmoke"' in flags,
