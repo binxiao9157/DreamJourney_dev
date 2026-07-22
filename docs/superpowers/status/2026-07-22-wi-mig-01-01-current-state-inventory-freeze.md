@@ -78,6 +78,14 @@ tracked Tencent XCFramework metadata. Local `*.local.xcconfig`,
 `LocalConfig.plist`, credential values, and the currently user-modified Xcode
 project file remain outside this source-only report.
 
+The matching backend route-authentication baseline was committed as
+`main@9e98766`, deployed, and verified against the production Postgres
+environment. `/ready` returned `status=ready` through both the host-local and
+public endpoint, while the deployed route smoke reported `routeCount=106` and
+the expected user, machine, and public authorization decisions. This confirms
+the source-freeze baseline is current; it does not convert the remaining G2,
+G3, or G4 evidence into completed gates.
+
 ## Next Boundary
 
 `WI-MIG-01-02 / C01` may be planned only around a real isolated backup and

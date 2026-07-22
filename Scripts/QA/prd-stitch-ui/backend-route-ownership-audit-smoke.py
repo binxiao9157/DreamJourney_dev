@@ -106,7 +106,7 @@ def main():
     require(policy.get("mode") == "shadow", "deployed global ownership mode must remain shadow")
     require(policy.get("productionEnforceReady") is False, "deployed runtime must not claim global enforce readiness")
     require(policy.get("principalBoundRouteEnforcement") is True, "principal-bound enforcement is missing")
-    require(audit.get("routeCount") == 104, "deployed route audit count mismatch")
+    require(audit.get("routeCount") == 106, "deployed route audit count mismatch")
     require(audit.get("unclassifiedCount") == 0, "deployed backend contains unclassified routes")
     require(header(runtime_headers, "X-DreamJourney-Auth-Principal") == "user", "runtime user principal missing")
 
