@@ -774,6 +774,7 @@ struct OwnerTruthInterviewCandidateReviewBatch: Equatable, Sendable {
     let authorityEpoch: Int
     let readiness: OwnerTruthInterviewCandidateReviewReadiness
     let latestExtractionStatus: String?
+    let selectedExtractionID: OwnerTruthRecordID?
     let batchCandidates: [OwnerTruthInterviewCandidateReviewItem]
     let singleCandidates: [OwnerTruthInterviewCandidateReviewItem]
 
@@ -837,6 +838,11 @@ struct OwnerTruthInterviewCandidateReviewBatch: Equatable, Sendable {
                 "non-ready response must not expose pending Candidates"
             )
         }
+        let selectedExtractionID = try Self.resolveSelectedExtractionID(
+            composition: review,
+            candidates: batchCandidates + singleCandidates,
+            error: OwnerTruthRemoteContractError.invalidInterviewCandidateReview
+        )
 
         vaultID = expectedVaultID
         self.reviewBatchID = reviewBatchID
@@ -849,8 +855,38 @@ struct OwnerTruthInterviewCandidateReviewBatch: Equatable, Sendable {
             review["latestExtractionStatus"],
             field: "latestExtractionStatus"
         )
+        self.selectedExtractionID = selectedExtractionID
         self.batchCandidates = batchCandidates
         self.singleCandidates = singleCandidates
+    }
+
+    static func resolveSelectedExtractionID(
+        composition: [String: Any],
+        candidates: [OwnerTruthInterviewCandidateReviewItem],
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws -> OwnerTruthRecordID? {
+        let candidateExtractionIDs = Set(candidates.map(\.extractionID))
+        let explicitSelectedExtractionID: OwnerTruthRecordID?
+        if let rawValue = composition["selectedExtractionId"], !(rawValue is NSNull) {
+            guard let selected = OwnerTruthCandidateEvidenceReference.recordID(rawValue) else {
+                throw error("selectedExtractionId must be a UUID or null")
+            }
+            explicitSelectedExtractionID = selected
+        } else {
+            explicitSelectedExtractionID = nil
+        }
+
+        if let explicitSelectedExtractionID {
+            guard candidateExtractionIDs.isEmpty
+                || candidateExtractionIDs == Set([explicitSelectedExtractionID]) else {
+                throw error("review candidates do not match selectedExtractionId")
+            }
+            return explicitSelectedExtractionID
+        }
+        guard candidateExtractionIDs.count <= 1 else {
+            throw error("review response mixes Candidate ExtractionResult baselines")
+        }
+        return candidateExtractionIDs.first
     }
 }
 
@@ -880,6 +916,7 @@ struct OwnerTruthInterviewCandidateConfirmation: Equatable, Sendable {
     let authorityEpoch: Int
     let readiness: OwnerTruthInterviewCandidateReviewReadiness
     let latestExtractionStatus: String?
+    let selectedExtractionID: OwnerTruthRecordID?
     let batchCandidates: [OwnerTruthInterviewCandidateReviewItem]
     let singleCandidates: [OwnerTruthInterviewCandidateReviewItem]
     private var leaseBinding: OwnerTruthInterviewCandidateConfirmationLeaseBinding?
@@ -954,6 +991,12 @@ struct OwnerTruthInterviewCandidateConfirmation: Equatable, Sendable {
             )
         }
 
+        let selectedExtractionID = try OwnerTruthInterviewCandidateReviewBatch.resolveSelectedExtractionID(
+            composition: confirmation,
+            candidates: batchCandidates + singleCandidates,
+            error: OwnerTruthRemoteContractError.invalidInterviewCandidateConfirmation
+        )
+
         vaultID = expectedVaultID
         self.reviewBatchID = reviewBatchID
         self.admissionID = admissionID
@@ -965,6 +1008,7 @@ struct OwnerTruthInterviewCandidateConfirmation: Equatable, Sendable {
             confirmation["latestExtractionStatus"],
             field: "latestExtractionStatus"
         )
+        self.selectedExtractionID = selectedExtractionID
         self.batchCandidates = batchCandidates
         self.singleCandidates = singleCandidates
         self.leaseBinding = nil

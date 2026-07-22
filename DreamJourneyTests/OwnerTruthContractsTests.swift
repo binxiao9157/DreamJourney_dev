@@ -367,6 +367,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "authorityEpoch": 0,
                 "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
                 "latestExtractionStatus": "succeeded",
+                "selectedExtractionId": extractionID,
                 "batchCandidateCount": 1,
                 "singleCandidateCount": 1,
             ],
@@ -413,6 +414,21 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(review.singleCandidates.map(\.id), [sensitiveID])
         XCTAssertEqual(review.batchCandidates.first?.reviewPath, .batch)
         XCTAssertEqual(review.singleCandidates.first?.reviewPath, .single)
+        XCTAssertEqual(review.selectedExtractionID?.rawValue.uuidString, extractionID)
+
+        var mixedExtractionResponse = response
+        var mixedSingleCandidates = try XCTUnwrap(
+            mixedExtractionResponse["singleCandidates"] as? [[String: Any]]
+        )
+        mixedSingleCandidates[0]["extractionId"] = "00000000-0000-0000-0000-000000000052"
+        mixedExtractionResponse["singleCandidates"] = mixedSingleCandidates
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewCandidateReviewBatch(
+                backendJSONObject: mixedExtractionResponse,
+                expectedVaultID: vaultID,
+                expectedReviewBatchID: reviewBatchID
+            )
+        )
 
         let command = try OwnerTruthInterviewCandidateBatchAcceptCommand(
             commandID: "interview-batch-accept-ios-001",
@@ -2452,6 +2468,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                     "authorityEpoch": 0,
                     "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
                     "latestExtractionStatus": "succeeded",
+                    "selectedExtractionId": extractionID,
                     "batchCandidateCount": 1,
                     "singleCandidateCount": 1,
                 ],
@@ -2514,6 +2531,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                     "authorityEpoch": 0,
                     "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
                     "latestExtractionStatus": "succeeded",
+                    "selectedExtractionId": extractionID,
                     "batchCandidateCount": 1,
                     "singleCandidateCount": 1,
                 ],
@@ -2578,6 +2596,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                     "authorityEpoch": authorityEpoch,
                     "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
                     "latestExtractionStatus": "succeeded",
+                    "selectedExtractionId": extractionID,
                     "batchCandidateCount": 0,
                     "singleCandidateCount": 1,
                 ],
