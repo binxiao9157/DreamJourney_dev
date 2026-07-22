@@ -1141,6 +1141,17 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertNil(receipt.messageSequence)
         XCTAssertFalse(String(describing: receipt).contains("text"))
 
+        let skipOnce = try OwnerTruthInterviewBoundaryCommand(
+            commandID: "natural-input-boundary-skip-once",
+            threadID: command.threadID,
+            sessionID: command.sessionID,
+            expectedSessionVersion: 2,
+            boundary: .skipOnce
+        )
+        let skipOnceReceipt = try interviewNaturalInputReceipt(vaultID: vaultID, boundary: skipOnce)
+        XCTAssertEqual(skipOnceReceipt.lifecycle, .active)
+        XCTAssertTrue(skipOnceReceipt.matches(skipOnce))
+
         XCTAssertThrowsError(
             try OwnerTruthInterviewBoundaryCommand(
                 commandID: "must-not-reopen",
@@ -1215,6 +1226,113 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.phase, .unavailable)
         XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
         XCTAssertNil(useCase.viewState.latestReceipt)
+    }
+
+    func testInterviewNaturalInputUseCasePersistsBoundaryAndRefreshesPausedContinuation() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        client.boundaryHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, boundary: command) }
+        }
+        client.continuationHandler = { _ in
+            Result {
+                try self.interviewNaturalInputContinuation(
+                    vaultID: vaultID,
+                    state: .paused,
+                    canContinue: false,
+                    canContinueLater: true
+                )
+            }
+        }
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.start)
+        useCase.send(.setBoundary(.cooldown))
+
+        XCTAssertEqual(client.boundaryCommand?.boundary, .cooldown)
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.latestReceipt?.boundary, .cooldown)
+        XCTAssertEqual(useCase.viewState.latestReceipt?.lifecycle, .paused)
+        XCTAssertEqual(useCase.viewState.continuation?.state, .paused)
+        XCTAssertEqual(useCase.viewState.continuation?.canContinue, false)
+        XCTAssertEqual(useCase.viewState.continuation?.canContinueLater, true)
+    }
+
+    func testInterviewNaturalInputUseCaseBoundaryFailsClosedForOpenMismatchAndStaleCompletion() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.start)
+        let initialReceipt = try XCTUnwrap(useCase.viewState.latestReceipt)
+        useCase.send(.setBoundary(.open))
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.notice, .invalidInput)
+        XCTAssertEqual(useCase.viewState.latestReceipt, initialReceipt)
+        XCTAssertNil(client.boundaryCommand)
+
+        client.boundaryHandler = { command in
+            Result {
+                let mismatched = try OwnerTruthInterviewBoundaryCommand(
+                    commandID: command.commandID,
+                    threadID: command.threadID,
+                    sessionID: command.sessionID,
+                    expectedSessionVersion: command.expectedSessionVersion,
+                    boundary: .doNotAsk
+                )
+                return try self.interviewNaturalInputReceipt(vaultID: vaultID, boundary: mismatched)
+            }
+        }
+        useCase.send(.setBoundary(.cooldown))
+        XCTAssertEqual(useCase.viewState.phase, .failed)
+        XCTAssertEqual(useCase.viewState.notice, .contractMismatch)
+
+        let retryClient = InterviewNaturalInputClientSpy()
+        retryClient.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        retryClient.deferBoundary = true
+        let retryUseCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: retryClient,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        retryUseCase.send(.start)
+        retryUseCase.send(.setBoundary(.cooldown))
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        let deferredCommand = try XCTUnwrap(retryClient.boundaryCommand)
+        retryClient.completeDeferredBoundary(.success(try interviewNaturalInputReceipt(
+            vaultID: vaultID,
+            boundary: deferredCommand
+        )))
+
+        XCTAssertEqual(retryUseCase.viewState.phase, .unavailable)
+        XCTAssertEqual(retryUseCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(retryUseCase.viewState.latestReceipt)
     }
 
     func testInterviewNaturalInputUseCaseFailsClosedWhenQAGateIsDisabled() throws {
@@ -2741,7 +2859,9 @@ final class OwnerTruthContractsTests: XCTestCase {
         vaultID: OwnerTruthVaultID,
         boundary: OwnerTruthInterviewBoundaryCommand
     ) throws -> OwnerTruthInterviewNaturalInputReceipt {
-        try OwnerTruthInterviewNaturalInputReceipt(
+        let lifecycle: OwnerTruthInterviewSessionLifecycle =
+            boundary.boundary == .skipOnce ? .active : .paused
+        return try OwnerTruthInterviewNaturalInputReceipt(
             backendJSONObject: [
                 "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
                 "vaultId": vaultID.rawValue,
@@ -2751,8 +2871,28 @@ final class OwnerTruthContractsTests: XCTestCase {
                     "sessionId": boundary.sessionID.rawValue.uuidString,
                     "threadVersion": 1,
                     "sessionVersion": boundary.expectedSessionVersion + 1,
-                    "state": OwnerTruthInterviewSessionLifecycle.paused.rawValue,
+                    "state": lifecycle.rawValue,
                     "boundary": boundary.boundary.rawValue,
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+    }
+
+    private func interviewNaturalInputContinuation(
+        vaultID: OwnerTruthVaultID,
+        state: OwnerTruthInterviewNaturalInputContinuationState,
+        canContinue: Bool,
+        canContinueLater: Bool
+    ) throws -> OwnerTruthInterviewNaturalInputContinuation {
+        try OwnerTruthInterviewNaturalInputContinuation(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewNaturalInputContinuation.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "presentation": [
+                    "state": state.rawValue,
+                    "canContinue": canContinue,
+                    "canContinueLater": canContinueLater,
                 ],
             ],
             expectedVaultID: vaultID
@@ -3135,7 +3275,9 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
     var boundaryHandler: ((OwnerTruthInterviewBoundaryCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var continuationHandler: ((OwnerTruthRecordID) -> Result<OwnerTruthInterviewNaturalInputContinuation, Error>)?
     var deferAppend = false
+    var deferBoundary = false
     private var deferredAppendCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
+    private var deferredBoundaryCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
 
     private(set) var startCommand: OwnerTruthInterviewNaturalInputStartCommand?
     private(set) var appendCommand: OwnerTruthInterviewNaturalInputAppendCommand?
@@ -3169,6 +3311,10 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
     ) {
         boundaryCommand = command
+        if deferBoundary {
+            deferredBoundaryCompletion = completion
+            return
+        }
         completion(boundaryHandler?(command) ?? .failure(
             InterviewNaturalInputClientSpyError.missingBoundaryResult
         ))
@@ -3187,6 +3333,12 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
     func completeDeferredAppend(_ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>) {
         let completion = deferredAppendCompletion
         deferredAppendCompletion = nil
+        completion?(result)
+    }
+
+    func completeDeferredBoundary(_ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>) {
+        let completion = deferredBoundaryCompletion
+        deferredBoundaryCompletion = nil
         completion?(result)
     }
 }

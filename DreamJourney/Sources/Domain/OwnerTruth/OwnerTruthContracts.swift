@@ -2678,9 +2678,12 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
     }
 
     func matches(_ command: OwnerTruthInterviewBoundaryCommand) -> Bool {
-        threadID == command.threadID
+        let expectedLifecycle: OwnerTruthInterviewSessionLifecycle =
+            command.boundary == .skipOnce ? .active : .paused
+        return threadID == command.threadID
             && sessionID == command.sessionID
             && boundary == command.boundary
+            && lifecycle == expectedLifecycle
             && messageID == nil
             && messageSequence == nil
             && sessionVersion > command.expectedSessionVersion
@@ -2886,6 +2889,7 @@ protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
 enum OwnerTruthInterviewNaturalInputIntent: Equatable, Sendable {
     case start
     case submit(text: String)
+    case setBoundary(OwnerTruthInterviewSessionBoundary)
 }
 
 enum OwnerTruthInterviewNaturalInputPhase: Equatable, Sendable {
@@ -2962,6 +2966,8 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             start()
         case .submit(let text):
             submit(text: text)
+        case .setBoundary(let boundary):
+            setBoundary(boundary)
         }
     }
 
@@ -3027,6 +3033,41 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         }
     }
 
+    private func setBoundary(_ boundary: OwnerTruthInterviewSessionBoundary) {
+        guard let receipt = viewState.latestReceipt,
+              viewState.phase == .ready else {
+            return
+        }
+        guard let vaultID = beginRequestOrFail() else { return }
+        do {
+            let command = try OwnerTruthInterviewBoundaryCommand(
+                commandID: identifierFactory().uuidString.lowercased(),
+                threadID: receipt.threadID,
+                sessionID: receipt.sessionID,
+                expectedSessionVersion: receipt.sessionVersion,
+                boundary: boundary
+            )
+            operationGeneration &+= 1
+            let generation = operationGeneration
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .submitting,
+                latestReceipt: receipt,
+                continuation: viewState.continuation,
+                notice: nil
+            )
+            client.setOwnerTruthInterviewBoundary(vaultID: vaultID, command: command) { [weak self] result in
+                self?.receiveBoundary(result, vaultID: vaultID, command: command, generation: generation)
+            }
+        } catch {
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .ready,
+                latestReceipt: receipt,
+                continuation: viewState.continuation,
+                notice: .invalidInput
+            )
+        }
+    }
+
     private func beginRequestOrFail() -> OwnerTruthVaultID? {
         guard qaGateEnabled() else {
             transitionUnavailable(.qaOnlyDisabled)
@@ -3072,6 +3113,31 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         _ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>,
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewNaturalInputAppendCommand,
+        generation: UInt
+    ) {
+        guard canCommit(generation: generation) else { return }
+        switch result {
+        case .success(let receipt):
+            guard receipt.vaultID == vaultID, receipt.matches(command) else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .ready,
+                latestReceipt: receipt,
+                continuation: nil,
+                notice: nil
+            )
+            refreshContinuation(vaultID: vaultID, receipt: receipt)
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private func receiveBoundary(
+        _ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewBoundaryCommand,
         generation: UInt
     ) {
         guard canCommit(generation: generation) else { return }
