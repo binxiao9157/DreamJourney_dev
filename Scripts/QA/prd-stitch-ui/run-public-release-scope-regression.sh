@@ -19,6 +19,7 @@ ARTIFACT_REPORT="${RELEASE_ARTIFACT_REPORT:-}"
 mkdir -p "$OUTPUT_DIR"
 
 swift "$SCRIPT_DIR/public-release-scope-regression-check.swift" "$ROOT_DIR"
+"$SCRIPT_DIR/run-publication-visitor-public-entry-g1-check.sh"
 OUTPUT_PATH="$MODEL_RESULT" "$SCRIPT_DIR/run-public-release-scope-model-smoke.sh"
 
 if [[ "$RUN_RELEASE_ARTIFACT" == "1" ]]; then
@@ -56,7 +57,7 @@ cat > "$REPORT_PATH" <<REPORT
 - Run ID: \`$RUN_ID\`
 - Work Item: \`WI-S0-06-07\`
 - Release artifact gate: passed
-- Release default entry and deep-link negative gate: passed
+- Release authentication entry and deep-link negative gate: passed
 - Policy offline/expired/emergency gate: passed
 - Deployed G2 command gate: \`$RUN_BACKEND_G2\`
 - G4 true-device regression: open

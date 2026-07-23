@@ -9,7 +9,7 @@ OUTPUT_DIR="$OUTPUT_ROOT/$RUN_ID"
 INSTALL_DIR="$OUTPUT_DIR/install"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$OUTPUT_DIR/DerivedData}"
 RESULT_PATH="$OUTPUT_DIR/result.json"
-SCREENSHOT_PATH="$OUTPUT_DIR/01-owner-default-entry.png"
+SCREENSHOT_PATH="$OUTPUT_DIR/01-authentication-gate-entry.png"
 DEEPLINK_LOG="$OUTPUT_DIR/deeplink-negative.log"
 RELEASE_XCCONFIG="$OUTPUT_DIR/release-simulator.xcconfig"
 
@@ -94,7 +94,8 @@ result = {
         "qaCompilationConditions": False,
     },
     "defaultEntry": {
-        "ownerSeeded": True,
+        "legacyProfileSeeded": True,
+        "expectedEntry": "authenticationUntilVerifiedSession",
         "launchArguments": [],
         "screenshotFile": pathlib.Path(screenshot).name,
     },

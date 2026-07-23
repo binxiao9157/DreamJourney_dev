@@ -10,7 +10,7 @@ Lease：`RELEASED`
 ## 1. 目标
 
 - 一键证明 Closed Pilot Owner 文字核心仍可用。
-- 一键证明 Product MVP/Beta Extension 的默认入口、route、deep link 和 command 绕过数均为零。
+- 一键证明 Release 在无已验证会话时停留认证入口，且 Product MVP/Beta Extension 的 route、deep link 和 command 绕过数均为零。
 - 覆盖 policy missing/offline、expired、emergency revoke 和 QA route-only 边界。
 - 证据包只记录 build、policy、feature、route、command 计数与决定，不记录正文、手机号、凭据或请求 body。
 
@@ -30,7 +30,7 @@ Lease：`RELEASED`
 ## 4. 完成结果
 
 - `G0`：typed policy model、Release feature matrix、Release iPhoneOS artifact scan 全部通过。
-- `G1`：使用 `Release + RELEASE_SCOPE_SIMULATOR` 构建可安装模拟器包；未启用 `DEBUG` 或 `UI_QA_SIMULATOR`。普通 Owner 默认入口截图仅展示普通 Echo 和三个公开 Tab，四个隐藏 deep link 均无法打开。
+- `G1`：使用 `Release + RELEASE_SCOPE_SIMULATOR` 构建可安装模拟器包；未启用 `DEBUG` 或 `UI_QA_SIMULATOR`。无已验证 session 的本地 profile 必须停留认证入口，四个隐藏 deep link 均无法打开。
 - `G2`：线上 `production/postgres` 通过公开核心 command、隐藏 command、unknown feature 和伪造 QA audience 负向 smoke；伪造 QA audience 仍按 Owner 处理，不能绕过发布策略。
 - `G4`：真实设备 fresh install、upgrade、offline/expired 和交互回归保持开放，不由本次非真机闭环冒充完成。
 - Product MVP/Beta 隐藏入口、route、command bypass 计数均为 `0`。
@@ -42,7 +42,7 @@ Lease：`RELEASED`
 - 线上健康状态：`production / postgres`
 - 最终组合报告：`tmp/visual-qa/prd-stitch-ui/public-release-scope-regression/20260716-wi-s0-06-07-final/report.md`
 - 脱敏证据包：`tmp/visual-qa/prd-stitch-ui/public-release-scope-regression/20260716-wi-s0-06-07-final/public-release-scope-evidence.json`
-- 默认入口截图：`tmp/visual-qa/prd-stitch-ui/public-release-scope-regression/20260716-wi-s0-06-07-final/uiqa/01-owner-default-entry.png`
+- 认证入口截图：`tmp/visual-qa/prd-stitch-ui/public-release-scope-regression/20260716-wi-s0-06-07-final/uiqa/01-owner-default-entry.png`（历史文件名保留；后续运行输出 `01-authentication-gate-entry.png`）
 - Release iPhoneOS artifact 报告：`tmp/visual-qa/prd-stitch-ui/public-release-scope-regression/20260716-wi-s0-06-07-final/release-artifact/report.md`
 
 ## 6. 边界

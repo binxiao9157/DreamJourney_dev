@@ -103,10 +103,10 @@
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
     },
     {
-      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-publication-visitor-default-deny-g0.md",
+    "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-publication-visitor-default-deny-g0.md; docs/superpowers/status/2026-07-23-wi-s3-01-01-public-entry-g1-audit.md",
       "id": "WI-S3-01-01",
-      "implementationStatus": "INTERNAL_READY / S3_PUBLICATION_VISITOR_POLICY_G0_DEPLOYED / BACKEND_0fdd55f / STRICT_DEFAULT_DENY / NO_ROUTE_NO_DB_NO_SHAREGRANT_NO_VISITORSESSION_NO_UI / G1_G4_OPEN",
-      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G4_OPEN"
+    "implementationStatus": "INTERNAL_READY / S3_PUBLICATION_VISITOR_POLICY_G0_DEPLOYED / BACKEND_0fdd55f / STRICT_DEFAULT_DENY / G1_PUBLIC_ENTRY_NON_ADMISSION_AUDIT_VERIFIED / NO_ROUTE_NO_DB_NO_SHAREGRANT_NO_VISITORSESSION_NO_UI / FUNCTIONAL_G1_G4_OPEN",
+    "registryClosure": "SCOPED_G0_AND_NON_ADMISSION_G1_EVIDENCE_PRESENT_FUNCTIONAL_G1_G4_OPEN"
     },
     {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-01-10-cutover-admission-g0.md",
