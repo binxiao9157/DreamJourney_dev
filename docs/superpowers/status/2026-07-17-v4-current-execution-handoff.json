@@ -8,26 +8,27 @@
     "predecessorWorkItem": "WI-V0-01-03",
     "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-scoped-capability-shadow-g0.md",
     "completedSubSlices": [
-      "WI-V0-01-04-G0-A-SCOPED_CAPABILITY_ADMISSION_SHADOW_DEPLOYED"
+      "WI-V0-01-04-G0-A-SCOPED_CAPABILITY_ADMISSION_SHADOW_DEPLOYED",
+      "WI-V0-01-04-G0-B-PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION_DEPLOYED"
     ],
-    "currentSubSlice": "WI-V0-01-04-G0-A-SCOPED_CAPABILITY_ADMISSION_SHADOW_DEPLOYED / NEXT:RECONCILE_REMAINING_G0_BROKER_BOUNDARIES_WITHOUT_ISSUER_OR_PROVIDER_PROMOTION",
+    "currentSubSlice": "WI-V0-01-04-G0-B-PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION_DEPLOYED / NEXT:CALLBACK_RECONCILIATION_ADMISSION_SHADOW_DEFAULT_DENY_WITHOUT_ISSUER_OR_PROVIDER_PROMOTION",
     "gateEvidence": {
-      "G0": "SCOPED_VERIFIED / HASH_ONLY_DEFAULT_DENY_ADMISSION_SHADOW_REJECTS_OWNER_VAULT_AUDIENCE_TTL_ONE_TIME_AND_REPLAY_MISMATCHES_WITH_ZERO_CAPABILITY_OR_PROVIDER_EFFECT",
+      "G0": "SCOPED_VERIFIED / HASH_ONLY_DEFAULT_DENY_ADMISSION_SHADOW_REJECTS_OWNER_VAULT_AUDIENCE_TTL_ONE_TIME_AND_REPLAY_MISMATCHES_WITH_ZERO_CAPABILITY_OR_PROVIDER_EFFECT / PROVIDER_RESPONSE_AND_EXCEPTION_VALUE_MINIMIZATION_DEPLOYED",
       "G2": "OPEN / DURABLE_ISSUER_ONE_TIME_REPLAY_LEDGER_ROTATION_AND_RECONCILIATION_NOT_STARTED",
       "G3": "OPEN / REAL_PROVIDER_CREDENTIAL_CUSTODY_EFFECT_RECEIPTS_QUERY_DELETE_AND_RECONCILIATION_NOT_STARTED",
       "G4": "OPEN / PRODUCT_PRIVACY_SECURITY_DEVICE_AND_RELEASE_APPROVAL_NOT_STARTED"
     },
     "latestEvidence": {
-      "backendCommit": "b13475c",
-      "backendDeployment": "passed / main@4478dec runtime code + main@b13475c deployment evidence / ready=status=ready / API-container deployed smoke reports status=blocked capabilityIssued=false providerEffectPerformed=false replayProtectionPersistent=false",
-      "scope": "G0_SCOPED_CAPABILITY_ADMISSION_SHADOW / DEFAULT_DENY / HASH_ONLY_VALUE_FREE / NO_ROUTE_NO_DB_NO_PROVIDER_NO_SESSION_NO_CREDENTIAL_NO_MEDIA_NO_UI_NO_RELEASE_PROMOTION",
-      "constraints": "In-memory request/nonce observations are explicitly not durable replay protection and do not consume a nonce. No capability issuer exists."
+      "backendCommit": "5799c39",
+      "backendDeployment": "passed / main@0f6dff3 runtime container + main@5799c39 deployment evidence / ready=status=ready / credential-response smoke verifies runtime plus unauthenticated fail-closed boundary without synthetic user-session issuance",
+      "scope": "G0_SCOPED_CAPABILITY_ADMISSION_SHADOW_AND_PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION / DEFAULT_DENY / HASH_ONLY_VALUE_FREE / TTS_ALLOWLIST_ONLY / NO_ROUTE_NO_DB_NO_PROVIDER_NO_SESSION_NO_CREDENTIAL_NO_MEDIA_NO_UI_NO_RELEASE_PROMOTION",
+      "constraints": "In-memory request/nonce observations are explicitly not durable replay protection and do not consume a nonce. No capability issuer exists. Provider error bodies, messages and nested payload fields are not public response or error values."
     },
-    "currentSummary": "WI-V0-01-04 G0-A adds only a hash-only ScopedCapabilityAdmissionShadow. It validates Vault/Owner/actor/subject/epoch/audience/TTL/one-time/replay vocabulary and always blocks; the deployed container smoke confirms no capability issuance, provider effect, durable replay protection, route, database write, credential, media, session, UI or release promotion. A durable Broker, rotation/revocation, Provider effect receipts/query/delete/reconcile and G4 approval remain open.",
+    "currentSummary": "WI-V0-01-04 G0-A adds only a hash-only ScopedCapabilityAdmissionShadow. G0-B separately allowlists legacy TTS response fields and removes upstream Voice Clone exception bodies/messages from public error values; deployment smoke proves runtime and unauthenticated protected paths remain fail-closed without creating a synthetic user session. A durable Broker, rotation/revocation, Provider effect receipts/query/delete/reconcile and G4 approval remain open.",
     "backendPendingPaths": []
   },
   "baselines": {
-    "backend": "main@b13475c / Voice-DH scoped capability shadow G0 deployed; container smoke verified default deny",
+    "backend": "main@5799c39 / Voice-DH scoped capability shadow plus Provider response/error value minimization deployed; container smoke verified default deny",
     "ios": "feature/prd-stitch-ui-adaptation@1943bfd / C00 current-state inventory freeze refreshed locally",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -562,15 +563,15 @@
     },
     {
       "id": "WI-V0-01-04",
-      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-scoped-capability-shadow-g0.md",
-      "implementationStatus": "INTERNAL_READY / V0_CREDENTIAL_BROKER_G0_SCOPED_CAPABILITY_SHADOW_DEPLOYED_b13475c / STRICT_DEFAULT_DENY / HASH_ONLY_VALUE_FREE / NO_BROKER_NO_ROUTE_NO_DB_NO_PROVIDER_NO_CREDENTIAL_NO_UI / G2_G3_G4_OPEN",
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-scoped-capability-shadow-g0.md; ../DreamJourneyBackend/docs/backend/2026-07-23-provider-response-error-redaction-g0.md",
+      "implementationStatus": "INTERNAL_READY / V0_CREDENTIAL_BROKER_G0_SCOPED_CAPABILITY_SHADOW_DEPLOYED_b13475c / PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION_DEPLOYED_117a79d / DEPLOYMENT_EVIDENCE_5799c39 / STRICT_DEFAULT_DENY / HASH_ONLY_VALUE_FREE / TTS_ALLOWLIST_ONLY / NO_BROKER_NO_ROUTE_NO_DB_NO_PROVIDER_NO_CREDENTIAL_NO_UI / G2_G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G2_G3_G4_OPEN"
     }
   ],
   "nextWorkItem": {
     "id": "WI-V0-01-04",
     "state": "RECONCILE_AFTER_CURRENT",
-    "summary": "Reconcile remaining Credential Broker G0 boundary evidence without creating a broker, capability issuer, public API, Provider effect or release promotion. Preserve M1/M2 default-off; select only an independent default-deny boundary or advance only when dependencies and Gates permit."
+    "summary": "Add only a default-deny Provider-effect callback reconciliation admission shadow: bind to an existing unknown effect, reject replay/cross-provider/request conflicts, and perform no webhook route, signature acceptance, issuer, Provider call or release promotion. Preserve M1/M2 default-off."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -579,5 +580,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-23T10:50:00+08:00"
+  "updatedAt": "2026-07-23T11:12:00+08:00"
 }
