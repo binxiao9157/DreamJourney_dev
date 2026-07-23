@@ -103,6 +103,12 @@
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
     },
     {
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-publication-visitor-default-deny-g0.md",
+      "id": "WI-S3-01-01",
+      "implementationStatus": "INTERNAL_READY / S3_PUBLICATION_VISITOR_POLICY_G0_DEPLOYED / BACKEND_0fdd55f / STRICT_DEFAULT_DENY / NO_ROUTE_NO_DB_NO_SHAREGRANT_NO_VISITORSESSION_NO_UI / G1_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G4_OPEN"
+    },
+    {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-01-10-cutover-admission-g0.md",
       "id": "WI-S1-01-10",
       "implementationStatus": "INTERNAL_READY / G0_CUTOVER_ADMISSION_BOUNDARY_VERIFIED / BACKEND_DEPLOYED_864e5d9 / DEFAULT_OFF / G1_G2_G4_OPEN",
