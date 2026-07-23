@@ -9,26 +9,27 @@
     "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-scoped-capability-shadow-g0.md",
     "completedSubSlices": [
       "WI-V0-01-04-G0-A-SCOPED_CAPABILITY_ADMISSION_SHADOW_DEPLOYED",
-      "WI-V0-01-04-G0-B-PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION_DEPLOYED"
+      "WI-V0-01-04-G0-B-PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION_DEPLOYED",
+      "WI-V0-01-04-G0-C-PROVIDER_EFFECT_CALLBACK_RECONCILIATION_ADMISSION_SHADOW_DEPLOYED"
     ],
-    "currentSubSlice": "WI-V0-01-04-G0-B-PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION_DEPLOYED / NEXT:CALLBACK_RECONCILIATION_ADMISSION_SHADOW_DEFAULT_DENY_WITHOUT_ISSUER_OR_PROVIDER_PROMOTION",
+    "currentSubSlice": "WI-V0-01-04-G0-C-PROVIDER_EFFECT_CALLBACK_RECONCILIATION_ADMISSION_SHADOW_DEPLOYED / NEXT:RECONCILE_REMAINING_G0_BOUNDARIES_BEFORE_ANY_G2_DURABLE_OR_G3_PROVIDER_PROMOTION",
     "gateEvidence": {
-      "G0": "SCOPED_VERIFIED / HASH_ONLY_DEFAULT_DENY_ADMISSION_SHADOW_REJECTS_OWNER_VAULT_AUDIENCE_TTL_ONE_TIME_AND_REPLAY_MISMATCHES_WITH_ZERO_CAPABILITY_OR_PROVIDER_EFFECT / PROVIDER_RESPONSE_AND_EXCEPTION_VALUE_MINIMIZATION_DEPLOYED",
+      "G0": "SCOPED_VERIFIED / HASH_ONLY_DEFAULT_DENY_ADMISSION_SHADOW_REJECTS_OWNER_VAULT_AUDIENCE_TTL_ONE_TIME_AND_REPLAY_MISMATCHES_WITH_ZERO_CAPABILITY_OR_PROVIDER_EFFECT / PROVIDER_RESPONSE_AND_EXCEPTION_VALUE_MINIMIZATION_DEPLOYED / PROVIDER_EFFECT_CALLBACK_RECONCILIATION_ADMISSION_SHADOW_DEPLOYED",
       "G2": "OPEN / DURABLE_ISSUER_ONE_TIME_REPLAY_LEDGER_ROTATION_AND_RECONCILIATION_NOT_STARTED",
       "G3": "OPEN / REAL_PROVIDER_CREDENTIAL_CUSTODY_EFFECT_RECEIPTS_QUERY_DELETE_AND_RECONCILIATION_NOT_STARTED",
       "G4": "OPEN / PRODUCT_PRIVACY_SECURITY_DEVICE_AND_RELEASE_APPROVAL_NOT_STARTED"
     },
     "latestEvidence": {
-      "backendCommit": "5799c39",
-      "backendDeployment": "passed / main@0f6dff3 runtime container + main@5799c39 deployment evidence / ready=status=ready / credential-response smoke verifies runtime plus unauthenticated fail-closed boundary without synthetic user-session issuance",
-      "scope": "G0_SCOPED_CAPABILITY_ADMISSION_SHADOW_AND_PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION / DEFAULT_DENY / HASH_ONLY_VALUE_FREE / TTS_ALLOWLIST_ONLY / NO_ROUTE_NO_DB_NO_PROVIDER_NO_SESSION_NO_CREDENTIAL_NO_MEDIA_NO_UI_NO_RELEASE_PROMOTION",
-      "constraints": "In-memory request/nonce observations are explicitly not durable replay protection and do not consume a nonce. No capability issuer exists. Provider error bodies, messages and nested payload fields are not public response or error values."
+      "backendCommit": "4224dd3",
+      "backendDeployment": "passed / runtime container rebuilt from main@181e1a1 plus server source pulled through main@4224dd3 / ready=status=ready / callback shadow deployed smoke verifies blocked status with callbackAccepted=false, providerEffectReconciled=false and replayProtectionPersistent=false",
+      "scope": "G0_SCOPED_CAPABILITY_ADMISSION_SHADOW_PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION_AND_CALLBACK_RECONCILIATION_ADMISSION_SHADOW / DEFAULT_DENY / HASH_ONLY_VALUE_FREE / TTS_ALLOWLIST_ONLY / NO_BROKER_NO_CALLBACK_ROUTE_NO_DB_NO_PROVIDER_NO_SESSION_NO_CREDENTIAL_NO_MEDIA_NO_UI_NO_RELEASE_PROMOTION",
+      "constraints": "In-memory request/nonce and callback-event observations are explicitly not durable replay protection and do not consume a nonce or callback. No capability issuer exists. No callback is accepted, verified, routed or reconciled. Provider error bodies, messages and nested payload fields are not public response or error values."
     },
-    "currentSummary": "WI-V0-01-04 G0-A adds only a hash-only ScopedCapabilityAdmissionShadow. G0-B separately allowlists legacy TTS response fields and removes upstream Voice Clone exception bodies/messages from public error values; deployment smoke proves runtime and unauthenticated protected paths remain fail-closed without creating a synthetic user session. A durable Broker, rotation/revocation, Provider effect receipts/query/delete/reconcile and G4 approval remain open.",
+    "currentSummary": "WI-V0-01-04 G0-A adds only a hash-only ScopedCapabilityAdmissionShadow. G0-B separately allowlists legacy TTS response fields and removes upstream Voice Clone exception bodies/messages from public error values. G0-C adds a value-free callback reconciliation admission shadow that always blocks and records only in-memory diagnostic replay observations; its deployed smoke proves no callback acceptance, reconciliation or persistent replay protection. A durable Broker, rotation/revocation, durable effect and replay records, Provider callback verification/receipts/query/delete/reconcile and G4 approval remain open.",
     "backendPendingPaths": []
   },
   "baselines": {
-    "backend": "main@5799c39 / Voice-DH scoped capability shadow plus Provider response/error value minimization deployed; container smoke verified default deny",
+    "backend": "main@4224dd3 / Voice-DH scoped capability, Provider response/error minimization and callback reconciliation admission shadows deployed; container smoke verified default deny",
     "ios": "feature/prd-stitch-ui-adaptation@1943bfd / C00 current-state inventory freeze refreshed locally",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -563,8 +564,8 @@
     },
     {
       "id": "WI-V0-01-04",
-      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-scoped-capability-shadow-g0.md; ../DreamJourneyBackend/docs/backend/2026-07-23-provider-response-error-redaction-g0.md",
-      "implementationStatus": "INTERNAL_READY / V0_CREDENTIAL_BROKER_G0_SCOPED_CAPABILITY_SHADOW_DEPLOYED_b13475c / PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION_DEPLOYED_117a79d / DEPLOYMENT_EVIDENCE_5799c39 / STRICT_DEFAULT_DENY / HASH_ONLY_VALUE_FREE / TTS_ALLOWLIST_ONLY / NO_BROKER_NO_ROUTE_NO_DB_NO_PROVIDER_NO_CREDENTIAL_NO_UI / G2_G3_G4_OPEN",
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-scoped-capability-shadow-g0.md; ../DreamJourneyBackend/docs/backend/2026-07-23-provider-response-error-redaction-g0.md; ../DreamJourneyBackend/docs/backend/2026-07-23-provider-effect-callback-shadow-g0.md",
+      "implementationStatus": "INTERNAL_READY / V0_CREDENTIAL_BROKER_G0_SCOPED_CAPABILITY_SHADOW_DEPLOYED_b13475c / PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION_DEPLOYED_117a79d / PROVIDER_EFFECT_CALLBACK_RECONCILIATION_ADMISSION_SHADOW_DEPLOYED_181e1a1 / DEPLOYMENT_EVIDENCE_4224dd3 / STRICT_DEFAULT_DENY / HASH_ONLY_VALUE_FREE / TTS_ALLOWLIST_ONLY / NO_BROKER_NO_CALLBACK_ROUTE_NO_DB_NO_PROVIDER_NO_CREDENTIAL_NO_UI / G2_G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G2_G3_G4_OPEN"
     }
   ],
