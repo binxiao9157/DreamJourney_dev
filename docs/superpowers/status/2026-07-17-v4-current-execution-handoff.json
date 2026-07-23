@@ -12,7 +12,7 @@
       "WI-V0-01-04-G0-B-PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION_DEPLOYED",
       "WI-V0-01-04-G0-C-PROVIDER_EFFECT_CALLBACK_RECONCILIATION_ADMISSION_SHADOW_DEPLOYED"
     ],
-    "currentSubSlice": "WI-V0-01-04-G0-C-PROVIDER_EFFECT_CALLBACK_RECONCILIATION_ADMISSION_SHADOW_DEPLOYED / NEXT:RECONCILE_REMAINING_G0_BOUNDARIES_BEFORE_ANY_G2_DURABLE_OR_G3_PROVIDER_PROMOTION",
+    "currentSubSlice": "WI-V0-01-04-G0-C-PROVIDER_EFFECT_CALLBACK_RECONCILIATION_ADMISSION_SHADOW_DEPLOYED / NEXT:SELECTOR_HOLD_AFTER_WP_S1_01_EVIDENCE_AUDIT_CONFIRMED_12_OF_12_EXISTING_EVIDENCE_AND_NO_ELIGIBLE_UNBLOCKED_P0_G0_WORK_ITEM_WITHIN_PLAN_ORDER",
     "gateEvidence": {
       "G0": "SCOPED_VERIFIED / HASH_ONLY_DEFAULT_DENY_ADMISSION_SHADOW_REJECTS_OWNER_VAULT_AUDIENCE_TTL_ONE_TIME_AND_REPLAY_MISMATCHES_WITH_ZERO_CAPABILITY_OR_PROVIDER_EFFECT / PROVIDER_RESPONSE_AND_EXCEPTION_VALUE_MINIMIZATION_DEPLOYED / PROVIDER_EFFECT_CALLBACK_RECONCILIATION_ADMISSION_SHADOW_DEPLOYED",
       "G2": "OPEN / DURABLE_ISSUER_ONE_TIME_REPLAY_LEDGER_ROTATION_AND_RECONCILIATION_NOT_STARTED",
@@ -25,7 +25,7 @@
       "scope": "G0_SCOPED_CAPABILITY_ADMISSION_SHADOW_PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION_AND_CALLBACK_RECONCILIATION_ADMISSION_SHADOW / DEFAULT_DENY / HASH_ONLY_VALUE_FREE / TTS_ALLOWLIST_ONLY / NO_BROKER_NO_CALLBACK_ROUTE_NO_DB_NO_PROVIDER_NO_SESSION_NO_CREDENTIAL_NO_MEDIA_NO_UI_NO_RELEASE_PROMOTION",
       "constraints": "In-memory request/nonce and callback-event observations are explicitly not durable replay protection and do not consume a nonce or callback. No capability issuer exists. No callback is accepted, verified, routed or reconciled. Provider error bodies, messages and nested payload fields are not public response or error values."
     },
-    "currentSummary": "WI-V0-01-04 G0-A adds only a hash-only ScopedCapabilityAdmissionShadow. G0-B separately allowlists legacy TTS response fields and removes upstream Voice Clone exception bodies/messages from public error values. G0-C adds a value-free callback reconciliation admission shadow that always blocks and records only in-memory diagnostic replay observations; its deployed smoke proves no callback acceptance, reconciliation or persistent replay protection. A durable Broker, rotation/revocation, durable effect and replay records, Provider callback verification/receipts/query/delete/reconcile and G4 approval remain open.",
+    "currentSummary": "WI-V0-01-04 G0-A adds only a hash-only ScopedCapabilityAdmissionShadow. G0-B separately allowlists legacy TTS response fields and removes upstream Voice Clone exception bodies/messages from public error values. G0-C adds a value-free callback reconciliation admission shadow that always blocks and records only in-memory diagnostic replay observations; its deployed smoke proves no callback acceptance, reconciliation or persistent replay protection. The required WP-S1-01 evidence audit then confirmed 12 of 12 Work Items already have handoff evidence, so no new P0/G0 Work Item may be started without bypassing plan order. Remaining unregistered candidates are migration NO_GO, external-gated media/deletion, M2 Publication/Visitor, or later M1/M2 Voice/DH work. A durable Broker, rotation/revocation, durable effect and replay records, Provider callback verification/receipts/query/delete/reconcile and G4 approval remain open.",
     "backendPendingPaths": []
   },
   "baselines": {
