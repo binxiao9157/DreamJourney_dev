@@ -42,12 +42,13 @@
       "WI-S1-01-04-FORMAL_CONFIRMATION_FEATURE_CONSTRAINT_G0_G2_DEPLOYED",
       "WI-V0-01-02-G0_G2-DEFAULT_DENY_PROFILE_AUTHORITY_SCHEMA_DEPLOYED",
       "WI-V0-01-03-G0-A-DEFAULT_DENY_TRAINING_PREFLIGHT_DEPLOYED",
-      "WI-V0-01-03-G0-B-IOS_OPTIONAL_AUTHORITY_ADAPTER_G0_G1_VERIFIED"
+      "WI-V0-01-03-G0-B-IOS_OPTIONAL_AUTHORITY_ADAPTER_G0_G1_VERIFIED",
+      "WI-V0-01-03-G0-C-BLOCKED_SAMPLE_INTENT_RECEIPT_G0_G2_DEPLOYED"
     ],
-    "currentSubSlice": "WI-V0-01-03-G0-B-IOS_OPTIONAL_AUTHORITY_ADAPTER_G0_G1_VERIFIED / NEXT:RECONCILE_REMAINING_M1_AUTHORITY_SUBSLICES_WITHOUT_PROVIDER_OR_UI_PROMOTION",
+    "currentSubSlice": "WI-V0-01-03-G0-C-BLOCKED_SAMPLE_INTENT_RECEIPT_G0_G2_DEPLOYED / NEXT:RECONCILE_REMAINING_M1_AUTHORITY_SUBSLICES_WITHOUT_PROVIDER_OR_UI_PROMOTION",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "SCOPED_VERIFIED / DEFAULT_DENY_TRAINING_PREFLIGHT_REJECTS_PROXY_SUBJECTS_LEGACY_SPEAKER_IDS_RAW_AUDIO_URLS_AND_DUPLICATE_COMMANDS_WITH_ZERO_PROVIDER_EFFECT",
+      "G0": "SCOPED_VERIFIED / DEFAULT_DENY_TRAINING_PREFLIGHT_AND_BLOCKED_SAMPLE_INTENT_RECEIPT_REJECT_PROXY_SUBJECTS_LEGACY_SPEAKER_IDS_RAW_AUDIO_URLS_AND_NON_MATCHING_PROFILE_BINDINGS_WITH_ZERO_PROVIDER_EFFECT",
       "G2": "OPEN / VERIFIED_SOURCE_OBJECT_SAMPLE_BINDING_OBJECT_STORAGE_SCAN_RETENTION_AND_DATA_SECURITY_EVIDENCE_NOT_STARTED",
       "G3": "OPEN / REAL_SAMPLE_SOURCE_BINDING_PROVIDER_TRAINING_GENERATION_DELETE_AND_RECONCILIATION_EVIDENCE_NOT_STARTED",
       "G4": "OPEN / REAL_DEVICE_AUDIO_PRODUCT_PRIVACY_LEGAL_AND_RELEASE_APPROVAL_NOT_STARTED"
@@ -66,7 +67,10 @@
       "voiceDhAuthorityDeployment": "passed / migration=0042 applied+verified / ready=status=ready / API-container disposable Postgres smoke reports profileStatus=blocked receiptCount=1 providerEffectPerformed=false",
       "voiceTrainingPreflightBackendCommit": "fc01a00",
       "voiceTrainingPreflightDeployment": "passed / ready=status=ready / API-container runtime smoke and G0 gate report voiceTrainingPreflight=blocked providerEffectPerformed=false sampleObjectCreated=false trainingCommandCreated=false",
-      "voiceDhAuthorityIOSAdapter": "passed / optional authority child parsing for digital-human session, voice profile and synthesis contracts; nil, subject mismatch, Vault mismatch and non-blocked status fail closed; static/model gate, 6 focused XCTest cases and generic iPhoneOS build passed; no runtime promotion, Provider effect, media parsing or UI exposure"
+      "voiceDhAuthorityIOSAdapter": "passed / optional authority child parsing for digital-human session, voice profile and synthesis contracts; nil, subject mismatch, Vault mismatch and non-blocked status fail closed; static/model gate, 6 focused XCTest cases and generic iPhoneOS build passed; no runtime promotion, Provider effect, media parsing or UI exposure",
+      "voiceDhBlockedSampleIntentBackendCommit": "be0153e",
+      "voiceDhBlockedSampleIntentDeployment": "passed / main@be0153e / migration=0043 applied+verified / ready=status=ready / API-container disposable Postgres smoke reports sampleStatus=blocked receiptCount=2 providerEffectPerformed=false sampleObjectCreated=false trainingCommandCreated=false",
+      "blockedSampleIntentSummary": "G0-C persists only a hash-only synthetic SampleIntent and a paired append-only authority receipt. It requires a deterministic blocked self-training profile parent, matching Vault/Owner/actor/subject/epoch/purpose/provider, allowed format and positive duration; it has no SourceObject, audio, URL, Provider, credential, training command or public UI effect."
     },
     "currentSummary": "WI-V0-01-03 now has a deployed G0-A default-deny training preflight. It accepts only synthetic, value-minimized references; rejects family/proxy subjects, non-eligible subjects, incomplete consent, legacy Provider speaker IDs, raw audio/URL fields and replayed request hashes; and always reports zero Provider effect, SampleObject creation and training-command creation. G0-B adds an iOS optional authority adapter that parses only the authority child of Digital Human session, voice-profile and synthesis contracts; nil, subject mismatch, Vault mismatch and non-blocked status remain default-denied, with no runtime promotion, Provider effect, media parsing or public UI. It does not make M1 Voice ready: real SourceObject binding, scan/retention, Provider training/delete/reconcile and G4 approval remain open.",
     "predecessorWorkItem": "WI-S1-01-03",
@@ -87,7 +91,7 @@
     "summary": "The private M0-A interview path is deployed through acknowledged-batch proposal admission, value-minimized review composition, partial acceptance for selected ordinary batch Candidates, individual terminal review for sensitive or explicitly single-review Candidates, a separate default-off iOS QA review consumer, a deployed value-minimized interview-session state read, and a lease-bound typed iOS natural-input client. The existing QA keyboard entry remains double-gated. A product natural-input surface is G0/G1 verified: it starts hidden in the existing full-screen Echo, requires both a fresh route visibility and write decision for echoTextInput, clears immediately on account rebind, and uses product wording without internal QA details. Formal backend writes require a captured server release-policy decision and reject absent policy without falling back to QA. `db95a5f` deployed the input authorization path; `8cb6a0d` deployed a content-free continuation presentation route and its isolated Postgres smoke verified rejected missing capture, matching capture, and presentation semantics without production business-data mutation. The product Sheet maps only server state to a natural summary and never exposes input text, Candidate content, review IDs, pacing, fatigue, or internal session details. Both UIQA surfaces use in-memory clients and never perform a private write, voice turn, or Digital Human request. `79a0504` added a separately policy-gated confirmation read route; iOS has a typed, lease-fenced, default-off read consumer that reuses the captured product policy and never carries the QA header or a decision mutation. `a9efa24` adds the separate formal batch-accept route under the confirmation path: it is default-off, requires a fresh captured `ownerTruthCandidateReview` policy, cannot be bypassed by a QA header, fixes the server-side boundary-confirmation reason, returns no Candidate content or QA receipt envelope, and records terminal Candidate receipts without activating a MemoryVersion. M0A-20 adds a separate typed iOS action consumer for that formal route: it remains fail-closed, validates AccountLease at request and commit, permits only ordinary batch Candidates present in the confirmation projection, rejects single/sensitive Candidate IDs, reuses a command ID for an unchanged retry, rejects QA response envelopes, and discards stale deferred results after account rebind. M0A-21 requires a fresh formal confirmation read after action success and enters confirmed only when every accepted Candidate has disappeared from the refreshed projection; a failed reconciliation preserves the value-minimized action result but does not claim completion. M0A-22 additionally binds a successfully read confirmation projection to the exact AccountLease that passed its completion fence and rejects a reconciliation whose admission/source/version/authority epoch drifts, while allowing candidate membership to change after a decision. `a954ac9` adds hash-minimized formal authorization evidence and immutable root-to-terminal receipt links. `0ab1e73` additionally rejects any populated formal capture whose feature is not `ownerTruthCandidateReview`; migration `0037` is deployed, the database constraint is validated and an online inventory found zero stored non-target captures. `f383e1b` and `179efbd` add a single selected successful ExtractionResult baseline: Candidate review never mixes historical extractions, a newer failed attempt retains the most recent successful pending baseline, and the iOS typed parser rejects mixed responses. `a45170d` deploys the formal owner boundary route, while `07ef43e` adds the lease/generation-fenced iOS use case: it accepts only skipOnce/cooldown/doNotAsk, validates the compatible active/paused receipt lifecycle, refreshes the value-minimized continuation, and discards stale completion after an AccountLease rebind. `5b2bafd` closes the remaining one-shot semantic: the next owner narrative atomically consumes `skipOnce`, its replay retains `open`, and the isolated deployed Postgres smoke verifies the full value-minimized boundary flow. `bc3f055` and `58ec52f` add and deploy M0A-28: a separate, explicitly confirmed restore only for `paused + doNotAsk`, backed by receipt migration `0038`; it rejects cooldown restoration and preserves replay idempotency. `4ebeda0` deploys the crisis safety override. `f74f18b` adds the adjacent default-off atomic “以后再聊” contract: the same Owner QA action stores a value-free continuation cue and starts server-owned cooldown in one UoW, then preserves only that cue across the direct elapsed cooldown transition. It is not public Echo UI, does not add provider input or Candidate/Memory authority writes, and has deployed isolated Postgres evidence. Natural-language topic re-identification and automatic reopening remain intentionally unimplemented pending product matching/ambiguity decisions. Registry status remains deliberately conservative."
   },
     "baselines": {
-    "backend": "main@cf77def / Voice-DH default-deny Authority schema deployed; documentation head c132605",
+    "backend": "main@be0153e / Voice-DH blocked sample-intent receipt G0 deployed; migration 0043 verified",
     "ios": "feature/prd-stitch-ui-adaptation@1943bfd / C00 current-state inventory freeze refreshed locally",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -123,9 +127,9 @@
       "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G3_G4_OPEN"
     },
     {
-      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-training-preflight-g0.md",
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-training-preflight-g0.md; ../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-blocked-sample-intent-g0.md",
       "id": "WI-V0-01-03",
-      "implementationStatus": "INTERNAL_READY / V0_TRAINING_PREFLIGHT_G0_DEPLOYED_fc01a00 / STRICT_DEFAULT_DENY / SYNTHETIC_VALUE_MINIMIZED_INPUT_ONLY / NO_ROUTE_NO_SAMPLEOBJECT_NO_PROVIDER_NO_MEDIA_NO_CREDENTIAL_NO_UI / G2_G3_G4_OPEN",
+      "implementationStatus": "INTERNAL_READY / V0_TRAINING_PREFLIGHT_AND_BLOCKED_SAMPLE_INTENT_G0_G2_DEPLOYED_be0153e / STRICT_DEFAULT_DENY / SYNTHETIC_VALUE_MINIMIZED_INPUT_ONLY / NO_ROUTE_NO_SAMPLEOBJECT_NO_PROVIDER_NO_MEDIA_NO_CREDENTIAL_NO_UI / G2_SOURCE_OBJECT_G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G2_G3_G4_OPEN"
     },
     {
@@ -633,5 +637,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-23T10:15:21+0800"
+  "updatedAt": "2026-07-23T10:35:05+0800"
 }
