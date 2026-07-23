@@ -1598,6 +1598,7 @@ struct DigitalHumanSessionContract {
     let smartActionEnabled: Bool
     let sessionPolicy: DigitalHumanSessionPolicy
     let credential: DigitalHumanSessionCredential
+    let authority: VoiceDigitalHumanAuthorityEnvelope?
     let fallbackMode: String
     let fallbackReason: String
     var lease: DigitalHumanSessionLeaseContract?
@@ -1637,6 +1638,7 @@ struct DigitalHumanSessionContract {
         self.smartActionEnabled = json["smartActionEnabled"] as? Bool ?? false
         self.sessionPolicy = DigitalHumanSessionPolicy(json: json["sessionPolicy"] as? [String: Any])
         self.credential = DigitalHumanSessionCredential(json: json["credential"] as? [String: Any])
+        self.authority = VoiceDigitalHumanAuthorityEnvelope(json: json["authority"] as? [String: Any])
         let fallback = json["fallback"] as? [String: Any]
         self.fallbackMode = fallback?["mode"] as? String ?? "audioOnly"
         self.fallbackReason = fallback?["reason"] as? String ?? ""
@@ -1890,6 +1892,7 @@ struct VoiceCloneProfileContract {
     let providerBindingMode: String
     let providerSlotManaged: Bool
     let providerSlotState: String
+    let authority: VoiceDigitalHumanAuthorityEnvelope?
 
     init?(json: [String: Any]) {
         guard let voiceProfileId = json["voiceProfileId"] as? String,
@@ -1921,6 +1924,7 @@ struct VoiceCloneProfileContract {
         )
         self.providerSlotManaged = json["providerSlotManaged"] as? Bool ?? false
         self.providerSlotState = json["providerSlotState"] as? String ?? ""
+        self.authority = VoiceDigitalHumanAuthorityEnvelope(json: json["authority"] as? [String: Any])
     }
 
     private static func intValue(_ value: Any?) -> Int? {
@@ -1951,6 +1955,7 @@ struct VoiceCloneSynthesisResult {
     let providerLogId: String?
     let providerRequestId: String?
     let visemeTimeline: DigitalHumanLipSyncTimeline?
+    let authority: VoiceDigitalHumanAuthorityEnvelope?
 
     init?(json: [String: Any]) {
         guard let voiceProfileId = json["voiceProfileId"] as? String,
@@ -1976,6 +1981,7 @@ struct VoiceCloneSynthesisResult {
         } else {
             self.visemeTimeline = nil
         }
+        self.authority = VoiceDigitalHumanAuthorityEnvelope(json: json["authority"] as? [String: Any])
     }
 
     var audioData: Data? {

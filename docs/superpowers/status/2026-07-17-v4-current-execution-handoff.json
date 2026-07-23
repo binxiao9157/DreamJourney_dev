@@ -41,9 +41,10 @@
       "WI-S1-01-03-M0A-31-SAME_VAULT_THREAD_PREFERENCE_ISOLATION_G0_G2_DEPLOYED",
       "WI-S1-01-04-FORMAL_CONFIRMATION_FEATURE_CONSTRAINT_G0_G2_DEPLOYED",
       "WI-V0-01-02-G0_G2-DEFAULT_DENY_PROFILE_AUTHORITY_SCHEMA_DEPLOYED",
-      "WI-V0-01-03-G0-A-DEFAULT_DENY_TRAINING_PREFLIGHT_DEPLOYED"
+      "WI-V0-01-03-G0-A-DEFAULT_DENY_TRAINING_PREFLIGHT_DEPLOYED",
+      "WI-V0-01-03-G0-B-IOS_OPTIONAL_AUTHORITY_ADAPTER_G0_G1_VERIFIED"
     ],
-    "currentSubSlice": "WI-V0-01-03-G0-A-DEFAULT_DENY_TRAINING_PREFLIGHT_DEPLOYED / NEXT:RECONCILE_REMAINING_M1_AUTHORITY_SUBSLICES_WITHOUT_PROVIDER_OR_UI_PROMOTION",
+    "currentSubSlice": "WI-V0-01-03-G0-B-IOS_OPTIONAL_AUTHORITY_ADAPTER_G0_G1_VERIFIED / NEXT:RECONCILE_REMAINING_M1_AUTHORITY_SUBSLICES_WITHOUT_PROVIDER_OR_UI_PROMOTION",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
       "G0": "SCOPED_VERIFIED / DEFAULT_DENY_TRAINING_PREFLIGHT_REJECTS_PROXY_SUBJECTS_LEGACY_SPEAKER_IDS_RAW_AUDIO_URLS_AND_DUPLICATE_COMMANDS_WITH_ZERO_PROVIDER_EFFECT",
@@ -64,9 +65,10 @@
       "voiceDhAuthorityBackendCommit": "cf77def",
       "voiceDhAuthorityDeployment": "passed / migration=0042 applied+verified / ready=status=ready / API-container disposable Postgres smoke reports profileStatus=blocked receiptCount=1 providerEffectPerformed=false",
       "voiceTrainingPreflightBackendCommit": "fc01a00",
-      "voiceTrainingPreflightDeployment": "passed / ready=status=ready / API-container runtime smoke and G0 gate report voiceTrainingPreflight=blocked providerEffectPerformed=false sampleObjectCreated=false trainingCommandCreated=false"
+      "voiceTrainingPreflightDeployment": "passed / ready=status=ready / API-container runtime smoke and G0 gate report voiceTrainingPreflight=blocked providerEffectPerformed=false sampleObjectCreated=false trainingCommandCreated=false",
+      "voiceDhAuthorityIOSAdapter": "passed / optional authority child parsing for digital-human session, voice profile and synthesis contracts; nil, subject mismatch, Vault mismatch and non-blocked status fail closed; static/model gate, 6 focused XCTest cases and generic iPhoneOS build passed; no runtime promotion, Provider effect, media parsing or UI exposure"
     },
-    "currentSummary": "WI-V0-01-03 now has a deployed G0-A default-deny training preflight. It accepts only synthetic, value-minimized references; rejects family/proxy subjects, non-eligible subjects, incomplete consent, legacy Provider speaker IDs, raw audio/URL fields and replayed request hashes; and always reports zero Provider effect, SampleObject creation and training-command creation. It does not make M1 Voice ready: real SourceObject binding, scan/retention, Provider training/delete/reconcile and G4 approval remain open.",
+    "currentSummary": "WI-V0-01-03 now has a deployed G0-A default-deny training preflight. It accepts only synthetic, value-minimized references; rejects family/proxy subjects, non-eligible subjects, incomplete consent, legacy Provider speaker IDs, raw audio/URL fields and replayed request hashes; and always reports zero Provider effect, SampleObject creation and training-command creation. G0-B adds an iOS optional authority adapter that parses only the authority child of Digital Human session, voice-profile and synthesis contracts; nil, subject mismatch, Vault mismatch and non-blocked status remain default-denied, with no runtime promotion, Provider effect, media parsing or public UI. It does not make M1 Voice ready: real SourceObject binding, scan/retention, Provider training/delete/reconcile and G4 approval remain open.",
     "predecessorWorkItem": "WI-S1-01-03",
     "formalBoundaryEvidence": "docs/superpowers/status/2026-07-23-wi-s1-01-03-m0a-formal-user-boundary-command.md",
     "formalBoundaryUseCaseEvidence": "docs/superpowers/status/2026-07-23-wi-s1-01-03-m0a-lease-fenced-boundary-use-case.md",
@@ -631,5 +633,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-23T10:06:00+0800"
+  "updatedAt": "2026-07-23T10:15:21+0800"
 }

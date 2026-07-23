@@ -909,6 +909,87 @@ final class VoiceDigitalHumanClientPortModelTests: XCTestCase {
         XCTAssertEqual(request.lifecycleMode, .sunlight)
     }
 
+    func testAuthorityEnvelopeObservesOnlyMatchingBlockedAuthority() throws {
+        let lease = makeAccountLease(subjectId: "viewer-1", generation: 8)
+        let authority = try XCTUnwrap(
+            VoiceDigitalHumanAuthorityEnvelope(
+                json: [
+                    "schemaVersion": 1,
+                    "subjectId": "viewer-1",
+                    "vaultId": "vault-viewer-1",
+                    "authorityEpoch": 3,
+                    "purpose": "voiceTraining",
+                    "resourceKind": "voiceProfile",
+                    "status": "blocked",
+                    "receiptIdHash": String(repeating: "a", count: 64)
+                ]
+            )
+        )
+
+        let decision = VoiceDigitalHumanAuthorityAdapter.decide(
+            authority: authority,
+            accountLease: lease
+        )
+
+        XCTAssertEqual(decision.state, .observedDefaultDeny)
+        XCTAssertEqual(decision.authority, authority)
+        XCTAssertFalse(decision.providerEffectAllowed)
+        XCTAssertFalse(decision.runtimePromotionAllowed)
+    }
+
+    func testAuthorityAdapterRejectsMissingMismatchedAndNonBlockedAuthority() throws {
+        let lease = makeAccountLease(subjectId: "viewer-1", generation: 8)
+        let basePayload: [String: Any] = [
+            "schemaVersion": 1,
+            "subjectId": "viewer-1",
+            "vaultId": "vault-viewer-1",
+            "authorityEpoch": "3",
+            "purpose": "voiceTraining",
+            "resourceKind": "voiceProfile",
+            "status": "blocked",
+            "receiptIdHash": String(repeating: "b", count: 64)
+        ]
+
+        XCTAssertEqual(
+            VoiceDigitalHumanAuthorityAdapter.decide(authority: nil, accountLease: lease).state,
+            .unavailable
+        )
+
+        var subjectMismatchPayload = basePayload
+        subjectMismatchPayload["subjectId"] = "viewer-2"
+        let subjectMismatch = try XCTUnwrap(
+            VoiceDigitalHumanAuthorityEnvelope(json: subjectMismatchPayload)
+        )
+        XCTAssertEqual(
+            VoiceDigitalHumanAuthorityAdapter.decide(
+                authority: subjectMismatch,
+                accountLease: lease
+            ).state,
+            .subjectMismatch
+        )
+
+        var vaultMismatchPayload = basePayload
+        vaultMismatchPayload["vaultId"] = "vault-viewer-2"
+        let vaultMismatch = try XCTUnwrap(
+            VoiceDigitalHumanAuthorityEnvelope(json: vaultMismatchPayload)
+        )
+        XCTAssertEqual(
+            VoiceDigitalHumanAuthorityAdapter.decide(
+                authority: vaultMismatch,
+                accountLease: lease
+            ).state,
+            .vaultMismatch
+        )
+
+        var pendingPayload = basePayload
+        pendingPayload["status"] = "pending"
+        let pending = try XCTUnwrap(VoiceDigitalHumanAuthorityEnvelope(json: pendingPayload))
+        XCTAssertEqual(
+            VoiceDigitalHumanAuthorityAdapter.decide(authority: pending, accountLease: lease).state,
+            .defaultDenied
+        )
+    }
+
     private func makeAccountLease(subjectId: String, generation: UInt64) -> AccountLease {
         AccountLease(
             subjectId: subjectId,

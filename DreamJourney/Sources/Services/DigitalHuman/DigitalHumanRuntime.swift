@@ -78,6 +78,134 @@ struct VoiceDigitalHumanOperationScope: Equatable, Sendable {
     }
 }
 
+/// Value-minimized Authority data that may accompany a future backend contract.
+/// It is observational only until the server and client share an enforceable
+/// authority-epoch mapping.
+struct VoiceDigitalHumanAuthorityEnvelope: Equatable, Sendable {
+    let schemaVersion: Int
+    let subjectId: String
+    let vaultId: String
+    let authorityEpoch: String
+    let purpose: String
+    let resourceKind: String
+    let status: String
+    let receiptIdHash: String
+
+    init?(json: [String: Any]?) {
+        guard let json,
+              let schemaVersion = Self.intValue(json["schemaVersion"]),
+              schemaVersion > 0,
+              let subjectId = Self.opaqueIdentifier(json["subjectId"]),
+              let vaultId = Self.opaqueIdentifier(json["vaultId"]),
+              let authorityEpoch = Self.opaqueIdentifier(Self.stringValue(json["authorityEpoch"])),
+              let purpose = Self.opaqueIdentifier(json["purpose"]),
+              let resourceKind = Self.opaqueIdentifier(json["resourceKind"]),
+              let status = Self.opaqueIdentifier(json["status"]),
+              let receiptIdHash = Self.sha256(json["receiptIdHash"]) else {
+            return nil
+        }
+        self.schemaVersion = schemaVersion
+        self.subjectId = subjectId
+        self.vaultId = vaultId
+        self.authorityEpoch = authorityEpoch
+        self.purpose = purpose
+        self.resourceKind = resourceKind
+        self.status = status
+        self.receiptIdHash = receiptIdHash
+    }
+
+    private static func opaqueIdentifier(_ value: Any?) -> String? {
+        guard let raw = value as? String else {
+            return nil
+        }
+        let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty,
+              normalized.count <= 128,
+              normalized.unicodeScalars.allSatisfy({ scalar in
+                  CharacterSet.alphanumerics.contains(scalar)
+                      || scalar == "."
+                      || scalar == "_"
+                      || scalar == ":"
+                      || scalar == "-"
+              }) else {
+            return nil
+        }
+        return normalized
+    }
+
+    private static func sha256(_ value: Any?) -> String? {
+        guard let raw = value as? String else {
+            return nil
+        }
+        let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let hexadecimal = CharacterSet(charactersIn: "0123456789abcdef")
+        guard normalized.count == 64,
+              normalized.unicodeScalars.allSatisfy({ hexadecimal.contains($0) }) else {
+            return nil
+        }
+        return normalized
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+
+    private static func stringValue(_ value: Any?) -> String? {
+        if let value = value as? String {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.stringValue
+        }
+        return nil
+    }
+}
+
+enum VoiceDigitalHumanAuthorityDecisionState: Equatable, Sendable {
+    case unavailable
+    case subjectMismatch
+    case vaultMismatch
+    case defaultDenied
+    case observedDefaultDeny
+}
+
+struct VoiceDigitalHumanAuthorityDecision: Equatable, Sendable {
+    let state: VoiceDigitalHumanAuthorityDecisionState
+    let authority: VoiceDigitalHumanAuthorityEnvelope?
+    let providerEffectAllowed: Bool = false
+    let runtimePromotionAllowed: Bool = false
+}
+
+enum VoiceDigitalHumanAuthorityAdapter {
+    static func decide(
+        authority: VoiceDigitalHumanAuthorityEnvelope?,
+        accountLease: AccountLease
+    ) -> VoiceDigitalHumanAuthorityDecision {
+        guard let authority else {
+            return VoiceDigitalHumanAuthorityDecision(state: .unavailable, authority: nil)
+        }
+        guard authority.subjectId == accountLease.subjectId else {
+            return VoiceDigitalHumanAuthorityDecision(state: .subjectMismatch, authority: authority)
+        }
+        guard authority.vaultId == accountLease.vaultId else {
+            return VoiceDigitalHumanAuthorityDecision(state: .vaultMismatch, authority: authority)
+        }
+        guard !authority.authorityEpoch.isEmpty, authority.status == "blocked" else {
+            return VoiceDigitalHumanAuthorityDecision(state: .defaultDenied, authority: authority)
+        }
+        return VoiceDigitalHumanAuthorityDecision(state: .observedDefaultDeny, authority: authority)
+    }
+}
+
 struct VoiceCloneSynthesisRequest: Equatable, Sendable {
     let scope: VoiceDigitalHumanOperationScope
     let voiceProfileId: String
