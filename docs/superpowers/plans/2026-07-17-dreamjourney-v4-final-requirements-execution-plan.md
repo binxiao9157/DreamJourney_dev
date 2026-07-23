@@ -155,7 +155,7 @@ GIC 需求在本计划中的唯一落点：
 
 ### 3.2 当前活动任务
 
-截至 2026-07-23，`docs/superpowers/status/2026-07-17-v4-current-execution-handoff.json` 已登记 `86/115` 个具有实现或验证证据的 Work Item。该数字只表示**证据覆盖**，不等同于公开发布完成率；Registry 继续保留 `PLANNED/STOP`，直到全部适用 Gate 有独立证据，不能把 G3/G4 或真实设备/法务门误算为“未开发”。
+截至 2026-07-23，`docs/superpowers/status/2026-07-17-v4-current-execution-handoff.json` 已登记 `87/115` 个具有实现或验证证据的 Work Item。该数字只表示**证据覆盖**，不等同于公开发布完成率；Registry 继续保留 `PLANNED/STOP`，直到全部适用 Gate 有独立证据，不能把 G3/G4 或真实设备/法务门误算为“未开发”。
 
 `WI-S0-06-09` 新规即时安全止损已经完成代码合同、后端部署和 scoped G0/G2 验证；M1-M4 仍默认关闭。`WI-S0-04-05` 已完成恢复工具、运行时围栏和真实 Postgres 隔离恢复演练，但 G2 结论仍为 `NO_GO`：历史数据存在 owner orphan 且全库 replay bundle 缺失，因此不得恢复切流。两项状态分别见 `docs/superpowers/status/2026-07-17-wi-s0-06-09-safety-stop-loss.md` 与 `docs/superpowers/status/2026-07-17-wi-s0-04-05-postgres-recovery.md`。
 
