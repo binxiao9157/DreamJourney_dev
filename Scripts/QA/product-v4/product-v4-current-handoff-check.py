@@ -41,6 +41,11 @@ def visit_keys(value: object, path: str = "$") -> None:
             visit_keys(child, f"{path}[{index}]")
 
 
+def evidence_paths(raw_evidence: str) -> list[str]:
+    """Split the handoff's semicolon-delimited evidence references."""
+    return [path.strip() for path in raw_evidence.split(";") if path.strip()]
+
+
 def main() -> None:
     handoff = json.loads(HANDOFF.read_text(encoding="utf-8"))
     registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
@@ -77,9 +82,15 @@ def main() -> None:
     require(len(evidence_ids) >= 22, "handoff must preserve the accepted evidence baseline")
     require(set(evidence_ids) <= registry_ids, "handoff references unknown Work Item")
     for item in evidence_items:
-        evidence = ROOT / item["evidence"]
-        require(evidence.is_file(), f"missing evidence: {item['evidence']}")
-        require(item["id"] in evidence.read_text(encoding="utf-8"), f"evidence ID mismatch: {item['id']}")
+        paths = evidence_paths(item["evidence"])
+        require(paths, f"missing evidence reference: {item['id']}")
+        evidence_files = [ROOT / path for path in paths]
+        for evidence in evidence_files:
+            require(evidence.is_file(), f"missing evidence: {evidence}")
+        require(
+            any(item["id"] in evidence.read_text(encoding="utf-8") for evidence in evidence_files),
+            f"evidence ID mismatch: {item['id']}",
+        )
 
     active = handoff["activeWorkItem"]
     require(active["state"] == "IN_PROGRESS", "active Work Item must be IN_PROGRESS")

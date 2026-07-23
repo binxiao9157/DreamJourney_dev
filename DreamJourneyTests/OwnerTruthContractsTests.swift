@@ -1445,6 +1445,58 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertNil(retryUseCase.viewState.latestReceipt)
     }
 
+    func testInterviewNaturalInputUseCaseRejectsSameLeaseReceiptFromDifferentThreadAndSession() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let firstClient = InterviewNaturalInputClientSpy()
+        let secondClient = InterviewNaturalInputClientSpy()
+        firstClient.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        firstClient.boundaryHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, boundary: command) }
+        }
+        secondClient.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        let firstUseCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: firstClient,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        let secondUseCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: secondClient,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        firstUseCase.send(.start)
+        secondUseCase.send(.start)
+        let firstStartReceipt = try XCTUnwrap(firstUseCase.viewState.latestReceipt)
+        let secondStartReceipt = try XCTUnwrap(secondUseCase.viewState.latestReceipt)
+        XCTAssertEqual(firstStartReceipt.vaultID, secondStartReceipt.vaultID)
+        XCTAssertNotEqual(firstStartReceipt.threadID, secondStartReceipt.threadID)
+        XCTAssertNotEqual(firstStartReceipt.sessionID, secondStartReceipt.sessionID)
+
+        firstUseCase.send(.setBoundary(.cooldown))
+        let firstCooldownReceipt = try XCTUnwrap(firstUseCase.viewState.latestReceipt)
+        XCTAssertEqual(firstCooldownReceipt.boundary, .cooldown)
+        secondClient.boundaryHandler = { _ in .success(firstCooldownReceipt) }
+
+        secondUseCase.send(.setBoundary(.cooldown))
+
+        let secondBoundaryCommand = try XCTUnwrap(secondClient.boundaryCommand)
+        XCTAssertFalse(firstCooldownReceipt.matches(secondBoundaryCommand))
+        XCTAssertEqual(secondUseCase.viewState.phase, .failed)
+        XCTAssertEqual(secondUseCase.viewState.notice, .contractMismatch)
+        XCTAssertNil(secondUseCase.viewState.latestReceipt)
+        XCTAssertNil(secondUseCase.viewState.continuation)
+        XCTAssertEqual(firstUseCase.viewState.phase, .ready)
+        XCTAssertEqual(firstUseCase.viewState.latestReceipt, firstCooldownReceipt)
+    }
+
     func testInterviewNaturalInputUseCaseFailsClosedWhenQAGateIsDisabled() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let client = InterviewNaturalInputClientSpy()
