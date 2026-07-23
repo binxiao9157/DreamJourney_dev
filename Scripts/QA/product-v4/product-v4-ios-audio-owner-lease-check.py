@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guard WI-S1-03-07's pure lease model and direct AVAudioSession inventory."""
+"""Guard WI-S1-03-07's pure model and Echo-only AudioSession enforcement."""
 
 from __future__ import annotations
 
@@ -11,13 +11,14 @@ MODEL = ROOT / "DreamJourney/Sources/App/AudioOwnerLeaseModel.swift"
 COORDINATOR = ROOT / "DreamJourney/Sources/App/AudioOwnerLeaseCoordinator.swift"
 TESTS = ROOT / "DreamJourneyTests/AudioOwnerLeaseModelTests.swift"
 ECHO = ROOT / "DreamJourney/Sources/Modules/Echo/EchoViewController.swift"
+DIALOG = ROOT / "DreamJourney/Sources/Services/DialogEngineManager.swift"
 SOURCE_ROOT = ROOT / "DreamJourney/Sources"
 
 EXPECTED_DIRECT_AUDIO_SESSION_CONFIGURATORS = {
+    "DreamJourney/Sources/App/AudioOwnerLeaseCoordinator.swift",
     "DreamJourney/Sources/Memoir/MemoirAudioPlayer.swift",
     "DreamJourney/Sources/Modules/Archive/MemoryArchiveAudioRecorderViewController.swift",
     "DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift",
-    "DreamJourney/Sources/Modules/Echo/EchoViewController.swift",
     "DreamJourney/Sources/Modules/Memory/MemoryDetailViewController.swift",
     "DreamJourney/Sources/Modules/Profile/ProfileVoiceCloneShellViewController.swift",
     "DreamJourney/Sources/Services/DialogEngineManager.swift",
@@ -50,6 +51,7 @@ def main() -> None:
     coordinator = read(COORDINATOR)
     tests = read(TESTS)
     echo = read(ECHO)
+    dialog = read(DIALOG)
 
     for required in (
         "enum AudioOwnerLeasePurpose",
@@ -76,6 +78,10 @@ def main() -> None:
         "func testRepeatedObserveOnlyOwnerDoesNotCreateAnotherLease()",
         "func testObserveOnlySystemEventsRequireTheCurrentLeaseToken()",
         "func testFallbackOrBackgroundReleaseClearsTencentLeaseBeforeNewCapture()",
+        "func testTencentPlaybackPreemptsCaptureAndStaleReleaseCannotDeactivateIt()",
+        "func testFailedTencentPreemptionRestoresCaptureAndDoesNotCommitNewOwner()",
+        "func testOnlyCurrentInterruptedLeaseCanResumeAndResumeReactivatesDriver()",
+        "func testFailedDeactivationRetainsCurrentLease()",
     ):
         require(test_name in tests, f"audio owner lease XCTest missing: {test_name}")
 
@@ -90,36 +96,55 @@ def main() -> None:
         "func observeResume(for lease: AudioOwnerLease)",
         "func observeRouteChange(for lease: AudioOwnerLease)",
         "static let shared = AudioOwnerLeaseCoordinator()",
-        "does not configure AVAudioSession yet",
-    ):
-        require(required in coordinator, f"audio owner observe coordinator missing: {required}")
-
-    for forbidden in (
-        "import AVFoundation",
+        "protocol AudioSessionDriving",
+        "final class AudioSessionCoordinator",
+        "func acquire(",
+        "func release(_ lease: AudioOwnerLease)",
+        "func interrupt(_ lease: AudioOwnerLease)",
+        "func resume(_ lease: AudioOwnerLease)",
+        "func routeDidChange(for lease: AudioOwnerLease)",
+        "func isCurrentActiveLease(_ lease: AudioOwnerLease)",
+        "static let shared = AudioSessionCoordinator(driver: SystemAudioSessionDriver())",
+        "private final class SystemAudioSessionDriver",
         "AVAudioSession.sharedInstance",
-        ".setCategory(",
-        ".setActive(",
     ):
+        require(required in coordinator, f"audio owner coordinator missing: {required}")
+
+    for forbidden in ("AVAudioSession.sharedInstance", ".setCategory(", ".setActive("):
         require(
-            forbidden not in coordinator,
-            f"observe coordinator must not configure audio runtime: {forbidden}",
+            forbidden not in echo,
+            f"Echo must not configure AVAudioSession directly: {forbidden}",
         )
     for required in (
         "private var activeEchoAudioOwnerLease: AudioOwnerLease?",
-        "observeEchoRuntimeAudioOwner(",
-        "AudioOwnerLeaseCoordinator.shared.observeOwner(",
+        "acquireEchoRuntimeAudioOwner(",
+        "releaseEchoAudioOwnerLease(",
+        "AudioSessionCoordinator.shared.acquire(",
+        "AudioSessionCoordinator.shared.release(",
+        "prepareEchoCaptureAudioSession(reason:",
+        "DialogEngineManager.shared.adoptExternallyManagedAudioSessionLease(lease)",
         "AVAudioSession.interruptionNotification",
         "AVAudioSession.routeChangeNotification",
         "reason: \"dialogStarted\"",
         "reason: \"digitalHumanRuntimeSpeaking\"",
-        "releaseObservedEchoAudioOwnerLease(reason: \"viewWillDisappear\")",
+        "releaseEchoAudioOwnerLease(reason: \"viewWillDisappear\")",
         "expectedOwner: .tencentDigitalHumanPlayback",
         "reason: \"runtimeReleased:\\(reason)\"",
         "reason: \"contextChanged\"",
         "interruptDigitalHumanPlayback(reason: \"appLifecycle:\\(reason)\")",
         "reason: \"appLifecycle:backgroundGraceExpired\"",
+        "audioSessionCoordinatorActivationFailed",
     ):
-        require(required in echo, f"Echo observe-only audio owner adapter missing: {required}")
+        require(required in echo, f"Echo AudioSession coordinator adapter missing: {required}")
+
+    for required in (
+        "private var externallyManagedAudioSessionLease: AudioOwnerLease?",
+        "func adoptExternallyManagedAudioSessionLease(_ lease: AudioOwnerLease) -> Bool",
+        "AudioSessionCoordinator.shared.isCurrentActiveLease(externallyManagedAudioSessionLease)",
+        "guard configureAudioSession() else",
+        "跳过 AudioSession 恢复：Echo coordinator 持有会话",
+    ):
+        require(required in dialog, f"DialogEngine managed-audio lease guard missing: {required}")
 
     actual_configurators = direct_audio_session_configurators()
     require(
@@ -130,7 +155,8 @@ def main() -> None:
     )
 
     print(
-        "Product V4 iOS audio owner lease check passed: pure interruption model and "
+        "Product V4 iOS audio owner lease check passed: pure interruption model, Echo-only "
+        "AudioSessionCoordinator enforcement, and "
         f"{len(actual_configurators)} direct AVAudioSession configurators are inventoried"
     )
 

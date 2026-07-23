@@ -945,7 +945,7 @@ final class EchoViewController: UIViewController {
             }
         }
         releaseDigitalHumanRuntime(reason: "viewWillDisappear", resetsAudioOwnerToOrdinaryEcho: true)
-        releaseObservedEchoAudioOwnerLease(reason: "viewWillDisappear")
+        releaseEchoAudioOwnerLease(reason: "viewWillDisappear")
         if ownsDialogDelegate {
             DialogEngineManager.shared.delegate = nil
             releaseDialogEngineBinding()
@@ -2099,7 +2099,7 @@ final class EchoViewController: UIViewController {
         // Runtime teardown must retire only Tencent's observed playback lease. This keeps
         // a role switch, fallback, or background release from leaving the old provider
         // session visible as the current audio owner in diagnostics.
-        releaseObservedEchoAudioOwnerLease(
+        releaseEchoAudioOwnerLease(
             expectedOwner: .tencentDigitalHumanPlayback,
             reason: "runtimeReleased:\(reason)"
         )
@@ -3066,7 +3066,7 @@ final class EchoViewController: UIViewController {
         let previousOwner = currentEchoAudioOwner
         currentEchoAudioOwner = owner
         if owner == .fallbackMuted {
-            releaseObservedEchoAudioOwnerLease(reason: "desiredMuted:\(reason)")
+            releaseEchoAudioOwnerLease(reason: "desiredMuted:\(reason)")
         }
         PrivacySafeDiagnostics.log(
             subsystem: "TencentDigitalHuman",
@@ -3082,41 +3082,48 @@ final class EchoViewController: UIViewController {
 
     /// Route preference is deliberately separate from a runtime lease. A Tencent route can
     /// be ready while the microphone is still listening; only actual capture/playback events
-    /// below obtain an observation lease.
-    private func observeEchoRuntimeAudioOwner(
+    /// below acquire the system AudioSession through the coordinator.
+    @discardableResult
+    private func acquireEchoRuntimeAudioOwner(
         _ owner: AudioOwnerLeaseOwner,
         priority: AudioOwnerLeasePriority,
         reason: String
-    ) {
+    ) -> Bool {
         guard let scope = currentEchoAudioOwnerLeaseScope() else {
-            releaseObservedEchoAudioOwnerLease(reason: "missingScope:\(reason)")
-            return
+            releaseEchoAudioOwnerLease(reason: "missingScope:\(reason)")
+            return false
         }
 
-        let result = AudioOwnerLeaseCoordinator.shared.observeOwner(
+        let result = AudioSessionCoordinator.shared.acquire(
             owner,
             priority: priority,
             scope: scope
         )
+        let accepted: Bool
         switch result {
         case let .unchanged(lease), let .acquired(lease), let .preempted(_, lease):
             activeEchoAudioOwnerLease = lease
+            accepted = true
+        case let .activationFailed(_, active, _):
+            activeEchoAudioOwnerLease = active
+            accepted = false
         case .deniedByActiveOwner, .deniedStaleGeneration,
-                .released, .ignoredStaleRelease,
+                .released, .ignoredStaleRelease, .deactivationFailed,
                 .ignoredStaleEvent, .ignoredNotInterrupted:
             activeEchoAudioOwnerLease = nil
-        case let .interrupted(lease), let .alreadyInterrupted(lease), let .resumed(lease),
-                let .routeChanged(lease):
-            activeEchoAudioOwnerLease = lease
+            accepted = false
+        case .interrupted, .alreadyInterrupted, .resumed, .routeChanged:
+            accepted = false
         }
-        recordEchoAudioOwnerLeaseObservation(
+        recordEchoAudioSessionCoordinatorTransition(
             result,
             requestedOwner: owner.rawValue,
             reason: reason
         )
+        return accepted
     }
 
-    private func releaseObservedEchoAudioOwnerLease(
+    private func releaseEchoAudioOwnerLease(
         expectedOwner: AudioOwnerLeaseOwner? = nil,
         reason: String
     ) {
@@ -3124,16 +3131,26 @@ final class EchoViewController: UIViewController {
             return
         }
         guard expectedOwner == nil || activeLease.owner == expectedOwner else {
-            recordEchoAudioOwnerLeaseObservation(
+            recordEchoAudioSessionCoordinatorTransition(
                 .ignoredStaleEvent(active: activeLease),
                 requestedOwner: expectedOwner?.rawValue ?? "none",
                 reason: "ownerMismatch:\(reason)"
             )
             return
         }
-        activeEchoAudioOwnerLease = nil
-        let result = AudioOwnerLeaseCoordinator.shared.releaseObservedLease(activeLease)
-        recordEchoAudioOwnerLeaseObservation(
+        let result = AudioSessionCoordinator.shared.release(activeLease)
+        switch result {
+        case .released, .ignoredStaleRelease:
+            activeEchoAudioOwnerLease = nil
+        case let .deactivationFailed(active):
+            activeEchoAudioOwnerLease = active
+        case .unchanged, .acquired, .preempted, .deniedByActiveOwner,
+                .deniedStaleGeneration, .interrupted, .alreadyInterrupted,
+                .resumed, .routeChanged, .ignoredStaleEvent,
+                .ignoredNotInterrupted, .activationFailed:
+            break
+        }
+        recordEchoAudioSessionCoordinatorTransition(
             result,
             requestedOwner: activeLease.owner.rawValue,
             reason: reason
@@ -3153,23 +3170,41 @@ final class EchoViewController: UIViewController {
         )
     }
 
-    private func recordEchoAudioOwnerLeaseObservation(
-        _ result: AudioOwnerLeaseObservationResult,
+    private func recordEchoAudioSessionCoordinatorTransition(
+        _ result: AudioSessionCoordinatorResult,
         requestedOwner: String,
         reason: String
     ) {
-        let snapshot = AudioOwnerLeaseCoordinator.shared.diagnosticsSnapshot()
+        let snapshot = AudioSessionCoordinator.shared.diagnosticsSnapshot()
         PrivacySafeDiagnostics.log(
             subsystem: "AudioOwnerLease",
-            event: "echoObserveOnlyTransition",
+            event: "echoAudioSessionCoordinatorTransition",
             states: [
                 "result": result.diagnosticCode,
                 "requestedOwner": requestedOwner,
                 "activeOwner": snapshot.activeLease?.owner.rawValue ?? "none",
-                "transitionCount": String(snapshot.observedTransitionCount),
+                "transitionCount": String(snapshot.transitionCount),
                 "reasonHash": PrivacySafeDiagnostics.correlationHash(reason),
             ]
         )
+    }
+
+    @discardableResult
+    private func prepareEchoCaptureAudioSession(reason: String) -> Bool {
+        guard acquireEchoRuntimeAudioOwner(
+            .echoCapture,
+            priority: .echoCapture,
+            reason: reason
+        ), let lease = activeEchoAudioOwnerLease,
+           lease.owner == .echoCapture,
+           DialogEngineManager.shared.adoptExternallyManagedAudioSessionLease(lease) else {
+            releaseEchoAudioOwnerLease(
+                expectedOwner: .echoCapture,
+                reason: "dialogEngineLeaseRejected:\(reason)"
+            )
+            return false
+        }
+        return true
     }
 
     private func observeEchoAudioSessionEvents() {
@@ -3194,22 +3229,22 @@ final class EchoViewController: UIViewController {
             return
         }
 
-        let result: AudioOwnerLeaseObservationResult
+        let result: AudioSessionCoordinatorResult
         switch type {
         case .began:
-            result = AudioOwnerLeaseCoordinator.shared.observeInterruption(for: activeLease)
+            result = AudioSessionCoordinator.shared.interrupt(activeLease)
         case .ended:
             let rawOptions = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
             let options = AVAudioSession.InterruptionOptions(rawValue: rawOptions)
             guard options.contains(.shouldResume) else {
                 PrivacySafeDiagnostics.log(
                     subsystem: "AudioOwnerLease",
-                    event: "echoObserveOnlyInterruptionEndedWithoutResume",
+                    event: "echoAudioSessionInterruptionEndedWithoutResume",
                     states: ["activeOwner": activeLease.owner.rawValue]
                 )
                 return
             }
-            result = AudioOwnerLeaseCoordinator.shared.observeResume(for: activeLease)
+            result = AudioSessionCoordinator.shared.resume(activeLease)
         @unknown default:
             return
         }
@@ -3219,12 +3254,14 @@ final class EchoViewController: UIViewController {
                 let .routeChanged(lease), let .unchanged(lease), let .acquired(lease),
                 let .preempted(_, lease):
             activeEchoAudioOwnerLease = lease
+        case let .activationFailed(_, active, _):
+            activeEchoAudioOwnerLease = active
         case .deniedByActiveOwner, .deniedStaleGeneration,
-                .released, .ignoredStaleRelease,
+                .released, .ignoredStaleRelease, .deactivationFailed,
                 .ignoredStaleEvent, .ignoredNotInterrupted:
             activeEchoAudioOwnerLease = nil
         }
-        recordEchoAudioOwnerLeaseObservation(
+        recordEchoAudioSessionCoordinatorTransition(
             result,
             requestedOwner: activeLease.owner.rawValue,
             reason: "audioSessionInterruption:\(type.rawValue)"
@@ -3235,19 +3272,21 @@ final class EchoViewController: UIViewController {
         guard let activeLease = activeEchoAudioOwnerLease else {
             return
         }
-        let result = AudioOwnerLeaseCoordinator.shared.observeRouteChange(for: activeLease)
+        let result = AudioSessionCoordinator.shared.routeDidChange(for: activeLease)
         switch result {
         case let .routeChanged(lease), let .unchanged(lease), let .acquired(lease),
                 let .preempted(_, lease), let .interrupted(lease), let .alreadyInterrupted(lease),
                 let .resumed(lease):
             activeEchoAudioOwnerLease = lease
+        case let .activationFailed(_, active, _):
+            activeEchoAudioOwnerLease = active
         case .deniedByActiveOwner, .deniedStaleGeneration,
-                .released, .ignoredStaleRelease,
+                .released, .ignoredStaleRelease, .deactivationFailed,
                 .ignoredStaleEvent, .ignoredNotInterrupted:
             activeEchoAudioOwnerLease = nil
         }
         let routeReason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
-        recordEchoAudioOwnerLeaseObservation(
+        recordEchoAudioSessionCoordinatorTransition(
             result,
             requestedOwner: activeLease.owner.rawValue,
             reason: "audioSessionRouteChange:\(routeReason.map(String.init) ?? "unknown")"
@@ -4080,32 +4119,32 @@ final class EchoViewController: UIViewController {
         )
     }
 
-    private func prepareAudioSessionForTencentProviderPlayback(preserveRecordingCategory: Bool) {
-        let session = AVAudioSession.sharedInstance()
-        do {
-            if session.category != .playAndRecord || session.mode != .voiceChat {
-                try session.setCategory(
-                    .playAndRecord,
-                    mode: .voiceChat,
-                    options: [.defaultToSpeaker, .allowBluetoothHFP]
-                )
-            }
-            try session.setActive(true)
+    @discardableResult
+    private func prepareAudioSessionForTencentProviderPlayback(
+        preserveRecordingCategory: Bool
+    ) -> Bool {
+        let acquired = acquireEchoRuntimeAudioOwner(
+            .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            reason: "prepareTencentProviderPlayback"
+        )
+        if acquired {
             PrivacySafeDiagnostics.log(
                 subsystem: "TencentDigitalHuman",
-                event: "audioSessionPrepared",
+                event: "audioSessionCoordinatorPrepared",
                 states: [
                     "category": "playAndRecord",
                     "preserveRecordingCategory": String(preserveRecordingCategory),
                 ]
             )
-        } catch {
+        } else {
             PrivacySafeDiagnostics.log(
                 subsystem: "TencentDigitalHuman",
-                event: "audioSessionPrepareFailed",
-                states: ["reason": "audioSessionFailure"]
+                event: "audioSessionCoordinatorPrepareFailed",
+                states: ["reason": "leaseActivationFailed"]
             )
         }
+        return acquired
     }
 
     private func markTencentProviderAudioHandoff(reason: String) {
@@ -4236,6 +4275,10 @@ final class EchoViewController: UIViewController {
         viewModel.beginVoiceInteraction()
         applyEchoAudioRoutePolicy()
         if DialogEngineManager.shared.isEngineReady {
+            guard prepareEchoCaptureAudioSession(reason: "resumeVoiceCapture:\(reason)") else {
+                handleBlockedRealtimeVoice(reason: "audioSessionCoordinatorActivationFailed")
+                return
+            }
             DialogEngineManager.shared.startDialog(
                 sendsGreeting: false,
                 usesTurnScopedKnowledgeContext: true
@@ -4413,7 +4456,15 @@ final class EchoViewController: UIViewController {
             return true
         }
         let pausedDialogEngine = pauseDialogEngineForTencentProviderSpeechIfNeeded()
-        prepareAudioSessionForTencentProviderPlayback(preserveRecordingCategory: pausedDialogEngine)
+        guard prepareAudioSessionForTencentProviderPlayback(
+            preserveRecordingCategory: pausedDialogEngine
+        ) else {
+            if runtimeInteractionCallback != nil {
+                echoRuntimeSessionCoordinator.finishInteraction()
+            }
+            degradeTencentDigitalHumanRoute(reason: "audioSessionCoordinatorActivationFailed")
+            return true
+        }
         digitalHumanConversation.beginProviderRequest(
             requestID: requestID,
             replyText: normalizedText,
@@ -5103,7 +5154,15 @@ final class EchoViewController: UIViewController {
 
         do {
             let pausedDialogEngine = pauseDialogEngineForTencentProviderSpeechIfNeeded()
-            prepareAudioSessionForTencentProviderPlayback(preserveRecordingCategory: pausedDialogEngine)
+            guard prepareAudioSessionForTencentProviderPlayback(
+                preserveRecordingCategory: pausedDialogEngine
+            ) else {
+                if runtimeInteractionCallback != nil {
+                    echoRuntimeSessionCoordinator.finishInteraction()
+                }
+                degradeTencentDigitalHumanRoute(reason: "audioSessionCoordinatorActivationFailed")
+                return
+            }
             try digitalHumanRuntime.sendTextChunk(normalizedText, requestID: requestID, sequence: 1, isFinal: true)
             digitalHumanConversation.beginProviderRequest(
                 requestID: requestID,
@@ -5252,7 +5311,7 @@ final class EchoViewController: UIViewController {
         let runtimeSessionCallback = echoRuntimeSessionCoordinator.currentSessionCallbackToken()
         stopDigitalHumanAudioLevelMetering()
         digitalHumanRuntime?.interrupt()
-        releaseObservedEchoAudioOwnerLease(
+        releaseEchoAudioOwnerLease(
             expectedOwner: .tencentDigitalHumanPlayback,
             reason: "providerTextOverTimeout"
         )
@@ -5303,7 +5362,7 @@ final class EchoViewController: UIViewController {
             digitalHumanRuntime?.interrupt()
         }
         stopDigitalHumanAudioLevelMetering()
-        releaseObservedEchoAudioOwnerLease(
+        releaseEchoAudioOwnerLease(
             expectedOwner: .tencentDigitalHumanPlayback,
             reason: "providerPlaybackInterrupted:\(reason)"
         )
@@ -5720,11 +5779,14 @@ final class EchoViewController: UIViewController {
             if shouldTraceTrueDeviceBackendPCMDrive {
                 trueDeviceBackendPCMDriveTrace.providerSpeakingObserved = true
             }
-            observeEchoRuntimeAudioOwner(
+            guard acquireEchoRuntimeAudioOwner(
                 .tencentDigitalHumanPlayback,
                 priority: .tencentDigitalHumanPlayback,
                 reason: "digitalHumanRuntimeSpeaking"
-            )
+            ) else {
+                degradeTencentDigitalHumanRoute(reason: "audioSessionCoordinatorActivationFailed")
+                return
+            }
             digitalHumanLivePanelView?.setInteractionState(.speaking)
             if case .speaking = currentState {
                 renderVoiceStatus(text: "腾讯数智人正在回响", isVisible: true)
@@ -5738,9 +5800,9 @@ final class EchoViewController: UIViewController {
             runTencentDigitalHumanPCMDriveSmokeIfNeeded(trigger: "runtimeReady")
             runTencentDigitalHumanBackendPCMDriveSmokeIfNeeded(trigger: "runtimeReady")
         case .interrupting, .closed:
-            releaseObservedEchoAudioOwnerLease(
-                expectedOwner: .tencentDigitalHumanPlayback,
-                reason: "digitalHumanRuntimeStopped"
+            releaseEchoAudioOwnerLease(
+            expectedOwner: .tencentDigitalHumanPlayback,
+            reason: "digitalHumanRuntimeStopped"
             )
             stopDigitalHumanAudioLevelMetering()
         case .failed(let code):
@@ -5764,7 +5826,7 @@ final class EchoViewController: UIViewController {
         stopDigitalHumanAudioLevelMetering()
         (digitalHumanRuntime as? TencentDigitalHumanCloudRuntime)?.setRemoteAudioMuted(true)
         digitalHumanRuntime.interrupt()
-        releaseObservedEchoAudioOwnerLease(
+        releaseEchoAudioOwnerLease(
             expectedOwner: .tencentDigitalHumanPlayback,
             reason: "prepareUserCapture"
         )
@@ -5832,7 +5894,7 @@ final class EchoViewController: UIViewController {
         echoRuntimeSessionCoordinator.finishInteraction()
         let runtimeSessionCallback = echoRuntimeSessionCoordinator.currentSessionCallbackToken()
         stopDigitalHumanAudioLevelMetering()
-        releaseObservedEchoAudioOwnerLease(
+        releaseEchoAudioOwnerLease(
             expectedOwner: .tencentDigitalHumanPlayback,
             reason: "providerPlaybackCompleted"
         )
@@ -6173,7 +6235,22 @@ final class EchoViewController: UIViewController {
             return
         }
         let pausedDialogEngine = pauseDialogEngineForTencentProviderSpeechIfNeeded()
-        prepareAudioSessionForTencentProviderPlayback(preserveRecordingCategory: pausedDialogEngine)
+        guard prepareAudioSessionForTencentProviderPlayback(
+            preserveRecordingCategory: pausedDialogEngine
+        ) else {
+            if runtimeInteractionCallback != nil {
+                echoRuntimeSessionCoordinator.finishInteraction()
+            }
+            if source == "trueDeviceBackendPCMDriveSmoke" {
+                trueDeviceBackendPCMDriveTrace.markFailure(
+                    reason: "audioSessionCoordinatorActivationFailed",
+                    detail: "The Echo audio-session coordinator could not activate Tencent playback"
+                )
+                emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "audioSessionCoordinatorActivationFailed")
+            }
+            degradeTencentDigitalHumanRoute(reason: "audioSessionCoordinatorActivationFailed")
+            return
+        }
         if source == "trueDeviceBackendPCMDriveSmoke" {
             trueDeviceBackendPCMDriveTrace.markRequest(turnID: turnID, requestID: requestID)
             trueDeviceBackendPCMDriveTrace.markSignal(
@@ -6500,6 +6577,10 @@ final class EchoViewController: UIViewController {
                     self.backendRuntimeTokenApplied = true
                     self.renderVoiceSDKReadinessPreviewIfNeeded()
                     self.applyEchoAudioRoutePolicy()
+                    guard self.prepareEchoCaptureAudioSession(reason: "configureVoiceRuntimeThenStart") else {
+                        self.handleBlockedRealtimeVoice(reason: "audioSessionCoordinatorActivationFailed")
+                        return
+                    }
                     DialogEngineManager.shared.startDialog(
                         sendsGreeting: !self.routeEchoAudioThroughDigitalHuman,
                         usesTurnScopedKnowledgeContext: true
@@ -6565,7 +6646,7 @@ final class EchoViewController: UIViewController {
             return
         }
 
-        releaseObservedEchoAudioOwnerLease(reason: "userStoppedVoiceCapture")
+        releaseEchoAudioOwnerLease(reason: "userStoppedVoiceCapture")
         invalidateDigitalHumanInteraction(reason: "userStoppedVoiceCapture")
         activeVoiceInteractionLifecycleToken = nil
         isStoppingVoiceCaptureManually = true
@@ -6779,11 +6860,10 @@ extension EchoViewController: DialogEngineDelegate {
                   self.validateEchoAccountLease(at: .ui, reason: "dialogStarted"),
                   self.activeVoiceInteractionToken(reason: "dialogStarted") != nil else { return }
             self.resetDigitalHumanReplyDispatchState()
-            self.observeEchoRuntimeAudioOwner(
-                .echoCapture,
-                priority: .echoCapture,
-                reason: "dialogStarted"
-            )
+            guard self.prepareEchoCaptureAudioSession(reason: "dialogStarted") else {
+                self.handleBlockedRealtimeVoice(reason: "audioSessionCoordinatorActivationFailed")
+                return
+            }
             self.viewModel.beginVoiceInteraction()
         }
     }
@@ -6795,7 +6875,7 @@ extension EchoViewController: DialogEngineDelegate {
                   self.validateEchoAccountLease(at: .ui, reason: "asrFinal"),
                   let lifecycleToken = self.activeVoiceInteractionToken(reason: "asrFinal"),
                   let accountLease = self.echoAccountLease else { return }
-            self.releaseObservedEchoAudioOwnerLease(
+            self.releaseEchoAudioOwnerLease(
                 expectedOwner: .echoCapture,
                 reason: "asrFinal"
             )
@@ -6852,11 +6932,14 @@ extension EchoViewController: DialogEngineDelegate {
                 print("[TencentDigitalHuman] skipped SDK TTS fallback; Tencent cloud render owns audio/lip-sync")
                 return
             }
-            self.observeEchoRuntimeAudioOwner(
+            guard self.acquireEchoRuntimeAudioOwner(
                 .echoLocalPlayback,
                 priority: .playback,
                 reason: "dialogTTSStarted"
-            )
+            ) else {
+                self.viewModel.fail("音频正在切换，请稍后重试")
+                return
+            }
             if self.applyCachedLipSyncTimelineForEchoReply(text) != true {
                 self.startSDKTTSPlaybackFallback()
             }
@@ -6875,7 +6958,7 @@ extension EchoViewController: DialogEngineDelegate {
                 print("[TencentDigitalHuman] waiting for provider TextOver before finishing Echo reply")
                 return
             }
-            self.releaseObservedEchoAudioOwnerLease(
+            self.releaseEchoAudioOwnerLease(
                 expectedOwner: .echoLocalPlayback,
                 reason: "dialogTTSFinished"
             )
@@ -6889,12 +6972,11 @@ extension EchoViewController: DialogEngineDelegate {
                         reason: "ttsFinishedResume"
                       ) else { return }
                 if DialogEngineManager.shared.isDialogActive {
-                    self.observeEchoRuntimeAudioOwner(
-                        .echoCapture,
-                        priority: .echoCapture,
-                        reason: "dialogTTSFinishedResume"
-                    )
-                    self.viewModel.beginVoiceInteraction()
+                    if self.prepareEchoCaptureAudioSession(reason: "dialogTTSFinishedResume") {
+                        self.viewModel.beginVoiceInteraction()
+                    } else {
+                        self.resetEchoViewModelToIdle()
+                    }
                 } else {
                     self.resetEchoViewModelToIdle()
                 }
@@ -6942,7 +7024,7 @@ extension EchoViewController: DialogEngineDelegate {
                 return
             }
 
-            self.releaseObservedEchoAudioOwnerLease(
+            self.releaseEchoAudioOwnerLease(
                 expectedOwner: .echoCapture,
                 reason: "dialogError"
             )
@@ -6960,7 +7042,7 @@ extension EchoViewController: DialogEngineDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self,
                   self.validateEchoAccountLease(at: .ui, reason: "dialogEnded") else { return }
-            self.releaseObservedEchoAudioOwnerLease(
+            self.releaseEchoAudioOwnerLease(
                 expectedOwner: .echoCapture,
                 reason: "dialogEnded"
             )
@@ -7022,6 +7104,9 @@ extension EchoViewController {
         DialogEngineManager.shared.delegate = self
         DialogEngineManager.shared.setup()
         viewModel.prepareVoiceInteraction()
+        guard prepareEchoCaptureAudioSession(reason: "uiqaMicrophoneSmoke") else {
+            return
+        }
         DialogEngineManager.shared.startDialog(
             sendsGreeting: false,
             usesTurnScopedKnowledgeContext: true

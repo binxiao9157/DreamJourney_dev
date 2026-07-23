@@ -270,6 +270,7 @@ final class DialogEngineManager: NSObject {
     private(set) var lastSubmittedTurnKnowledgeContextSource: String?
     private(set) var lastSubmittedTurnKnowledgeContextLength = 0
     private var scopedTTSVoiceSelectionStore = DialogEngineScopedTTSVoiceSelectionStore()
+    private var externallyManagedAudioSessionLease: AudioOwnerLease?
 
     private override init() {
         super.init()
@@ -326,6 +327,7 @@ final class DialogEngineManager: NSObject {
         activeDialogBindingHandle = nil
         activeDialogAccountLease = nil
         isDialogActive = false
+        externallyManagedAudioSessionLease = nil
         _ = scopedTTSVoiceSelectionStore.clear(bindingID: handle.bindingId)
         delegate = nil
         return true
@@ -335,6 +337,18 @@ final class DialogEngineManager: NSObject {
         guard let handle,
               boundBindingHandle == handle else { return false }
         return accountLeaseRuntime.validate(handle.accountLease, at: .runtime).allowed
+    }
+
+    /// Echo owns the session through AudioSessionCoordinator; the dialog engine must
+    /// only reuse the exact active lease and never configure it a second time.
+    @discardableResult
+    func adoptExternallyManagedAudioSessionLease(_ lease: AudioOwnerLease) -> Bool {
+        guard AudioSessionCoordinator.shared.isCurrentActiveLease(lease) else {
+            externallyManagedAudioSessionLease = nil
+            return false
+        }
+        externallyManagedAudioSessionLease = lease
+        return true
     }
 
     private func isActiveAccountLeaseValid(at checkpoint: AccountLeaseCheckpoint) -> Bool {
@@ -425,6 +439,7 @@ final class DialogEngineManager: NSObject {
         activeDialogBindingHandle = nil
         activeDialogAccountLease = nil
         usesTurnScopedKnowledgeContext = false
+        externallyManagedAudioSessionLease = nil
         delegate = nil
     }
 
@@ -553,6 +568,7 @@ final class DialogEngineManager: NSObject {
     private var engineDelegateProxy: DialogEngineProviderDelegateProxy?
     private var requiresEngineRecreationBeforeNextDialog = false
     private var scopedTTSVoiceSelectionStore = DialogEngineScopedTTSVoiceSelectionStore()
+    private var externallyManagedAudioSessionLease: AudioOwnerLease?
 
     /// 引擎是否就绪（已初始化完成）
     private(set) var isEngineReady = false
@@ -781,6 +797,18 @@ final class DialogEngineManager: NSObject {
         guard let handle,
               boundBindingHandle == handle else { return false }
         return accountLeaseRuntime.validate(handle.accountLease, at: .runtime).allowed
+    }
+
+    /// Echo owns the session through AudioSessionCoordinator; the dialog engine must
+    /// only reuse the exact active lease and never configure it a second time.
+    @discardableResult
+    func adoptExternallyManagedAudioSessionLease(_ lease: AudioOwnerLease) -> Bool {
+        guard AudioSessionCoordinator.shared.isCurrentActiveLease(lease) else {
+            externallyManagedAudioSessionLease = nil
+            return false
+        }
+        externallyManagedAudioSessionLease = lease
+        return true
     }
 
     private func isActiveAccountLeaseValid(at checkpoint: AccountLeaseCheckpoint) -> Bool {
@@ -1125,6 +1153,7 @@ final class DialogEngineManager: NSObject {
         isEnding = false
         usesTurnScopedKnowledgeContext = false
         restoreAudioSessionIfNeeded()
+        externallyManagedAudioSessionLease = nil
         DDLogInfo("[DialogEngine] 引擎已销毁")
     }
 
@@ -1141,8 +1170,19 @@ final class DialogEngineManager: NSObject {
         !config.enablePlayer
     }
 
-    /// 配置音频会话为录音+播放模式
-    private func configureAudioSession() {
+    /// Configures the legacy session only when a non-Echo caller owns this engine.
+    /// Echo passes an exact coordinator lease and must never race this direct path.
+    private func configureAudioSession() -> Bool {
+        if let externallyManagedAudioSessionLease {
+            guard AudioSessionCoordinator.shared.isCurrentActiveLease(externallyManagedAudioSessionLease) else {
+                DDLogError("[DialogEngine] 外部 AudioSession lease 已失效，拒绝启动对话")
+                delegate?.onError(error: DialogEngineError.audioSessionFailed)
+                return false
+            }
+            DDLogInfo("[DialogEngine] 复用 Echo AudioSessionCoordinator lease")
+            return true
+        }
+
         let session = AVAudioSession.sharedInstance()
         do {
             if session.category != .playAndRecord || session.mode != .voiceChat {
@@ -1159,13 +1199,19 @@ final class DialogEngineManager: NSObject {
             } else {
                 DDLogInfo("[DialogEngine] AudioSession 配置为 playAndRecord + voiceChat")
             }
+            return true
         } catch {
             DDLogError("[DialogEngine] AudioSession 配置失败: \(error.localizedDescription)")
             delegate?.onError(error: DialogEngineError.audioSessionFailed)
+            return false
         }
     }
 
     private func restoreAudioSessionIfNeeded() {
+        if externallyManagedAudioSessionLease != nil {
+            DDLogInfo("[DialogEngine] 跳过 AudioSession 恢复：Echo coordinator 持有会话")
+            return
+        }
         guard !shouldLetExternalTTSOwnAudioSession else {
             DDLogInfo("[DialogEngine] 跳过 AudioSession 恢复：外部数字人 TTS 仍可能在播放")
             print("[DialogEngine] skip AudioSession restore; external digital-human TTS owns playback")
@@ -1353,7 +1399,9 @@ final class DialogEngineManager: NSObject {
         }
 
         print("[DialogEngine] 配置 AudioSession...")
-        configureAudioSession()
+        guard configureAudioSession() else {
+            return
+        }
 
         // 先同步停止引擎（官方推荐，避免异步线程问题）
         print("[DialogEngine] 发送 SyncStopEngine 指令...")

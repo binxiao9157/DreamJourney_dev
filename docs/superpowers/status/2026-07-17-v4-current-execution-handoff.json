@@ -1,31 +1,32 @@
 {
   "activeWorkItem": {
-    "id": "WI-V0-01-04",
+    "id": "WI-S1-03-07",
     "state": "IN_PROGRESS",
-    "leaseState": "HELD",
+    "leaseState": "RELEASED",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
-    "authorityLock": "VOICE_DH_GOVERNANCE",
-    "predecessorWorkItem": "WI-V0-01-03",
-    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-scoped-capability-shadow-g0.md",
+    "authorityLock": "IOS_COMPOSITION",
+    "predecessorWorkItem": "WI-S1-03-06",
+    "priorEvidence": "docs/superpowers/status/2026-07-19-wi-s1-03-07-audio-owner-lease.md",
     "completedSubSlices": [
-      "WI-V0-01-04-G0-A-SCOPED_CAPABILITY_ADMISSION_SHADOW_DEPLOYED",
-      "WI-V0-01-04-G0-B-PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION_DEPLOYED",
-      "WI-V0-01-04-G0-C-PROVIDER_EFFECT_CALLBACK_RECONCILIATION_ADMISSION_SHADOW_DEPLOYED"
+      "WI-S1-03-07-AUDIO_OWNER_INVENTORY_AND_MODEL_G0",
+      "WI-S1-03-07-ECHO_DH_OBSERVE_ONLY_ADAPTER_G0",
+      "WI-S1-03-07-ECHO_RUNTIME_EVENT_ORDERING_G0",
+      "WI-S1-03-07-ECHO_FALLBACK_AND_BACKGROUND_EVENT_AUDIT_G0",
+      "WI-S1-03-07-G0-A-ECHO_AUDIO_SESSION_COORDINATOR_ENFORCEMENT"
     ],
-    "currentSubSlice": "WI-V0-01-04-G0-C-PROVIDER_EFFECT_CALLBACK_RECONCILIATION_ADMISSION_SHADOW_DEPLOYED / NEXT:SELECTOR_HOLD_AFTER_WP_S1_01_EVIDENCE_AUDIT_CONFIRMED_12_OF_12_EXISTING_EVIDENCE_AND_NO_ELIGIBLE_UNBLOCKED_P0_G0_WORK_ITEM_WITHIN_PLAN_ORDER",
+    "currentSubSlice": "WI-S1-03-07-G0-A-ECHO_AUDIO_SESSION_COORDINATOR_ENFORCEMENT_COMPLETE / fake-driver, static and generic-iPhoneOS evidence passed / PAUSED_BY_USER_BEFORE_G1_OR_NEXT_WORK_ITEM",
     "gateEvidence": {
-      "G0": "SCOPED_VERIFIED / HASH_ONLY_DEFAULT_DENY_ADMISSION_SHADOW_REJECTS_OWNER_VAULT_AUDIENCE_TTL_ONE_TIME_AND_REPLAY_MISMATCHES_WITH_ZERO_CAPABILITY_OR_PROVIDER_EFFECT / PROVIDER_RESPONSE_AND_EXCEPTION_VALUE_MINIMIZATION_DEPLOYED / PROVIDER_EFFECT_CALLBACK_RECONCILIATION_ADMISSION_SHADOW_DEPLOYED",
-      "G2": "OPEN / DURABLE_ISSUER_ONE_TIME_REPLAY_LEDGER_ROTATION_AND_RECONCILIATION_NOT_STARTED",
-      "G3": "OPEN / REAL_PROVIDER_CREDENTIAL_CUSTODY_EFFECT_RECEIPTS_QUERY_DELETE_AND_RECONCILIATION_NOT_STARTED",
-      "G4": "OPEN / PRODUCT_PRIVACY_SECURITY_DEVICE_AND_RELEASE_APPROVAL_NOT_STARTED"
+      "G0": "SCOPED_VERIFIED / ECHO_ONLY_AUDIO_SESSION_COORDINATOR_ENFORCES_CAPTURE_LOCAL_TTS_AND_TENCENT_PLAYBACK_WITH_INJECTABLE_DRIVER_EXACT_LEASE_AND_GENERATION_FENCES / STATIC_FAKE_DRIVER_SMOKE_AND_GENERIC_IPHONEOS_BUILD_PASSED",
+      "G1": "OPEN / SIMULATOR_UIQA_AFTER_RUNTIME_ENFORCEMENT_PENDING",
+      "G4": "OPEN / TRUE_DEVICE_INTERRUPTION_ROUTE_BLUETOOTH_BARGE_IN_AND_MICROPHONE_RECOVERY_EVIDENCE_PENDING"
     },
     "latestEvidence": {
-      "backendCommit": "4224dd3",
-      "backendDeployment": "passed / runtime container rebuilt from main@181e1a1 plus server source pulled through main@4224dd3 / ready=status=ready / callback shadow deployed smoke verifies blocked status with callbackAccepted=false, providerEffectReconciled=false and replayProtectionPersistent=false",
-      "scope": "G0_SCOPED_CAPABILITY_ADMISSION_SHADOW_PROVIDER_RESPONSE_ERROR_VALUE_MINIMIZATION_AND_CALLBACK_RECONCILIATION_ADMISSION_SHADOW / DEFAULT_DENY / HASH_ONLY_VALUE_FREE / TTS_ALLOWLIST_ONLY / NO_BROKER_NO_CALLBACK_ROUTE_NO_DB_NO_PROVIDER_NO_SESSION_NO_CREDENTIAL_NO_MEDIA_NO_UI_NO_RELEASE_PROMOTION",
-      "constraints": "In-memory request/nonce and callback-event observations are explicitly not durable replay protection and do not consume a nonce or callback. No capability issuer exists. No callback is accepted, verified, routed or reconciled. Provider error bodies, messages and nested payload fields are not public response or error values."
+      "iosBaseline": "feature/prd-stitch-ui-adaptation / WI-S1-03-07 G0-A local commit",
+      "scope": "ECHO_ONLY_AUDIO_SESSION_RUNTIME_ENFORCEMENT / injectable_fake_driver / exact_lease_acquire_preempt_interrupt_resume_release / DialogEngine managed-lease reuse / no public UI or Provider change / no Archive_Profile_Memoir migration",
+      "validation": "product-v4-ios-audio-owner-lease-check.py PASS; audio-owner-lease-model-smoke.swift PASS; generic/platform=iOS build-for-testing CODE_SIGNING_ALLOWED=NO TEST BUILD SUCCEEDED; git diff --check PASS",
+      "constraints": "DialogEngineManager retains its legacy direct AudioSession path only for non-Echo callers. Echo must pass an exact active coordinator lease before DialogEngine starts; stale release, interruption or resume cannot mutate a newer lease. G1 simulator and G4 true-device audio behavior remain open."
     },
-    "currentSummary": "WI-V0-01-04 G0-A adds only a hash-only ScopedCapabilityAdmissionShadow. G0-B separately allowlists legacy TTS response fields and removes upstream Voice Clone exception bodies/messages from public error values. G0-C adds a value-free callback reconciliation admission shadow that always blocks and records only in-memory diagnostic replay observations; its deployed smoke proves no callback acceptance, reconciliation or persistent replay protection. The required WP-S1-01 evidence audit then confirmed 12 of 12 Work Items already have handoff evidence, so no new P0/G0 Work Item may be started without bypassing plan order. Remaining unregistered candidates are migration NO_GO, external-gated media/deletion, M2 Publication/Visitor, or later M1/M2 Voice/DH work. A durable Broker, rotation/revocation, durable effect and replay records, Provider callback verification/receipts/query/delete/reconcile and G4 approval remain open.",
+    "currentSummary": "WI-S1-03-07 G0-A is complete: Echo capture, local TTS and Tencent digital-human playback now use an actual injectable AudioSessionCoordinator. The coordinator commits only after driver activation, retains the prior owner on failed preemption, rejects stale release/resume, and preserves the DialogEngine legacy direct path only for non-Echo callers. No public UI, Provider routing, Archive/Profile/Memoir migration, simulator UIQA or true-device claim was added. The user requested a pause after this committed G0 boundary, so no G1 or next Work Item is selected automatically.",
     "backendPendingPaths": []
   },
   "baselines": {
@@ -139,7 +140,7 @@
     {
       "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-07-audio-owner-lease.md",
       "id": "WI-S1-03-07",
-      "implementationStatus": "INTERNAL_READY / FOUR_G0_OBSERVE_ONLY_AUDIO_OWNER_SLICES_VERIFIED / IOS_LOCAL_COMMITTED / G1_G4_OPEN",
+      "implementationStatus": "INTERNAL_READY / G0_ECHO_AUDIO_SESSION_COORDINATOR_ENFORCEMENT_VERIFIED / INJECTABLE_DRIVER_EXACT_LEASE_PREEMPT_INTERRUPT_RESUME_RELEASE / IOS_LOCAL_COMMITTED / G1_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G4_OPEN"
     },
     {
@@ -570,9 +571,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-V0-01-04",
+    "id": "WI-S1-03-07",
     "state": "RECONCILE_AFTER_CURRENT",
-    "summary": "Add only a default-deny Provider-effect callback reconciliation admission shadow: bind to an existing unknown effect, reject replay/cross-provider/request conflicts, and perform no webhook route, signature acceptance, issuer, Provider call or release promotion. Preserve M1/M2 default-off."
+    "summary": "Paused by user after WI-S1-03-07 G0-A. On explicit resume, choose either scoped G1 simulator UIQA for the enforced Echo route or the next plan-authorized Work Item; do not auto-promote G0 to G4."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -581,5 +582,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-23T11:12:00+08:00"
+  "updatedAt": "2026-07-23T12:45:00+08:00"
 }

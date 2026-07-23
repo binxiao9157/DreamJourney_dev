@@ -1,100 +1,50 @@
 # WI-S1-03-07 AudioOwnerLease
 
-日期：2026-07-19
+日期：2026-07-23
 
 ## 当前状态
 
 - Work Item：`WI-S1-03-07`
 - Authority lock：`IOS_COMPOSITION`
-- Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`
-- 当前结果：`INTERNAL_READY / FOUR_G0_OBSERVE_ONLY_SLICES_VERIFIED / G1_G4_OPEN`
-- 已完成切片：`WI-S1-03-07-AUDIO_OWNER_INVENTORY_AND_MODEL_G0`、
-  `WI-S1-03-07-ECHO_DH_OBSERVE_ONLY_ADAPTER_G0`、
-  `WI-S1-03-07-ECHO_RUNTIME_EVENT_ORDERING_G0`、
-  `WI-S1-03-07-ECHO_FALLBACK_AND_BACKGROUND_EVENT_AUDIT_G0`
-- 范围：先建立纯 AudioOwnerLease 合同、直接 `AVAudioSession` 写入清单，以及 Echo/DH 的 observe-only
-  adapter；不迁移运行时播放/录音行为，不修改 Echo 全屏 UI、Provider、声音复刻或公开发布范围。
+- 当前结果：`INTERNAL_READY / G0_ECHO_AUDIO_SESSION_COORDINATOR_ENFORCEMENT_VERIFIED / G1_G4_OPEN`
+- 本次完成切片：`WI-S1-03-07-G0-A-ECHO_AUDIO_SESSION_COORDINATOR_ENFORCEMENT`
+- 范围：只迁移 Echo capture、普通 Echo 本地 TTS、腾讯数智人播放；不改变 Echo 全屏 UI、Provider 路由、声音复刻产品策略或公开发布范围；Archive、Profile、Memoir 继续保留既有直接路径。
 
 ## 已实现
 
-`AudioOwnerLeaseModel` 是既有的纯仲裁基础，本切片将它补齐为可描述、可验证的 lease 合同：
-
-- lease 现在显式携带 owner、purpose、route、account/runtime generation、priority、state 与 issuedAt；
-- owner 的默认 purpose/route 固定为：Echo capture/Tencent audio-drive 使用 `playAndRecordVoiceChat`，
-  Archive recorder 使用 `recordAndSpeaker`，Archive/Memoir playback 使用 `playback`，Profile 试听使用
-  `spokenAudioPreview`；
-- 新增 `active`/`interrupted` 状态和 interruption/resume 结果。系统中断后只有当前 active lease 能恢复；
-  已被抢占的旧 capture lease 不能在腾讯数字人播放结束后重新抢回音频；
-- 既有 generation/priority/stale-release 规则仍保留：旧 runtime generation 不能抢占，旧 lease 不能清除新 owner；
-- 新增静态 inventory gate。当前真正配置或激活 `AVAudioSession` 的业务写入点为 7 个：
-  `DialogEngineManager`、`EchoViewController`、Archive recorder、Archive detail、Memory detail、
-  Profile voice preview、`MemoirAudioPlayer`。`MicrophonePermissionManager` 只读/请求权限，不属于
-  audio owner configurator；
-- inventory gate 会阻止新增未登记的直接 `AVAudioSession.setCategory` / `setActive` 写入点。
-- 新增进程级 `AudioOwnerLeaseCoordinator`。它只包装纯模型、记录 acquire/preempt/release/stale-release
-  证据，不导入或调用 `AVFoundation`；实际 AudioSession 的配置权仍保留在既有业务代码中；
-- Echo 的 `setEchoAudioOwner` 现在只保留“希望走腾讯或本地”的路由偏好；它不再把尚未发生的音频路由
-  误记成实际占用。实际 lease 只在 DialogEngine 开始采集、普通 Echo TTS 开始/结束、腾讯 runtime 进入
-  `speaking`、provider 播放结束/中断和显式停止等事件中变更；
-- `onDialogStarted` 取得 `echoCapture` lease，最终 ASR、对话结束、错误和用户停止只会释放对应的 capture
-  lease；普通 TTS 取得/释放 `echoLocalPlayback`，腾讯 `.speaking` 取得 `tencentDigitalHumanPlayback`。
-  旧 release 只能得到 `ignoredStaleRelease`，不能清空后来的 owner；
-- `AudioOwnerLeaseCoordinator` 新增按精确 lease token 的 interruption、resume 和 route-change observe API。
-  迟到的系统中断、route-change 或 resume 不会改变已经被腾讯播放抢占的新 lease；
-- Echo 订阅 `AVAudioSession` interruption/route-change 通知，但仅更新观察模型和隐私安全诊断，绝不在该
-  observer 中配置、激活、播放、停止或恢复 `AVAudioSession`；
-- 新增 `echoLocalPlayback` / `echoLocalTTSPlayback`，使现有普通 Echo 本地 TTS 不再被错误归类为
-  Profile 或 Archive 播放；
-- 页面退出会释放该页面持有的 observation lease。这个释放不触碰腾讯 runtime、DialogEngine 或
-  `AVAudioSession`，只避免诊断层遗留旧 owner。
-- 角色切换、普通 Echo fallback、后台宽限期到期和页面退出现在都经由 runtime teardown 显式释放
-  `tencentDigitalHumanPlayback` observation lease；它不会误清理正在进行的 capture/local playback。这样旧
-  角色或已释放的云端 session 不会在诊断层阻塞下一轮 Echo capture；
-- 新增 fallback/background release smoke：先释放上一代 Tencent playback，再验证下一代 runtime 的 Echo
-  capture 可以取得新 lease。静态 gate 同时钉住角色切换进入 `fallbackMuted`、前后台 interrupt 与后台宽限期
-  release 的收尾路径。
-
-本切片仍是 observe-only：以上 7 个业务写入点尚未迁移到统一 runtime coordinator。虽然 Echo 的
-capture/local-TTS/Tencent playback 已按实际关键事件进入观察模型，但 lease 还不强制配置或阻断既有
-`AVAudioSession` 写入。不能把模型/扫描通过误报为已解决真机无声、双播、蓝牙或音画同步。
+- 保留既有纯 `AudioOwnerLeaseModel`：lease 显式记录 owner、purpose、route、account/runtime generation、priority、state 与 issuedAt；旧 generation、旧 lease、旧 interruption/resume 都不能改写较新的 owner。
+- 新增可注入 `AudioSessionCoordinator` 与 `AudioSessionDriving`。iOS 真正的 `AVAudioSession` 读写只留在 `SystemAudioSessionDriver`；命令行 smoke 和单元测试使用 fake driver，不触碰系统音频会话。
+- coordinator 只在 driver 成功激活后提交模型状态。腾讯播放抢占 Echo capture 失败时会尝试恢复旧 capture driver 状态，并保留旧 lease；停用失败时也不会清空当前 owner。
+- Echo 不再直接调用 `AVAudioSession.setCategory` / `setActive`。capture、普通本地 TTS、腾讯播放分别经 coordinator acquire/preempt/release；腾讯播放激活失败会明确降级，而不会继续发送 provider 音频。
+- Echo 在启动 DialogEngine 前必须取得并传递精确 active lease。`DialogEngineManager` 检测到该 lease 后只复用它，不再第二次直接配置或恢复会话；它对非 Echo 调用仍保留原有直接路径，避免扩大迁移范围。
+- interruption、resume、route-change、角色切换、fallback、后台释放和页面退出都继续使用精确 lease token；迟到旧回调不会释放或恢复新 owner。
+- 直接 `AVAudioSession` inventory 仍为 7 个文件，但从 `EchoViewController` 转移到 `AudioOwnerLeaseCoordinator`。其余 6 个非 Echo 写入点未在本切片迁移。
 
 ## 验证
 
 执行：
 
 ```bash
+python3 Scripts/QA/product-v4/product-v4-ios-audio-owner-lease-check.py
 bash Scripts/QA/product-v4/run-ios-audio-owner-lease-gate.sh
 git diff --check
 ```
 
 结果：`PASS`。
 
-- `product-v4-ios-audio-owner-lease-check.py` 校验 lease 字段、精确 token 的 interruption/resume/route
-  XCTest 声明、Echo 实际事件 observer 以及 7 个直接 AVAudioSession configurator 的完整清单；
-- `audio-owner-lease-model-smoke.swift` 实际编译运行，覆盖数字人播放抢占 Echo capture、系统中断、
-  stale capture interruption/resume/route-change 拒绝、owner route/purpose 默认值，以及 observe-only
-  Tencent/local transition 的 stale release 拒绝、fallback/background release 后下一代 Echo capture 的恢复；
-- Debug、`generic/platform=iOS`、`CODE_SIGNING_ALLOWED=NO` 的 `build-for-testing` 成功；
+- 静态 gate 验证纯模型未依赖音频框架、Echo 不再直接配置 `AVAudioSession`、DialogEngine 的受管 lease guard 存在，并钉住 7 个直接 configurator 的清单。
+- fake-driver smoke 与 XCTest 编译覆盖：腾讯播放抢占 capture、旧 capture release 不可停掉腾讯、腾讯激活失败回滚旧 capture、当前 interrupted lease 才能 resume、deactivate 失败保留 owner。
+- `Debug`、`generic/platform=iOS`、`CODE_SIGNING_ALLOWED=NO` 的 `build-for-testing` 成功，输出为 `TEST BUILD SUCCEEDED`。
 - `git diff --check` 通过。
 
-额外尝试了同测试文件的 Simulator `xcodebuild test`。当前 scheme 只暴露 iOS 真机和通用 Simulator
-placeholder，未暴露本机已启动的具体 Simulator destination，因此该命令在 destination selection 阶段退出，
-没有执行任何测试，也不是代码失败。无真机约束下，本切片以独立 Swift smoke、静态 gate 和
-`build-for-testing` 作为 G0 证据。
+本次只证明 G0 的代码合同和通用 iOS 构建。没有运行模拟器交互或真机，因此不能声明蓝牙、听筒/扬声器、打断、无声、口型、前后台或麦克风恢复已经验收。
 
-构建仍会输出既有第三方地图静态库的缺失 object-file warning；本切片未新增该类 warning，结果为
-`TEST BUILD SUCCEEDED`。
+## 仍然开放的 Gate
 
-## 未完成边界
+- G1：需要模拟器 UIQA 覆盖 Echo capture -> 腾讯播放 -> capture 恢复、失败 fallback 和角色切换。
+- G4：需要真机连续对话、打断、路由变化、蓝牙、后台恢复以及腾讯数智人/复刻声音实际听感证据。
+- 非 Echo 音频模块的统一迁移不属于本 Work Item，后续必须独立选择和验证。
 
-- 尚未实现唯一、强制的运行时 `AudioSessionCoordinator`，也未让任何业务面通过 lease 实际配置/释放 AVAudioSession；
-- Echo/Digital Human 已有按实际关键事件记录的 observe-only lease adapter，但实际 AudioSession 配置仍
-  各自存在；Archive/Profile/Memoir 也仍有直接调用；
-- 系统 audio interruption、route change、蓝牙、听筒/扬声器、真正打断与麦克风恢复尚未进行 G4 真机验证；
-- 不涉及 ASR/TTS 质量、腾讯/火山 Provider 行为或媒体功能公开策略。
+## 暂停点
 
-## 下一步
-
-`WI-S1-03-07` 的 G0 observe-only 边界已闭合。下一项进入 `WI-S1-03-08`：在不扩大公开范围的前提下，
-为 Voice/Digital Human 建立 typed client ports 与 runtime adapters。任何实际 `AVAudioSession` 强制仲裁、
-Archive/Profile/Memoir 迁移或真机音频行为验收仍必须独立排期。
+本轮按用户要求在 `G0-A` 提交后暂停。恢复后先决定是否补 G1 UIQA 或转入另一个计划内 Work Item；不得把本证据自动提升为 G4。

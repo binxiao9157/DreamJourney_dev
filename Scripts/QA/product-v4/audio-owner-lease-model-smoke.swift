@@ -8,6 +8,9 @@ enum AudioOwnerLeaseModelSmoke {
         verifyObserveOnlyTransitionRejectsStaleRelease()
         verifyObserveOnlySystemEventsRequireCurrentLease()
         verifyFallbackOrBackgroundReleaseClearsTencentLease()
+        verifyEnforcedCoordinatorPreemptsAndRejectsStaleRelease()
+        verifyEnforcedCoordinatorRestoresPriorOwnerAfterActivationFailure()
+        verifyEnforcedCoordinatorInterruptionAndDeactivationFailures()
         print("Audio owner lease model smoke passed")
     }
 
@@ -145,6 +148,84 @@ enum AudioOwnerLeaseModelSmoke {
         require(capture.scope == nextScope, "new capture must use the current runtime scope")
     }
 
+    private static func verifyEnforcedCoordinatorPreemptsAndRejectsStaleRelease() {
+        let driver = RecordingAudioSessionDriver()
+        let coordinator = AudioSessionCoordinator(driver: driver)
+        let scope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+        guard case let .acquired(capture) = coordinator.acquire(
+            .echoCapture,
+            priority: .echoCapture,
+            scope: scope
+        ), case let .preempted(_, playback) = coordinator.acquire(
+            .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            scope: scope
+        ) else {
+            fail("enforced coordinator should preempt Echo capture with Tencent playback")
+        }
+
+        require(
+            coordinator.release(capture) == .ignoredStaleRelease(active: playback),
+            "stale capture release must not deactivate current Tencent playback"
+        )
+        require(driver.deactivatedLeases.isEmpty, "stale release must not touch the driver")
+        require(
+            coordinator.release(playback) == .released(playback),
+            "current Tencent playback should release through the driver"
+        )
+    }
+
+    private static func verifyEnforcedCoordinatorRestoresPriorOwnerAfterActivationFailure() {
+        let driver = RecordingAudioSessionDriver()
+        driver.failingActivationOwners = [.tencentDigitalHumanPlayback]
+        let coordinator = AudioSessionCoordinator(driver: driver)
+        let scope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+        guard case let .acquired(capture) = coordinator.acquire(
+            .echoCapture,
+            priority: .echoCapture,
+            scope: scope
+        ) else {
+            fail("capture should activate before failed Tencent preemption")
+        }
+
+        let result = coordinator.acquire(
+            .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            scope: scope
+        )
+        guard case let .activationFailed(requested, active, recoveryAttempted) = result else {
+            fail("failed Tencent activation must be explicit")
+        }
+        require(requested.owner == .tencentDigitalHumanPlayback, "failed request must identify Tencent owner")
+        require(active == capture, "failed preemption must retain prior capture lease")
+        require(recoveryAttempted, "failed preemption must attempt prior-owner recovery")
+        require(coordinator.isCurrentActiveLease(capture), "capture must remain the coordinator owner")
+    }
+
+    private static func verifyEnforcedCoordinatorInterruptionAndDeactivationFailures() {
+        let driver = RecordingAudioSessionDriver()
+        let coordinator = AudioSessionCoordinator(driver: driver)
+        let scope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+        guard case let .acquired(capture) = coordinator.acquire(
+            .echoCapture,
+            priority: .echoCapture,
+            scope: scope
+        ), case let .interrupted(interrupted) = coordinator.interrupt(capture) else {
+            fail("capture should enter interrupted state")
+        }
+        require(
+            coordinator.resume(interrupted) == .resumed(capture),
+            "current interrupted capture should reactivate"
+        )
+
+        driver.shouldFailDeactivation = true
+        require(
+            coordinator.release(capture) == .deactivationFailed(active: capture),
+            "failed deactivation must retain the active lease"
+        )
+        require(coordinator.isCurrentActiveLease(capture), "deactivation failure must not clear active owner")
+    }
+
     private static func acquire(
         _ model: inout AudioOwnerLeaseModel,
         owner: AudioOwnerLeaseOwner,
@@ -176,5 +257,31 @@ enum AudioOwnerLeaseModelSmoke {
     private static func fail(_ message: String) -> Never {
         fputs("Audio owner lease model smoke failed: \(message)\n", stderr)
         Foundation.exit(1)
+    }
+
+    private final class RecordingAudioSessionDriver: AudioSessionDriving {
+        enum DriverError: Error {
+            case activationRejected
+            case deactivationRejected
+        }
+
+        var activatedLeases: [AudioOwnerLease] = []
+        var deactivatedLeases: [AudioOwnerLease] = []
+        var failingActivationOwners: Set<AudioOwnerLeaseOwner> = []
+        var shouldFailDeactivation = false
+
+        func activate(for lease: AudioOwnerLease) throws {
+            activatedLeases.append(lease)
+            if failingActivationOwners.contains(lease.owner) {
+                throw DriverError.activationRejected
+            }
+        }
+
+        func deactivate(after lease: AudioOwnerLease) throws {
+            deactivatedLeases.append(lease)
+            if shouldFailDeactivation {
+                throw DriverError.deactivationRejected
+            }
+        }
     }
 }

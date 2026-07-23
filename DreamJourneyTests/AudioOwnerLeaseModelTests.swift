@@ -269,6 +269,149 @@ final class AudioOwnerLeaseCoordinatorTests: XCTestCase {
     }
 }
 
+final class AudioSessionCoordinatorTests: XCTestCase {
+    func testTencentPlaybackPreemptsCaptureAndStaleReleaseCannotDeactivateIt() {
+        let driver = RecordingAudioSessionDriver()
+        let coordinator = AudioSessionCoordinator(driver: driver)
+        let scope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+
+        guard case let .acquired(capture) = coordinator.acquire(
+            .echoCapture,
+            priority: .echoCapture,
+            scope: scope
+        ) else {
+            return XCTFail("Echo capture should activate first")
+        }
+        guard case let .preempted(previous, playback) = coordinator.acquire(
+            .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            scope: scope
+        ) else {
+            return XCTFail("Tencent playback should preempt capture")
+        }
+
+        XCTAssertEqual(previous.leaseId, capture.leaseId)
+        XCTAssertEqual(
+            coordinator.release(capture),
+            .ignoredStaleRelease(active: playback)
+        )
+        XCTAssertTrue(driver.deactivatedLeases.isEmpty)
+        XCTAssertTrue(coordinator.isCurrentActiveLease(playback))
+
+        XCTAssertEqual(coordinator.release(playback), .released(playback))
+        XCTAssertEqual(driver.deactivatedLeases, [playback])
+    }
+
+    func testFailedTencentPreemptionRestoresCaptureAndDoesNotCommitNewOwner() {
+        let driver = RecordingAudioSessionDriver()
+        driver.failingActivationOwners = [.tencentDigitalHumanPlayback]
+        let coordinator = AudioSessionCoordinator(driver: driver)
+        let scope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+
+        guard case let .acquired(capture) = coordinator.acquire(
+            .echoCapture,
+            priority: .echoCapture,
+            scope: scope
+        ) else {
+            return XCTFail("Echo capture should activate")
+        }
+
+        let result = coordinator.acquire(
+            .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            scope: scope
+        )
+        guard case let .activationFailed(requested, active, recoveryAttempted) = result else {
+            return XCTFail("failed playback activation must be surfaced")
+        }
+
+        XCTAssertEqual(requested.owner, .tencentDigitalHumanPlayback)
+        XCTAssertEqual(active, capture)
+        XCTAssertTrue(recoveryAttempted)
+        XCTAssertTrue(coordinator.isCurrentActiveLease(capture))
+        XCTAssertEqual(
+            driver.activatedLeases.map(\.owner),
+            [.echoCapture, .tencentDigitalHumanPlayback, .echoCapture]
+        )
+    }
+
+    func testOnlyCurrentInterruptedLeaseCanResumeAndResumeReactivatesDriver() {
+        let driver = RecordingAudioSessionDriver()
+        let coordinator = AudioSessionCoordinator(driver: driver)
+        let scope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+
+        guard case let .acquired(capture) = coordinator.acquire(
+            .echoCapture,
+            priority: .echoCapture,
+            scope: scope
+        ), case let .preempted(_, playback) = coordinator.acquire(
+            .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            scope: scope
+        ), case let .interrupted(interrupted) = coordinator.interrupt(playback) else {
+            return XCTFail("current Tencent playback should enter interruption state")
+        }
+
+        XCTAssertEqual(
+            coordinator.resume(capture),
+            .ignoredStaleEvent(active: interrupted)
+        )
+        XCTAssertEqual(coordinator.resume(interrupted), .resumed(playback))
+        XCTAssertTrue(coordinator.isCurrentActiveLease(playback))
+        XCTAssertEqual(
+            driver.activatedLeases.map(\.owner),
+            [.echoCapture, .tencentDigitalHumanPlayback, .tencentDigitalHumanPlayback]
+        )
+    }
+
+    func testFailedDeactivationRetainsCurrentLease() {
+        let driver = RecordingAudioSessionDriver()
+        driver.shouldFailDeactivation = true
+        let coordinator = AudioSessionCoordinator(driver: driver)
+        let scope = AudioOwnerLeaseScope(accountGeneration: 4, runtimeGeneration: 9)
+
+        guard case let .acquired(capture) = coordinator.acquire(
+            .echoCapture,
+            priority: .echoCapture,
+            scope: scope
+        ) else {
+            return XCTFail("Echo capture should activate")
+        }
+
+        XCTAssertEqual(
+            coordinator.release(capture),
+            .deactivationFailed(active: capture)
+        )
+        XCTAssertTrue(coordinator.isCurrentActiveLease(capture))
+    }
+}
+
+private final class RecordingAudioSessionDriver: AudioSessionDriving {
+    enum DriverError: Error {
+        case activationRejected
+        case deactivationRejected
+    }
+
+    var activatedLeases: [AudioOwnerLease] = []
+    var deactivatedLeases: [AudioOwnerLease] = []
+    var failingActivationOwners: Set<AudioOwnerLeaseOwner> = []
+    var shouldFailDeactivation = false
+
+    func activate(for lease: AudioOwnerLease) throws {
+        activatedLeases.append(lease)
+        if failingActivationOwners.contains(lease.owner) {
+            throw DriverError.activationRejected
+        }
+    }
+
+    func deactivate(after lease: AudioOwnerLease) throws {
+        deactivatedLeases.append(lease)
+        if shouldFailDeactivation {
+            throw DriverError.deactivationRejected
+        }
+    }
+}
+
 final class EchoTurnIntentReducerTests: XCTestCase {
     func testOrdinaryTurnTransitionsFromVoiceStartToReplyDelivered() {
         var reducer = EchoTurnIntentReducer()
