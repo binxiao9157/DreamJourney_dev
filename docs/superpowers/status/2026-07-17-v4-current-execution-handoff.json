@@ -40,17 +40,18 @@
       "WI-S1-01-03-M0A-30-COOLDOWN_RESTORE_IOS_QA_G0_G1_VERIFIED",
       "WI-S1-01-03-M0A-31-SAME_VAULT_THREAD_PREFERENCE_ISOLATION_G0_G2_DEPLOYED",
       "WI-S1-01-04-FORMAL_CONFIRMATION_FEATURE_CONSTRAINT_G0_G2_DEPLOYED",
-      "WI-V0-01-02-G0_G2-DEFAULT_DENY_PROFILE_AUTHORITY_SCHEMA_DEPLOYED"
+      "WI-V0-01-02-G0_G2-DEFAULT_DENY_PROFILE_AUTHORITY_SCHEMA_DEPLOYED",
+      "WI-V0-01-03-G0-A-DEFAULT_DENY_TRAINING_PREFLIGHT_DEPLOYED"
     ],
-    "currentSubSlice": "WI-V0-01-02-G0_G2-DEFAULT_DENY_PROFILE_AUTHORITY_SCHEMA_DEPLOYED / NEXT:RECONCILE_REMAINING_M1_AUTHORITY_SUBSLICES_WITHOUT_PROVIDER_OR_UI_PROMOTION",
+    "currentSubSlice": "WI-V0-01-03-G0-A-DEFAULT_DENY_TRAINING_PREFLIGHT_DEPLOYED / NEXT:RECONCILE_REMAINING_M1_AUTHORITY_SUBSLICES_WITHOUT_PROVIDER_OR_UI_PROMOTION",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "gateEvidence": {
-      "G0": "VERIFIED / DEFAULT_DENY_VOICE_PROFILE_AUTHORITY_SCHEMA_HASH_ONLY_BLOCKED_ADMISSION_AND_IMMUTABLE_RECEIPT",
-      "G2": "VERIFIED / MAIN_cf77def_DEPLOYED_MIGRATION_0042_APPLIED_AND_API_CONTAINER_DISPOSABLE_POSTGRES_SMOKE_PASSED",
+      "G0": "SCOPED_VERIFIED / DEFAULT_DENY_TRAINING_PREFLIGHT_REJECTS_PROXY_SUBJECTS_LEGACY_SPEAKER_IDS_RAW_AUDIO_URLS_AND_DUPLICATE_COMMANDS_WITH_ZERO_PROVIDER_EFFECT",
+      "G2": "OPEN / VERIFIED_SOURCE_OBJECT_SAMPLE_BINDING_OBJECT_STORAGE_SCAN_RETENTION_AND_DATA_SECURITY_EVIDENCE_NOT_STARTED",
       "G3": "OPEN / REAL_SAMPLE_SOURCE_BINDING_PROVIDER_TRAINING_GENERATION_DELETE_AND_RECONCILIATION_EVIDENCE_NOT_STARTED",
       "G4": "OPEN / REAL_DEVICE_AUDIO_PRODUCT_PRIVACY_LEGAL_AND_RELEASE_APPROVAL_NOT_STARTED"
     },
-    "id": "WI-V0-01-02",
+    "id": "WI-V0-01-03",
     "leaseState": "HELD",
     "state": "IN_PROGRESS",
     "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-purpose-consent-g0.md",
@@ -61,9 +62,11 @@
       "sameVaultThreadIsolation": "passed / main@8a28825 / API-container disposable Postgres smoke / same Vault sequential A(cooldown) then B(doNotAsk); sessionB+threadA boundary and restore reject 409 without writes; A restore leaves B paused; receiptCount=5; sameVaultThreadIsolation=true; API healthy and deployed readiness passed",
       "scope": "G0_G1_G2_FORMAL_CONFIRMATION_AUTHORITY_SELECTED_EXTRACTION_FORMAL_USER_BOUNDARY_ONE_SHOT_SKIP_CONSUMPTION_CONFIRMED_DO_NOT_ASK_RESTORE_CRISIS_SAFETY_OVERRIDE_AND_ATOMIC_DEFER_WITH_SAVED_CONTINUATION_EVIDENCE / DEFAULT_OFF / QA_ONLY_BOUNDARY_ACTIONS / RELEASE_COMPILES_OUT_QA_CONTROLS / NO_PUBLIC_ECHO_ROUTE / QA_HEADER_CANNOT_BYPASS / NO_REGULAR_DATABASE_URL_FALLBACK",
       "voiceDhAuthorityBackendCommit": "cf77def",
-      "voiceDhAuthorityDeployment": "passed / migration=0042 applied+verified / ready=status=ready / API-container disposable Postgres smoke reports profileStatus=blocked receiptCount=1 providerEffectPerformed=false"
+      "voiceDhAuthorityDeployment": "passed / migration=0042 applied+verified / ready=status=ready / API-container disposable Postgres smoke reports profileStatus=blocked receiptCount=1 providerEffectPerformed=false",
+      "voiceTrainingPreflightBackendCommit": "fc01a00",
+      "voiceTrainingPreflightDeployment": "passed / ready=status=ready / API-container runtime smoke and G0 gate report voiceTrainingPreflight=blocked providerEffectPerformed=false sampleObjectCreated=false trainingCommandCreated=false"
     },
-    "currentSummary": "WI-V0-01-02 now has a deployed, default-deny G0/G2 Authority schema slice. It records only Vault/Owner/Epoch-bound opaque IDs and hashes, permits only self-profile blocked admission, pairs immutable receipts to the exact profile record, and has no route, Provider effect, media/content persistence, credential, iOS adapter, or public UI. It does not make M1 Voice or M2 Digital Human ready: real source binding, Provider lifecycle/delete/reconcile evidence and G4 approval remain open.",
+    "currentSummary": "WI-V0-01-03 now has a deployed G0-A default-deny training preflight. It accepts only synthetic, value-minimized references; rejects family/proxy subjects, non-eligible subjects, incomplete consent, legacy Provider speaker IDs, raw audio/URL fields and replayed request hashes; and always reports zero Provider effect, SampleObject creation and training-command creation. It does not make M1 Voice ready: real SourceObject binding, scan/retention, Provider training/delete/reconcile and G4 approval remain open.",
     "predecessorWorkItem": "WI-S1-01-03",
     "formalBoundaryEvidence": "docs/superpowers/status/2026-07-23-wi-s1-01-03-m0a-formal-user-boundary-command.md",
     "formalBoundaryUseCaseEvidence": "docs/superpowers/status/2026-07-23-wi-s1-01-03-m0a-lease-fenced-boundary-use-case.md",
@@ -116,6 +119,12 @@
       "id": "WI-V0-01-02",
       "implementationStatus": "INTERNAL_READY / VOICE_DH_AUTHORITY_SCHEMA_G0_G2_DEPLOYED_cf77def / STRICT_DEFAULT_DENY / PROFILE_ADMISSION_BLOCKED / NO_ROUTE_NO_PROVIDER_NO_MEDIA_NO_CREDENTIAL_NO_UI / G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G3_G4_OPEN"
+    },
+    {
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-training-preflight-g0.md",
+      "id": "WI-V0-01-03",
+      "implementationStatus": "INTERNAL_READY / V0_TRAINING_PREFLIGHT_G0_DEPLOYED_fc01a00 / STRICT_DEFAULT_DENY / SYNTHETIC_VALUE_MINIMIZED_INPUT_ONLY / NO_ROUTE_NO_SAMPLEOBJECT_NO_PROVIDER_NO_MEDIA_NO_CREDENTIAL_NO_UI / G2_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G2_G3_G4_OPEN"
     },
     {
     "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-publication-visitor-default-deny-g0.md; docs/superpowers/status/2026-07-23-wi-s3-01-01-public-entry-g1-audit.md",
@@ -611,9 +620,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-V0-01-02",
+    "id": "WI-V0-01-03",
     "state": "RECONCILE_AFTER_CURRENT",
-    "summary": "Reconcile the remaining Voice/Digital Human Authority sub-slices against this deployed default-deny schema. Do not create a fake sample/media authority path or promote legacy Provider adapters; select only a G0-safe boundary that preserves M1/M2 default-off and does not require G3/G4, public exposure, or real Provider execution."
+    "summary": "Reconcile the remaining Voice/Digital Human Authority sub-slices against the deployed default-deny schema and training preflight. Do not create a fake SampleObject/media authority path or promote legacy Provider adapters; select only a G0-safe boundary that preserves M1/M2 default-off and does not require G3/G4, public exposure, or real Provider execution."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -622,5 +631,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-23T09:47:28+0800"
+  "updatedAt": "2026-07-23T10:06:00+0800"
 }
