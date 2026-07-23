@@ -97,6 +97,12 @@
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G4_OPEN"
     },
     {
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-purpose-consent-g0.md",
+      "id": "WI-V0-01-01",
+      "implementationStatus": "INTERNAL_READY / V0_PURPOSE_CONSENT_G0_VERIFIED / BACKEND_PUSHED_1091f17 / STRICT_DEFAULT_DENY / SYNTHETIC_PRECONDITIONS_ONLY / NO_ROUTE_NO_DB_NO_PROVIDER_NO_UI / G1_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
+    },
+    {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-01-10-cutover-admission-g0.md",
       "id": "WI-S1-01-10",
       "implementationStatus": "INTERNAL_READY / G0_CUTOVER_ADMISSION_BOUNDARY_VERIFIED / BACKEND_DEPLOYED_864e5d9 / DEFAULT_OFF / G1_G2_G4_OPEN",
