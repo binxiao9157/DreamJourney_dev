@@ -3597,6 +3597,217 @@ private enum OwnerTruthKnowledgeDimensionConfirmationContract {
     }
 }
 
+enum OwnerTruthKnowledgeDimensionConfirmationPhase: Equatable, Sendable {
+    case idle
+    case confirming
+    case confirmed
+    case unavailable
+    case failed
+}
+
+enum OwnerTruthKnowledgeDimensionConfirmationNotice: Equatable, Sendable {
+    case qaOnlyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case memoryActivationUnavailable
+    case invalidSelection
+    case contractMismatch
+    case requestFailed
+}
+
+/// This state intentionally keeps only the value-minimized confirmation
+/// receipt. Memory and version identifiers plus the bound content hash are
+/// inputs to the request and never become retained presentation state.
+struct OwnerTruthKnowledgeDimensionConfirmationViewState: Equatable, Sendable {
+    let phase: OwnerTruthKnowledgeDimensionConfirmationPhase
+    let latestReceipt: OwnerTruthKnowledgeDimensionConfirmationReceipt?
+    let notice: OwnerTruthKnowledgeDimensionConfirmationNotice?
+
+    static let idle = OwnerTruthKnowledgeDimensionConfirmationViewState(
+        phase: .idle,
+        latestReceipt: nil,
+        notice: nil
+    )
+}
+
+/// QA-only bridge from an accepted/corrected Candidate activation to one
+/// explicit knowledge-dimension confirmation. The server remains the final
+/// authority for ownership and current-version validation; this coordinator
+/// prevents stale-account callbacks and retry command drift on the client.
+final class OwnerTruthKnowledgeDimensionConfirmationUseCase {
+    typealias CommandIDFactory = () -> String
+
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let client: OwnerTruthKnowledgeDimensionConfirmationClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
+    private let commandIDFactory: CommandIDFactory
+
+    private var commandIDsBySelectionSignature: [String: String] = [:]
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthKnowledgeDimensionConfirmationViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthKnowledgeDimensionConfirmationViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthKnowledgeDimensionConfirmationClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled },
+        commandIDFactory: @escaping CommandIDFactory = {
+            "owner-truth-dimension-\(UUID().uuidString.lowercased())"
+        }
+    ) {
+        self.accountLease = accountLease
+        self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
+        self.commandIDFactory = commandIDFactory
+    }
+
+    func confirm(
+        memoryActivation: OwnerTruthCandidateMemoryActivation,
+        dimension: OwnerTruthKnowledgeRecommendationDimension,
+        coveredFacets: [String]
+    ) {
+        guard let vaultID = beginRequestOrFail(),
+              let command = makeCommand(
+                  memoryActivation: memoryActivation,
+                  dimension: dimension,
+                  coveredFacets: coveredFacets
+              ) else {
+            return
+        }
+
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthKnowledgeDimensionConfirmationViewState(
+            phase: .confirming,
+            latestReceipt: nil,
+            notice: nil
+        )
+        client.confirmOwnerTruthKnowledgeDimension(vaultID: vaultID, command: command) { [weak self] result in
+            self?.receive(result, expectedCommand: command, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard qaGateEnabled() else {
+            resetForUnavailable(.qaOnlyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func makeCommand(
+        memoryActivation: OwnerTruthCandidateMemoryActivation,
+        dimension: OwnerTruthKnowledgeRecommendationDimension,
+        coveredFacets: [String]
+    ) -> OwnerTruthKnowledgeDimensionConfirmationCommand? {
+        guard memoryActivation.outcome != .notApplicable,
+              memoryActivation.memoryID != nil,
+              let memoryVersionID = memoryActivation.memoryVersionID,
+              let contentHash = memoryActivation.contentHash else {
+            transitionFailure(.memoryActivationUnavailable)
+            return nil
+        }
+
+        let normalizedFacets = coveredFacets.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let canonicalFacets = dimension.facetOrder.filter(normalizedFacets.contains)
+        let signature = [
+            memoryVersionID.rawValue.uuidString.lowercased(),
+            contentHash.trimmingCharacters(in: .whitespacesAndNewlines),
+            dimension.rawValue,
+            canonicalFacets.joined(separator: ","),
+        ].joined(separator: "|")
+        let commandID = commandIDsBySelectionSignature[signature] ?? commandIDFactory()
+
+        do {
+            let command = try OwnerTruthKnowledgeDimensionConfirmationCommand(
+                commandID: commandID,
+                memoryVersionID: memoryVersionID,
+                expectedContentHash: contentHash,
+                dimension: dimension,
+                coveredFacets: coveredFacets
+            )
+            commandIDsBySelectionSignature[signature] = commandID
+            return command
+        } catch {
+            transitionFailure(.invalidSelection)
+            return nil
+        }
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthKnowledgeDimensionConfirmationReceipt, Error>,
+        expectedCommand: OwnerTruthKnowledgeDimensionConfirmationCommand,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard qaGateEnabled() else {
+            resetForUnavailable(.qaOnlyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+
+        switch result {
+        case .success(let receipt):
+            guard receipt.dimension == expectedCommand.dimension,
+                  receipt.coveredFacets == expectedCommand.coveredFacets else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            viewState = OwnerTruthKnowledgeDimensionConfirmationViewState(
+                phase: .confirmed,
+                latestReceipt: receipt,
+                notice: nil
+            )
+        case .failure(let error):
+            if case OwnerTruthRemoteContractError.invalidKnowledgeDimensionConfirmation = error {
+                transitionFailure(.contractMismatch)
+            } else {
+                transitionFailure(.requestFailed)
+            }
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthKnowledgeDimensionConfirmationNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthKnowledgeDimensionConfirmationViewState(
+            phase: .unavailable,
+            latestReceipt: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure(_ notice: OwnerTruthKnowledgeDimensionConfirmationNotice) {
+        viewState = OwnerTruthKnowledgeDimensionConfirmationViewState(
+            phase: .failed,
+            latestReceipt: nil,
+            notice: notice
+        )
+    }
+}
+
 enum OwnerTruthInterviewNaturalInputIntent: Equatable, Sendable {
     case start
     case submit(text: String)

@@ -113,6 +113,12 @@ grep -Eq '"authorityEpoch"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Ex
 grep -Eq '"receiptRetainsOpaqueIdentifiers"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Receipt must discard opaque identifiers and content hash."
 grep -Eq '"boundHashMismatchRejected"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Bound content hash mismatch must fail closed."
 grep -Eq '"malformedReceiptRejected"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Malformed receipt must fail closed."
+grep -Eq '"useCaseCreatedOutcome"[[:space:]]*:[[:space:]]*"created"' "$RESULT_FILE" || fail "Use case should create a confirmation."
+grep -Eq '"useCaseReplayOutcome"[[:space:]]*:[[:space:]]*"deduplicated"' "$RESULT_FILE" || fail "Use case retry should deduplicate."
+grep -Eq '"stableRetryCommandID"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Unchanged confirmation retry must reuse its command id."
+grep -Eq '"unavailableActivationRejected"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Non-activated memory must not issue confirmation request."
+grep -Eq '"staleCompletionRejected"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Stale account completion must fail closed."
+grep -Eq '"useCaseStateRetainsOpaqueIdentifiers"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Use case state must not retain opaque version identifiers or hashes."
 grep -Eq '"DJRunOwnerTruthKnowledgeDimensionConfirmationSmoke"' "$RESULT_FILE" || fail "Confirmation launch scenario drifted."
 grep -Eq '"DJEnableOwnerTruthCandidateReviewQA"' "$RESULT_FILE" || fail "QA gate launch argument drifted."
 

@@ -57,6 +57,15 @@ def main() -> None:
         "private enum OwnerTruthKnowledgeDimensionConfirmationContract",
         "isOpaqueCommandID",
         "isSHA256Digest",
+        "final class OwnerTruthKnowledgeDimensionConfirmationUseCase",
+        "commandIDsBySelectionSignature",
+        "func confirm(",
+        "memoryActivation: OwnerTruthCandidateMemoryActivation",
+        "memoryActivation.outcome != .notApplicable",
+        "accountLeaseRuntime.validate(accountLease, at: .request).allowed",
+        "accountLeaseRuntime.validate(accountLease, at: .commit).allowed",
+        "resetForUnavailable(.staleAccountLease)",
+        '"owner-truth-dimension-\\(UUID().uuidString.lowercased())"',
     ):
         require(snippet in contracts, f"M0-B dimension confirmation contract missing: {snippet}")
 
@@ -111,6 +120,12 @@ def main() -> None:
         "receiptRetainsOpaqueIdentifiers",
         "boundHashMismatchRejected",
         "malformedReceiptRejected",
+        "verifyUseCaseVariants",
+        "stableRetryCommandID",
+        "unavailableActivationRejected",
+        "staleCompletionRejected",
+        "OwnerTruthKnowledgeDimensionConfirmationDeferredUIQAClient",
+        "OwnerTruthKnowledgeDimensionConfirmationUIQALeaseRuntime",
         "qa-dimension-confirm-001",
         "replayReceipt.outcome == .deduplicated",
     ):
@@ -124,6 +139,12 @@ def main() -> None:
         '"receiptRetainsOpaqueIdentifiers"',
         '"boundHashMismatchRejected"',
         '"malformedReceiptRejected"',
+        '"useCaseCreatedOutcome"',
+        '"useCaseReplayOutcome"',
+        '"stableRetryCommandID"',
+        '"unavailableActivationRejected"',
+        '"staleCompletionRejected"',
+        '"useCaseStateRetainsOpaqueIdentifiers"',
     ):
         require(snippet in runner, f"M0-B confirmation smoke runner missing: {snippet}")
 

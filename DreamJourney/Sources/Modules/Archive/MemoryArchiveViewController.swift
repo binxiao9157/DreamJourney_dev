@@ -7948,6 +7948,12 @@ struct OwnerTruthKnowledgeDimensionConfirmationUIQASmokeResult: Codable {
     let receiptRetainsOpaqueIdentifiers: Bool
     let boundHashMismatchRejected: Bool
     let malformedReceiptRejected: Bool
+    let useCaseCreatedOutcome: String?
+    let useCaseReplayOutcome: String?
+    let stableRetryCommandID: Bool
+    let unavailableActivationRejected: Bool
+    let staleCompletionRejected: Bool
+    let useCaseStateRetainsOpaqueIdentifiers: Bool
     let launchArguments: [String]
     let failureReason: String?
 
@@ -8000,6 +8006,10 @@ enum OwnerTruthKnowledgeDimensionConfirmationUIQASmoke {
                                 vaultID: vaultID,
                                 command: command
                             )
+                            let useCaseVariants = verifyUseCaseVariants(
+                                accountLease: accountLease,
+                                vaultID: vaultID
+                            )
                             let completed = OwnerTruthCandidateReviewQAGate.isEnabled
                                 && createdReceipt.outcome == .created
                                 && replayReceipt.outcome == .deduplicated
@@ -8009,6 +8019,12 @@ enum OwnerTruthKnowledgeDimensionConfirmationUIQASmoke {
                                 && !client.receiptRetainsOpaqueIdentifiers(createdReceipt, command: command)
                                 && variants.boundHashMismatchRejected
                                 && variants.malformedReceiptRejected
+                                && useCaseVariants.createdOutcome == .created
+                                && useCaseVariants.replayOutcome == .deduplicated
+                                && useCaseVariants.stableRetryCommandID
+                                && useCaseVariants.unavailableActivationRejected
+                                && useCaseVariants.staleCompletionRejected
+                                && !useCaseVariants.stateRetainsOpaqueIdentifiers
                             write(
                                 OwnerTruthKnowledgeDimensionConfirmationUIQASmokeResult(
                                     completed: completed,
@@ -8024,6 +8040,12 @@ enum OwnerTruthKnowledgeDimensionConfirmationUIQASmoke {
                                     ),
                                     boundHashMismatchRejected: variants.boundHashMismatchRejected,
                                     malformedReceiptRejected: variants.malformedReceiptRejected,
+                                    useCaseCreatedOutcome: useCaseVariants.createdOutcome?.rawValue,
+                                    useCaseReplayOutcome: useCaseVariants.replayOutcome?.rawValue,
+                                    stableRetryCommandID: useCaseVariants.stableRetryCommandID,
+                                    unavailableActivationRejected: useCaseVariants.unavailableActivationRejected,
+                                    staleCompletionRejected: useCaseVariants.staleCompletionRejected,
+                                    useCaseStateRetainsOpaqueIdentifiers: useCaseVariants.stateRetainsOpaqueIdentifiers,
                                     launchArguments: [
                                         QALaunchScenario.ownerTruthKnowledgeDimensionConfirmationSmoke.rawValue,
                                         OwnerTruthCandidateReviewQAGate.launchArgument,
@@ -8053,6 +8075,12 @@ enum OwnerTruthKnowledgeDimensionConfirmationUIQASmoke {
                 receiptRetainsOpaqueIdentifiers: false,
                 boundHashMismatchRejected: false,
                 malformedReceiptRejected: false,
+                useCaseCreatedOutcome: nil,
+                useCaseReplayOutcome: nil,
+                stableRetryCommandID: false,
+                unavailableActivationRejected: false,
+                staleCompletionRejected: false,
+                useCaseStateRetainsOpaqueIdentifiers: false,
                 launchArguments: [
                     QALaunchScenario.ownerTruthKnowledgeDimensionConfirmationSmoke.rawValue,
                     OwnerTruthCandidateReviewQAGate.launchArgument,
@@ -8071,11 +8099,98 @@ enum OwnerTruthKnowledgeDimensionConfirmationUIQASmoke {
             print("[UI_QA] OwnerTruthKnowledgeDimensionConfirmationSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
+
+    private static func verifyUseCaseVariants(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID
+    ) -> OwnerTruthKnowledgeDimensionConfirmationUIQAUseCaseVariants {
+        let activation = OwnerTruthCandidateMemoryActivation(
+            outcome: .created,
+            memoryID: OwnerTruthRecordID(rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000403")!),
+            memoryVersionID: OwnerTruthRecordID(rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000401")!),
+            contentHash: String(repeating: "a", count: 64)
+        )
+        let client = OwnerTruthKnowledgeDimensionConfirmationUIQAClient(vaultID: vaultID)
+        let runtime = OwnerTruthKnowledgeDimensionConfirmationUIQALeaseRuntime(
+            accountLease: accountLease
+        )
+        let useCase = OwnerTruthKnowledgeDimensionConfirmationUseCase(
+            accountLease: accountLease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "owner-truth-dimension-qa-001" }
+        )
+        useCase.confirm(
+            memoryActivation: activation,
+            dimension: .keyDecisions,
+            coveredFacets: ["reason", "choice"]
+        )
+        let createdOutcome = useCase.viewState.latestReceipt?.outcome
+        useCase.confirm(
+            memoryActivation: activation,
+            dimension: .keyDecisions,
+            coveredFacets: ["choice", "reason"]
+        )
+        let replayOutcome = useCase.viewState.latestReceipt?.outcome
+        let stableRetryCommandID = client.receivedCommandIDs.count == 2
+            && Set(client.receivedCommandIDs).count == 1
+
+        let requestCountBeforeUnavailableActivation = client.receivedCommandIDs.count
+        useCase.confirm(
+            memoryActivation: OwnerTruthCandidateMemoryActivation(
+                outcome: .notApplicable,
+                memoryID: nil,
+                memoryVersionID: nil,
+                contentHash: nil
+            ),
+            dimension: .keyDecisions,
+            coveredFacets: ["choice"]
+        )
+        let unavailableActivationRejected = useCase.viewState.phase == .failed
+            && useCase.viewState.notice == .memoryActivationUnavailable
+            && client.receivedCommandIDs.count == requestCountBeforeUnavailableActivation
+
+        let deferredClient = OwnerTruthKnowledgeDimensionConfirmationDeferredUIQAClient(vaultID: vaultID)
+        let staleRuntime = OwnerTruthKnowledgeDimensionConfirmationUIQALeaseRuntime(
+            accountLease: accountLease
+        )
+        let staleUseCase = OwnerTruthKnowledgeDimensionConfirmationUseCase(
+            accountLease: accountLease,
+            client: deferredClient,
+            accountLeaseRuntime: staleRuntime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "owner-truth-dimension-qa-002" }
+        )
+        staleUseCase.confirm(
+            memoryActivation: activation,
+            dimension: .keyDecisions,
+            coveredFacets: ["choice"]
+        )
+        staleRuntime.allowCommit = false
+        deferredClient.resolve(outcome: .created)
+        let staleCompletionRejected = staleUseCase.viewState.phase == .unavailable
+            && staleUseCase.viewState.notice == .staleAccountLease
+
+        let reflectedState = String(reflecting: useCase.viewState)
+        let stateRetainsOpaqueIdentifiers = reflectedState.contains(activation.memoryVersionID!.rawValue.uuidString)
+            || reflectedState.contains(activation.contentHash!)
+
+        return OwnerTruthKnowledgeDimensionConfirmationUIQAUseCaseVariants(
+            createdOutcome: createdOutcome,
+            replayOutcome: replayOutcome,
+            stableRetryCommandID: stableRetryCommandID,
+            unavailableActivationRejected: unavailableActivationRejected,
+            staleCompletionRejected: staleCompletionRejected,
+            stateRetainsOpaqueIdentifiers: stateRetainsOpaqueIdentifiers
+        )
+    }
 }
 
 private final class OwnerTruthKnowledgeDimensionConfirmationUIQAClient: OwnerTruthKnowledgeDimensionConfirmationClient {
     private let vaultID: OwnerTruthVaultID
     private var completedCommandIDs: Set<String> = []
+    private(set) var receivedCommandIDs: [String] = []
 
     init(vaultID: OwnerTruthVaultID) {
         self.vaultID = vaultID
@@ -8090,6 +8205,7 @@ private final class OwnerTruthKnowledgeDimensionConfirmationUIQAClient: OwnerTru
             completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
             return
         }
+        receivedCommandIDs.append(command.commandID)
         let outcome: OwnerTruthKnowledgeDimensionConfirmationOutcome = completedCommandIDs.insert(command.commandID)
             .inserted ? .created : .deduplicated
         do {
@@ -8157,7 +8273,7 @@ private final class OwnerTruthKnowledgeDimensionConfirmationUIQAClient: OwnerTru
             || reflected.contains("00000000-0000-0000-0000-000000000402")
     }
 
-    private static func fixture(
+    static func fixture(
         command: OwnerTruthKnowledgeDimensionConfirmationCommand,
         outcome: OwnerTruthKnowledgeDimensionConfirmationOutcome
     ) -> [String: Any] {
@@ -8179,6 +8295,77 @@ private final class OwnerTruthKnowledgeDimensionConfirmationUIQAClient: OwnerTru
     }
 }
 
+private final class OwnerTruthKnowledgeDimensionConfirmationDeferredUIQAClient: OwnerTruthKnowledgeDimensionConfirmationClient {
+    private let vaultID: OwnerTruthVaultID
+    private var pendingCommand: OwnerTruthKnowledgeDimensionConfirmationCommand?
+    private var pendingCompletion: ((Result<OwnerTruthKnowledgeDimensionConfirmationReceipt, Error>) -> Void)?
+
+    init(vaultID: OwnerTruthVaultID) {
+        self.vaultID = vaultID
+    }
+
+    func confirmOwnerTruthKnowledgeDimension(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthKnowledgeDimensionConfirmationCommand,
+        completion: @escaping (Result<OwnerTruthKnowledgeDimensionConfirmationReceipt, Error>) -> Void
+    ) {
+        guard vaultID == self.vaultID, pendingCompletion == nil else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        pendingCommand = command
+        pendingCompletion = completion
+    }
+
+    func resolve(outcome: OwnerTruthKnowledgeDimensionConfirmationOutcome) {
+        guard let command = pendingCommand,
+              let completion = pendingCompletion else {
+            return
+        }
+        pendingCommand = nil
+        pendingCompletion = nil
+        do {
+            completion(.success(try OwnerTruthKnowledgeDimensionConfirmationReceipt(
+                backendJSONObject: OwnerTruthKnowledgeDimensionConfirmationUIQAClient.fixture(
+                    command: command,
+                    outcome: outcome
+                ),
+                expectedCommand: command
+            )))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+}
+
+private final class OwnerTruthKnowledgeDimensionConfirmationUIQALeaseRuntime: AccountLeaseRuntimePort, @unchecked Sendable {
+    private let accountLease: AccountLease
+    var allowRequest = true
+    var allowCommit = true
+
+    init(accountLease: AccountLease) {
+        self.accountLease = accountLease
+    }
+
+    func capture(forSubjectId subjectId: String?) -> AccountLease? {
+        subjectId == accountLease.subjectId ? accountLease : nil
+    }
+
+    func validate(
+        _ lease: AccountLease,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> AccountLeaseValidationDecision {
+        let allowed = lease == accountLease && (checkpoint != .request || allowRequest)
+            && (checkpoint != .commit || allowCommit)
+        return AccountLeaseValidationDecision(
+            checkpoint: checkpoint,
+            allowed: allowed,
+            reason: allowed ? .allowed : .generationMismatch,
+            sessionRotated: !allowed
+        )
+    }
+}
+
 private struct OwnerTruthKnowledgeDimensionConfirmationUIQAContractVariants {
     let boundHashMismatchRejected: Bool
     let malformedReceiptRejected: Bool
@@ -8187,6 +8374,15 @@ private struct OwnerTruthKnowledgeDimensionConfirmationUIQAContractVariants {
         boundHashMismatchRejected: false,
         malformedReceiptRejected: false
     )
+}
+
+private struct OwnerTruthKnowledgeDimensionConfirmationUIQAUseCaseVariants {
+    let createdOutcome: OwnerTruthKnowledgeDimensionConfirmationOutcome?
+    let replayOutcome: OwnerTruthKnowledgeDimensionConfirmationOutcome?
+    let stableRetryCommandID: Bool
+    let unavailableActivationRejected: Bool
+    let staleCompletionRejected: Bool
+    let stateRetainsOpaqueIdentifiers: Bool
 }
 
 #endif
