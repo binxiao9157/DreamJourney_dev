@@ -136,6 +136,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidInterviewCandidateDecision(String)
     case invalidInterviewSessionState(String)
     case invalidInterviewNaturalInput(String)
+    case invalidKnowledgeDimensionConfirmation(String)
     case invalidKnowledgeRecommendationPlan(String)
     case invalidKBLiteCompatibilityReadEnvelope(String)
     case invalidContextCitationShadowBuild(String)
@@ -161,6 +162,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "访谈会话状态合同无效：\(detail)"
         case .invalidInterviewNaturalInput(let detail):
             return "访谈自然输入合同无效：\(detail)"
+        case .invalidKnowledgeDimensionConfirmation(let detail):
+            return "知识维度确认合同无效：\(detail)"
         case .invalidKnowledgeRecommendationPlan(let detail):
             return "知识推荐合同无效：\(detail)"
         case .invalidKBLiteCompatibilityReadEnvelope(let detail):
@@ -3088,6 +3091,29 @@ enum OwnerTruthKnowledgeRecommendationDimension: String, CaseIterable, Codable, 
     case professionalExperience
     case values
     case aspirationsAndBoundaries
+
+    /// This order is owned by the V4 policy and is used to canonicalize an
+    /// explicit Owner selection before it crosses the QA-only transport.
+    var facetOrder: [String] {
+        switch self {
+        case .lifeStage:
+            return ["timeContext", "experience"]
+        case .importantPeople:
+            return ["person", "relationshipChange"]
+        case .keyDecisions:
+            return ["choice", "reason", "outcome"]
+        case .professionalExperience:
+            return ["practice", "judgment"]
+        case .values:
+            return ["priority", "reflection"]
+        case .aspirationsAndBoundaries:
+            return ["aspiration", "boundary"]
+        }
+    }
+
+    func supportsFacet(_ value: String) -> Bool {
+        facetOrder.contains(value)
+    }
 }
 
 enum OwnerTruthKnowledgeRecommendationPlanState: String, Codable, Equatable, Sendable {
@@ -3302,7 +3328,7 @@ struct OwnerTruthKnowledgeRecommendationPlan: Equatable, Sendable {
                   let evidenceReferenceCount = OwnerTruthKnowledgeRecommendationPlanContract.nonNegativeInt(
                     object["evidenceRefCount"]
                   ),
-                  Self.validFacet(missingFacet, for: targetDimension) else {
+                  targetDimension.supportsFacet(missingFacet) else {
                 throw OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan(
                     "selected recommendation has an unsupported value"
                 )
@@ -3342,25 +3368,6 @@ struct OwnerTruthKnowledgeRecommendationPlan: Equatable, Sendable {
         return filteredObjects.count
     }
 
-    private static func validFacet(
-        _ missingFacet: String,
-        for dimension: OwnerTruthKnowledgeRecommendationDimension
-    ) -> Bool {
-        switch dimension {
-        case .lifeStage:
-            return ["timeContext", "experience"].contains(missingFacet)
-        case .importantPeople:
-            return ["person", "relationshipChange"].contains(missingFacet)
-        case .keyDecisions:
-            return ["choice", "reason", "outcome"].contains(missingFacet)
-        case .professionalExperience:
-            return ["practice", "judgment"].contains(missingFacet)
-        case .values:
-            return ["priority", "reflection"].contains(missingFacet)
-        case .aspirationsAndBoundaries:
-            return ["aspiration", "boundary"].contains(missingFacet)
-        }
-    }
 }
 
 protocol OwnerTruthKnowledgeRecommendationPlanClient: AnyObject {
@@ -3402,6 +3409,191 @@ private enum OwnerTruthKnowledgeRecommendationPlanContract {
             }
             return object
         }
+    }
+}
+
+// MARK: - QA-only Owner-confirmed knowledge dimensions
+
+/// The server recognizes only a newly recorded confirmation or an idempotent
+/// replay. Keeping this separate from generic command outcomes prevents a
+/// future public surface from treating the QA endpoint as a mutable review API.
+enum OwnerTruthKnowledgeDimensionConfirmationOutcome: String, Codable, Equatable, Sendable {
+    case created
+    case deduplicated
+}
+
+/// A value-minimized command for one explicit Owner classification of an exact
+/// current MemoryVersion. It has no narrative, provider output or client-owned
+/// policy method; those values remain fixed at the server policy boundary.
+struct OwnerTruthKnowledgeDimensionConfirmationCommand: Equatable, Sendable {
+    static let confirmationMethod = "ownerExplicitSelection"
+    static let uiSchemaVersion = "knowledge-dimension-review-v1"
+
+    let commandID: String
+    let memoryVersionID: OwnerTruthRecordID
+    let expectedContentHash: String
+    let dimension: OwnerTruthKnowledgeRecommendationDimension
+    let coveredFacets: [String]
+
+    init(
+        commandID: String,
+        memoryVersionID: OwnerTruthRecordID,
+        expectedContentHash: String,
+        dimension: OwnerTruthKnowledgeRecommendationDimension,
+        coveredFacets: [String]
+    ) throws {
+        let normalizedCommandID = commandID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedHash = expectedContentHash.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedFacets = coveredFacets.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard OwnerTruthKnowledgeDimensionConfirmationContract.isOpaqueCommandID(normalizedCommandID),
+              OwnerTruthKnowledgeDimensionConfirmationContract.isSHA256Digest(normalizedHash),
+              !normalizedFacets.isEmpty,
+              Set(normalizedFacets).count == normalizedFacets.count,
+              normalizedFacets.allSatisfy(dimension.supportsFacet) else {
+            throw OwnerTruthRemoteContractError.invalidKnowledgeDimensionConfirmation(
+                "command must include an opaque id, exact hash and unique supported facets"
+            )
+        }
+        self.commandID = normalizedCommandID
+        self.memoryVersionID = memoryVersionID
+        self.expectedContentHash = normalizedHash
+        self.dimension = dimension
+        self.coveredFacets = dimension.facetOrder.filter(normalizedFacets.contains)
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "commandId": commandID,
+            "expectedContentHash": expectedContentHash,
+            "dimension": dimension.rawValue,
+            "coveredFacets": coveredFacets,
+            "confirmationMethod": Self.confirmationMethod,
+            "uiSchemaVersion": Self.uiSchemaVersion,
+        ]
+    }
+}
+
+/// The response keeps only classification metadata needed by a later reviewed
+/// knowledge-map surface. Receipt and MemoryVersion identifiers plus the bound
+/// hash are verified on receipt, then deliberately discarded.
+struct OwnerTruthKnowledgeDimensionConfirmationReceipt: Equatable, Sendable {
+    static let responseSchemaVersion = "owner-truth-knowledge-dimension-confirmation-response-v1"
+    static let confirmationSchemaVersion = "owner-truth-knowledge-dimension-confirmation-v1"
+
+    let outcome: OwnerTruthKnowledgeDimensionConfirmationOutcome
+    let dimension: OwnerTruthKnowledgeRecommendationDimension
+    let coveredFacets: [String]
+    let authorityEpoch: Int
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedCommand: OwnerTruthKnowledgeDimensionConfirmationCommand
+    ) throws {
+        guard OwnerTruthKnowledgeDimensionConfirmationContract.requiredString(object["schemaVersion"])
+                == Self.responseSchemaVersion,
+              let rawOutcome = OwnerTruthKnowledgeDimensionConfirmationContract.requiredString(object["status"]),
+              let outcome = OwnerTruthKnowledgeDimensionConfirmationOutcome(rawValue: rawOutcome),
+              let confirmation = object["confirmation"] as? [String: Any],
+              OwnerTruthKnowledgeDimensionConfirmationContract.requiredString(confirmation["schemaVersion"])
+                == Self.confirmationSchemaVersion,
+              OwnerTruthKnowledgeDimensionConfirmationContract.requiredString(confirmation["status"])
+                == outcome.rawValue,
+              OwnerTruthKnowledgeDimensionConfirmationContract.recordID(confirmation["confirmationId"]) != nil,
+              OwnerTruthKnowledgeDimensionConfirmationContract.recordID(confirmation["memoryId"]) != nil,
+              OwnerTruthKnowledgeDimensionConfirmationContract.recordID(confirmation["memoryVersionId"])
+                == expectedCommand.memoryVersionID,
+              OwnerTruthKnowledgeDimensionConfirmationContract.requiredString(confirmation["boundContentHash"])
+                == expectedCommand.expectedContentHash,
+              OwnerTruthKnowledgeDimensionConfirmationContract.requiredString(confirmation["dimension"])
+                == expectedCommand.dimension.rawValue,
+              let coveredFacets = OwnerTruthKnowledgeDimensionConfirmationContract.stringArray(
+                confirmation["coveredFacets"]
+              ),
+              coveredFacets == expectedCommand.coveredFacets,
+              let authorityEpoch = OwnerTruthKnowledgeDimensionConfirmationContract.nonNegativeInt(
+                confirmation["authorityEpoch"]
+              ) else {
+            throw OwnerTruthRemoteContractError.invalidKnowledgeDimensionConfirmation(
+                "confirmation receipt does not match the requested current MemoryVersion"
+            )
+        }
+
+        self.outcome = outcome
+        self.dimension = expectedCommand.dimension
+        self.coveredFacets = coveredFacets
+        self.authorityEpoch = authorityEpoch
+    }
+}
+
+protocol OwnerTruthKnowledgeDimensionConfirmationClient: AnyObject {
+    func confirmOwnerTruthKnowledgeDimension(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthKnowledgeDimensionConfirmationCommand,
+        completion: @escaping (Result<OwnerTruthKnowledgeDimensionConfirmationReceipt, Error>) -> Void
+    )
+}
+
+private enum OwnerTruthKnowledgeDimensionConfirmationContract {
+    static func requiredString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    static func recordID(_ value: Any?) -> OwnerTruthRecordID? {
+        guard let rawValue = requiredString(value),
+              let uuid = UUID(uuidString: rawValue) else {
+            return nil
+        }
+        return OwnerTruthRecordID(rawValue: uuid)
+    }
+
+    static func stringArray(_ value: Any?) -> [String]? {
+        guard let values = value as? [Any] else { return nil }
+        let normalized = values.compactMap(requiredString)
+        return normalized.count == values.count ? normalized : nil
+    }
+
+    static func nonNegativeInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value >= 0 { return value }
+        if let value = value as? NSNumber,
+           CFGetTypeID(value) != CFBooleanGetTypeID(),
+           value.doubleValue.rounded() == value.doubleValue,
+           value.intValue >= 0 {
+            return value.intValue
+        }
+        return nil
+    }
+
+    static func isOpaqueCommandID(_ value: String) -> Bool {
+        let scalars = Array(value.unicodeScalars)
+        guard (1...128).contains(scalars.count),
+              let first = scalars.first,
+              isASCIILetter(first) else {
+            return false
+        }
+        return scalars.dropFirst().allSatisfy(isAllowedOpaqueIdentifierScalar)
+    }
+
+    static func isSHA256Digest(_ value: String) -> Bool {
+        let scalars = Array(value.unicodeScalars)
+        return scalars.count == 64 && scalars.allSatisfy(isLowercaseHexScalar)
+    }
+
+    private static func isASCIILetter(_ scalar: UnicodeScalar) -> Bool {
+        (65...90).contains(scalar.value) || (97...122).contains(scalar.value)
+    }
+
+    private static func isAllowedOpaqueIdentifierScalar(_ scalar: UnicodeScalar) -> Bool {
+        isASCIILetter(scalar)
+            || (48...57).contains(scalar.value)
+            || [46, 58, 45, 95].contains(scalar.value)
+    }
+
+    private static func isLowercaseHexScalar(_ scalar: UnicodeScalar) -> Bool {
+        (48...57).contains(scalar.value) || (97...102).contains(scalar.value)
     }
 }
 

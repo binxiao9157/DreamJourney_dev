@@ -367,6 +367,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewSessionStateSmoke() }
         case .ownerTruthInterviewNaturalInputSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewNaturalInputSmoke() }
+        case .ownerTruthKnowledgeDimensionConfirmationSmoke:
+            scheduleUIQAScenario(scenario) { $0.runOwnerTruthKnowledgeDimensionConfirmationSmoke() }
         case .ownerTruthKnowledgeRecommendationPlanSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthKnowledgeRecommendationPlanSmoke() }
         case .ownerTruthInterviewBoundarySmoke:
@@ -2104,6 +2106,42 @@ private extension AppDelegate {
         }
         OwnerTruthKnowledgeRecommendationPlanUIQASmoke.run(accountLease: accountLease)
         print("[UI_QA] OwnerTruthKnowledgeRecommendationPlanSmoke started")
+    }
+
+    func runOwnerTruthKnowledgeDimensionConfirmationSmoke(retryCount: Int = 0) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            OwnerTruthKnowledgeDimensionConfirmationUIQASmoke.writeFailure("qaGateDisabled")
+            return
+        }
+        guard let userID = UserManager.shared.currentUser?.id,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userID),
+              accountLease.subjectId == userID,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            guard retryCount < 20 else {
+                OwnerTruthKnowledgeDimensionConfirmationUIQASmoke.writeFailure("accountLeaseUnavailable")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerTruthKnowledgeDimensionConfirmationSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+        guard let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }),
+              keyWindow.rootViewController is WarmTabBarController else {
+            guard retryCount < 20 else {
+                OwnerTruthKnowledgeDimensionConfirmationUIQASmoke.writeFailure("mainRootUnavailable")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerTruthKnowledgeDimensionConfirmationSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+        OwnerTruthKnowledgeDimensionConfirmationUIQASmoke.run(accountLease: accountLease)
+        print("[UI_QA] OwnerTruthKnowledgeDimensionConfirmationSmoke started")
     }
 
     func runOwnerTruthInterviewBoundarySmoke(retryCount: Int = 0) {

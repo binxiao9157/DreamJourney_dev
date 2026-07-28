@@ -5521,6 +5521,44 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    func confirmOwnerTruthKnowledgeDimension(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthKnowledgeDimensionConfirmationCommand,
+        completion: @escaping (Result<OwnerTruthKnowledgeDimensionConfirmationReceipt, Error>) -> Void
+    ) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthKnowledgeDimensionConfirmation",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/memory-versions/\(pathComponent(command.memoryVersionID.rawValue.uuidString))/knowledge-dimension-confirmations"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthKnowledgeDimensionConfirmationReceipt(
+                        backendJSONObject: object,
+                        expectedCommand: command
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func fetchOwnerTruthInterviewNaturalInputCurrentSession(
         vaultID: OwnerTruthVaultID,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>) -> Void
@@ -7987,6 +8025,7 @@ extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationAct
 extension DreamJourneyBackendClient: OwnerTruthInterviewSessionStateClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewNaturalInputClient {}
 extension DreamJourneyBackendClient: OwnerTruthKnowledgeRecommendationPlanClient {}
+extension DreamJourneyBackendClient: OwnerTruthKnowledgeDimensionConfirmationClient {}
 extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}
 extension DreamJourneyBackendClient: OwnerTruthContextCitationClient {}
 extension DreamJourneyBackendClient: OwnerTruthCorrectionRequestClient {}
