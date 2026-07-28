@@ -1,33 +1,32 @@
 {
   "activeWorkItem": {
-    "id": "WI-S3-01-09",
+    "id": "WI-V0-01-09",
     "state": "IN_PROGRESS",
     "leaseState": "HELD",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
-    "authorityLock": "PUBLICATION",
-    "predecessorWorkItem": "WI-S3-01-08",
-    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-release-guard-viewstate-g0.md",
+    "authorityLock": "VOICE_DH_GOVERNANCE",
+    "predecessorWorkItem": "WI-V0-01-08",
+    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-canary-exit-readiness-g0.md",
     "completedSubSlices": [],
-    "currentSubSlice": "WI-S3-01-09_PUBLICATION_M2_CANARY_EXIT_G0 / model only default-blocked adult publication canary, incident, delete and regulatory-exit decision contracts. Do not enroll a real cohort, create public access, invoke a delete/provider operation, open a route or self-approve G2/G3/G4.",
+    "currentSubSlice": "WI-V0-01-09_SINGLE_AUDIO_OWNER_PCM_INTERRUPTION_G0 / tighten the existing AudioOwnerLease, generated-audio PCM/timeline and runtime-generation contracts. Do not alter Echo visual design, make a provider call, claim real Tencent/Volc delivery or claim true-device acceptance.",
     "gateEvidence": {
-      "G0": "PENDING / PUBLICATION_M2_CANARY_INCIDENT_DELETE_AND_REGULATORY_EXIT_CONTRACT_MUST_REMAIN_DEFAULT_BLOCKED_WITHOUT_REAL_COHORT_PUBLIC_ACCESS_DELETE_PROVIDER_OR_RELEASE_ACTION",
-      "G1": "OPEN / HIDDEN_UIQA_RELEASE_KILL_SWITCH_AND_OWNER_VISITOR_FAILURE_DISCLOSURE_PENDING",
-      "G2": "OPEN / REAL_POSTGRES_PUBLIC_ROLE_RESTORE_CONCURRENCY_AND_DEPLOYED_SMOKE_PENDING",
-      "G3": "OPEN / EXTERNAL_INDEX_CDN_OBJECT_PROVIDER_AND_REGULATORY_EVIDENCE_PENDING",
-      "G4": "OPEN / ADULT_VISITOR_PRODUCT_PRIVACY_LEGAL_SAFETY_OPERATIONS_AND_ACCESSIBILITY_APPROVAL_PENDING"
+      "G0": "PENDING / SINGLE_AUDIO_OWNER_PCM_DRIVE_INTERRUPTION_STOP_AND_MIC_RESUME_CONTRACT_MUST_REMAIN_MUTUALLY_EXCLUSIVE_AND_STALE_GENERATION_SAFE",
+      "G1": "OPEN / MOCK_TIMELINE_PLAYBACK_AND_GENERIC_BUILD_UIQA_PENDING",
+      "G3": "OPEN / REAL_VOLC_TENCENT_AUDIO_DRIVE_SESSION_AND_PROVIDER_RECEIPT_EVIDENCE_PENDING",
+      "G4": "OPEN / TRUE_DEVICE_SPEAKER_RECEIVER_BLUETOOTH_INTERRUPT_BACKGROUND_KILL_AND_PRODUCT_HEARING_ACCEPTANCE_PENDING"
     },
     "latestEvidence": {
-      "backendBaseline": "main@d608754 / Publication release-guard/ViewState G0 contract committed locally; no deployment or public release claim",
-      "iosBaseline": "feature/prd-stitch-ui-adaptation@5e5c705 / C05 synthetic ViewState parity G1 gate revalidated locally",
-      "scope": "WI-S3-01-09_G0_FIRST / create only a value-minimized, default-blocked adult publication canary, incident, delete and regulatory-exit decision seam. No cohort enrollment, public access, provider call, deletion, route, deployment or external approval claim.",
-      "validation": "WI-S3-01-08 release-guard/ViewState G0 gate PASS (9 tests); full scripts/verify_backend.sh PASS with scoped gates and smokes; the ViewState remains hash-only/default-off with no route, Visitor session, metric reader, private projection, UI enablement or public release.",
-      "constraints": "Publication/visitor policy remains strict default deny. A canary decision must require current evidence and named external approvals, fail closed for any private leak/revoke gap/unknown effect/open incident, and never self-promote a real adult Visitor cohort."
+      "backendBaseline": "main@26b015c / Publication canary and exit-readiness G0 contract committed locally; no deployment or public release claim",
+      "iosBaseline": "feature/prd-stitch-ui-adaptation@55c0b33 / V4 publication evidence handoff committed; no V0-01-09 iOS implementation claim",
+      "scope": "WI-V0-01-09_G0_FIRST / harden only the existing AudioOwner, PCM/timeline, runtime-generation, stop/interruption and microphone-resume contract seams. No visual redesign, dual playback, real provider call, real device claim or public Voice/DH enablement.",
+      "validation": "WI-S3-01-09 canary/exit-readiness G0 gate PASS (10 tests); full scripts/verify_backend.sh PASS with scoped gates and smokes; Publication remains default-blocked with no cohort, public route, Visitor session, Provider action or external approval claim.",
+      "constraints": "Echo must have exactly one audio owner. Any stale generation, owner/receipt/session mismatch or stop/interruption must stop/flush only the current audio turn, preserve the DH session until page exit and restore microphone ownership honestly."
     },
-    "currentSummary": "WI-S3-01-08 is recorded as a locally verified hidden release-guard/ViewState contract. It uses fixed response fields and aggregate-only metrics with a privacy minimum; rejects family-derived Visitor access, invalid adult state, offline state and incomplete release prerequisites; and remains policy-disabled even when candidate prerequisites are supplied. Work advances to WI-S3-01-09 for default-blocked M2 canary, incident, delete and regulatory-exit decision contracts.",
+    "currentSummary": "WI-S3-01-09 is recorded as a locally verified Publication canary/exit-readiness contract. It makes private leaks, revoke gaps, unknown effects and open incidents pause conditions; requires zero legacy guest traffic and explicit internal/external evidence; and remains no-go even with synthetic positive inputs. Work advances to WI-V0-01-09 for single AudioOwner, PCM drive, interruption and microphone-resume contract hardening.",
     "backendPendingPaths": [
-      "app/domain/publication/release_guard_viewstate.py",
-      "app/services/release_policy.py",
-      "scripts/run-backend-publication-release-guard-viewstate-g0-gate.sh"
+      "app/services/voice_generated_audio_binding_shadow.py",
+      "app/services/digital_human_session_lifecycle_shadow.py",
+      "app/services/voice_dh_lane_readiness.py"
     ]
   },
   "baselines": {
@@ -713,12 +712,18 @@
       "evidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-release-guard-viewstate-g0.md",
       "implementationStatus": "INTERNAL_READY / PUBLICATION_RELEASE_GUARD_VIEWSTATE_G0_VERIFIED_LOCAL / BACKEND_LOCAL_COMMITTED_d608754 / HASH_ONLY_DEFAULT_OFF / NO_OWNER_OR_VISITOR_ROUTE_SESSION_METRICS_READER_PRIVATE_PROJECTION_RELEASE_UI_OR_PUBLIC_ENABLEMENT / G1_G2_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G4_OPEN"
+    },
+    {
+      "id": "WI-S3-01-09",
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-canary-exit-readiness-g0.md",
+      "implementationStatus": "INTERNAL_READY / PUBLICATION_CANARY_EXIT_READINESS_G0_VERIFIED_LOCAL / BACKEND_LOCAL_COMMITTED_26b015c / HASH_ONLY_DEFAULT_BLOCKED / NO_COHORT_PUBLIC_ACCESS_VISITOR_SESSION_INCIDENT_DISPATCH_RIGHTS_EXECUTION_PROVIDER_OR_RELEASE_ACTION / G1_G2_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN"
     }
   ],
   "nextWorkItem": {
     "id": "WI-V0-01-09",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After the default-blocked Publication M2 canary/incident/exit decision contract, continue with single AudioOwner, PCM drive, interrupt and microphone-recovery hardening. Do not treat non-device evidence as Tencent/Volc G3 or real-device G4 validation."
+    "summary": "This is the final non-evidence-backed V4 Work Item. Complete its non-device G0 contract hardening, then reconcile the V4 evidence register and report the remaining real-provider, device, deployment and approval gates without claiming them complete."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -727,5 +732,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-29T07:20:00+08:00"
+  "updatedAt": "2026-07-29T07:40:00+08:00"
 }
