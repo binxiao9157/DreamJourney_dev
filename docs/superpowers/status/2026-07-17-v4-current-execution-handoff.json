@@ -6,23 +6,25 @@
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "authorityLock": "VOICE_DH_GOVERNANCE",
     "predecessorWorkItem": "WI-V0-01-08",
-    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-canary-exit-readiness-g0.md",
-    "completedSubSlices": [],
-    "currentSubSlice": "WI-V0-01-09_SINGLE_AUDIO_OWNER_PCM_INTERRUPTION_G0 / tighten the existing AudioOwnerLease, generated-audio PCM/timeline and runtime-generation contracts. Do not alter Echo visual design, make a provider call, claim real Tencent/Volc delivery or claim true-device acceptance.",
+    "priorEvidence": "docs/superpowers/status/2026-07-28-wi-v0-01-09-audio-owner-pcm-terminal-fence-g0.md",
+    "completedSubSlices": [
+      "WI-V0-01-09_G0_REQUEST_SCOPED_AUDIO_OWNER_PCM_TERMINAL_FENCE_VERIFIED_LOCAL"
+    ],
+    "currentSubSlice": "WI-V0-01-09_RECONCILE_EVIDENCE_AND_PREPARE_G1_SCOPE / G0 request-scoped provider completion is locally verified. Reconcile the V4 evidence register without promoting Registry lifecycle or claiming mock UIQA, real Provider delivery or true-device acceptance.",
     "gateEvidence": {
-      "G0": "PENDING / SINGLE_AUDIO_OWNER_PCM_DRIVE_INTERRUPTION_STOP_AND_MIC_RESUME_CONTRACT_MUST_REMAIN_MUTUALLY_EXCLUSIVE_AND_STALE_GENERATION_SAFE",
+      "G0": "VERIFIED_LOCAL / REQUEST_SCOPED_PROVIDER_COMPLETION_FENCE_AUDIO_OWNER_PCM_TERMINAL_BOUNDARY_IOS_LOCAL_COMMITTED_9390141",
       "G1": "OPEN / MOCK_TIMELINE_PLAYBACK_AND_GENERIC_BUILD_UIQA_PENDING",
       "G3": "OPEN / REAL_VOLC_TENCENT_AUDIO_DRIVE_SESSION_AND_PROVIDER_RECEIPT_EVIDENCE_PENDING",
       "G4": "OPEN / TRUE_DEVICE_SPEAKER_RECEIVER_BLUETOOTH_INTERRUPT_BACKGROUND_KILL_AND_PRODUCT_HEARING_ACCEPTANCE_PENDING"
     },
     "latestEvidence": {
       "backendBaseline": "main@26b015c / Publication canary and exit-readiness G0 contract committed locally; no deployment or public release claim",
-      "iosBaseline": "feature/prd-stitch-ui-adaptation@55c0b33 / V4 publication evidence handoff committed; no V0-01-09 iOS implementation claim",
-      "scope": "WI-V0-01-09_G0_FIRST / harden only the existing AudioOwner, PCM/timeline, runtime-generation, stop/interruption and microphone-resume contract seams. No visual redesign, dual playback, real provider call, real device claim or public Voice/DH enablement.",
-      "validation": "WI-S3-01-09 canary/exit-readiness G0 gate PASS (10 tests); full scripts/verify_backend.sh PASS with scoped gates and smokes; Publication remains default-blocked with no cohort, public route, Visitor session, Provider action or external approval claim.",
+      "iosBaseline": "feature/prd-stitch-ui-adaptation@9390141 / request-scoped Tencent terminal completion fence committed locally; no real Provider, device or public Voice/DH claim",
+      "scope": "WI-V0-01-09_G0 / TextOver is non-terminal; only matching AudioOver completes the active provider request. No visual redesign, dual playback, real provider call, real device claim or public Voice/DH enablement.",
+      "validation": "runtime-session static gate PASS; runtime-session model smoke and generic iPhoneOS build-for-testing PASS; audio-owner lease gate and generic iPhoneOS build-for-testing PASS; git diff --check PASS.",
       "constraints": "Echo must have exactly one audio owner. Any stale generation, owner/receipt/session mismatch or stop/interruption must stop/flush only the current audio turn, preserve the DH session until page exit and restore microphone ownership honestly."
     },
-    "currentSummary": "WI-S3-01-09 is recorded as a locally verified Publication canary/exit-readiness contract. It makes private leaks, revoke gaps, unknown effects and open incidents pause conditions; requires zero legacy guest traffic and explicit internal/external evidence; and remains no-go even with synthetic positive inputs. Work advances to WI-V0-01-09 for single AudioOwner, PCM drive, interruption and microphone-resume contract hardening.",
+    "currentSummary": "WI-V0-01-09 now has scoped G0 evidence: stale or missing Provider terminal events cannot complete a newer Echo turn, and TextOver cannot release audio before matching AudioOver. The V4 evidence register is now being reconciled; this is not a claim that G1/G3/G4, provider delivery, product audio quality or public release is complete.",
     "backendPendingPaths": [
       "app/services/voice_generated_audio_binding_shadow.py",
       "app/services/digital_human_session_lifecycle_shadow.py",
@@ -30,8 +32,8 @@
     ]
   },
   "baselines": {
-    "backend": "main@535134e / C11 local removal-authorization gate committed; C03-C11 remain default-off evidence only, with no deployment, G2 evidence or cutover claim",
-    "ios": "feature/prd-stitch-ui-adaptation@664bac7 / QA Support result writers are centralized; no public UI change",
+    "backend": "main@26b015c / Publication canary and exit-readiness G0 committed locally; default-blocked with no deployment, G2 evidence or cutover claim",
+    "ios": "feature/prd-stitch-ui-adaptation@9390141 / Echo request-scoped provider terminal fence committed; no public UI change or real Provider/device claim",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -660,6 +662,12 @@
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN"
     },
     {
+      "id": "WI-V0-01-09",
+      "evidence": "docs/superpowers/status/2026-07-28-wi-v0-01-09-audio-owner-pcm-terminal-fence-g0.md",
+      "implementationStatus": "INTERNAL_READY / G0_REQUEST_SCOPED_AUDIO_OWNER_PCM_TERMINAL_FENCE_VERIFIED_LOCAL / IOS_LOCAL_COMMITTED_9390141 / DEFAULT_OFF / NO_REAL_PROVIDER_OR_DEVICE_CLAIM / G1_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
+    },
+    {
       "id": "WI-V0-01-10",
       "evidence": "docs/superpowers/status/2026-07-28-wi-v0-01-10-voice-dh-exit-g0.md; docs/superpowers/status/2026-07-28-wi-v0-01-10-exit-disclosure-g1-local.md",
       "implementationStatus": "INTERNAL_READY / G0_VOICE_DH_RIGHTS_EXIT_SHADOW_VERIFIED / BACKEND_LOCAL_COMMITTED_0043e4a / EXIT_DISCLOSURE_BACKEND_COMMITTED_de2d397 / EXIT_DISCLOSURE_IOS_COMMITTED_95c9e6d / DEFAULT_OFF / NO_PROVIDER_DELETE_OR_RECEIPT / G1_UIQA_G2_G3_G4_OPEN",
@@ -722,8 +730,8 @@
   ],
   "nextWorkItem": {
     "id": "WI-V0-01-09",
-    "state": "PLANNED_AFTER_CURRENT",
-    "summary": "This is the final non-evidence-backed V4 Work Item. Complete its non-device G0 contract hardening, then reconcile the V4 evidence register and report the remaining real-provider, device, deployment and approval gates without claiming them complete."
+    "state": "RECONCILE_AFTER_CURRENT",
+    "summary": "All 115 Registry Work Items now have scoped local evidence references. Reconcile the evidence register and select only a gate-appropriate G1/G2/G3/G4 follow-up; do not promote Registry lifecycle, deployment, Provider or true-device status from local evidence."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -732,5 +740,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-29T07:40:00+08:00"
+  "updatedAt": "2026-07-29T08:10:00+08:00"
 }
