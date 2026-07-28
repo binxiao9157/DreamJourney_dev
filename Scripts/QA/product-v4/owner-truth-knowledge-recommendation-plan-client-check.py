@@ -113,6 +113,11 @@ def main() -> None:
         "candidate-continuity-opaque",
         "includedMemoryVersionIds",
         "OwnerTruthKnowledgeRecommendationPlanUIQAClient",
+        "verifyContractVariants(",
+        "singleRecommendationAccepted",
+        "emptyRecommendationAccepted",
+        "nonReadyPlanAccepted",
+        "malformedPlanRejected",
         "planInvariantMismatch",
     ):
         require(snippet in smoke_surface, f"M0-B value-minimized smoke missing: {snippet}")

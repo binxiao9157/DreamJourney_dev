@@ -7634,6 +7634,10 @@ struct OwnerTruthKnowledgeRecommendationPlanUIQASmokeResult: Codable {
     let filteredCount: Int
     let coverageDimensionCount: Int
     let candidateIdentifierExposed: Bool
+    let singleRecommendationAccepted: Bool
+    let emptyRecommendationAccepted: Bool
+    let nonReadyPlanAccepted: Bool
+    let malformedPlanRejected: Bool
     let launchArguments: [String]
     let failureReason: String?
 
@@ -7667,6 +7671,7 @@ enum OwnerTruthKnowledgeRecommendationPlanUIQASmoke {
         client.fetchOwnerTruthKnowledgeRecommendationPlan(vaultID: vaultID) { result in
             switch result {
             case .success(let plan):
+                let variants = client.verifyContractVariants(vaultID: vaultID)
                 let slots = plan.selected.map(\.slot.rawValue)
                 let expectedSlots: Set<OwnerTruthKnowledgeRecommendationSlot> = [.continuity, .breadth]
                 let completed = OwnerTruthCandidateReviewQAGate.isEnabled
@@ -7675,6 +7680,10 @@ enum OwnerTruthKnowledgeRecommendationPlanUIQASmoke {
                     && Set(plan.selected.map(\.slot)) == expectedSlots
                     && plan.filteredCount == 1
                     && plan.coverage.count == OwnerTruthKnowledgeRecommendationDimension.allCases.count
+                    && variants.singleRecommendationAccepted
+                    && variants.emptyRecommendationAccepted
+                    && variants.nonReadyPlanAccepted
+                    && variants.malformedPlanRejected
                 write(
                     OwnerTruthKnowledgeRecommendationPlanUIQASmokeResult(
                         completed: completed,
@@ -7685,6 +7694,10 @@ enum OwnerTruthKnowledgeRecommendationPlanUIQASmoke {
                         filteredCount: plan.filteredCount,
                         coverageDimensionCount: plan.coverage.count,
                         candidateIdentifierExposed: false,
+                        singleRecommendationAccepted: variants.singleRecommendationAccepted,
+                        emptyRecommendationAccepted: variants.emptyRecommendationAccepted,
+                        nonReadyPlanAccepted: variants.nonReadyPlanAccepted,
+                        malformedPlanRejected: variants.malformedPlanRejected,
                         launchArguments: [
                             QALaunchScenario.ownerTruthKnowledgeRecommendationPlanSmoke.rawValue,
                             OwnerTruthCandidateReviewQAGate.launchArgument,
@@ -7709,6 +7722,10 @@ enum OwnerTruthKnowledgeRecommendationPlanUIQASmoke {
                 filteredCount: 0,
                 coverageDimensionCount: 0,
                 candidateIdentifierExposed: false,
+                singleRecommendationAccepted: false,
+                emptyRecommendationAccepted: false,
+                nonReadyPlanAccepted: false,
+                malformedPlanRejected: false,
                 launchArguments: [
                     QALaunchScenario.ownerTruthKnowledgeRecommendationPlanSmoke.rawValue,
                     OwnerTruthCandidateReviewQAGate.launchArgument,
@@ -7746,7 +7763,7 @@ private final class OwnerTruthKnowledgeRecommendationPlanUIQAClient: OwnerTruthK
         }
         do {
             completion(.success(try OwnerTruthKnowledgeRecommendationPlan(
-                backendJSONObject: fixture(vaultID: vaultID),
+                backendJSONObject: Self.fixture(vaultID: vaultID),
                 expectedVaultID: vaultID
             )))
         } catch {
@@ -7754,7 +7771,87 @@ private final class OwnerTruthKnowledgeRecommendationPlanUIQAClient: OwnerTruthK
         }
     }
 
-    private func fixture(vaultID: OwnerTruthVaultID) -> [String: Any] {
+    func verifyContractVariants(
+        vaultID: OwnerTruthVaultID
+    ) -> OwnerTruthKnowledgeRecommendationPlanUIQAContractVariants {
+        do {
+            var singleResponse = Self.fixture(vaultID: vaultID)
+            guard var singleRecommendations = singleResponse["recommendations"] as? [String: Any],
+                  let selected = singleRecommendations["selected"] as? [[String: Any]],
+                  selected.count == 2 else {
+                return .failed
+            }
+            singleRecommendations["selected"] = [selected[1]]
+            singleRecommendations["filtered"] = [] as [[String: Any]]
+            singleResponse["recommendations"] = singleRecommendations
+            let singlePlan = try OwnerTruthKnowledgeRecommendationPlan(
+                backendJSONObject: singleResponse,
+                expectedVaultID: vaultID
+            )
+
+            var emptyResponse = Self.fixture(vaultID: vaultID)
+            guard var emptyRecommendations = emptyResponse["recommendations"] as? [String: Any] else {
+                return .failed
+            }
+            emptyRecommendations["selected"] = [] as [[String: Any]]
+            emptyRecommendations["filtered"] = [] as [[String: Any]]
+            emptyResponse["recommendations"] = emptyRecommendations
+            let emptyPlan = try OwnerTruthKnowledgeRecommendationPlan(
+                backendJSONObject: emptyResponse,
+                expectedVaultID: vaultID
+            )
+
+            var unavailableResponse = Self.fixture(vaultID: vaultID)
+            guard var unavailableRecommendations = unavailableResponse["recommendations"] as? [String: Any],
+                  var unavailableDimensionRead = unavailableRecommendations["dimensionRead"] as? [String: Any] else {
+                return .failed
+            }
+            unavailableRecommendations["selectionState"] = OwnerTruthKnowledgeRecommendationPlanState.unavailable.rawValue
+            unavailableRecommendations["selected"] = [] as [[String: Any]]
+            unavailableRecommendations["filtered"] = [] as [[String: Any]]
+            unavailableDimensionRead["state"] = OwnerTruthKnowledgeRecommendationPlanState.unavailable.rawValue
+            unavailableDimensionRead.removeValue(forKey: "coverage")
+            unavailableDimensionRead.removeValue(forKey: "includedMemoryVersionIds")
+            unavailableDimensionRead.removeValue(forKey: "excluded")
+            unavailableRecommendations["dimensionRead"] = unavailableDimensionRead
+            unavailableResponse["recommendations"] = unavailableRecommendations
+            let unavailablePlan = try OwnerTruthKnowledgeRecommendationPlan(
+                backendJSONObject: unavailableResponse,
+                expectedVaultID: vaultID
+            )
+
+            var malformedResponse = Self.fixture(vaultID: vaultID)
+            guard var malformedRecommendations = malformedResponse["recommendations"] as? [String: Any] else {
+                return .failed
+            }
+            malformedRecommendations["selected"] = [selected[0], selected[0]]
+            malformedResponse["recommendations"] = malformedRecommendations
+            let malformedRejected: Bool
+            do {
+                _ = try OwnerTruthKnowledgeRecommendationPlan(
+                    backendJSONObject: malformedResponse,
+                    expectedVaultID: vaultID
+                )
+                malformedRejected = false
+            } catch {
+                malformedRejected = true
+            }
+
+            return OwnerTruthKnowledgeRecommendationPlanUIQAContractVariants(
+                singleRecommendationAccepted: singlePlan.selected.count == 1
+                    && singlePlan.selected.first?.slot == .breadth,
+                emptyRecommendationAccepted: emptyPlan.state == .ready && emptyPlan.selected.isEmpty,
+                nonReadyPlanAccepted: unavailablePlan.state == .unavailable
+                    && unavailablePlan.coverage.isEmpty
+                    && unavailablePlan.selected.isEmpty,
+                malformedPlanRejected: malformedRejected
+            )
+        } catch {
+            return .failed
+        }
+    }
+
+    private static func fixture(vaultID: OwnerTruthVaultID) -> [String: Any] {
         let policyVersion = "knowledge-dimension-policy-v1"
         let dimensions: [[String: Any]] = [
             ["dimension": "lifeStage", "evidenceCount": 1, "coveredFacetCount": 1, "missingFacetCount": 1],
@@ -7822,6 +7919,20 @@ private final class OwnerTruthKnowledgeRecommendationPlanUIQAClient: OwnerTruthK
             ],
         ]
     }
+}
+
+private struct OwnerTruthKnowledgeRecommendationPlanUIQAContractVariants {
+    let singleRecommendationAccepted: Bool
+    let emptyRecommendationAccepted: Bool
+    let nonReadyPlanAccepted: Bool
+    let malformedPlanRejected: Bool
+
+    static let failed = Self(
+        singleRecommendationAccepted: false,
+        emptyRecommendationAccepted: false,
+        nonReadyPlanAccepted: false,
+        malformedPlanRejected: false
+    )
 }
 
 #endif
