@@ -4699,6 +4699,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         hasExplicitBaseURL && OwnerTruthCandidateReviewQAGate.isEnabled
     }
 
+    var isOwnerTruthKnowledgeRecommendationPlanQAConfigured: Bool {
+        hasExplicitBaseURL && OwnerTruthCandidateReviewQAGate.isEnabled
+    }
+
     /// A configured backend is not release authority. Outside QA, natural
     /// input needs a fresh server policy decision before it can write.
     var isOwnerTruthInterviewNaturalInputReleaseConfigured: Bool {
@@ -5468,6 +5472,43 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
             case .success(let object):
                 do {
                     completion(.success(try OwnerTruthInterviewSessionState(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func fetchOwnerTruthKnowledgeRecommendationPlan(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthKnowledgeRecommendationPlan, Error>) -> Void
+    ) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthKnowledgeRecommendationPlan",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/knowledge-recommendations/plan"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: [:],
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthKnowledgeRecommendationPlan(
                         backendJSONObject: object,
                         expectedVaultID: vaultID
                     )))
@@ -7945,6 +7986,7 @@ extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationCli
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationActionClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewSessionStateClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewNaturalInputClient {}
+extension DreamJourneyBackendClient: OwnerTruthKnowledgeRecommendationPlanClient {}
 extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}
 extension DreamJourneyBackendClient: OwnerTruthContextCitationClient {}
 extension DreamJourneyBackendClient: OwnerTruthCorrectionRequestClient {}

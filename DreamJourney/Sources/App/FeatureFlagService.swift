@@ -111,6 +111,7 @@ enum QALaunchScenario: String, CaseIterable {
     case ownerTruthInterviewCandidateReviewSmoke = "DJRunOwnerTruthInterviewCandidateReviewSmoke"
     case ownerTruthInterviewSessionStateSmoke = "DJRunOwnerTruthInterviewSessionStateSmoke"
     case ownerTruthInterviewNaturalInputSmoke = "DJRunOwnerTruthInterviewNaturalInputSmoke"
+    case ownerTruthKnowledgeRecommendationPlanSmoke = "DJRunOwnerTruthKnowledgeRecommendationPlanSmoke"
     case ownerTruthInterviewBoundarySmoke = "DJRunOwnerTruthInterviewBoundarySmoke"
     case ownerTruthInterviewNaturalInputEchoSurfaceSmoke = "DJRunOwnerTruthInterviewNaturalInputEchoSurfaceSmoke"
     case ownerTruthInterviewNaturalInputProductSurfaceSmoke = "DJRunOwnerTruthInterviewNaturalInputProductSurfaceSmoke"
@@ -157,6 +158,7 @@ enum QALaunchScenario: String, CaseIterable {
         .ownerTruthInterviewCandidateReviewSmoke,
         .ownerTruthInterviewSessionStateSmoke,
         .ownerTruthInterviewNaturalInputSmoke,
+        .ownerTruthKnowledgeRecommendationPlanSmoke,
         .ownerTruthInterviewBoundarySmoke,
         .ownerTruthInterviewNaturalInputEchoSurfaceSmoke,
         .ownerTruthInterviewNaturalInputProductSurfaceSmoke,
@@ -207,6 +209,7 @@ enum QALaunchScenario: String, CaseIterable {
              .ownerTruthInterviewCandidateReviewSmoke,
              .ownerTruthInterviewSessionStateSmoke,
              .ownerTruthInterviewNaturalInputSmoke,
+             .ownerTruthKnowledgeRecommendationPlanSmoke,
              .archiveFailedAnalysisRetrySmoke,
              .timeLetterDispatchReminderSmoke:
             return .loginAndResetFeatureFlags

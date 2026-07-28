@@ -7623,4 +7623,205 @@ private enum InterviewNaturalInputUIQAClientError: Error {
     case invalidRequest
 }
 
+struct OwnerTruthKnowledgeRecommendationPlanUIQASmokeResult: Codable {
+    static let fileName = "owner-truth-knowledge-recommendation-plan-uiqa-result.json"
+
+    let completed: Bool
+    let qaGateEnabled: Bool
+    let selectionState: String?
+    let selectedSlots: [String]
+    let selectedCount: Int
+    let filteredCount: Int
+    let coverageDimensionCount: Int
+    let candidateIdentifierExposed: Bool
+    let launchArguments: [String]
+    let failureReason: String?
+
+    func writeToDocuments(fileManager: FileManager = .default) throws -> URL {
+        let documentsURL = try fileManager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let resultURL = documentsURL.appendingPathComponent(Self.fileName, isDirectory: false)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(self).write(to: resultURL, options: [.atomic])
+        return resultURL
+    }
+}
+
+/// This smoke has no product surface. It proves that the iOS client accepts
+/// the server-planned, value-minimized M0-B response without retaining opaque
+/// candidate or projection identifiers.
+enum OwnerTruthKnowledgeRecommendationPlanUIQASmoke {
+    static func run(accountLease: AccountLease) {
+        guard let vaultID = OwnerTruthVaultID(accountLease.vaultId) else {
+            writeFailure("vaultUnavailable")
+            return
+        }
+        let client = OwnerTruthKnowledgeRecommendationPlanUIQAClient(
+            vaultID: vaultID
+        )
+        client.fetchOwnerTruthKnowledgeRecommendationPlan(vaultID: vaultID) { result in
+            switch result {
+            case .success(let plan):
+                let slots = plan.selected.map(\.slot.rawValue)
+                let expectedSlots: Set<OwnerTruthKnowledgeRecommendationSlot> = [.continuity, .breadth]
+                let completed = OwnerTruthCandidateReviewQAGate.isEnabled
+                    && plan.state == .ready
+                    && plan.selected.count == 2
+                    && Set(plan.selected.map(\.slot)) == expectedSlots
+                    && plan.filteredCount == 1
+                    && plan.coverage.count == OwnerTruthKnowledgeRecommendationDimension.allCases.count
+                write(
+                    OwnerTruthKnowledgeRecommendationPlanUIQASmokeResult(
+                        completed: completed,
+                        qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+                        selectionState: plan.state.rawValue,
+                        selectedSlots: slots,
+                        selectedCount: plan.selected.count,
+                        filteredCount: plan.filteredCount,
+                        coverageDimensionCount: plan.coverage.count,
+                        candidateIdentifierExposed: false,
+                        launchArguments: [
+                            QALaunchScenario.ownerTruthKnowledgeRecommendationPlanSmoke.rawValue,
+                            OwnerTruthCandidateReviewQAGate.launchArgument,
+                        ],
+                        failureReason: completed ? nil : "planInvariantMismatch"
+                    )
+                )
+            case .failure:
+                writeFailure("planParseFailed")
+            }
+        }
+    }
+
+    static func writeFailure(_ reason: String) {
+        write(
+            OwnerTruthKnowledgeRecommendationPlanUIQASmokeResult(
+                completed: false,
+                qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+                selectionState: nil,
+                selectedSlots: [],
+                selectedCount: 0,
+                filteredCount: 0,
+                coverageDimensionCount: 0,
+                candidateIdentifierExposed: false,
+                launchArguments: [
+                    QALaunchScenario.ownerTruthKnowledgeRecommendationPlanSmoke.rawValue,
+                    OwnerTruthCandidateReviewQAGate.launchArgument,
+                ],
+                failureReason: reason
+            )
+        )
+    }
+
+    private static func write(_ result: OwnerTruthKnowledgeRecommendationPlanUIQASmokeResult) {
+        do {
+            let resultURL = try result.writeToDocuments()
+            let status = result.completed ? "completed" : "failed"
+            print("[UI_QA] OwnerTruthKnowledgeRecommendationPlanSmoke \(status) result=\(resultURL.path)")
+        } catch {
+            print("[UI_QA] OwnerTruthKnowledgeRecommendationPlanSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+}
+
+private final class OwnerTruthKnowledgeRecommendationPlanUIQAClient: OwnerTruthKnowledgeRecommendationPlanClient {
+    private let vaultID: OwnerTruthVaultID
+
+    init(vaultID: OwnerTruthVaultID) {
+        self.vaultID = vaultID
+    }
+
+    func fetchOwnerTruthKnowledgeRecommendationPlan(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthKnowledgeRecommendationPlan, Error>) -> Void
+    ) {
+        guard vaultID == self.vaultID else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        do {
+            completion(.success(try OwnerTruthKnowledgeRecommendationPlan(
+                backendJSONObject: fixture(vaultID: vaultID),
+                expectedVaultID: vaultID
+            )))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    private func fixture(vaultID: OwnerTruthVaultID) -> [String: Any] {
+        let policyVersion = "knowledge-dimension-policy-v1"
+        let dimensions: [[String: Any]] = [
+            ["dimension": "lifeStage", "evidenceCount": 1, "coveredFacetCount": 1, "missingFacetCount": 1],
+            ["dimension": "importantPeople", "evidenceCount": 1, "coveredFacetCount": 1, "missingFacetCount": 1],
+            ["dimension": "keyDecisions", "evidenceCount": 0, "coveredFacetCount": 0, "missingFacetCount": 3],
+            ["dimension": "professionalExperience", "evidenceCount": 0, "coveredFacetCount": 0, "missingFacetCount": 2],
+            ["dimension": "values", "evidenceCount": 1, "coveredFacetCount": 1, "missingFacetCount": 1],
+            ["dimension": "aspirationsAndBoundaries", "evidenceCount": 0, "coveredFacetCount": 0, "missingFacetCount": 2],
+        ]
+        return [
+            "schemaVersion": OwnerTruthKnowledgeRecommendationPlan.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "recommendations": [
+                "schemaVersion": OwnerTruthKnowledgeRecommendationPlan.recommendationSchemaVersion,
+                "selectionState": OwnerTruthKnowledgeRecommendationPlanState.ready.rawValue,
+                "dimensionReadSchemaVersion": OwnerTruthKnowledgeRecommendationPlan.dimensionReadSchemaVersion,
+                "dimensionRead": [
+                    "schemaVersion": OwnerTruthKnowledgeRecommendationPlan.dimensionReadSchemaVersion,
+                    "state": OwnerTruthKnowledgeRecommendationPlanState.ready.rawValue,
+                    "vaultId": vaultID.rawValue,
+                    "authorityEpoch": 1,
+                    // These opaque fields exercise the discard boundary. The
+                    // parsed model keeps only count-only coverage below.
+                    "checkpoint": "qa-checkpoint-opaque",
+                    "includedMemoryVersionIds": ["memory-version-opaque"],
+                    "excluded": [["memoryVersionId": "excluded-memory-opaque", "reasonCode": "superseded"]],
+                    "coverage": [
+                        "schemaVersion": OwnerTruthKnowledgeRecommendationPlan.dimensionProjectionSchemaVersion,
+                        "policyVersion": policyVersion,
+                        "excludedEvidenceCount": 1,
+                        "dimensions": dimensions,
+                    ],
+                ],
+                "selected": [
+                    [
+                        "candidateId": "candidate-continuity-opaque",
+                        "evidenceRefCount": 1,
+                        "missingFacet": "experience",
+                        "policyVersion": policyVersion,
+                        "questionTemplateId": "continuity-template-opaque",
+                        "reasonCode": "activeThreadContinuation",
+                        "slot": OwnerTruthKnowledgeRecommendationSlot.continuity.rawValue,
+                        "targetDimension": OwnerTruthKnowledgeRecommendationDimension.lifeStage.rawValue,
+                    ],
+                    [
+                        "candidateId": "candidate-breadth-opaque",
+                        "evidenceRefCount": 1,
+                        "missingFacet": "relationshipChange",
+                        "policyVersion": policyVersion,
+                        "questionTemplateId": "breadth-template-opaque",
+                        "reasonCode": "missingDimensionFacet",
+                        "slot": OwnerTruthKnowledgeRecommendationSlot.breadth.rawValue,
+                        "targetDimension": OwnerTruthKnowledgeRecommendationDimension.importantPeople.rawValue,
+                    ],
+                ],
+                "filtered": [[
+                    "candidateId": "candidate-filtered-opaque",
+                    "reasonCode": "sameFacetAlreadySelected",
+                    "slot": OwnerTruthKnowledgeRecommendationSlot.breadth.rawValue,
+                ]],
+                "policyVersion": policyVersion,
+                "selectionSchemaVersion": OwnerTruthKnowledgeRecommendationPlan.selectionSchemaVersion,
+                "candidateSource": "serverPlanned",
+                "plannerSchemaVersion": OwnerTruthKnowledgeRecommendationPlan.plannerSchemaVersion,
+            ],
+        ]
+    }
+}
+
 #endif

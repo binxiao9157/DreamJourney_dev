@@ -136,6 +136,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidInterviewCandidateDecision(String)
     case invalidInterviewSessionState(String)
     case invalidInterviewNaturalInput(String)
+    case invalidKnowledgeRecommendationPlan(String)
     case invalidKBLiteCompatibilityReadEnvelope(String)
     case invalidContextCitationShadowBuild(String)
     case invalidAnswerCitationReceipt(String)
@@ -160,6 +161,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "访谈会话状态合同无效：\(detail)"
         case .invalidInterviewNaturalInput(let detail):
             return "访谈自然输入合同无效：\(detail)"
+        case .invalidKnowledgeRecommendationPlan(let detail):
+            return "知识推荐合同无效：\(detail)"
         case .invalidKBLiteCompatibilityReadEnvelope(let detail):
             return "兼容读取合同无效：\(detail)"
         case .invalidContextCitationShadowBuild(let detail):
@@ -3063,6 +3066,343 @@ protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
         sessionID: OwnerTruthRecordID,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputContinuation, Error>) -> Void
     )
+}
+
+// MARK: - QA-only Owner Truth knowledge recommendation plan
+
+/// The two product-facing recommendation positions remain stable even while
+/// the planner evolves. The plan is QA-only today and deliberately contains
+/// no generated question or private memory content.
+enum OwnerTruthKnowledgeRecommendationSlot: String, Codable, Equatable, Sendable {
+    case continuity
+    case breadth
+}
+
+/// The six V4 knowledge dimensions. They are policy-owned, so an unexpected
+/// backend dimension fails closed instead of quietly becoming a new client
+/// behavior.
+enum OwnerTruthKnowledgeRecommendationDimension: String, CaseIterable, Codable, Equatable, Sendable {
+    case lifeStage
+    case importantPeople
+    case keyDecisions
+    case professionalExperience
+    case values
+    case aspirationsAndBoundaries
+}
+
+enum OwnerTruthKnowledgeRecommendationPlanState: String, Codable, Equatable, Sendable {
+    case ready
+    case rebuilding
+    case unavailable
+}
+
+/// Count-only coverage displayed in QA diagnostics. Memory-version IDs,
+/// source IDs and checkpoints are deliberately not retained on iOS.
+struct OwnerTruthKnowledgeRecommendationCoverage: Equatable, Sendable {
+    let dimension: OwnerTruthKnowledgeRecommendationDimension
+    let evidenceCount: Int
+    let coveredFacetCount: Int
+    let missingFacetCount: Int
+}
+
+/// A usable recommendation without its server-side candidate identity or
+/// question template. The public Echo surface will map these identifiers to
+/// approved copy only in a later reviewed slice.
+struct OwnerTruthKnowledgeRecommendation: Equatable, Sendable {
+    let slot: OwnerTruthKnowledgeRecommendationSlot
+    let targetDimension: OwnerTruthKnowledgeRecommendationDimension
+    let missingFacet: String
+    let reasonCode: String
+    let evidenceReferenceCount: Int
+}
+
+/// Typed, value-minimized read model for the server-planned M0-B route. This
+/// is intentionally not connected to a public Echo entry point.
+struct OwnerTruthKnowledgeRecommendationPlan: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-knowledge-recommendation-plan-response-v1"
+    static let recommendationSchemaVersion = "owner-truth-knowledge-recommendation-read-v1"
+    static let plannerSchemaVersion = "owner-truth-knowledge-recommendation-plan-v1"
+    static let dimensionReadSchemaVersion = "owner-truth-knowledge-dimension-read-v2"
+    static let dimensionProjectionSchemaVersion = "owner-truth-dimension-projection-v1"
+    static let selectionSchemaVersion = "owner-truth-recommendation-selection-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let state: OwnerTruthKnowledgeRecommendationPlanState
+    let coverage: [OwnerTruthKnowledgeRecommendationCoverage]
+    let selected: [OwnerTruthKnowledgeRecommendation]
+    let filteredCount: Int
+    let policyVersion: String
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        guard OwnerTruthKnowledgeRecommendationPlanContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthKnowledgeRecommendationPlanContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let recommendations = object["recommendations"] as? [String: Any],
+              OwnerTruthKnowledgeRecommendationPlanContract.requiredString(recommendations["schemaVersion"])
+                == Self.recommendationSchemaVersion,
+              OwnerTruthKnowledgeRecommendationPlanContract.requiredString(recommendations["candidateSource"])
+                == "serverPlanned",
+              OwnerTruthKnowledgeRecommendationPlanContract.requiredString(recommendations["plannerSchemaVersion"])
+                == Self.plannerSchemaVersion,
+              OwnerTruthKnowledgeRecommendationPlanContract.requiredString(recommendations["dimensionReadSchemaVersion"])
+                == Self.dimensionReadSchemaVersion,
+              OwnerTruthKnowledgeRecommendationPlanContract.requiredString(recommendations["selectionSchemaVersion"])
+                == Self.selectionSchemaVersion,
+              let stateRaw = OwnerTruthKnowledgeRecommendationPlanContract.requiredString(
+                recommendations["selectionState"]
+              ),
+              let state = OwnerTruthKnowledgeRecommendationPlanState(rawValue: stateRaw),
+              let policyVersion = OwnerTruthKnowledgeRecommendationPlanContract.requiredString(
+                recommendations["policyVersion"]
+              ),
+              let dimensionRead = recommendations["dimensionRead"] as? [String: Any],
+              OwnerTruthKnowledgeRecommendationPlanContract.requiredString(dimensionRead["schemaVersion"])
+                == Self.dimensionReadSchemaVersion,
+              OwnerTruthKnowledgeRecommendationPlanContract.requiredString(dimensionRead["state"])
+                == state.rawValue,
+              OwnerTruthKnowledgeRecommendationPlanContract.requiredString(dimensionRead["vaultId"])
+                == expectedVaultID.rawValue,
+              OwnerTruthKnowledgeRecommendationPlanContract.nonNegativeInt(dimensionRead["authorityEpoch"]) != nil else {
+            throw OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan(
+                "plan response misses a required value-minimized field"
+            )
+        }
+
+        let coverage = try Self.parseCoverage(
+            dimensionRead: dimensionRead,
+            state: state,
+            policyVersion: policyVersion
+        )
+        let selected = try Self.parseSelected(
+            recommendations["selected"],
+            state: state,
+            policyVersion: policyVersion
+        )
+        let filteredCount = try Self.parseFilteredCount(recommendations["filtered"])
+
+        vaultID = expectedVaultID
+        self.state = state
+        self.coverage = coverage
+        self.selected = selected
+        self.filteredCount = filteredCount
+        self.policyVersion = policyVersion
+    }
+
+    private static func parseCoverage(
+        dimensionRead: [String: Any],
+        state: OwnerTruthKnowledgeRecommendationPlanState,
+        policyVersion: String
+    ) throws -> [OwnerTruthKnowledgeRecommendationCoverage] {
+        guard state == .ready else {
+            guard dimensionRead["coverage"] == nil || dimensionRead["coverage"] is NSNull else {
+                throw OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan(
+                    "non-ready plan must not retain coverage"
+                )
+            }
+            return []
+        }
+        guard let coverageObject = dimensionRead["coverage"] as? [String: Any],
+              OwnerTruthKnowledgeRecommendationPlanContract.requiredString(coverageObject["schemaVersion"])
+                == Self.dimensionProjectionSchemaVersion,
+              OwnerTruthKnowledgeRecommendationPlanContract.requiredString(coverageObject["policyVersion"])
+                == policyVersion,
+              OwnerTruthKnowledgeRecommendationPlanContract.nonNegativeInt(
+                coverageObject["excludedEvidenceCount"]
+              ) != nil else {
+            throw OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan(
+                "ready plan coverage misses a required count-only field"
+            )
+        }
+        let dimensionObjects = try OwnerTruthKnowledgeRecommendationPlanContract.objectArray(
+            coverageObject["dimensions"],
+            field: "coverage.dimensions"
+        )
+        guard dimensionObjects.count == OwnerTruthKnowledgeRecommendationDimension.allCases.count else {
+            throw OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan(
+                "coverage must contain every stable knowledge dimension"
+            )
+        }
+
+        let values = try dimensionObjects.map { object -> OwnerTruthKnowledgeRecommendationCoverage in
+            guard let rawDimension = OwnerTruthKnowledgeRecommendationPlanContract.requiredString(
+                object["dimension"]
+            ),
+            let dimension = OwnerTruthKnowledgeRecommendationDimension(rawValue: rawDimension),
+            let evidenceCount = OwnerTruthKnowledgeRecommendationPlanContract.nonNegativeInt(
+                object["evidenceCount"]
+            ),
+            let coveredFacetCount = OwnerTruthKnowledgeRecommendationPlanContract.nonNegativeInt(
+                object["coveredFacetCount"]
+            ),
+            let missingFacetCount = OwnerTruthKnowledgeRecommendationPlanContract.nonNegativeInt(
+                object["missingFacetCount"]
+            ) else {
+                throw OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan(
+                    "coverage dimension has an unsupported value"
+                )
+            }
+            return OwnerTruthKnowledgeRecommendationCoverage(
+                dimension: dimension,
+                evidenceCount: evidenceCount,
+                coveredFacetCount: coveredFacetCount,
+                missingFacetCount: missingFacetCount
+            )
+        }
+        guard Set(values.map(\.dimension)).count == OwnerTruthKnowledgeRecommendationDimension.allCases.count else {
+            throw OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan(
+                "coverage must not duplicate a knowledge dimension"
+            )
+        }
+        return values
+    }
+
+    private static func parseSelected(
+        _ value: Any?,
+        state: OwnerTruthKnowledgeRecommendationPlanState,
+        policyVersion: String
+    ) throws -> [OwnerTruthKnowledgeRecommendation] {
+        let selectedObjects = try OwnerTruthKnowledgeRecommendationPlanContract.objectArray(
+            value,
+            field: "selected"
+        )
+        guard selectedObjects.count <= 2 else {
+            throw OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan(
+                "plan must not select more than two recommendations"
+            )
+        }
+        guard state == .ready || selectedObjects.isEmpty else {
+            throw OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan(
+                "non-ready plan must not select recommendations"
+            )
+        }
+
+        let values = try selectedObjects.map { object -> OwnerTruthKnowledgeRecommendation in
+            // Candidate and template identifiers are verified as opaque server
+            // references, then discarded. They must never become UI state.
+            guard OwnerTruthKnowledgeRecommendationPlanContract.requiredString(object["candidateId"]) != nil,
+                  OwnerTruthKnowledgeRecommendationPlanContract.requiredString(object["questionTemplateId"]) != nil,
+                  let rawSlot = OwnerTruthKnowledgeRecommendationPlanContract.requiredString(object["slot"]),
+                  let slot = OwnerTruthKnowledgeRecommendationSlot(rawValue: rawSlot),
+                  let rawDimension = OwnerTruthKnowledgeRecommendationPlanContract.requiredString(
+                    object["targetDimension"]
+                  ),
+                  let targetDimension = OwnerTruthKnowledgeRecommendationDimension(rawValue: rawDimension),
+                  let missingFacet = OwnerTruthKnowledgeRecommendationPlanContract.requiredString(
+                    object["missingFacet"]
+                  ),
+                  let reasonCode = OwnerTruthKnowledgeRecommendationPlanContract.requiredString(
+                    object["reasonCode"]
+                  ),
+                  OwnerTruthKnowledgeRecommendationPlanContract.requiredString(object["policyVersion"])
+                    == policyVersion,
+                  let evidenceReferenceCount = OwnerTruthKnowledgeRecommendationPlanContract.nonNegativeInt(
+                    object["evidenceRefCount"]
+                  ),
+                  Self.validFacet(missingFacet, for: targetDimension) else {
+                throw OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan(
+                    "selected recommendation has an unsupported value"
+                )
+            }
+            return OwnerTruthKnowledgeRecommendation(
+                slot: slot,
+                targetDimension: targetDimension,
+                missingFacet: missingFacet,
+                reasonCode: reasonCode,
+                evidenceReferenceCount: evidenceReferenceCount
+            )
+        }
+        guard Set(values.map(\.slot)).count == values.count,
+              Set(values.map { "\($0.targetDimension.rawValue):\($0.missingFacet)" }).count == values.count else {
+            throw OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan(
+                "selected recommendations must not duplicate a slot or knowledge gap"
+            )
+        }
+        return values
+    }
+
+    private static func parseFilteredCount(_ value: Any?) throws -> Int {
+        let filteredObjects = try OwnerTruthKnowledgeRecommendationPlanContract.objectArray(
+            value,
+            field: "filtered"
+        )
+        for object in filteredObjects {
+            guard OwnerTruthKnowledgeRecommendationPlanContract.requiredString(object["candidateId"]) != nil,
+                  OwnerTruthKnowledgeRecommendationPlanContract.requiredString(object["reasonCode"]) != nil,
+                  let rawSlot = OwnerTruthKnowledgeRecommendationPlanContract.requiredString(object["slot"]),
+                  OwnerTruthKnowledgeRecommendationSlot(rawValue: rawSlot) != nil else {
+                throw OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan(
+                    "filtered recommendation has an unsupported value"
+                )
+            }
+        }
+        return filteredObjects.count
+    }
+
+    private static func validFacet(
+        _ missingFacet: String,
+        for dimension: OwnerTruthKnowledgeRecommendationDimension
+    ) -> Bool {
+        switch dimension {
+        case .lifeStage:
+            return ["timeContext", "experience"].contains(missingFacet)
+        case .importantPeople:
+            return ["person", "relationshipChange"].contains(missingFacet)
+        case .keyDecisions:
+            return ["choice", "reason", "outcome"].contains(missingFacet)
+        case .professionalExperience:
+            return ["practice", "judgment"].contains(missingFacet)
+        case .values:
+            return ["priority", "reflection"].contains(missingFacet)
+        case .aspirationsAndBoundaries:
+            return ["aspiration", "boundary"].contains(missingFacet)
+        }
+    }
+}
+
+protocol OwnerTruthKnowledgeRecommendationPlanClient: AnyObject {
+    func fetchOwnerTruthKnowledgeRecommendationPlan(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthKnowledgeRecommendationPlan, Error>) -> Void
+    )
+}
+
+private enum OwnerTruthKnowledgeRecommendationPlanContract {
+    static func requiredString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    static func nonNegativeInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value >= 0 { return value }
+        if let value = value as? NSNumber,
+           CFGetTypeID(value) != CFBooleanGetTypeID(),
+           value.doubleValue.rounded() == value.doubleValue,
+           value.intValue >= 0 {
+            return value.intValue
+        }
+        return nil
+    }
+
+    static func objectArray(_ value: Any?, field: String) throws -> [[String: Any]] {
+        guard let values = value as? [Any] else {
+            throw OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan(
+                "\(field) must be an array"
+            )
+        }
+        return try values.map { value in
+            guard let object = value as? [String: Any] else {
+                throw OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan(
+                    "\(field) must contain objects"
+                )
+            }
+            return object
+        }
+    }
 }
 
 enum OwnerTruthInterviewNaturalInputIntent: Equatable, Sendable {
