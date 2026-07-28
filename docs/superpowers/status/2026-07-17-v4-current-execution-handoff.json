@@ -1,35 +1,35 @@
 {
   "activeWorkItem": {
-    "id": "WI-MIG-01-11",
+    "id": "WI-MIG-01-12",
     "state": "IN_PROGRESS",
     "leaseState": "HELD",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "authorityLock": "MIGRATION_EVIDENCE",
-    "predecessorWorkItem": "WI-MIG-01-10",
-    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-owner-truth-c09-rights-restore-replay-g0.md",
+    "predecessorWorkItem": "WI-MIG-01-11",
+    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-owner-truth-c10-retirement-candidate-g0.md",
     "completedSubSlices": [],
-    "currentSubSlice": "WI-MIG-01-11-C10_RETIREMENT_CANDIDATE_AND_ZERO_USE_G0 / define candidate inventory, drain, zero-use observation, reopen, and approval boundaries without deleting any legacy implementation, schema, credential, route, timer, store, or object",
+    "currentSubSlice": "WI-MIG-01-12-C11_IRREVERSIBLE_AUTHORIZATION_G0 / define independent authorization, contract dry-run, final restore/replay, old-client, in-flight, credential-owner, and post-monitor boundaries without deleting or revoking any legacy asset",
     "gateEvidence": {
-      "G0": "IN_PROGRESS / C10_RETIREMENT_CANDIDATES_MUST_REMAIN_OBSERVATION_ONLY_AND_REOPEN_ON_ANY_USAGE_OR_UNKNOWN",
-      "G2": "OPEN / RUNTIME_ROUTE_PROCESS_CLIENT_DRAIN_AND_RESTORE_EVIDENCE_PENDING",
-      "G3": "OPEN / PROVIDER_AND_CREDENTIAL_IN_FLIGHT_EVIDENCE_PENDING",
-      "G4": "OPEN / SECURITY_AND_OPERATIONS_CANDIDATE_APPROVAL_PENDING"
+      "G0": "IN_PROGRESS / C11_AUTHORIZATION_MUST_REJECT_UNAPPROVED_OR_UNKNOWN_CANDIDATES_AND_CANNOT_EXECUTE_REMOVAL",
+      "G2": "OPEN / CURRENT_BACKUP_RESTORE_REPLAY_RUNTIME_DRAIN_OLD_CLIENT_AND_POST_MONITOR_EVIDENCE_PENDING",
+      "G3": "OPEN / PROVIDER_AND_CREDENTIAL_OWNER_IN_FLIGHT_AND_REVOCATION_EVIDENCE_PENDING",
+      "G4": "OPEN / INDEPENDENT_SECURITY_OPERATIONS_AND_PRODUCT_AUTHORIZATION_PENDING"
     },
     "latestEvidence": {
-      "backendBaseline": "main@7780de4 / C09 rights/restore/replay composite G0 gate committed locally",
+      "backendBaseline": "main@e3c59f0 / C10 retirement candidate/zero-use G0 gate committed locally",
       "iosBaseline": "feature/prd-stitch-ui-adaptation@5e5c705 / C05 synthetic ViewState parity G1 gate revalidated locally",
-      "scope": "C10_PLANNING_ONLY / retirement candidates may be discovered, drained, observed, reopened, or approved as evidence records only; no implementation, schema, credential, route, timer, store, or object deletion is permitted",
-      "validation": "C09 rights/restore/replay gate PASS (31 tests); full scripts/verify_backend.sh PASS; the gate composes existing lifecycle, rights-evidence, recovery-access, replay, and dead-letter recovery fences",
-      "constraints": "C09 is not a deployed deletion/purge/restore/replay or Provider exit. C10 must not use it as removal approval and may not treat source search as a zero-use runtime observation."
+      "scope": "C11_AUTHORIZATION_PLANNING_ONLY / independent authorization, dry-run, restore/replay, old-client, in-flight, credential-owner, and post-monitor requirements may be modeled but no implementation, schema, credential, route, timer, store, or object deletion/revocation is permitted",
+      "validation": "C10 retirement candidate gate PASS (7 tests); full scripts/verify_backend.sh PASS (1360 unit tests plus scoped gates and smokes); C10 remains default-off and value-free",
+      "constraints": "C10 zero-use observation is not candidate approval. C11 must reject missing external approvals, unknown runtime/in-flight/restore evidence, or missing credential owner evidence; no local G0 test can authorize a real removal or revoke."
     },
-    "currentSummary": "WI-MIG-01-10 C09 is recorded as a locally verified composite rights/restore/replay gate. It preserves access-first, no-resurrection, receipt, and recovery fences without operating on real data. Work advances to WI-MIG-01-11 C10 only for retirement-candidate and zero-use evidence planning; every removal remains NO_GO.",
+    "currentSummary": "WI-MIG-01-11 C10 is recorded as a locally verified retirement-candidate/zero-use planning gate. It reopens on use or unknown evidence, retains protected Rights/reconciliation paths, and never self-approves. Work advances to WI-MIG-01-12 C11 only for fail-closed authorization planning; every removal and revoke remains NO_GO.",
     "backendPendingPaths": [
-      "app/domain/owner_truth/legacy_migration.py",
+      "app/domain/owner_truth/migration_retirement_candidate_shadow.py",
       "scripts/verify_backend.sh"
     ]
   },
   "baselines": {
-    "backend": "main@7780de4 / C09 local rights/restore/replay gate committed; C03-C09 remain default-off evidence only, with no deployment, G2 evidence or cutover claim",
+    "backend": "main@e3c59f0 / C10 local retirement-candidate gate committed; C03-C10 remain default-off evidence only, with no deployment, G2 evidence or cutover claim",
     "ios": "feature/prd-stitch-ui-adaptation@664bac7 / QA Support result writers are centralized; no public UI change",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -93,6 +93,12 @@
       "id": "WI-MIG-01-10",
       "implementationStatus": "INTERNAL_READY / C09_RIGHTS_RESTORE_REPLAY_COMPOSITE_G0_VERIFIED_LOCAL_2026-07-29 / BACKEND_LOCAL_COMMITTED_7780de4 / OBSERVATION_ONLY / NO_REAL_DELETE_PURGE_RESTORE_REPLAY_OR_PROVIDER_EXIT / G1_G2_G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN_NO_GO"
+    },
+    {
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-29-owner-truth-c10-retirement-candidate-g0.md",
+      "id": "WI-MIG-01-11",
+      "implementationStatus": "INTERNAL_READY / C10_RETIREMENT_CANDIDATE_DRAIN_ZERO_USE_G0_VERIFIED_LOCAL_2026-07-29 / BACKEND_LOCAL_COMMITTED_e3c59f0 / DEFAULT_OFF_VALUE_FREE_ONLY / NO_LIVE_COUNTER_DRAIN_DELETE_REVOKE_OR_SELF_APPROVAL / G2_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G2_G3_G4_OPEN_NO_GO"
     },
     {
       "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-purpose-consent-g0.md",
@@ -648,9 +654,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-MIG-01-12",
+    "id": "WI-S1-02-11",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After C10 retirement-candidate evidence is recorded, assess C11 only as irreversible contract/revoke/removal authorization planning. Do not treat C03-C10 planning evidence as permission to remove a legacy implementation or credential."
+    "summary": "After C11 authorization planning, continue with verified-media processor planning. Do not treat C03-C11 local planning evidence as permission to remove a legacy implementation or credential."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -659,5 +665,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-29T04:37:08+08:00"
+  "updatedAt": "2026-07-29T05:15:00+08:00"
 }
