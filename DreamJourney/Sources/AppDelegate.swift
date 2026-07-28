@@ -14,18 +14,14 @@ import MAMapKit
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
+    let appComposition = AppComposition()
     private var releasePolicyRefreshGeneration: UInt64 = 0
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         TencentVirtualmanSDKBridge.registerFactory()
         configureLaunchArgumentFeatureFlagsIfNeeded()
-        UserManager.shared.reconcilePrivateAccessSession()
-        let currentKnowledgeUserId = UserManager.shared.canEnterPrivateUI
-            ? UserManager.shared.currentUser?.id
-            : nil
-        KnowledgeSyncCoordinator.shared.userDidChange(to: currentKnowledgeUserId)
-        KBLiteManager.shared.switchUser(to: currentKnowledgeUserId)
+        appComposition.prepareForProcessLaunch()
 
         // 火山引擎语音 SDK 环境准备
         #if !((UI_QA_SIMULATOR || RELEASE_SCOPE_SIMULATOR) && targetEnvironment(simulator))

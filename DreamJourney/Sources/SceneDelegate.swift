@@ -16,7 +16,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = (scene as? UIWindowScene) else { return }
         let window = UIWindow(windowScene: windowScene)
         self.window = window
-        let coordinator = AppCoordinator(window: window)
+        let appComposition = (UIApplication.shared.delegate as? AppDelegate)?.appComposition
+        let coordinator = AppCoordinator(window: window, appComposition: appComposition)
         appCoordinator = coordinator
         coordinator.start()
         coordinator.handleSceneLifecycleEvent(.sceneConnected)

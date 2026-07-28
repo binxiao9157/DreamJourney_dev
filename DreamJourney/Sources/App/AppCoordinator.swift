@@ -48,6 +48,7 @@ final class AppCoordinator: Coordinator {
     }
 
     func start() {
+        appComposition.prepareForProcessLaunch()
         AccountLeaseRuntime.shared.updateAuthorityEpoch(
             RecoveryRuntimePolicyStore.shared.currentPolicy.authorityEpoch
         )
@@ -644,6 +645,52 @@ extension AppCoordinator {
 
 // MARK: - App composition
 
+/// The composition-owned launch boundary keeps AppDelegate free of private
+/// account and knowledge-store mutations while retaining the previous startup
+/// order: reconcile the private session first, then bind compatibility stores
+/// to the validated owner (or `nil`).
+@MainActor
+protocol AppLaunchPreparing: AnyObject {
+    func prepareForProcessLaunch()
+}
+
+@MainActor
+final class AppLaunchPreparer: AppLaunchPreparing {
+    private let reconcilePrivateAccessSession: () -> Bool
+    private let currentPrivateSubjectID: () -> String?
+    private let synchronizeKnowledgeUser: (String?) -> Void
+    private let switchKBLiteUser: (String?) -> Void
+
+    init(
+        reconcilePrivateAccessSession: @escaping () -> Bool = {
+            UserManager.shared.reconcilePrivateAccessSession()
+        },
+        currentPrivateSubjectID: @escaping () -> String? = {
+            UserManager.shared.canEnterPrivateUI
+                ? UserManager.shared.currentUser?.id
+                : nil
+        },
+        synchronizeKnowledgeUser: @escaping (String?) -> Void = {
+            KnowledgeSyncCoordinator.shared.userDidChange(to: $0)
+        },
+        switchKBLiteUser: @escaping (String?) -> Void = {
+            KBLiteManager.shared.switchUser(to: $0)
+        }
+    ) {
+        self.reconcilePrivateAccessSession = reconcilePrivateAccessSession
+        self.currentPrivateSubjectID = currentPrivateSubjectID
+        self.synchronizeKnowledgeUser = synchronizeKnowledgeUser
+        self.switchKBLiteUser = switchKBLiteUser
+    }
+
+    func prepareForProcessLaunch() {
+        _ = reconcilePrivateAccessSession()
+        let subjectID = currentPrivateSubjectID()
+        synchronizeKnowledgeUser(subjectID)
+        switchKBLiteUser(subjectID)
+    }
+}
+
 /// The only root-level factory for the current three-tab private UI. It captures
 /// the account lease, lifecycle generation and release-policy authority once at
 /// the root boundary before handing construction to feature factories.
@@ -652,17 +699,27 @@ final class AppComposition {
     private let featureFactory: AppFeatureFactory
     private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let releasePolicyAuthorityEpochProvider: () -> String
+    private let appLaunchPreparer: AppLaunchPreparing
+    private var didPrepareProcessLaunch = false
 
     init(
         featureFactory: AppFeatureFactory? = nil,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAuthorityEpochProvider: @escaping () -> String = {
             RecoveryRuntimePolicyStore.shared.currentPolicy.authorityEpoch
-        }
+        },
+        appLaunchPreparer: AppLaunchPreparing? = nil
     ) {
         self.featureFactory = featureFactory ?? AppFeatureFactory()
         self.accountLeaseRuntime = accountLeaseRuntime
         self.releasePolicyAuthorityEpochProvider = releasePolicyAuthorityEpochProvider
+        self.appLaunchPreparer = appLaunchPreparer ?? AppLaunchPreparer()
+    }
+
+    func prepareForProcessLaunch() {
+        guard !didPrepareProcessLaunch else { return }
+        didPrepareProcessLaunch = true
+        appLaunchPreparer.prepareForProcessLaunch()
     }
 
     func makeTabCoordinator(

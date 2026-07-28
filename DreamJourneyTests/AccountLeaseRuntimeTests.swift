@@ -6,6 +6,47 @@ import XCTest
 #endif
 
 final class AccountLeaseRuntimeTests: XCTestCase {
+    @MainActor
+    func testAppLaunchPreparerReconcilesBeforeResolvingPrivateKnowledgeScope() {
+        let recorder = AppLaunchPreparationRecorder()
+        let preparer = AppLaunchPreparer(
+            reconcilePrivateAccessSession: {
+                recorder.events.append("reconcile")
+                return true
+            },
+            currentPrivateSubjectID: {
+                recorder.events.append("resolveSubject")
+                return "owner-a"
+            },
+            synchronizeKnowledgeUser: { subjectID in
+                recorder.events.append("knowledge:\(subjectID ?? "nil")")
+            },
+            switchKBLiteUser: { subjectID in
+                recorder.events.append("kblite:\(subjectID ?? "nil")")
+            }
+        )
+
+        preparer.prepareForProcessLaunch()
+
+        XCTAssertEqual(
+            recorder.events,
+            ["reconcile", "resolveSubject", "knowledge:owner-a", "kblite:owner-a"]
+        )
+    }
+
+    @MainActor
+    func testAppCompositionPreparesLaunchOnlyOnce() {
+        let launchPreparer = AppLaunchPreparationSpy()
+        let composition = AppComposition(
+            appLaunchPreparer: launchPreparer
+        )
+
+        composition.prepareForProcessLaunch()
+        composition.prepareForProcessLaunch()
+
+        XCTAssertEqual(launchPreparer.callCount, 1)
+    }
+
     func testStaleAccountCallbackIsRejectedAfterAccountSwitch() throws {
         let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
         runtime.publish(session: session(
@@ -163,4 +204,17 @@ final class AccountLeaseRuntimeTests: XCTestCase {
             activatedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
     }
+}
+
+@MainActor
+private final class AppLaunchPreparationSpy: AppLaunchPreparing {
+    private(set) var callCount = 0
+
+    func prepareForProcessLaunch() {
+        callCount += 1
+    }
+}
+
+private final class AppLaunchPreparationRecorder {
+    var events: [String] = []
 }

@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[3]
 APP_COORDINATOR = ROOT / "DreamJourney/Sources/App/AppCoordinator.swift"
 TAB_COORDINATOR = ROOT / "DreamJourney/Sources/App/TabCoordinator.swift"
 ACCOUNT_LEASE = ROOT / "DreamJourney/Sources/App/AccountLease.swift"
+APP_DELEGATE = ROOT / "DreamJourney/Sources/AppDelegate.swift"
+SCENE_DELEGATE = ROOT / "DreamJourney/Sources/SceneDelegate.swift"
 ACCOUNT_LEASE_TESTS = ROOT / "DreamJourneyTests/AccountLeaseRuntimeTests.swift"
 
 
@@ -27,6 +29,8 @@ def main() -> None:
     app_coordinator = read(APP_COORDINATOR)
     tab_coordinator = read(TAB_COORDINATOR)
     account_lease = read(ACCOUNT_LEASE)
+    app_delegate = read(APP_DELEGATE)
+    scene_delegate = read(SCENE_DELEGATE)
     account_lease_tests = read(ACCOUNT_LEASE_TESTS)
 
     for required in (
@@ -46,6 +50,10 @@ def main() -> None:
         "AppFeatureRuntimeContext(",
         "accountLeaseRuntime.validate(accountLease, at: .ui).allowed",
         "featureFactory.makeTabCoordinator(runtimeContext: runtimeContext)",
+        "protocol AppLaunchPreparing",
+        "final class AppLaunchPreparer",
+        "func prepareForProcessLaunch()",
+        "appComposition.prepareForProcessLaunch()",
     ):
         require(required in app_coordinator, f"app composition contract missing: {required}")
     require(
@@ -68,13 +76,38 @@ def main() -> None:
     ):
         require(forbidden not in tab_coordinator, f"TabCoordinator bypasses feature factory: {forbidden}")
 
+    for required in (
+        "let appComposition = AppComposition()",
+        "appComposition.prepareForProcessLaunch()",
+    ):
+        require(required in app_delegate, f"AppDelegate composition boundary missing: {required}")
+    for forbidden in (
+        "UserManager.shared.reconcilePrivateAccessSession()",
+        "KnowledgeSyncCoordinator.shared.userDidChange(to:",
+        "KBLiteManager.shared.switchUser(to:",
+    ):
+        require(
+            forbidden not in app_delegate,
+            f"AppDelegate must not own private startup side effect: {forbidden}",
+        )
+    require(
+        "AppCoordinator(window: window, appComposition: appComposition)" in scene_delegate,
+        "SceneDelegate must pass the root AppComposition into AppCoordinator",
+    )
+
     require(
         "testFeatureRuntimeContextRejectsMismatchedLifecycleOrPolicyAuthority" in account_lease_tests,
         "missing deterministic AppFeatureRuntimeContext contract test",
     )
+    for required in (
+        "testAppLaunchPreparerReconcilesBeforeResolvingPrivateKnowledgeScope",
+        "testAppCompositionPreparesLaunchOnlyOnce",
+    ):
+        require(required in account_lease_tests, f"missing composition launch test: {required}")
     print(
         "Product V4 iOS composition seam check passed: AppCoordinator captures a coherent "
-        "runtime context and TabCoordinator builds all root tabs through AppFeatureFactory"
+        "runtime context, AppDelegate/SceneDelegate share one AppComposition, and "
+        "TabCoordinator builds all root tabs through AppFeatureFactory"
     )
 
 
