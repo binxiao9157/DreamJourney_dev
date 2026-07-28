@@ -1,32 +1,33 @@
 {
   "activeWorkItem": {
-    "id": "WI-S3-01-05",
+    "id": "WI-S3-01-06",
     "state": "IN_PROGRESS",
     "leaseState": "HELD",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "authorityLock": "PUBLICATION",
-    "predecessorWorkItem": "WI-S3-01-04",
-    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-public-projector-g0.md",
+    "predecessorWorkItem": "WI-S3-01-05",
+    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-share-grant-session-g0.md",
     "completedSubSlices": [],
-    "currentSubSlice": "WI-S3-01-05_SHARE_GRANT_VISITOR_G0 / model only Owner-scoped ShareGrant, adult Visitor identity and short-session authorization contracts. Do not create a public gateway, share link, anonymous secret, token issuer, session writer, Family auto-grant, query route or release UI.",
+    "currentSubSlice": "WI-S3-01-06_VISITOR_ANSWER_SAFETY_G0 / model only default-deny Visitor answer, AI disclosure, session-duration, exit, crisis, report and rate-limit contracts. Do not create a public query route, provider call, private context dependency, Visitor UI or release flag.",
     "gateEvidence": {
-      "G0": "PENDING / SHARE_GRANT_ADULT_VISITOR_AND_SHORT_SESSION_CONTRACT_MUST_REMAIN_OWNER_SCOPED_DEFAULT_DENY_AND_VALUE_MINIMIZED",
-      "G1": "OPEN / HIDDEN_OWNER_GRANT_AND_VISITOR_LINK_VIEWSTATE_PENDING",
-      "G2": "OPEN / REAL_POSTGRES_CONCURRENT_USE_SESSION_REVOKE_AND_GATEWAY_EVIDENCE_PENDING",
-      "G4": "OPEN / VISITOR_ADULT_IDENTITY_CONTACT_FORWARDING_TTL_AND_REGULATORY_RELEASE_APPROVAL_PENDING"
+      "G0": "PENDING / VISITOR_ANSWER_SAFETY_CONTRACT_MUST_REMAIN_PUBLIC_VERSION_ONLY_DEFAULT_DENY_AND_FREE_OF_OWNER_MEMORY_PERSONA_VOICE_OR_DIGITAL_HUMAN_DEPENDENCIES",
+      "G1": "OPEN / HIDDEN_VISITOR_TEXT_DISCLAIM_EXIT_REPORT_AND_FAILURE_VIEWSTATE_PENDING",
+      "G2": "OPEN / REAL_GATEWAY_SESSION_REVOKE_RATE_LIMIT_DURATION_AND_REPORT_EVIDENCE_PENDING",
+      "G3": "OPEN / MODEL_SAFETY_PROVIDER_RETENTION_AND_PROMPT_INJECTION_EVIDENCE_PENDING",
+      "G4": "OPEN / VISITOR_CRISIS_ESCALATION_OPERATIONS_AND_REGULATORY_RELEASE_APPROVAL_PENDING"
     },
     "latestEvidence": {
-      "backendBaseline": "main@7dbbe2a / one-way public projector G0 contract committed locally; no deployment or public release claim",
+      "backendBaseline": "main@836e0e3 / ShareGrant and adult Visitor session G0 contract committed locally; no deployment or public release claim",
       "iosBaseline": "feature/prd-stitch-ui-adaptation@5e5c705 / C05 synthetic ViewState parity G1 gate revalidated locally",
-      "scope": "WI-S3-01-05_G0_FIRST / create only Owner-scoped ShareGrant, adult Visitor identity and short-session authorization contract seams. No public gateway, share link, anonymous secret, token issuer, session writer, Family auto-grant, query route or release UI.",
-      "validation": "WI-S3-01-04 public projector G0 gate PASS (10 tests); full scripts/verify_backend.sh PASS (1403 unit tests plus scoped gates and smokes); projection candidates remain hash-only and default-off with no private repository read, public query, index provider or object copy.",
-      "constraints": "Publication/visitor policy remains strict default deny. Family relationships never imply grant authority, and any future public access must recheck adult identity, grant state, version, expiry and use limit on every query."
+      "scope": "WI-S3-01-06_G0_FIRST / create only Visitor answer safety, disclosure, session-duration, exit, crisis, report and rate-limit contract seams. No public query route, provider call, private context dependency, Visitor UI or release flag.",
+      "validation": "WI-S3-01-05 share grant/session G0 gate PASS (10 tests); full scripts/verify_backend.sh PASS (1413 unit tests plus scoped gates and smokes); grants and session proposals remain hash-only and default-off with no raw credential, link, writer, public route or query.",
+      "constraints": "Publication/visitor policy remains strict default deny. A future Visitor answer may use only a current public version and public citation; it must never fall back to Owner Memory, KBLite, Persona, Voice, Digital Human or a provider call when its admission conditions are absent."
     },
-    "currentSummary": "WI-S3-01-04 is recorded as a locally verified one-way Public Projector contract. It accepts only immutable publication-version event metadata, rejects private repository dependencies and external index/object-copy requests, and creates no public store, route, query or visitor access. Work advances to WI-S3-01-05 for default-deny ShareGrant, adult Visitor identity and session contracts.",
+    "currentSummary": "WI-S3-01-05 is recorded as a locally verified ShareGrant and adult Visitor session contract. It rejects Family-derived access, unknown/minor Visitors, cross-vault or expired/revoked/exhausted grants, and session version/TTL/CAS mismatches; it creates no credential, link, session, public route or query. Work advances to WI-S3-01-06 for default-deny Visitor answer safety contracts.",
     "backendPendingPaths": [
-      "app/domain/publication/public_projector.py",
+      "app/domain/publication/share_grant_session.py",
       "app/services/release_policy.py",
-      "scripts/run-backend-publication-public-projector-g0-gate.sh"
+      "scripts/run-backend-publication-share-grant-session-g0-gate.sh"
     ]
   },
   "baselines": {
@@ -688,12 +689,18 @@
       "evidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-public-projector-g0.md",
       "implementationStatus": "INTERNAL_READY / PUBLIC_PROJECTOR_G0_VERIFIED_LOCAL / BACKEND_LOCAL_COMMITTED_7dbbe2a / ONE_WAY_HASH_ONLY_DEFAULT_OFF / NO_PRIVATE_REPOSITORY_READ_PUBLIC_STORE_QUERY_INDEX_PROVIDER_OBJECT_COPY_VISITOR_SESSION_OR_RELEASE_UI / G2_G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G2_G3_G4_OPEN"
+    },
+    {
+      "id": "WI-S3-01-05",
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-share-grant-session-g0.md",
+      "implementationStatus": "INTERNAL_READY / SHARE_GRANT_AND_ADULT_VISITOR_SESSION_G0_VERIFIED_LOCAL / BACKEND_LOCAL_COMMITTED_836e0e3 / HASH_ONLY_DEFAULT_OFF / NO_RAW_CREDENTIAL_LINK_TOKEN_ISSUER_SESSION_WRITER_PUBLIC_GATEWAY_QUERY_ROUTE_FAMILY_AUTO_GRANT_OR_RELEASE_UI / G1_G2_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G4_OPEN"
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S3-01-06",
+    "id": "WI-S3-01-07",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After the default-deny ShareGrant, adult Visitor identity and short-session contract, continue with Visitor answer, AI disclosure, dependency/time-limit, exit, crisis and report planning. Do not treat local planning evidence as permission to open a public query, use a private context, call a provider or remove a legacy implementation or credential."
+    "summary": "After the default-deny Visitor answer safety contract, continue with Publication update, suspend/withdraw and revoke-propagation planning. Do not treat local planning evidence as permission to expose a public route, mutate a publication, call a provider, remove a legacy implementation or claim external cleanup completion."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -702,5 +709,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-29T05:38:42+08:00"
+  "updatedAt": "2026-07-29T06:15:00+08:00"
 }
