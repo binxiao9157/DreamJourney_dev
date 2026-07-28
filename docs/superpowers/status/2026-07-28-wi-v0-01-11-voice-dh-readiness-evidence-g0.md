@@ -76,6 +76,18 @@ git diff --check
 contract gate 和 FastAPI smoke）。后端尚未推送或部署，因此不能记录为线上/真实 Provider
 证据。
 
+后端提交 `68b6e69` 已将同一断言加入既有部署命令：
+
+```bash
+cd /Users/yxj/Documents/Codex/Video/DreamJourneyBackend
+BACKEND_BASE_URL=<deployed-api> BACKEND_API_TOKEN=<machine-token> \
+  scripts/run-backend-release-policy-rollout-deployed-smoke.sh
+```
+
+部署后该 smoke 会拒绝缺少 `voiceDigitalHumanReadiness`、任一 M1/M2/M3 lane 非
+`blocked`、任一 `promotionAllowed=true` 或 M3 缺少 `memorialPilotNotApproved` 的结果。
+这只是一次部署配置/接口回归检查；不调用 Voice/DH Provider，不替代成本、质量、删除或真机门。
+
 ## 仍然开放的门
 
 - `G1`：没有以删除/禁用 profile 的交互场景完成模拟器截图验收。
