@@ -62,6 +62,10 @@ def main() -> None:
         "func writeEchoAudioOwnerCoordinatorSmokeResult" not in app_delegate,
         "AppDelegate must not retain the Echo audio-owner result writer",
     )
+    require(
+        "func writeEchoQAExportSmokeResult" not in app_delegate,
+        "AppDelegate must not retain shared Echo result persistence",
+    )
 
     require(
         "AudioOwnerLeaseCoordinator.swift in Sources" in project,

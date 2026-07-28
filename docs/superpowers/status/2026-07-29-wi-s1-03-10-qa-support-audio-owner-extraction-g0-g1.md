@@ -20,6 +20,9 @@ Authority lock：`IOS_COMPOSITION`
 - Echo 音频归属 smoke 的结果写出已直接委托给
   `QAScenarioResultWriter.writeAndLog`；`AppDelegate` 不再保留该场景的
   JSON 写出转发方法。
+- 同一写出边界已覆盖连续回合、Echo trace/diagnostics/evidence 导出，以及
+  Owner Truth 自然输入的 Echo surface smoke；通用
+  `writeEchoQAExportSmokeResult` 已从 `AppDelegate` 删除。
 - 新增 `product-v4-ios-qa-support-isolation-check.py`，守住编译隔离、调用方向和
   target 包含关系。
 - 新增 `run-ios-qa-support-isolation-g0-gate.sh`，串联 isolation 检查与既有

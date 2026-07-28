@@ -2193,8 +2193,12 @@ private extension AppDelegate {
             retry: { [weak self] nextRetryCount in
                 self?.runOwnerTruthInterviewNaturalInputEchoSurfaceSmoke(retryCount: nextRetryCount)
             },
-            writeResult: { [weak self] result in
-                self?.writeOwnerTruthInterviewNaturalInputEchoSurfaceSmokeResult(result)
+            writeResult: { result in
+                QAScenarioResultWriter.writeAndLog(
+                    result,
+                    fileName: "owner-truth-interview-natural-input-echo-surface-smoke-result.json",
+                    smokeName: "OwnerTruthInterviewNaturalInputEchoSurfaceSmoke"
+                )
             },
             execute: { echoViewController, completion in
                 echoViewController.runUIQAOwnerTruthInterviewNaturalInputEchoSurfaceSmoke(completion: completion)
@@ -2217,8 +2221,12 @@ private extension AppDelegate {
             retry: { [weak self] nextRetryCount in
                 self?.runOwnerTruthInterviewNaturalInputProductSurfaceSmoke(retryCount: nextRetryCount)
             },
-            writeResult: { [weak self] result in
-                self?.writeOwnerTruthInterviewNaturalInputProductSurfaceSmokeResult(result)
+            writeResult: { result in
+                QAScenarioResultWriter.writeAndLog(
+                    result,
+                    fileName: "owner-truth-interview-natural-input-product-surface-smoke-result.json",
+                    smokeName: "OwnerTruthInterviewNaturalInputProductSurfaceSmoke"
+                )
             },
             execute: { echoViewController, completion in
                 echoViewController.runUIQAOwnerTruthInterviewNaturalInputProductSurfaceSmoke(completion: completion)
@@ -3923,8 +3931,12 @@ private extension AppDelegate {
             retry: { [weak self] nextRetryCount in
                 self?.runEchoTraceExportSmoke(retryCount: nextRetryCount)
             },
-            writeResult: { [weak self] result in
-                self?.writeEchoTraceExportSmokeResult(result)
+            writeResult: { result in
+                QAScenarioResultWriter.writeAndLog(
+                    result,
+                    fileName: "echo-trace-export-smoke-result.json",
+                    smokeName: "EchoTraceExportSmoke"
+                )
             },
             execute: { echoViewController, completion in
                 echoViewController.runUIQAEchoTraceExportSmoke(completion: completion)
@@ -3947,8 +3959,12 @@ private extension AppDelegate {
             retry: { [weak self] nextRetryCount in
                 self?.runEchoRuntimeDiagnosticsExportSmoke(retryCount: nextRetryCount)
             },
-            writeResult: { [weak self] result in
-                self?.writeEchoRuntimeDiagnosticsExportSmokeResult(result)
+            writeResult: { result in
+                QAScenarioResultWriter.writeAndLog(
+                    result,
+                    fileName: "echo-runtime-diagnostics-export-smoke-result.json",
+                    smokeName: "EchoRuntimeDiagnosticsExportSmoke"
+                )
             },
             execute: { echoViewController, completion in
                 echoViewController.runUIQAEchoRuntimeDiagnosticsExportSmoke(completion: completion)
@@ -4025,8 +4041,12 @@ private extension AppDelegate {
             retry: { [weak self] nextRetryCount in
                 self?.runEchoContinuousTurnSmoke(retryCount: nextRetryCount)
             },
-            writeResult: { [weak self] result in
-                self?.writeEchoContinuousTurnSmokeResult(result)
+            writeResult: { result in
+                QAScenarioResultWriter.writeAndLog(
+                    result,
+                    fileName: "echo-continuous-turn-smoke-result.json",
+                    smokeName: "EchoContinuousTurnSmoke"
+                )
             },
             execute: { echoViewController, completion in
                 echoViewController.runUIQAEchoContinuousTurnSmoke(completion: completion)
@@ -4050,8 +4070,12 @@ private extension AppDelegate {
             retry: { [weak self] nextRetryCount in
                 self?.runEchoTraceEvidencePackageExportSmoke(retryCount: nextRetryCount)
             },
-            writeResult: { [weak self] result in
-                self?.writeEchoTraceEvidencePackageExportSmokeResult(result)
+            writeResult: { result in
+                QAScenarioResultWriter.writeAndLog(
+                    result,
+                    fileName: "echo-trace-evidence-package-export-smoke-result.json",
+                    smokeName: "EchoTraceEvidencePackageExportSmoke"
+                )
             },
             execute: { echoViewController, completion in
                 echoViewController.runUIQAEchoTraceEvidencePackageExportSmoke(completion: completion)
@@ -4074,8 +4098,12 @@ private extension AppDelegate {
             retry: { [weak self] nextRetryCount in
                 self?.runEchoTraceEvidencePackagePanelExportSmoke(retryCount: nextRetryCount)
             },
-            writeResult: { [weak self] result in
-                self?.writeEchoTraceEvidencePackagePanelExportSmokeResult(result)
+            writeResult: { result in
+                QAScenarioResultWriter.writeAndLog(
+                    result,
+                    fileName: "echo-trace-evidence-package-panel-export-smoke-result.json",
+                    smokeName: "EchoTraceEvidencePackagePanelExportSmoke"
+                )
             },
             execute: { echoViewController, completion in
                 echoViewController.runUIQAEchoTraceEvidencePackagePanelExportSmoke(completion: completion)
@@ -4098,8 +4126,12 @@ private extension AppDelegate {
             retry: { [weak self] nextRetryCount in
                 self?.runEchoQAEvidenceBundleExportSmoke(retryCount: nextRetryCount)
             },
-            writeResult: { [weak self] result in
-                self?.writeEchoQAEvidenceBundleExportSmokeResult(result)
+            writeResult: { result in
+                QAScenarioResultWriter.writeAndLog(
+                    result,
+                    fileName: "echo-qa-evidence-bundle-export-smoke-result.json",
+                    smokeName: "EchoQAEvidenceBundleExportSmoke"
+                )
             },
             execute: { echoViewController, completion in
                 echoViewController.runUIQAEchoQAEvidenceBundleExportSmoke(completion: completion)
@@ -4734,14 +4766,6 @@ private extension AppDelegate {
         }
     }
 
-    func writeEchoContinuousTurnSmokeResult(_ result: [String: Any]) {
-        writeEchoQAExportSmokeResult(
-            result,
-            fileName: "echo-continuous-turn-smoke-result.json",
-            smokeName: "EchoContinuousTurnSmoke"
-        )
-    }
-
     func writeDigitalHumanRuntimeStubSmokeResult(_ result: [String: Any]) {
         guard let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
               let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
@@ -4769,78 +4793,6 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] TencentBackendPCMDriveMockSmoke failed reason=resultWrite error=\(error.localizedDescription)")
-        }
-    }
-
-    func writeEchoTraceExportSmokeResult(_ result: [String: Any]) {
-        writeEchoQAExportSmokeResult(
-            result,
-            fileName: "echo-trace-export-smoke-result.json",
-            smokeName: "EchoTraceExportSmoke"
-        )
-    }
-
-    func writeEchoRuntimeDiagnosticsExportSmokeResult(_ result: [String: Any]) {
-        writeEchoQAExportSmokeResult(
-            result,
-            fileName: "echo-runtime-diagnostics-export-smoke-result.json",
-            smokeName: "EchoRuntimeDiagnosticsExportSmoke"
-        )
-    }
-
-    func writeEchoTraceEvidencePackageExportSmokeResult(_ result: [String: Any]) {
-        writeEchoQAExportSmokeResult(
-            result,
-            fileName: "echo-trace-evidence-package-export-smoke-result.json",
-            smokeName: "EchoTraceEvidencePackageExportSmoke"
-        )
-    }
-
-    func writeEchoTraceEvidencePackagePanelExportSmokeResult(_ result: [String: Any]) {
-        writeEchoQAExportSmokeResult(
-            result,
-            fileName: "echo-trace-evidence-package-panel-export-smoke-result.json",
-            smokeName: "EchoTraceEvidencePackagePanelExportSmoke"
-        )
-    }
-
-    func writeEchoQAEvidenceBundleExportSmokeResult(_ result: [String: Any]) {
-        writeEchoQAExportSmokeResult(
-            result,
-            fileName: "echo-qa-evidence-bundle-export-smoke-result.json",
-            smokeName: "EchoQAEvidenceBundleExportSmoke"
-        )
-    }
-
-    func writeOwnerTruthInterviewNaturalInputEchoSurfaceSmokeResult(_ result: [String: Any]) {
-        writeEchoQAExportSmokeResult(
-            result,
-            fileName: "owner-truth-interview-natural-input-echo-surface-smoke-result.json",
-            smokeName: "OwnerTruthInterviewNaturalInputEchoSurfaceSmoke"
-        )
-    }
-
-    func writeOwnerTruthInterviewNaturalInputProductSurfaceSmokeResult(_ result: [String: Any]) {
-        writeEchoQAExportSmokeResult(
-            result,
-            fileName: "owner-truth-interview-natural-input-product-surface-smoke-result.json",
-            smokeName: "OwnerTruthInterviewNaturalInputProductSurfaceSmoke"
-        )
-    }
-
-    func writeEchoQAExportSmokeResult(
-        _ result: [String: Any],
-        fileName: String,
-        smokeName: String
-    ) {
-        do {
-            _ = try QAScenarioResultWriter.write(result, fileName: fileName)
-        } catch QAScenarioResultWriter.WriteError.resultEncoding {
-            print("[UI_QA] \(smokeName) failed reason=resultEncoding")
-        } catch QAScenarioResultWriter.WriteError.resultWrite(let error) {
-            print("[UI_QA] \(smokeName) failed reason=resultWrite error=\(error.localizedDescription)")
-        } catch {
-            print("[UI_QA] \(smokeName) failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 
