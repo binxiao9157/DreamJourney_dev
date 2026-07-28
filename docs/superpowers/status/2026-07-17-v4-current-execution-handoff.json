@@ -1,33 +1,36 @@
 {
   "activeWorkItem": {
-    "id": "WI-MIG-01-08",
+    "id": "WI-MIG-01-09",
     "state": "IN_PROGRESS",
     "leaseState": "HELD",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "authorityLock": "MIGRATION_EVIDENCE",
-    "predecessorWorkItem": "WI-MIG-01-07",
-    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-owner-truth-c06-non-authoritative-canary-g0.md",
+    "predecessorWorkItem": "WI-MIG-01-08",
+    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-owner-truth-c07-cutover-admission-g0.md",
     "completedSubSlices": [],
-    "currentSubSlice": "WI-MIG-01-08-C07_TWO_PHASE_CUTOVER_AUTHORIZATION_G0 / retain a fail-closed pre-Go/No-Go admission boundary without advancing authorityEpoch, retiring a legacy writer, or treating prior shadow evidence as execution approval",
+    "currentSubSlice": "WI-MIG-01-09-C08_LANE_BY_LANE_ACTIVATION_G0 / define independent Projection, business-worker, object-reference, and optional-Provider lane readiness and rollback contracts without a global activation switch or Owner epoch mutation",
     "gateEvidence": {
-      "G0": "IN_PROGRESS / C07_PRE_GO_NO_GO_ADMISSION_MUST_REMAIN_FAIL_CLOSED_AND_NON_EXECUTING",
-      "G2": "OPEN / INDEPENDENT_PRODUCTION_GO_RECORD_AND_REAL_CUTOVER_EVIDENCE_PENDING"
+      "G0": "IN_PROGRESS / C08_LANE_READINESS_AND_ROLLBACK_CONTRACTS_MUST_REMAIN_INDEPENDENT_AND_DEFAULT_OFF",
+      "G1": "OPEN / EACH_LANE_COMPATIBILITY_AND_FALLBACK_EVIDENCE_PENDING",
+      "G2": "OPEN / PROJECTION_WORKER_OBJECT_DEPLOYMENT_AND_RECEIPTS_PENDING",
+      "G3": "OPEN / OPTIONAL_PROVIDER_RECEIPTS_PENDING",
+      "G4": "OPEN / DEVICE_AND_PRODUCT_ACCEPTANCE_PER_LANE_PENDING"
     },
     "latestEvidence": {
-      "backendBaseline": "main@45c685f / C06 non-authoritative canary and five-plane rollback contract committed locally",
+      "backendBaseline": "main@e3b9875 / C07 fail-closed cutover admission gate integrated into full backend verification",
       "iosBaseline": "feature/prd-stitch-ui-adaptation@5e5c705 / C05 synthetic ViewState parity G1 gate revalidated locally",
-      "scope": "C07_PLANNING_ONLY / cutover admission may bind parity evidence to a read-only current epoch but must never advance Authority, retire a legacy writer, or self-authorize production execution",
-      "validation": "C06 backend gate PASS (5 tests); full scripts/verify_backend.sh PASS; C06 has zero route/store/effect/provider dependencies and emits only value-free hashes/reason codes",
-      "constraints": "C06 is not a canary execution, rollback drill, G1 internal-cohort observation, G2 deployed worker/DB/object evidence, G3 Provider sandbox, or G4 device/product acceptance. C07 must not reinterpret it as a Go record."
+      "scope": "C08_PLANNING_ONLY / each lane must have a separate capability, receipt, owner and rollback boundary; no global activation switch may modify Owner Authority or hide a failed lane behind another lane",
+      "validation": "C07 cutover-admission gate PASS (12 tests); full scripts/verify_backend.sh PASS; C07 remains pure and value-free with no route/store/effect/provider dependency",
+      "constraints": "C07 is not a production Go/No-Go record, a transactional cutover command, an authority epoch change, or legacy-writer retirement. C08 may not use it to activate Projection, worker, object, or Provider lanes."
     },
-    "currentSummary": "WI-MIG-01-07 C06 is recorded as a locally verified default-off non-authoritative canary/rollback-plane contract. It permits no traffic, epoch mutation, writer retirement, object operation, Provider call, or public exposure. Work advances to WI-MIG-01-08 C07 only as a fail-closed pre-Go/No-Go admission design; every real cutover remains NO_GO.",
+    "currentSummary": "WI-MIG-01-08 C07 is recorded as a locally verified default-off pre-Go/No-Go admission boundary. It rejects self-authorization even when a shadow report is tampered. Work advances to WI-MIG-01-09 C08 only for independent lane-readiness and rollback contracts; every lane remains disabled until its own external gates are evidenced.",
     "backendPendingPaths": [
-      "app/services/owner_truth_cutover_admission_shadow.py",
-      "app/services/owner_truth_legacy_shadow_parity.py"
+      "app/domain/owner_truth/migration_canary_shadow.py",
+      "app/services/owner_truth_cutover_admission_shadow.py"
     ]
   },
   "baselines": {
-    "backend": "main@45c685f / C06 local G0 canary contract committed; C03-C06 remain default-off evidence only, with no deployment, G2 evidence or cutover claim",
+    "backend": "main@e3b9875 / C07 local G0 admission gate integrated; C03-C07 remain default-off evidence only, with no deployment, G2 evidence or cutover claim",
     "ios": "feature/prd-stitch-ui-adaptation@664bac7 / QA Support result writers are centralized; no public UI change",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -73,6 +76,12 @@
       "id": "WI-MIG-01-07",
       "implementationStatus": "INTERNAL_READY / C06_NON_AUTHORITATIVE_CANARY_AND_FIVE_ROLLBACK_PLANE_G0_VERIFIED_LOCAL_2026-07-29 / BACKEND_LOCAL_COMMITTED_45c685f / DEFAULT_OFF / VALUE_FREE_ONLY / NO_TRAFFIC_NO_EPOCH_MUTATION_NO_LEGACY_WRITER_RETIREMENT_NO_OBJECT_NO_PROVIDER / G1_G2_G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN_NO_GO"
+    },
+    {
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-29-owner-truth-c07-cutover-admission-g0.md",
+      "id": "WI-MIG-01-08",
+      "implementationStatus": "INTERNAL_READY / C07_FAIL_CLOSED_CUTOVER_ADMISSION_G0_REVALIDATED_LOCAL_2026-07-29 / BACKEND_LOCAL_COMMITTED_e3b9875 / DEFAULT_OFF / VALUE_FREE_ONLY / NO_SELF_AUTHORIZATION_NO_EPOCH_MUTATION_NO_LEGACY_WRITER_RETIREMENT / G2_OPEN_NO_GO",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G2_OPEN_NO_GO"
     },
     {
       "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-purpose-consent-g0.md",
@@ -628,9 +637,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-MIG-01-09",
+    "id": "WI-MIG-01-10",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After C07 pre-Go/No-Go evidence is recorded, assess C08 only as lane-by-lane cutover sequencing and rollback planning. Do not treat C03-C07 shadow or admission evidence as an executed Authority cutover."
+    "summary": "After C08 lane-readiness evidence is recorded, assess C09 only as rights/delete/exit and restore-replay drill planning. Do not treat C03-C08 shadow, admission, or lane planning evidence as an executed Authority cutover."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -639,5 +648,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-29T04:20:59+08:00"
+  "updatedAt": "2026-07-29T04:24:17+08:00"
 }
