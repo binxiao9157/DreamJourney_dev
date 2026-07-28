@@ -1,25 +1,26 @@
 {
   "activeWorkItem": {
-    "id": "WI-MIG-01-05",
+    "id": "WI-MIG-01-06",
     "state": "IN_PROGRESS",
     "leaseState": "HELD",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "authorityLock": "MIGRATION_EVIDENCE",
-    "predecessorWorkItem": "WI-MIG-01-04",
-    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-28-owner-truth-legacy-backfill-admission-plan.md",
+    "predecessorWorkItem": "WI-MIG-01-05",
+    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-28-owner-truth-legacy-tail-shadow-g0.md",
     "completedSubSlices": [],
-    "currentSubSlice": "WI-MIG-01-05-C04_WOULD_RUN_SHADOW_CURRENT_STATE_RECONCILIATION_G0 / inventory current legacy tail, outbox, object and provider mappings without real effects; C03 is revalidated at G0 only and no authority cutover is allowed",
+    "currentSubSlice": "WI-MIG-01-06-C05_PARITY_SHADOW_CURRENT_STATE_RECONCILIATION_G0 / assess legacy versus V4 read, command, projection and object-copy parity only as hash-only evidence; no live cutover or object copy is allowed",
     "gateEvidence": {
-      "G0": "IN_PROGRESS / C04_WOULD_RUN_MAPPING_MUST_REMAIN_VALUE_MINIMIZED_AND_SIDE_EFFECT_FREE",
+      "G0": "IN_PROGRESS / C05_PARITY_OBSERVATION_MUST_REMAIN_VALUE_MINIMIZED_AND_READ_ONLY",
+      "G1": "OPEN / LOCAL_COMPATIBILITY_AND_PROJECTION_PARITY_EVIDENCE_PENDING",
       "G2": "OPEN / PERSISTENCE_CHECKPOINT_AND_PRODUCTION_SHAPE_SHADOW_EVIDENCE_PENDING"
     },
     "latestEvidence": {
-      "backendBaseline": "main@195c41f / C03 admission-plan G0 revalidated locally before C04 assessment",
-      "scope": "MIGRATION_SHADOW_ONLY / C04 may inventory stable would-run mappings but must not enqueue a job, PUT an object, invoke a provider, retire a legacy writer or promote Authority",
-      "validation": "C03 gate: scripts/run-backend-owner-truth-legacy-backfill-g0-gate.sh PASS (13 tests); Product V4 handoff checker passed before reconciliation",
-      "constraints": "C03 remains default-off and hash-only. C03 G1 representative-data review and G2 isolated Postgres persistence/replay remain open; C04 cannot claim an effect, object copy, provider call or migration cutover."
+      "backendBaseline": "main@195c41f / C04 legacy tail shadow G0 revalidated locally before C05 assessment",
+      "scope": "MIGRATION_SHADOW_ONLY / C05 may compare stable legacy and V4 summary hashes but must not copy an object, change a writer, invoke a provider or promote Authority",
+      "validation": "C04 gate: scripts/run-backend-owner-truth-legacy-tail-shadow-g0-gate.sh PASS (14 tests); Product V4 handoff checker passed after C03 reconciliation",
+      "constraints": "C04 remains default-off, hash-only and side-effect free. C04 G2 disposable Postgres smoke is intentionally not run against an unspecified DATABASE_URL; no real legacy inventory, object storage or Provider has been touched."
     },
-    "currentSummary": "WI-MIG-01-04 C03 is now recorded as a locally revalidated, default-off G0 admission plan: it writes no target Owner Truth data and permits no cutover. Work advances to WI-MIG-01-05 C04 only as a no-side-effect shadow inventory; G2 and all cutover decisions remain open.",
+    "currentSummary": "WI-MIG-01-05 C04 is now recorded as a locally revalidated, default-off G0 would-run shadow: it writes only append-only, value-minimized report evidence with zero effect, object or Provider operations. Work advances to WI-MIG-01-06 C05 only as a parity shadow; G2 and all cutover decisions remain open.",
     "backendPendingPaths": [
       "app/services/owner_truth_legacy_tail_shadow.py",
       "app/services/owner_truth_migration_parity_shadow.py"
@@ -54,6 +55,12 @@
       "id": "WI-MIG-01-04",
       "implementationStatus": "INTERNAL_READY / C03_BACKFILL_ADMISSION_PLAN_G0_REVALIDATED_LOCAL_2026-07-29 / DEFAULT_OFF / HASH_ONLY_APPEND_ONLY / NO_TARGET_OWNER_TRUTH_WRITE_NO_CUTOVER / G1_G2_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_OPEN_NO_GO"
+    },
+    {
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-28-owner-truth-legacy-tail-shadow-g0.md",
+      "id": "WI-MIG-01-05",
+      "implementationStatus": "INTERNAL_READY / C04_LEGACY_TAIL_WOULD_RUN_SHADOW_G0_REVALIDATED_LOCAL_2026-07-29 / DEFAULT_OFF / HASH_ONLY_APPEND_ONLY / ZERO_EFFECT_OBJECT_PROVIDER_CALLBACK_AND_AUTHORITY_MUTATION / G2_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G2_OPEN_NO_GO"
     },
     {
       "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-purpose-consent-g0.md",
@@ -609,9 +616,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-MIG-01-06",
+    "id": "WI-MIG-01-07",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After C04 has a verified no-side-effect mapping and any gaps are explicitly dispositioned, assess C05 parity only as a shadow. Do not treat C03/C04 evidence as migration execution, object copy, Provider invocation or Authority cutover."
+    "summary": "After C05 has a verified read/command/projection parity shadow and all differences are explicit, assess C06 cutover-readiness only as a NO_GO decision package. Do not treat C03-C05 shadow evidence as migration execution, object copy, Provider invocation or Authority cutover."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -620,5 +627,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-29T04:04:01+08:00"
+  "updatedAt": "2026-07-29T04:07:29+08:00"
 }
