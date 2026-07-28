@@ -31,6 +31,21 @@ Echo QA 面板和导出包仅显示经 allowlist 的状态码、布尔值和既�
 `localResolved` 仅表示本地快照匹配，绝不表示第三方清理、Provider delete 或外部验收
 已经完成。
 
+后端提交 `3712c24` 在既有机器权限接口
+`GET /ops/release-policy/observations` 新增 `voiceDigitalHumanReadiness` 只读摘要：
+
+- `M1SelfVoice`、`M2LivingDigitalHuman`、`M3AdultMemorialPilot` 分开报告；
+- 只消费运行时 capability 五轴、成本聚合、事故 stop-the-line 和证据 manifest 的数量；
+- 不返回 Provider、音色、用户、会话、证据正文或凭据；
+- 不调用 Provider、不写库、不新增发布开关，三条 lane 的 `status` 均固定为 `blocked`，
+  `promotionAllowed=false`；
+- 即使注入全绿模拟输入和 current manifest，也仍要求人工批准、profile 级质量证据、
+  真机验收和相应 Provider exit/session cleanup receipt；M3 额外固定要求
+  `memorialPilotNotApproved`。
+
+这使成本、事故、能力和证据能在同一处被观察，但不把观察结果误当成 M1/M2/M3 的放量
+决定。
+
 ## 验证
 
 ```bash
@@ -46,6 +61,20 @@ git diff --check
 
 结果：Voice/DH 退出披露 gate、退出 readiness evidence gate、audio owner lease
 静态检查、handoff 检查和 workspace 通用模拟器构建均通过。
+
+后端验证：
+
+```bash
+cd /Users/yxj/Documents/Codex/Video/DreamJourneyBackend
+PYTHON_BIN=/tmp/dreamjourney-backend-test-venv/bin/python \
+  scripts/run-backend-voice-dh-lane-readiness-g0-gate.sh
+PYTHON_BIN=/tmp/dreamjourney-backend-test-venv/bin/python scripts/verify_backend.sh
+git diff --check
+```
+
+结果：新增 lane-readiness 单测 5 项通过；完整后端验证通过（1225 项单测、既有 G0/G2
+contract gate 和 FastAPI smoke）。后端尚未推送或部署，因此不能记录为线上/真实 Provider
+证据。
 
 ## 仍然开放的门
 

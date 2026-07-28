@@ -600,8 +600,8 @@
     {
       "id": "WI-V0-01-11",
       "evidence": "docs/superpowers/status/2026-07-28-wi-v0-01-11-voice-dh-readiness-evidence-g0.md",
-      "implementationStatus": "INTERNAL_READY / G0_QA_EXIT_READINESS_EVIDENCE_LOCAL_VERIFIED / IOS_LOCAL_COMMITTED_9f7c90b / QA_ONLY / NO_PROVIDER_CLEANUP_RECEIPT_PROMOTION / G1_G2_G3_G4_OPEN",
-      "registryClosure": "SCOPED_G0_LOCAL_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN"
+      "implementationStatus": "INTERNAL_READY / G0_QA_EXIT_READINESS_EVIDENCE_LOCAL_VERIFIED / IOS_LOCAL_COMMITTED_9f7c90b / BACKEND_LOCAL_COMMITTED_3712c24 / VALUE_FREE_M1_M2_M3_BLOCKED_READINESS_OBSERVATION / NO_PROVIDER_CLEANUP_RECEIPT_OR_PROMOTION / G1_G2_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_LOCAL_EVIDENCE_PRESENT_NO_DEPLOYMENT_G1_G2_G3_G4_OPEN"
     }
   ],
   "nextWorkItem": {
@@ -616,5 +616,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-28T20:49:12+08:00"
+  "updatedAt": "2026-07-28T20:57:53+08:00"
 }
