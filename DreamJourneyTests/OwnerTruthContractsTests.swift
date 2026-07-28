@@ -3268,6 +3268,181 @@ final class OwnerTruthContractsTests: XCTestCase {
             expectedCandidateID: candidateID
         )
     }
+
+    func testMigrationViewStateParityMatchesEquivalentLegacyAndV4Read() throws {
+        let legacy = migrationParitySnapshot(source: .legacy)
+        let v4 = migrationParitySnapshot(source: .v4)
+
+        let report = try OwnerTruthMigrationParityViewStateComparator.compare(
+            legacy: legacy,
+            v4: v4,
+            qaGateEnabled: true
+        )
+
+        XCTAssertEqual(report.schemaVersion, "owner-truth-migration-view-state-parity-v1")
+        XCTAssertTrue(report.mismatches.isEmpty)
+        XCTAssertEqual(report.blockerCount, 0)
+        XCTAssertEqual(report.unresolvedM08Count, 0)
+        XCTAssertTrue(report.isEligibleForApprovedWindow)
+    }
+
+    func testMigrationViewStateParityClassifiesAllBlockingDimensions() throws {
+        let legacy = migrationParitySnapshot(source: .legacy)
+        let differentAuthority = OwnerTruthMigrationParityAuthorityBinding(
+            ownerSubjectHash: migrationDigest("owner-b"),
+            vaultHash: migrationDigest("vault-b"),
+            authorityEpochHash: migrationDigest("epoch-v2")
+        )
+        let v4 = OwnerTruthMigrationParityViewStateSnapshot(
+            source: .v4,
+            surface: .context,
+            intentHash: migrationDigest("intent-b"),
+            authority: differentAuthority,
+            routeDecision: .denied,
+            visibility: .hidden,
+            phase: .failed,
+            cacheState: .stale,
+            viewStateHash: migrationDigest("view-state-b"),
+            citationSetHash: migrationDigest("citations-b"),
+            projectionCheckpointHash: migrationDigest("checkpoint-b"),
+            presentationHash: migrationDigest("presentation-b")
+        )
+
+        let report = try OwnerTruthMigrationParityViewStateComparator.compare(
+            legacy: legacy,
+            v4: v4,
+            qaGateEnabled: true
+        )
+
+        XCTAssertEqual(
+            Set(report.mismatches.map(\.code)),
+            [
+                .m01AuthorityBinding,
+                .m02IntentOrRoute,
+                .m03Visibility,
+                .m04AuthorityEpoch,
+                .m05ViewState,
+                .m06Citation,
+                .m07CacheOrCheckpoint,
+                .m08Presentation,
+            ]
+        )
+        XCTAssertGreaterThan(report.blockerCount, 0)
+        XCTAssertEqual(report.unresolvedM08Count, 1)
+        XCTAssertFalse(report.isEligibleForApprovedWindow)
+    }
+
+    func testMigrationViewStateParityAllowsOnlyScopedUnexpiredM08PresentationDisposition() throws {
+        let legacy = migrationParitySnapshot(source: .legacy)
+        let v4 = migrationParitySnapshot(
+            source: .v4,
+            presentationHash: migrationDigest("presentation-v4")
+        )
+        let activeDate = Date(timeIntervalSince1970: 1_750_000_000)
+        let disposition = OwnerTruthMigrationParityM08Disposition(
+            surface: .context,
+            legacyPresentationHash: try XCTUnwrap(legacy.presentationHash),
+            v4PresentationHash: try XCTUnwrap(v4.presentationHash),
+            approvalReferenceHash: migrationDigest("product-data-approval"),
+            expiresAt: activeDate.addingTimeInterval(60)
+        )
+
+        let report = try OwnerTruthMigrationParityViewStateComparator.compare(
+            legacy: legacy,
+            v4: v4,
+            m08Dispositions: [disposition],
+            at: activeDate,
+            qaGateEnabled: true
+        )
+
+        XCTAssertEqual(report.mismatches.count, 1)
+        XCTAssertEqual(report.mismatches[0].code, .m08Presentation)
+        XCTAssertEqual(report.mismatches[0].m08DispositionStatus, .approved)
+        XCTAssertEqual(report.blockerCount, 0)
+        XCTAssertTrue(report.isEligibleForApprovedWindow)
+
+        let expiredReport = try OwnerTruthMigrationParityViewStateComparator.compare(
+            legacy: legacy,
+            v4: v4,
+            m08Dispositions: [disposition],
+            at: activeDate.addingTimeInterval(61),
+            qaGateEnabled: true
+        )
+        XCTAssertEqual(expiredReport.mismatches[0].m08DispositionStatus, .expired)
+        XCTAssertEqual(expiredReport.blockerCount, 1)
+        XCTAssertFalse(expiredReport.isEligibleForApprovedWindow)
+    }
+
+    func testMigrationViewStateParityRejectsDisabledGateAndInvalidSourcePairs() throws {
+        let legacy = migrationParitySnapshot(source: .legacy)
+        let v4 = migrationParitySnapshot(source: .v4)
+
+        XCTAssertThrowsError(
+            try OwnerTruthMigrationParityViewStateComparator.compare(
+                legacy: legacy,
+                v4: v4,
+                qaGateEnabled: false
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? OwnerTruthMigrationParityViewStateComparisonError,
+                .qaDisabled
+            )
+        }
+
+        XCTAssertThrowsError(
+            try OwnerTruthMigrationParityViewStateComparator.compare(
+                legacy: legacy,
+                v4: migrationParitySnapshot(source: .legacy),
+                qaGateEnabled: true
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? OwnerTruthMigrationParityViewStateComparisonError,
+                .invalidSourcePair
+            )
+        }
+    }
+
+    func testMigrationViewStateParitySnapshotRejectsRawOrMalformedDigest() throws {
+        XCTAssertNil(OwnerTruthMigrationParityDigest("not-a-digest"))
+        XCTAssertNil(OwnerTruthMigrationParityDigest("sha256:ABCDEF"))
+
+        let digest = migrationDigest("opaque-only")
+        let decoded = try JSONDecoder().decode(
+            OwnerTruthMigrationParityDigest.self,
+            from: JSONEncoder().encode(digest)
+        )
+        XCTAssertEqual(decoded, digest)
+    }
+
+    private func migrationParitySnapshot(
+        source: OwnerTruthMigrationParityClientGeneration,
+        presentationHash: OwnerTruthMigrationParityDigest? = nil
+    ) -> OwnerTruthMigrationParityViewStateSnapshot {
+        OwnerTruthMigrationParityViewStateSnapshot(
+            source: source,
+            surface: .context,
+            intentHash: migrationDigest("same-intent"),
+            authority: OwnerTruthMigrationParityAuthorityBinding(
+                ownerSubjectHash: migrationDigest("owner-a"),
+                vaultHash: migrationDigest("vault-a"),
+                authorityEpochHash: migrationDigest("epoch-v1")
+            ),
+            routeDecision: .allowed,
+            visibility: .visible,
+            phase: .ready,
+            cacheState: .fresh,
+            viewStateHash: migrationDigest("same-view-state"),
+            citationSetHash: migrationDigest("same-citations"),
+            projectionCheckpointHash: migrationDigest("same-checkpoint"),
+            presentationHash: presentationHash ?? migrationDigest("presentation-legacy")
+        )
+    }
+
+    private func migrationDigest(_ value: String) -> OwnerTruthMigrationParityDigest {
+        OwnerTruthMigrationParityDigest.make("test|\(value)")
+    }
 }
 
 private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
@@ -3454,6 +3629,7 @@ private enum InterviewSessionStateClientSpyError: Error {
 }
 
 private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalInputClient {
+    var currentSessionHandler: ((OwnerTruthVaultID) -> Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>)?
     var startHandler: ((OwnerTruthInterviewNaturalInputStartCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var appendHandler: ((OwnerTruthInterviewNaturalInputAppendCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var boundaryHandler: ((OwnerTruthInterviewBoundaryCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
@@ -3472,6 +3648,28 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
     private(set) var boundaryCommand: OwnerTruthInterviewBoundaryCommand?
     private(set) var restoreDoNotAskCommand: OwnerTruthInterviewRestoreDoNotAskCommand?
     private(set) var restoreCooldownCommand: OwnerTruthInterviewRestoreCooldownCommand?
+
+    func fetchOwnerTruthInterviewNaturalInputCurrentSession(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>) -> Void
+    ) {
+        if let currentSessionHandler {
+            completion(currentSessionHandler(vaultID))
+            return
+        }
+        do {
+            completion(.success(try OwnerTruthInterviewNaturalInputCurrentSession(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewNaturalInputCurrentSession.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "currentSession": NSNull(),
+                ],
+                expectedVaultID: vaultID
+            )))
+        } catch {
+            completion(.failure(error))
+        }
+    }
 
     func startOwnerTruthInterviewNaturalInput(
         vaultID: OwnerTruthVaultID,

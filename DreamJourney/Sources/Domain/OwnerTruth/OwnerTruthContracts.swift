@@ -7684,3 +7684,468 @@ protocol OwnerTruthCorrectionRequestClient: AnyObject {
         completion: @escaping (Result<OwnerTruthCorrectionRequestReceipt, Error>) -> Void
     )
 }
+
+// MARK: - Migration C05 ViewState parity shadow (QA-only)
+
+/// C05 never changes a user-visible result. This gate only permits the
+/// value-minimized parity comparator in debug/UIQA builds; callers must keep
+/// legacy and V4 reads separate and may not use a result to select a writer.
+enum OwnerTruthMigrationParityQAGate {
+    static let launchArgument = "DJEnableOwnerTruthMigrationParityQA"
+
+    static var isEnabled: Bool {
+        #if DEBUG || UI_QA_SIMULATOR
+        return ProcessInfo.processInfo.arguments.contains(launchArgument)
+        #else
+        return false
+        #endif
+    }
+}
+
+/// A validated SHA-256 value. C05 ViewState evidence intentionally accepts
+/// digests only, so neither the parity report nor a future QA export can carry
+/// archive text, identifiers, route URLs, or presentation strings.
+struct OwnerTruthMigrationParityDigest: RawRepresentable, Codable, Hashable, Sendable {
+    let rawValue: String
+
+    init?(rawValue: String) {
+        let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard normalized.hasPrefix("sha256:"),
+              normalized.count == "sha256:".count + 64,
+              normalized.dropFirst("sha256:".count).allSatisfy(\.isHexDigit) else {
+            return nil
+        }
+        self.rawValue = normalized
+    }
+
+    init?(_ rawValue: String) {
+        self.init(rawValue: rawValue)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        guard let value = Self(rawValue: try container.decode(String.self)) else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Owner Truth migration parity values must be SHA-256 digests"
+            )
+        }
+        self = value
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    static func make(_ canonicalValue: String) -> Self {
+        let digest = SHA256.hash(data: Data(canonicalValue.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        // SHA256 always produces 64 lowercase hexadecimal characters.
+        return Self(rawValue: "sha256:\(digest)")!
+    }
+}
+
+enum OwnerTruthMigrationParitySurface: String, CaseIterable, Codable, Sendable {
+    case read
+    case projection
+    case context
+}
+
+enum OwnerTruthMigrationParityClientGeneration: String, Codable, Sendable {
+    case legacy
+    case v4
+}
+
+enum OwnerTruthMigrationParityRouteDecision: String, CaseIterable, Codable, Sendable {
+    case allowed
+    case denied
+    case unavailable
+}
+
+enum OwnerTruthMigrationParityVisibility: String, CaseIterable, Codable, Sendable {
+    case visible
+    case redacted
+    case hidden
+    case denied
+}
+
+enum OwnerTruthMigrationParityViewStatePhase: String, CaseIterable, Codable, Sendable {
+    case ready
+    case empty
+    case unavailable
+    case failed
+    case retryableFailure
+}
+
+enum OwnerTruthMigrationParityCacheState: String, CaseIterable, Codable, Sendable {
+    case fresh
+    case stale
+    case invalidated
+    case unavailable
+}
+
+/// The C05 taxonomy mirrors the backend shadow contract. M01-M07 stop a
+/// promotion window; M08 is only eligible for a scoped, expiring presentation
+/// disposition and is never a blanket compatibility waiver.
+enum OwnerTruthMigrationParityMismatchCode: String, CaseIterable, Codable, Sendable {
+    case m01AuthorityBinding = "M01"
+    case m02IntentOrRoute = "M02"
+    case m03Visibility = "M03"
+    case m04AuthorityEpoch = "M04"
+    case m05ViewState = "M05"
+    case m06Citation = "M06"
+    case m07CacheOrCheckpoint = "M07"
+    case m08Presentation = "M08"
+
+    var isPromotionBlocker: Bool {
+        self != .m08Presentation
+    }
+}
+
+enum OwnerTruthMigrationParityMismatchDimension: String, Codable, Sendable {
+    case authorityBinding
+    case intent
+    case routeDecision
+    case visibility
+    case authorityEpoch
+    case viewStatePhase
+    case viewStateHash
+    case citationSet
+    case projectionCheckpoint
+    case cacheState
+    case presentation
+
+    var code: OwnerTruthMigrationParityMismatchCode {
+        switch self {
+        case .authorityBinding:
+            return .m01AuthorityBinding
+        case .intent, .routeDecision:
+            return .m02IntentOrRoute
+        case .visibility:
+            return .m03Visibility
+        case .authorityEpoch:
+            return .m04AuthorityEpoch
+        case .viewStatePhase, .viewStateHash:
+            return .m05ViewState
+        case .citationSet:
+            return .m06Citation
+        case .projectionCheckpoint, .cacheState:
+            return .m07CacheOrCheckpoint
+        case .presentation:
+            return .m08Presentation
+        }
+    }
+}
+
+struct OwnerTruthMigrationParityAuthorityBinding: Codable, Equatable, Sendable {
+    let ownerSubjectHash: OwnerTruthMigrationParityDigest
+    let vaultHash: OwnerTruthMigrationParityDigest
+    let authorityEpochHash: OwnerTruthMigrationParityDigest
+
+    var fingerprint: OwnerTruthMigrationParityDigest {
+        OwnerTruthMigrationParityDigest.make([
+            "owner-truth-migration-authority-binding-v1",
+            ownerSubjectHash.rawValue,
+            vaultHash.rawValue,
+        ].joined(separator: "|"))
+    }
+}
+
+/// A value-minimized rendering result produced from one semantic Intent. The
+/// source is intentionally explicit: a comparison must be legacy-to-V4, never
+/// legacy-to-legacy or V4-to-V4. Route decisions are semantic outcomes, not
+/// endpoint strings, because migration endpoints are expected to differ.
+struct OwnerTruthMigrationParityViewStateSnapshot: Codable, Equatable, Sendable {
+    static let schemaVersion = "owner-truth-migration-view-state-snapshot-v1"
+
+    let schemaVersion: String
+    let source: OwnerTruthMigrationParityClientGeneration
+    let surface: OwnerTruthMigrationParitySurface
+    let intentHash: OwnerTruthMigrationParityDigest
+    let authority: OwnerTruthMigrationParityAuthorityBinding
+    let routeDecision: OwnerTruthMigrationParityRouteDecision
+    let visibility: OwnerTruthMigrationParityVisibility
+    let phase: OwnerTruthMigrationParityViewStatePhase
+    let cacheState: OwnerTruthMigrationParityCacheState
+    let viewStateHash: OwnerTruthMigrationParityDigest
+    let citationSetHash: OwnerTruthMigrationParityDigest?
+    let projectionCheckpointHash: OwnerTruthMigrationParityDigest?
+    let presentationHash: OwnerTruthMigrationParityDigest?
+
+    init(
+        source: OwnerTruthMigrationParityClientGeneration,
+        surface: OwnerTruthMigrationParitySurface,
+        intentHash: OwnerTruthMigrationParityDigest,
+        authority: OwnerTruthMigrationParityAuthorityBinding,
+        routeDecision: OwnerTruthMigrationParityRouteDecision,
+        visibility: OwnerTruthMigrationParityVisibility,
+        phase: OwnerTruthMigrationParityViewStatePhase,
+        cacheState: OwnerTruthMigrationParityCacheState,
+        viewStateHash: OwnerTruthMigrationParityDigest,
+        citationSetHash: OwnerTruthMigrationParityDigest? = nil,
+        projectionCheckpointHash: OwnerTruthMigrationParityDigest? = nil,
+        presentationHash: OwnerTruthMigrationParityDigest? = nil
+    ) {
+        self.schemaVersion = Self.schemaVersion
+        self.source = source
+        self.surface = surface
+        self.intentHash = intentHash
+        self.authority = authority
+        self.routeDecision = routeDecision
+        self.visibility = visibility
+        self.phase = phase
+        self.cacheState = cacheState
+        self.viewStateHash = viewStateHash
+        self.citationSetHash = citationSetHash
+        self.projectionCheckpointHash = projectionCheckpointHash
+        self.presentationHash = presentationHash
+    }
+}
+
+/// M08 approval is bound to one exact pair of presentation digests and one
+/// surface. It cannot approve a route, visibility, citation, cache, owner, or
+/// epoch mismatch, and it expires rather than becoming permanent policy.
+struct OwnerTruthMigrationParityM08Disposition: Codable, Equatable, Sendable {
+    let surface: OwnerTruthMigrationParitySurface
+    let legacyPresentationHash: OwnerTruthMigrationParityDigest
+    let v4PresentationHash: OwnerTruthMigrationParityDigest
+    let approvalReferenceHash: OwnerTruthMigrationParityDigest
+    let expiresAt: Date
+
+    func covers(
+        surface: OwnerTruthMigrationParitySurface,
+        legacyPresentationHash: OwnerTruthMigrationParityDigest,
+        v4PresentationHash: OwnerTruthMigrationParityDigest,
+        at date: Date
+    ) -> Bool {
+        self.surface == surface
+            && self.legacyPresentationHash == legacyPresentationHash
+            && self.v4PresentationHash == v4PresentationHash
+            && expiresAt > date
+    }
+}
+
+enum OwnerTruthMigrationParityM08DispositionStatus: String, Codable, Sendable {
+    case notApplicable
+    case unapproved
+    case approved
+    case expired
+}
+
+struct OwnerTruthMigrationParityViewStateMismatch: Codable, Equatable, Sendable {
+    let code: OwnerTruthMigrationParityMismatchCode
+    let dimension: OwnerTruthMigrationParityMismatchDimension
+    let legacyFingerprint: OwnerTruthMigrationParityDigest
+    let v4Fingerprint: OwnerTruthMigrationParityDigest
+    let m08DispositionStatus: OwnerTruthMigrationParityM08DispositionStatus
+
+    var isPromotionBlocker: Bool {
+        code.isPromotionBlocker
+            || m08DispositionStatus == .unapproved
+            || m08DispositionStatus == .expired
+    }
+}
+
+struct OwnerTruthMigrationParityViewStateReport: Codable, Equatable, Sendable {
+    static let schemaVersion = "owner-truth-migration-view-state-parity-v1"
+
+    let schemaVersion: String
+    let surface: OwnerTruthMigrationParitySurface
+    let intentHash: OwnerTruthMigrationParityDigest
+    let legacyCacheState: OwnerTruthMigrationParityCacheState
+    let v4CacheState: OwnerTruthMigrationParityCacheState
+    let legacyAuthorityEpochHash: OwnerTruthMigrationParityDigest
+    let v4AuthorityEpochHash: OwnerTruthMigrationParityDigest
+    let mismatches: [OwnerTruthMigrationParityViewStateMismatch]
+    let blockerCount: Int
+    let unresolvedM08Count: Int
+
+    var isEligibleForApprovedWindow: Bool {
+        blockerCount == 0 && unresolvedM08Count == 0
+    }
+}
+
+enum OwnerTruthMigrationParityViewStateComparisonError: Error, Equatable, Sendable {
+    case qaDisabled
+    case invalidSourcePair
+    case surfaceMismatch
+}
+
+/// Pure comparator for C05 G1. It has no network, persistence, cache mutation,
+/// UI mutation, command submission, or Authority selection behavior. A caller
+/// may use the returned report as QA evidence only after both independent
+/// legacy and V4 reads have completed.
+enum OwnerTruthMigrationParityViewStateComparator {
+    static func compare(
+        legacy: OwnerTruthMigrationParityViewStateSnapshot,
+        v4: OwnerTruthMigrationParityViewStateSnapshot,
+        m08Dispositions: [OwnerTruthMigrationParityM08Disposition] = [],
+        at date: Date = Date(),
+        qaGateEnabled: Bool = OwnerTruthMigrationParityQAGate.isEnabled
+    ) throws -> OwnerTruthMigrationParityViewStateReport {
+        guard qaGateEnabled else {
+            throw OwnerTruthMigrationParityViewStateComparisonError.qaDisabled
+        }
+        guard legacy.source == .legacy, v4.source == .v4 else {
+            throw OwnerTruthMigrationParityViewStateComparisonError.invalidSourcePair
+        }
+        guard legacy.surface == v4.surface else {
+            throw OwnerTruthMigrationParityViewStateComparisonError.surfaceMismatch
+        }
+
+        var mismatches: [OwnerTruthMigrationParityViewStateMismatch] = []
+        let surface = legacy.surface
+
+        appendIfDifferent(
+            dimension: .authorityBinding,
+            legacy: legacy.authority.fingerprint,
+            v4: v4.authority.fingerprint,
+            to: &mismatches
+        )
+        appendIfDifferent(
+            dimension: .intent,
+            legacy: legacy.intentHash,
+            v4: v4.intentHash,
+            to: &mismatches
+        )
+        appendIfDifferent(
+            dimension: .routeDecision,
+            legacy: fingerprint(legacy.routeDecision.rawValue),
+            v4: fingerprint(v4.routeDecision.rawValue),
+            to: &mismatches
+        )
+        appendIfDifferent(
+            dimension: .visibility,
+            legacy: fingerprint(legacy.visibility.rawValue),
+            v4: fingerprint(v4.visibility.rawValue),
+            to: &mismatches
+        )
+        appendIfDifferent(
+            dimension: .authorityEpoch,
+            legacy: legacy.authority.authorityEpochHash,
+            v4: v4.authority.authorityEpochHash,
+            to: &mismatches
+        )
+        appendIfDifferent(
+            dimension: .viewStatePhase,
+            legacy: fingerprint(legacy.phase.rawValue),
+            v4: fingerprint(v4.phase.rawValue),
+            to: &mismatches
+        )
+        appendIfDifferent(
+            dimension: .viewStateHash,
+            legacy: legacy.viewStateHash,
+            v4: v4.viewStateHash,
+            to: &mismatches
+        )
+        appendIfDifferent(
+            dimension: .citationSet,
+            legacy: optionalFingerprint(legacy.citationSetHash),
+            v4: optionalFingerprint(v4.citationSetHash),
+            to: &mismatches
+        )
+        appendIfDifferent(
+            dimension: .projectionCheckpoint,
+            legacy: optionalFingerprint(legacy.projectionCheckpointHash),
+            v4: optionalFingerprint(v4.projectionCheckpointHash),
+            to: &mismatches
+        )
+        appendIfDifferent(
+            dimension: .cacheState,
+            legacy: fingerprint(legacy.cacheState.rawValue),
+            v4: fingerprint(v4.cacheState.rawValue),
+            to: &mismatches
+        )
+
+        let legacyPresentationHash = optionalFingerprint(legacy.presentationHash)
+        let v4PresentationHash = optionalFingerprint(v4.presentationHash)
+        if legacyPresentationHash != v4PresentationHash {
+            let dispositionStatus = m08DispositionStatus(
+                surface: surface,
+                legacyPresentationHash: legacyPresentationHash,
+                v4PresentationHash: v4PresentationHash,
+                dispositions: m08Dispositions,
+                at: date
+            )
+            mismatches.append(
+                OwnerTruthMigrationParityViewStateMismatch(
+                    code: .m08Presentation,
+                    dimension: .presentation,
+                    legacyFingerprint: legacyPresentationHash,
+                    v4Fingerprint: v4PresentationHash,
+                    m08DispositionStatus: dispositionStatus
+                )
+            )
+        }
+
+        let blockerCount = mismatches.filter(\.isPromotionBlocker).count
+        let unresolvedM08Count = mismatches.filter {
+            $0.code == .m08Presentation && $0.m08DispositionStatus != .approved
+        }.count
+        return OwnerTruthMigrationParityViewStateReport(
+            schemaVersion: OwnerTruthMigrationParityViewStateReport.schemaVersion,
+            surface: surface,
+            intentHash: legacy.intentHash,
+            legacyCacheState: legacy.cacheState,
+            v4CacheState: v4.cacheState,
+            legacyAuthorityEpochHash: legacy.authority.authorityEpochHash,
+            v4AuthorityEpochHash: v4.authority.authorityEpochHash,
+            mismatches: mismatches,
+            blockerCount: blockerCount,
+            unresolvedM08Count: unresolvedM08Count
+        )
+    }
+
+    private static func appendIfDifferent(
+        dimension: OwnerTruthMigrationParityMismatchDimension,
+        legacy: OwnerTruthMigrationParityDigest,
+        v4: OwnerTruthMigrationParityDigest,
+        to mismatches: inout [OwnerTruthMigrationParityViewStateMismatch]
+    ) {
+        guard legacy != v4 else { return }
+        mismatches.append(
+            OwnerTruthMigrationParityViewStateMismatch(
+                code: dimension.code,
+                dimension: dimension,
+                legacyFingerprint: legacy,
+                v4Fingerprint: v4,
+                m08DispositionStatus: .notApplicable
+            )
+        )
+    }
+
+    private static func m08DispositionStatus(
+        surface: OwnerTruthMigrationParitySurface,
+        legacyPresentationHash: OwnerTruthMigrationParityDigest,
+        v4PresentationHash: OwnerTruthMigrationParityDigest,
+        dispositions: [OwnerTruthMigrationParityM08Disposition],
+        at date: Date
+    ) -> OwnerTruthMigrationParityM08DispositionStatus {
+        let matchingDispositions = dispositions.filter {
+            $0.surface == surface
+                && $0.legacyPresentationHash == legacyPresentationHash
+                && $0.v4PresentationHash == v4PresentationHash
+        }
+        guard !matchingDispositions.isEmpty else { return .unapproved }
+        return matchingDispositions.contains {
+            $0.covers(
+                surface: surface,
+                legacyPresentationHash: legacyPresentationHash,
+                v4PresentationHash: v4PresentationHash,
+                at: date
+            )
+        } ? .approved : .expired
+    }
+
+    private static func optionalFingerprint(
+        _ value: OwnerTruthMigrationParityDigest?
+    ) -> OwnerTruthMigrationParityDigest {
+        value ?? fingerprint("owner-truth-migration-parity-absent-v1")
+    }
+
+    private static func fingerprint(_ value: String) -> OwnerTruthMigrationParityDigest {
+        OwnerTruthMigrationParityDigest.make("owner-truth-migration-parity-v1|\(value)")
+    }
+}
