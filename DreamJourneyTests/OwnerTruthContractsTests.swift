@@ -1669,6 +1669,43 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertFalse(String(decoding: encoded, as: UTF8.self).contains(query))
     }
 
+    func testContextShadowBuildAcceptsDeterministicTextFallbackSelectionMode() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let query = "自行车"
+        var response = try contextShadowBuildResponse(for: lease, query: query)
+        var shadow = try XCTUnwrap(response["contextShadow"] as? [String: Any])
+        var request = try XCTUnwrap(shadow["request"] as? [String: Any])
+        request["selectionMode"] = "deterministicTextFallback"
+        shadow["request"] = request
+
+        var selected = try XCTUnwrap(shadow["selectedContext"] as? [[String: Any]])
+        selected[0]["reason"] = "confirmed_current_memory_version_query_match"
+        var selectedRank = try XCTUnwrap(selected[0]["rank"] as? [String: Any])
+        selectedRank["strategy"] = "deterministicTextFallback"
+        selected[0]["rank"] = selectedRank
+        shadow["selectedContext"] = selected
+
+        var ranking = try XCTUnwrap(shadow["rankingTrace"] as? [[String: Any]])
+        ranking[0]["reason"] = "confirmed_current_memory_version_query_match"
+        var rankingRank = try XCTUnwrap(ranking[0]["rank"] as? [String: Any])
+        rankingRank["strategy"] = "deterministicTextFallback"
+        ranking[0]["rank"] = rankingRank
+        shadow["rankingTrace"] = ranking
+        response["contextShadow"] = shadow
+
+        let build = try OwnerTruthContextShadowBuild(
+            backendJSONObject: response,
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+            expectedIntent: "echo_chat",
+            expectedQuery: query,
+            expectedSelectionMode: .deterministicTextFallback
+        )
+
+        XCTAssertEqual(build.request.selectionMode, .deterministicTextFallback)
+        XCTAssertEqual(build.selectedContext[0].rank?.strategy, "deterministicTextFallback")
+        XCTAssertEqual(build.traceSummary().selectionMode, .deterministicTextFallback)
+    }
+
     func testContextShadowBuildAcceptsJSONRoundTripNumberValues() throws {
         let (_, lease) = try makeActiveRuntime()
         let query = "网络 JSON 的数字字段必须能稳定解析"
@@ -2541,6 +2578,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "intent": "echo_chat",
                 "queryHash": digest(query),
                 "queryLength": query.unicodeScalars.count,
+                "selectionMode": "projectionCitationOrder",
             ],
             "authority": [
                 "source": "owner-truth-memory-projection",

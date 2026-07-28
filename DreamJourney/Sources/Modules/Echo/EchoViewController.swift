@@ -8824,6 +8824,7 @@ extension EchoViewController {
         let ownerTruthContextSummary = OwnerTruthContextCitationTraceSummary(
             contextVersion: "echo-context-v4-shadow",
             policyVersion: "owner-truth-context-shadow-build-policy-v1",
+            selectionMode: .projectionCitationOrder,
             contextHash: "uiqa-owner-truth-context-hash",
             authorityState: .ready,
             authorityEpoch: 7,

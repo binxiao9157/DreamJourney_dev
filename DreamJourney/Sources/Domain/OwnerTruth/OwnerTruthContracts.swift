@@ -5536,6 +5536,13 @@ enum OwnerTruthContextShadowState: String, Codable, Equatable, Sendable {
     case ready
 }
 
+/// QA-only Context selection modes. The public Context Packet does not consume
+/// either mode until the separate Owner Truth cutover gate is approved.
+enum OwnerTruthContextSelectionMode: String, Codable, Equatable, Sendable {
+    case projectionCitationOrder
+    case deterministicTextFallback
+}
+
 enum OwnerTruthAnswerCitationOutcome: String, Codable, Equatable, Sendable {
     case created
     case deduplicated
@@ -5554,9 +5561,11 @@ private enum OwnerTruthContextCitationContract {
     static let correctionRequestPendingReviewStatus = "pendingReview"
     static let correctionRequestMaximumTextScalars = 20_000
     static let citationResolution = "current_confirmed_projection_entry"
-    static let rankStrategy = "projectionCitationOrder"
+    static let defaultSelectionMode = OwnerTruthContextSelectionMode.projectionCitationOrder
     static let unavailableFallback = "owner_truth_context_unavailable_no_personal_memory"
     static let emptyFallback = "owner_truth_context_no_eligible_personal_memory"
+    static let searchUnavailableFallback = "owner_truth_context_search_unavailable_no_personal_memory"
+    static let queryNoMatchFallback = "owner_truth_context_no_query_match_no_personal_memory"
 
     /// A QA evidence response is citation-only. These fields would carry
     /// human-readable private content and are rejected at the mobile boundary.
@@ -5987,14 +5996,14 @@ struct OwnerTruthContextCitationRank: Codable, Equatable, Sendable {
             field: "rank.position",
             error: error
         )
-        guard try OwnerTruthContextCitationContract.nonEmptyString(
+        guard let selectionMode = OwnerTruthContextSelectionMode(rawValue: try OwnerTruthContextCitationContract.nonEmptyString(
             object["strategy"],
             field: "rank.strategy",
             error: error
-        ) == OwnerTruthContextCitationContract.rankStrategy else {
-            throw error("rank.strategy is not the approved projection order")
+        )) else {
+            throw error("rank.strategy is not an approved Context selection mode")
         }
-        strategy = OwnerTruthContextCitationContract.rankStrategy
+        strategy = selectionMode.rawValue
     }
 }
 
@@ -6210,8 +6219,14 @@ struct OwnerTruthContextShadowRequestSummary: Codable, Equatable, Sendable {
     let intent: String
     let queryHash: String?
     let queryLength: Int
+    let selectionMode: OwnerTruthContextSelectionMode
 
-    init(backendJSONObject object: [String: Any], expectedIntent: String, expectedQuery: String) throws {
+    init(
+        backendJSONObject object: [String: Any],
+        expectedIntent: String,
+        expectedQuery: String,
+        expectedSelectionMode: OwnerTruthContextSelectionMode
+    ) throws {
         let error = OwnerTruthContextCitationContract.contextError
         try OwnerTruthContextCitationContract.ensureNoRawContent(object, field: "context request", error: error)
         let normalizedIntent = OwnerTruthContextCitationContract.normalizedText(expectedIntent)
@@ -6245,6 +6260,14 @@ struct OwnerTruthContextShadowRequestSummary: Codable, Equatable, Sendable {
         guard queryHash == expectedHash else {
             throw error("request.queryHash does not match the submitted query")
         }
+        guard let selectionMode = OwnerTruthContextSelectionMode(rawValue: try OwnerTruthContextCitationContract.nonEmptyString(
+            object["selectionMode"],
+            field: "request.selectionMode",
+            error: error
+        )), selectionMode == expectedSelectionMode else {
+            throw error("request.selectionMode does not match the submitted selection mode")
+        }
+        self.selectionMode = selectionMode
     }
 }
 
@@ -6316,7 +6339,8 @@ struct OwnerTruthContextShadowBuild: Codable, Equatable, Sendable {
         backendJSONObject object: [String: Any],
         expectedVaultID: OwnerTruthVaultID,
         expectedIntent: String,
-        expectedQuery: String
+        expectedQuery: String,
+        expectedSelectionMode: OwnerTruthContextSelectionMode = .projectionCitationOrder
     ) throws {
         let error = OwnerTruthContextCitationContract.contextError
         try OwnerTruthContextCitationContract.ensureNoRawContent(object, field: "context response", error: error)
@@ -6382,7 +6406,8 @@ struct OwnerTruthContextShadowBuild: Codable, Equatable, Sendable {
                 error: error
             ),
             expectedIntent: expectedIntent,
-            expectedQuery: expectedQuery
+            expectedQuery: expectedQuery,
+            expectedSelectionMode: expectedSelectionMode
         )
         authority = try OwnerTruthContextShadowAuthority(
             backendJSONObject: OwnerTruthContextCitationContract.object(
@@ -6450,7 +6475,8 @@ struct OwnerTruthContextShadowBuild: Codable, Equatable, Sendable {
             rankingTrace: rankingTrace,
             citationProof: citationProof,
             authority: authority,
-            fallbacks: fallbacks
+            fallbacks: fallbacks,
+            selectionMode: request.selectionMode
         )
         try Self.validateTraceCounts(
             shadow["trace"],
@@ -6502,7 +6528,8 @@ struct OwnerTruthContextShadowBuild: Codable, Equatable, Sendable {
         rankingTrace: [OwnerTruthContextRankingTrace],
         citationProof: [OwnerTruthContextCitationProof],
         authority: OwnerTruthContextShadowAuthority,
-        fallbacks: [String]
+        fallbacks: [String],
+        selectionMode: OwnerTruthContextSelectionMode
     ) throws {
         let error = OwnerTruthContextCitationContract.contextError
         let selectedByRef = Dictionary(uniqueKeysWithValues: selectedContext.map { ($0.refID, $0) })
@@ -6527,7 +6554,8 @@ struct OwnerTruthContextShadowBuild: Codable, Equatable, Sendable {
             guard let selected = selectedByRef[trace.refID],
                   trace.source == selected.source,
                   trace.reason == selected.reason,
-                  trace.rank == selected.rank else {
+                  trace.rank == selected.rank,
+                  trace.rank.strategy == selectionMode.rawValue else {
                 throw error("ranking trace does not match its selected Context item")
             }
         }
@@ -6541,9 +6569,24 @@ struct OwnerTruthContextShadowBuild: Codable, Equatable, Sendable {
         }
         switch authority.state {
         case .ready:
-            if selectedContext.isEmpty,
-               !fallbacks.contains(OwnerTruthContextCitationContract.emptyFallback) {
-                throw error("ready empty Context requires the explicit no-eligible-memory fallback")
+            if selectedContext.isEmpty {
+                let allowedFallbacks: Set<String>
+                switch selectionMode {
+                case .projectionCitationOrder:
+                    allowedFallbacks = [OwnerTruthContextCitationContract.emptyFallback]
+                case .deterministicTextFallback:
+                    allowedFallbacks = [
+                        OwnerTruthContextCitationContract.emptyFallback,
+                        OwnerTruthContextCitationContract.searchUnavailableFallback,
+                        OwnerTruthContextCitationContract.queryNoMatchFallback,
+                    ]
+                }
+                guard fallbacks.count == 1, let fallback = fallbacks.first,
+                      allowedFallbacks.contains(fallback) else {
+                    throw error("ready empty Context has an invalid fallback for its selection mode")
+                }
+            } else if !fallbacks.isEmpty {
+                throw error("selected Context must not carry a fallback")
             }
         case .disabled, .rebuilding:
             guard selectedContext.isEmpty,
@@ -7490,6 +7533,7 @@ struct OwnerTruthContextCitationTraceSummary: Codable, Equatable, Sendable {
 
     let contextVersion: String
     let policyVersion: String
+    let selectionMode: OwnerTruthContextSelectionMode
     let contextHash: String
     let authorityState: OwnerTruthContextShadowState
     let authorityEpoch: Int?
@@ -7508,6 +7552,7 @@ struct OwnerTruthContextCitationTraceSummary: Codable, Equatable, Sendable {
     init(context: OwnerTruthContextShadowBuild, receipt: OwnerTruthAnswerCitationReceipt?) {
         contextVersion = context.contextVersion
         policyVersion = context.policyVersion
+        selectionMode = context.request.selectionMode
         contextHash = context.contextHash
         authorityState = context.authority.state
         authorityEpoch = context.authority.authorityEpoch
@@ -7528,6 +7573,7 @@ struct OwnerTruthContextCitationTraceSummary: Codable, Equatable, Sendable {
     init(
         contextVersion: String,
         policyVersion: String,
+        selectionMode: OwnerTruthContextSelectionMode,
         contextHash: String,
         authorityState: OwnerTruthContextShadowState,
         authorityEpoch: Int?,
@@ -7545,6 +7591,7 @@ struct OwnerTruthContextCitationTraceSummary: Codable, Equatable, Sendable {
     ) {
         self.contextVersion = contextVersion
         self.policyVersion = policyVersion
+        self.selectionMode = selectionMode
         self.contextHash = contextHash
         self.authorityState = authorityState
         self.authorityEpoch = authorityEpoch
@@ -7572,6 +7619,7 @@ struct OwnerTruthContextCitationQAEvidenceReadout: Codable, Equatable, Sendable 
     let schemaVersion: String
     let contextVersion: String
     let policyVersion: String
+    let selectionMode: OwnerTruthContextSelectionMode
     let contextHashDigest: String
     let authorityState: OwnerTruthContextShadowState
     let authorityEpoch: Int?
@@ -7591,6 +7639,7 @@ struct OwnerTruthContextCitationQAEvidenceReadout: Codable, Equatable, Sendable 
         schemaVersion = Self.schemaVersion
         contextVersion = summary.contextVersion
         policyVersion = summary.policyVersion
+        selectionMode = summary.selectionMode
         contextHashDigest = Self.digest(summary.contextHash)
         authorityState = summary.authorityState
         authorityEpoch = summary.authorityEpoch
@@ -7611,6 +7660,7 @@ struct OwnerTruthContextCitationQAEvidenceReadout: Codable, Equatable, Sendable 
     func panelLines(prefix: String = "ownerCtx") -> [String] {
         [
             "\(prefix) schema: \(schemaVersion)",
+            "\(prefix) selection: \(selectionMode.rawValue)",
             "\(prefix) authority: \(authorityState.rawValue) epoch=\(authorityEpoch.map(String.init) ?? "none")",
             "\(prefix) selected/filtered: \(selectedContextCount)/\(filteredContextCount)",
             "\(prefix) citation/answer: \(citationCount)/\(answerCitationCount)",
@@ -7658,6 +7708,7 @@ protocol OwnerTruthContextCitationClient: AnyObject {
         expectedOwnerSubjectID: String,
         intent: String,
         query: String,
+        selectionMode: OwnerTruthContextSelectionMode,
         completion: @escaping (Result<OwnerTruthContextShadowBuild, Error>) -> Void
     )
 

@@ -59,6 +59,7 @@ def main() -> None:
         "enum OwnerTruthContextCitationQAGate",
         'static let launchArgument = "DJEnableOwnerTruthContextCitationQA"',
         "enum OwnerTruthContextShadowState",
+        "enum OwnerTruthContextSelectionMode",
         "enum OwnerTruthAnswerCitationOutcome",
         "struct OwnerTruthContextCitation",
         "struct OwnerTruthContextSourceReference",
@@ -75,6 +76,10 @@ def main() -> None:
         "owner-truth-answer-citation-receipt-response-v1",
         "owner-truth-answer-citation-v1",
         "owner_truth_context_unavailable_no_personal_memory",
+        "owner_truth_context_search_unavailable_no_personal_memory",
+        "owner_truth_context_no_query_match_no_personal_memory",
+        "deterministicTextFallback",
+        "selectionMode",
         "legacyContextRead",
         "rawContentKeys",
         "SHA256.hash(data: Data(text.utf8))",
@@ -165,6 +170,7 @@ def main() -> None:
 
     for test_name in (
         "func testContextShadowBuildAcceptsTypedProjectionCitationsWithoutRawContent()",
+        "func testContextShadowBuildAcceptsDeterministicTextFallbackSelectionMode()",
         "func testContextShadowBuildAcceptsJSONRoundTripNumberValues()",
         "func testContextShadowBuildRejectsBooleanAndFractionalJSONNumbers()",
         "func testContextShadowBuildRejectsRawMemoryValueAndCrossVaultCitation()",

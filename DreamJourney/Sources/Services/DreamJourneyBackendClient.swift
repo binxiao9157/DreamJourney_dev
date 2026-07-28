@@ -6072,6 +6072,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         expectedOwnerSubjectID: String,
         intent: String,
         query: String,
+        selectionMode: OwnerTruthContextSelectionMode = .projectionCitationOrder,
         completion: @escaping (Result<OwnerTruthContextShadowBuild, Error>) -> Void
     ) {
         guard OwnerTruthContextCitationQAGate.isEnabled else {
@@ -6089,6 +6090,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
             payload: [
                 "intent": intent,
                 "query": query,
+                "selectionMode": selectionMode.rawValue,
             ],
             authPolicy: .userRequired,
             sessionUserId: expectedOwnerSubjectID,
@@ -6101,7 +6103,8 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
                         backendJSONObject: object,
                         expectedVaultID: vaultID,
                         expectedIntent: intent,
-                        expectedQuery: query
+                        expectedQuery: query,
+                        expectedSelectionMode: selectionMode
                     )))
                 } catch {
                     completion(.failure(error))
@@ -6146,6 +6149,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
                 "commandId": commandID,
                 "intent": intent,
                 "query": query,
+                "selectionMode": expectedContext.request.selectionMode.rawValue,
                 "answerText": answerText,
             ],
             authPolicy: .userRequired,
