@@ -118,20 +118,36 @@ def main() -> None:
     # without returning transcript text, Candidate content or internal pacing.
     for snippet in (
         "OwnerTruthInterviewNaturalInputContinuation",
+        "OwnerTruthInterviewNaturalInputCurrentSession",
         '"owner-truth-interview-session-presentation-v1"',
+        '"owner-truth-interview-current-session-v1"',
         "case readyForNarrative",
         "case narrativeRecorded",
         "case reviewPending",
+        "fetchOwnerTruthInterviewNaturalInputCurrentSession",
         "fetchOwnerTruthInterviewNaturalInputContinuation",
+        "startNewSession(vaultID: vaultID)",
+        "failed current-session read could bypass an existing boundary",
     ):
         require(snippet in owner_truth_contracts, f"continuation contract missing: {snippet}")
 
     for snippet in (
+        "/interview-sessions/current\"",
+        "fetchOwnerTruthInterviewNaturalInputCurrentSession",
         "/presentation\"",
         "fetchOwnerTruthInterviewNaturalInputContinuation",
         "ownerTruthInterviewNaturalInputTransport()",
     ):
         require(snippet in backend_client, f"policy-bound continuation transport missing: {snippet}")
+
+    for snippet in (
+        "sessionResumed: Bool",
+        "startRequestCount: Int",
+        "resumeReceiptMismatch",
+        "unexpectedSecondStart",
+        "OwnerTruthInterviewNaturalInputReceiptOutcome.resumed.rawValue",
+    ):
+        require(snippet in natural_input_surface, f"resume UIQA coverage missing: {snippet}")
 
     for snippet in (
         "这段分享已经留好。想起来时，可以继续补充。",

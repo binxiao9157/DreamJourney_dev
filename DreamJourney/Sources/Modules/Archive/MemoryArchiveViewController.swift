@@ -6845,6 +6845,8 @@ struct OwnerTruthInterviewNaturalInputUIQASmokeResult: Codable {
     let completed: Bool
     let qaGateEnabled: Bool
     let sessionCreated: Bool
+    let sessionResumed: Bool
+    let startRequestCount: Int
     let inputRecorded: Bool
     let messageSequence: Int?
     let transcriptCleared: Bool
@@ -6874,9 +6876,12 @@ enum OwnerTruthInterviewNaturalInputUIQASmoke {
     /// sheet proves layout and presentation without making a backend request.
     static func makePreviewViewController(
         accountLease: AccountLease,
-        presentation: OwnerTruthInterviewNaturalInputPresentation = .qa
+        presentation: OwnerTruthInterviewNaturalInputPresentation = .qa,
+        client: OwnerTruthInterviewNaturalInputClient? = nil
     ) -> OwnerTruthInterviewNaturalInputViewController {
-        let client = InterviewNaturalInputUIQAClient(vaultID: OwnerTruthVaultID(accountLease.vaultId))
+        let client = client ?? InterviewNaturalInputUIQAClient(
+            vaultID: OwnerTruthVaultID(accountLease.vaultId)
+        )
         let previewGateEnabled: () -> Bool
         switch presentation {
         case .qa:
@@ -6897,8 +6902,9 @@ enum OwnerTruthInterviewNaturalInputUIQASmoke {
     static func makeViewController(
         accountLease: AccountLease
     ) -> OwnerTruthInterviewNaturalInputViewController {
-        let controller = makePreviewViewController(accountLease: accountLease)
-        let scenario = InterviewNaturalInputUIQAScenario()
+        let client = InterviewNaturalInputUIQAClient(vaultID: OwnerTruthVaultID(accountLease.vaultId))
+        let controller = makePreviewViewController(accountLease: accountLease, client: client)
+        let scenario = InterviewNaturalInputUIQAScenario(accountLease: accountLease, client: client)
         controller.onViewStateRendered = { state in
             scenario.consume(state, controller: controller)
         }
@@ -6910,6 +6916,8 @@ enum OwnerTruthInterviewNaturalInputUIQASmoke {
             completed: false,
             qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
             sessionCreated: false,
+            sessionResumed: false,
+            startRequestCount: 0,
             inputRecorded: false,
             messageSequence: nil,
             transcriptCleared: false,
@@ -6929,14 +6937,23 @@ enum OwnerTruthInterviewNaturalInputUIQASmoke {
 }
 
 private final class InterviewNaturalInputUIQAScenario {
+    private let accountLease: AccountLease
+    private let client: InterviewNaturalInputUIQAClient
     private var didSubmit = false
     private var didWrite = false
+    private var didFinish = false
+    private var resumeUseCase: OwnerTruthInterviewNaturalInputUseCase?
+
+    init(accountLease: AccountLease, client: InterviewNaturalInputUIQAClient) {
+        self.accountLease = accountLease
+        self.client = client
+    }
 
     func consume(
         _ state: OwnerTruthInterviewNaturalInputViewState,
         controller: OwnerTruthInterviewNaturalInputViewController
     ) {
-        guard !didWrite, state.phase == .ready, let receipt = state.latestReceipt else { return }
+        guard !didWrite, !didFinish, state.phase == .ready, let receipt = state.latestReceipt else { return }
         guard receipt.messageSequence != nil else {
             guard !didSubmit else { return }
             didSubmit = true
@@ -6946,15 +6963,72 @@ private final class InterviewNaturalInputUIQAScenario {
             return
         }
         didWrite = true
+        startResumeCheck(after: receipt, controller: controller)
+    }
+
+    private func startResumeCheck(
+        after receipt: OwnerTruthInterviewNaturalInputReceipt,
+        controller: OwnerTruthInterviewNaturalInputViewController
+    ) {
         let transcriptCleared = controller.isTranscriptClearForQA
+        let resumeUseCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: accountLease,
+            client: client
+        )
+        self.resumeUseCase = resumeUseCase
+        resumeUseCase.onViewStateChange = { [weak self] resumedState in
+            guard let self,
+                  !self.didFinish,
+                  resumedState.phase == .ready,
+                  let resumedReceipt = resumedState.latestReceipt else {
+                return
+            }
+            guard resumedReceipt.outcome == .resumed,
+                  resumedReceipt.threadID == receipt.threadID,
+                  resumedReceipt.sessionID == receipt.sessionID,
+                  resumedReceipt.threadVersion == receipt.threadVersion,
+                  resumedReceipt.sessionVersion == receipt.sessionVersion,
+                  resumedReceipt.lifecycle == .active,
+                  resumedReceipt.boundary == .open,
+                  resumedReceipt.messageID == nil,
+                  resumedReceipt.messageSequence == nil else {
+                self.finish(
+                    receipt: receipt,
+                    transcriptCleared: transcriptCleared,
+                    sessionResumed: false,
+                    failureReason: "resumeReceiptMismatch"
+                )
+                return
+            }
+            self.finish(
+                receipt: receipt,
+                transcriptCleared: transcriptCleared,
+                sessionResumed: self.client.startRequestCount == 1,
+                failureReason: self.client.startRequestCount == 1 ? nil : "unexpectedSecondStart"
+            )
+        }
+        resumeUseCase.send(.start)
+    }
+
+    private func finish(
+        receipt: OwnerTruthInterviewNaturalInputReceipt,
+        transcriptCleared: Bool,
+        sessionResumed: Bool,
+        failureReason: String?
+    ) {
+        guard !didFinish else { return }
+        didFinish = true
         let result = OwnerTruthInterviewNaturalInputUIQASmokeResult(
             completed: OwnerTruthCandidateReviewQAGate.isEnabled
                 && receipt.lifecycle == .active
                 && receipt.boundary == .open
                 && receipt.messageSequence == 1
-                && transcriptCleared,
+                && transcriptCleared
+                && sessionResumed,
             qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
             sessionCreated: true,
+            sessionResumed: sessionResumed,
+            startRequestCount: client.startRequestCount,
             inputRecorded: true,
             messageSequence: receipt.messageSequence,
             transcriptCleared: transcriptCleared,
@@ -6962,7 +7036,7 @@ private final class InterviewNaturalInputUIQAScenario {
                 QALaunchScenario.ownerTruthInterviewNaturalInputSmoke.rawValue,
                 OwnerTruthCandidateReviewQAGate.launchArgument,
             ],
-            failureReason: nil
+            failureReason: failureReason
         )
         do {
             let resultURL = try result.writeToDocuments()
@@ -7284,9 +7358,47 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
     private let vaultID: OwnerTruthVaultID?
     private var sessionsWithNarrative = Set<UUID>()
     private var boundariesBySessionID: [UUID: OwnerTruthInterviewSessionBoundary] = [:]
+    private var currentSessionReceipt: OwnerTruthInterviewNaturalInputReceipt?
+    private(set) var startRequestCount = 0
 
     init(vaultID: OwnerTruthVaultID?) {
         self.vaultID = vaultID
+    }
+
+    func fetchOwnerTruthInterviewNaturalInputCurrentSession(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        do {
+            let currentSession: Any
+            if let receipt = currentSessionReceipt {
+                currentSession = [
+                    "status": OwnerTruthInterviewNaturalInputReceiptOutcome.resumed.rawValue,
+                    "threadId": receipt.threadID.rawValue.uuidString,
+                    "sessionId": receipt.sessionID.rawValue.uuidString,
+                    "threadVersion": receipt.threadVersion,
+                    "sessionVersion": receipt.sessionVersion,
+                    "state": receipt.lifecycle.rawValue,
+                    "boundary": receipt.boundary.rawValue,
+                ]
+            } else {
+                currentSession = NSNull()
+            }
+            completion(.success(try OwnerTruthInterviewNaturalInputCurrentSession(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewNaturalInputCurrentSession.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "currentSession": currentSession,
+                ],
+                expectedVaultID: vaultID
+            )))
+        } catch {
+            completion(.failure(error))
+        }
     }
 
     func startOwnerTruthInterviewNaturalInput(
@@ -7299,7 +7411,8 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
             return
         }
         do {
-            completion(.success(try OwnerTruthInterviewNaturalInputReceipt(
+            startRequestCount += 1
+            let receipt = try OwnerTruthInterviewNaturalInputReceipt(
                 backendJSONObject: [
                     "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
                     "vaultId": vaultID.rawValue,
@@ -7314,7 +7427,9 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
                     ],
                 ],
                 expectedVaultID: vaultID
-            )))
+            )
+            currentSessionReceipt = receipt
+            completion(.success(receipt))
         } catch {
             completion(.failure(error))
         }
@@ -7331,7 +7446,7 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
         }
         sessionsWithNarrative.insert(command.sessionID.rawValue)
         do {
-            completion(.success(try OwnerTruthInterviewNaturalInputReceipt(
+            let receipt = try OwnerTruthInterviewNaturalInputReceipt(
                 backendJSONObject: [
                     "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
                     "vaultId": vaultID.rawValue,
@@ -7348,7 +7463,9 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
                     ],
                 ],
                 expectedVaultID: vaultID
-            )))
+            )
+            currentSessionReceipt = receipt
+            completion(.success(receipt))
         } catch {
             completion(.failure(error))
         }

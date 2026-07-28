@@ -107,6 +107,8 @@ printf '\n'
 grep -Eq '"completed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Natural-input UIQA did not complete."
 grep -Eq '"qaGateEnabled"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "QA gate should be enabled."
 grep -Eq '"sessionCreated"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Session should be created."
+grep -Eq '"sessionResumed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Existing active session should be resumed."
+grep -Eq '"startRequestCount"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Resume must not create a second session."
 grep -Eq '"inputRecorded"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Input receipt should be recorded."
 grep -Eq '"messageSequence"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Expected first message receipt."
 grep -Eq '"transcriptCleared"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Input text should not remain rendered."

@@ -2594,14 +2594,20 @@ private enum OwnerTruthInterviewSessionStateContract {
 
 // MARK: - Default-off interview natural-input command
 
-/// A write receipt intentionally has no conversation text. It is sufficient
-/// for a QA client to preserve optimistic version fences without turning the
+/// A write or explicit resume handle intentionally has no conversation text.
+/// It is sufficient to preserve optimistic version fences without turning the
 /// private interview record into a visible transcript.
+enum OwnerTruthInterviewNaturalInputReceiptOutcome: String, Equatable, Sendable {
+    case created
+    case deduplicated
+    case resumed
+}
+
 struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
     static let schemaVersion = "owner-truth-interview-session-command-v1"
 
     let vaultID: OwnerTruthVaultID
-    let outcome: OwnerTruthCommandOutcome
+    let outcome: OwnerTruthInterviewNaturalInputReceiptOutcome
     let threadID: OwnerTruthRecordID
     let sessionID: OwnerTruthRecordID
     let threadVersion: Int
@@ -2619,9 +2625,20 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
                 == Self.schemaVersion,
               OwnerTruthInterviewNaturalInputContract.requiredString(object["vaultId"])
                 == expectedVaultID.rawValue,
-              let receipt = object["receipt"] as? [String: Any],
-              let outcomeRaw = OwnerTruthInterviewNaturalInputContract.requiredString(receipt["status"]),
-              let outcome = OwnerTruthCommandOutcome(rawValue: outcomeRaw),
+              let receipt = object["receipt"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "command receipt misses a required value-minimized field"
+            )
+        }
+        try self.init(receiptJSONObject: receipt, expectedVaultID: expectedVaultID)
+    }
+
+    fileprivate init(
+        receiptJSONObject receipt: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        guard let outcomeRaw = OwnerTruthInterviewNaturalInputContract.requiredString(receipt["status"]),
+              let outcome = OwnerTruthInterviewNaturalInputReceiptOutcome(rawValue: outcomeRaw),
               let threadID = OwnerTruthInterviewNaturalInputContract.recordID(receipt["threadId"]),
               let sessionID = OwnerTruthInterviewNaturalInputContract.recordID(receipt["sessionId"]),
               let threadVersion = OwnerTruthInterviewNaturalInputContract.positiveInt(receipt["threadVersion"]),
@@ -2646,6 +2663,11 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
         guard (messageID == nil) == (messageSequence == nil) else {
             throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
                 "message metadata must be present together or absent together"
+            )
+        }
+        guard outcome != .resumed || (messageID == nil && messageSequence == nil) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "resumed session handle must not include message metadata"
             )
         }
 
@@ -2707,6 +2729,54 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
             && messageID == nil
             && messageSequence == nil
             && sessionVersion > command.expectedSessionVersion
+    }
+}
+
+/// The current-session read either gives the authenticated owner a stable
+/// handle for the one active interview, or explicitly confirms that a new
+/// session may be created. It never returns transcript, review or pacing data.
+struct OwnerTruthInterviewNaturalInputCurrentSession: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-current-session-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let receipt: OwnerTruthInterviewNaturalInputReceipt?
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        guard OwnerTruthInterviewNaturalInputContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthInterviewNaturalInputContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "current session response misses a required value-minimized field"
+            )
+        }
+
+        if let value = object["currentSession"], !(value is NSNull) {
+            guard let currentSession = value as? [String: Any] else {
+                throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                    "currentSession must be an object or null"
+                )
+            }
+            let parsedReceipt = try OwnerTruthInterviewNaturalInputReceipt(
+                receiptJSONObject: currentSession,
+                expectedVaultID: expectedVaultID
+            )
+            guard parsedReceipt.outcome == .resumed,
+                  parsedReceipt.lifecycle == .active,
+                  parsedReceipt.messageID == nil,
+                  parsedReceipt.messageSequence == nil else {
+                throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                    "currentSession must contain an active resumed session handle"
+                )
+            }
+            receipt = parsedReceipt
+        } else {
+            receipt = nil
+        }
+        vaultID = expectedVaultID
     }
 }
 
@@ -2953,6 +3023,11 @@ struct OwnerTruthInterviewRestoreCooldownCommand: Equatable, Sendable {
 }
 
 protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
+    func fetchOwnerTruthInterviewNaturalInputCurrentSession(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>) -> Void
+    )
+
     func startOwnerTruthInterviewNaturalInput(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewNaturalInputStartCommand,
@@ -3084,6 +3159,20 @@ final class OwnerTruthInterviewNaturalInputUseCase {
     private func start() {
         guard viewState.latestReceipt == nil, viewState.phase != .starting else { return }
         guard let vaultID = beginRequestOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthInterviewNaturalInputViewState(
+            phase: .starting,
+            latestReceipt: nil,
+            continuation: nil,
+            notice: nil
+        )
+        client.fetchOwnerTruthInterviewNaturalInputCurrentSession(vaultID: vaultID) { [weak self] result in
+            self?.receiveCurrentSession(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func startNewSession(vaultID: OwnerTruthVaultID) {
         do {
             let command = try OwnerTruthInterviewNaturalInputStartCommand(
                 commandID: identifierFactory().uuidString.lowercased(),
@@ -3103,6 +3192,43 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             }
         } catch {
             transitionFailure(.invalidInput)
+        }
+    }
+
+    private func receiveCurrentSession(
+        _ result: Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard canCommit(generation: generation) else { return }
+        switch result {
+        case .success(let current):
+            guard current.vaultID == vaultID else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            guard let receipt = current.receipt else {
+                startNewSession(vaultID: vaultID)
+                return
+            }
+            guard receipt.outcome == .resumed,
+                  receipt.lifecycle == .active,
+                  receipt.messageID == nil,
+                  receipt.messageSequence == nil else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .ready,
+                latestReceipt: receipt,
+                continuation: nil,
+                notice: nil
+            )
+            refreshContinuation(vaultID: vaultID, receipt: receipt)
+        case .failure:
+            // Failing closed is important here: creating a fresh session after
+            // a failed current-session read could bypass an existing boundary.
+            transitionFailure(.requestFailed)
         }
     }
 
