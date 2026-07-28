@@ -198,6 +198,9 @@ grep -Eq '"providerMode"[[:space:]]*:[[:space:]]*"blockedUntilScopedBroker"' "$R
 grep -Eq '"runtimeProvider"[[:space:]]*:[[:space:]]*"none"' "$RESULT_FILE" || fail "Blocked mode must not create a digital-human runtime."
 grep -Eq '"runtimeIsRealSDKBacked"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Blocked mode must not claim real Tencent SDK backing."
 grep -Eq '"fallbackMode"[[:space:]]*:[[:space:]]*"textOnly"' "$RESULT_FILE" || fail "Blocked mode must fall back to text-only Echo."
+grep -Eq '"visibleFallback"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Blocked mode must render the explicit fallback state."
+grep -Eq '"visibleFallbackDetail"[[:space:]]*:[[:space:]]*"数字人暂不可用，已回到普通回响"' "$RESULT_FILE" || fail "Fallback detail must remain explicit."
+grep -Eq '"audioOwner"[[:space:]]*:[[:space:]]*"(volcengineLocalTTS|fallbackMuted)"' "$RESULT_FILE" || fail "Blocked mode must not retain Tencent as the audio owner."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true

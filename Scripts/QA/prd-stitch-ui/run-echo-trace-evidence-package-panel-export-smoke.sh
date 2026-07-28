@@ -108,6 +108,8 @@ def correlation_hash(value):
 require(result.get("completed") is True, "Echo evidence panel export smoke did not complete")
 require(result.get("buttonVisible") is True, "QA evidence export button should be visible")
 require(result.get("buttonTitle") == "导出证据包", "QA evidence export button title changed")
+require(result.get("personaBadgeMatchesFamily") is True, "Visible Echo persona badge must match the family runtime context")
+require(result.get("personaBadgeName") == "UIQA 家人音色 · AI 数字分身", "Visible Echo persona badge text changed")
 require(result.get("latestTurnIDHash") == correlation_hash("uiqa-panel-evidence-turn"), "Panel export latest turn hash changed")
 require(result.get("latestProviderLogIdHash") == correlation_hash("uiqa-panel-provider-log"), "Panel export provider log hash changed")
 require(result.get("latestArchiveClueHashes") == correlation_hash("archive_panel_evidence"), "Panel export archive clue hash changed")

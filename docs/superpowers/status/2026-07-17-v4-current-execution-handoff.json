@@ -1,33 +1,30 @@
 {
   "activeWorkItem": {
-    "id": "WI-S1-03-07",
+    "id": "WI-S1-03-08",
     "state": "IN_PROGRESS",
     "leaseState": "RELEASED",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "authorityLock": "IOS_COMPOSITION",
-    "predecessorWorkItem": "WI-S1-03-06",
-    "priorEvidence": "docs/superpowers/status/2026-07-19-wi-s1-03-07-audio-owner-lease.md",
+    "predecessorWorkItem": "WI-S1-03-07",
+    "priorEvidence": "docs/superpowers/status/2026-07-19-wi-s1-03-08-crosspath-integration-review.md",
     "completedSubSlices": [
-      "WI-S1-03-07-AUDIO_OWNER_INVENTORY_AND_MODEL_G0",
-      "WI-S1-03-07-ECHO_DH_OBSERVE_ONLY_ADAPTER_G0",
-      "WI-S1-03-07-ECHO_RUNTIME_EVENT_ORDERING_G0",
-      "WI-S1-03-07-ECHO_FALLBACK_AND_BACKGROUND_EVENT_AUDIT_G0",
-      "WI-S1-03-07-G0-A-ECHO_AUDIO_SESSION_COORDINATOR_ENFORCEMENT",
-      "WI-S1-03-07-G1-SIMULATOR_AUDIO_OWNER_COORDINATOR_UIQA"
+      "WI-S1-03-08-VOICE_DH_TYPED_PORTS_AND_CROSSPATH_G0",
+      "WI-S1-03-08-G1-SIMULATOR_ROLE_VOICE_AND_FAIL_CLOSED_UIQA"
     ],
-    "currentSubSlice": "WI-S1-03-07-G1-SIMULATOR_AUDIO_OWNER_COORDINATOR_UIQA_COMPLETE / injected fake driver verifies capture, Tencent preemption, failed activation preservation and stale release fencing / G4 true-device evidence remains open",
+    "currentSubSlice": "WI-S1-03-08-G1-SIMULATOR_ROLE_VOICE_AND_FAIL_CLOSED_UIQA_COMPLETE / family role badge and runtime voice diagnostics agree; scoped credential rejection visibly returns to ordinary Echo without retaining Tencent audio ownership / G3 and G4 remain open",
     "gateEvidence": {
-      "G0": "SCOPED_VERIFIED / ECHO_ONLY_AUDIO_SESSION_COORDINATOR_ENFORCES_CAPTURE_LOCAL_TTS_AND_TENCENT_PLAYBACK_WITH_INJECTABLE_DRIVER_EXACT_LEASE_AND_GENERATION_FENCES / STATIC_FAKE_DRIVER_SMOKE_AND_GENERIC_IPHONEOS_BUILD_PASSED",
-      "G1": "SCOPED_VERIFIED / SIMULATOR_UIQA_INJECTED_AUDIO_SESSION_DRIVER / CAPTURE_TO_TENCENT_PREEMPT_STALE_RELEASE_FAILURE_RECOVERY_AND_ROLE_GENERATION_FENCE_PASSED / NO_PROVIDER_OR_MICROPHONE_SIDE_EFFECT",
-      "G4": "OPEN / TRUE_DEVICE_INTERRUPTION_ROUTE_BLUETOOTH_BARGE_IN_AND_MICROPHONE_RECOVERY_EVIDENCE_PENDING"
+      "G0": "SCOPED_VERIFIED / TYPED_VOICE_DH_PORTS_OWNER_KEYED_CACHE_ROLE_SELECTION_AND_RUNTIME_CAPABILITY_FAIL_CLOSED_CROSSPATH",
+      "G1": "SCOPED_VERIFIED / SIMULATOR_UIQA_PROVES_FAMILY_ROLE_BADGE_RUNTIME_VOICE_DIAGNOSTICS_AND_FAIL_CLOSED_TEXT_ONLY_VISIBLE_STATE / NO_REAL_PROVIDER_OR_MICROPHONE_SIDE_EFFECT",
+      "G3": "OPEN / PROVIDER_CREDENTIAL_QUOTA_QUALITY_DELETE_AND_EXIT_RECEIPT_EVIDENCE_PENDING",
+      "G4": "OPEN / TRUE_DEVICE_TENCENT_SESSION_PCM_AUDIO_LIPSYNC_INTERRUPTION_ROUTE_AND_MICROPHONE_RECOVERY_EVIDENCE_PENDING"
     },
     "latestEvidence": {
-      "iosBaseline": "feature/prd-stitch-ui-adaptation / WI-S1-03-07 G0-A local commit",
-      "scope": "ECHO_ONLY_AUDIO_SESSION_RUNTIME_ENFORCEMENT / injectable_fake_driver / exact_lease_acquire_preempt_interrupt_resume_release / DialogEngine managed-lease reuse / no public UI or Provider change / no Archive_Profile_Memoir migration",
-      "validation": "product-v4-ios-audio-owner-lease-check.py PASS; audio-owner-lease-model-smoke.swift PASS; generic/platform=iOS build-for-testing CODE_SIGNING_ALLOWED=NO TEST BUILD SUCCEEDED; run-echo-audio-owner-coordinator-uiqa-smoke.sh PASS (capture->Tencent preempt->capture, failed Tencent activation preserves capture, stale capture/role release ignored, final owner none); git diff --check PASS",
-      "constraints": "DialogEngineManager retains its legacy direct AudioSession path only for non-Echo callers. Echo must pass an exact active coordinator lease before DialogEngine starts; stale release, interruption or resume cannot mutate a newer lease. G1 simulator and G4 true-device audio behavior remain open."
+      "iosBaseline": "feature/prd-stitch-ui-adaptation / WI-S1-03-08 scoped G1 local evidence",
+      "scope": "UI_QA_SIMULATOR_ONLY / family role voice identity and evidence-package diagnostics / scoped-broker blocked Digital Human fail-closed visible fallback / no public UI, Provider, Archive, Profile or Memoir behavior change",
+      "validation": "run-echo-trace-evidence-package-panel-export-smoke.sh PASS (family badge match, familyMember role source, Tencent owner diagnostic, redacted evidence package); run-digital-human-runtime-stub-smoke.sh PASS (503 scoped broker block -> visible ordinary Echo fallback, runtime none, non-Tencent owner); run-voice-tts-digital-human-owner-scope-gate.sh PASS; role/profile and runtime abstraction checks PASS; release QA package check PASS; generic/platform=iOS build-for-testing CODE_SIGNING_ALLOWED=NO TEST BUILD SUCCEEDED; git diff --check PASS",
+      "constraints": "Simulator assertions do not create a real Tencent runtime, open a microphone or claim Provider quality. G3 Provider and G4 true-device evidence remain separately required."
     },
-    "currentSummary": "WI-S1-03-07 G0-A and scoped G1 are complete: Echo capture, local TTS and Tencent digital-human playback use an injectable AudioSessionCoordinator. The simulator QA route proves controller-level capture-to-Tencent preemption, stale release fencing, failed activation recovery and role-generation fencing without touching AVAudioSession, microphone or provider runtime. No public UI, Provider routing, Archive/Profile/Memoir migration or true-device claim was added. G4 device audio behavior remains open.",
+    "currentSummary": "WI-S1-03-08 G0 and scoped G1 are complete: role-scoped voice diagnostics and visible Echo identity agree in the family QA fixture, while a blocked Digital Human credential path visibly fails closed to ordinary Echo without retaining Tencent audio ownership. No public UI, real Provider call, microphone or true-device claim was added. G3 Provider and G4 device evidence remain open.",
     "backendPendingPaths": []
   },
   "baselines": {
@@ -127,10 +124,10 @@
       "registryClosure": "SCOPED_G0_G1_G2_EVIDENCE_PRESENT_G3_OPEN"
     },
     {
-      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-08-crosspath-integration-review.md",
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-08-crosspath-integration-review.md; docs/superpowers/status/2026-07-28-wi-s1-03-08-voice-dh-g1-uiqa.md",
       "id": "WI-S1-03-08",
-      "implementationStatus": "INTERNAL_READY / G0_CROSSPATH_VERIFIED / IOS_LOCAL_COMMITTED / G1_G3_G4_OPEN",
-      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
+      "implementationStatus": "INTERNAL_READY / G0_CROSSPATH_VERIFIED / G1_SIMULATOR_ROLE_VOICE_AND_FAIL_CLOSED_UIQA_VERIFIED / IOS_LOCAL_COMMITTED / G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_G1_EVIDENCE_PRESENT_G3_G4_OPEN"
     },
     {
       "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-06-runtime-session-coordinator.md",
@@ -572,9 +569,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-03-07",
+    "id": "WI-S1-03-08",
     "state": "RECONCILE_AFTER_CURRENT",
-    "summary": "WI-S1-03-07 scoped G1 simulator UIQA is complete. Reconcile the next plan-authorized slice without promoting G1 to G4; true-device interruption, route, Bluetooth, barge-in and microphone recovery remain external evidence."
+    "summary": "WI-S1-03-08 scoped G1 simulator UIQA is complete. Reconcile G3/G4 without promoting simulator evidence to Provider or true-device completion; live credential, quality, session, audio, lipsync, interruption and microphone recovery remain external evidence."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -583,5 +580,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-28T10:00:00+08:00"
+  "updatedAt": "2026-07-28T10:09:35+08:00"
 }

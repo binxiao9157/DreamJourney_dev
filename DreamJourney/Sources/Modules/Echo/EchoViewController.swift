@@ -8468,10 +8468,12 @@ extension EchoViewController {
             mode: qaFamilyMember.digitalHumanMode,
             isSelfAssistant: false
         )
+        updatePersonaBadge()
         setEchoAudioOwner(.tencentDigitalHuman, reason: "uiqaPanelFamilyVoiceSelection")
         lastEchoRuntimeFallbackReason = nil
         defer {
             DigitalHumanContextStore.shared.current = previousContext
+            updatePersonaBadge()
             setEchoAudioOwner(previousAudioOwner, reason: "uiqaPanelRestore")
         }
 
@@ -8595,9 +8597,13 @@ extension EchoViewController {
                 clueSummary,
                 key: "filteredContextReasons"
             )
+            let personaBadgeName = personaNameLabel.text ?? ""
+            let personaBadgeMatchesFamily = personaBadgeName
+                == "\(qaFamilyMember.name) · AI 数字分身"
             completion([
                 "completed": echoTraceEvidenceExportButton.superview === echoRuntimeDiagnosticsPanelView
                     && echoTraceEvidenceExportButton.title(for: .normal) == "导出证据包"
+                    && personaBadgeMatchesFamily
                     && latestTurnIDHash
                         == PrivacySafeDiagnostics.correlationHash("uiqa-panel-evidence-turn")
                     && latestProviderLogIdHash
@@ -8626,6 +8632,8 @@ extension EchoViewController {
                     && !serialized.contains("archive_panel_evidence"),
                 "buttonVisible": echoTraceEvidenceExportButton.superview === echoRuntimeDiagnosticsPanelView,
                 "buttonTitle": echoTraceEvidenceExportButton.title(for: .normal) ?? "",
+                "personaBadgeName": personaBadgeName,
+                "personaBadgeMatchesFamily": personaBadgeMatchesFamily,
                 "packageCount": packages.count,
                 "latestTurnIDHash": latestTurnIDHash,
                 "latestProviderLogIdHash": latestProviderLogIdHash,
@@ -9249,8 +9257,18 @@ extension EchoViewController {
                 let isExpectedBrokerBlock = message.contains(
                     "revocable scoped session credential broker"
                 )
+                if isExpectedBrokerBlock {
+                    self.failClosedDigitalHumanRuntimePreparation(
+                        requestOwnerUserId: accountLease.subjectId,
+                        reason: "uiqaScopedBrokerRequired",
+                        detail: message
+                    )
+                }
+                let visibleFallbackDetail = self.digitalHumanStatusDetailLabel.text ?? ""
+                let visibleFallback = isExpectedBrokerBlock
+                    && visibleFallbackDetail == "数字人暂不可用，已回到普通回响"
                 completion([
-                    "completed": isExpectedBrokerBlock,
+                    "completed": isExpectedBrokerBlock && visibleFallback,
                     "failureReason": isExpectedBrokerBlock ? "" : "backendSessionError",
                     "boundaryState": isExpectedBrokerBlock ? "scopedBrokerRequired" : "unexpectedBackendError",
                     "provider": "tencent",
@@ -9258,6 +9276,9 @@ extension EchoViewController {
                     "runtimeProvider": "none",
                     "runtimeIsRealSDKBacked": false,
                     "fallbackMode": "textOnly",
+                    "visibleFallback": visibleFallback,
+                    "visibleFallbackDetail": visibleFallbackDetail,
+                    "audioOwner": self.currentEchoAudioOwner.rawValue,
                     "error": message,
                 ])
             }
