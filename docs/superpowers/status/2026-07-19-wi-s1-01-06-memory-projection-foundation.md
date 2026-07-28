@@ -66,3 +66,22 @@
 
 read-envelope 的 G2 部署与 smoke 已完成。下一步进入 `WI-S1-01-07` 的 Owner QA Context
 与 typed Citation 子闭环；保持 legacy KBLite 不能成为 confirmed-fact Authority。
+
+## 2026-07-29：Legacy KBLite Gap Prompt Fence
+
+`9672ec1 fix(v4): fence legacy KBLite gap prompts` 完成了一个局部 G0 边界修复。
+
+- `DialogEngineManager` 不再把 `KBLiteGapDetector` 基于旧图谱推测出的“知识缺口”和
+  建议问题直接注入 Echo prompt。
+- 旧图谱的兼容读取、会话摘要和 Archive 既有路径没有迁移；本轮不声称 legacy KBLite
+  已成为 Owner Truth Projection，也不改变公开 Echo 视觉或导航。
+- 主动追问必须等待 Owner Truth 的 policy-checked recommendation flow；该 flow 仍默认
+  关闭，且不因本次修改公开。
+- 新增
+  `Scripts/QA/product-v4/product-v4-legacy-kblite-gap-prompt-fence-check.py`，防止运行时
+  重新接回 `KBLiteGapDetector.shared.buildGapContext()`。
+
+本地验证：legacy KBLite gap prompt fence check、Owner Truth knowledge recommendation
+plan client check、`git diff --check` 和 generic unsigned iPhoneOS Debug build 均通过。
+这仅补充 `WI-S1-01-06` 的本地 G0 边界证据；Projection rebuild、Context/Echo 正式
+cutover、G1/G3/G4 仍保持开放。
