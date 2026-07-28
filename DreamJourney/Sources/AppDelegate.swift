@@ -314,6 +314,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runDigitalHumanLivePanelSmoke() }
         case .echoDigitalHumanLifecycleSmoke:
             scheduleUIQAScenario(scenario) { $0.runEchoDigitalHumanLifecycleSmoke() }
+        case .echoAudioOwnerCoordinatorSmoke:
+            scheduleUIQAScenario(scenario) { $0.runEchoAudioOwnerCoordinatorSmoke() }
         case .echoContinuousTurnSmoke:
             scheduleUIQAScenario(scenario) { $0.runEchoContinuousTurnSmoke() }
         case .digitalHumanRuntimeStubSmoke:
@@ -3869,6 +3871,31 @@ private extension AppDelegate {
         )
     }
 
+    func runEchoAudioOwnerCoordinatorSmoke(retryCount: Int = 0) {
+        QAEchoScenarioRunner.run(
+            retryCount: retryCount,
+            smokeName: "EchoAudioOwnerCoordinatorSmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runEchoAudioOwnerCoordinatorSmoke(retryCount: nextRetryCount)
+            },
+            writeResult: { [weak self] result in
+                self?.writeEchoAudioOwnerCoordinatorSmokeResult(result)
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQAEchoAudioOwnerCoordinatorSmoke(completion: completion)
+            },
+            completionLog: { result in
+                print(
+                    "[UI_QA] EchoAudioOwnerCoordinatorSmoke completed " +
+                    "completed=\(result["completed"] as? Bool == true) " +
+                    "capture=\(result["captureAcquired"] as? Bool == true) " +
+                    "tencent=\(result["tencentPreemptedCapture"] as? Bool == true) " +
+                    "failurePreserved=\(result["tencentFailurePreservedCapture"] as? Bool == true)"
+                )
+            }
+        )
+    }
+
     func runEchoContinuousTurnSmoke(retryCount: Int = 0) {
         QAEchoScenarioRunner.run(
             retryCount: retryCount,
@@ -4572,6 +4599,14 @@ private extension AppDelegate {
         } catch {
             print("[UI_QA] EchoDigitalHumanLifecycleSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
+    }
+
+    func writeEchoAudioOwnerCoordinatorSmokeResult(_ result: [String: Any]) {
+        writeEchoQAExportSmokeResult(
+            result,
+            fileName: "echo-audio-owner-coordinator-smoke-result.json",
+            smokeName: "EchoAudioOwnerCoordinatorSmoke"
+        )
     }
 
     func writeEchoContinuousTurnSmokeResult(_ result: [String: Any]) {

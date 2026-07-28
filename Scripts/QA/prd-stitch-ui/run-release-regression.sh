@@ -30,6 +30,7 @@ RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE="${RUN_ECHO_TRACE_EVIDENCE_PACKAGE_
 RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE="${RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE:-0}"
 RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE="${RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE:-0}"
 RUN_ECHO_DIGITAL_HUMAN_LIFECYCLE_SMOKE="${RUN_ECHO_DIGITAL_HUMAN_LIFECYCLE_SMOKE:-0}"
+RUN_ECHO_AUDIO_OWNER_COORDINATOR_UIQA_SMOKE="${RUN_ECHO_AUDIO_OWNER_COORDINATOR_UIQA_SMOKE:-0}"
 RUN_ECHO_CONTINUOUS_TURN_UIQA_SMOKE="${RUN_ECHO_CONTINUOUS_TURN_UIQA_SMOKE:-0}"
 RUN_ECHO_READINESS_REPORT="${RUN_ECHO_READINESS_REPORT:-0}"
 RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE="${RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE:-0}"
@@ -188,6 +189,7 @@ Run ID: \`$RUN_ID\`
 - Echo trace evidence package panel export UIQA smoke: \`$RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE\`
 - Echo QA evidence bundle export UIQA smoke: \`$RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE\`
 - Echo digital-human lifecycle UIQA smoke: \`$RUN_ECHO_DIGITAL_HUMAN_LIFECYCLE_SMOKE\`
+- Echo audio-owner coordinator UIQA smoke: \`$RUN_ECHO_AUDIO_OWNER_COORDINATOR_UIQA_SMOKE\`
 - Echo readiness report: \`$RUN_ECHO_READINESS_REPORT\`
 - Echo Context Builder V2 backend smoke: \`$RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE\`
 - Backend environment smoke: \`$RUN_BACKEND_ENV_SMOKE\`
@@ -258,6 +260,7 @@ Run ID: \`$RUN_ID\`
 - Optional Echo trace evidence package panel export UIQA smoke when \`RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE=1\`; this verifies the QA diagnostics panel has a visible export button and can generate the same redacted evidence package.
 - Optional Echo QA evidence bundle export UIQA smoke when \`RUN_ECHO_QA_EVIDENCE_BUNDLE_EXPORT_SMOKE=1\`; this verifies Context V2 clue summary, digital-human session, voice synthesis, fallback summary, runtime diagnostics, and trace package export as one redacted QA-only v2 bundle.
 - Optional Echo digital-human lifecycle UIQA smoke when \`RUN_ECHO_DIGITAL_HUMAN_LIFECYCLE_SMOKE=1\`; this verifies app lifecycle pause/restore preserves the provider view, avoids microphone auto-start, and exports audio-owner state.
+- Optional Echo audio-owner coordinator UIQA smoke when \`RUN_ECHO_AUDIO_OWNER_COORDINATOR_UIQA_SMOKE=1\`; this uses an injected simulator-only driver to verify capture-to-Tencent preemption, stale release fencing, failed provider activation recovery, and role-generation stale-release rejection without a microphone or provider session.
 - Optional Echo readiness report when \`RUN_ECHO_READINESS_REPORT=1\`; this produces a JSON/Markdown diagnostic package for backend, digital-human session, voice synthesis, APNs boundary, KBLite, context packet, and runtime diagnostics readiness.
 - Optional Stage 0 readiness artifact gate when \`RUN_STAGE0_READINESS_ARTIFACT_GATE=1\`; this converts an explicitly supplied current backend \`/ready\` response and Echo QA evidence manifest into fail-closed GateResults. It does not close G2/G4, fetch or export credentials, or treat absent artifacts as a pass.
 - Optional Echo Context Builder V2 backend smoke when \`RUN_ECHO_CONTEXT_BUILDER_V2_SMOKE=1\`; this verifies \`contextVersion=echo-context-v2\`, selected/filtered/ranking trace, \`kbFact\`/\`persona\`/\`care\` source signals, \`selectedContextSourceCounts\`, failed-analysis filtering, unopened time-letter recipient filtering, pending family viewer blocking, and care snapshot summarization against the backend test client.
@@ -720,6 +723,7 @@ for guard in \
   echo-audio-owner-lifecycle-guard-check.swift \
   echo-digital-human-lifecycle-audio-route-check.swift \
   echo-digital-human-lifecycle-uiqa-smoke-check.swift \
+  echo-audio-owner-coordinator-uiqa-smoke-check.swift \
   echo-continuous-turn-uiqa-smoke-check.swift \
   tencent-digital-human-trtc-compat-check.swift \
   tencent-digital-human-sdk-binary-check.swift \
@@ -892,6 +896,16 @@ if [[ "$RUN_ECHO_DIGITAL_HUMAN_LIFECYCLE_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/echo-digital-human-lifecycle-smoke/$RUN_ID"
   echo "Skipped by RUN_ECHO_DIGITAL_HUMAN_LIFECYCLE_SMOKE=0" > "$OUTPUT_DIR/echo-digital-human-lifecycle-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_ECHO_AUDIO_OWNER_COORDINATOR_UIQA_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/echo-audio-owner-coordinator-uiqa-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataEchoAudioOwnerCoordinatorSmoke" \
+  "$SCRIPT_DIR/run-echo-audio-owner-coordinator-uiqa-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/echo-audio-owner-coordinator-uiqa-smoke/$RUN_ID"
+  echo "Skipped by RUN_ECHO_AUDIO_OWNER_COORDINATOR_UIQA_SMOKE=0" > "$OUTPUT_DIR/echo-audio-owner-coordinator-uiqa-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_ECHO_CONTINUOUS_TURN_UIQA_SMOKE" == "1" ]]; then

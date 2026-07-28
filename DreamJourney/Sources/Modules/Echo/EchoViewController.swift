@@ -238,6 +238,32 @@ private final class EchoTurnKnowledgeContextGate {
     }
 }
 
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+private enum UIQAEchoAudioOwnerDriverError: Error {
+    case activationRejected(AudioOwnerLeaseOwner)
+}
+
+/// A side-effect-free driver used only by the simulator harness. It proves the
+/// Echo controller's coordinator integration without configuring AVAudioSession
+/// or opening a provider session.
+private final class UIQAEchoAudioOwnerDriver: AudioSessionDriving {
+    var rejectedOwners: Set<AudioOwnerLeaseOwner> = []
+    private(set) var activationCount = 0
+    private(set) var deactivationCount = 0
+
+    func activate(for lease: AudioOwnerLease) throws {
+        activationCount += 1
+        if rejectedOwners.contains(lease.owner) {
+            throw UIQAEchoAudioOwnerDriverError.activationRejected(lease.owner)
+        }
+    }
+
+    func deactivate(after _: AudioOwnerLease) throws {
+        deactivationCount += 1
+    }
+}
+#endif
+
 final class EchoViewController: UIViewController {
     private static let echoTurnKnowledgeTimeout: TimeInterval = 0.9
 
@@ -257,6 +283,7 @@ final class EchoViewController: UIViewController {
     private var lastTencentProviderAudioHandoffAt: Date?
     private var currentEchoAudioOwner: EchoDigitalHumanAudioOwner = .volcengineLocalTTS
     private var activeEchoAudioOwnerLease: AudioOwnerLease?
+    private var audioSessionCoordinator = AudioSessionCoordinator.shared
     private var lastEchoTraceRecord: EchoTraceRecord?
     private let echoApplicationCoordinator = EchoApplicationCoordinator()
     private var activeEchoTurnKnowledgeContextGate: EchoTurnKnowledgeContextGate?
@@ -3094,7 +3121,7 @@ final class EchoViewController: UIViewController {
             return false
         }
 
-        let result = AudioSessionCoordinator.shared.acquire(
+        let result = audioSessionCoordinator.acquire(
             owner,
             priority: priority,
             scope: scope
@@ -3138,7 +3165,7 @@ final class EchoViewController: UIViewController {
             )
             return
         }
-        let result = AudioSessionCoordinator.shared.release(activeLease)
+        let result = audioSessionCoordinator.release(activeLease)
         switch result {
         case .released, .ignoredStaleRelease:
             activeEchoAudioOwnerLease = nil
@@ -3175,7 +3202,7 @@ final class EchoViewController: UIViewController {
         requestedOwner: String,
         reason: String
     ) {
-        let snapshot = AudioSessionCoordinator.shared.diagnosticsSnapshot()
+        let snapshot = audioSessionCoordinator.diagnosticsSnapshot()
         PrivacySafeDiagnostics.log(
             subsystem: "AudioOwnerLease",
             event: "echoAudioSessionCoordinatorTransition",
@@ -3232,7 +3259,7 @@ final class EchoViewController: UIViewController {
         let result: AudioSessionCoordinatorResult
         switch type {
         case .began:
-            result = AudioSessionCoordinator.shared.interrupt(activeLease)
+            result = audioSessionCoordinator.interrupt(activeLease)
         case .ended:
             let rawOptions = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
             let options = AVAudioSession.InterruptionOptions(rawValue: rawOptions)
@@ -3244,7 +3271,7 @@ final class EchoViewController: UIViewController {
                 )
                 return
             }
-            result = AudioSessionCoordinator.shared.resume(activeLease)
+            result = audioSessionCoordinator.resume(activeLease)
         @unknown default:
             return
         }
@@ -3272,7 +3299,7 @@ final class EchoViewController: UIViewController {
         guard let activeLease = activeEchoAudioOwnerLease else {
             return
         }
-        let result = AudioSessionCoordinator.shared.routeDidChange(for: activeLease)
+        let result = audioSessionCoordinator.routeDidChange(for: activeLease)
         switch result {
         case let .routeChanged(lease), let .unchanged(lease), let .acquired(lease),
                 let .preempted(_, lease), let .interrupted(lease), let .alreadyInterrupted(lease),
@@ -7396,6 +7423,186 @@ extension EchoViewController {
             }
         }
     }
+
+    #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+    /// Exercises the actual Echo audio-owner integration with an injected driver.
+    /// This deliberately avoids microphone, local TTS, and provider calls; it is
+    /// a simulator-only regression for lease ordering after G0 enforcement.
+    func runUIQAEchoAudioOwnerCoordinatorSmoke(completion: @escaping ([String: Any]) -> Void) {
+        guard let echoAccountLease,
+              validateEchoAccountLease(
+                at: .request,
+                expected: echoAccountLease,
+                reason: "uiqaEchoAudioOwnerCoordinatorSmoke"
+              ) else {
+            completion([
+                "completed": false,
+                "failureReason": "missingEchoAccountLease",
+            ])
+            return
+        }
+
+        let previousCoordinator = audioSessionCoordinator
+        let previousLease = activeEchoAudioOwnerLease
+        let previousAudioOwner = currentEchoAudioOwner
+        let driver = UIQAEchoAudioOwnerDriver()
+        let coordinator = AudioSessionCoordinator(driver: driver)
+        audioSessionCoordinator = coordinator
+        activeEchoAudioOwnerLease = nil
+
+        defer {
+            if let activeLease = activeEchoAudioOwnerLease {
+                _ = audioSessionCoordinator.release(activeLease)
+            }
+            audioSessionCoordinator = previousCoordinator
+            activeEchoAudioOwnerLease = previousLease
+            currentEchoAudioOwner = previousAudioOwner
+        }
+
+        let captureAcquired = acquireEchoRuntimeAudioOwner(
+            .echoCapture,
+            priority: .echoCapture,
+            reason: "uiqaCapture"
+        )
+        guard captureAcquired,
+              let firstCaptureLease = activeEchoAudioOwnerLease,
+              firstCaptureLease.owner == .echoCapture else {
+            completion([
+                "completed": false,
+                "captureAcquired": false,
+                "failureReason": "captureLeaseNotAcquired",
+            ])
+            return
+        }
+
+        let tencentAcquired = acquireEchoRuntimeAudioOwner(
+            .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            reason: "uiqaTencentPreempt"
+        )
+        guard tencentAcquired,
+              let firstTencentLease = activeEchoAudioOwnerLease,
+              firstTencentLease.owner == .tencentDigitalHumanPlayback else {
+            completion([
+                "completed": false,
+                "captureAcquired": true,
+                "tencentPreemptedCapture": false,
+                "failureReason": "tencentLeaseNotAcquired",
+            ])
+            return
+        }
+
+        let staleCaptureReleaseIgnored: Bool
+        switch coordinator.release(firstCaptureLease) {
+        case let .ignoredStaleRelease(active):
+            staleCaptureReleaseIgnored = active?.leaseId == firstTencentLease.leaseId
+        default:
+            staleCaptureReleaseIgnored = false
+        }
+
+        releaseEchoAudioOwnerLease(
+            expectedOwner: .tencentDigitalHumanPlayback,
+            reason: "uiqaTencentPlaybackFinished"
+        )
+        let captureRestored = acquireEchoRuntimeAudioOwner(
+            .echoCapture,
+            priority: .echoCapture,
+            reason: "uiqaCaptureRestored"
+        )
+        guard captureRestored,
+              let restoredCaptureLease = activeEchoAudioOwnerLease,
+              restoredCaptureLease.owner == .echoCapture else {
+            completion([
+                "completed": false,
+                "captureAcquired": true,
+                "tencentPreemptedCapture": true,
+                "staleCaptureReleaseIgnored": staleCaptureReleaseIgnored,
+                "captureRestored": false,
+                "failureReason": "captureLeaseNotRestored",
+            ])
+            return
+        }
+
+        driver.rejectedOwners.insert(.tencentDigitalHumanPlayback)
+        let tencentFailureRejected = !acquireEchoRuntimeAudioOwner(
+            .tencentDigitalHumanPlayback,
+            priority: .tencentDigitalHumanPlayback,
+            reason: "uiqaTencentActivationFailure"
+        )
+        let tencentFailurePreservedCapture = tencentFailureRejected
+            && activeEchoAudioOwnerLease?.leaseId == restoredCaptureLease.leaseId
+        driver.rejectedOwners.remove(.tencentDigitalHumanPlayback)
+
+        let roleSwitchCoordinator = AudioSessionCoordinator(driver: driver)
+        let oldRoleScope = AudioOwnerLeaseScope(
+            accountGeneration: echoAccountLease.generation,
+            runtimeGeneration: 10_001
+        )
+        let newRoleScope = AudioOwnerLeaseScope(
+            accountGeneration: echoAccountLease.generation,
+            runtimeGeneration: 10_002
+        )
+        let staleRoleReleaseIgnored: Bool
+        switch roleSwitchCoordinator.acquire(
+            .echoCapture,
+            priority: .echoCapture,
+            scope: oldRoleScope
+        ) {
+        case let .acquired(oldRoleLease):
+            switch roleSwitchCoordinator.acquire(
+                .tencentDigitalHumanPlayback,
+                priority: .tencentDigitalHumanPlayback,
+                scope: newRoleScope
+            ) {
+            case let .preempted(_, currentRoleLease):
+                switch roleSwitchCoordinator.release(oldRoleLease) {
+                case let .ignoredStaleRelease(active):
+                    staleRoleReleaseIgnored = active?.leaseId == currentRoleLease.leaseId
+                default:
+                    staleRoleReleaseIgnored = false
+                }
+                _ = roleSwitchCoordinator.release(currentRoleLease)
+            default:
+                staleRoleReleaseIgnored = false
+            }
+        default:
+            staleRoleReleaseIgnored = false
+        }
+
+        releaseEchoAudioOwnerLease(
+            expectedOwner: .echoCapture,
+            reason: "uiqaCaptureStop"
+        )
+        let snapshot = coordinator.diagnosticsSnapshot()
+        let finalOwner = snapshot.activeLease?.owner.rawValue ?? "none"
+        let completed = captureAcquired
+            && tencentAcquired
+            && staleCaptureReleaseIgnored
+            && captureRestored
+            && tencentFailurePreservedCapture
+            && staleRoleReleaseIgnored
+            && finalOwner == "none"
+
+        renderVoiceStatus(
+            text: completed ? "音频归属校验完成" : "音频归属校验失败",
+            isVisible: true
+        )
+        completion([
+            "completed": completed,
+            "captureAcquired": captureAcquired,
+            "tencentPreemptedCapture": tencentAcquired,
+            "staleCaptureReleaseIgnored": staleCaptureReleaseIgnored,
+            "captureRestored": captureRestored,
+            "tencentFailurePreservedCapture": tencentFailurePreservedCapture,
+            "staleRoleReleaseIgnored": staleRoleReleaseIgnored,
+            "transitionCount": snapshot.transitionCount,
+            "driverActivationCount": driver.activationCount,
+            "driverDeactivationCount": driver.deactivationCount,
+            "finalOwner": finalOwner,
+            "voiceStatusText": voiceStatusLabel.text ?? "",
+        ])
+    }
+    #endif
 
     /// Verifies the explicitly QA-only natural-input entry without starting a
     /// voice turn, Digital Human session, or private interview write.

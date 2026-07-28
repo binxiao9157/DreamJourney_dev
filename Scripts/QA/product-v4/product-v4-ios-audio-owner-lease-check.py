@@ -117,10 +117,11 @@ def main() -> None:
         )
     for required in (
         "private var activeEchoAudioOwnerLease: AudioOwnerLease?",
+        "private var audioSessionCoordinator = AudioSessionCoordinator.shared",
         "acquireEchoRuntimeAudioOwner(",
         "releaseEchoAudioOwnerLease(",
-        "AudioSessionCoordinator.shared.acquire(",
-        "AudioSessionCoordinator.shared.release(",
+        "audioSessionCoordinator.acquire(",
+        "audioSessionCoordinator.release(",
         "prepareEchoCaptureAudioSession(reason:",
         "DialogEngineManager.shared.adoptExternallyManagedAudioSessionLease(lease)",
         "AVAudioSession.interruptionNotification",
