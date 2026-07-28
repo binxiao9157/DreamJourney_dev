@@ -1,36 +1,36 @@
 {
   "activeWorkItem": {
-    "id": "WI-MIG-01-09",
+    "id": "WI-MIG-01-10",
     "state": "IN_PROGRESS",
     "leaseState": "HELD",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "authorityLock": "MIGRATION_EVIDENCE",
-    "predecessorWorkItem": "WI-MIG-01-08",
-    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-owner-truth-c07-cutover-admission-g0.md",
+    "predecessorWorkItem": "WI-MIG-01-09",
+    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-owner-truth-c08-lane-activation-g0.md",
     "completedSubSlices": [],
-    "currentSubSlice": "WI-MIG-01-09-C08_LANE_BY_LANE_ACTIVATION_G0 / define independent Projection, business-worker, object-reference, and optional-Provider lane readiness and rollback contracts without a global activation switch or Owner epoch mutation",
+    "currentSubSlice": "WI-MIG-01-10-C09_RIGHTS_DELETE_EXIT_AND_RESTORE_REPLAY_G0 / bind access-first, layered receipt, tombstone, restore, and replay evidence into a no-resurrection planning contract without operating on production data",
     "gateEvidence": {
-      "G0": "IN_PROGRESS / C08_LANE_READINESS_AND_ROLLBACK_CONTRACTS_MUST_REMAIN_INDEPENDENT_AND_DEFAULT_OFF",
-      "G1": "OPEN / EACH_LANE_COMPATIBILITY_AND_FALLBACK_EVIDENCE_PENDING",
-      "G2": "OPEN / PROJECTION_WORKER_OBJECT_DEPLOYMENT_AND_RECEIPTS_PENDING",
-      "G3": "OPEN / OPTIONAL_PROVIDER_RECEIPTS_PENDING",
-      "G4": "OPEN / DEVICE_AND_PRODUCT_ACCEPTANCE_PER_LANE_PENDING"
+      "G0": "IN_PROGRESS / C09_RIGHTS_RESTORE_REPLAY_CONTRACT_MUST_PRESERVE_ACCESS_FIRST_AND_NO_RESURRECTION",
+      "G1": "OPEN / USER_RECEIPT_AND_ACCOUNT_LIFECYCLE_EVIDENCE_PENDING",
+      "G2": "OPEN / ISOLATED_BACKUP_RESTORE_REPLAY_AND_LAYER_RECEIPTS_PENDING",
+      "G3": "OPEN / PROVIDER_DELETE_EXIT_RECEIPTS_PENDING",
+      "G4": "OPEN / PRIVACY_LEGAL_OPERATIONS_AND_DEVICE_ACCEPTANCE_PENDING"
     },
     "latestEvidence": {
-      "backendBaseline": "main@e3b9875 / C07 fail-closed cutover admission gate integrated into full backend verification",
+      "backendBaseline": "main@a3b5fed / C08 independent lane-activation shadow gate committed locally",
       "iosBaseline": "feature/prd-stitch-ui-adaptation@5e5c705 / C05 synthetic ViewState parity G1 gate revalidated locally",
-      "scope": "C08_PLANNING_ONLY / each lane must have a separate capability, receipt, owner and rollback boundary; no global activation switch may modify Owner Authority or hide a failed lane behind another lane",
-      "validation": "C07 cutover-admission gate PASS (12 tests); full scripts/verify_backend.sh PASS; C07 remains pure and value-free with no route/store/effect/provider dependency",
-      "constraints": "C07 is not a production Go/No-Go record, a transactional cutover command, an authority epoch change, or legacy-writer retirement. C08 may not use it to activate Projection, worker, object, or Provider lanes."
+      "scope": "C09_PLANNING_ONLY / rights and restore/replay must keep access-first, layer outcomes, tombstones, and no-resurrection semantics independent from any live deletion or production recovery operation",
+      "validation": "C08 lane-activation gate PASS (6 tests); full scripts/verify_backend.sh PASS; all six lanes are single-lane, default-off, value-free, and reject public/global activation",
+      "constraints": "C08 is not lane deployment, a Projection rebuild, worker/object receipt, Provider receipt, or device/product acceptance. C09 must not interpret its readiness plan as permission to operate on production data."
     },
-    "currentSummary": "WI-MIG-01-08 C07 is recorded as a locally verified default-off pre-Go/No-Go admission boundary. It rejects self-authorization even when a shadow report is tampered. Work advances to WI-MIG-01-09 C08 only for independent lane-readiness and rollback contracts; every lane remains disabled until its own external gates are evidenced.",
+    "currentSummary": "WI-MIG-01-09 C08 is recorded as a locally verified default-off per-lane activation/rollback contract. It permits no global switch, traffic, worker, object, Provider, or Authority mutation. Work advances to WI-MIG-01-10 C09 only for rights/delete/exit and restore-replay planning; every actual data operation remains NO_GO.",
     "backendPendingPaths": [
-      "app/domain/owner_truth/migration_canary_shadow.py",
-      "app/services/owner_truth_cutover_admission_shadow.py"
+      "app/services/data_rights_evidence_projection.py",
+      "app/services/owner_truth_legacy_migration.py"
     ]
   },
   "baselines": {
-    "backend": "main@e3b9875 / C07 local G0 admission gate integrated; C03-C07 remain default-off evidence only, with no deployment, G2 evidence or cutover claim",
+    "backend": "main@a3b5fed / C08 local lane-activation gate committed; C03-C08 remain default-off evidence only, with no deployment, G2 evidence or cutover claim",
     "ios": "feature/prd-stitch-ui-adaptation@664bac7 / QA Support result writers are centralized; no public UI change",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -82,6 +82,12 @@
       "id": "WI-MIG-01-08",
       "implementationStatus": "INTERNAL_READY / C07_FAIL_CLOSED_CUTOVER_ADMISSION_G0_REVALIDATED_LOCAL_2026-07-29 / BACKEND_LOCAL_COMMITTED_e3b9875 / DEFAULT_OFF / VALUE_FREE_ONLY / NO_SELF_AUTHORIZATION_NO_EPOCH_MUTATION_NO_LEGACY_WRITER_RETIREMENT / G2_OPEN_NO_GO",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G2_OPEN_NO_GO"
+    },
+    {
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-29-owner-truth-c08-lane-activation-g0.md",
+      "id": "WI-MIG-01-09",
+      "implementationStatus": "INTERNAL_READY / C08_INDEPENDENT_LANE_ACTIVATION_AND_ROLLBACK_G0_VERIFIED_LOCAL_2026-07-29 / BACKEND_LOCAL_COMMITTED_a3b5fed / DEFAULT_OFF / VALUE_FREE_ONLY / NO_GLOBAL_SWITCH_NO_TRAFFIC_NO_WORKER_NO_OBJECT_NO_PROVIDER_NO_AUTHORITY_MUTATION / G1_G2_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN_NO_GO"
     },
     {
       "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-purpose-consent-g0.md",
@@ -637,9 +643,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-MIG-01-10",
+    "id": "WI-MIG-01-11",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After C08 lane-readiness evidence is recorded, assess C09 only as rights/delete/exit and restore-replay drill planning. Do not treat C03-C08 shadow, admission, or lane planning evidence as an executed Authority cutover."
+    "summary": "After C09 rights/restore-replay evidence is recorded, assess C10 only as retirement-candidate and zero-use planning. Do not treat C03-C09 planning evidence as a completed Authority cutover or permission to remove legacy implementation."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -648,5 +654,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-29T04:24:17+08:00"
+  "updatedAt": "2026-07-29T04:32:14+08:00"
 }
