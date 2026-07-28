@@ -572,6 +572,12 @@
       "evidence": "docs/superpowers/status/2026-07-28-wi-v0-01-05-quality-preview-receipt-g0.md",
       "implementationStatus": "IMPLEMENTED / G0_QUALITY_PREVIEW_RECEIPT_SCOPED_VERIFIED / IOS_AND_BACKEND_LOCAL_COMMITTED / DEFAULT_OFF / G1_G3_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_OPEN"
+    },
+    {
+      "id": "WI-V0-01-06",
+      "evidence": "docs/superpowers/status/2026-07-28-wi-v0-01-06-generated-audio-binding-g0.md",
+      "implementationStatus": "INTERNAL_READY / G0_GENERATED_AUDIO_BINDING_SHADOW_VERIFIED / BACKEND_LOCAL_COMMITTED_fe51e12 / DEFAULT_OFF / NO_TEXT_OR_AUDIO_BYTES_NO_PROVIDER_NO_CACHE_NO_PERSISTENCE / G1_G2_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN"
     }
   ],
   "nextWorkItem": {
@@ -586,5 +592,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-28T10:45:40+08:00"
+  "updatedAt": "2026-07-28T10:57:23+08:00"
 }
