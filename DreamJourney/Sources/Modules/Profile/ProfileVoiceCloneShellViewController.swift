@@ -3,6 +3,12 @@ import UIKit
 import UniformTypeIdentifiers
 
 final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPickerDelegate, AVAudioPlayerDelegate {
+    private struct QualityPreviewReceipt {
+        let voiceProfileId: String
+        let value: String
+        let expiresAt: String?
+    }
+
     private var snapshot: VoiceCloneProfileSnapshot
     private var voiceCloneRuntimeCapability = VoiceCloneRuntimeCapability.localFallback(isBackendConfigured: false)
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
@@ -25,6 +31,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     private weak var deleteButton: UIButton?
     private var previewPlayer: AVAudioPlayer?
     private var previewFileURL: URL?
+    private var qualityPreviewReceipt: QualityPreviewReceipt?
     private var viewAccountLease: AccountLease?
     private var viewDigitalHumanContext: DigitalHumanContext?
 
@@ -414,20 +421,37 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             feedbackLabel?.text = "训练完成并确认合成服务可用后，才能试听复刻效果。"
             return
         }
+        qualityPreviewReceipt = nil
+        updateActionAvailability()
         setBusyFeedback("正在生成试听音频...")
         DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis(
             userId: accountLease.subjectId,
             voiceProfileId: snapshot.voiceProfileId,
             text: "你好，我是你的复刻声音。请听听这段声音是否像你本人。",
             audioFormat: "mp3",
-            sampleRate: 24000
+            sampleRate: 24000,
+            requestPurpose: "qualityPreview"
         ) { [weak self] result in
             guard let self, self.validateViewOperation(at: .runtime) else { return }
             DispatchQueue.main.async {
                 guard self.validateViewOperation(at: .ui) else { return }
                 switch result {
                 case .success(let synthesis):
-                    self.playPreviewAudio(synthesis, accountLease: accountLease)
+                    guard let receiptId = synthesis.qualityPreviewReceiptId,
+                          !receiptId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                        self.finishBusy(feedback: "试听生成失败：后端未返回试听确认凭据。")
+                        return
+                    }
+                    let receipt = QualityPreviewReceipt(
+                        voiceProfileId: self.snapshot.voiceProfileId,
+                        value: receiptId,
+                        expiresAt: synthesis.qualityPreviewExpiresAt
+                    )
+                    self.playPreviewAudio(
+                        synthesis,
+                        accountLease: accountLease,
+                        qualityPreviewReceipt: receipt
+                    )
                 case .failure(let error):
                     self.finishBusy(feedback: "试听生成失败：\(error.localizedDescription)")
                 }
@@ -466,7 +490,8 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     private func playPreviewAudio(
         _ synthesis: VoiceCloneSynthesisResult,
-        accountLease: AccountLease
+        accountLease: AccountLease,
+        qualityPreviewReceipt: QualityPreviewReceipt
     ) {
         guard viewAccountLease == accountLease,
               validateViewOperation(at: .runtime) else {
@@ -503,7 +528,12 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             previewPlayer = try AVAudioPlayer(contentsOf: previewURL)
             previewPlayer?.delegate = self
             previewPlayer?.prepareToPlay()
-            previewPlayer?.play()
+            guard previewPlayer?.play() == true else {
+                stopPreviewRuntime()
+                finishBusy(feedback: "试听播放失败：无法开始播放音频。")
+                return
+            }
+            self.qualityPreviewReceipt = qualityPreviewReceipt
             finishBusy(feedback: "试听已开始。若声音像本人，请点“确认使用此音色”；不满意可重新提交样本。")
         } catch {
             finishBusy(feedback: "试听播放失败：\(error.localizedDescription)")
@@ -530,13 +560,21 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     private func performAcceptVoiceQuality() {
         guard validateViewOperation(at: .request) else { return }
+        guard let receipt = currentQualityPreviewReceipt else {
+            finishBusy(feedback: "请先生成并试听复刻音频后再确认。")
+            return
+        }
         setBusyFeedback("正在确认音色效果...")
-        VoiceCloneService.shared.acceptVoiceProfileQualityRemote(profileId: snapshot.voiceProfileId) { [weak self] result in
+        VoiceCloneService.shared.acceptVoiceProfileQualityRemote(
+            profileId: snapshot.voiceProfileId,
+            previewReceiptId: receipt.value
+        ) { [weak self] result in
             guard let self, self.validateViewOperation(at: .runtime) else { return }
             DispatchQueue.main.async {
                 guard self.validateViewOperation(at: .ui) else { return }
                 switch result {
                 case .success(let snapshot):
+                    self.qualityPreviewReceipt = nil
                     self.applySnapshot(snapshot, feedback: "已确认使用此音色，后续回响可使用复刻语音。")
                 case .failure(let error):
                     self.finishBusy(feedback: "确认失败：\(error.localizedDescription)")
@@ -699,6 +737,9 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     private func applySnapshot(_ snapshot: VoiceCloneProfileSnapshot, feedback: String? = nil) {
         guard validateViewOperation(at: .commit) else { return }
+        if qualityPreviewReceipt?.voiceProfileId != snapshot.voiceProfileId || !snapshot.qualityAcceptanceRequired {
+            qualityPreviewReceipt = nil
+        }
         VoiceCloneService.shared.persistSnapshot(snapshot)
         guard validateViewOperation(at: .ui) else { return }
         renderSnapshot(snapshot, feedback: feedback)
@@ -750,7 +791,16 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private var canAcceptVoiceQuality: Bool {
-        canPreviewVoice && snapshot.qualityAcceptanceRequired
+        canPreviewVoice && snapshot.qualityAcceptanceRequired && currentQualityPreviewReceipt != nil
+    }
+
+    private var currentQualityPreviewReceipt: QualityPreviewReceipt? {
+        guard let receipt = qualityPreviewReceipt,
+              receipt.voiceProfileId == snapshot.voiceProfileId,
+              !receipt.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return receipt
     }
 
     private func updateActionAvailability() {

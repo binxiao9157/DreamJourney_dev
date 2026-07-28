@@ -954,6 +954,7 @@ final class VoiceCloneService {
 
     func acceptVoiceProfileQualityRemote(
         profileId: String,
+        previewReceiptId: String,
         completion: @escaping (Result<VoiceCloneProfileSnapshot, VoiceCloneError>) -> Void
     ) {
         guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured else {
@@ -966,6 +967,11 @@ final class VoiceCloneService {
             completion(.failure(.speakerIdNotFound))
             return
         }
+        let trimmedPreviewReceiptId = previewReceiptId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPreviewReceiptId.isEmpty else {
+            completion(.failure(.networkError("请先生成并试听复刻音频后再确认。")))
+            return
+        }
 
         guard let operation = activePersonaOperation() else {
             completion(.failure(.accountSessionChanged))
@@ -975,7 +981,8 @@ final class VoiceCloneService {
         let target = operation.target
         DreamJourneyBackendClient.shared.acceptVoiceCloneQuality(
             userId: accountLease.subjectId,
-            profileId: trimmedProfileId
+            profileId: trimmedProfileId,
+            previewReceiptId: trimmedPreviewReceiptId
         ) { [weak self] result in
             guard let self,
                   self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {

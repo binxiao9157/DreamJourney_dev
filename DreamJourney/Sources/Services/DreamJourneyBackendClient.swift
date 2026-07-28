@@ -1954,6 +1954,8 @@ struct VoiceCloneSynthesisResult {
     let durationSeconds: Double?
     let providerLogId: String?
     let providerRequestId: String?
+    let qualityPreviewReceiptId: String?
+    let qualityPreviewExpiresAt: String?
     let visemeTimeline: DigitalHumanLipSyncTimeline?
     let authority: VoiceDigitalHumanAuthorityEnvelope?
 
@@ -1976,6 +1978,8 @@ struct VoiceCloneSynthesisResult {
         self.durationSeconds = Self.doubleValue(audioJSON["durationSeconds"])
         self.providerLogId = json["providerLogIdHash"] as? String
         self.providerRequestId = json["providerRequestIdHash"] as? String
+        self.qualityPreviewReceiptId = json["qualityPreviewReceiptId"] as? String
+        self.qualityPreviewExpiresAt = json["qualityPreviewExpiresAt"] as? String
         if let visemeTimelineJSON = json["visemeTimeline"] as? [String: Any] {
             self.visemeTimeline = DigitalHumanLipSyncTimeline(json: visemeTimelineJSON)
         } else {
@@ -5075,13 +5079,17 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
     func acceptVoiceCloneQuality(
         userId: String,
         profileId voiceProfileId: String,
+        previewReceiptId: String,
         completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
     ) {
         let path = "/voice/profiles/\(pathComponent(userId))/\(pathComponent(voiceProfileId))/quality-acceptance"
         requestJSON(
             path: path,
             method: .post,
-            payload: ["accepted": true],
+            payload: [
+                "accepted": true,
+                "previewReceiptId": previewReceiptId,
+            ],
             authPolicy: .userRequired,
             sessionUserId: userId
         ) { result in
@@ -5108,6 +5116,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         speechRate: Int = -10,
         loudnessRate: Int = 10,
         outputMode: String? = nil,
+        requestPurpose: String? = nil,
         completion: @escaping (Result<VoiceCloneSynthesisResult, Error>) -> Void
     ) {
         var payload: [String: Any] = [
@@ -5121,6 +5130,9 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         ]
         if let outputMode, !outputMode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             payload["outputMode"] = outputMode
+        }
+        if let requestPurpose, !requestPurpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["requestPurpose"] = requestPurpose
         }
         requestJSON(
             path: "/voice/synthesis",
