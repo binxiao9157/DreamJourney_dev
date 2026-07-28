@@ -203,12 +203,10 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
                 states: ["status": status],
                 correlations: ["request": requestID ?? currentRequestID]
             )
-        case .textOver:
-            currentRequestID = nil
-            state = .ready
-        case .audioOver:
-            currentRequestID = nil
-            state = .ready
+        case .textOver(let requestID):
+            handleProviderTextOver(requestID: requestID)
+        case .audioOver(let requestID):
+            handleProviderAudioOver(requestID: requestID)
         case .error(let code, let message):
             if isNonFatalInterruptRejection(code: code, message: message) {
                 currentRequestID = nil
@@ -224,6 +222,67 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
             currentRequestID = nil
             state = .closed
         }
+    }
+
+    private func handleProviderTextOver(requestID: String?) {
+        guard matchesCurrentProviderRequest(requestID) else {
+            return
+        }
+        // TextOver only means that the provider consumed the text. Audio may
+        // still be playing, so ownership and microphone recovery stay put
+        // until the request-specific AudioOver event arrives.
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "providerTextCompletedAwaitingAudio",
+            correlations: ["request": requestID]
+        )
+    }
+
+    private func handleProviderAudioOver(requestID: String?) {
+        guard let currentRequestID,
+              matchesCurrentProviderRequest(requestID) else {
+            return
+        }
+        self.currentRequestID = nil
+        state = .completed(requestID: currentRequestID)
+        state = .ready
+    }
+
+    private func matchesCurrentProviderRequest(_ providerRequestID: String?) -> Bool {
+        guard let currentRequestID else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "providerTerminalEventIgnored",
+                states: ["reason": "noCurrentRequest"],
+                correlations: ["providerRequest": providerRequestID]
+            )
+            return false
+        }
+        guard let providerRequestID = providerRequestID?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !providerRequestID.isEmpty else {
+            // Terminal events without a provider request ID cannot be safely
+            // attributed. The existing timeout will recover the current turn.
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "providerTerminalEventIgnored",
+                states: ["reason": "missingProviderRequest"],
+                correlations: ["currentRequest": currentRequestID]
+            )
+            return false
+        }
+        guard providerRequestID == currentRequestID else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "providerTerminalEventIgnored",
+                states: ["reason": "requestMismatch"],
+                correlations: [
+                    "currentRequest": currentRequestID,
+                    "providerRequest": providerRequestID,
+                ]
+            )
+            return false
+        }
+        return true
     }
 
     private func isNonFatalInterruptRejection(code: Int32, message: String) -> Bool {

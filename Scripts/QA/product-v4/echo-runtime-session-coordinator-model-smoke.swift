@@ -9,6 +9,7 @@ enum EchoRuntimeSessionCoordinatorModelSmoke {
         verifyBackgroundOrFallbackReleaseRejectsSessionAndInteractionCallbacks()
         verifySessionCallbackRejectsDifferentProviderSession()
         verifyNewInteractionRejectsPriorRequestCallbacks()
+        verifyProviderCompletionRequiresMatchingRequestID()
         verifyExpiredSessionRejectsNewWork()
         verifyHeartbeatRenewalExtendsSessionCallbackBoundary()
         print("Echo runtime session coordinator model smoke passed")
@@ -251,6 +252,30 @@ enum EchoRuntimeSessionCoordinatorModelSmoke {
             coordinator.validate(replacement) == .accepted,
             "the newest provider request should remain valid"
         )
+    }
+
+    private static func verifyProviderCompletionRequiresMatchingRequestID() {
+        let coordinator = DigitalHumanConversationCoordinator()
+        coordinator.beginProviderRequest(
+            requestID: "current-request",
+            replyText: "当前回响",
+            turnID: "turn-current",
+            keepsPendingReply: true
+        )
+
+        require(
+            coordinator.completeProviderRequest(matching: "stale-request") == nil,
+            "a late provider completion must not clear the current request"
+        )
+        require(
+            coordinator.activeRequestID == "current-request",
+            "stale completion must leave the current provider request intact"
+        )
+        guard let completion = coordinator.completeProviderRequest(matching: "current-request") else {
+            fail("current provider completion should be accepted")
+        }
+        require(completion.requestID == "current-request", "completion must retain the matched request ID")
+        require(!coordinator.hasProviderSpeechInFlight, "accepted completion must clear the provider request")
     }
 
     private static func verifyExpiredSessionRejectsNewWork() {

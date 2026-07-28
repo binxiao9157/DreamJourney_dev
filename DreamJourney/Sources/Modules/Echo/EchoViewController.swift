@@ -2914,7 +2914,7 @@ final class EchoViewController: UIViewController {
             return false
         }
         switch digitalHumanRuntime.state {
-        case .ready, .buffering, .speaking:
+        case .ready, .buffering, .speaking, .completed:
             return true
         default:
             return false
@@ -2932,7 +2932,7 @@ final class EchoViewController: UIViewController {
             return false
         }
         switch digitalHumanRuntime.state {
-        case .preparing, .connecting, .ready, .buffering, .speaking:
+        case .preparing, .connecting, .ready, .buffering, .speaking, .completed:
             return true
         default:
             return false
@@ -3393,6 +3393,8 @@ final class EchoViewController: UIViewController {
             return "buffering"
         case .speaking:
             return "speaking"
+        case .completed:
+            return "completed"
         case .interrupting:
             return "interrupting"
         case .reconnecting:
@@ -5859,7 +5861,19 @@ final class EchoViewController: UIViewController {
             return
         }
         switch state {
-        case .speaking:
+        case .speaking(let requestID):
+            guard digitalHumanConversation.activeRequestID == requestID else {
+                PrivacySafeDiagnostics.log(
+                    subsystem: "TencentDigitalHuman",
+                    event: "providerSpeakingIgnored",
+                    states: ["reason": "requestMismatch"],
+                    correlations: [
+                        "activeRequest": digitalHumanConversation.activeRequestID,
+                        "providerRequest": requestID,
+                    ]
+                )
+                return
+            }
             if shouldTraceTrueDeviceBackendPCMDrive {
                 trueDeviceBackendPCMDriveTrace.providerSpeakingObserved = true
             }
@@ -5875,11 +5889,12 @@ final class EchoViewController: UIViewController {
             if case .speaking = currentState {
                 renderVoiceStatus(text: "腾讯数智人正在回响", isVisible: true)
             }
+        case .completed(let requestID):
+            completeTencentDigitalHumanReplyIfNeeded(requestID: requestID)
         case .ready:
             cancelDigitalHumanRuntimeRecovery()
             digitalHumanRuntimeRecoveryAttemptsByContext[currentDigitalHumanRuntimeContextKey()] = 0
             applyEchoAudioRoutePolicy()
-            completeTencentDigitalHumanReplyIfNeeded()
             runTencentDigitalHumanTextDriveSmokeIfNeeded(trigger: "runtimeReady")
             runTencentDigitalHumanPCMDriveSmokeIfNeeded(trigger: "runtimeReady")
             runTencentDigitalHumanBackendPCMDriveSmokeIfNeeded(trigger: "runtimeReady")
@@ -5966,9 +5981,18 @@ final class EchoViewController: UIViewController {
         )
     }
 
-    private func completeTencentDigitalHumanReplyIfNeeded() {
+    private func completeTencentDigitalHumanReplyIfNeeded(requestID: String) {
         guard routeEchoAudioThroughDigitalHuman,
-              let completion = digitalHumanConversation.completeProviderRequest() else {
+              let completion = digitalHumanConversation.completeProviderRequest(matching: requestID) else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "providerCompletionIgnored",
+                states: ["reason": "requestMismatchOrNoActiveRequest"],
+                correlations: [
+                    "activeRequest": digitalHumanConversation.activeRequestID,
+                    "providerRequest": requestID,
+                ]
+            )
             return
         }
 

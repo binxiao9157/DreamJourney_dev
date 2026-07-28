@@ -45,7 +45,12 @@ final class TencentDigitalHumanRuntimeStub: DigitalHumanRuntime {
         guard profile != nil else {
             throw DigitalHumanRuntimeError.missingProfile
         }
-        state = isFinal ? .ready : .speaking(requestID: requestID)
+        if isFinal {
+            state = .completed(requestID: requestID)
+            state = .ready
+        } else {
+            state = .speaking(requestID: requestID)
+        }
     }
 
     func sendPCMChunk(_ data: Data, requestID: String, sequence: Int, isFinal: Bool) throws {
@@ -58,7 +63,12 @@ final class TencentDigitalHumanRuntimeStub: DigitalHumanRuntime {
             byteCount: data.count,
             isFinal: isFinal
         ))
-        state = isFinal ? .ready : .speaking(requestID: requestID)
+        if isFinal {
+            state = .completed(requestID: requestID)
+            state = .ready
+        } else {
+            state = .speaking(requestID: requestID)
+        }
     }
 
     func interrupt() {

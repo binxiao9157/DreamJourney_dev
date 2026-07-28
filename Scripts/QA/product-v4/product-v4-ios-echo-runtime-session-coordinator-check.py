@@ -9,6 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 COORDINATOR = ROOT / "DreamJourney/Sources/Modules/Echo/DigitalHumanConversationCoordinator.swift"
 VIEW_CONTROLLER = ROOT / "DreamJourney/Sources/Modules/Echo/EchoViewController.swift"
+RUNTIME = ROOT / "DreamJourney/Sources/Services/DigitalHuman/DigitalHumanRuntime.swift"
+CLOUD_RUNTIME = ROOT / "DreamJourney/Sources/Services/DigitalHuman/TencentDigitalHumanCloudRuntime.swift"
 TESTS = ROOT / "DreamJourneyTests/AudioOwnerLeaseModelTests.swift"
 
 
@@ -28,6 +30,8 @@ def source_slice(source: str, start: str, end: str) -> str:
 def main() -> None:
     coordinator = COORDINATOR.read_text(encoding="utf-8")
     view_controller = VIEW_CONTROLLER.read_text(encoding="utf-8")
+    runtime = RUNTIME.read_text(encoding="utf-8")
+    cloud_runtime = CLOUD_RUNTIME.read_text(encoding="utf-8")
     tests = TESTS.read_text(encoding="utf-8")
 
     for required in (
@@ -146,6 +150,30 @@ def main() -> None:
         "quota and provider fallback must release the active runtime lease",
     )
 
+    require(
+        "case completed(requestID: String)" in runtime,
+        "runtime completion must carry the provider request identity",
+    )
+    require(
+        "func completeProviderRequest(matching requestID: String)" in coordinator,
+        "provider completion must require the current request identity",
+    )
+    require(
+        "case .completed(let requestID):" in view_controller
+        and "completeTencentDigitalHumanReplyIfNeeded(requestID: requestID)" in view_controller,
+        "Echo must only complete a request from a request-specific provider terminal event",
+    )
+    require(
+        "case .textOver(let requestID):" in cloud_runtime
+        and "handleProviderTextOver(requestID: requestID)" in cloud_runtime,
+        "TextOver must remain distinct from terminal audio completion",
+    )
+    require(
+        "case .audioOver(let requestID):" in cloud_runtime
+        and "handleProviderAudioOver(requestID: requestID)" in cloud_runtime,
+        "AudioOver must carry a request-specific completion boundary",
+    )
+
     for test_name in (
         "func testLateRoleSwitchSessionCallbackIsRejectedBeforeActivation()",
         "func testStopInvalidatesInteractionButPreservesActiveSession()",
@@ -155,6 +183,7 @@ def main() -> None:
         "func testNewInteractionRejectsPriorRequestCallbacks()",
         "func testExpiredSessionRejectsNewWork()",
         "func testHeartbeatRenewalExtendsSessionCallbackBoundary()",
+        "func testProviderCompletionRequiresMatchingRequestID()",
     ):
         require(test_name in tests, f"runtime session coordinator test missing: {test_name}")
 

@@ -482,13 +482,13 @@ final class DigitalHumanConversationCoordinator {
         pendingReplyText = keepsPendingReply ? replyText : nil
     }
 
-    func completeProviderRequest() -> ProviderCompletion? {
-        guard hasProviderSpeechInFlight else {
+    func completeProviderRequest(matching requestID: String) -> ProviderCompletion? {
+        guard activeRequestID == requestID else {
             return nil
         }
         let completion = ProviderCompletion(
             turnID: currentTurnID ?? "unknown",
-            requestID: activeRequestID ?? "unknown",
+            requestID: requestID,
             replyText: pendingReplyText
         )
         clearProviderRequest()

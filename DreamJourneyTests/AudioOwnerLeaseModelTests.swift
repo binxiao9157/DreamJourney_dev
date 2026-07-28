@@ -957,6 +957,29 @@ final class EchoRuntimeSessionCoordinatorTests: XCTestCase {
     }
 }
 
+final class DigitalHumanConversationCoordinatorTests: XCTestCase {
+    func testProviderCompletionRequiresMatchingRequestID() {
+        let coordinator = DigitalHumanConversationCoordinator()
+        coordinator.beginProviderRequest(
+            requestID: "current-request",
+            replyText: "当前回响",
+            turnID: "turn-current",
+            keepsPendingReply: true
+        )
+
+        XCTAssertNil(coordinator.completeProviderRequest(matching: "stale-request"))
+        XCTAssertEqual(coordinator.activeRequestID, "current-request")
+        XCTAssertTrue(coordinator.hasProviderSpeechInFlight)
+
+        let completion = coordinator.completeProviderRequest(matching: "current-request")
+        XCTAssertEqual(completion?.requestID, "current-request")
+        XCTAssertEqual(completion?.turnID, "turn-current")
+        XCTAssertEqual(completion?.replyText, "当前回响")
+        XCTAssertNil(coordinator.activeRequestID)
+        XCTAssertFalse(coordinator.hasProviderSpeechInFlight)
+    }
+}
+
 final class VoiceDigitalHumanClientPortModelTests: XCTestCase {
     func testOperationScopeCarriesAccountPersonaRoleAndRuntimeGeneration() throws {
         let lease = makeAccountLease(subjectId: "viewer-1", generation: 8)

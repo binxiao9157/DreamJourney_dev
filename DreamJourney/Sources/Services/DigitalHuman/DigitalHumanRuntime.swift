@@ -10,6 +10,9 @@ enum DigitalHumanSessionState: Equatable {
     case thinking
     case buffering
     case speaking(requestID: String)
+    /// Terminal provider event. The request identity is required so Echo can
+    /// reject a late completion from an earlier turn before it releases audio.
+    case completed(requestID: String)
     case interrupting
     case reconnecting
     case degraded
