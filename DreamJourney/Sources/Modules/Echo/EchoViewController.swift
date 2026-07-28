@@ -57,6 +57,33 @@ private struct EchoRoleVoiceProfileSelection {
     }
 }
 
+private struct EchoVoiceProfileExitEvidence {
+    let evidenceState: String
+    let exitState: String?
+    let accessRevoked: Bool?
+    let localCleanupState: String?
+    let providerCleanupState: String?
+    let providerCleanupReceiptAvailable: Bool?
+
+    static let notSelected = EchoVoiceProfileExitEvidence(
+        evidenceState: "notSelected",
+        exitState: nil,
+        accessRevoked: nil,
+        localCleanupState: nil,
+        providerCleanupState: nil,
+        providerCleanupReceiptAvailable: nil
+    )
+
+    static let unresolved = EchoVoiceProfileExitEvidence(
+        evidenceState: "unresolved",
+        exitState: nil,
+        accessRevoked: nil,
+        localCleanupState: nil,
+        providerCleanupState: nil,
+        providerCleanupReceiptAvailable: nil
+    )
+}
+
 private struct DeferredDigitalHumanSessionRelease {
     let contract: DigitalHumanSessionContract
     let originatingAccountLease: AccountLease
@@ -3085,6 +3112,34 @@ final class EchoViewController: UIViewController {
         )
     }
 
+    /// QA evidence must not infer provider cleanup from role selection alone.
+    /// The selected profile has to match the current account-scoped snapshot
+    /// before local lifecycle state is exported. Provider cleanup remains a
+    /// separate, explicitly reported receipt boundary.
+    private func resolveVoiceProfileExitEvidence(
+        for selection: EchoRoleVoiceProfileSelection
+    ) -> EchoVoiceProfileExitEvidence {
+        guard let voiceProfileId = selection.voiceProfileId?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !voiceProfileId.isEmpty else {
+            return .notSelected
+        }
+
+        let snapshot = VoiceCloneService.shared.voiceCloneShellSnapshot()
+        guard snapshot.voiceProfileId == voiceProfileId else {
+            return .unresolved
+        }
+
+        return EchoVoiceProfileExitEvidence(
+            evidenceState: "localResolved",
+            exitState: snapshot.exitState,
+            accessRevoked: snapshot.accessRevoked,
+            localCleanupState: snapshot.localCleanupState,
+            providerCleanupState: snapshot.providerCleanupState,
+            providerCleanupReceiptAvailable: snapshot.providerCleanupReceiptAvailable
+        )
+    }
+
     private func isCurrentUserPersonaContext(_ context: DigitalHumanContext) -> Bool {
         KBLiteManager.resolveAuthorizedPersonaIdentity(for: context)?.isPersonal == true
     }
@@ -3392,6 +3447,7 @@ final class EchoViewController: UIViewController {
         let providerMode = profile?.driveMode ?? ownerTrace?.digitalHumanProviderMode ?? "unknown"
         let fallbackReason = lastEchoRuntimeFallbackReason ?? ownerTrace?.fallbacks.first
         let voiceSelection = resolveEchoRoleVoiceProfileSelection()
+        let voiceExitEvidence = resolveVoiceProfileExitEvidence(for: voiceSelection)
         let policyDecisions = FeatureGateService.shared.qaEvidenceSnapshot(features: [
             .echoTextInput,
             .voiceCloneShell,
@@ -3405,6 +3461,12 @@ final class EchoViewController: UIViewController {
             roleVoiceSource: voiceSelection.source.rawValue,
             roleVoiceDisplayName: voiceSelection.displayName,
             roleVoiceContextOwnerId: voiceSelection.contextOwnerId,
+            voiceProfileExitEvidenceState: voiceExitEvidence.evidenceState,
+            voiceProfileExitState: voiceExitEvidence.exitState,
+            voiceProfileAccessRevoked: voiceExitEvidence.accessRevoked,
+            voiceProfileLocalCleanupState: voiceExitEvidence.localCleanupState,
+            voiceProfileProviderCleanupState: voiceExitEvidence.providerCleanupState,
+            voiceProfileProviderCleanupReceiptAvailable: voiceExitEvidence.providerCleanupReceiptAvailable,
             digitalHumanRuntimeState: runtimeState,
             digitalHumanSessionReady: profile != nil || ownerTrace?.digitalHumanSessionReady == true,
             digitalHumanProviderMode: providerMode,
@@ -3434,6 +3496,8 @@ final class EchoViewController: UIViewController {
                 "digitalHumanState": snapshot.digitalHumanRuntimeState,
                 "outputMode": snapshot.voiceOutputMode,
                 "roleVoiceSource": snapshot.roleVoiceSource ?? "unknown",
+                "voiceExitEvidence": snapshot.voiceProfileExitEvidenceState ?? "unknown",
+                "voiceExitState": snapshot.voiceProfileExitState ?? "unknown",
                 "fallbackReason": snapshot.fallbackReason ?? "none",
                 "source": snapshot.source,
             ],
@@ -3515,6 +3579,24 @@ final class EchoViewController: UIViewController {
             fallback: "none"
         )
         let voiceProfileHash = PrivacySafeDiagnostics.correlationHash(snapshot.voiceProfileId)
+        let voiceExitEvidenceState = PrivacySafeDiagnostics.safeCode(
+            snapshot.voiceProfileExitEvidenceState,
+            fallback: "unknown"
+        )
+        let voiceExitState = PrivacySafeDiagnostics.safeCode(
+            snapshot.voiceProfileExitState,
+            fallback: "notApplicable"
+        )
+        let voiceLocalCleanupState = PrivacySafeDiagnostics.safeCode(
+            snapshot.voiceProfileLocalCleanupState,
+            fallback: "notApplicable"
+        )
+        let voiceProviderCleanupState = PrivacySafeDiagnostics.safeCode(
+            snapshot.voiceProfileProviderCleanupState,
+            fallback: "notApplicable"
+        )
+        let voiceAccessRevoked = snapshot.voiceProfileAccessRevoked.map(String.init) ?? "unknown"
+        let voiceProviderCleanupReceipt = snapshot.voiceProfileProviderCleanupReceiptAvailable.map(String.init) ?? "unknown"
         let policyLines = (snapshot.featurePolicyDecisions ?? []).map { decision in
             let revision = decision.validatedPolicyRevision ?? decision.capturedPolicyRevision ?? 0
             return "policy.\(decision.feature): \(decision.allowed ? "allow" : "deny") "
@@ -3539,6 +3621,7 @@ final class EchoViewController: UIViewController {
             "roleVoiceSource: \(PrivacySafeDiagnostics.safeCode(snapshot.roleVoiceSource, fallback: "unknown"))",
             "roleVoiceDisplayNameHash: \(PrivacySafeDiagnostics.correlationHash(snapshot.roleVoiceDisplayName))",
             "roleVoiceContextOwnerHash: \(PrivacySafeDiagnostics.correlationHash(snapshot.roleVoiceContextOwnerId))",
+            "voiceExit: evidence=\(voiceExitEvidenceState) state=\(voiceExitState) accessRevoked=\(voiceAccessRevoked) local=\(voiceLocalCleanupState) provider=\(voiceProviderCleanupState) receipt=\(voiceProviderCleanupReceipt)",
             "audioOwner: \(PrivacySafeDiagnostics.safeCode(snapshot.audioOwner, fallback: "unknown"))",
             "digitalHuman: \(PrivacySafeDiagnostics.safeCode(snapshot.digitalHumanRuntimeState, fallback: "redacted")) / \(PrivacySafeDiagnostics.safeCode(snapshot.digitalHumanProviderMode, fallback: "unknown"))",
             "providerLogIdHash: \(PrivacySafeDiagnostics.correlationHash(snapshot.providerLogId))",

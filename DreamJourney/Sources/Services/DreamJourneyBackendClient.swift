@@ -2538,6 +2538,12 @@ struct EchoRuntimeDiagnosticsSnapshot: Codable {
     let roleVoiceSource: String?
     let roleVoiceDisplayName: String?
     let roleVoiceContextOwnerId: String?
+    let voiceProfileExitEvidenceState: String?
+    let voiceProfileExitState: String?
+    let voiceProfileAccessRevoked: Bool?
+    let voiceProfileLocalCleanupState: String?
+    let voiceProfileProviderCleanupState: String?
+    let voiceProfileProviderCleanupReceiptAvailable: Bool?
     let audioOwner: String
     let digitalHumanRuntimeState: String
     let digitalHumanSessionReady: Bool
@@ -2561,6 +2567,12 @@ struct EchoRuntimeDiagnosticsSnapshot: Codable {
         roleVoiceSource: String? = nil,
         roleVoiceDisplayName: String? = nil,
         roleVoiceContextOwnerId: String? = nil,
+        voiceProfileExitEvidenceState: String? = nil,
+        voiceProfileExitState: String? = nil,
+        voiceProfileAccessRevoked: Bool? = nil,
+        voiceProfileLocalCleanupState: String? = nil,
+        voiceProfileProviderCleanupState: String? = nil,
+        voiceProfileProviderCleanupReceiptAvailable: Bool? = nil,
         digitalHumanRuntimeState: String,
         digitalHumanSessionReady: Bool? = nil,
         digitalHumanProviderMode: String? = nil,
@@ -2571,7 +2583,7 @@ struct EchoRuntimeDiagnosticsSnapshot: Codable {
         featurePolicyDecisions: [FeatureDecisionEvidenceSummary] = [],
         source: String
     ) {
-        self.schemaVersion = 1
+        self.schemaVersion = 2
         let uniqueSuffix = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24))
         self.snapshotId = "echo_diag_" + uniqueSuffix
         let explicitOwnerUserId = EchoTraceOwnerScope.normalizedOwnerUserId(ownerUserId)
@@ -2593,6 +2605,12 @@ struct EchoRuntimeDiagnosticsSnapshot: Codable {
         self.roleVoiceSource = roleVoiceSource
         self.roleVoiceDisplayName = roleVoiceDisplayName
         self.roleVoiceContextOwnerId = roleVoiceContextOwnerId
+        self.voiceProfileExitEvidenceState = voiceProfileExitEvidenceState
+        self.voiceProfileExitState = voiceProfileExitState
+        self.voiceProfileAccessRevoked = voiceProfileAccessRevoked
+        self.voiceProfileLocalCleanupState = voiceProfileLocalCleanupState
+        self.voiceProfileProviderCleanupState = voiceProfileProviderCleanupState
+        self.voiceProfileProviderCleanupReceiptAvailable = voiceProfileProviderCleanupReceiptAvailable
         self.audioOwner = audioOwner
         self.digitalHumanRuntimeState = digitalHumanRuntimeState
         self.digitalHumanSessionReady = digitalHumanSessionReady ?? scopedTrace?.digitalHumanSessionReady ?? false
@@ -2747,6 +2765,10 @@ private enum EchoDiagnosticExportRedactor {
         "source",
         "sourceCommit",
         "status",
+        "voiceProfileExitEvidenceState",
+        "voiceProfileExitState",
+        "voiceProfileLocalCleanupState",
+        "voiceProfileProviderCleanupState",
     ]
 
     private static let codeArrayKeys: Set<String> = [
