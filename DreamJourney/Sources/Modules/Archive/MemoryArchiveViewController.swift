@@ -7638,6 +7638,11 @@ struct OwnerTruthKnowledgeRecommendationPlanUIQASmokeResult: Codable {
     let emptyRecommendationAccepted: Bool
     let nonReadyPlanAccepted: Bool
     let malformedPlanRejected: Bool
+    let useCasePhase: String?
+    let useCaseSelectedCount: Int
+    let useCaseCoverageDimensionCount: Int
+    let useCaseOpaqueIdentifiersExposed: Bool
+    let useCaseStaleCompletionRejected: Bool
     let launchArguments: [String]
     let failureReason: String?
 
@@ -7672,6 +7677,10 @@ enum OwnerTruthKnowledgeRecommendationPlanUIQASmoke {
             switch result {
             case .success(let plan):
                 let variants = client.verifyContractVariants(vaultID: vaultID)
+                let useCaseVariants = verifyUseCaseVariants(
+                    accountLease: accountLease,
+                    vaultID: vaultID
+                )
                 let slots = plan.selected.map(\.slot.rawValue)
                 let expectedSlots: Set<OwnerTruthKnowledgeRecommendationSlot> = [.continuity, .breadth]
                 let completed = OwnerTruthCandidateReviewQAGate.isEnabled
@@ -7684,6 +7693,12 @@ enum OwnerTruthKnowledgeRecommendationPlanUIQASmoke {
                     && variants.emptyRecommendationAccepted
                     && variants.nonReadyPlanAccepted
                     && variants.malformedPlanRejected
+                    && useCaseVariants.phase == .ready
+                    && useCaseVariants.selectedCount == 2
+                    && useCaseVariants.coverageDimensionCount
+                        == OwnerTruthKnowledgeRecommendationDimension.allCases.count
+                    && !useCaseVariants.opaqueIdentifiersExposed
+                    && useCaseVariants.staleCompletionRejected
                 write(
                     OwnerTruthKnowledgeRecommendationPlanUIQASmokeResult(
                         completed: completed,
@@ -7698,6 +7713,11 @@ enum OwnerTruthKnowledgeRecommendationPlanUIQASmoke {
                         emptyRecommendationAccepted: variants.emptyRecommendationAccepted,
                         nonReadyPlanAccepted: variants.nonReadyPlanAccepted,
                         malformedPlanRejected: variants.malformedPlanRejected,
+                        useCasePhase: useCaseVariants.phase.rawValue,
+                        useCaseSelectedCount: useCaseVariants.selectedCount,
+                        useCaseCoverageDimensionCount: useCaseVariants.coverageDimensionCount,
+                        useCaseOpaqueIdentifiersExposed: useCaseVariants.opaqueIdentifiersExposed,
+                        useCaseStaleCompletionRejected: useCaseVariants.staleCompletionRejected,
                         launchArguments: [
                             QALaunchScenario.ownerTruthKnowledgeRecommendationPlanSmoke.rawValue,
                             OwnerTruthCandidateReviewQAGate.launchArgument,
@@ -7726,6 +7746,11 @@ enum OwnerTruthKnowledgeRecommendationPlanUIQASmoke {
                 emptyRecommendationAccepted: false,
                 nonReadyPlanAccepted: false,
                 malformedPlanRejected: false,
+                useCasePhase: nil,
+                useCaseSelectedCount: 0,
+                useCaseCoverageDimensionCount: 0,
+                useCaseOpaqueIdentifiersExposed: false,
+                useCaseStaleCompletionRejected: false,
                 launchArguments: [
                     QALaunchScenario.ownerTruthKnowledgeRecommendationPlanSmoke.rawValue,
                     OwnerTruthCandidateReviewQAGate.launchArgument,
@@ -7743,6 +7768,57 @@ enum OwnerTruthKnowledgeRecommendationPlanUIQASmoke {
         } catch {
             print("[UI_QA] OwnerTruthKnowledgeRecommendationPlanSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
+    }
+
+    private static func verifyUseCaseVariants(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID
+    ) -> OwnerTruthKnowledgeRecommendationPlanUIQAUseCaseVariants {
+        let client = OwnerTruthKnowledgeRecommendationPlanUIQAClient(vaultID: vaultID)
+        let runtime = OwnerTruthKnowledgeRecommendationPlanUIQALeaseRuntime(
+            accountLease: accountLease
+        )
+        let useCase = OwnerTruthKnowledgeRecommendationPlanUseCase(
+            accountLease: accountLease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        useCase.refresh()
+        let reflectedState = String(reflecting: useCase.viewState)
+        let opaqueIdentifiersExposed = [
+            accountLease.vaultId,
+            "candidate-continuity-opaque",
+            "candidate-breadth-opaque",
+            "continuity-template-opaque",
+            "breadth-template-opaque",
+            "memory-version-opaque",
+            "qa-checkpoint-opaque",
+        ].contains { reflectedState.contains($0) }
+
+        let deferredClient = OwnerTruthKnowledgeRecommendationPlanDeferredUIQAClient(vaultID: vaultID)
+        let staleRuntime = OwnerTruthKnowledgeRecommendationPlanUIQALeaseRuntime(
+            accountLease: accountLease
+        )
+        let staleUseCase = OwnerTruthKnowledgeRecommendationPlanUseCase(
+            accountLease: accountLease,
+            client: deferredClient,
+            accountLeaseRuntime: staleRuntime,
+            qaGateEnabled: { true }
+        )
+        staleUseCase.refresh()
+        staleRuntime.allowCommit = false
+        deferredClient.resolve()
+        let staleCompletionRejected = staleUseCase.viewState.phase == .unavailable
+            && staleUseCase.viewState.notice == .staleAccountLease
+
+        return OwnerTruthKnowledgeRecommendationPlanUIQAUseCaseVariants(
+            phase: useCase.viewState.phase,
+            selectedCount: useCase.viewState.recommendations.count,
+            coverageDimensionCount: useCase.viewState.coverage.count,
+            opaqueIdentifiersExposed: opaqueIdentifiersExposed,
+            staleCompletionRejected: staleCompletionRejected
+        )
     }
 }
 
@@ -7851,7 +7927,7 @@ private final class OwnerTruthKnowledgeRecommendationPlanUIQAClient: OwnerTruthK
         }
     }
 
-    private static func fixture(vaultID: OwnerTruthVaultID) -> [String: Any] {
+    static func fixture(vaultID: OwnerTruthVaultID) -> [String: Any] {
         let policyVersion = "knowledge-dimension-policy-v1"
         let dimensions: [[String: Any]] = [
             ["dimension": "lifeStage", "evidenceCount": 1, "coveredFacetCount": 1, "missingFacetCount": 1],
@@ -7933,6 +8009,75 @@ private struct OwnerTruthKnowledgeRecommendationPlanUIQAContractVariants {
         nonReadyPlanAccepted: false,
         malformedPlanRejected: false
     )
+}
+
+private final class OwnerTruthKnowledgeRecommendationPlanDeferredUIQAClient: OwnerTruthKnowledgeRecommendationPlanClient {
+    private let vaultID: OwnerTruthVaultID
+    private var pendingCompletion: ((Result<OwnerTruthKnowledgeRecommendationPlan, Error>) -> Void)?
+
+    init(vaultID: OwnerTruthVaultID) {
+        self.vaultID = vaultID
+    }
+
+    func fetchOwnerTruthKnowledgeRecommendationPlan(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthKnowledgeRecommendationPlan, Error>) -> Void
+    ) {
+        guard vaultID == self.vaultID, pendingCompletion == nil else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        pendingCompletion = completion
+    }
+
+    func resolve() {
+        guard let completion = pendingCompletion else { return }
+        pendingCompletion = nil
+        do {
+            completion(.success(try OwnerTruthKnowledgeRecommendationPlan(
+                backendJSONObject: OwnerTruthKnowledgeRecommendationPlanUIQAClient.fixture(vaultID: vaultID),
+                expectedVaultID: vaultID
+            )))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+}
+
+private final class OwnerTruthKnowledgeRecommendationPlanUIQALeaseRuntime: AccountLeaseRuntimePort, @unchecked Sendable {
+    private let accountLease: AccountLease
+    var allowRequest = true
+    var allowCommit = true
+
+    init(accountLease: AccountLease) {
+        self.accountLease = accountLease
+    }
+
+    func capture(forSubjectId subjectId: String?) -> AccountLease? {
+        subjectId == accountLease.subjectId ? accountLease : nil
+    }
+
+    func validate(
+        _ lease: AccountLease,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> AccountLeaseValidationDecision {
+        let allowed = lease == accountLease && (checkpoint != .request || allowRequest)
+            && (checkpoint != .commit || allowCommit)
+        return AccountLeaseValidationDecision(
+            checkpoint: checkpoint,
+            allowed: allowed,
+            reason: allowed ? .allowed : .generationMismatch,
+            sessionRotated: !allowed
+        )
+    }
+}
+
+private struct OwnerTruthKnowledgeRecommendationPlanUIQAUseCaseVariants {
+    let phase: OwnerTruthKnowledgeRecommendationPlanUseCasePhase
+    let selectedCount: Int
+    let coverageDimensionCount: Int
+    let opaqueIdentifiersExposed: Bool
+    let staleCompletionRejected: Bool
 }
 
 struct OwnerTruthKnowledgeDimensionConfirmationUIQASmokeResult: Codable {

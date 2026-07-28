@@ -3412,6 +3412,181 @@ private enum OwnerTruthKnowledgeRecommendationPlanContract {
     }
 }
 
+enum OwnerTruthKnowledgeRecommendationPlanUseCasePhase: String, Equatable, Sendable {
+    case idle
+    case loading
+    case ready
+    case rebuilding
+    case unavailable
+    case failed
+}
+
+enum OwnerTruthKnowledgeRecommendationPlanUseCaseNotice: Equatable, Sendable {
+    case qaOnlyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case contractMismatch
+    case requestFailed
+}
+
+/// Value-minimized presentation state for the hidden M0-B plan reader. It is
+/// deliberately separate from the transport model so no Vault identifier,
+/// candidate identifier, question template, checkpoint or evidence reference
+/// can survive into a future UI surface.
+struct OwnerTruthKnowledgeRecommendationPlanViewState: Equatable, Sendable {
+    let phase: OwnerTruthKnowledgeRecommendationPlanUseCasePhase
+    let coverage: [OwnerTruthKnowledgeRecommendationCoverage]
+    let recommendations: [OwnerTruthKnowledgeRecommendation]
+    let filteredCount: Int
+    let policyVersion: String?
+    let notice: OwnerTruthKnowledgeRecommendationPlanUseCaseNotice?
+
+    static let idle = OwnerTruthKnowledgeRecommendationPlanViewState(
+        phase: .idle,
+        coverage: [],
+        recommendations: [],
+        filteredCount: 0,
+        policyVersion: nil,
+        notice: nil
+    )
+}
+
+/// QA-only lease-fenced reader for the server-planned M0-B recommendation
+/// response. It only publishes count-level coverage and reviewed display-safe
+/// recommendation metadata after both request and commit lease checks pass.
+final class OwnerTruthKnowledgeRecommendationPlanUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let client: OwnerTruthKnowledgeRecommendationPlanClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthKnowledgeRecommendationPlanViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthKnowledgeRecommendationPlanViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthKnowledgeRecommendationPlanClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
+    ) {
+        self.accountLease = accountLease
+        self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
+    }
+
+    func refresh() {
+        guard let vaultID = beginRequestOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthKnowledgeRecommendationPlanViewState(
+            phase: .loading,
+            coverage: [],
+            recommendations: [],
+            filteredCount: 0,
+            policyVersion: nil,
+            notice: nil
+        )
+        client.fetchOwnerTruthKnowledgeRecommendationPlan(vaultID: vaultID) { [weak self] result in
+            self?.receive(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard qaGateEnabled() else {
+            resetForUnavailable(.qaOnlyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthKnowledgeRecommendationPlan, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard qaGateEnabled() else {
+            resetForUnavailable(.qaOnlyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+
+        switch result {
+        case .success(let plan):
+            guard plan.vaultID == vaultID,
+                  plan.vaultID.rawValue == accountLease.vaultId else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            let phase: OwnerTruthKnowledgeRecommendationPlanUseCasePhase
+            switch plan.state {
+            case .ready:
+                phase = .ready
+            case .rebuilding:
+                phase = .rebuilding
+            case .unavailable:
+                phase = .unavailable
+            }
+            viewState = OwnerTruthKnowledgeRecommendationPlanViewState(
+                phase: phase,
+                coverage: plan.coverage,
+                recommendations: plan.selected,
+                filteredCount: plan.filteredCount,
+                policyVersion: plan.policyVersion,
+                notice: nil
+            )
+        case .failure(let error):
+            if case OwnerTruthRemoteContractError.invalidKnowledgeRecommendationPlan = error {
+                transitionFailure(.contractMismatch)
+            } else {
+                transitionFailure(.requestFailed)
+            }
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthKnowledgeRecommendationPlanUseCaseNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthKnowledgeRecommendationPlanViewState(
+            phase: .unavailable,
+            coverage: [],
+            recommendations: [],
+            filteredCount: 0,
+            policyVersion: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure(_ notice: OwnerTruthKnowledgeRecommendationPlanUseCaseNotice) {
+        viewState = OwnerTruthKnowledgeRecommendationPlanViewState(
+            phase: .failed,
+            coverage: [],
+            recommendations: [],
+            filteredCount: 0,
+            policyVersion: nil,
+            notice: notice
+        )
+    }
+}
+
 // MARK: - QA-only Owner-confirmed knowledge dimensions
 
 /// The server recognizes only a newly recorded confirmation or an idempotent

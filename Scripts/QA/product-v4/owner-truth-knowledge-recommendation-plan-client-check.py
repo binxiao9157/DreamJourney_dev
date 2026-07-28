@@ -57,6 +57,12 @@ def main() -> None:
         "plan must not select more than two recommendations",
         "selected recommendations must not duplicate a slot or knowledge gap",
         "protocol OwnerTruthKnowledgeRecommendationPlanClient",
+        "final class OwnerTruthKnowledgeRecommendationPlanUseCase",
+        "struct OwnerTruthKnowledgeRecommendationPlanViewState",
+        "func refresh()",
+        "accountLeaseRuntime.validate(accountLease, at: .request).allowed",
+        "accountLeaseRuntime.validate(accountLease, at: .commit).allowed",
+        "resetForUnavailable(.staleAccountLease)",
     ):
         require(snippet in contracts, f"M0-B recommendation contract missing: {snippet}")
 
@@ -79,6 +85,16 @@ def main() -> None:
         require(
             forbidden not in plan_model,
             f"typed recommendation plan must not retain {forbidden}",
+        )
+    use_case_state = section(
+        contracts,
+        "struct OwnerTruthKnowledgeRecommendationPlanViewState: Equatable, Sendable",
+        "/// QA-only lease-fenced reader",
+    )
+    for forbidden in ("vaultID", "candidateId", "questionTemplateId", "memoryVersion", "checkpoint"):
+        require(
+            forbidden not in use_case_state,
+            f"recommendation use-case state must not retain {forbidden}",
         )
 
     for snippet in (
@@ -118,6 +134,12 @@ def main() -> None:
         "emptyRecommendationAccepted",
         "nonReadyPlanAccepted",
         "malformedPlanRejected",
+        "verifyUseCaseVariants",
+        "OwnerTruthKnowledgeRecommendationPlanUseCase",
+        "OwnerTruthKnowledgeRecommendationPlanDeferredUIQAClient",
+        "OwnerTruthKnowledgeRecommendationPlanUIQALeaseRuntime",
+        "useCaseOpaqueIdentifiersExposed",
+        "useCaseStaleCompletionRejected",
         "planInvariantMismatch",
     ):
         require(snippet in smoke_surface, f"M0-B value-minimized smoke missing: {snippet}")
@@ -128,6 +150,11 @@ def main() -> None:
         '"selectedCount"',
         '"coverageDimensionCount"',
         '"candidateIdentifierExposed"',
+        '"useCasePhase"',
+        '"useCaseSelectedCount"',
+        '"useCaseCoverageDimensionCount"',
+        '"useCaseOpaqueIdentifiersExposed"',
+        '"useCaseStaleCompletionRejected"',
     ):
         require(snippet in runner, f"M0-B smoke runner missing: {snippet}")
 
