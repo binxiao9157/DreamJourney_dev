@@ -2351,11 +2351,10 @@ extension DialogEngineManager {
             context += kbContext
         }
 
-        // 【KBLite】知识缺口检测（仅在合适时机引导补充）
-        let gapContext = KBLiteGapDetector.shared.buildGapContext()
-        if !gapContext.isEmpty {
-            context += gapContext
-        }
+        // V4: legacy KBLite is a compatibility projection only. It must not
+        // independently select follow-up questions or present inferred gaps as
+        // an Echo instruction; authoritative recommendations come from the
+        // Owner Truth recommendation flow after its policy checks.
 
         context += "\n请基于以上记忆自然地延续话题，让长辈感受到你记得他/她说过的事。\n"
         context += "不要直接报出以上信息，而是在对话中自然地引用。\n"
