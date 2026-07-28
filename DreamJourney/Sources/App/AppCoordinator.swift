@@ -430,6 +430,218 @@ final class AppCoordinator: Coordinator {
     }
 }
 
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+extension AppCoordinator {
+    /// Exercises the same root router used by AppDelegate and SceneDelegate.
+    /// It contains synthetic opaque route envelopes only; it never invokes a
+    /// notification provider, opens a private resource, or starts an audio runtime.
+    func runNotificationRuntimeRouteUIQASmoke(
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        guard rootMode == .main,
+              let runtimeContext = currentFeatureRuntimeContext(),
+              let activeTabCoordinator else {
+            completion([
+                "completed": false,
+                "failureReason": "mainRuntimeUnavailable",
+            ])
+            return
+        }
+
+        let accountLease = runtimeContext.accountLease
+        let baselineSnapshot = notificationRuntimeRouteInbox.snapshot()
+        let tabBarController = activeTabCoordinator.tabBarController
+        let initialSelectedTabIndex = tabBarController.selectedIndex
+        let stabilizationDelay = DispatchTimeInterval.milliseconds(150)
+
+        // Route events normally arrive on separate main-loop turns. Preserve that
+        // cadence here so a synthetic test cannot leave UIKit mid-appearance when
+        // its final screenshot is captured.
+        receiveNotificationRuntimeRoute(
+            userInfo: uiqaNotificationRuntimeRouteUserInfo(
+                accountLease: accountLease,
+                kind: .timeLetter,
+                operation: "uiqa-route-time-letter"
+            ),
+            source: .notificationResponse
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + stabilizationDelay) { [weak self] in
+            guard let self else {
+                completion([
+                    "completed": false,
+                    "failureReason": "coordinatorReleasedAfterTimeLetterRoute",
+                ])
+                return
+            }
+            let timeLetterRouteSelectedArchive = tabBarController.selectedIndex == 0
+
+            self.receiveNotificationRuntimeRoute(
+                userInfo: self.uiqaNotificationRuntimeRouteUserInfo(
+                    accountLease: accountLease,
+                    kind: .echoDelayedReply,
+                    operation: "uiqa-route-echo-reply"
+                ),
+                source: .remoteNotification
+            )
+            DispatchQueue.main.asyncAfter(deadline: .now() + stabilizationDelay) { [weak self] in
+                guard let self else {
+                    completion([
+                        "completed": false,
+                        "failureReason": "coordinatorReleasedAfterEchoRoute",
+                    ])
+                    return
+                }
+                let echoRouteSelectedEcho = tabBarController.selectedIndex == 1
+
+                let deepLinkRouteAvailable: Bool
+                if let deepLinkURL = self.uiqaNotificationRuntimeRouteDeepLink(
+                    accountLease: accountLease,
+                    kind: .careSignal,
+                    operation: "uiqa-route-care"
+                ) {
+                    self.receiveNotificationRuntimeDeepLink(deepLinkURL)
+                    deepLinkRouteAvailable = true
+                } else {
+                    deepLinkRouteAvailable = false
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + stabilizationDelay) { [weak self] in
+                    guard let self else {
+                        completion([
+                            "completed": false,
+                            "failureReason": "coordinatorReleasedAfterDeepLinkRoute",
+                        ])
+                        return
+                    }
+                    let deepLinkRouteSelectedArchive = deepLinkRouteAvailable
+                        && tabBarController.selectedIndex == 0
+                    let safeSelectedTabIndex = tabBarController.selectedIndex
+
+                    self.receiveNotificationRuntimeRoute(
+                        userInfo: self.uiqaNotificationRuntimeRouteUserInfo(
+                            accountLease: accountLease,
+                            kind: .familyInvitation,
+                            operation: "uiqa-route-cross-owner",
+                            resourceOwnerIdentity: NotificationRuntimeRoutePayload.identityDigest(
+                                values: ["resource-owner", "uiqa-other-owner"]
+                            )
+                        ),
+                        source: .notificationResponse
+                    )
+                    let crossOwnerRouteIgnored = tabBarController.selectedIndex == safeSelectedTabIndex
+
+                    self.receiveNotificationRuntimeRoute(
+                        userInfo: self.uiqaNotificationRuntimeRouteUserInfo(
+                            accountLease: accountLease,
+                            kind: .systemNotice,
+                            operation: "uiqa-route-stale-generation",
+                            generation: accountLease.generation &+ 1
+                        ),
+                        source: .notificationResponse
+                    )
+                    let staleGenerationRouteIgnored = tabBarController.selectedIndex == safeSelectedTabIndex
+
+                    self.receiveNotificationRuntimeDeepLink(
+                        URL(string: "dreamjourney://runtime-route?type=echoDelayedReply")!
+                    )
+                    let malformedDeepLinkIgnored = tabBarController.selectedIndex == safeSelectedTabIndex
+
+                    DispatchQueue.main.asyncAfter(deadline: .now() + stabilizationDelay) {
+                        let finalSnapshot = self.notificationRuntimeRouteInbox.snapshot()
+                        let validRouteDeliveryCount = finalSnapshot.deliveredCount - baselineSnapshot.deliveredCount
+                        let rejectedRouteCount = finalSnapshot.rejectedCount - baselineSnapshot.rejectedCount
+                        let pendingRoutesDrained = finalSnapshot.queuedCount == baselineSnapshot.queuedCount
+                        let finalSelectedTabIndex = tabBarController.selectedIndex
+                        let completed = initialSelectedTabIndex == 1
+                            && timeLetterRouteSelectedArchive
+                            && echoRouteSelectedEcho
+                            && deepLinkRouteSelectedArchive
+                            && crossOwnerRouteIgnored
+                            && staleGenerationRouteIgnored
+                            && malformedDeepLinkIgnored
+                            && validRouteDeliveryCount == 3
+                            && rejectedRouteCount >= 3
+                            && pendingRoutesDrained
+                            && finalSelectedTabIndex == 0
+
+                        completion([
+                            "completed": completed,
+                            "failureReason": completed ? "" : "routeContractMismatch",
+                            "initialSelectedTabIndex": initialSelectedTabIndex,
+                            "timeLetterRouteSelectedArchive": timeLetterRouteSelectedArchive,
+                            "echoRouteSelectedEcho": echoRouteSelectedEcho,
+                            "deepLinkRouteSelectedArchive": deepLinkRouteSelectedArchive,
+                            "crossOwnerRouteIgnored": crossOwnerRouteIgnored,
+                            "staleGenerationRouteIgnored": staleGenerationRouteIgnored,
+                            "malformedDeepLinkIgnored": malformedDeepLinkIgnored,
+                            "validRouteDeliveryCount": validRouteDeliveryCount,
+                            "rejectedRouteCount": rejectedRouteCount,
+                            "pendingRoutesDrained": pendingRoutesDrained,
+                            "finalSelectedTabIndex": finalSelectedTabIndex,
+                        ])
+                    }
+                }
+            }
+        }
+    }
+
+    private func uiqaNotificationRuntimeRouteUserInfo(
+        accountLease: AccountLease,
+        kind: NotificationRuntimeRouteKind,
+        operation: String,
+        generation: UInt64? = nil,
+        resourceOwnerIdentity: String? = nil
+    ) -> [AnyHashable: Any] {
+        [
+            NotificationRuntimeRoutePayload.Key.schemaVersion: NSNumber(
+                value: NotificationRuntimeRoutePayload.schemaVersion
+            ),
+            NotificationRuntimeRoutePayload.Key.action: NotificationRuntimeRouteAction.open.rawValue,
+            NotificationRuntimeRoutePayload.Key.type: kind.rawValue,
+            NotificationRuntimeRoutePayload.Key.subjectIdentity: NotificationRuntimeRoutePayload.identityDigest(
+                values: ["subject", accountLease.subjectId]
+            ),
+            NotificationRuntimeRoutePayload.Key.generation: NSNumber(value: generation ?? accountLease.generation),
+            NotificationRuntimeRoutePayload.Key.generationIdentity: NotificationRuntimeRoutePayload.identityDigest(
+                values: ["generation-id", accountLease.generationId.uuidString]
+            ),
+            NotificationRuntimeRoutePayload.Key.vaultIdentity: NotificationRuntimeRoutePayload.identityDigest(
+                values: ["vault", accountLease.vaultId]
+            ),
+            NotificationRuntimeRoutePayload.Key.authorityEpochIdentity: NotificationRuntimeRoutePayload.identityDigest(
+                values: ["authority-epoch", accountLease.authorityEpoch]
+            ),
+            NotificationRuntimeRoutePayload.Key.resourceOwnerIdentity: resourceOwnerIdentity
+                ?? NotificationRuntimeRoutePayload.identityDigest(
+                    values: ["resource-owner", accountLease.subjectId]
+                ),
+            NotificationRuntimeRoutePayload.Key.operationIdentity: NotificationRuntimeRoutePayload.identityDigest(
+                values: ["operation", operation]
+            ),
+        ]
+    }
+
+    private func uiqaNotificationRuntimeRouteDeepLink(
+        accountLease: AccountLease,
+        kind: NotificationRuntimeRouteKind,
+        operation: String
+    ) -> URL? {
+        let userInfo = uiqaNotificationRuntimeRouteUserInfo(
+            accountLease: accountLease,
+            kind: kind,
+            operation: operation
+        )
+        var components = URLComponents()
+        components.scheme = "dreamjourney"
+        components.host = "runtime-route"
+        components.queryItems = userInfo.compactMap { key, value in
+            guard let name = key as? String else { return nil }
+            return URLQueryItem(name: name, value: String(describing: value))
+        }
+        return components.url
+    }
+}
+#endif
+
 // MARK: - App composition
 
 /// The only root-level factory for the current three-tab private UI. It captures

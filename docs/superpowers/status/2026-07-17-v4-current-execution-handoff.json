@@ -1,30 +1,30 @@
 {
   "activeWorkItem": {
-    "id": "WI-S1-03-08",
+    "id": "WI-S1-03-09",
     "state": "IN_PROGRESS",
     "leaseState": "RELEASED",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "authorityLock": "IOS_COMPOSITION",
-    "predecessorWorkItem": "WI-S1-03-07",
-    "priorEvidence": "docs/superpowers/status/2026-07-19-wi-s1-03-08-crosspath-integration-review.md",
+    "predecessorWorkItem": "WI-S1-03-08",
+    "priorEvidence": "docs/superpowers/status/2026-07-19-wi-s1-03-09-notification-runtime-owner-routing.md",
     "completedSubSlices": [
-      "WI-S1-03-08-VOICE_DH_TYPED_PORTS_AND_CROSSPATH_G0",
-      "WI-S1-03-08-G1-SIMULATOR_ROLE_VOICE_AND_FAIL_CLOSED_UIQA"
+      "WI-S1-03-09-NOTIFICATION_DEEPLINK_OWNER_ROUTING_G0",
+      "WI-S1-03-09-G1-SIMULATOR_SAFE_ROUTE_UIQA"
     ],
-    "currentSubSlice": "WI-S1-03-08-G1-SIMULATOR_ROLE_VOICE_AND_FAIL_CLOSED_UIQA_COMPLETE / family role badge and runtime voice diagnostics agree; scoped credential rejection visibly returns to ordinary Echo without retaining Tencent audio ownership / G3 and G4 remain open",
+    "currentSubSlice": "WI-S1-03-09-G1-SIMULATOR_SAFE_ROUTE_UIQA_COMPLETE / valid time-letter, Echo-reply and care Deep Link envelopes land on neutral tabs; cross-owner, stale-generation and malformed routes are rejected; G3 and G4 remain open",
     "gateEvidence": {
-      "G0": "SCOPED_VERIFIED / TYPED_VOICE_DH_PORTS_OWNER_KEYED_CACHE_ROLE_SELECTION_AND_RUNTIME_CAPABILITY_FAIL_CLOSED_CROSSPATH",
-      "G1": "SCOPED_VERIFIED / SIMULATOR_UIQA_PROVES_FAMILY_ROLE_BADGE_RUNTIME_VOICE_DIAGNOSTICS_AND_FAIL_CLOSED_TEXT_ONLY_VISIBLE_STATE / NO_REAL_PROVIDER_OR_MICROPHONE_SIDE_EFFECT",
-      "G3": "OPEN / PROVIDER_CREDENTIAL_QUOTA_QUALITY_DELETE_AND_EXIT_RECEIPT_EVIDENCE_PENDING",
-      "G4": "OPEN / TRUE_DEVICE_TENCENT_SESSION_PCM_AUDIO_LIPSYNC_INTERRUPTION_ROUTE_AND_MICROPHONE_RECOVERY_EVIDENCE_PENDING"
+      "G0": "SCOPED_VERIFIED / OWNER_SCOPED_NOTIFICATION_AND_DEEPLINK_INGRESS_FAILS_CLOSED_BEFORE_PRIVATE_UI_ROUTING",
+      "G1": "SCOPED_VERIFIED / SIMULATOR_UIQA_PROVES_VALID_NEUTRAL_TAB_ROUTING_AND_CROSS_OWNER_STALE_OR_MALFORMED_ROUTE_REJECTION / NO_APNS_BACKEND_OR_PRIVATE_RESOURCE_OPEN",
+      "G3": "OPEN / DEVICE_SUBSCRIPTION_MESSAGE_DEEPLINK_CAPABILITY_APNS_CREDENTIAL_AND_SERVER_AUTHZ_RECEIPT_EVIDENCE_PENDING",
+      "G4": "OPEN / TRUE_DEVICE_PUSH_DELIVERY_LOCKSCREEN_PRIVACY_WRONG_ACCOUNT_CLICK_TOKEN_ROTATION_AND_PRODUCT_ACCEPTANCE_EVIDENCE_PENDING"
     },
     "latestEvidence": {
-      "iosBaseline": "feature/prd-stitch-ui-adaptation / WI-S1-03-08 scoped G1 local evidence",
-      "scope": "UI_QA_SIMULATOR_ONLY / family role voice identity and evidence-package diagnostics / scoped-broker blocked Digital Human fail-closed visible fallback / no public UI, Provider, Archive, Profile or Memoir behavior change",
-      "validation": "run-echo-trace-evidence-package-panel-export-smoke.sh PASS (family badge match, familyMember role source, Tencent owner diagnostic, redacted evidence package); run-digital-human-runtime-stub-smoke.sh PASS (503 scoped broker block -> visible ordinary Echo fallback, runtime none, non-Tencent owner); run-voice-tts-digital-human-owner-scope-gate.sh PASS; role/profile and runtime abstraction checks PASS; release QA package check PASS; generic/platform=iOS build-for-testing CODE_SIGNING_ALLOWED=NO TEST BUILD SUCCEEDED; git diff --check PASS",
-      "constraints": "Simulator assertions do not create a real Tencent runtime, open a microphone or claim Provider quality. G3 Provider and G4 true-device evidence remain separately required."
+      "iosBaseline": "feature/prd-stitch-ui-adaptation / WI-S1-03-09 scoped G1 local evidence",
+      "scope": "UI_QA_SIMULATOR_ONLY / opaque notification and Deep Link envelopes route only to neutral tabs / cross-owner stale-generation and malformed ingress fail closed / no public UI, APNs, backend, private resource, voice or digital-human behavior change",
+      "validation": "run-notification-runtime-route-uiqa-smoke.sh PASS (three valid routes, three rejected routes, inbox drained, final Archive screenshot stable); launch configuration, non-Echo dispatch inventory and notification static checks PASS; notification owner, message lifecycle, message owner and delayed-reply owner gates PASS; release QA package check PASS; generic/platform=iOS build-for-testing CODE_SIGNING_ALLOWED=NO TEST BUILD SUCCEEDED; git diff --check PASS",
+      "constraints": "Simulator assertions do not deliver APNs, open a private resource, assert lockscreen privacy or claim device subscription/token lifecycle behavior. G3 backend/APNs and G4 true-device evidence remain separately required."
     },
-    "currentSummary": "WI-S1-03-08 G0 and scoped G1 are complete: role-scoped voice diagnostics and visible Echo identity agree in the family QA fixture, while a blocked Digital Human credential path visibly fails closed to ordinary Echo without retaining Tencent audio ownership. No public UI, real Provider call, microphone or true-device claim was added. G3 Provider and G4 device evidence remain open.",
+    "currentSummary": "WI-S1-03-09 G0 and scoped G1 are complete: synthetic valid time-letter, Echo-reply and care Deep Link envelopes route through the same owner-scoped inbox to neutral tabs, while cross-owner, stale-generation and malformed ingress remain rejected. The simulator screenshot is stable on Archive after the final route. No public UI, APNs, backend, voice, digital-human or true-device claim was added. G3 backend/APNs and G4 device evidence remain open.",
     "backendPendingPaths": []
   },
   "baselines": {
@@ -520,10 +520,10 @@
       "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_NO_CUTOVER"
     },
     {
-      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-09-notification-runtime-owner-routing.md",
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-09-notification-runtime-owner-routing.md; docs/superpowers/status/2026-07-28-wi-s1-03-09-notification-routing-g1-uiqa.md",
       "id": "WI-S1-03-09",
-      "implementationStatus": "INTERNAL_READY / G0_OWNER_ROUTING_VERIFIED / IOS_LOCAL_COMMITTED / G1_G3_G4_OPEN",
-      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
+      "implementationStatus": "INTERNAL_READY / G0_OWNER_ROUTING_VERIFIED / G1_SIMULATOR_SAFE_ROUTE_UIQA_VERIFIED / IOS_LOCAL_COMMITTED / G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_G1_EVIDENCE_PRESENT_G3_G4_OPEN"
     },
     {
       "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-10-qa-strangler-g0-closure.md",
@@ -569,9 +569,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-03-08",
+    "id": "WI-S1-03-09",
     "state": "RECONCILE_AFTER_CURRENT",
-    "summary": "WI-S1-03-08 scoped G1 simulator UIQA is complete. Reconcile G3/G4 without promoting simulator evidence to Provider or true-device completion; live credential, quality, session, audio, lipsync, interruption and microphone recovery remain external evidence."
+    "summary": "WI-S1-03-09 scoped G1 simulator UIQA is complete. Reconcile G3/G4 without promoting simulator evidence to APNs or true-device completion; device subscription, message/deeplink capability, delivery, lockscreen privacy, wrong-account clicks and token lifecycle remain external evidence."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -580,5 +580,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-28T10:09:35+08:00"
+  "updatedAt": "2026-07-28T10:22:15+08:00"
 }

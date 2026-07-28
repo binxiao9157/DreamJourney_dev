@@ -51,6 +51,7 @@ def main() -> None:
     shared_echo_route = {
         "digitalHumanLivePanelSmoke",
         "echoDigitalHumanLifecycleSmoke",
+        "echoAudioOwnerCoordinatorSmoke",
         "echoContinuousTurnSmoke",
         "tencentBackendPCMDriveMockSmoke",
         "echoTraceExportSmoke",
@@ -68,7 +69,10 @@ def main() -> None:
         "backendEnvironmentSmoke",
         "archiveToEchoSmoke",
     }
-    account_lease_custom_route = {"archiveMediaEchoContextSmoke"}
+    account_lease_custom_route = {
+        "archiveMediaEchoContextSmoke",
+        "notificationRuntimeRouteSmoke",
+    }
     seed_only = {
         "seedEchoArchiveContext",
         "seedArchiveAnalysisInsights",
@@ -87,6 +91,12 @@ def main() -> None:
         "archiveAudioLifecycleSmoke",
         "archiveHiddenShellSmoke",
         "ownerTruthCandidateInboxSmoke",
+        "ownerTruthInterviewCandidateReviewSmoke",
+        "ownerTruthInterviewSessionStateSmoke",
+        "ownerTruthInterviewNaturalInputSmoke",
+        "ownerTruthInterviewBoundarySmoke",
+        "ownerTruthInterviewNaturalInputEchoSurfaceSmoke",
+        "ownerTruthInterviewNaturalInputProductSurfaceSmoke",
         "echoDelayedReplyNotificationSmoke",
         "timeLetterDispatchReminderSmoke",
         "echoListeningStatePreview",

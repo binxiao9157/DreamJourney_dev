@@ -141,6 +141,7 @@ def main() -> None:
         "DJRunVoiceCloneSynthesisRuntimeSmoke": "voiceCloneSynthesisRuntimeSmoke",
         "DJRunArchiveFailedAnalysisRetrySmoke": "archiveFailedAnalysisRetrySmoke",
         "DJRunEchoDelayedReplyNotificationSmoke": "echoDelayedReplyNotificationSmoke",
+        "DJRunNotificationRuntimeRouteSmoke": "notificationRuntimeRouteSmoke",
         "DJRunOwnerTruthCandidateInboxSmoke": "ownerTruthCandidateInboxSmoke",
         "DJRunOwnerTruthInterviewCandidateReviewSmoke": "ownerTruthInterviewCandidateReviewSmoke",
         "DJRunTimeLetterDispatchReminderSmoke": "timeLetterDispatchReminderSmoke",

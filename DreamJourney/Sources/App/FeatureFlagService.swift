@@ -116,6 +116,7 @@ enum QALaunchScenario: String, CaseIterable {
     case ownerTruthInterviewNaturalInputProductSurfaceSmoke = "DJRunOwnerTruthInterviewNaturalInputProductSurfaceSmoke"
     case archiveFailedAnalysisRetrySmoke = "DJRunArchiveFailedAnalysisRetrySmoke"
     case echoDelayedReplyNotificationSmoke = "DJRunEchoDelayedReplyNotificationSmoke"
+    case notificationRuntimeRouteSmoke = "DJRunNotificationRuntimeRouteSmoke"
     case backendEnvironmentSmoke = "DJRunBackendEnvSmoke"
     case archiveToEchoSmoke = "DJRunArchiveToEchoSmoke"
     case archiveMediaEchoContextSmoke = "DJRunArchiveMediaEchoContextSmoke"
@@ -161,6 +162,7 @@ enum QALaunchScenario: String, CaseIterable {
         .ownerTruthInterviewNaturalInputProductSurfaceSmoke,
         .archiveFailedAnalysisRetrySmoke,
         .echoDelayedReplyNotificationSmoke,
+        .notificationRuntimeRouteSmoke,
         .backendEnvironmentSmoke,
         .archiveToEchoSmoke,
         .archiveMediaEchoContextSmoke,

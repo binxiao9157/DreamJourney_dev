@@ -378,6 +378,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runArchiveFailedAnalysisRetrySmoke() }
         case .echoDelayedReplyNotificationSmoke:
             scheduleUIQAScenario(scenario) { $0.runEchoDelayedReplyNotificationSmoke() }
+        case .notificationRuntimeRouteSmoke:
+            scheduleUIQAScenario(scenario) { $0.runNotificationRuntimeRouteSmoke() }
         case .backendEnvironmentSmoke:
             seedEchoArchiveContext()
             scheduleUIQAScenario(scenario) { $0.runBackendEnvSmoke() }
@@ -1367,6 +1369,46 @@ private extension AppDelegate {
                     }
                 }
             }
+        }
+    }
+
+    func runNotificationRuntimeRouteSmoke(retryCount: Int = 0) {
+        let maximumCoordinatorRetries = 20
+        guard let coordinator = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .compactMap({ $0.delegate as? SceneDelegate })
+            .compactMap(\.appCoordinator)
+            .first else {
+            guard retryCount < maximumCoordinatorRetries else {
+                writeNotificationRuntimeRouteSmokeResult([
+                    "completed": false,
+                    "failureReason": "missingUIQAAppCoordinator",
+                ])
+                print("[UI_QA] NotificationRuntimeRouteSmoke failed reason=missingUIQAAppCoordinator")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.runNotificationRuntimeRouteSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        coordinator.runNotificationRuntimeRouteUIQASmoke { [weak self] result in
+            guard let self else { return }
+            if result["failureReason"] as? String == "mainRuntimeUnavailable",
+               retryCount < maximumCoordinatorRetries {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                    self?.runNotificationRuntimeRouteSmoke(retryCount: retryCount + 1)
+                }
+                return
+            }
+            self.writeNotificationRuntimeRouteSmokeResult(result)
+            print(
+                "[UI_QA] NotificationRuntimeRouteSmoke completed " +
+                "completed=\(result["completed"] as? Bool ?? false) " +
+                "delivered=\(result["validRouteDeliveryCount"] as? Int ?? -1) " +
+                "rejected=\(result["rejectedRouteCount"] as? Int ?? -1)"
+            )
         }
     }
 
@@ -4568,6 +4610,17 @@ private extension AppDelegate {
             try data.write(to: resultURL, options: [.atomic])
         } catch {
             print("[UI_QA] EchoDelayedReplyNotificationSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    func writeNotificationRuntimeRouteSmokeResult(_ result: [String: Any]) {
+        do {
+            _ = try QAScenarioResultWriter.write(
+                result,
+                fileName: "notification-runtime-route-uiqa-smoke-result.json"
+            )
+        } catch {
+            print("[UI_QA] NotificationRuntimeRouteSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
     }
 
