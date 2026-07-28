@@ -1892,6 +1892,11 @@ struct VoiceCloneProfileContract {
     let providerBindingMode: String
     let providerSlotManaged: Bool
     let providerSlotState: String
+    let exitState: String
+    let accessRevoked: Bool
+    let localCleanupState: String
+    let providerCleanupState: String
+    let providerCleanupReceiptAvailable: Bool
     let authority: VoiceDigitalHumanAuthorityEnvelope?
 
     init?(json: [String: Any]) {
@@ -1924,7 +1929,31 @@ struct VoiceCloneProfileContract {
         )
         self.providerSlotManaged = json["providerSlotManaged"] as? Bool ?? false
         self.providerSlotState = json["providerSlotState"] as? String ?? ""
+        self.exitState = json["exitState"] as? String ?? Self.defaultExitState(for: sampleStatus)
+        self.accessRevoked = json["accessRevoked"] as? Bool ?? (sampleStatus == .disabled || sampleStatus == .deleted)
+        self.localCleanupState = json["localCleanupState"] as? String ?? Self.defaultLocalCleanupState(for: sampleStatus)
+        self.providerCleanupState = json["providerCleanupState"] as? String ?? Self.defaultProviderCleanupState(for: sampleStatus)
+        self.providerCleanupReceiptAvailable = json["providerCleanupReceiptAvailable"] as? Bool ?? false
         self.authority = VoiceDigitalHumanAuthorityEnvelope(json: json["authority"] as? [String: Any])
+    }
+
+    private static func defaultExitState(for sampleStatus: VoiceCloneSampleStatus) -> String {
+        switch sampleStatus {
+        case .disabled:
+            return "accessRevoked"
+        case .deleted:
+            return "partial"
+        default:
+            return "active"
+        }
+    }
+
+    private static func defaultLocalCleanupState(for sampleStatus: VoiceCloneSampleStatus) -> String {
+        sampleStatus == .deleted ? "tombstoned" : (sampleStatus == .disabled ? "retained" : "notRequested")
+    }
+
+    private static func defaultProviderCleanupState(for sampleStatus: VoiceCloneSampleStatus) -> String {
+        sampleStatus == .deleted ? "unsupported" : "notRequested"
     }
 
     private static func intValue(_ value: Any?) -> Int? {

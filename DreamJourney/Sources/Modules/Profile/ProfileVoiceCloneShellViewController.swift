@@ -586,7 +586,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     @objc private func deleteVoiceTapped() {
         confirmDestructive(
             title: "删除音色",
-            message: "删除会清理后端样本、训练产物和本地记录。此操作不可恢复。",
+            message: "删除会立即停止该音色用于回响，并更新本地记录。当前未接入第三方服务清理回执，无法确认第三方数据是否已删除。此操作不可恢复。",
             actionTitle: "删除"
         ) { [weak self] in
             self?.performDeleteVoice()
@@ -672,7 +672,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
                 guard self.validateViewOperation(at: .ui) else { return }
                 switch result {
                 case .success(let snapshot):
-                    self.applySnapshot(snapshot, feedback: "音色已删除。")
+                    self.applySnapshot(snapshot, feedback: snapshot.exitDisclosureText)
                 case .failure(let error):
                     self.finishBusy(feedback: error.localizedDescription)
                 }
@@ -858,7 +858,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         case .disabled:
             return "音色已禁用"
         case .deleted:
-            return "音色已删除"
+            return "音色已停止使用"
         }
     }
 
@@ -887,7 +887,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         case .disabled:
             return "当前音色不会再用于合成，可重新提交样本恢复。"
         case .deleted:
-            return "音色和本地记录已清理，可以重新授权创建。"
+            return snapshot.exitDisclosureText
         }
     }
 
@@ -912,7 +912,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         case .disabled:
             return "已暂停"
         case .deleted:
-            return "已删除"
+            return "已停止"
         case .notProvided:
             return "待创建"
         }
@@ -942,7 +942,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         case .disabled:
             return "音色已暂停，回响会使用普通语音"
         case .deleted:
-            return "音色已删除，回响会使用普通语音"
+            return "音色已停止使用，回响会使用普通语音"
         case .notProvided:
             return "创建音色后可用于回响"
         }

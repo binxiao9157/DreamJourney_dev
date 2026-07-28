@@ -45,6 +45,11 @@ struct VoiceCloneProfileSnapshot {
     let providerBindingMode: String
     let providerSlotManaged: Bool
     let providerSlotState: String
+    let exitState: String
+    let accessRevoked: Bool
+    let localCleanupState: String
+    let providerCleanupState: String
+    let providerCleanupReceiptAvailable: Bool
 
     init(
         voiceProfileId: String,
@@ -62,7 +67,12 @@ struct VoiceCloneProfileSnapshot {
         defaultReleaseVisible: Bool = true,
         providerBindingMode: String = "unassigned",
         providerSlotManaged: Bool = false,
-        providerSlotState: String = ""
+        providerSlotState: String = "",
+        exitState: String = "",
+        accessRevoked: Bool? = nil,
+        localCleanupState: String = "",
+        providerCleanupState: String = "",
+        providerCleanupReceiptAvailable: Bool = false
     ) {
         self.voiceProfileId = voiceProfileId
         self.sampleStatus = sampleStatus
@@ -80,6 +90,11 @@ struct VoiceCloneProfileSnapshot {
         self.providerBindingMode = providerBindingMode
         self.providerSlotManaged = providerSlotManaged
         self.providerSlotState = providerSlotState
+        self.exitState = exitState.isEmpty ? Self.defaultExitState(for: sampleStatus) : exitState
+        self.accessRevoked = accessRevoked ?? (sampleStatus == .disabled || sampleStatus == .deleted)
+        self.localCleanupState = localCleanupState.isEmpty ? Self.defaultLocalCleanupState(for: sampleStatus) : localCleanupState
+        self.providerCleanupState = providerCleanupState.isEmpty ? Self.defaultProviderCleanupState(for: sampleStatus) : providerCleanupState
+        self.providerCleanupReceiptAvailable = providerCleanupReceiptAvailable
     }
 
     init(backendContract: VoiceCloneProfileContract) {
@@ -99,8 +114,42 @@ struct VoiceCloneProfileSnapshot {
             defaultReleaseVisible: backendContract.defaultReleaseVisible,
             providerBindingMode: backendContract.providerBindingMode,
             providerSlotManaged: backendContract.providerSlotManaged,
-            providerSlotState: backendContract.providerSlotState
+            providerSlotState: backendContract.providerSlotState,
+            exitState: backendContract.exitState,
+            accessRevoked: backendContract.accessRevoked,
+            localCleanupState: backendContract.localCleanupState,
+            providerCleanupState: backendContract.providerCleanupState,
+            providerCleanupReceiptAvailable: backendContract.providerCleanupReceiptAvailable
         )
+    }
+
+    var exitDisclosureText: String {
+        if exitState == "partial" && providerCleanupState == "unsupported" && !providerCleanupReceiptAvailable {
+            return "该音色已停止用于回响。本地记录已标记删除；第三方服务清理尚未接入，无法确认第三方数据是否已删除。"
+        }
+        if exitState == "accessRevoked" {
+            return "该音色已停止用于回响，第三方服务清理未被请求。"
+        }
+        return ""
+    }
+
+    private static func defaultExitState(for sampleStatus: VoiceCloneSampleStatus) -> String {
+        switch sampleStatus {
+        case .disabled:
+            return "accessRevoked"
+        case .deleted:
+            return "partial"
+        default:
+            return "active"
+        }
+    }
+
+    private static func defaultLocalCleanupState(for sampleStatus: VoiceCloneSampleStatus) -> String {
+        sampleStatus == .deleted ? "tombstoned" : (sampleStatus == .disabled ? "retained" : "notRequested")
+    }
+
+    private static func defaultProviderCleanupState(for sampleStatus: VoiceCloneSampleStatus) -> String {
+        sampleStatus == .deleted ? "unsupported" : "notRequested"
     }
 
     var isReadyForUse: Bool {
@@ -1075,7 +1124,12 @@ final class VoiceCloneService {
             defaultReleaseVisible: source.defaultReleaseVisible,
             providerBindingMode: source.providerBindingMode,
             providerSlotManaged: source.providerSlotManaged,
-            providerSlotState: source.providerSlotState
+            providerSlotState: source.providerSlotState,
+            exitState: source.exitState,
+            accessRevoked: source.accessRevoked,
+            localCleanupState: source.localCleanupState,
+            providerCleanupState: source.providerCleanupState,
+            providerCleanupReceiptAvailable: source.providerCleanupReceiptAvailable
         )
     }
 
