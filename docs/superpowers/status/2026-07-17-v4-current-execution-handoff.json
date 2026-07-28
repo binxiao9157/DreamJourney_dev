@@ -1,32 +1,33 @@
 {
   "activeWorkItem": {
-    "id": "WI-S3-01-08",
+    "id": "WI-S3-01-09",
     "state": "IN_PROGRESS",
     "leaseState": "HELD",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "authorityLock": "PUBLICATION",
-    "predecessorWorkItem": "WI-S3-01-07",
-    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-lifecycle-propagation-g0.md",
+    "predecessorWorkItem": "WI-S3-01-08",
+    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-release-guard-viewstate-g0.md",
     "completedSubSlices": [],
-    "currentSubSlice": "WI-S3-01-08_PUBLICATION_UI_RELEASE_GUARD_G0 / model only hidden Owner/Visitor publication ViewState, aggregate metrics and release-guard response contracts. Do not register a public route, enable Visitor access, reveal private data, expose a release UI or claim product/legal approval.",
+    "currentSubSlice": "WI-S3-01-09_PUBLICATION_M2_CANARY_EXIT_G0 / model only default-blocked adult publication canary, incident, delete and regulatory-exit decision contracts. Do not enroll a real cohort, create public access, invoke a delete/provider operation, open a route or self-approve G2/G3/G4.",
     "gateEvidence": {
-      "G0": "PENDING / PUBLICATION_OWNER_VISITOR_VIEWSTATE_AND_RELEASE_GUARD_CONTRACT_MUST_REMAIN_HIDDEN_DEFAULT_DENY_AND_FREE_OF_PRIVATE_DATA_LEAK_PUBLIC_ROUTE_OR_RELEASE_ENABLEMENT",
-      "G1": "OPEN / HIDDEN_OWNER_PUBLICATION_STATUS_WITHDRAW_DISCLOSURE_AND_VISITOR_FAILURE_VIEWSTATE_PENDING",
-      "G2": "OPEN / REAL_METRICS_ROUTE_AND_PUBLIC_GUARD_DEPLOYMENT_EVIDENCE_PENDING",
-      "G4": "OPEN / PRODUCT_PRIVACY_ACCESSIBILITY_AND_LEGAL_RELEASE_APPROVAL_PENDING"
+      "G0": "PENDING / PUBLICATION_M2_CANARY_INCIDENT_DELETE_AND_REGULATORY_EXIT_CONTRACT_MUST_REMAIN_DEFAULT_BLOCKED_WITHOUT_REAL_COHORT_PUBLIC_ACCESS_DELETE_PROVIDER_OR_RELEASE_ACTION",
+      "G1": "OPEN / HIDDEN_UIQA_RELEASE_KILL_SWITCH_AND_OWNER_VISITOR_FAILURE_DISCLOSURE_PENDING",
+      "G2": "OPEN / REAL_POSTGRES_PUBLIC_ROLE_RESTORE_CONCURRENCY_AND_DEPLOYED_SMOKE_PENDING",
+      "G3": "OPEN / EXTERNAL_INDEX_CDN_OBJECT_PROVIDER_AND_REGULATORY_EVIDENCE_PENDING",
+      "G4": "OPEN / ADULT_VISITOR_PRODUCT_PRIVACY_LEGAL_SAFETY_OPERATIONS_AND_ACCESSIBILITY_APPROVAL_PENDING"
     },
     "latestEvidence": {
-      "backendBaseline": "main@5fb7611 / Publication lifecycle propagation G0 contract committed locally; no deployment or public release claim",
+      "backendBaseline": "main@d608754 / Publication release-guard/ViewState G0 contract committed locally; no deployment or public release claim",
       "iosBaseline": "feature/prd-stitch-ui-adaptation@5e5c705 / C05 synthetic ViewState parity G1 gate revalidated locally",
-      "scope": "WI-S3-01-08_G0_FIRST / create only hidden Owner/Visitor publication ViewState, aggregate metrics and release-guard response seams. No public route, visitor access, private projection, release UI, product approval or legal approval claim.",
-      "validation": "WI-S3-01-07 lifecycle propagation G0 gate PASS (10 tests); full scripts/verify_backend.sh PASS (1434 unit tests plus scoped gates and smokes); lifecycle remains hash-only/default-off with no publication mutation, grant revoke, visitor-session close, gateway denial, index/cache clear, external cleanup, route or release UI.",
-      "constraints": "Publication/visitor policy remains strict default deny. Release ViewState must use fixed allowlists and aggregate-only metrics, never expose Visitor body, private Source/Memory/Persona data, raw identity or operational risk detail."
+      "scope": "WI-S3-01-09_G0_FIRST / create only a value-minimized, default-blocked adult publication canary, incident, delete and regulatory-exit decision seam. No cohort enrollment, public access, provider call, deletion, route, deployment or external approval claim.",
+      "validation": "WI-S3-01-08 release-guard/ViewState G0 gate PASS (9 tests); full scripts/verify_backend.sh PASS with scoped gates and smokes; the ViewState remains hash-only/default-off with no route, Visitor session, metric reader, private projection, UI enablement or public release.",
+      "constraints": "Publication/visitor policy remains strict default deny. A canary decision must require current evidence and named external approvals, fail closed for any private leak/revoke gap/unknown effect/open incident, and never self-promote a real adult Visitor cohort."
     },
-    "currentSummary": "WI-S3-01-07 is recorded as a locally verified lifecycle-propagation contract. It validates Owner scope, trigger/action pairing and stale sequences; plans deny-first suspend/withdraw propagation; requires a new version plus second confirmation for an update; and creates no publication mutation, grant/session effect, index/cache clear, external cleanup, route or release UI. Work advances to WI-S3-01-08 for hidden Owner/Visitor ViewState, aggregate metrics and release-guard contracts.",
+    "currentSummary": "WI-S3-01-08 is recorded as a locally verified hidden release-guard/ViewState contract. It uses fixed response fields and aggregate-only metrics with a privacy minimum; rejects family-derived Visitor access, invalid adult state, offline state and incomplete release prerequisites; and remains policy-disabled even when candidate prerequisites are supplied. Work advances to WI-S3-01-09 for default-blocked M2 canary, incident, delete and regulatory-exit decision contracts.",
     "backendPendingPaths": [
-      "app/domain/publication/lifecycle_propagation.py",
+      "app/domain/publication/release_guard_viewstate.py",
       "app/services/release_policy.py",
-      "scripts/run-backend-publication-lifecycle-propagation-g0-gate.sh"
+      "scripts/run-backend-publication-release-guard-viewstate-g0-gate.sh"
     ]
   },
   "baselines": {
@@ -706,12 +707,18 @@
       "evidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-lifecycle-propagation-g0.md",
       "implementationStatus": "INTERNAL_READY / PUBLICATION_LIFECYCLE_PROPAGATION_G0_VERIFIED_LOCAL / BACKEND_LOCAL_COMMITTED_5fb7611 / HASH_ONLY_DEFAULT_OFF / NO_PUBLICATION_WRITER_GRANT_REVOKE_SESSION_CLOSE_GATEWAY_MUTATION_INDEX_CACHE_EXTERNAL_CLEANUP_ROUTE_OR_RELEASE_UI / G1_G2_G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN"
+    },
+    {
+      "id": "WI-S3-01-08",
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-release-guard-viewstate-g0.md",
+      "implementationStatus": "INTERNAL_READY / PUBLICATION_RELEASE_GUARD_VIEWSTATE_G0_VERIFIED_LOCAL / BACKEND_LOCAL_COMMITTED_d608754 / HASH_ONLY_DEFAULT_OFF / NO_OWNER_OR_VISITOR_ROUTE_SESSION_METRICS_READER_PRIVATE_PROJECTION_RELEASE_UI_OR_PUBLIC_ENABLEMENT / G1_G2_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G4_OPEN"
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S3-01-09",
+    "id": "WI-V0-01-09",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After the hidden Owner/Visitor publication ViewState and release-guard contract, continue with M2 adult publication canary, incident, delete and regulatory-exit planning. Do not treat local planning evidence as permission to open an adult Visitor cohort, create public access or self-approve G2/G3/G4."
+    "summary": "After the default-blocked Publication M2 canary/incident/exit decision contract, continue with single AudioOwner, PCM drive, interrupt and microphone-recovery hardening. Do not treat non-device evidence as Tencent/Volc G3 or real-device G4 validation."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -720,5 +727,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-29T07:00:00+08:00"
+  "updatedAt": "2026-07-29T07:20:00+08:00"
 }
