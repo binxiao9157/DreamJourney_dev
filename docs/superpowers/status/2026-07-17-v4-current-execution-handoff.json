@@ -8,20 +8,21 @@
     "predecessorWorkItem": "WI-S1-03-02",
     "priorEvidence": "docs/superpowers/status/2026-07-19-wi-s1-01-06-memory-projection-foundation.md",
     "completedSubSlices": [
-      "WI-S1-01-06_G0_LEGACY_KBLITE_GAP_PROMPT_FENCE_VERIFIED_LOCAL"
+      "WI-S1-01-06_G0_LEGACY_KBLITE_GAP_PROMPT_FENCE_VERIFIED_LOCAL",
+      "WI-S1-01-06_G0_QUERY_RANKED_CONTEXT_SHADOW_VERIFIED_LOCAL"
     ],
-    "currentSubSlice": "WI-S1-01-06_RECONCILE_AFTER_LEGACY_GAP_PROMPT_FENCE / The local legacy KBLite gap prompt no longer drives Echo follow-up questions. Inspect the remaining Projection-to-Context cutover boundary without treating KBLite as Authority or promoting a public feature.",
+    "currentSubSlice": "WI-S1-01-06_RECONCILE_AFTER_QUERY_RANKED_CONTEXT_SHADOW / QA-only deterministic text selection can now narrow current confirmed Projection citations and fails closed when its private search projection is unavailable. Inspect the next non-duplicate Projection-to-Context cutover boundary without treating KBLite as Authority or promoting a public feature.",
     "gateEvidence": {
-      "G0": "VERIFIED_LOCAL / LEGACY_KBLITE_GAP_PROMPT_FENCE / IOS_LOCAL_COMMITTED_9672ec1"
+      "G0": "VERIFIED_LOCAL / LEGACY_KBLITE_GAP_PROMPT_FENCE / QUERY_RANKED_CONTEXT_SHADOW / BACKEND_LOCAL_COMMITTED_8e2e3c6 / IOS_LOCAL_COMMITTED_a2cdccc"
     },
     "latestEvidence": {
-      "backendBaseline": "main@26b015c / Publication canary and exit-readiness G0 contract committed locally; no deployment or public release claim",
-      "iosBaseline": "feature/prd-stitch-ui-adaptation@9672ec1 / legacy KBLite gap suggestions are fenced from Echo prompts; no public UI or Provider/device claim",
-      "scope": "WI-S1-01-06_G0 / Legacy KBLite remains a compatibility path, but its locally inferred gap questions no longer enter the public Echo fallback prompt. The root three-tab UI, Stitch visual design, backend API and business writers are unchanged.",
-      "validation": "product-v4-legacy-kblite-gap-prompt-fence-check PASS; owner-truth-knowledge-recommendation-plan-client-check PASS; generic iPhoneOS Debug build PASS; git diff --check PASS.",
-      "constraints": "This evidence does not make KBLite a Projection reader, switch Context/Echo to Owner Truth, authorize data migration, real provider delivery, true-device claims or public feature promotion."
+      "backendBaseline": "main@8e2e3c6 / QA-only Context Shadow supports explicit projectionCitationOrder or deterministicTextFallback selection; no deployment or public release claim",
+      "iosBaseline": "feature/prd-stitch-ui-adaptation@a2cdccc / iOS parses only approved QA selection modes and binds the selected mode into value-free evidence; no public UI or Provider/device claim",
+      "scope": "WI-S1-01-06_G0 / Legacy KBLite remains a compatibility path. Query-ranked Context Shadow can only narrow current policy-eligible confirmed Projection citations; absent or stale SearchDocument projection returns no personal memory. The root three-tab UI, Stitch visual design, public /context/build and business writers are unchanged.",
+      "validation": "Backend 22 focused Context Shadow, Answer Citation, API and SearchDocument tests PASS; Python compile PASS; product-v4 iOS Context/Citation check PASS; generic iPhoneOS Debug build PASS; git diff --check PASS. Postgres smoke was extended but not run locally because DATABASE_URL is unset.",
+      "constraints": "This evidence does not make KBLite a Projection reader, switch public Context/Echo to Owner Truth, claim retrieval quality, authorize data migration, real provider delivery, deployment, true-device evidence or public feature promotion."
     },
-    "currentSummary": "WI-S1-01-06 has a new scoped G0 fence: the legacy KBLite graph cannot independently choose follow-up questions for Echo. The next task must inspect the remaining Projection-to-Context boundary without duplicating the existing read envelope, typed citation or recommendation-plan work.",
+    "currentSummary": "WI-S1-01-06 now has two scoped local G0 protections: legacy KBLite cannot independently choose Echo follow-up questions, and QA-only deterministic text selection can narrow current confirmed Projection citations without widening policy eligibility. The next task must inspect the remaining Projection-to-Context boundary without duplicating the existing read envelope, typed citation, SearchDocument projection or recommendation-plan work.",
     "backendPendingPaths": []
   },
   "baselines": {
@@ -567,7 +568,7 @@
     {
       "evidence": "docs/superpowers/status/2026-07-19-wi-s1-01-06-kblite-compatibility-read-envelope.md; docs/superpowers/status/2026-07-19-wi-s1-01-06-memory-projection-foundation.md",
       "id": "WI-S1-01-06",
-      "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / LEGACY_KBLITE_GAP_PROMPT_FENCE_G0_VERIFIED_LOCAL_9672ec1 / G0_G2_SCOPED_EVIDENCE_PRESENT / IOS_LOCAL_COMMITTED / G1_G3_G4_OPEN",
+      "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / LEGACY_KBLITE_GAP_PROMPT_FENCE_G0_VERIFIED_LOCAL_9672ec1 / QUERY_RANKED_CONTEXT_SHADOW_G0_VERIFIED_LOCAL_BACKEND_8e2e3c6_IOS_a2cdccc / G0_G2_SCOPED_EVIDENCE_PRESENT / QUERY_QUALITY_G3_G4_OPEN / NO_PUBLIC_CONTEXT_CUTOVER",
       "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
     },
     {
@@ -597,7 +598,7 @@
     {
       "evidence": "docs/superpowers/status/2026-07-19-wi-s1-01-07-owner-qa-context-typed-citation.md",
       "id": "WI-S1-01-07",
-      "implementationStatus": "INTERNAL_READY / G0_G1_G2_SCOPED_EVIDENCE_PRESENT / IOS_LOCAL_COMMITTED / G3_DEFERRED_UNTIL_QUERY_RETRIEVER_EXISTS",
+      "implementationStatus": "INTERNAL_READY / G0_G1_G2_SCOPED_EVIDENCE_PRESENT / IOS_LOCAL_COMMITTED / QA_DETERMINISTIC_TEXT_FALLBACK_AVAILABLE / G3_DEFERRED_UNTIL_QUERY_QUALITY_GATE_EXISTS",
       "registryClosure": "SCOPED_G0_G1_G2_EVIDENCE_PRESENT_G3_RETRIEVER_QUALITY_OPEN"
     },
     {
@@ -724,7 +725,7 @@
   "nextWorkItem": {
     "id": "WI-S1-01-06",
     "state": "RECONCILE_AFTER_CURRENT",
-    "summary": "The legacy KBLite gap-prompt fence is now locally evidenced for WI-S1-01-06. Select the next non-duplicate Projection-to-Context M0 gap after implementation inspection; do not treat KBLite as Authority or promote real Provider, deployment, true-device or public status from local evidence."
+    "summary": "The legacy KBLite gap-prompt fence and QA-only deterministic query Context Shadow are now locally evidenced for WI-S1-01-06. Select the next non-duplicate Projection-to-Context M0 gap after implementation inspection; do not treat KBLite as Authority or promote retrieval quality, deployment, true-device or public status from local evidence."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -733,5 +734,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-29T07:18:02+08:00"
+  "updatedAt": "2026-07-29T08:00:00+08:00"
 }

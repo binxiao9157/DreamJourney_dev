@@ -12,7 +12,7 @@ evidence 结构。
 状态：`INTERNAL_READY / G0_TYPED_CONTRACT_VERIFIED /
 G1_QA_TEXT_EVIDENCE_SIMULATOR_VERIFIED /
 G2_SCOPED_DEPLOYED_POSTGRES_VERIFIED / IOS_LOCAL_COMMITTED /
-G3_DEFERRED_UNTIL_QUERY_RETRIEVER_EXISTS`。
+G3_DEFERRED_UNTIL_QUERY_QUALITY_GATE_EXISTS`。
 
 本轮没有修改公开 `/context/build`、公开 Echo UI、Archive/KBLite writer、数字人或
 音色链路。生产用户无法通过此合同读取个人记忆正文。
@@ -97,16 +97,17 @@ tmp/visual-qa/prd-stitch-ui/echo-qa-evidence-bundle-export-smoke/20260719-233143
 - `G2`：已完成部署容器内的隔离 Postgres 合同 smoke；真实 Owner QA cohort 的线上
   观察、性能/容量阈值和 citation resolve 压测仍未执行，不能因此宣称公开 Context
   切流完成。
-- `G3`：当前 `ContextShadowService` 的 `projectionCitationOrder` 是确定性引用顺序，
-  代码明确标注它不是相关性排序；工程尚不存在 query-driven retriever/ranker。因此不能用
-  fixture 伪造“检索质量已验收”，也不能把该 Gate 误标为完成。待后续引入真正的 query
-  retriever 后，再以独立的语料、失败分母、跨 Vault 拒绝与质量门完成本 Gate。
+- `G3`：`projectionCitationOrder` 仍只是确定性引用顺序。后续新增的
+  `deterministicTextFallback` 只在 QA Context Shadow 显式请求时读取当前
+  SearchDocument Projection，并且只能收窄已获准的 confirmed MemoryVersion；它不是
+  语义检索或质量认可。不能用 fixture 伪造“检索质量已验收”，也不能把该 Gate 误标为
+  完成。后续仍需独立语料、失败分母、跨 Vault 拒绝与质量门。
 - `G4`：不适用于本轮内部 QA 合同；未来公开/隐私评审另行处理。
 
 ## 下一步
 
 `WI-S1-01-07` 的当前内部 QA 合同不再继续伪造 G3 基线。将 G3 保持为
-`DEFERRED_UNTIL_QUERY_RETRIEVER_EXISTS`，并转入不依赖它的 `WI-S1-01-08`：纠正必须
+`DEFERRED_UNTIL_QUERY_QUALITY_GATE_EXISTS`，并转入不依赖它的 `WI-S1-01-08`：纠正必须
 形成 Correction Candidate 和新的不可变 MemoryVersion，而不是原地修改 Archive 或
-Projection。真实 Owner QA cohort 的线上观察、容量压测和未来 query retrieval 质量门仍
+Projection。真实 Owner QA cohort 的线上观察、容量压测和后续 query retrieval 质量门仍
 作为后续受控 Gate，且不得把 legacy/private JSON 当作 Authority。

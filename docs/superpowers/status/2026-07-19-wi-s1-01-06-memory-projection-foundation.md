@@ -85,3 +85,35 @@ read-envelope 的 G2 部署与 smoke 已完成。下一步进入 `WI-S1-01-07` �
 plan client check、`git diff --check` 和 generic unsigned iPhoneOS Debug build 均通过。
 这仅补充 `WI-S1-01-06` 的本地 G0 边界证据；Projection rebuild、Context/Echo 正式
 cutover、G1/G3/G4 仍保持开放。
+
+## Query-Ranked Context Shadow（QA-only）
+
+Backend `8e2e3c6 feat(v4): add query-ranked context shadow` 与 iOS
+`a2cdccc feat(v4): parse query-ranked context shadow` 完成了一项继续保持默认关闭的
+G0 子闭环。
+
+- `POST /v2/vaults/{vaultId}/context-shadow/build` 的 QA 合同新增显式
+  `selectionMode`。默认仍为 `projectionCitationOrder`；只有 Owner QA 请求显式传入
+  `deterministicTextFallback` 时，才读取现有私有 SearchDocument Projection 做确定性
+  文本匹配。
+- 匹配只能收窄已经通过 Context policy 的 current confirmed `MemoryVersion`。它不能把
+  restricted、过期、跨 Vault 或未确认项提升为可见上下文。
+- SearchDocument Projection 缺失、checkpoint/authority epoch 不一致时，返回
+  `owner_truth_context_search_unavailable_no_personal_memory`，不会回退到 legacy KBLite
+  或全量个人记忆；无匹配时返回
+  `owner_truth_context_no_query_match_no_personal_memory`。
+- Context hash 现在同时绑定 query hash、selection mode、authority、selected/filtered
+  citations 和 fallback。Answer/Citation receipt 会回传同一 selection mode，确保收据
+  不能引用与 Context build 不一致的选择计划。
+- iOS 只解析两种受控 mode，并把 mode 放入 QA evidence readout；公开 Echo、公开
+  `/context/build`、Archive/KBLite writer 和三 Tab 视觉均未改变。
+
+本地验证：后端 Context Shadow、Answer Citation、FastAPI candidate-review API 和
+SearchDocument read 测试共 22 项通过；Python compile、iOS Context/Citation static check、
+`git diff --check` 与 generic unsigned iPhoneOS Debug build 通过。Postgres smoke 已加入
+"query matches only confirmed eligible memory" 和相同 Context hash 的 Answer/Citation
+断言，但本机未配置 `DATABASE_URL`，因此没有将本轮标记为部署或 G2 通过。
+
+这不是语义检索或质量验收：当前算法仍是 deterministic text fallback，未接入向量、模型
+或真实 Owner corpus。真实检索质量、线上 cohort、正式 Context/Echo cutover、G1/G2/G3/G4
+继续保持开放。
