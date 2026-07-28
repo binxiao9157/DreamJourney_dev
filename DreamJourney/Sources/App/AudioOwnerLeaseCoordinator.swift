@@ -469,6 +469,34 @@ final class AudioSessionCoordinator: @unchecked Sendable {
     }
 }
 
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+/// Simulator-only fixtures for Echo audio-owner UIQA. Keeping these outside the
+/// view controller makes the production coordinator boundary explicit: the
+/// injected driver never configures `AVAudioSession` or opens a provider.
+enum AudioOwnerLeaseQASupport {
+    enum EchoAudioOwnerDriverError: Error {
+        case activationRejected(AudioOwnerLeaseOwner)
+    }
+
+    final class EchoAudioOwnerDriver: AudioSessionDriving {
+        var rejectedOwners: Set<AudioOwnerLeaseOwner> = []
+        private(set) var activationCount = 0
+        private(set) var deactivationCount = 0
+
+        func activate(for lease: AudioOwnerLease) throws {
+            activationCount += 1
+            if rejectedOwners.contains(lease.owner) {
+                throw EchoAudioOwnerDriverError.activationRejected(lease.owner)
+            }
+        }
+
+        func deactivate(after _: AudioOwnerLease) throws {
+            deactivationCount += 1
+        }
+    }
+}
+#endif
+
 #if os(iOS) || targetEnvironment(macCatalyst)
 private final class SystemAudioSessionDriver: AudioSessionDriving {
     func activate(for lease: AudioOwnerLease) throws {

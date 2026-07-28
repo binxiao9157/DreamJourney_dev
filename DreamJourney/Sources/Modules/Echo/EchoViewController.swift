@@ -265,32 +265,6 @@ private final class EchoTurnKnowledgeContextGate {
     }
 }
 
-#if UI_QA_SIMULATOR && targetEnvironment(simulator)
-private enum UIQAEchoAudioOwnerDriverError: Error {
-    case activationRejected(AudioOwnerLeaseOwner)
-}
-
-/// A side-effect-free driver used only by the simulator harness. It proves the
-/// Echo controller's coordinator integration without configuring AVAudioSession
-/// or opening a provider session.
-private final class UIQAEchoAudioOwnerDriver: AudioSessionDriving {
-    var rejectedOwners: Set<AudioOwnerLeaseOwner> = []
-    private(set) var activationCount = 0
-    private(set) var deactivationCount = 0
-
-    func activate(for lease: AudioOwnerLease) throws {
-        activationCount += 1
-        if rejectedOwners.contains(lease.owner) {
-            throw UIQAEchoAudioOwnerDriverError.activationRejected(lease.owner)
-        }
-    }
-
-    func deactivate(after _: AudioOwnerLease) throws {
-        deactivationCount += 1
-    }
-}
-#endif
-
 final class EchoViewController: UIViewController {
     private static let echoTurnKnowledgeTimeout: TimeInterval = 0.9
 
@@ -7528,7 +7502,7 @@ extension EchoViewController {
         let previousCoordinator = audioSessionCoordinator
         let previousLease = activeEchoAudioOwnerLease
         let previousAudioOwner = currentEchoAudioOwner
-        let driver = UIQAEchoAudioOwnerDriver()
+        let driver = AudioOwnerLeaseQASupport.EchoAudioOwnerDriver()
         let coordinator = AudioSessionCoordinator(driver: driver)
         audioSessionCoordinator = coordinator
         activeEchoAudioOwnerLease = nil
