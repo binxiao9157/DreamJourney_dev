@@ -373,6 +373,25 @@ enum QAScenarioResultWriter {
             throw WriteError.resultWrite(error)
         }
     }
+
+    /// Emits a deterministic UIQA result without routing smoke persistence
+    /// through AppDelegate. This remains compile-isolated from release builds.
+    static func writeAndLog(
+        _ result: [String: Any],
+        fileName: String,
+        smokeName: String
+    ) {
+        do {
+            let resultURL = try write(result, fileName: fileName)
+            print("[UI_QA] \(smokeName) result=\(resultURL.path)")
+        } catch WriteError.resultEncoding {
+            print("[UI_QA] \(smokeName) failed reason=resultEncoding")
+        } catch WriteError.resultWrite(let error) {
+            print("[UI_QA] \(smokeName) failed reason=resultWrite error=\(error.localizedDescription)")
+        } catch {
+            print("[UI_QA] \(smokeName) failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
 }
 #endif
 

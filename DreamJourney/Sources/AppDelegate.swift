@@ -3996,8 +3996,12 @@ private extension AppDelegate {
             retry: { [weak self] nextRetryCount in
                 self?.runEchoAudioOwnerCoordinatorSmoke(retryCount: nextRetryCount)
             },
-            writeResult: { [weak self] result in
-                self?.writeEchoAudioOwnerCoordinatorSmokeResult(result)
+            writeResult: { result in
+                QAScenarioResultWriter.writeAndLog(
+                    result,
+                    fileName: "echo-audio-owner-coordinator-smoke-result.json",
+                    smokeName: "EchoAudioOwnerCoordinatorSmoke"
+                )
             },
             execute: { echoViewController, completion in
                 echoViewController.runUIQAEchoAudioOwnerCoordinatorSmoke(completion: completion)
@@ -4728,14 +4732,6 @@ private extension AppDelegate {
         } catch {
             print("[UI_QA] EchoDigitalHumanLifecycleSmoke failed reason=resultWrite error=\(error.localizedDescription)")
         }
-    }
-
-    func writeEchoAudioOwnerCoordinatorSmokeResult(_ result: [String: Any]) {
-        writeEchoQAExportSmokeResult(
-            result,
-            fileName: "echo-audio-owner-coordinator-smoke-result.json",
-            smokeName: "EchoAudioOwnerCoordinatorSmoke"
-        )
     }
 
     func writeEchoContinuousTurnSmokeResult(_ result: [String: Any]) {

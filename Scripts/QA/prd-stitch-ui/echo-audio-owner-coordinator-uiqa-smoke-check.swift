@@ -33,7 +33,7 @@ for required in [
 }
 
 for required in [
-    "UIQAEchoAudioOwnerDriver",
+    "AudioOwnerLeaseQASupport.EchoAudioOwnerDriver()",
     "audioSessionCoordinator = AudioSessionCoordinator.shared",
     "runUIQAEchoAudioOwnerCoordinatorSmoke",
     "captureAcquired",
@@ -50,11 +50,16 @@ for required in [
 
 for required in [
     "runEchoAudioOwnerCoordinatorSmoke",
-    "writeEchoAudioOwnerCoordinatorSmokeResult",
+    "QAScenarioResultWriter.writeAndLog",
     "echo-audio-owner-coordinator-smoke-result.json",
 ] {
     require(appDelegate.contains(required), "AppDelegate coordinator smoke wiring missing \(required)")
 }
+
+require(
+    !appDelegate.contains("func writeEchoAudioOwnerCoordinatorSmokeResult"),
+    "AppDelegate must not retain the coordinator result writer"
+)
 
 for required in [
     "run-installable-simulator-uiqa.sh",

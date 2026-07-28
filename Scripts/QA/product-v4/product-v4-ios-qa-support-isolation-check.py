@@ -36,6 +36,13 @@ def main() -> None:
     ):
         require(required in coordinator, f"QA support boundary missing: {required}")
 
+    for required in (
+        "enum QAScenarioResultWriter",
+        "static func writeAndLog(",
+        "This remains compile-isolated from release builds.",
+    ):
+        require(required in read(ROOT / "DreamJourney/Sources/App/FeatureFlagService.swift"), f"QA result writer boundary missing: {required}")
+
     require(
         "AudioOwnerLeaseQASupport.EchoAudioOwnerDriver()" in echo,
         "Echo must consume the simulator driver through AudioOwnerLeaseQASupport",
@@ -45,6 +52,16 @@ def main() -> None:
         "private final class UIQAEchoAudioOwnerDriver",
     ):
         require(removed not in echo, f"Echo must not retain inline QA fixture: {removed}")
+
+    app_delegate = read(ROOT / "DreamJourney/Sources/AppDelegate.swift")
+    require(
+        "QAScenarioResultWriter.writeAndLog(" in app_delegate,
+        "AppDelegate must delegate Echo QA result persistence to QA support",
+    )
+    require(
+        "func writeEchoAudioOwnerCoordinatorSmokeResult" not in app_delegate,
+        "AppDelegate must not retain the Echo audio-owner result writer",
+    )
 
     require(
         "AudioOwnerLeaseCoordinator.swift in Sources" in project,

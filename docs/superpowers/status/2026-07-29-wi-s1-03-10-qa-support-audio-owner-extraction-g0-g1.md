@@ -17,6 +17,9 @@ Authority lock：`IOS_COMPOSITION`
   `UI_QA_SIMULATOR && targetEnvironment(simulator)` 编译，不能进入 Release
   artifact。
 - `EchoViewController` 只消费该 QA support driver，不再定义内联 smoke driver。
+- Echo 音频归属 smoke 的结果写出已直接委托给
+  `QAScenarioResultWriter.writeAndLog`；`AppDelegate` 不再保留该场景的
+  JSON 写出转发方法。
 - 新增 `product-v4-ios-qa-support-isolation-check.py`，守住编译隔离、调用方向和
   target 包含关系。
 - 新增 `run-ios-qa-support-isolation-g0-gate.sh`，串联 isolation 检查与既有
@@ -34,6 +37,12 @@ git diff --check
 
 结果：通过。
 
+第二切片模拟器运行证据：
+
+```text
+tmp/visual-qa/prd-stitch-ui/echo-audio-owner-coordinator-uiqa-smoke/20260729-035253/
+```
+
 模拟器运行证据：
 
 ```text
@@ -46,6 +55,7 @@ tmp/visual-qa/prd-stitch-ui/echo-audio-owner-coordinator-uiqa-smoke/20260729-034
   preservation、capture restore 与 stale release rejection 均为 `true`。
 - 最终 `audioOwner=none`，没有遗留 injected lease。
 - 截图仍是原有全屏 Echo；QA-only 状态文字为“音频归属校验完成”。
+- Result JSON 仍写入同一 simulator Documents 路径，shell smoke 的消费合同不变。
 
 ## 未完成事项
 
