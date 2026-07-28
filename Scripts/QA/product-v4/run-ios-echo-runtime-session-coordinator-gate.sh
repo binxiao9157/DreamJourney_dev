@@ -17,7 +17,8 @@ swiftc \
 "$MODEL_SMOKE_BINARY"
 
 # The hosted test bundle links provider SDKs unavailable to SwiftPM. CI may pass
-# a runnable simulator destination to execute the isolated coordinator tests.
+# a runnable simulator destination to execute the isolated coordinator and
+# request-scoped Tencent terminal-event tests.
 if [[ -n "${DJ_IOS_TEST_DESTINATION:-}" ]]; then
   xcodebuild test \
     -workspace "$ROOT/DreamJourney.xcworkspace" \
@@ -25,6 +26,7 @@ if [[ -n "${DJ_IOS_TEST_DESTINATION:-}" ]]; then
     -configuration Debug \
     -destination "$DJ_IOS_TEST_DESTINATION" \
     -only-testing:DreamJourneyTests/EchoRuntimeSessionCoordinatorTests \
+    -only-testing:DreamJourneyTests/TencentDigitalHumanCloudRuntimeTests \
     CODE_SIGNING_ALLOWED=NO
   exit 0
 fi

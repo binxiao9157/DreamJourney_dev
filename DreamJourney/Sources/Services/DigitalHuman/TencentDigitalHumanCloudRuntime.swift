@@ -34,6 +34,26 @@ final class TencentDigitalHumanCloudRuntime: DigitalHumanRuntime {
             throw DigitalHumanRuntimeError.silentModeDisabled
         }
 
+        // The factory routes mock contracts to the stub in normal app flows.
+        // Keeping this narrow branch lets the cloud adapter itself be driven by
+        // a fake bridge in tests, without minting or accepting a real session.
+        if contract.providerMode == "mockContract" {
+            let configuration = TencentDigitalHumanSDKConfiguration(
+                sessionId: contract.sessionId,
+                assetVirtualmanKey: contract.assetKey ?? contract.providerAssetId,
+                virtualmanProjectId: contract.providerProjectId,
+                alphaChannelEnable: profile.alphaEnabled,
+                smartActionEnabled: profile.smartActionEnabled,
+                driveMode: profile.driveMode,
+                credentialMode: "mockContract"
+            )
+            try bridge.configure(configuration, profile: profile)
+            self.configuration = configuration
+            self.profile = profile
+            state = .preparing
+            return
+        }
+
         state = .failed(code: "credential_broker_unavailable")
         throw DigitalHumanRuntimeError.unsupportedOperation(
             "credentialBrokerUnavailable: Tencent runtime requires a revocable scoped session credential."

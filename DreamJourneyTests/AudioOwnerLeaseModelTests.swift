@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 #if canImport(DreamJourney)
 @testable import DreamJourney
 #elseif canImport(DreamJourneyCore)
@@ -386,6 +387,85 @@ final class AudioSessionCoordinatorTests: XCTestCase {
     }
 }
 
+final class TencentDigitalHumanCloudRuntimeTests: XCTestCase {
+    func testTerminalEventsOnlyCompleteTheMatchingActiveRequest() throws {
+        let bridge = TencentTerminalEventTestBridge()
+        let runtime = TencentDigitalHumanCloudRuntime(
+            contract: try makeMockContract(),
+            bridge: bridge,
+            contentView: UIView()
+        )
+        var observedStates: [DigitalHumanSessionState] = []
+        runtime.onStateChange = { observedStates.append($0) }
+
+        try runtime.configure(DigitalHumanProfile(
+            provider: "tencent",
+            personaId: "qa-persona",
+            displayName: "QA Tencent",
+            lifecycleMode: .sunlight,
+            driveMode: "streamText",
+            alphaEnabled: true,
+            smartActionEnabled: false,
+            assetKey: "qa-asset"
+        ))
+        try runtime.open()
+        bridge.emit(.webSocketOpen)
+
+        let firstRequest = "request-first"
+        try runtime.sendTextChunk("第一轮", requestID: firstRequest, sequence: 0, isFinal: true)
+        bridge.emit(.audioStart(requestID: firstRequest))
+        bridge.emit(.textOver(requestID: firstRequest))
+
+        XCTAssertEqual(runtime.state, .speaking(requestID: firstRequest))
+        XCTAssertFalse(observedStates.contains(.completed(requestID: firstRequest)))
+
+        bridge.emit(.audioOver(requestID: nil))
+        bridge.emit(.audioOver(requestID: "request-stale"))
+        XCTAssertEqual(runtime.state, .speaking(requestID: firstRequest))
+        XCTAssertFalse(observedStates.contains(.completed(requestID: firstRequest)))
+
+        let secondRequest = "request-second"
+        try runtime.sendTextChunk("第二轮", requestID: secondRequest, sequence: 0, isFinal: true)
+        bridge.emit(.audioOver(requestID: firstRequest))
+        XCTAssertEqual(runtime.state, .buffering)
+        XCTAssertFalse(observedStates.contains(.completed(requestID: firstRequest)))
+
+        bridge.emit(.audioStart(requestID: secondRequest))
+        bridge.emit(.audioOver(requestID: secondRequest))
+
+        XCTAssertEqual(runtime.state, .ready)
+        XCTAssertEqual(
+            observedStates.filter { $0 == .completed(requestID: secondRequest) }.count,
+            1
+        )
+        XCTAssertFalse(observedStates.contains(.completed(requestID: firstRequest)))
+
+        let interruptedRequest = "request-interrupted"
+        try runtime.sendTextChunk("第三轮", requestID: interruptedRequest, sequence: 0, isFinal: true)
+        runtime.interrupt()
+        bridge.emit(.audioOver(requestID: interruptedRequest))
+
+        XCTAssertEqual(runtime.state, .interrupting)
+        XCTAssertFalse(observedStates.contains(.completed(requestID: interruptedRequest)))
+    }
+
+    private func makeMockContract() throws -> DigitalHumanSessionContract {
+        try XCTUnwrap(DigitalHumanSessionContract(json: [
+            "sessionId": "qa-session",
+            "userId": "qa-owner",
+            "provider": "tencent",
+            "providerMode": "mockContract",
+            "personaId": "qa-persona",
+            "scene": "echo",
+            "deviceId": "qa-device",
+            "lifecycleMode": DigitalHumanMode.sunlight.rawValue,
+            "driveMode": "streamText",
+            "assetKey": "qa-asset",
+            "contractVersion": 1,
+        ]))
+    }
+}
+
 private final class RecordingAudioSessionDriver: AudioSessionDriving {
     enum DriverError: Error {
         case activationRejected
@@ -409,6 +489,53 @@ private final class RecordingAudioSessionDriver: AudioSessionDriving {
         if shouldFailDeactivation {
             throw DriverError.deactivationRejected
         }
+    }
+}
+
+private final class TencentTerminalEventTestBridge: TencentDigitalHumanSDKBridge {
+    let contentView = UIView()
+    var eventHandler: ((TencentDigitalHumanSDKBridgeEvent) -> Void)?
+
+    func configure(
+        _ configuration: TencentDigitalHumanSDKConfiguration,
+        profile: DigitalHumanProfile
+    ) throws {
+        _ = configuration
+        _ = profile
+    }
+
+    func openByAsset(completion: @escaping (Result<String, Error>) -> Void) {
+        completion(.success("qa-session"))
+    }
+
+    func openByProject(completion: @escaping (Result<String, Error>) -> Void) {
+        completion(.success("qa-session"))
+    }
+
+    func sendText(_ text: String, requestID: String, sequence: Int, isFinal: Bool) throws {
+        _ = text
+        _ = requestID
+        _ = sequence
+        _ = isFinal
+    }
+
+    func sendPCM(_ data: Data, requestID: String, sequence: Int, isFinal: Bool) throws {
+        _ = data
+        _ = requestID
+        _ = sequence
+        _ = isFinal
+    }
+
+    func setRemoteAudioMuted(_ muted: Bool) {
+        _ = muted
+    }
+
+    func interrupt() {}
+
+    func close() {}
+
+    func emit(_ event: TencentDigitalHumanSDKBridgeEvent) {
+        eventHandler?(event)
     }
 }
 

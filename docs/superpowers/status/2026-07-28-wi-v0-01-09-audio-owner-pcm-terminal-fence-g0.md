@@ -1,4 +1,4 @@
-# WI-V0-01-09 G0: Echo AudioOwner / PCM Terminal Fence
+# WI-V0-01-09 G0/G1: Echo AudioOwner / PCM Terminal Fence
 
 日期：2026-07-28
 
@@ -42,6 +42,7 @@ Provider 配置或真实播放方案。
 - `DreamJourneyTests/AudioOwnerLeaseModelTests.swift`
 - `Scripts/QA/product-v4/echo-runtime-session-coordinator-model-smoke.swift`
 - `Scripts/QA/product-v4/product-v4-ios-echo-runtime-session-coordinator-check.py`
+- `Scripts/QA/product-v4/run-ios-echo-runtime-session-coordinator-gate.sh`
 
 ## 验证
 
@@ -57,17 +58,22 @@ git diff --check
 
 - runtime-session 静态 gate 钉住 request-specific completion、`TextOver` / `AudioOver`
   分离、回合匹配清理及现有 session/interaction callback fence；
-- 模型 smoke 与 XCTest 编译覆盖“旧 request 完成不能清除当前 request”；
+- 模拟器 XCTest `TencentDigitalHumanCloudRuntimeTests` 用 fake Tencent bridge 覆盖
+  `TextOver`、缺失/错配 `AudioOver`、角色切换后的旧 `AudioOver`、以及停止后的迟到
+  `AudioOver`；只有当前 request 的 `AudioOver` 能发出一次 `.completed(requestID:)`；
+- 已运行 `run-echo-audio-owner-coordinator-uiqa-smoke.sh`，以注入式音频 driver 覆盖
+  capture -> Tencent playback preempt -> stale release ignored -> capture recovery；
 - runtime-session gate 和 audio-owner lease gate 均完成通用 `iPhoneOS`
   `build-for-testing`；
-- 本轮未运行模拟器交互、腾讯真实 Provider、火山合成或真机。
+- 本轮未运行腾讯真实 Provider、火山合成或真机。
 
 ## 未关闭 Gate
 
-- `G1`：mock PCM/timeline 的可视化和交互回归仍需单独确认，不能用静态状态机替代；
+- `G1`：本轮请求终止和 AudioOwner 交互回归已在模拟器确认；真实 SDK callback
+  时序、PCM/timeline 实际播放仍属于 G3/G4，不能用 fake bridge 替代；
 - `G3`：没有腾讯真实 `AudioOver`、火山复刻 PCM、Provider receipt、配额或成本证据；
 - `G4`：没有真机扬声器/听筒/蓝牙、打断、系统中断、前后台、连续对话、麦克风恢复及
   产品听感验收。
 
-因此本项状态为 `INTERNAL_READY / SCOPED_G0`。它不表示真实腾讯数字人有声、口型同步、
+因此本项状态为 `INTERNAL_READY / SCOPED_G0_G1`。它不表示真实腾讯数字人有声、口型同步、
 复刻音色已生效，不能据此公开 Voice 或 Digital Human 能力。
