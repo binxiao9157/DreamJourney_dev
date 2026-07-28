@@ -584,6 +584,12 @@
       "evidence": "docs/superpowers/status/2026-07-28-wi-v0-01-07-role-voice-selection-g0.md",
       "implementationStatus": "INTERNAL_READY / G0_ROLE_VOICE_SELECTION_SHADOW_VERIFIED / BACKEND_LOCAL_COMMITTED_e837740 / DEFAULT_OFF / NO_ROUTE_NO_PROFILE_SELECTION_NO_PROVIDER_NO_AUDIO_NO_UI / G1_G2_G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN"
+    },
+    {
+      "id": "WI-V0-01-08",
+      "evidence": "docs/superpowers/status/2026-07-28-wi-v0-01-08-digital-human-session-lifecycle-g0.md",
+      "implementationStatus": "INTERNAL_READY / G0_DIGITAL_HUMAN_SESSION_LIFECYCLE_SHADOW_VERIFIED / BACKEND_LOCAL_COMMITTED_39a963b / DEFAULT_OFF / NO_ROUTE_NO_PROVIDER_SESSION_NO_LEASE_PROMOTION_NO_UI / G1_G2_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN"
     }
   ],
   "nextWorkItem": {
@@ -598,5 +604,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-28T20:16:49+08:00"
+  "updatedAt": "2026-07-28T20:22:07+08:00"
 }
