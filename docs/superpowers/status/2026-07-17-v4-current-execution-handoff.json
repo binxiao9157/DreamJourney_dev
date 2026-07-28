@@ -1,35 +1,33 @@
 {
   "activeWorkItem": {
-    "id": "WI-S1-03-09",
+    "id": "WI-MIG-01-05",
     "state": "IN_PROGRESS",
-    "leaseState": "RELEASED",
+    "leaseState": "HELD",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
-    "authorityLock": "IOS_COMPOSITION",
-    "predecessorWorkItem": "WI-S1-03-08",
-    "priorEvidence": "docs/superpowers/status/2026-07-19-wi-s1-03-09-notification-runtime-owner-routing.md",
-    "completedSubSlices": [
-      "WI-S1-03-09-NOTIFICATION_DEEPLINK_OWNER_ROUTING_G0",
-      "WI-S1-03-09-G1-SIMULATOR_SAFE_ROUTE_UIQA"
-    ],
-    "currentSubSlice": "WI-S1-03-09-G1-SIMULATOR_SAFE_ROUTE_UIQA_COMPLETE / valid time-letter, Echo-reply and care Deep Link envelopes land on neutral tabs; cross-owner, stale-generation and malformed routes are rejected; G3 and G4 remain open",
+    "authorityLock": "MIGRATION_EVIDENCE",
+    "predecessorWorkItem": "WI-MIG-01-04",
+    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-28-owner-truth-legacy-backfill-admission-plan.md",
+    "completedSubSlices": [],
+    "currentSubSlice": "WI-MIG-01-05-C04_WOULD_RUN_SHADOW_CURRENT_STATE_RECONCILIATION_G0 / inventory current legacy tail, outbox, object and provider mappings without real effects; C03 is revalidated at G0 only and no authority cutover is allowed",
     "gateEvidence": {
-      "G0": "SCOPED_VERIFIED / OWNER_SCOPED_NOTIFICATION_AND_DEEPLINK_INGRESS_FAILS_CLOSED_BEFORE_PRIVATE_UI_ROUTING",
-      "G1": "SCOPED_VERIFIED / SIMULATOR_UIQA_PROVES_VALID_NEUTRAL_TAB_ROUTING_AND_CROSS_OWNER_STALE_OR_MALFORMED_ROUTE_REJECTION / NO_APNS_BACKEND_OR_PRIVATE_RESOURCE_OPEN",
-      "G3": "OPEN / DEVICE_SUBSCRIPTION_MESSAGE_DEEPLINK_CAPABILITY_APNS_CREDENTIAL_AND_SERVER_AUTHZ_RECEIPT_EVIDENCE_PENDING",
-      "G4": "OPEN / TRUE_DEVICE_PUSH_DELIVERY_LOCKSCREEN_PRIVACY_WRONG_ACCOUNT_CLICK_TOKEN_ROTATION_AND_PRODUCT_ACCEPTANCE_EVIDENCE_PENDING"
+      "G0": "IN_PROGRESS / C04_WOULD_RUN_MAPPING_MUST_REMAIN_VALUE_MINIMIZED_AND_SIDE_EFFECT_FREE",
+      "G2": "OPEN / PERSISTENCE_CHECKPOINT_AND_PRODUCTION_SHAPE_SHADOW_EVIDENCE_PENDING"
     },
     "latestEvidence": {
-      "iosBaseline": "feature/prd-stitch-ui-adaptation / WI-S1-03-09 scoped G1 local evidence",
-      "scope": "UI_QA_SIMULATOR_ONLY / opaque notification and Deep Link envelopes route only to neutral tabs / cross-owner stale-generation and malformed ingress fail closed / no public UI, APNs, backend, private resource, voice or digital-human behavior change",
-      "validation": "run-notification-runtime-route-uiqa-smoke.sh PASS (three valid routes, three rejected routes, inbox drained, final Archive screenshot stable); launch configuration, non-Echo dispatch inventory and notification static checks PASS; notification owner, message lifecycle, message owner and delayed-reply owner gates PASS; release QA package check PASS; generic/platform=iOS build-for-testing CODE_SIGNING_ALLOWED=NO TEST BUILD SUCCEEDED; git diff --check PASS",
-      "constraints": "Simulator assertions do not deliver APNs, open a private resource, assert lockscreen privacy or claim device subscription/token lifecycle behavior. G3 backend/APNs and G4 true-device evidence remain separately required."
+      "backendBaseline": "main@195c41f / C03 admission-plan G0 revalidated locally before C04 assessment",
+      "scope": "MIGRATION_SHADOW_ONLY / C04 may inventory stable would-run mappings but must not enqueue a job, PUT an object, invoke a provider, retire a legacy writer or promote Authority",
+      "validation": "C03 gate: scripts/run-backend-owner-truth-legacy-backfill-g0-gate.sh PASS (13 tests); Product V4 handoff checker passed before reconciliation",
+      "constraints": "C03 remains default-off and hash-only. C03 G1 representative-data review and G2 isolated Postgres persistence/replay remain open; C04 cannot claim an effect, object copy, provider call or migration cutover."
     },
-    "currentSummary": "WI-S1-03-09 G0 and scoped G1 are complete: synthetic valid time-letter, Echo-reply and care Deep Link envelopes route through the same owner-scoped inbox to neutral tabs, while cross-owner, stale-generation and malformed ingress remain rejected. The simulator screenshot is stable on Archive after the final route. No public UI, APNs, backend, voice, digital-human or true-device claim was added. G3 backend/APNs and G4 device evidence remain open.",
-    "backendPendingPaths": []
+    "currentSummary": "WI-MIG-01-04 C03 is now recorded as a locally revalidated, default-off G0 admission plan: it writes no target Owner Truth data and permits no cutover. Work advances to WI-MIG-01-05 C04 only as a no-side-effect shadow inventory; G2 and all cutover decisions remain open.",
+    "backendPendingPaths": [
+      "app/services/owner_truth_legacy_tail_shadow.py",
+      "app/services/owner_truth_migration_parity_shadow.py"
+    ]
   },
   "baselines": {
-    "backend": "main@4224dd3 / Voice-DH scoped capability, Provider response/error minimization and callback reconciliation admission shadows deployed; container smoke verified default deny",
-    "ios": "feature/prd-stitch-ui-adaptation@1943bfd / C00 current-state inventory freeze refreshed locally",
+    "backend": "main@195c41f / local migration shadow baseline; C03 G0 revalidated locally and C05 parity smoke exists; no C03 deployment, G2 evidence or cutover claim",
+    "ios": "feature/prd-stitch-ui-adaptation@664bac7 / QA Support result writers are centralized; no public UI change",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -50,6 +48,12 @@
       "id": "WI-MIG-01-03",
       "implementationStatus": "INTERNAL_READY / C02_IDENTITY_PROMOTION_PREFLIGHT_G0_VERIFIED / BACKEND_PUSHED_703c65b / SHADOW_ONLY / NO_IDENTITY_OR_OWNER_DATA_WRITE / G1_G2_G4_OPEN / NO_CUTOVER",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G4_OPEN"
+    },
+    {
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-28-owner-truth-legacy-backfill-admission-plan.md",
+      "id": "WI-MIG-01-04",
+      "implementationStatus": "INTERNAL_READY / C03_BACKFILL_ADMISSION_PLAN_G0_REVALIDATED_LOCAL_2026-07-29 / DEFAULT_OFF / HASH_ONLY_APPEND_ONLY / NO_TARGET_OWNER_TRUTH_WRITE_NO_CUTOVER / G1_G2_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_OPEN_NO_GO"
     },
     {
       "evidence": "../DreamJourneyBackend/docs/backend/2026-07-23-voice-dh-purpose-consent-g0.md",
@@ -526,9 +530,9 @@
       "registryClosure": "SCOPED_G0_G1_EVIDENCE_PRESENT_G3_G4_OPEN"
     },
     {
-      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-10-qa-strangler-g0-closure.md",
+      "evidence": "docs/superpowers/status/2026-07-19-wi-s1-03-10-qa-strangler-g0-closure.md; docs/superpowers/status/2026-07-29-wi-s1-03-10-qa-support-audio-owner-extraction-g0-g1.md",
       "id": "WI-S1-03-10",
-      "implementationStatus": "INTERNAL_READY / BOUNDED_G0_QA_STRANGLER_PARITY_VERIFIED / IOS_LOCAL_COMMITTED / G1_G3_G4_OPEN",
+      "implementationStatus": "INTERNAL_READY / BOUNDED_G0_QA_STRANGLER_PARITY_VERIFIED / QA_SUPPORT_AUDIO_OWNER_AND_GENERIC_ECHO_EXPORT_WRITERS_CENTRALIZED / IOS_LOCAL_COMMITTED_664bac7 / G1_G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
     },
     {
@@ -605,9 +609,9 @@
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S1-03-09",
-    "state": "RECONCILE_AFTER_CURRENT",
-    "summary": "WI-S1-03-09 scoped G1 simulator UIQA is complete. Reconcile G3/G4 without promoting simulator evidence to APNs or true-device completion; device subscription, message/deeplink capability, delivery, lockscreen privacy, wrong-account clicks and token lifecycle remain external evidence."
+    "id": "WI-MIG-01-06",
+    "state": "PLANNED_AFTER_CURRENT",
+    "summary": "After C04 has a verified no-side-effect mapping and any gaps are explicitly dispositioned, assess C05 parity only as a shadow. Do not treat C03/C04 evidence as migration execution, object copy, Provider invocation or Authority cutover."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -616,5 +620,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-28T21:01:53+08:00"
+  "updatedAt": "2026-07-29T04:04:01+08:00"
 }
