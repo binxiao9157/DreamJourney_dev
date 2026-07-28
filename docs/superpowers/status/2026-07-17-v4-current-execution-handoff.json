@@ -1,32 +1,31 @@
 {
   "activeWorkItem": {
-    "id": "WI-S3-01-03",
+    "id": "WI-S3-01-04",
     "state": "IN_PROGRESS",
     "leaseState": "HELD",
     "executionOwner": "codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a",
     "authorityLock": "PUBLICATION",
-    "predecessorWorkItem": "WI-S3-01-02",
-    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-schema-authz-g0.md",
+    "predecessorWorkItem": "WI-S3-01-03",
+    "priorEvidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-draft-snapshot-g0.md",
     "completedSubSlices": [],
-    "currentSubSlice": "WI-S3-01-03_OWNER_DRAFT_SNAPSHOT_G0 / model a hidden, owner-derived draft snapshot, redaction-diff and second-confirmation contract only. Do not create a public projection, public route, writer, publication URL, visitor session, private-media copy or release UI.",
+    "currentSubSlice": "WI-S3-01-04_PUBLIC_PROJECTOR_G0 / model only a one-way, default-off Public Store/Index projection boundary from immutable PublicationVersion metadata. Do not create a public gateway, query route, index provider, object copy, visitor session, private repository dependency or release UI.",
     "gateEvidence": {
-      "G0": "PENDING / OWNER_DRAFT_SNAPSHOT_REDACTION_DIFF_AND_SECOND_CONFIRMATION_MUST_REMAIN_HIDDEN_OWNER_DERIVED_AND_DEFAULT_DENY",
-      "G1": "OPEN / IOS_TYPED_PUBLICATION_GRANT_VISITOR_PORT_AND_HIDDEN_QA_VIEWSTATE_PENDING",
-      "G2": "OPEN / REAL_POSTGRES_MIGRATION_SEPARATE_PUBLIC_ROLE_AND_CONCURRENT_GRANT_CAS_EVIDENCE_PENDING",
-      "G4": "OPEN / PRODUCT_PRIVACY_LEGAL_SECURITY_AND_OPERATIONS_PUBLICATION_APPROVAL_PENDING"
+      "G0": "PENDING / PUBLIC_PROJECTOR_STORE_INDEX_AND_CITATION_CONTRACT_MUST_REMAIN_ONE_WAY_DEFAULT_DENY_AND_FREE_OF_PRIVATE_REPOSITORY_DEPENDENCIES",
+      "G2": "OPEN / REAL_POSTGRES_PROJECTOR_CHECKPOINT_REPLAY_AND_PUBLIC_ROLE_ISOLATION_EVIDENCE_PENDING",
+      "G3": "OPEN / INDEPENDENT_OBJECT_STORE_INDEX_PROVIDER_AND_CREDENTIAL_SCOPE_EVIDENCE_PENDING"
     },
     "latestEvidence": {
-      "backendBaseline": "main@b14da96 / publication schema/AuthZ G0 contract committed locally; no deployment or public release claim",
+      "backendBaseline": "main@61ce866 / publication draft snapshot G0 contract committed locally; no deployment or public release claim",
       "iosBaseline": "feature/prd-stitch-ui-adaptation@5e5c705 / C05 synthetic ViewState parity G1 gate revalidated locally",
-      "scope": "WI-S3-01-03_G0_FIRST / create only hidden owner draft snapshot, redaction-diff and second-confirmation contract seams. No public writer, projection, public DB access, public URL, visitor route, visitor session, private-memory copy, Provider or release UI.",
-      "validation": "WI-S3-01-02 publication schema/AuthZ G0 gate PASS (8 tests); full scripts/verify_backend.sh PASS (1382 unit tests plus scoped gates and smokes); schema is additive and default-off with no public route, writer, session, DTO or Provider effect.",
-      "constraints": "Publication/visitor policy remains strict default deny. Any future public principal must never read private DB tables or private identifiers/body through public DTOs, and G4 approval is required before a writer or gateway can become reachable."
+      "scope": "WI-S3-01-04_G0_FIRST / create only a one-way Public Store/Index projection boundary from immutable publication metadata. No public gateway, query route, object copy, visitor session, private repository dependency, Provider or release UI.",
+      "validation": "WI-S3-01-03 publication draft snapshot G0 gate PASS (11 tests); full scripts/verify_backend.sh PASS (1393 unit tests plus scoped gates and smokes); draft metadata is additive, hash-only and default-off with no writer, receipt, outbox, public route or readable draft copy.",
+      "constraints": "Publication/visitor policy remains strict default deny. A future Public Store must never depend on a private repository at query time, and G2/G3 evidence is required before any projector, object copy, index provider or gateway becomes reachable."
     },
-    "currentSummary": "WI-S3-01-02 is recorded as a locally verified additive publication schema and fail-closed authorization foundation. It has no public writer, projection, gateway, visitor session, private-memory copy or release UI. Work advances to WI-S3-01-03 for an owner-derived, hidden draft snapshot and second-confirmation contract.",
+    "currentSummary": "WI-S3-01-03 is recorded as a locally verified hidden Owner Draft Snapshot contract. It fails closed for stale sources, rights or consent issues, redaction gaps, preview mismatch and absent second confirmation, and it creates no draft, version, receipt or outbox effect. Work advances to WI-S3-01-04 for a one-way Public Store/Index projection boundary.",
     "backendPendingPaths": [
-      "app/domain/publication/schema_authz.py",
+      "app/domain/publication/draft_snapshot.py",
       "app/services/release_policy.py",
-      "scripts/run-backend-publication-schema-authz-g0-gate.sh"
+      "scripts/run-backend-publication-draft-snapshot-g0-gate.sh"
     ]
   },
   "baselines": {
@@ -676,12 +675,18 @@
       "evidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-schema-authz-g0.md",
       "implementationStatus": "INTERNAL_READY / PUBLICATION_SCHEMA_AUTHZ_G0_VERIFIED_LOCAL / BACKEND_LOCAL_COMMITTED_b14da96 / ADDITIVE_DEFAULT_OFF / NO_PUBLIC_ROUTE_WRITER_PROJECTION_VISITOR_SESSION_PRIVATE_MEMORY_COPY_PROVIDER_OR_RELEASE_UI / G1_G2_G4_OPEN",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G4_OPEN"
+    },
+    {
+      "id": "WI-S3-01-03",
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-29-publication-draft-snapshot-g0.md",
+      "implementationStatus": "INTERNAL_READY / PUBLICATION_DRAFT_SNAPSHOT_G0_VERIFIED_LOCAL / BACKEND_LOCAL_COMMITTED_61ce866 / ADDITIVE_HASH_ONLY_DEFAULT_OFF / NO_DRAFT_WRITER_PREVIEW_RENDERER_PUBLICATION_VERSION_RECEIPT_OUTBOX_PUBLIC_ROUTE_OR_RELEASE_UI / G1_G2_G4_OPEN",
+      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G4_OPEN"
     }
   ],
   "nextWorkItem": {
-    "id": "WI-S3-01-04",
+    "id": "WI-S3-01-05",
     "state": "PLANNED_AFTER_CURRENT",
-    "summary": "After the hidden Owner Draft Snapshot, redaction-diff and second-confirmation contract, continue with a one-way Public Projector, Store and Index foundation. Do not treat local planning evidence as permission to create a public gateway, public data projection or remove a legacy implementation or credential."
+    "summary": "After the one-way Public Store/Index projection boundary, continue with ShareGrant, adult Visitor identity/session and Public Gateway planning. Do not treat local planning evidence as permission to create a public gateway, anonymous secret, public route, public data projection or remove a legacy implementation or credential."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -690,5 +695,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-29T05:23:00+08:00"
+  "updatedAt": "2026-07-29T05:31:49+08:00"
 }
