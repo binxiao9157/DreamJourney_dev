@@ -77,6 +77,24 @@ Candidate；候选可在 QA-only Candidate Inbox 中被定位，但终态必须�
   运行时 `api/postgres` healthy，`OWNER_TRUTH_CANDIDATE_REVIEW_QA_ENABLED=false`，未改变公开开关。
 - **G4**：公开纠错入口、审核体验和 cohort 策略仍等待产品确认，默认保持关闭。
 
+### 2026-07-30 Resolution 来源当前性补强
+
+后端 `main@d1887f3` 增加了 pending correction request 的终态重验：原始 cited Source 与
+私有 correction Source 都必须仍属于同一 Owner、保持 `active`，并与 Vault authority epoch
+一致；原始 Source 还必须仍与 cited MemoryVersion 的 `source_version` 匹配。服务层遇到任一
+失效来源会返回 stale，数据库 migration `0058` 也把同一检查放在 `correct` 与 `rejected`
+两种终态之前，避免特权直接写入绕过服务层而消费已 superseded 的 predecessor。
+
+| 验证 | 结果 |
+| --- | --- |
+| `tests.test_owner_truth_correction_request` + `tests.test_owner_truth_correction_resolution_currentness_migration_contract` + `tests.test_owner_truth_migration_contract` | 24 项通过；覆盖两类 Source 在 request 创建后失效，以及 trigger 合同 |
+| `PYTHON_BIN=.venv/bin/python ./scripts/verify_backend.sh` | 1,487 项后端测试、G0 gates、FastAPI smoke 与 diff 检查通过 |
+| `scripts/backend-owner-truth-postgres-smoke.py` 新增路径 | 已纳入代码；要求部署 migration `0058` 后在隔离 PostgreSQL 实际执行 |
+
+本地未配置 `DATABASE_URL` 或 `OWNER_TRUTH_FORMAL_SMOKE_ADMIN_DATABASE_URL`。因此先前
+`main@162afb0` 的已部署 G2 证据不覆盖本轮新增 migration `0058`；本轮新 guard 的 G2 状态为
+**待部署并运行隔离 PostgreSQL smoke**，不能据此宣称线上已生效。
+
 ## 不能宣称完成的内容
 
 - 尚未把纠正入口公开给普通用户。
