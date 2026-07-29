@@ -299,3 +299,27 @@ Python compile、route inventory 121 和 `git diff --check` 均通过。Owner Tr
 
 这仍只是 `WI-S1-01-06` 的本地 G0 服务端准备证据，不构成公开 Echo Context cutover、
 Provider dispatch、检索质量、KBLite retirement、部署、真机或公开能力完成。
+
+## 2026-07-30：Interview ReviewBatch 自动衔接（QA-only）
+
+后端新增 default-off 的 `OwnerTruthInterviewReviewBatchAutomationService`，把已经持久化的
+M0-A owner narrative / boundary 与既有 `ReviewBatch` 合同做最小衔接：五段未审核 owner
+叙述后，或带未审核叙述的 Session 退出后，才创建一个 pending batch。它只在既有
+`OWNER_TRUTH_CANDIDATE_REVIEW_QA_ENABLED` 与 self-owner QA header 同时成立时运行；普通
+released 请求不会触发。
+
+- 子 command id 由父写入 command id 确定，重放或后续叙述只会复用 pending batch，不会重复
+  创建。
+- 仅在创建/已存在 batch 时返回 value-minimized `reviewBatchAutomation` 摘要；没有 message、
+  query、memory、Candidate 或 provider 内容。创建 batch 后 response receipt 会返回最新
+  `sessionVersion`，避免下一次 optimistic write 使用陈旧版本；not-due 时保持旧响应结构。
+- 服务不创建 Candidate、Source、DecisionReceipt 或 MemoryVersion，不调用 Provider，不新增
+  route；authentication/ownership inventory 仍为 121。它是持久化后幂等补偿边界，尚不是
+  生产 outbox/exactly-once 调度承诺。
+- 后端 focused suites、route/release policy group、完整 `verify_backend.sh`（1474 tests）和
+  Python compile/diff check 均已通过；隔离 Postgres conversation smoke 已补自动 batch 的
+  五轮/第六轮/重启/零 Candidate-Memory 断言，但本机 `DATABASE_URL` 未设置，尚未运行 G2。
+
+本轮没有 iOS source、三 Tab、Stitch 视觉、公开 Echo 输入或公开 Feature 变更。后端详细
+证据见
+`../DreamJourneyBackend/docs/backend/2026-07-30-owner-truth-interview-review-batch-automation-g0.md`。
