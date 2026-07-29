@@ -176,3 +176,37 @@ unsigned iPhoneOS Debug `build-for-testing`、Echo QA evidence-bundle simulator 
 
 该子闭环仍只构成 `WI-S1-01-06` 的 G0 观测正确性证据。它不构成 Projection-to-Context
 正式 cutover、KBLite retirement、G1/G2/G3/G4 或公开能力完成声明。
+
+## 2026-07-29：Live Echo Context V1/V4 Parity Observation（QA-only）
+
+`e01725d test(v4): pair live echo context parity evidence` 将当前 self-owner Echo turn 的
+legacy public Context V1 packet 与同一 turn 的 Owner Truth Context V4 Shadow summary 配对为
+可导出的 QA 证据；它不改写公开回响使用的 Context 或回复输入。
+
+- 只有 `DJEnableOwnerTruthContextCitationQA` 和
+  `DJEnableOwnerTruthMigrationParityQA` 同时开启，并且当前角色、账户 lease、context
+  generation、public response identity、query hash 和 scalar length 全部匹配时才会开始配对。
+  家人、跨 persona、未配置 backend、过期 lease、旧 callback 或任一不匹配均 fail closed，
+  清除未完成配对。
+- iOS 在进入配对器前把 V1/V4 都缩减为 hash、长度、版本、source/selected/filtered/ranking
+  数量、fallback 和 mismatch code；不会保留 `generationContextText`、用户原始 query、answer
+  text、citation body 或把 Shadow transport 接到 `DialogEngine`。
+- 配对结果固定为 `comparisonState=observedNonPromoting` 和
+  `promotionDecision=notEvaluated`。它复用既有 migration comparator 记录差异，但不产生
+  cutover 建议、写入、provider 调用或公开 UI 行为。
+- Echo QA evidence bundle 升级到 v3，新增 optional 的 value-minimized parity readout；旧 bundle
+  仍可解码。QA panel 只在两个 launch arg 均启用时展示 `ctxParity`，公开用户不会看到该区块。
+- 新增
+  `Scripts/QA/product-v4/product-v4-ios-owner-truth-live-context-parity-check.py`，并把它接入
+  Owner Truth turn-shadow composite gate。证据导出 simulator smoke 同时校验 v3 manifest、双 gate、
+  不晋升状态以及原始 parity query 不会序列化。
+
+本地验证：live parity static check、既有 live Shadow check 与 migration parity check 通过；
+`EchoApplicationCoordinatorTests` 13 项通过；Owner Truth turn-shadow composite gate、Echo QA
+evidence-bundle simulator smoke、generic unsigned iPhoneOS Debug `build-for-testing` 和
+`git diff --check` 均通过。烟测截图位于
+`tmp/visual-qa/prd-stitch-ui/echo-qa-evidence-bundle-export-smoke/20260729-092859/`。
+
+本轮没有后端变更、迁移、部署、线上 cohort、真机验证或公开 UI 调整。它依然只是
+`WI-S1-01-06` 的本地 G0 对照观察证据；正式 Context/Echo cutover、检索质量、KBLite retirement、
+G1/G2/G3/G4 和任何公开能力仍保持开放。
