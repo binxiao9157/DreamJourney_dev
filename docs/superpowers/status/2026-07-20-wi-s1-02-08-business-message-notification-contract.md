@@ -2,7 +2,7 @@
 
 日期：2026-07-20
 
-## 本次 G0 闭环
+## 初始 G0 闭环
 
 本次完成 `WI-S1-02-08` 的两个 G0 子闭环：为“业务已完成”到“应用内消息投影”再到“通知意图”建立单向、内容脱敏的合同，并补齐 hash-only DeviceSubscription 的 rotation/revoke 与通知路由围栏。
 
@@ -28,6 +28,34 @@ main@8517259 feat(v4): add device notification subscription contract
 3. revoke 仅撤销后续投递资格，不删除历史 subscription 身份，也不回写业务完成或应用内消息状态。
 4. APNs 路由绑定同时验证 owner/vault/authority epoch、message/resource、notification generation、subscription ID 与 subscription generation；任一不一致均 fail-closed。
 5. 当前模块仍不持久化订阅或投递记录，不改 `/devices/push-token` 旧注册路由，不调用 APNs，也不改 iOS 公共 UI。
+
+## 2026-07-30 补充：跨账号收件箱身份拆分（G0 v2）
+
+后端提交：
+
+```text
+main@76e87bb fix(v4): separate message resource and inbox identity
+```
+
+初始合同中的 `owner/vault` 坐标只足以描述“资源所有者给自己发送消息”。它不能安全描述跨账号时间信件：资源属于写信人，但消息应进入已授权家人的收件箱，且家人的设备账户 epoch 不应与资源 authority epoch 被错误地强制相等。
+
+本次将尚未持久化的 G0 合同升级为 `business-message-notification-v2`：
+
+1. `InAppMessageProjection` 显式分为 `resourceOwnerSubjectId/resourceVaultId` 与 `inboxSubjectId/inboxVaultId`；默认仍投递给资源所有者，跨账号必须同时提供两个 inbox 坐标。
+2. 同一个业务 receipt 投递到不同收件箱时生成不同、稳定的 `messageId`，避免 Owner 与家人碰撞成同一条消息。
+3. `DeviceSubscription` 改为绑定收件箱账户，而不是资源 Owner；路由分别校验资源 owner/vault/authority epoch、收件箱 subject/vault 和设备账户 epoch。
+4. APNs 路由只保留 hash/digest，不含原始 subject、vault、token、正文或 Provider payload；资源授权仍需在点击后由实际读取路径重新验证。
+5. 现有 `mailbox_letters`、TimeLetter/Echo 的用户可见消息、旧 `/devices/push-token` 路由及 iOS `InAppMessageCenter` 均未改动，因此不会产生第二条公开消息。
+
+验证：
+
+```bash
+PYTHON_BIN=.venv/bin/python scripts/run-backend-business-message-notification-contract-gate.sh
+PYTHON_BIN=.venv/bin/python ./scripts/verify_backend.sh
+git diff --check
+```
+
+结果：专用合同 gate `10` 项通过，新增跨账号 recipient route、缺失 inbox 坐标、不同 inbox 的稳定 message identity、资源/收件箱/account epoch fail-closed 覆盖；全量后端回归 `1,489` 项通过。该提交尚未推送、部署或运行 PostgreSQL smoke。
 
 ## 已验证
 
@@ -65,7 +93,7 @@ scripts/run-backend-business-message-notification-contract-gate.sh
 
 | Gate | 状态 | 说明 |
 | --- | --- | --- |
-| G0 | 已通过 | 合同、负例、幂等标识、hash-only subscription rotation/revoke、owner/generation route fencing 与失败不回写业务完成已验证。 |
+| G0 | 已通过 | 合同、负例、幂等标识、hash-only subscription rotation/revoke、资源与收件箱身份拆分、独立 resource/account epoch route fencing 与失败不回写业务完成已验证。 |
 | G1 | 未开始 | iOS 仍消费既有本地/legacy 消息来源，尚未消费该 server projection。 |
 | G2 | 未开始 | 尚未持久化 device subscription、message projection、notification intent 或 delivery receipt。 |
 | G3 | 未开始 | 未注册 Device Token、未调用 APNs。 |
@@ -73,4 +101,4 @@ scripts/run-backend-business-message-notification-contract-gate.sh
 
 ## 下一 Work Item
 
-进入 `WI-S1-02-09` 的 G0：先建立 dead-letter admission、authorized replay 与 worker readiness 的纯合同。仍不接真实 Provider replay，不允许客户端直接重放任务。
+`WI-S1-02-09` 的 G0/G2 dead-letter、replay request 与 worker-loss 证据已存在，不应重复实现。下一可执行闭环是将已有 readiness manifest 以 machine-only、value-free 方式写入现有 evidence manifest 服务；之后再进入本 Work Item 的消息投影持久化 shadow。两者都不启动真实 worker、不调用 Provider、不会启用 APNs 或公开 UI。

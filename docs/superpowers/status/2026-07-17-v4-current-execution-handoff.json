@@ -189,8 +189,8 @@
     {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-08-business-message-notification-contract.md",
       "id": "WI-S1-02-08",
-      "implementationStatus": "INTERNAL_READY / G0_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED_8517259 / G1_G2_G3_G4_OPEN",
-      "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN"
+      "implementationStatus": "INTERNAL_READY / G0_V2_CROSS_ACCOUNT_INBOX_IDENTITY_VERIFIED_LOCAL_BACKEND_76e87bb / PRIOR_G0_DEPLOYED_8517259 / G1_G2_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_V2_LOCAL_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN"
     },
     {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-07-provider-effect-contract.md",
