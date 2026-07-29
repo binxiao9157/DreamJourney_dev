@@ -386,3 +386,31 @@ Echo、KBLite 或三 Tab UI：
 不能因 Source/effect staging 已存在而自动执行模型、创建 Candidate 或推进 Memory。
 详细后端证据见
 `../DreamJourneyBackend/docs/backend/2026-07-30-owner-truth-interview-candidate-proposal-admission-api-g0.md`。
+
+## 2026-07-30：Candidate Proposal Staging Status（QA-only）
+
+后端 `44046ae feat(v4): expose candidate proposal staging status` 增加一个只读、默认关闭的
+QA 状态接口，用来区分 ReviewBatch 已确认后的安全阶段，但不启动候选抽取：
+
+`GET /v2/vaults/{vaultId}/interview-review-batches/{reviewBatchId}/candidate-proposal/status`
+
+- 复用既有 `OWNER_TRUTH_CANDIDATE_REVIEW_QA_ENABLED=true`、self-owner session 和 QA header
+  三重门；不进 OpenAPI，普通用户与其他 Owner 均不可见或不可读。
+- 返回内容严格为固定状态标签：`pendingAcknowledgement`、`readyForAdmission` 或
+  `admitted`，并标明 Source/effect 的 staging 是否已记录、抽取是否仅为 `requested`、
+  execution 仍为 `disabled`、Candidate review 仍为 `notReady`。
+- 内存路径通过真实 conversation aggregate 的 value-free snapshot 校验 active Vault、Owner 和
+  authority epoch；Postgres 路径执行同等 owner/epoch/admission 读取。两者都不重建或回传
+  访谈原文。
+- 该接口不会创建 Candidate、DecisionReceipt、MemoryVersion、Projection 或 Provider 请求，也
+  不改变公开 Echo、KBLite、三 Tab 或 Stitch 视觉。
+- route authentication/ownership inventory 从 123 更新为 124，避免 QA-only 路由绕过认证清单。
+
+本地验证：候选提案 status/admission/ReviewBatch 与 route/authentication/ownership/runtime/session
+focused group 72 项通过；`scripts/verify_backend.sh` 通过（1479 个 backend unit tests 与既有
+G0/FastAPI smoke）；Python compile 与 `git diff --check` 通过。本机未配置 `DATABASE_URL`，未运行
+隔离 Postgres smoke，也没有部署、真机或公开 release 声明。
+
+这只是 `WI-S1-01-06` 的状态可观察性 G0 证据，不构成 candidate extraction worker、Provider
+调用、Candidate review、Memory 写入或正式 Context/Echo cutover。下一步仍须单独审查抽取执行与
+review 的默认关闭边界。
