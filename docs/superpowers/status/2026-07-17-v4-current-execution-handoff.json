@@ -12,25 +12,26 @@
       "WI-S1-01-06_G0_QUERY_RANKED_CONTEXT_SHADOW_VERIFIED_LOCAL",
       "WI-S1-01-06_G0_LIVE_ECHO_OWNER_TRUTH_CONTEXT_SHADOW_OBSERVER_VERIFIED_LOCAL",
       "WI-S1-01-06_G0_LIVE_ECHO_OWNER_TRUTH_CONTEXT_QUERY_CORRELATION_VERIFIED_LOCAL",
-      "WI-S1-01-06_G0_LIVE_ECHO_CONTEXT_V1_V4_PARITY_OBSERVATION_VERIFIED_LOCAL"
+      "WI-S1-01-06_G0_LIVE_ECHO_CONTEXT_V1_V4_PARITY_OBSERVATION_VERIFIED_LOCAL",
+      "WI-S1-01-06_G0_CONTEXT_V1_RESPONSE_REQUEST_CORRELATION_VERIFIED_LOCAL"
     ],
-    "currentSubSlice": "WI-S1-01-06_RECONCILE_AFTER_LIVE_ECHO_CONTEXT_V1_V4_PARITY_OBSERVATION / QA-only self-owner Echo turns can now pair the current legacy public Context V1 packet with the current Owner Truth Context V4 Shadow summary using a generation and query fence. The evidence is value-minimized and non-promoting; inspect the next non-duplicate Projection-to-Context boundary without treating KBLite as Authority, changing public reply input, or promoting a public feature.",
+    "currentSubSlice": "WI-S1-01-06_RECONCILE_AFTER_CONTEXT_V1_RESPONSE_REQUEST_CORRELATION / The legacy public Context V1 response now carries an additive value-free requestCorrelation fingerprint. Only the dual-gated self-owner V1/V4 QA pair requires it; ordinary Echo delivery remains compatible. Inspect the next non-duplicate Projection-to-Context boundary without treating KBLite as Authority, changing public reply input, or promoting a public feature.",
     "gateEvidence": {
-      "G0": "VERIFIED_LOCAL / LEGACY_KBLITE_GAP_PROMPT_FENCE / QUERY_RANKED_CONTEXT_SHADOW / LIVE_ECHO_OWNER_TRUTH_CONTEXT_SHADOW_OBSERVER / LIVE_ECHO_OWNER_TRUTH_CONTEXT_QUERY_CORRELATION / LIVE_ECHO_CONTEXT_V1_V4_PARITY_OBSERVATION / BACKEND_LOCAL_COMMITTED_8e2e3c6 / IOS_LOCAL_COMMITTED_e01725d"
+      "G0": "VERIFIED_LOCAL / LEGACY_KBLITE_GAP_PROMPT_FENCE / QUERY_RANKED_CONTEXT_SHADOW / LIVE_ECHO_OWNER_TRUTH_CONTEXT_SHADOW_OBSERVER / LIVE_ECHO_OWNER_TRUTH_CONTEXT_QUERY_CORRELATION / LIVE_ECHO_CONTEXT_V1_V4_PARITY_OBSERVATION / CONTEXT_V1_RESPONSE_REQUEST_CORRELATION / BACKEND_LOCAL_COMMITTED_57108ac / IOS_LOCAL_COMMITTED_3ce1a77"
     },
     "latestEvidence": {
-      "backendBaseline": "main@8e2e3c6 / QA-only Context Shadow supports explicit projectionCitationOrder or deterministicTextFallback selection; no deployment or public release claim",
-      "iosBaseline": "feature/prd-stitch-ui-adaptation@e01725d / QA-only live Echo self-owner turns pair the current legacy public Context V1 packet and typed value-free Context V4 Shadow summary behind independent generation and query fences; the pair is observedNonPromoting and never changes public reply input, Provider or device behavior",
-      "scope": "WI-S1-01-06_G0 / Legacy KBLite remains a compatibility path. Query-ranked Context Shadow can only narrow current policy-eligible confirmed Projection citations. With both QA gates enabled, a current self-owner Echo turn may value-minimize and pair its legacy public Context V1 packet with its matching Owner Truth Context V4 Shadow summary; no raw query, generation context, answer text or citation body is retained. The root three-tab UI, Stitch visual design, public /context/build and business writers are unchanged.",
-      "validation": "Backend 22 focused Context Shadow, Answer Citation, API and SearchDocument tests PASS; Python compile PASS; product-v4 iOS Context/Citation, live Echo shadow, live V1/V4 parity and Echo application coordinator checks PASS; focused EchoApplicationCoordinatorTests (13 tests) PASS; Owner Truth turn-shadow composite gate, Echo QA evidence-bundle simulator smoke, generic iPhoneOS Debug build-for-testing and git diff --check PASS. Postgres smoke was extended but not run locally because DATABASE_URL is unset.",
+      "backendBaseline": "main@57108ac / Legacy Context V1 adds a value-free requestCorrelation response field (intent, normalized query hash and scalar length); no deployment or public release claim",
+      "iosBaseline": "feature/prd-stitch-ui-adaptation@3ce1a77 / The dual-gated self-owner V1/V4 parity observer rejects missing, malformed, wrong-intent or mismatched legacy response correlation; ordinary public Context delivery remains compatible",
+      "scope": "WI-S1-01-06_G0 / Legacy KBLite remains a compatibility path. Query-ranked Context Shadow can only narrow current policy-eligible confirmed Projection citations. With both QA gates enabled, a current self-owner Echo turn may value-minimize and pair its legacy public Context V1 packet with its matching Owner Truth Context V4 Shadow summary only after both request fingerprints match. The Context V1 response now has an additive value-free requestCorrelation field; no raw query, generation context, answer text or citation body is retained in QA evidence. The root three-tab UI, Stitch visual design, public reply input and business writers are unchanged.",
+      "validation": "Backend Context Packet persona/safety tests (8) PASS, Python compile PASS and Context V2 smoke PASS. product-v4 iOS Context/Citation, live Echo shadow, live V1/V4 parity and Echo application coordinator checks PASS; focused EchoApplicationCoordinatorTests (15 tests) PASS; Owner Truth turn-shadow composite gate, Echo QA evidence-bundle simulator smoke, generic iPhoneOS Debug build-for-testing and git diff --check PASS. QA export was checked for raw query absence; screenshot is tmp/visual-qa/prd-stitch-ui/echo-qa-evidence-bundle-export-smoke/20260730-001417/01-echo-qa-evidence-bundle-export-smoke.png. Postgres smoke was not run locally because DATABASE_URL is unset.",
       "constraints": "This evidence does not make KBLite a Projection reader, switch public Context/Echo to Owner Truth, change public reply input, claim retrieval quality, authorize data migration, real provider delivery, deployment, true-device evidence or public feature promotion."
     },
-    "currentSummary": "WI-S1-01-06 now has five scoped local G0 protections: legacy KBLite cannot independently choose Echo follow-up questions; QA-only deterministic text selection can narrow current confirmed Projection citations without widening policy eligibility; real self-owner Echo turns can export value-free Owner Truth Context Shadow evidence without changing reply input; each retained Shadow summary must match the exact submitted query by normalized hash plus scalar length; and the current legacy public Context V1 packet can be paired with the matching Context V4 Shadow summary only as a value-minimized, non-promoting QA observation. The next task must inspect the remaining Projection-to-Context boundary without duplicating the existing read envelope, typed citation, SearchDocument projection, live shadow observer, query-correlation guard, parity observer or recommendation-plan work.",
+    "currentSummary": "WI-S1-01-06 now has six scoped local G0 protections: legacy KBLite cannot independently choose Echo follow-up questions; QA-only deterministic text selection can narrow current confirmed Projection citations without widening policy eligibility; real self-owner Echo turns can export value-free Owner Truth Context Shadow evidence without changing reply input; each retained Shadow summary must match the exact submitted query by normalized hash plus scalar length; the current legacy public Context V1 packet can be paired with the matching Context V4 Shadow summary only as a value-minimized, non-promoting QA observation; and the legacy response now carries its own additive intent/hash/length requestCorrelation so that pair cannot be produced from a stale V1 response. The next task must inspect the remaining Projection-to-Context boundary without duplicating the existing read envelope, typed citation, SearchDocument projection, live shadow observer, query-correlation guard, parity observer or recommendation-plan work.",
     "backendPendingPaths": []
   },
   "baselines": {
-    "backend": "main@26b015c / Publication canary and exit-readiness G0 committed locally; default-blocked with no deployment, G2 evidence or cutover claim",
-    "ios": "feature/prd-stitch-ui-adaptation@e01725d / same-turn QA-only Context V1/V4 parity evidence added behind two gates; no public UI change or real Provider/device claim",
+    "backend": "main@57108ac / Legacy Context V1 request correlation committed locally; additive value-free response field, no deployment, G2 evidence or cutover claim",
+    "ios": "feature/prd-stitch-ui-adaptation@3ce1a77 / same-turn QA-only Context V1/V4 parity now requires legacy response request correlation behind two gates; no public UI change or real Provider/device claim",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -571,7 +572,7 @@
     {
       "evidence": "docs/superpowers/status/2026-07-19-wi-s1-01-06-kblite-compatibility-read-envelope.md; docs/superpowers/status/2026-07-19-wi-s1-01-06-memory-projection-foundation.md",
       "id": "WI-S1-01-06",
-      "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / LEGACY_KBLITE_GAP_PROMPT_FENCE_G0_VERIFIED_LOCAL_9672ec1 / QUERY_RANKED_CONTEXT_SHADOW_G0_VERIFIED_LOCAL_BACKEND_8e2e3c6_IOS_a2cdccc / G0_G2_SCOPED_EVIDENCE_PRESENT / QUERY_QUALITY_G3_G4_OPEN / NO_PUBLIC_CONTEXT_CUTOVER",
+      "implementationStatus": "INTERNAL_READY / BACKEND_DEPLOYED / LEGACY_KBLITE_GAP_PROMPT_FENCE_G0_VERIFIED_LOCAL_9672ec1 / QUERY_RANKED_CONTEXT_SHADOW_G0_VERIFIED_LOCAL_BACKEND_8e2e3c6_IOS_a2cdccc / CONTEXT_V1_RESPONSE_REQUEST_CORRELATION_G0_VERIFIED_LOCAL_BACKEND_57108ac_IOS_3ce1a77 / G0_G2_SCOPED_EVIDENCE_PRESENT / QUERY_QUALITY_G3_G4_OPEN / NO_PUBLIC_CONTEXT_CUTOVER",
       "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G1_G3_G4_OPEN"
     },
     {
@@ -737,5 +738,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-29T09:31:00+08:00"
+  "updatedAt": "2026-07-30T00:15:00+08:00"
 }

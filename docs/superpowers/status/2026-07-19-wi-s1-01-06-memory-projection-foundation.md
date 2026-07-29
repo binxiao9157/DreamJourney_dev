@@ -210,3 +210,33 @@ evidence-bundle simulator smoke、generic unsigned iPhoneOS Debug `build-for-tes
 本轮没有后端变更、迁移、部署、线上 cohort、真机验证或公开 UI 调整。它依然只是
 `WI-S1-01-06` 的本地 G0 对照观察证据；正式 Context/Echo cutover、检索质量、KBLite retirement、
 G1/G2/G3/G4 和任何公开能力仍保持开放。
+
+## 2026-07-30：Legacy Context V1 Response Request Correlation
+
+Backend `57108ac feat(v4): correlate legacy context responses` 与 iOS
+`3ce1a77 test(v4): fence echo parity on response correlation` 补齐了现有
+Context V1/V4 对照的另一半请求归属边界。
+
+- `POST /context/build` 的既有 `contextPacket` 新增向后兼容的
+  `requestCorrelation`：固定 schema、intent、标准化 query 的 SHA-256 和 Unicode scalar
+  length；不新增任何原文。普通包仍保留其既有 `query` 字段，安全中性包仍输出空 `query`，
+  但同样只保留提交请求的 value-free fingerprint。
+- iOS 将该字段作为 optional contract 解析。旧服务端或异常字段不会让普通 Echo Context
+  delivery 失败，因此公开回复路径仍兼容。
+- 只有同时打开 `DJEnableOwnerTruthContextCitationQA` 与
+  `DJEnableOwnerTruthMigrationParityQA` 的 self-owner parity 观察，才要求 Context V1
+  packet 的 intent/hash/length 与本轮 lease 完全一致。缺失、格式非法、intent 不同或 hash/
+  length 不同都会 fail closed，丢弃该 QA 对照，不会影响 DialogEngine 的公开输入。
+- QA fixture、证据包静态 gate 和 simulator smoke 一并更新；导出包依旧只含二次 hash 和
+  长度，不含 V1 原始 query、generation context、answer 或 citation body。
+
+本地验证：后端 Context Packet persona/safety 8 项单测、Python compile、
+`run-echo-context-builder-v2-smoke.sh` 通过；iOS parity static gate、focused
+`EchoApplicationCoordinatorTests` 15 项、Owner Truth turn-shadow composite gate、
+generic iPhoneOS Debug build-for-testing、Echo QA evidence-bundle simulator smoke 与
+`git diff --check` 均通过。模拟器截图位于
+`tmp/visual-qa/prd-stitch-ui/echo-qa-evidence-bundle-export-smoke/20260730-001417/01-echo-qa-evidence-bundle-export-smoke.png`。
+
+本轮不部署、不切换 `/context/build` 的数据 Authority、不改变公开 Echo/UI 或业务写入；
+它仅是 `WI-S1-01-06` 的 G0 回合对照完整性证据。Owner Truth Projection 的正式 Context
+read/cutover、KBLite retirement、检索质量与所有 G1/G2/G3/G4 仍未完成。
