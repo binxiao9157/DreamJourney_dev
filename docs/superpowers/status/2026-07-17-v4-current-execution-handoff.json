@@ -461,7 +461,7 @@
     {
       "evidence": "docs/superpowers/status/2026-07-16-wi-s0-07-01-event-envelope.md",
       "id": "WI-S0-07-01",
-      "implementationStatus": "INTERNAL_READY / G0_VERIFIED / PERSISTENT_SINK_NOT_STARTED",
+      "implementationStatus": "INTERNAL_READY / G0_VERIFIED / PERSISTENT_SINK_IMPLEMENTED_BY_WI-S0-07-02",
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT"
     },
     {
@@ -747,5 +747,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-30T01:58:42+08:00"
+  "updatedAt": "2026-07-30T03:14:56+08:00"
 }

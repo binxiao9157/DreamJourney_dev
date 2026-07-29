@@ -2,7 +2,7 @@
 
 日期：2026-07-16  
 Work Item：`WI-S0-07-01`  
-状态：`INTERNAL_READY / G0_VERIFIED / PERSISTENT_SINK_NOT_STARTED`  
+状态：`INTERNAL_READY / G0_VERIFIED / PERSISTENT_SINK_IMPLEMENTED_BY_WI-S0-07-02`
 Execution owner：`codex-goal:019ece6b-2c15-7521-b160-c42e95d1dd5a`  
 Authority lock：`OPERATIONS_EVIDENCE`  
 Lease：`ACTIVE`
@@ -20,7 +20,9 @@ Lease：`ACTIVE`
 ## 当前边界
 
 - 本项只定义 schema、validator、mapper 和 shadow evidence，不建立通用 analytics 平台。
-- 后端事件仍随现有 bounded recorder 生命周期存在；append-only 持久化、retention、受限查询属于 `WI-S0-07-02`。
+- append-only 持久化、retention、受限查询属于 `WI-S0-07-02`，且该后续 Work Item 已完成
+  Postgres `evidence_events` 落库、重放去重、更新拒绝、保留期和 system-only 查询的 scoped
+  实现与 G2 smoke。本 Work Item 仍只定义 schema、validator、mapper 和 shadow evidence。
 - iOS mapper 只服务本地 QA diagnostics，不上传正文，不成为业务 Authority。
 - Knowledge receipt、auth deny、rights receipt 和 provider cost 只有 mapping owner，本轮没有批量复制旧数据或开启新 writer。
 - `WI-S0-06-08` 的 168 小时零使用观察不能靠进程内 recorder 完成；需在 `WI-S0-07-02` 接入持久化 sink 后重新建立可跨重启窗口。
@@ -37,4 +39,17 @@ Lease：`ACTIVE`
 
 ## 下一步
 
-进入 `WI-S0-07-02`：通过 versioned migration 建立 append-only evidence sink、retention class 和 system-only 查询；先接 release-policy 单一低风险 writer，并证明 API 重启后观察窗口仍连续。不得在该持久化门完成前删除 legacy runtime alias。
+`WI-S0-07-02` 已完成后，继续按 `WI-S0-07-03` 的独立 operation-metrics 覆盖推进；不得因为本
+文档的旧阶段说明重复建设第二套 sink，或据此删除 legacy runtime alias。
+
+## 2026-07-30 状态校正
+
+本文件最初记录的 `PERSISTENT_SINK_NOT_STARTED` 是 `WI-S0-07-01` 完成当日对后续
+`WI-S0-07-02` 的阶段性描述，不是当前实现状态。当前事实以
+`2026-07-16-wi-s0-07-02-evidence-sink.md` 为准：
+
+- Postgres `evidence_events` 已是唯一 scoped append-only evidence sink；
+- ReleasePolicy shadow writer 已接入，API 重启连续性、同 hash 重放去重、篡改拒绝和数据库
+  `UPDATE` trigger 均已有验证；
+- 仍未关闭的是 backup/isolated restore、Privacy/Legal retention 和高风险 mandatory writer，
+  它们属于 `WI-S0-07-02` 的外部 Gate，不是 `WI-S0-07-01` 的未实现功能。

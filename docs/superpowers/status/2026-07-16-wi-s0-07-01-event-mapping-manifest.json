@@ -73,6 +73,6 @@
     "backend.releasePolicyDecisionRecorder.shadow",
     "ios.echoRuntimeDiagnostics.localMapper"
   ],
-  "persistentSink": "NOT_IMPLEMENTED_WI-S0-07-02",
+  "persistentSink": "IMPLEMENTED_BY_WI-S0-07-02",
   "externalAnalytics": "OUT_OF_SCOPE"
 }
