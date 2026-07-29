@@ -187,10 +187,10 @@
       "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G2_LOCAL_EXTENSION_PENDING_DEPLOYED_SMOKE_G3_EXTERNAL_BLOCKED"
     },
     {
-      "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-08-business-message-notification-contract.md",
+      "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-08-business-message-notification-contract.md; docs/superpowers/status/2026-07-30-wi-s1-02-08-business-message-projection-shadow.md",
       "id": "WI-S1-02-08",
-      "implementationStatus": "INTERNAL_READY / G0_V2_CROSS_ACCOUNT_INBOX_IDENTITY_VERIFIED_LOCAL_BACKEND_76e87bb / PRIOR_G0_DEPLOYED_8517259 / G1_G2_G3_G4_OPEN",
-      "registryClosure": "SCOPED_G0_V2_LOCAL_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN"
+      "implementationStatus": "INTERNAL_READY / G0_V2_CROSS_ACCOUNT_INBOX_IDENTITY_VERIFIED_LOCAL_BACKEND_76e87bb / G0_G2A_DURABLE_PROJECTION_SHADOW_VERIFIED_LOCAL_BACKEND_6d6a7b8 / DISPOSABLE_POSTGRES_SMOKE_PENDING / PRIOR_G0_DEPLOYED_8517259 / G1_G2_G3_G4_OPEN",
+      "registryClosure": "SCOPED_G0_V2_AND_G2A_LOCAL_EVIDENCE_PRESENT_G1_G2_G3_G4_OPEN"
     },
     {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-07-provider-effect-contract.md",
@@ -751,5 +751,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-30T04:09:29+08:00"
+  "updatedAt": "2026-07-30T05:22:57+08:00"
 }
