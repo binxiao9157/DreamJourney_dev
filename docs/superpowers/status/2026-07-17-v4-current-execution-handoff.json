@@ -9,20 +9,21 @@
     "priorEvidence": "docs/superpowers/status/2026-07-19-wi-s1-01-06-memory-projection-foundation.md",
     "completedSubSlices": [
       "WI-S1-01-06_G0_LEGACY_KBLITE_GAP_PROMPT_FENCE_VERIFIED_LOCAL",
-      "WI-S1-01-06_G0_QUERY_RANKED_CONTEXT_SHADOW_VERIFIED_LOCAL"
+      "WI-S1-01-06_G0_QUERY_RANKED_CONTEXT_SHADOW_VERIFIED_LOCAL",
+      "WI-S1-01-06_G0_LIVE_ECHO_OWNER_TRUTH_CONTEXT_SHADOW_OBSERVER_VERIFIED_LOCAL"
     ],
-    "currentSubSlice": "WI-S1-01-06_RECONCILE_AFTER_QUERY_RANKED_CONTEXT_SHADOW / QA-only deterministic text selection can now narrow current confirmed Projection citations and fails closed when its private search projection is unavailable. Inspect the next non-duplicate Projection-to-Context cutover boundary without treating KBLite as Authority or promoting a public feature.",
+    "currentSubSlice": "WI-S1-01-06_RECONCILE_AFTER_LIVE_ECHO_OWNER_TRUTH_CONTEXT_SHADOW / QA-only live Echo turns now record only value-free selected/filtered/ranking citation summaries for self-owner contexts. Inspect the next non-duplicate Projection-to-Context cutover boundary without treating KBLite as Authority, changing public reply input, or promoting a public feature.",
     "gateEvidence": {
-      "G0": "VERIFIED_LOCAL / LEGACY_KBLITE_GAP_PROMPT_FENCE / QUERY_RANKED_CONTEXT_SHADOW / BACKEND_LOCAL_COMMITTED_8e2e3c6 / IOS_LOCAL_COMMITTED_a2cdccc"
+      "G0": "VERIFIED_LOCAL / LEGACY_KBLITE_GAP_PROMPT_FENCE / QUERY_RANKED_CONTEXT_SHADOW / LIVE_ECHO_OWNER_TRUTH_CONTEXT_SHADOW_OBSERVER / BACKEND_LOCAL_COMMITTED_8e2e3c6 / IOS_LOCAL_COMMITTED_e6549ac"
     },
     "latestEvidence": {
       "backendBaseline": "main@8e2e3c6 / QA-only Context Shadow supports explicit projectionCitationOrder or deterministicTextFallback selection; no deployment or public release claim",
-      "iosBaseline": "feature/prd-stitch-ui-adaptation@a2cdccc / iOS parses only approved QA selection modes and binds the selected mode into value-free evidence; no public UI or Provider/device claim",
-      "scope": "WI-S1-01-06_G0 / Legacy KBLite remains a compatibility path. Query-ranked Context Shadow can only narrow current policy-eligible confirmed Projection citations; absent or stale SearchDocument projection returns no personal memory. The root three-tab UI, Stitch visual design, public /context/build and business writers are unchanged.",
-      "validation": "Backend 22 focused Context Shadow, Answer Citation, API and SearchDocument tests PASS; Python compile PASS; product-v4 iOS Context/Citation check PASS; generic iPhoneOS Debug build PASS; git diff --check PASS. Postgres smoke was extended but not run locally because DATABASE_URL is unset.",
-      "constraints": "This evidence does not make KBLite a Projection reader, switch public Context/Echo to Owner Truth, claim retrieval quality, authorize data migration, real provider delivery, deployment, true-device evidence or public feature promotion."
+      "iosBaseline": "feature/prd-stitch-ui-adaptation@e6549ac / QA-only live Echo self-owner turns observe typed value-free Context Shadow summaries behind an independent generation fence; no public UI, reply-input, Provider or device claim",
+      "scope": "WI-S1-01-06_G0 / Legacy KBLite remains a compatibility path. Query-ranked Context Shadow can only narrow current policy-eligible confirmed Projection citations; live Echo observation records only value-free self-owner summaries and never submits Shadow output to DialogEngine. The root three-tab UI, Stitch visual design, public /context/build and business writers are unchanged.",
+      "validation": "Backend 22 focused Context Shadow, Answer Citation, API and SearchDocument tests PASS; Python compile PASS; product-v4 iOS Context/Citation, live Echo shadow and Echo application coordinator checks PASS; focused EchoApplicationCoordinatorTests (9 tests) PASS; generic iPhoneOS Debug build PASS; git diff --check PASS. Postgres smoke was extended but not run locally because DATABASE_URL is unset.",
+      "constraints": "This evidence does not make KBLite a Projection reader, switch public Context/Echo to Owner Truth, change public reply input, claim retrieval quality, authorize data migration, real provider delivery, deployment, true-device evidence or public feature promotion."
     },
-    "currentSummary": "WI-S1-01-06 now has two scoped local G0 protections: legacy KBLite cannot independently choose Echo follow-up questions, and QA-only deterministic text selection can narrow current confirmed Projection citations without widening policy eligibility. The next task must inspect the remaining Projection-to-Context boundary without duplicating the existing read envelope, typed citation, SearchDocument projection or recommendation-plan work.",
+    "currentSummary": "WI-S1-01-06 now has three scoped local G0 protections: legacy KBLite cannot independently choose Echo follow-up questions; QA-only deterministic text selection can narrow current confirmed Projection citations without widening policy eligibility; and real self-owner Echo turns can export value-free Owner Truth Context Shadow evidence without changing reply input. The next task must inspect the remaining Projection-to-Context boundary without duplicating the existing read envelope, typed citation, SearchDocument projection, live shadow observer or recommendation-plan work.",
     "backendPendingPaths": []
   },
   "baselines": {

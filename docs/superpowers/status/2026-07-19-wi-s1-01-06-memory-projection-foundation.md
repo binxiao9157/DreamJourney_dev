@@ -117,3 +117,31 @@ SearchDocument read 测试共 22 项通过；Python compile、iOS Context/Citati
 这不是语义检索或质量验收：当前算法仍是 deterministic text fallback，未接入向量、模型
 或真实 Owner corpus。真实检索质量、线上 cohort、正式 Context/Echo cutover、G1/G2/G3/G4
 继续保持开放。
+
+## 2026-07-29：Live Echo Turn Context Shadow Observer（QA-only）
+
+`e6549ac feat(v4): observe owner truth context per echo turn` 将既有的 typed
+`/v2/vaults/{vaultId}/context-shadow/build` 合同接入真实 Echo turn 的 QA 观测，仍不改变
+公开回复路径。
+
+- 只有 `DJEnableOwnerTruthContextCitationQA` 开启、当前角色是本人、`AccountLease` 仍匹配且
+  `KBPersonaIdentity.isPersonal` 时，才会发起 Shadow 请求；家人、跨 persona、未配置 backend
+  或失效 lease 全部 fail closed。
+- Shadow transport 只返回 value-free `OwnerTruthContextCitationTraceSummary`。iOS 只把其
+  authority state、selection mode、selected/filtered/ranking/citation 数量、hash correlation
+  记录到既有 QA panel 和 evidence bundle；不会传给 `DialogEngine`，不会替换 public Context
+  Packet，也不会读取或替换 local KBLite fallback。
+- Shadow lease 独立 generation-fence 管理。新 turn、context-build invalidation、角色/账户
+  生命周期切换都会丢弃旧 callback 并清除旧 QA evidence，避免上一轮摘要写回下一轮。
+- 新增
+  `Scripts/QA/product-v4/product-v4-ios-owner-truth-context-turn-shadow-check.py` 与
+  `run-ios-owner-truth-context-turn-shadow-gate.sh`，检查 self-owner scope、value-free transport、
+  public reply isolation 和 stale-callback fence。
+
+本地验证：新 static gate、既有 Context/Citation gate、Echo application coordinator gate、
+current handoff gate、`git diff --check` 全部通过；`EchoApplicationCoordinatorTests` 9 项通过；
+generic unsigned iPhoneOS Debug `build-for-testing` 通过。
+
+本轮没有后端代码、数据库迁移、部署、线上 shadow cohort、公开 UI 或真机验证。它仅补充
+`WI-S1-01-06` 的 G0 观测证据；Projection-to-Context 正式 cutover、KBLite retirement、G1/G2/G3/G4
+仍保持开放。
