@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOSTED_BUILD_DESTINATION="${DJ_IOS_TEST_BUILD_DESTINATION:-generic/platform=iOS}"
 
 python3 "$ROOT/Scripts/QA/product-v4/product-v4-ios-owner-truth-context-turn-shadow-check.py"
+python3 "$ROOT/Scripts/QA/product-v4/product-v4-ios-owner-truth-live-context-parity-check.py"
 
 # CI may provide a runnable simulator destination to execute the focused
 # coordinator tests.  Otherwise this remains a non-device build gate.

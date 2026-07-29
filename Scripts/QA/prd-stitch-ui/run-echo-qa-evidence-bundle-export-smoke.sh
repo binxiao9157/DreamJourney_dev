@@ -84,6 +84,7 @@ echo "[echo-qa-evidence-bundle-export-smoke] Launching QA evidence bundle export
 xcrun simctl launch --console "$SIMULATOR_UDID" "$BUNDLE_ID" \
   DJRunEchoQAEvidenceBundleExportSmoke \
   DJEnableOwnerTruthContextCitationQA \
+  DJEnableOwnerTruthMigrationParityQA \
   "DJEvidenceSourceCommit=$SOURCE_COMMIT" > "$RUNTIME_LOG" 2>&1 &
 CONSOLE_PID="$!"
 
@@ -118,7 +119,7 @@ def correlation_hash(value):
     return "sha256:" + hashlib.sha256(value.encode()).hexdigest()[:16]
 
 require(result.get("completed") is True, "Echo QA evidence bundle smoke did not complete")
-require(result.get("schemaVersion") == 2, "QA evidence bundle schemaVersion changed")
+require(result.get("schemaVersion") == 3, "QA evidence bundle schemaVersion changed")
 require(result.get("latestTurnIDHash") == correlation_hash("uiqa-qa-bundle-turn"), "QA evidence bundle latest turn hash changed")
 require(result.get("latestVoiceOutputMode") == "tencentAudioDrive", "QA evidence bundle voice output mode changed")
 require(result.get("latestProviderLogIdHash") == correlation_hash("uiqa-bundle-provider-log"), "QA evidence bundle provider log hash changed")
@@ -144,6 +145,22 @@ require(
     result.get("ownerTruthContextPanelVisible") is True,
     "Owner Truth Context QA evidence should render in the QA diagnostics panel",
 )
+require(
+    result.get("ownerTruthContextParityEvidenceSchemaVersion") == "echo-owner-truth-context-parity-readout-v1",
+    "Owner Truth Context parity QA evidence schema changed",
+)
+require(
+    result.get("ownerTruthContextParityPromotionDecision") == "notEvaluated",
+    "Owner Truth Context parity must not imply a promotion decision",
+)
+require(
+    "M04" in (result.get("ownerTruthContextParityMismatchCodes") or "").split(","),
+    "Owner Truth Context parity fixture should preserve the authority-epoch mismatch",
+)
+require(
+    result.get("ownerTruthContextParityPanelVisible") is True,
+    "Owner Truth Context parity evidence should render in the QA diagnostics panel",
+)
 require(result.get("fileExists") is True, "QA evidence bundle export file should exist")
 require(result.get("manifestSchemaVersion") == 1, "QA evidence manifest schemaVersion changed")
 require(result.get("manifestStatus") == "passed", "QA evidence manifest should be passed")
@@ -160,7 +177,7 @@ require(isinstance(manifest_export_path, str) and manifest_export_path.endswith(
 export_file = pathlib.Path(export_path)
 require(export_file.exists(), f"Exported QA evidence bundle file missing: {export_file}")
 bundle = json.loads(export_file.read_text())
-require(bundle.get("schemaVersion") == 2, "Exported QA bundle schemaVersion changed")
+require(bundle.get("schemaVersion") == 3, "Exported QA bundle schemaVersion changed")
 require(bundle.get("evidencePackage", {}).get("schemaVersion") == 1, "Nested evidence package schemaVersion changed")
 require(bundle.get("redactionPolicyVersion") == "iosDiagnostics-v1", "QA evidence bundle should declare its redaction policy")
 require(bundle.get("contextClues", {}).get("archiveRefsHashes") == [correlation_hash("archive_qa_bundle")], "Exported archive clue summary changed")
@@ -179,6 +196,23 @@ require(
     all(isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value) for value in owner_truth_ref_digests),
     "Owner Truth Context references must be SHA-256 digests",
 )
+owner_truth_context_parity = bundle.get("ownerTruthContextParityEvidence") or {}
+require(
+    owner_truth_context_parity.get("schemaVersion") == "echo-owner-truth-context-parity-readout-v1",
+    "Exported Owner Truth Context parity QA evidence schema changed",
+)
+require(
+    owner_truth_context_parity.get("comparisonState") == "observedNonPromoting",
+    "Owner Truth Context parity must remain observation-only",
+)
+require(
+    owner_truth_context_parity.get("promotionDecision") == "notEvaluated",
+    "Owner Truth Context parity must not authorize promotion",
+)
+require(
+    "M04" in (owner_truth_context_parity.get("mismatchCodes") or []),
+    "Owner Truth Context parity should preserve authority-epoch mismatch evidence",
+)
 require(bundle.get("digitalHumanSession", {}).get("status") == "unavailable", "Exported digital human status changed")
 require(bundle.get("voiceSynthesis", {}).get("providerLogIdHash") == correlation_hash("uiqa-bundle-provider-log"), "Exported voice provider log changed")
 require(
@@ -191,6 +225,7 @@ require("appkey" not in serialized.lower(), "QA evidence bundle must not export 
 require("accesstoken" not in serialized.lower(), "QA evidence bundle must not export accesstoken")
 require("uiqa-bundle-provider-log" not in serialized, "QA evidence bundle must not export raw provider log IDs")
 require("archive_qa_bundle" not in serialized, "QA evidence bundle must not export raw archive references")
+require("uiqa echo context parity evidence" not in serialized, "QA evidence bundle must not export raw parity query")
 require(
     "memory-version:00000000-0000-0000-0000-000000000901" not in serialized,
     "QA evidence bundle must not export raw Owner Truth memory references",
@@ -207,7 +242,7 @@ require(manifest.get("manifestType") == "echoQaEvidenceBundle", "Exported manife
 require(manifest.get("sourceCommit") == source_commit, "Exported manifest source commit changed")
 require(manifest.get("manifestStatus") == "passed", "Exported manifest must be passed")
 require(manifest.get("artifactHashes") == [bundle_hash], "Manifest must bind the exact redacted bundle hash")
-require(manifest.get("sourceSchemaVersions") == ["echoQaBundle-v2", "echoEvidenceManifest-v1"], "Manifest schema source changed")
+require(manifest.get("sourceSchemaVersions") == ["echoQaBundle-v3", "echoEvidenceManifest-v1"], "Manifest schema source changed")
 require(manifest.get("exclusionCodes") == ["rawAudio", "providerSecret", "reportBody", "userContent"], "Manifest exclusion set changed")
 require(isinstance(manifest.get("ownerLeaseHash"), str) and len(manifest["ownerLeaseHash"]) == 64, "Manifest owner lease hash missing")
 require("evidenceIdHash" in manifest, "Manifest evidence id should be redacted at export")

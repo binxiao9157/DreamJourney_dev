@@ -480,22 +480,375 @@ enum EchoOwnerTruthContextShadowCorrelationError: Error, Equatable {
     case queryMismatch
 }
 
+/// One QA-only correlation lease for observing the legacy Context Packet and
+/// the Owner Truth Context shadow for the exact same self-owner Echo turn.
+/// It carries only normalized request metadata; neither answer text nor memory
+/// values are retained here.
+struct EchoOwnerTruthContextParityLease: Equatable {
+    let generation: UInt64
+    let turnID: String
+    let expectedIdentity: EchoKnowledgeContextIdentity
+    let accountSubjectID: String
+    let vaultID: String
+    let queryHash: String
+    let queryLength: Int
+}
+
+/// A deliberately value-minimized legacy observation. The public Context
+/// Packet can contain generation text, so the pairing buffer never stores it.
+struct EchoOwnerTruthContextParityLegacyObservation: Equatable {
+    let contextVersion: String
+    let selectedContextCount: Int
+    let filteredContextCount: Int
+    let rankingTraceCount: Int
+    let selectedContextSourceCount: Int
+    let fallbackCount: Int
+    let citationSetHash: OwnerTruthMigrationParityDigest?
+
+    init(packet: EchoContextPacket) {
+        contextVersion = packet.contextVersion
+        selectedContextCount = packet.selectedContextCount
+        filteredContextCount = packet.filteredContextCount
+        rankingTraceCount = packet.rankingTraceCount
+        selectedContextSourceCount = packet.selectedContextSourceCounts.count
+        fallbackCount = packet.fallbacks.count
+        citationSetHash = Self.citationSetHash(
+            packet.selectedContextRefs,
+            domain: "legacy-echo-context-citation-set-v1"
+        )
+    }
+
+    private static func citationSetHash(
+        _ refs: [String],
+        domain: String
+    ) -> OwnerTruthMigrationParityDigest? {
+        let normalized = refs
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .sorted()
+        guard !normalized.isEmpty else { return nil }
+        return OwnerTruthMigrationParityDigest.make(
+            ([domain] + normalized).joined(separator: "|")
+        )
+    }
+}
+
+/// The Shadow half of a parity observation is reduced before it can be held by
+/// the coordinator. Reference IDs and checkpoints become one-way digests.
+struct EchoOwnerTruthContextParityShadowObservation: Equatable {
+    let contextVersion: String
+    let authorityState: OwnerTruthContextShadowState
+    let authorityEpoch: Int?
+    let queryHash: String?
+    let queryLength: Int?
+    let selectedContextCount: Int
+    let filteredContextCount: Int
+    let rankingTraceCount: Int
+    let selectedContextSourceCount: Int
+    let fallbackCount: Int
+    let citationSetHash: OwnerTruthMigrationParityDigest?
+    let projectionCheckpointHash: OwnerTruthMigrationParityDigest?
+
+    init(summary: OwnerTruthContextCitationTraceSummary) {
+        contextVersion = summary.contextVersion
+        authorityState = summary.authorityState
+        authorityEpoch = summary.authorityEpoch
+        queryHash = summary.queryHash
+        queryLength = summary.queryLength
+        selectedContextCount = summary.selectedContextCount
+        filteredContextCount = summary.filteredContextCount
+        rankingTraceCount = summary.rankingTraceCount
+        selectedContextSourceCount = summary.selectedContextSourceCounts.count
+        fallbackCount = summary.fallbacks.count
+        citationSetHash = Self.citationSetHash(
+            summary.selectedContextRefs,
+            domain: "owner-truth-echo-context-citation-set-v1"
+        )
+        projectionCheckpointHash = summary.projectionCheckpoint.map {
+            OwnerTruthMigrationParityDigest.make(
+                "owner-truth-echo-context-checkpoint-v1|\($0)"
+            )
+        }
+    }
+
+    private static func citationSetHash(
+        _ refs: [String],
+        domain: String
+    ) -> OwnerTruthMigrationParityDigest? {
+        let normalized = refs
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .sorted()
+        guard !normalized.isEmpty else { return nil }
+        return OwnerTruthMigrationParityDigest.make(
+            ([domain] + normalized).joined(separator: "|")
+        )
+    }
+}
+
+/// This is the only live V1/V4 parity shape that may enter Echo QA UI or an
+/// evidence bundle. It is diagnostic only: mismatch data never changes a
+/// route, writer, authority, reply input, or release decision.
+struct EchoOwnerTruthContextParityQAEvidenceReadout: Codable, Equatable, Sendable {
+    static let schemaVersion = "echo-owner-truth-context-parity-readout-v1"
+
+    let schemaVersion: String
+    let comparisonState: String
+    let promotionDecision: String
+    let queryHashDigest: String
+    let queryLength: Int
+    let legacyContextVersion: String
+    let ownerTruthContextVersion: String
+    let legacySelectedContextCount: Int
+    let ownerTruthSelectedContextCount: Int
+    let legacyFilteredContextCount: Int
+    let ownerTruthFilteredContextCount: Int
+    let legacyRankingTraceCount: Int
+    let ownerTruthRankingTraceCount: Int
+    let legacySourceCount: Int
+    let ownerTruthSourceCount: Int
+    let legacyFallbackCount: Int
+    let ownerTruthFallbackCount: Int
+    let mismatchCodes: [String]
+    let blockerCount: Int
+    let unresolvedM08Count: Int
+
+    init(
+        lease: EchoOwnerTruthContextParityLease,
+        legacy: EchoOwnerTruthContextParityLegacyObservation,
+        ownerTruth: EchoOwnerTruthContextParityShadowObservation,
+        report: OwnerTruthMigrationParityViewStateReport
+    ) {
+        schemaVersion = Self.schemaVersion
+        comparisonState = "observedNonPromoting"
+        promotionDecision = "notEvaluated"
+        queryHashDigest = OwnerTruthMigrationParityDigest.make(
+            "echo-owner-truth-context-parity-query-v1|\(lease.queryHash)"
+        ).rawValue
+        queryLength = lease.queryLength
+        legacyContextVersion = legacy.contextVersion
+        ownerTruthContextVersion = ownerTruth.contextVersion
+        legacySelectedContextCount = legacy.selectedContextCount
+        ownerTruthSelectedContextCount = ownerTruth.selectedContextCount
+        legacyFilteredContextCount = legacy.filteredContextCount
+        ownerTruthFilteredContextCount = ownerTruth.filteredContextCount
+        legacyRankingTraceCount = legacy.rankingTraceCount
+        ownerTruthRankingTraceCount = ownerTruth.rankingTraceCount
+        legacySourceCount = legacy.selectedContextSourceCount
+        ownerTruthSourceCount = ownerTruth.selectedContextSourceCount
+        legacyFallbackCount = legacy.fallbackCount
+        ownerTruthFallbackCount = ownerTruth.fallbackCount
+        mismatchCodes = Array(Set(report.mismatches.map { $0.code.rawValue })).sorted()
+        blockerCount = report.blockerCount
+        unresolvedM08Count = report.unresolvedM08Count
+    }
+
+    func panelLines(prefix: String = "ctxParity") -> [String] {
+        [
+            "\(prefix) schema: \(schemaVersion)",
+            "\(prefix) state: \(comparisonState) promotion=\(promotionDecision)",
+            "\(prefix) query: length=\(queryLength) hash=\(queryHashDigest)",
+            "\(prefix) version: legacy=\(legacyContextVersion) ownerTruth=\(ownerTruthContextVersion)",
+            "\(prefix) selected/filtered: \(legacySelectedContextCount)/\(legacyFilteredContextCount) -> \(ownerTruthSelectedContextCount)/\(ownerTruthFilteredContextCount)",
+            "\(prefix) ranking/sources/fallbacks: \(legacyRankingTraceCount)/\(legacySourceCount)/\(legacyFallbackCount) -> \(ownerTruthRankingTraceCount)/\(ownerTruthSourceCount)/\(ownerTruthFallbackCount)",
+            "\(prefix) mismatches: \(mismatchCodes.isEmpty ? "none" : mismatchCodes.joined(separator: ",")) blockers=\(blockerCount) m08=\(unresolvedM08Count)"
+        ]
+    }
+}
+
+enum EchoOwnerTruthContextParityObservationError: Error, Equatable {
+    case qaDisabled
+    case legacyIdentityMismatch
+    case shadowQueryMismatch
+}
+
+/// Builds C05 view-state snapshots from independent live results. It preserves
+/// the legacy response as the public source of truth and uses the C05 report
+/// only to explain differences in QA evidence.
+enum EchoOwnerTruthContextParityAdapter {
+    static func compare(
+        lease: EchoOwnerTruthContextParityLease,
+        legacy: EchoOwnerTruthContextParityLegacyObservation,
+        ownerTruth: EchoOwnerTruthContextParityShadowObservation,
+        qaGateEnabled: Bool
+    ) throws -> EchoOwnerTruthContextParityQAEvidenceReadout {
+        guard qaGateEnabled else {
+            throw EchoOwnerTruthContextParityObservationError.qaDisabled
+        }
+        guard ownerTruth.queryHash == lease.queryHash,
+              ownerTruth.queryLength == lease.queryLength else {
+            throw EchoOwnerTruthContextParityObservationError.shadowQueryMismatch
+        }
+
+        let intentHash = OwnerTruthMigrationParityDigest.make(
+            "echo-owner-truth-context-parity-intent-v1|\(lease.queryHash)|\(lease.queryLength)"
+        )
+        let subjectHash = OwnerTruthMigrationParityDigest.make(
+            "echo-owner-truth-context-parity-subject-v1|\(lease.accountSubjectID)"
+        )
+        let vaultHash = OwnerTruthMigrationParityDigest.make(
+            "echo-owner-truth-context-parity-vault-v1|\(lease.vaultID)"
+        )
+        let legacyAuthority = OwnerTruthMigrationParityAuthorityBinding(
+            ownerSubjectHash: subjectHash,
+            vaultHash: vaultHash,
+            authorityEpochHash: OwnerTruthMigrationParityDigest.make(
+                "echo-owner-truth-context-parity-legacy-epoch-unavailable-v1"
+            )
+        )
+        let ownerTruthAuthority = OwnerTruthMigrationParityAuthorityBinding(
+            ownerSubjectHash: subjectHash,
+            vaultHash: vaultHash,
+            authorityEpochHash: OwnerTruthMigrationParityDigest.make(
+                "echo-owner-truth-context-parity-owner-truth-epoch-v1|\(ownerTruth.authorityEpoch.map(String.init) ?? "absent")"
+            )
+        )
+        let legacySnapshot = OwnerTruthMigrationParityViewStateSnapshot(
+            source: .legacy,
+            surface: .context,
+            intentHash: intentHash,
+            authority: legacyAuthority,
+            routeDecision: .allowed,
+            visibility: visibility(
+                selected: legacy.selectedContextCount,
+                filtered: legacy.filteredContextCount,
+                available: true
+            ),
+            phase: phase(
+                selected: legacy.selectedContextCount,
+                available: true
+            ),
+            cacheState: .fresh,
+            viewStateHash: viewStateHash(
+                version: legacy.contextVersion,
+                selected: legacy.selectedContextCount,
+                filtered: legacy.filteredContextCount,
+                ranking: legacy.rankingTraceCount,
+                sourceCount: legacy.selectedContextSourceCount,
+                fallbackCount: legacy.fallbackCount,
+                domain: "legacy"
+            ),
+            citationSetHash: legacy.citationSetHash
+        )
+        let ownerTruthAvailable = ownerTruth.authorityState == .ready
+        let ownerTruthSnapshot = OwnerTruthMigrationParityViewStateSnapshot(
+            source: .v4,
+            surface: .context,
+            intentHash: intentHash,
+            authority: ownerTruthAuthority,
+            routeDecision: ownerTruthAvailable ? .allowed : .unavailable,
+            visibility: visibility(
+                selected: ownerTruth.selectedContextCount,
+                filtered: ownerTruth.filteredContextCount,
+                available: ownerTruthAvailable
+            ),
+            phase: phase(
+                selected: ownerTruth.selectedContextCount,
+                available: ownerTruthAvailable
+            ),
+            cacheState: ownerTruthAvailable ? .fresh : .unavailable,
+            viewStateHash: viewStateHash(
+                version: ownerTruth.contextVersion,
+                selected: ownerTruth.selectedContextCount,
+                filtered: ownerTruth.filteredContextCount,
+                ranking: ownerTruth.rankingTraceCount,
+                sourceCount: ownerTruth.selectedContextSourceCount,
+                fallbackCount: ownerTruth.fallbackCount,
+                domain: "ownerTruth"
+            ),
+            citationSetHash: ownerTruth.citationSetHash,
+            projectionCheckpointHash: ownerTruth.projectionCheckpointHash
+        )
+        let report = try OwnerTruthMigrationParityViewStateComparator.compare(
+            legacy: legacySnapshot,
+            v4: ownerTruthSnapshot,
+            qaGateEnabled: true
+        )
+        return EchoOwnerTruthContextParityQAEvidenceReadout(
+            lease: lease,
+            legacy: legacy,
+            ownerTruth: ownerTruth,
+            report: report
+        )
+    }
+
+    private static func visibility(
+        selected: Int,
+        filtered: Int,
+        available: Bool
+    ) -> OwnerTruthMigrationParityVisibility {
+        guard available else { return .hidden }
+        if selected > 0 { return .visible }
+        return filtered > 0 ? .redacted : .hidden
+    }
+
+    private static func phase(
+        selected: Int,
+        available: Bool
+    ) -> OwnerTruthMigrationParityViewStatePhase {
+        guard available else { return .unavailable }
+        return selected > 0 ? .ready : .empty
+    }
+
+    private static func viewStateHash(
+        version: String,
+        selected: Int,
+        filtered: Int,
+        ranking: Int,
+        sourceCount: Int,
+        fallbackCount: Int,
+        domain: String
+    ) -> OwnerTruthMigrationParityDigest {
+        OwnerTruthMigrationParityDigest.make(
+            [
+                "echo-owner-truth-context-parity-view-state-v1",
+                domain,
+                version,
+                String(selected),
+                String(filtered),
+                String(ranking),
+                String(sourceCount),
+                String(fallbackCount),
+            ].joined(separator: "|")
+        )
+    }
+}
+
 /// Incremental application coordinator for Echo business requests.
 /// Runtime digital-human/audio lifecycles intentionally remain outside this seam.
 final class EchoApplicationCoordinator {
+    private struct OwnerTruthContextParityPendingObservation {
+        let lease: EchoOwnerTruthContextParityLease
+        var legacy: EchoOwnerTruthContextParityLegacyObservation?
+        var ownerTruth: EchoOwnerTruthContextParityShadowObservation?
+    }
+
     private var nextContextBuildGeneration: UInt64 = 0
     private var nextOwnerTruthContextShadowGeneration: UInt64 = 0
+    private var nextOwnerTruthContextParityGeneration: UInt64 = 0
     private let contextBuildTransport: EchoContextBuildTransport
     private let ownerTruthContextShadowTransport: EchoOwnerTruthContextShadowTransport
+    private let ownerTruthContextCitationQAEnabled: () -> Bool
+    private let ownerTruthMigrationParityQAEnabled: () -> Bool
     private(set) var activeContextBuildLease: EchoContextBuildLease?
     private(set) var activeOwnerTruthContextShadowLease: EchoOwnerTruthContextShadowLease?
+    private(set) var activeOwnerTruthContextParityLease: EchoOwnerTruthContextParityLease?
+    private var ownerTruthContextParityPendingObservation: OwnerTruthContextParityPendingObservation?
 
     init(
         contextBuildTransport: EchoContextBuildTransport = DreamJourneyBackendClient.shared,
-        ownerTruthContextShadowTransport: EchoOwnerTruthContextShadowTransport = DreamJourneyBackendClient.shared
+        ownerTruthContextShadowTransport: EchoOwnerTruthContextShadowTransport = DreamJourneyBackendClient.shared,
+        ownerTruthContextCitationQAEnabled: @escaping () -> Bool = {
+            OwnerTruthContextCitationQAGate.isEnabled
+        },
+        ownerTruthMigrationParityQAEnabled: @escaping () -> Bool = {
+            OwnerTruthMigrationParityQAGate.isEnabled
+        }
     ) {
         self.contextBuildTransport = contextBuildTransport
         self.ownerTruthContextShadowTransport = ownerTruthContextShadowTransport
+        self.ownerTruthContextCitationQAEnabled = ownerTruthContextCitationQAEnabled
+        self.ownerTruthMigrationParityQAEnabled = ownerTruthMigrationParityQAEnabled
     }
 
     @discardableResult
@@ -518,6 +871,7 @@ final class EchoApplicationCoordinator {
         let invalidatedLease = activeContextBuildLease
         activeContextBuildLease = nil
         invalidateOwnerTruthContextShadow()
+        invalidateOwnerTruthContextParity()
         return invalidatedLease
     }
 
@@ -534,6 +888,136 @@ final class EchoApplicationCoordinator {
 
     func isCurrent(_ lease: EchoOwnerTruthContextShadowLease) -> Bool {
         activeOwnerTruthContextShadowLease == lease
+    }
+
+    /// Starts a second, independent QA-only fence for a live legacy/V4 Context
+    /// comparison. Both source reads remain observational; the returned report
+    /// is never allowed to select the public Echo response source.
+    @discardableResult
+    func beginOwnerTruthContextParity(
+        turnID: String,
+        query: String,
+        accountLease: AccountLease,
+        expectedIdentity: EchoKnowledgeContextIdentity
+    ) -> EchoOwnerTruthContextParityLease? {
+        guard ownerTruthContextCitationQAEnabled(),
+              ownerTruthMigrationParityQAEnabled(),
+              expectedIdentity.isPersonal,
+              expectedIdentity.userId == accountLease.subjectId else {
+            return nil
+        }
+        let normalizedVaultID = accountLease.vaultId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fingerprint = OwnerTruthContextCitationTraceSummary.queryFingerprint(for: query)
+        guard !normalizedVaultID.isEmpty,
+              let queryHash = fingerprint.hash,
+              fingerprint.length > 0 else {
+            return nil
+        }
+
+        invalidateOwnerTruthContextParity()
+        nextOwnerTruthContextParityGeneration &+= 1
+        let lease = EchoOwnerTruthContextParityLease(
+            generation: nextOwnerTruthContextParityGeneration,
+            turnID: turnID,
+            expectedIdentity: expectedIdentity,
+            accountSubjectID: accountLease.subjectId,
+            vaultID: normalizedVaultID,
+            queryHash: queryHash,
+            queryLength: fingerprint.length
+        )
+        activeOwnerTruthContextParityLease = lease
+        ownerTruthContextParityPendingObservation = OwnerTruthContextParityPendingObservation(
+            lease: lease,
+            legacy: nil,
+            ownerTruth: nil
+        )
+        return lease
+    }
+
+    @discardableResult
+    func invalidateOwnerTruthContextParity() -> EchoOwnerTruthContextParityLease? {
+        let invalidatedLease = activeOwnerTruthContextParityLease
+        activeOwnerTruthContextParityLease = nil
+        ownerTruthContextParityPendingObservation = nil
+        return invalidatedLease
+    }
+
+    @discardableResult
+    func invalidateOwnerTruthContextParity(
+        matching lease: EchoOwnerTruthContextParityLease
+    ) -> Bool {
+        guard activeOwnerTruthContextParityLease == lease else {
+            return false
+        }
+        _ = invalidateOwnerTruthContextParity()
+        return true
+    }
+
+    func isCurrent(_ lease: EchoOwnerTruthContextParityLease) -> Bool {
+        activeOwnerTruthContextParityLease == lease
+    }
+
+    /// Records only a value-minimized legacy packet observation. The caller
+    /// still independently owns the public Context Packet and DialogEngine.
+    func recordOwnerTruthContextParityLegacy(
+        _ packet: EchoContextPacket,
+        contextBuildLease: EchoContextBuildLease,
+        parityLease: EchoOwnerTruthContextParityLease
+    ) -> EchoOwnerTruthContextParityQAEvidenceReadout? {
+        guard isCurrent(contextBuildLease),
+              isCurrent(parityLease),
+              contextBuildLease.turnID == parityLease.turnID,
+              contextBuildLease.expectedIdentity == parityLease.expectedIdentity,
+              EchoKnowledgeContextPolicy.responseIdentityMatches(
+                  expected: parityLease.expectedIdentity,
+                  responseUserId: packet.userId,
+                  responsePersonaScope: packet.personaScope,
+                  responseDigitalHumanId: packet.digitalHumanId
+              ),
+              var pending = ownerTruthContextParityPendingObservation,
+              pending.lease == parityLease else {
+            _ = invalidateOwnerTruthContextParity(matching: parityLease)
+            return nil
+        }
+        pending.legacy = EchoOwnerTruthContextParityLegacyObservation(packet: packet)
+        ownerTruthContextParityPendingObservation = pending
+        return completeOwnerTruthContextParityIfReady()
+    }
+
+    /// The shadow callback has already passed its own request-generation fence;
+    /// this method adds the pair fence and rejects any uncorrelated summary.
+    func recordOwnerTruthContextParityShadow(
+        _ summary: OwnerTruthContextCitationTraceSummary,
+        parityLease: EchoOwnerTruthContextParityLease
+    ) -> EchoOwnerTruthContextParityQAEvidenceReadout? {
+        guard isCurrent(parityLease),
+              summary.queryHash == parityLease.queryHash,
+              summary.queryLength == parityLease.queryLength,
+              var pending = ownerTruthContextParityPendingObservation,
+              pending.lease == parityLease else {
+            _ = invalidateOwnerTruthContextParity(matching: parityLease)
+            return nil
+        }
+        pending.ownerTruth = EchoOwnerTruthContextParityShadowObservation(summary: summary)
+        ownerTruthContextParityPendingObservation = pending
+        return completeOwnerTruthContextParityIfReady()
+    }
+
+    private func completeOwnerTruthContextParityIfReady() -> EchoOwnerTruthContextParityQAEvidenceReadout? {
+        guard let pending = ownerTruthContextParityPendingObservation,
+              activeOwnerTruthContextParityLease == pending.lease,
+              let legacy = pending.legacy,
+              let ownerTruth = pending.ownerTruth else {
+            return nil
+        }
+        _ = invalidateOwnerTruthContextParity()
+        return try? EchoOwnerTruthContextParityAdapter.compare(
+            lease: pending.lease,
+            legacy: legacy,
+            ownerTruth: ownerTruth,
+            qaGateEnabled: ownerTruthContextCitationQAEnabled()
+                && ownerTruthMigrationParityQAEnabled()
+        )
     }
 
     @discardableResult

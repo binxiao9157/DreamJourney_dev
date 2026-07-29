@@ -24,6 +24,7 @@ func require(_ condition: Bool, _ message: String) {
 
 let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
+let echoViewModel = read("DreamJourney/Sources/Modules/Echo/EchoViewModel.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
 let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let ownerTruthContracts = read("DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift")
@@ -43,8 +44,9 @@ for required in [
     "func exportLatestManifest(",
     "echo-qa-evidence-bundle.json",
     "echo-qa-evidence-manifest.json",
-    "schemaVersion = 2",
+    "schemaVersion = 3",
     "ownerTruthContextCitationEvidence",
+    "ownerTruthContextParityEvidence",
 ] {
     require(backendClient.contains(required), "backend client should define QA bundle support: \(required)")
 }
@@ -89,8 +91,11 @@ for required in [
     "latestDigitalHumanStatus",
     "latestArchiveClueHashes",
     "recordOwnerTruthContextCitationQAEvidence",
+    "recordOwnerTruthContextParityQAEvidence",
     "ownerTruthContextEvidenceSchemaVersion",
     "ownerTruthContextReferenceDigestCount",
+    "ownerTruthContextParityEvidenceSchemaVersion",
+    "ownerTruthContextParityPromotionDecision",
 ] {
     require(echo.contains(required), "Echo should build/export QA evidence bundle: \(required)")
 }
@@ -104,8 +109,19 @@ for required in [
     "selectedContextRefDigestsBySource",
     "enum OwnerTruthContextCitationQAGate",
     "DJEnableOwnerTruthContextCitationQA",
+    "enum OwnerTruthMigrationParityQAGate",
+    "DJEnableOwnerTruthMigrationParityQA",
 ] {
     require(ownerTruthContracts.contains(required), "Owner Truth QA readout must stay value-free: \(required)")
+}
+
+for required in [
+    "struct EchoOwnerTruthContextParityQAEvidenceReadout",
+    "echo-owner-truth-context-parity-readout-v1",
+    "observedNonPromoting",
+    "promotionDecision",
+] {
+    require(echoViewModel.contains(required), "Owner Truth Context parity readout must remain QA-only: \(required)")
 }
 
 require(
@@ -117,7 +133,7 @@ require(
 for required in [
     "case .echoQAEvidenceBundleExportSmoke:",
     "runEchoQAEvidenceBundleExportSmoke",
-    "writeEchoQAEvidenceBundleExportSmokeResult",
+    "QAScenarioResultWriter.writeAndLog(",
     "echo-qa-evidence-bundle-export-smoke-result.json",
 ] {
     require(appDelegate.contains(required), "AppDelegate should expose QA evidence bundle smoke: \(required)")
@@ -166,8 +182,10 @@ for required in [
     "voiceSynthesis",
     "fallbackSummary",
     "ownerTruthContextCitationEvidence",
+    "ownerTruthContextParityEvidence",
     "selectedContextRefDigests",
     "DJEnableOwnerTruthContextCitationQA",
+    "DJEnableOwnerTruthMigrationParityQA",
     "audioBase64",
     "appkey",
     "accesstoken",

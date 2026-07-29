@@ -3830,6 +3830,7 @@ struct EchoQAEvidenceBundle: Codable {
     let runtimeDiagnostics: EchoRuntimeDiagnosticsSnapshot?
     let contextClues: EchoContextV2ClueSummary
     let ownerTruthContextCitationEvidence: OwnerTruthContextCitationQAEvidenceReadout?
+    let ownerTruthContextParityEvidence: EchoOwnerTruthContextParityQAEvidenceReadout?
     let digitalHumanSession: EchoDigitalHumanSessionEvidenceSummary?
     let voiceSynthesis: EchoVoiceSynthesisEvidenceSummary?
     let fallbackSummary: EchoQAFallbackSummary
@@ -3841,9 +3842,10 @@ struct EchoQAEvidenceBundle: Codable {
 
     init(
         evidencePackage: EchoTraceEvidencePackage,
-        ownerTruthContextCitationEvidence: OwnerTruthContextCitationQAEvidenceReadout? = nil
+        ownerTruthContextCitationEvidence: OwnerTruthContextCitationQAEvidenceReadout? = nil,
+        ownerTruthContextParityEvidence: EchoOwnerTruthContextParityQAEvidenceReadout? = nil
     ) {
-        self.schemaVersion = 2
+        self.schemaVersion = 3
         let uniqueSuffix = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24))
         self.bundleId = "echo_qa_bundle_" + uniqueSuffix
         self.generatedAt = Date()
@@ -3857,6 +3859,10 @@ struct EchoQAEvidenceBundle: Codable {
         self.ownerTruthContextCitationEvidence = OwnerTruthContextCitationQAGate.isEnabled
             ? ownerTruthContextCitationEvidence
             : nil
+        self.ownerTruthContextParityEvidence = (
+            OwnerTruthContextCitationQAGate.isEnabled
+                && OwnerTruthMigrationParityQAGate.isEnabled
+        ) ? ownerTruthContextParityEvidence : nil
         self.digitalHumanSession = evidencePackage.digitalHumanSession
         self.voiceSynthesis = evidencePackage.voiceSynthesis
         self.fallbackSummary = EchoQAFallbackSummary(
@@ -3866,8 +3872,9 @@ struct EchoQAEvidenceBundle: Codable {
             voiceSynthesis: evidencePackage.voiceSynthesis
         )
         self.redactionPolicy = evidencePackage.redactionPolicy + [
-            "QA bundle v2 汇总 Context V2 线索、数字人 session、声音合成和 fallback 摘要",
+            "QA bundle v3 汇总 Context V2 线索、数字人 session、声音合成和 fallback 摘要",
             "Owner Truth Context QA 只导出哈希引用、计数和过滤码",
+            "Owner Truth Context V1/V4 parity 只导出哈希、计数和 mismatch code，且不作切流结论",
             "不导出 raw audio、PCM、音频 base64 或供应商密钥",
             "手动分享仅在 QA 面板中开放"
         ]
@@ -4056,7 +4063,7 @@ struct EchoQAEvidenceManifest: Codable {
             Data((artifactHash + "|" + String(bundle.schemaVersion)).utf8)
         )
         self.exclusionCodes = ["rawAudio", "providerSecret", "reportBody", "userContent"]
-        self.sourceSchemaVersions = ["echoQaBundle-v2", "echoEvidenceManifest-v1"]
+        self.sourceSchemaVersions = ["echoQaBundle-v3", "echoEvidenceManifest-v1"]
         self.redactionVersion = PrivacySafeDiagnostics.redactionPolicyVersion
         self.artifactHashes = [artifactHash]
         self.windowStartedAt = bundle.generatedAt

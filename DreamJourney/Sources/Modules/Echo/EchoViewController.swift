@@ -295,6 +295,7 @@ final class EchoViewController: UIViewController {
     private var lastDigitalHumanSessionEvidenceSummary: EchoDigitalHumanSessionEvidenceSummary?
     private var lastVoiceSynthesisEvidenceSummary: EchoVoiceSynthesisEvidenceSummary?
     private var lastOwnerTruthContextCitationEvidence: OwnerTruthContextCitationQAEvidenceReadout?
+    private var lastOwnerTruthContextParityEvidence: EchoOwnerTruthContextParityQAEvidenceReadout?
     private var trueDeviceBackendPCMDriveTrace = TencentBackendPCMDriveTrueDeviceTrace()
     private var digitalHumanRuntimeContextKey: String?
     private var digitalHumanRuntimeLifecycleGeneration: UInt64?
@@ -1388,6 +1389,7 @@ final class EchoViewController: UIViewController {
         lastDigitalHumanSessionEvidenceSummary = nil
         lastVoiceSynthesisEvidenceSummary = nil
         lastOwnerTruthContextCitationEvidence = nil
+        lastOwnerTruthContextParityEvidence = nil
         lastVoiceCloneProviderLogId = nil
         lastVoiceCloneProviderRequestId = nil
         lastVoiceCloneProviderMode = nil
@@ -3523,7 +3525,8 @@ final class EchoViewController: UIViewController {
         let package = makeEchoTraceEvidencePackage(snapshot: snapshot, source: source)
         return EchoQAEvidenceBundle(
             evidencePackage: package,
-            ownerTruthContextCitationEvidence: lastOwnerTruthContextCitationEvidence
+            ownerTruthContextCitationEvidence: lastOwnerTruthContextCitationEvidence,
+            ownerTruthContextParityEvidence: lastOwnerTruthContextParityEvidence
         )
     }
 
@@ -3536,6 +3539,19 @@ final class EchoViewController: UIViewController {
             return false
         }
         lastOwnerTruthContextCitationEvidence = OwnerTruthContextCitationQAEvidenceReadout(summary: summary)
+        return true
+    }
+
+    @discardableResult
+    private func recordOwnerTruthContextParityQAEvidence(
+        _ evidence: EchoOwnerTruthContextParityQAEvidenceReadout
+    ) -> Bool {
+        guard OwnerTruthContextCitationQAGate.isEnabled,
+              OwnerTruthMigrationParityQAGate.isEnabled else {
+            lastOwnerTruthContextParityEvidence = nil
+            return false
+        }
+        lastOwnerTruthContextParityEvidence = evidence
         return true
     }
 
@@ -3586,6 +3602,7 @@ final class EchoViewController: UIViewController {
             capability.map { "capability.\($0.diagnosticSummary)" }
         }
         let ownerTruthContextLines = lastOwnerTruthContextCitationEvidence?.panelLines() ?? []
+        let ownerTruthContextParityLines = lastOwnerTruthContextParityEvidence?.panelLines() ?? []
         let baseLines = [
             "Echo QA clues",
             "turnHash: \(PrivacySafeDiagnostics.correlationHash(snapshot.turnID))",
@@ -3607,6 +3624,7 @@ final class EchoViewController: UIViewController {
         echoRuntimeDiagnosticsPanelLabel.text = (
             [baseLines[0]]
                 + ownerTruthContextLines
+                + ownerTruthContextParityLines
                 + Array(baseLines.dropFirst())
                 + capabilityLines
                 + policyLines
@@ -4770,6 +4788,7 @@ final class EchoViewController: UIViewController {
         // Shadow evidence belongs to one Echo turn only.  It must not survive a
         // cancellation, account/context switch, or a later turn.
         lastOwnerTruthContextCitationEvidence = nil
+        lastOwnerTruthContextParityEvidence = nil
         guard let lease = echoApplicationCoordinator.invalidateContextBuild() else {
             return
         }
@@ -4803,6 +4822,23 @@ final class EchoViewController: UIViewController {
         }
 
         cancelActiveEchoContextBuild(reason: "newEchoTurn")
+        let contextParityLease: EchoOwnerTruthContextParityLease?
+        if context.isSelfAssistant,
+           let accountLease = echoAccountLease,
+           validateEchoAccountLease(
+               at: .request,
+               expected: accountLease,
+               reason: "ownerTruthContextParityRequest"
+           ) {
+            contextParityLease = echoApplicationCoordinator.beginOwnerTruthContextParity(
+                turnID: turnID,
+                query: text,
+                accountLease: accountLease,
+                expectedIdentity: expectedIdentity
+            )
+        } else {
+            contextParityLease = nil
+        }
         let gate: EchoTurnKnowledgeContextGate?
         if allowsGeneration {
             let turnGate = EchoTurnKnowledgeContextGate(
@@ -4835,7 +4871,7 @@ final class EchoViewController: UIViewController {
             expectedIdentity: expectedIdentity,
             lifecycleMode: context.mode,
             viewerFamilyMemberID: context.isSelfAssistant ? nil : context.ownerId
-        ) { [weak self] _, delivery in
+        ) { [weak self] contextBuildLease, delivery in
             switch delivery {
             case .success(let packet):
                 let record = EchoTraceRecord(turnID: turnID, packet: packet)
@@ -4844,6 +4880,14 @@ final class EchoViewController: UIViewController {
                         lifecycleToken,
                         reason: "contextPacketResponse"
                       ) else { return }
+                if let contextParityLease,
+                   let parityEvidence = self.echoApplicationCoordinator.recordOwnerTruthContextParityLegacy(
+                    packet,
+                    contextBuildLease: contextBuildLease,
+                    parityLease: contextParityLease
+                   ) {
+                    _ = self.recordOwnerTruthContextParityQAEvidence(parityEvidence)
+                }
                 EchoTraceStore.shared.record(record, ownerUserId: expectedIdentity.userId)
                 self.lastEchoTraceRecord = record
                 self.recordEchoRuntimeDiagnosticsSnapshot(reason: "contextPacketBuilt")
@@ -4899,6 +4943,11 @@ final class EchoViewController: UIViewController {
                         lifecycleToken,
                         reason: "contextPacketIdentityMismatch"
                       ) else { return }
+                if let contextParityLease {
+                    _ = self.echoApplicationCoordinator.invalidateOwnerTruthContextParity(
+                        matching: contextParityLease
+                    )
+                }
                 if let gate {
                     self.submitLocalEchoTurnKnowledgeContext(
                         text: text,
@@ -4925,12 +4974,19 @@ final class EchoViewController: UIViewController {
                       self.isCurrentDigitalHumanLifecycleToken(
                         lifecycleToken,
                         reason: "contextPacketFailure"
-                      ), let gate else { return }
-                self.submitLocalEchoTurnKnowledgeContext(
-                    text: text,
-                    gate: gate,
-                    source: "localKBLiteBackendFailure"
-                )
+                      ) else { return }
+                if let contextParityLease {
+                    _ = self.echoApplicationCoordinator.invalidateOwnerTruthContextParity(
+                        matching: contextParityLease
+                    )
+                }
+                if let gate {
+                    self.submitLocalEchoTurnKnowledgeContext(
+                        text: text,
+                        gate: gate,
+                        source: "localKBLiteBackendFailure"
+                    )
+                }
                 PrivacySafeDiagnostics.log(
                     subsystem: "CFLite",
                     event: "contextBuildFailed",
@@ -4944,9 +5000,15 @@ final class EchoViewController: UIViewController {
             turnID: turnID,
             lifecycleToken: lifecycleToken,
             expectedIdentity: expectedIdentity,
-            context: context
+            context: context,
+            contextParityLease: contextParityLease
         )
         guard contextBuildLease != nil else {
+            if let contextParityLease {
+                _ = echoApplicationCoordinator.invalidateOwnerTruthContextParity(
+                    matching: contextParityLease
+                )
+            }
             if let gate {
                 submitLocalEchoTurnKnowledgeContext(
                     text: text,
@@ -4972,10 +5034,12 @@ final class EchoViewController: UIViewController {
         turnID: String,
         lifecycleToken: DigitalHumanLifecycleToken,
         expectedIdentity: EchoKnowledgeContextIdentity,
-        context: DigitalHumanContext
+        context: DigitalHumanContext,
+        contextParityLease: EchoOwnerTruthContextParityLease?
     ) {
         guard OwnerTruthContextCitationQAGate.isEnabled else {
             lastOwnerTruthContextCitationEvidence = nil
+            lastOwnerTruthContextParityEvidence = nil
             return
         }
         guard context.isSelfAssistant,
@@ -4992,6 +5056,11 @@ final class EchoViewController: UIViewController {
                 states: ["reason": "ineligibleOwnerScope"],
                 correlations: ["turn": turnID]
             )
+            if let contextParityLease {
+                _ = echoApplicationCoordinator.invalidateOwnerTruthContextParity(
+                    matching: contextParityLease
+                )
+            }
             return
         }
 
@@ -5000,7 +5069,7 @@ final class EchoViewController: UIViewController {
             query: text,
             accountLease: accountLease,
             expectedIdentity: expectedIdentity
-        ) { [weak self] _, delivery in
+        ) { [weak self] shadowLease, delivery in
             guard let self,
                   self.isCurrentDigitalHumanLifecycleToken(
                       lifecycleToken,
@@ -5018,6 +5087,15 @@ final class EchoViewController: UIViewController {
             case .success(let summary):
                 guard self.recordOwnerTruthContextCitationQAEvidence(summary) else {
                     return
+                }
+                if let contextParityLease,
+                   shadowLease.turnID == contextParityLease.turnID,
+                   shadowLease.expectedIdentity == contextParityLease.expectedIdentity,
+                   let parityEvidence = self.echoApplicationCoordinator.recordOwnerTruthContextParityShadow(
+                    summary,
+                    parityLease: contextParityLease
+                   ) {
+                    _ = self.recordOwnerTruthContextParityQAEvidence(parityEvidence)
                 }
                 self.recordEchoRuntimeDiagnosticsSnapshot(reason: "ownerTruthContextShadowObserved")
                 PrivacySafeDiagnostics.log(
@@ -5040,6 +5118,11 @@ final class EchoViewController: UIViewController {
                 )
             case .failure:
                 self.lastOwnerTruthContextCitationEvidence = nil
+                if let contextParityLease {
+                    _ = self.echoApplicationCoordinator.invalidateOwnerTruthContextParity(
+                        matching: contextParityLease
+                    )
+                }
                 PrivacySafeDiagnostics.log(
                     subsystem: "CFLite",
                     event: "ownerTruthContextShadowUnavailable",
@@ -5049,6 +5132,11 @@ final class EchoViewController: UIViewController {
             }
         }
         guard shadowLease != nil else {
+            if let contextParityLease {
+                _ = echoApplicationCoordinator.invalidateOwnerTruthContextParity(
+                    matching: contextParityLease
+                )
+            }
             PrivacySafeDiagnostics.log(
                 subsystem: "CFLite",
                 event: "ownerTruthContextShadowSkipped",
@@ -8851,8 +8939,10 @@ extension EchoViewController {
         let ownerContext = prepareEchoTraceUIQAOwner(fallbackOwnerUserId: "uiqa_echo_qa_bundle_user")
         let ownerUserId = ownerContext.ownerUserId
         let previousOwnerTruthContextCitationEvidence = lastOwnerTruthContextCitationEvidence
+        let previousOwnerTruthContextParityEvidence = lastOwnerTruthContextParityEvidence
         defer {
             lastOwnerTruthContextCitationEvidence = previousOwnerTruthContextCitationEvidence
+            lastOwnerTruthContextParityEvidence = previousOwnerTruthContextParityEvidence
             restoreEchoTraceUIQAOwner(ownerContext)
         }
         EchoTraceStore.shared.clear(ownerUserId: ownerUserId)
@@ -8960,6 +9050,89 @@ extension EchoViewController {
             return
         }
 
+        let ownerTruthContextParityQuery = "uiqa echo context parity evidence"
+        let ownerTruthContextParityFingerprint = OwnerTruthContextCitationTraceSummary
+            .queryFingerprint(for: ownerTruthContextParityQuery)
+        guard let ownerTruthContextParityQueryHash = ownerTruthContextParityFingerprint.hash,
+              let legacyParityPacket = EchoContextPacket(json: [
+                "traceId": "ctx_uiqa_owner_truth_parity",
+                "intent": "echo",
+                "userId": ownerUserId,
+                "personaScope": "self",
+                "digitalHumanId": ownerUserId,
+                "contextVersion": "echo-context-v1",
+                "trace": [
+                    "selectedContextCount": 1,
+                    "filteredContextCount": 0,
+                    "rankingTraceCount": 1,
+                    "selectedContextSourceCounts": ["owner-truth-memory-projection": 1],
+                ],
+                "selectedContext": [[
+                    "refId": ownerTruthContextReference,
+                    "source": "owner-truth-memory-projection",
+                ]],
+                "filteredContext": [],
+                "rankingTrace": [["rank": 1]],
+                "fallbacks": [],
+              ]) else {
+            completion([
+                "completed": false,
+                "failureReason": "ownerTruthContextParityFixtureInvalid",
+                "error": "redacted",
+            ])
+            return
+        }
+        let ownerTruthContextParitySummary = OwnerTruthContextCitationTraceSummary(
+            contextVersion: ownerTruthContextSummary.contextVersion,
+            policyVersion: ownerTruthContextSummary.policyVersion,
+            selectionMode: ownerTruthContextSummary.selectionMode,
+            queryHash: ownerTruthContextParityQueryHash,
+            queryLength: ownerTruthContextParityFingerprint.length,
+            contextHash: ownerTruthContextSummary.contextHash,
+            authorityState: ownerTruthContextSummary.authorityState,
+            authorityEpoch: ownerTruthContextSummary.authorityEpoch,
+            projectionCheckpoint: ownerTruthContextSummary.projectionCheckpoint,
+            selectedContextRefs: ownerTruthContextSummary.selectedContextRefs,
+            selectedContextRefsBySource: ownerTruthContextSummary.selectedContextRefsBySource,
+            filteredContextReasons: ownerTruthContextSummary.filteredContextReasons,
+            selectedContextCount: ownerTruthContextSummary.selectedContextCount,
+            filteredContextCount: ownerTruthContextSummary.filteredContextCount,
+            rankingTraceCount: ownerTruthContextSummary.rankingTraceCount,
+            citationCount: ownerTruthContextSummary.citationCount,
+            answerCitationCount: ownerTruthContextSummary.answerCitationCount,
+            selectedContextSourceCounts: ownerTruthContextSummary.selectedContextSourceCounts,
+            fallbacks: ownerTruthContextSummary.fallbacks
+        )
+        let ownerTruthContextParityLease = EchoOwnerTruthContextParityLease(
+            generation: 1,
+            turnID: "uiqa-owner-truth-context-parity-turn",
+            expectedIdentity: EchoKnowledgeContextIdentity(
+                userId: ownerUserId,
+                personaScope: "self",
+                digitalHumanId: ownerUserId
+            ),
+            accountSubjectID: ownerUserId,
+            vaultID: "vault-uiqa-owner-truth-context-parity",
+            queryHash: ownerTruthContextParityQueryHash,
+            queryLength: ownerTruthContextParityFingerprint.length
+        )
+        guard let ownerTruthContextParityEvidence = try? EchoOwnerTruthContextParityAdapter.compare(
+            lease: ownerTruthContextParityLease,
+            legacy: EchoOwnerTruthContextParityLegacyObservation(packet: legacyParityPacket),
+            ownerTruth: EchoOwnerTruthContextParityShadowObservation(
+                summary: ownerTruthContextParitySummary
+            ),
+            qaGateEnabled: OwnerTruthContextCitationQAGate.isEnabled
+                && OwnerTruthMigrationParityQAGate.isEnabled
+        ), recordOwnerTruthContextParityQAEvidence(ownerTruthContextParityEvidence) else {
+            completion([
+                "completed": false,
+                "failureReason": "ownerTruthContextParityQADisabled",
+                "error": "redacted",
+            ])
+            return
+        }
+
         do {
             let scopedExportURL = try exportEchoQAEvidenceBundleForQA(source: "uiqaQAEvidenceBundleExport")
             let exportURL = try preserveTemporaryEchoTraceUIQAExport(
@@ -8982,6 +9155,7 @@ extension EchoViewController {
             let evidencePackage = bundle["evidencePackage"] as? [String: Any]
             let clueSummary = bundle["contextClues"] as? [String: Any]
             let ownerTruthContextEvidence = bundle["ownerTruthContextCitationEvidence"] as? [String: Any]
+            let ownerTruthContextParityEvidence = bundle["ownerTruthContextParityEvidence"] as? [String: Any]
             let voiceSynthesis = bundle["voiceSynthesis"] as? [String: Any]
             let fallbackSummary = bundle["fallbackSummary"] as? [String: Any]
             let latestTurnIDHash = redactedEchoExportString(bundle, key: "turnIDHash")
@@ -9010,6 +9184,10 @@ extension EchoViewController {
                 ownerTruthContextEvidence,
                 key: "selectedContextRefDigests"
             )
+            let ownerTruthContextParityMismatchCodes = redactedEchoExportStrings(
+                ownerTruthContextParityEvidence,
+                key: "mismatchCodes"
+            )
             let manifestArtifactHashes = redactedEchoExportStrings(manifest, key: "artifactHashes")
             let manifestSourceCommit = redactedEchoExportString(manifest, key: "sourceCommit")
             let manifestStatus = redactedEchoExportString(manifest, key: "manifestStatus")
@@ -9025,7 +9203,7 @@ extension EchoViewController {
                 at: Date().addingTimeInterval(EchoQAEvidenceManifest.localBundleTTL + 1)
             ) == "expired"
             completion([
-                "completed": bundle["schemaVersion"] as? Int == 2
+                "completed": bundle["schemaVersion"] as? Int == 3
                     && evidencePackage?["schemaVersion"] as? Int == 1
                     && latestTurnIDHash
                         == PrivacySafeDiagnostics.correlationHash("uiqa-qa-bundle-turn")
@@ -9048,6 +9226,15 @@ extension EchoViewController {
                     }
                     && !serialized.contains(ownerTruthContextReference)
                     && echoRuntimeDiagnosticsPanelLabel.text?.contains("ownerCtx schema") == true
+                    && ownerTruthContextParityEvidence?["schemaVersion"] as? String
+                        == EchoOwnerTruthContextParityQAEvidenceReadout.schemaVersion
+                    && ownerTruthContextParityEvidence?["comparisonState"] as? String
+                        == "observedNonPromoting"
+                    && ownerTruthContextParityEvidence?["promotionDecision"] as? String
+                        == "notEvaluated"
+                    && ownerTruthContextParityMismatchCodes.contains("M04")
+                    && echoRuntimeDiagnosticsPanelLabel.text?.contains("ctxParity schema") == true
+                    && !serialized.contains(ownerTruthContextParityQuery)
                     && (bundle["digitalHumanSession"] as? [String: Any])?["status"] as? String == "unavailable"
                     && latestProviderLogIdHash
                         == PrivacySafeDiagnostics.correlationHash("uiqa-bundle-provider-log")
@@ -9097,6 +9284,10 @@ extension EchoViewController {
                 "ownerTruthContextEvidenceSchemaVersion": ownerTruthContextEvidence?["schemaVersion"] as? String ?? "",
                 "ownerTruthContextReferenceDigestCount": ownerTruthContextRefDigests.count,
                 "ownerTruthContextPanelVisible": echoRuntimeDiagnosticsPanelLabel.text?.contains("ownerCtx schema") == true,
+                "ownerTruthContextParityEvidenceSchemaVersion": ownerTruthContextParityEvidence?["schemaVersion"] as? String ?? "",
+                "ownerTruthContextParityMismatchCodes": ownerTruthContextParityMismatchCodes.joined(separator: ","),
+                "ownerTruthContextParityPromotionDecision": ownerTruthContextParityEvidence?["promotionDecision"] as? String ?? "",
+                "ownerTruthContextParityPanelVisible": echoRuntimeDiagnosticsPanelLabel.text?.contains("ctxParity schema") == true,
                 "latestFilteredReasons": redactedEchoExportStrings(
                     clueSummary,
                     key: "filteredContextReasons"

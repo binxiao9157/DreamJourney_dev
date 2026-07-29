@@ -960,6 +960,146 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
         wait(for: [expectation], timeout: 1)
     }
 
+    func testOwnerTruthContextParityRequiresBothQAGates() {
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 8)
+        let citationDisabled = EchoApplicationCoordinator(
+            ownerTruthContextCitationQAEnabled: { false },
+            ownerTruthMigrationParityQAEnabled: { true }
+        )
+        let parityDisabled = EchoApplicationCoordinator(
+            ownerTruthContextCitationQAEnabled: { true },
+            ownerTruthMigrationParityQAEnabled: { false }
+        )
+
+        XCTAssertNil(
+            citationDisabled.beginOwnerTruthContextParity(
+                turnID: "turn-gate",
+                query: "QA gate must be explicit",
+                accountLease: accountLease,
+                expectedIdentity: identity
+            )
+        )
+        XCTAssertNil(
+            parityDisabled.beginOwnerTruthContextParity(
+                turnID: "turn-gate",
+                query: "QA gate must be explicit",
+                accountLease: accountLease,
+                expectedIdentity: identity
+            )
+        )
+    }
+
+    func testOwnerTruthContextParityPairsRealContractShapesWithoutPromotion() throws {
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 9)
+        let coordinator = EchoApplicationCoordinator(
+            ownerTruthContextCitationQAEnabled: { true },
+            ownerTruthMigrationParityQAEnabled: { true }
+        )
+        let contextLease = coordinator.beginContextBuild(
+            turnID: "turn-parity",
+            expectedIdentity: identity
+        )
+        let parityLease = try XCTUnwrap(
+            coordinator.beginOwnerTruthContextParity(
+                turnID: "turn-parity",
+                query: "同一回合只做上下文对照",
+                accountLease: accountLease,
+                expectedIdentity: identity
+            )
+        )
+        let packet = makeEchoContextPacket(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+
+        XCTAssertNil(
+            coordinator.recordOwnerTruthContextParityLegacy(
+                packet,
+                contextBuildLease: contextLease,
+                parityLease: parityLease
+            )
+        )
+
+        let evidence = coordinator.recordOwnerTruthContextParityShadow(
+            makeOwnerTruthContextShadowSummary(query: "同一回合只做上下文对照"),
+            parityLease: parityLease
+        )
+
+        XCTAssertEqual(evidence?.schemaVersion, "echo-owner-truth-context-parity-readout-v1")
+        XCTAssertEqual(evidence?.comparisonState, "observedNonPromoting")
+        XCTAssertEqual(evidence?.promotionDecision, "notEvaluated")
+        XCTAssertTrue(evidence?.mismatchCodes.contains("M04") == true)
+        XCTAssertGreaterThan(evidence?.blockerCount ?? 0, 0)
+        XCTAssertNil(coordinator.activeOwnerTruthContextParityLease)
+        XCTAssertFalse(evidence?.panelLines().joined(separator: " ").contains("同一回合只做上下文对照") == true)
+    }
+
+    func testOwnerTruthContextParityRejectsQueryMismatchAndContextInvalidation() throws {
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 10)
+        let coordinator = EchoApplicationCoordinator(
+            ownerTruthContextCitationQAEnabled: { true },
+            ownerTruthMigrationParityQAEnabled: { true }
+        )
+        let contextLease = coordinator.beginContextBuild(
+            turnID: "turn-mismatch",
+            expectedIdentity: identity
+        )
+        let parityLease = try XCTUnwrap(
+            coordinator.beginOwnerTruthContextParity(
+                turnID: "turn-mismatch",
+                query: "must stay isolated",
+                accountLease: accountLease,
+                expectedIdentity: identity
+            )
+        )
+
+        XCTAssertNil(
+            coordinator.recordOwnerTruthContextParityShadow(
+                makeOwnerTruthContextShadowSummary(query: "another turn"),
+                parityLease: parityLease
+            )
+        )
+        XCTAssertNil(coordinator.activeOwnerTruthContextParityLease)
+
+        let replacementLease = try XCTUnwrap(
+            coordinator.beginOwnerTruthContextParity(
+                turnID: "turn-mismatch",
+                query: "must stay isolated",
+                accountLease: accountLease,
+                expectedIdentity: identity
+            )
+        )
+        XCTAssertEqual(coordinator.invalidateContextBuild(), contextLease)
+        XCTAssertNil(
+            coordinator.recordOwnerTruthContextParityLegacy(
+                makeEchoContextPacket(
+                    userId: "owner-1",
+                    personaScope: "self",
+                    digitalHumanId: "digital-human-1"
+                ),
+                contextBuildLease: contextLease,
+                parityLease: replacementLease
+            )
+        )
+        XCTAssertNil(coordinator.activeOwnerTruthContextParityLease)
+    }
+
     private func makeAccountLease(subjectId: String, generation: UInt64) -> AccountLease {
         AccountLease(
             subjectId: subjectId,
