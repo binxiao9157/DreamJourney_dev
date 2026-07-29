@@ -323,3 +323,33 @@ released 请求不会触发。
 本轮没有 iOS source、三 Tab、Stitch 视觉、公开 Echo 输入或公开 Feature 变更。后端详细
 证据见
 `../DreamJourneyBackend/docs/backend/2026-07-30-owner-truth-interview-review-batch-automation-g0.md`。
+
+## 2026-07-30：Interview ReviewBatch 显式确认（QA-only）
+
+后端 `10c8cf0 feat(v4): acknowledge interview review batches` 在已有自动创建 pending
+`ReviewBatch` 的基础上，新增了一个更窄的 Owner QA 确认边界：
+
+`POST /v2/vaults/{vaultId}/interview-review-batches/{reviewBatchId}/acknowledgement`
+
+- 仅在 `OWNER_TRUTH_CANDIDATE_REVIEW_QA_ENABLED=true` 与 self-owner QA header 同时存在时可用，
+  不进 OpenAPI，也不改变公开 Echo。
+- request 是封闭、无正文的 commandId/threadId/sessionId/两项 optimistic version 合同。它只允许
+  `pendingAcknowledgement -> acknowledged`；Vault、Owner、thread、session、authority epoch、
+  session version 和 batch version 任一不匹配均 fail closed；同一 command replay 返回
+  `deduplicated`。
+- 确认成功只清除 Session 的 pending batch pointer 并更新 Session/ReviewBatch 版本。响应只返回
+  操作标识、版本、状态和 `candidateProposal=notStarted` / `memoryActivation=notApplicable`；
+  不返回访谈原文、Source、Candidate、DecisionReceipt、MemoryVersion、provider 或 effect 内容。
+- 路由已进入 typed USER_SESSION authentication/ownership inventory，完整数量从 121 更新为 122；
+  既有部署 Postgres route-authentication smoke 的期望也同步更新，避免清单漂移。
+
+本地验证：acknowledgement API 2 项、route/authentication/ownership/runtime/session 59 项、
+输入/ReviewBatch/automation/outcome 相邻组 28 项，以及完整 `scripts/verify_backend.sh`（1476
+backend unit tests 与既有 G0/FastAPI smoke）均通过；Python compile 和 `git diff --check` 通过。
+本机没有 `DATABASE_URL`，未运行 disposable Postgres acknowledgement/concurrency smoke，也没有
+部署、公开 feature、iOS source、三 Tab 或 Stitch 视觉变更。
+
+该子闭环只为 `WI-S1-01-06` 新增本地 G0 确认边界。下一步若继续，必须单独审查 acknowledged
+batch 到 Candidate proposal admission 的 Authority/effect 边界，不能把确认动作自动升级为
+Source、Candidate 或 Memory 写入。详细后端证据见
+`../DreamJourneyBackend/docs/backend/2026-07-30-owner-truth-interview-review-batch-acknowledgement-g0.md`。
