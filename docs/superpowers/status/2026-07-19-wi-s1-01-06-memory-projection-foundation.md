@@ -414,3 +414,38 @@ G0/FastAPI smoke）；Python compile 与 `git diff --check` 通过。本机未�
 这只是 `WI-S1-01-06` 的状态可观察性 G0 证据，不构成 candidate extraction worker、Provider
 调用、Candidate review、Memory 写入或正式 Context/Echo cutover。下一步仍须单独审查抽取执行与
 review 的默认关闭边界。
+
+## 2026-07-30：正式访谈确认后的显式 MemoryVersion 激活（default-off）
+
+后端 `eb2b085 feat(v4): activate formally confirmed interview candidates` 补齐了访谈批量确认
+与最终 Owner Truth 写入之间的显式命令边界，保持公开 Echo、KBLite 和三 Tab UI 不变：
+
+`POST /v2/vaults/{vaultId}/interview-review-batches/{reviewBatchId}/confirmation/candidates/{candidateId}/memory-activation`
+
+- `batch-accept` 行为未改变，始终只写不可变 `DecisionReceipt`，不会自动创建
+  `MemoryVersion`。
+- 新命令只接受 `commandId`；正式 Vault Owner 必须持有 captured
+  `ownerTruthCandidateReview` authorization，且 Candidate 的 receipt 必须链接到同一
+  正式 ReviewBatch。旧 QA-only 批次、跨 Owner/批次、缺失 receipt、rejected Candidate 都
+  fail closed。
+- 只有 `accepted` 或 `corrected` receipt 能进入既有 canonical
+  `activate_memory_version`；它在同一 Unit of Work 中继续校验 Candidate、Source、Vault 和
+  authority epoch，重放不会创建第二个当前版本。
+- 成功后只登记不含记忆正文的 compatibility-projection rebuild intent。HTTP response 不返回
+  Candidate 正文、DecisionReceipt、MemoryVersion、Source/effect 标识或 Provider 内容。
+- route authentication/ownership inventory 从 124 更新为 125；本次没有迁移、部署、公开入口、
+  extraction worker、Provider 调用、Context/Echo cutover 或 iOS source 修改。
+
+本地验证：formal activation 正向/重放/响应脱敏、QA-only receipt 拒绝、route/authentication/
+ownership/runtime/session focused group 均通过；完整 `scripts/verify_backend.sh` 通过（1481
+个 backend unit tests 与既有 G0/FastAPI smoke），Python compile 和 `git diff --check` 通过。
+
+formal Postgres smoke 已扩展为 receipt-only batch acceptance、formal activation、幂等和脱敏
+断言；本机没有 `OWNER_TRUTH_FORMAL_SMOKE_ADMIN_DATABASE_URL`，未运行 disposable database
+版本，也没有 G2/部署声明。详细后端证据见
+`../DreamJourneyBackend/docs/backend/2026-07-30-owner-truth-interview-confirmation-memory-activation-g0.md`。
+
+这只补充 `WI-S1-01-06` 的本地 G0 Authority 链：`Source -> Candidate -> DecisionReceipt ->
+MemoryVersion -> rebuild intent`。它不等于 Candidate 自动抽取、Projection 已被公开 Context
+消费、KBLite 退役、生产 exactly-once、Provider、真机或产品验收完成。下一步必须单独审查仍默认
+关闭的 extraction execution/result-admission 边界。
