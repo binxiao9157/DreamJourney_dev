@@ -240,3 +240,30 @@ generic iPhoneOS Debug build-for-testing、Echo QA evidence-bundle simulator smo
 本轮不部署、不切换 `/context/build` 的数据 Authority、不改变公开 Echo/UI 或业务写入；
 它仅是 `WI-S1-01-06` 的 G0 回合对照完整性证据。Owner Truth Projection 的正式 Context
 read/cutover、KBLite retirement、检索质量与所有 G1/G2/G3/G4 仍未完成。
+
+## 2026-07-30：Confirmed Projection Context Materialization（default-off）
+
+Backend `b52562a feat(v4): materialize confirmed projection context` 补齐了 Projection
+到未来服务端对话输入之间的私有物化边界，仍不改变当前公开 Echo 回复路径。
+
+- 新增 `OwnerTruthContextMaterializationService`，先复用 Context Shadow 的 policy-eligible
+  selected citations，再重新读取当前 Projection；vault、authority epoch、checkpoint、typed
+  citation、source ref、版本和 content hash 任一不一致即 fail closed。
+- 仅支持 V1 已确认内容：`experience.summary`、`knowledge.claim`、`emotion.label`。输出的
+  `generationContext.text` 上限为 4096 字符，只在后端进程内供未来 conversation adapter 使用。
+- Projection 未就绪或发生变化时返回空上下文与 no-personal-memory fallback；query-ranked
+  选择只能继续收窄已经合格的 confirmed Projection，不会恢复 unmatched、restricted、跨 Vault
+  或 Candidate 内容。
+- 新增隐藏 QA 路由
+  `POST /v2/vaults/{vaultId}/context-shadow/materialize`。它复用 Owner QA feature/header/self-owner
+  gate，`Cache-Control: no-store`，并只返回 hash、typed citations、计数、截断标记与 fallback，
+  不返回用户 query、记忆正文、answer 或 provider 内容。
+- 路由已进入 USER_SESSION authentication/ownership registry；完整 inventory 因此为 120，
+  同步修正了 runtime、production enforce 和 deployed smoke 的预期，避免认证清单漂移。
+
+本地验证：Context Shadow/materialization/API/route ownership focused tests 通过；
+`scripts/verify_backend.sh` 通过（1460 个单测及既有 G0/FastAPI smoke），Python compile 与
+`git diff --check` 通过。`DATABASE_URL` 在本机未配置，因此
+`scripts/run-backend-owner-truth-postgres-smoke.sh` 未运行，未声明 G2 部署或线上 Postgres
+通过。本轮未改 iOS source、公开 `/context/build`、DialogEngine 输入、三 Tab/Stitch 视觉或
+业务写入。
