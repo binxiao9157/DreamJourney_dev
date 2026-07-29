@@ -145,3 +145,34 @@ generic unsigned iPhoneOS Debug `build-for-testing` 通过。
 本轮没有后端代码、数据库迁移、部署、线上 shadow cohort、公开 UI 或真机验证。它仅补充
 `WI-S1-01-06` 的 G0 观测证据；Projection-to-Context 正式 cutover、KBLite retirement、G1/G2/G3/G4
 仍保持开放。
+
+## 2026-07-29：Live Echo Shadow Query Correlation（QA-only）
+
+`b58db69 fix(v4): correlate echo shadow context turns` 继续收紧上一项 live Echo Shadow
+observer 的回合归属边界，避免迟到或错误关联的
+QA Shadow 响应被保存、展示或导出为当前回响的上下文证据。
+
+- `OwnerTruthContextCitationTraceSummary` 现在保留后端既有的 normalized query hash 和
+  Unicode scalar length；不保存原始用户文本。
+- `EchoApplicationCoordinator` 在交付成功结果前，按当前提交 query 的同一 hash/length
+  重新计算指纹；任一字段不匹配、或旧响应缺少 length 时，均 fail closed 为
+  `queryMismatch`，不会写入当前 turn 的 QA evidence。
+- QA 面板与 evidence bundle 只导出 query hash 的二次 SHA-256 与 query length，因此可
+  排查请求/响应关联，且不会暴露原始 query 或直接复用后端 correlation hash。
+- 新字段均为 optional，已存储的旧 QA evidence bundle 可以继续解码；缺失关联字段的旧
+  summary 不会被当作当前 live turn 的成功结果。
+- 公开 `/context/build`、DialogEngine 输入、legacy KBLite fallback、业务写入、三 Tab UI、
+  Provider、部署和真机路径均未改变。
+
+本地验证：Owner Truth live Echo Shadow static gate、Context Citation static gate、focused
+`EchoApplicationCoordinatorTests` 10 项、Owner Truth turn-shadow composite gate、generic
+unsigned iPhoneOS Debug `build-for-testing`、Echo QA evidence-bundle simulator smoke 和
+`git diff --check` 均通过。模拟器导出的 evidence bundle 已确认包含仅 QA 可见的
+`queryHashDigest` 与 `queryLength`。
+
+补充说明：Swift Package 全量 `swift test` 仍被既有 package test source 未包含
+`AppLaunchPreparing` / `AppLaunchPreparer` / `AppComposition` 阻断；这与本轮文件无关，
+不以该失败替代已通过的 Xcode focused test 与 smoke 证据。
+
+该子闭环仍只构成 `WI-S1-01-06` 的 G0 观测正确性证据。它不构成 Projection-to-Context
+正式 cutover、KBLite retirement、G1/G2/G3/G4 或公开能力完成声明。
