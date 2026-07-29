@@ -17,6 +17,23 @@ G3_DEFERRED_UNTIL_QUERY_QUALITY_GATE_EXISTS`。
 本轮没有修改公开 `/context/build`、公开 Echo UI、Archive/KBLite writer、数字人或
 音色链路。生产用户无法通过此合同读取个人记忆正文。
 
+### 2026-07-30 Context 当前性补强（本地 G0）
+
+Context Shadow 构建和 Answer/Citation 写入之间可能存在短暂的来源撤回窗口。为避免
+QA 证据把已变化的 Projection 当作新的当前引用，后端在写入前新增以下 fail-closed
+复核：
+
+- 仅当 Context 为 `ready` 时，重新读取 Owner-scoped Memory Projection。
+- `state`、`authorityEpoch` 或 `checkpoint` 任一变化即拒绝写入，且不保留 Answer
+  或 Citation 记录。
+- Postgres 已有的 `owner_truth_answer_citations_validate_memory` trigger 继续作为同一
+  事务内逐条 Citation 的最终并发防线；本次不改变其 schema、公开路由或默认开关。
+- In-memory 语义实现同步遵守该边界，避免测试双实现与 Postgres 行为失真。
+
+验证新增覆盖“Context 构建后 Source 被撤回”的负向场景：服务返回
+`OwnerTruthAnswerCitationConflict`，answer ledger 保持为空。该补强目前仅完成本地 G0
+验证，尚未部署；既有 G2 隔离 Postgres smoke 不应被用来声称这段新代码已线上验收。
+
 ## 实现
 
 ### 已有后端合同
@@ -77,7 +94,9 @@ tmp/visual-qa/prd-stitch-ui/echo-qa-evidence-bundle-export-smoke/20260719-233143
 `echo-qa-evidence-bundle.json` 包含 `owner-truth-context-citation-readout-v1` 和哈希引用，
 不包含原始 MemoryVersion。
 
-后端本轮没有代码变化；服务器上的既有 QA contract 不需要重新部署。
+截至最初的 2026-07-19 交付，服务器上的既有 QA contract 无需重新部署。2026-07-30
+已新增本地 Context 当前性 guard，后端现有未部署代码；后续部署后需要重新运行隔离
+Postgres smoke，才能更新该新 guard 的 G2 结论。
 
 ### G2 服务器隔离验证
 
