@@ -353,3 +353,36 @@ backend unit tests 与既有 G0/FastAPI smoke）均通过；Python compile 和 `
 batch 到 Candidate proposal admission 的 Authority/effect 边界，不能把确认动作自动升级为
 Source、Candidate 或 Memory 写入。详细后端证据见
 `../DreamJourneyBackend/docs/backend/2026-07-30-owner-truth-interview-review-batch-acknowledgement-g0.md`。
+
+## 2026-07-30：Acknowledged ReviewBatch -> Candidate Proposal Admission（QA-only）
+
+后端 `defb350 feat(v4): expose interview candidate proposal admission` 将已存在的
+Postgres service-level Candidate proposal admission 补进了隐藏 QA HTTP 合同，但不改变公开
+Echo、KBLite 或三 Tab UI：
+
+`POST /v2/vaults/{vaultId}/interview-review-batches/{reviewBatchId}/candidate-proposal/admit`
+
+- 仅在既有 `OWNER_TRUTH_CANDIDATE_REVIEW_QA_ENABLED=true` 与 self-owner QA header 同时成立时可用。
+  请求只接受 `commandId` 和 `expectedReviewBatchVersion`，不能传入或替换访谈正文、Source metadata、
+  Candidate、Memory 或 provider 字段。
+- 它只能作用于同一 active Vault owner、相同 authority epoch、已经
+  `acknowledged` 且 version 精确匹配的 ReviewBatch；同一 batch 只能 admission 一次，命令重放返回
+  `deduplicated`。
+- 为了让内存 API QA 也遵守生产边界，新增一个内部 aggregate snapshot adapter：它从真实
+  `InMemoryOwnerTruthConversationRepository` 恢复 batch 固定的 owner-turn 窗口，而不是在 HTTP
+  层 seed 一个伪 batch。五轮已确认叙述后的第六轮新输入不会混入旧 Source。
+- 成功后只写一个 private `conversation` Source 和一个 default-off extraction effect；不会创建或
+  返回 Candidate、DecisionReceipt、MemoryVersion、Projection、SearchDocument、Provider request 或公开
+  功能。HTTP response 也不返回原文、Source/effect identifier 或 metadata。
+- route authentication/ownership inventory 从 122 更新为 123，仍是 typed USER_SESSION route；没有
+  deployment、G2 Postgres concurrency evidence、iOS source、真机或公开 release claim。
+
+本地验证：candidate proposal API/服务 6 项、route/authentication/ownership/runtime/session 59 项、
+完整 `scripts/verify_backend.sh`（1478 个 backend unit tests 与既有 G0/FastAPI smoke）、Python compile
+和 `git diff --check` 都通过。`DATABASE_URL` 未设置，因此既有隔离 Postgres conversation smoke 未在
+本机运行；内存 route 的通过不代替 Source/effect/admission 三写入的事务回滚或并发 G2 证据。
+
+下一步必须单独审查 candidate-extraction execution/review 的 effect worker 边界，保持默认关闭，
+不能因 Source/effect staging 已存在而自动执行模型、创建 Candidate 或推进 Memory。
+详细后端证据见
+`../DreamJourneyBackend/docs/backend/2026-07-30-owner-truth-interview-candidate-proposal-admission-api-g0.md`。
