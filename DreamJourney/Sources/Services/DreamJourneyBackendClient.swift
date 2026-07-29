@@ -6222,6 +6222,53 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    func resolveOwnerTruthCorrection(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        command: OwnerTruthCorrectionResolutionCommand,
+        completion: @escaping (Result<OwnerTruthCorrectionResolutionReceipt, Error>) -> Void
+    ) {
+        guard OwnerTruthCorrectionRequestQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthCorrectionResolution",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        guard command.vaultID == vaultID else {
+            DispatchQueue.main.async {
+                completion(.failure(OwnerTruthRemoteContractError.invalidCorrectionResolutionCommand(
+                    "requested Vault does not match the pending correction request"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/correction-requests/\(pathComponent(command.correctionRequestID.rawValue.uuidString))/resolve",
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            sessionUserId: expectedOwnerSubjectID,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthCorrectionResolutionReceipt(
+                        backendJSONObject: object,
+                        expectedCommand: command
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func deleteVoiceCloneProfile(
         userId: String,
         profileId voiceProfileId: String,
@@ -8033,3 +8080,4 @@ extension DreamJourneyBackendClient: OwnerTruthKnowledgeDimensionConfirmationCli
 extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}
 extension DreamJourneyBackendClient: OwnerTruthContextCitationClient {}
 extension DreamJourneyBackendClient: OwnerTruthCorrectionRequestClient {}
+extension DreamJourneyBackendClient: OwnerTruthCorrectionResolutionClient {}

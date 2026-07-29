@@ -143,6 +143,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidAnswerCitationReceipt(String)
     case invalidCorrectionRequestCommand(String)
     case invalidCorrectionRequestReceipt(String)
+    case invalidCorrectionResolutionCommand(String)
+    case invalidCorrectionResolutionReceipt(String)
 
     var errorDescription: String? {
         switch self {
@@ -176,6 +178,10 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "回答纠错请求命令无效：\(detail)"
         case .invalidCorrectionRequestReceipt(let detail):
             return "回答纠错请求回执合同无效：\(detail)"
+        case .invalidCorrectionResolutionCommand(let detail):
+            return "回答纠错处理命令无效：\(detail)"
+        case .invalidCorrectionResolutionReceipt(let detail):
+            return "回答纠错处理回执合同无效：\(detail)"
         }
     }
 }
@@ -5558,6 +5564,8 @@ private enum OwnerTruthContextCitationContract {
     static let answerCitationSchemaVersion = "owner-truth-answer-citation-v1"
     static let correctionRequestResponseSchemaVersion = "owner-truth-correction-request-response-v1"
     static let correctionRequestSchemaVersion = "owner-truth-correction-request-v1"
+    static let correctionResolutionResponseSchemaVersion = "owner-truth-correction-resolution-response-v1"
+    static let correctionResolutionSchemaVersion = "owner-truth-correction-resolution-v1"
     static let correctionRequestPendingReviewStatus = "pendingReview"
     static let correctionRequestMaximumTextScalars = 20_000
     static let citationResolution = "current_confirmed_projection_entry"
@@ -5597,6 +5605,14 @@ private enum OwnerTruthContextCitationContract {
 
     static func correctionReceiptError(_ detail: String) -> OwnerTruthRemoteContractError {
         .invalidCorrectionRequestReceipt(detail)
+    }
+
+    static func correctionResolutionCommandError(_ detail: String) -> OwnerTruthRemoteContractError {
+        .invalidCorrectionResolutionCommand(detail)
+    }
+
+    static func correctionResolutionReceiptError(_ detail: String) -> OwnerTruthRemoteContractError {
+        .invalidCorrectionResolutionReceipt(detail)
     }
 
     static func nonEmptyString(
@@ -6964,11 +6980,13 @@ struct OwnerTruthCorrectionRequestCommand: Equatable, Sendable {
     }
 }
 
-/// A value-free confirmation that a correction has entered pending review.
-/// The private correction Source, answer text and memory contents are never
-/// represented in this mobile-domain receipt.
+/// A value-free confirmation that a correction has entered pending review. The
+/// Vault is carried forward only from the verified request command; the private
+/// correction Source, answer text and memory contents are never represented in
+/// this mobile-domain receipt.
 struct OwnerTruthCorrectionRequestReceipt: Codable, Equatable, Sendable {
     let outcome: OwnerTruthCorrectionRequestOutcome
+    let vaultID: OwnerTruthVaultID
     let correctionRequestID: OwnerTruthRecordID
     let candidateID: OwnerTruthRecordID
     let candidateVersion: Int
@@ -7029,6 +7047,7 @@ struct OwnerTruthCorrectionRequestReceipt: Codable, Equatable, Sendable {
         }
 
         self.outcome = outcome
+        vaultID = expectedCommand.vaultID
         correctionRequestID = try OwnerTruthContextCitationContract.recordID(
             request["correctionRequestId"],
             field: "correctionRequest.correctionRequestId",
@@ -7099,6 +7118,284 @@ struct OwnerTruthCorrectionRequestReceipt: Codable, Equatable, Sendable {
         guard correctionTextHash == expectedCommand.correctionTextHash,
               correctionTextLength == expectedCommand.correctionTextLength else {
             throw error("correctionRequest correction text integrity does not match the submitted command")
+        }
+    }
+}
+
+/// The correction resolver deliberately excludes generic candidate acceptance.
+/// A correction either supersedes the cited MemoryVersion or rejects the pending
+/// Candidate without changing memory authority.
+enum OwnerTruthCorrectionResolutionAction: String, CaseIterable, Codable, Sendable {
+    case correct
+    case reject
+
+    var terminalDecision: OwnerTruthCandidateDecision {
+        switch self {
+        case .correct:
+            return .corrected
+        case .reject:
+            return .rejected
+        }
+    }
+}
+
+enum OwnerTruthCorrectionResolutionOutcome: String, Codable, Equatable, Sendable {
+    case created
+    case deduplicated
+}
+
+/// A terminal, QA-only decision bound to one pending correction request. Raw
+/// corrected values are retained only while constructing the transport payload;
+/// no value is copied into a receipt or view state.
+struct OwnerTruthCorrectionResolutionCommand: Equatable, Sendable {
+    let commandID: String
+    let vaultID: OwnerTruthVaultID
+    let correctionRequestID: OwnerTruthRecordID
+    let candidateID: OwnerTruthRecordID
+    let expectedCandidateVersion: Int
+    let expectedMemoryVersionID: OwnerTruthRecordID
+    let action: OwnerTruthCorrectionResolutionAction
+    let correctedValue: [String: OwnerTruthJSONValue]?
+    let correctedValueSchemaVersion: String?
+    let reasonCode: String
+
+    init(
+        commandID: String,
+        correctionRequestReceipt: OwnerTruthCorrectionRequestReceipt,
+        action: OwnerTruthCorrectionResolutionAction,
+        correctedValue: [String: OwnerTruthJSONValue]? = nil,
+        correctedValueSchemaVersion: String? = nil,
+        reasonCode: String
+    ) throws {
+        let error = OwnerTruthContextCitationContract.correctionResolutionCommandError
+        let normalizedCommandID = try OwnerTruthContextCitationContract.opaqueIdentifier(
+            commandID,
+            field: "commandId",
+            error: error
+        )
+        let normalizedReasonCode = try OwnerTruthContextCitationContract.opaqueIdentifier(
+            reasonCode,
+            field: "reasonCode",
+            error: error
+        )
+        let normalizedSchemaVersion = correctedValueSchemaVersion.map(
+            OwnerTruthContextCitationContract.normalizedText
+        )
+
+        switch action {
+        case .correct:
+            guard let correctedValue, !correctedValue.isEmpty,
+                  let normalizedSchemaVersion, !normalizedSchemaVersion.isEmpty else {
+                throw error("correct requires correctedValue and correctedValueSchemaVersion")
+            }
+            self.correctedValue = correctedValue
+            self.correctedValueSchemaVersion = normalizedSchemaVersion
+        case .reject:
+            guard correctedValue == nil, correctedValueSchemaVersion == nil else {
+                throw error("reject must not include correctedValue or correctedValueSchemaVersion")
+            }
+            self.correctedValue = nil
+            self.correctedValueSchemaVersion = nil
+        }
+
+        self.commandID = normalizedCommandID
+        vaultID = correctionRequestReceipt.vaultID
+        correctionRequestID = correctionRequestReceipt.correctionRequestID
+        candidateID = correctionRequestReceipt.candidateID
+        expectedCandidateVersion = correctionRequestReceipt.candidateVersion
+        expectedMemoryVersionID = correctionRequestReceipt.expectedMemoryVersionID
+        self.action = action
+        self.reasonCode = normalizedReasonCode
+    }
+
+    var backendPayload: [String: Any] {
+        var payload: [String: Any] = [
+            "commandId": commandID,
+            "expectedCandidateVersion": expectedCandidateVersion,
+            "expectedMemoryVersionId": expectedMemoryVersionID.rawValue.uuidString.lowercased(),
+            "action": action.rawValue,
+            "reasonCode": reasonCode,
+        ]
+        if let correctedValue, let correctedValueSchemaVersion {
+            payload["correctedValue"] = correctedValue.mapValues(\.backendJSONObject)
+            payload["correctedValueSchemaVersion"] = correctedValueSchemaVersion
+        }
+        return payload
+    }
+}
+
+/// A value-free terminal correction receipt. A corrected outcome must identify
+/// the successor of the exact cited MemoryVersion; a rejected outcome must not
+/// carry successor or outdated-answer metadata.
+struct OwnerTruthCorrectionResolutionReceipt: Codable, Equatable, Sendable {
+    let outcome: OwnerTruthCorrectionResolutionOutcome
+    let correctionRequestID: OwnerTruthRecordID
+    let candidateID: OwnerTruthRecordID
+    let candidateVersion: Int
+    let receiptID: OwnerTruthRecordID
+    let decision: OwnerTruthCandidateDecision
+    let supersededMemoryVersionID: OwnerTruthRecordID?
+    let replacementMemoryVersionID: OwnerTruthRecordID?
+    let replacementMemoryVersion: Int?
+    let answerOutdatedEventID: OwnerTruthRecordID?
+    let authorityEpoch: Int?
+    let contentHash: String?
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedCommand: OwnerTruthCorrectionResolutionCommand
+    ) throws {
+        let error = OwnerTruthContextCitationContract.correctionResolutionReceiptError
+        try OwnerTruthContextCitationContract.ensureNoRawContentRecursively(
+            object,
+            field: "correction resolution response",
+            error: error
+        )
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            object["schemaVersion"],
+            field: "schemaVersion",
+            error: error
+        ) == OwnerTruthContextCitationContract.correctionResolutionResponseSchemaVersion,
+        let outcome = OwnerTruthCorrectionResolutionOutcome(
+            rawValue: try OwnerTruthContextCitationContract.nonEmptyString(
+                object["status"],
+                field: "status",
+                error: error
+            )
+        ) else {
+            throw error("correction resolution response schemaVersion or status is invalid")
+        }
+
+        let resolution = try OwnerTruthContextCitationContract.object(
+            object["correctionResolution"],
+            field: "correctionResolution",
+            error: error
+        )
+        try OwnerTruthContextCitationContract.ensureNoRawContentRecursively(
+            resolution,
+            field: "correctionResolution",
+            error: error
+        )
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            resolution["schemaVersion"],
+            field: "correctionResolution.schemaVersion",
+            error: error
+        ) == OwnerTruthContextCitationContract.correctionResolutionSchemaVersion,
+        try OwnerTruthContextCitationContract.nonEmptyString(
+            resolution["outcome"],
+            field: "correctionResolution.outcome",
+            error: error
+        ) == outcome.rawValue,
+        let decision = OwnerTruthCandidateDecision(
+            rawValue: try OwnerTruthContextCitationContract.nonEmptyString(
+                resolution["decision"],
+                field: "correctionResolution.decision",
+                error: error
+            )
+        ) else {
+            throw error("correctionResolution schemaVersion, outcome or decision is invalid")
+        }
+
+        self.outcome = outcome
+        correctionRequestID = try OwnerTruthContextCitationContract.recordID(
+            resolution["correctionRequestId"],
+            field: "correctionResolution.correctionRequestId",
+            error: error
+        )
+        candidateID = try OwnerTruthContextCitationContract.recordID(
+            resolution["candidateId"],
+            field: "correctionResolution.candidateId",
+            error: error
+        )
+        candidateVersion = try OwnerTruthContextCitationContract.positiveInt(
+            resolution["candidateVersion"],
+            field: "correctionResolution.candidateVersion",
+            error: error
+        )
+        receiptID = try OwnerTruthContextCitationContract.recordID(
+            resolution["receiptId"],
+            field: "correctionResolution.receiptId",
+            error: error
+        )
+        self.decision = decision
+
+        func optionalRecordID(_ key: String) throws -> OwnerTruthRecordID? {
+            guard let rawValue = try OwnerTruthContextCitationContract.optionalString(
+                resolution[key],
+                field: "correctionResolution.\(key)",
+                error: error
+            ) else {
+                return nil
+            }
+            return try OwnerTruthContextCitationContract.recordID(
+                rawValue,
+                field: "correctionResolution.\(key)",
+                error: error
+            )
+        }
+
+        supersededMemoryVersionID = try optionalRecordID("supersededMemoryVersionId")
+        replacementMemoryVersionID = try optionalRecordID("replacementMemoryVersionId")
+        answerOutdatedEventID = try optionalRecordID("answerOutdatedEventId")
+        if let value = resolution["replacementMemoryVersion"], !(value is NSNull) {
+            replacementMemoryVersion = try OwnerTruthContextCitationContract.positiveInt(
+                value,
+                field: "correctionResolution.replacementMemoryVersion",
+                error: error
+            )
+        } else {
+            replacementMemoryVersion = nil
+        }
+        authorityEpoch = try OwnerTruthContextCitationContract.optionalNonnegativeInt(
+            resolution["authorityEpoch"],
+            field: "correctionResolution.authorityEpoch",
+            error: error
+        )
+        contentHash = try OwnerTruthContextCitationContract.optionalSHA256(
+            resolution["contentHash"],
+            field: "correctionResolution.contentHash",
+            error: error
+        )
+        if let projectionEffect = resolution["projectionEffect"], !(projectionEffect is NSNull) {
+            let effect = try OwnerTruthContextCitationContract.object(
+                projectionEffect,
+                field: "correctionResolution.projectionEffect",
+                error: error
+            )
+            try OwnerTruthContextCitationContract.ensureNoRawContentRecursively(
+                effect,
+                field: "correctionResolution.projectionEffect",
+                error: error
+            )
+        }
+
+        guard correctionRequestID == expectedCommand.correctionRequestID,
+              candidateID == expectedCommand.candidateID,
+              candidateVersion == expectedCommand.expectedCandidateVersion,
+              decision == expectedCommand.action.terminalDecision else {
+            throw error("correctionResolution identity or terminal decision does not match the submitted command")
+        }
+
+        switch expectedCommand.action {
+        case .correct:
+            guard supersededMemoryVersionID == expectedCommand.expectedMemoryVersionID,
+                  let replacementMemoryVersionID,
+                  replacementMemoryVersionID != expectedCommand.expectedMemoryVersionID,
+                  replacementMemoryVersion != nil,
+                  answerOutdatedEventID != nil,
+                  authorityEpoch != nil,
+                  contentHash != nil else {
+                throw error("corrected resolution must identify one successor MemoryVersion and outdated answer event")
+            }
+        case .reject:
+            guard supersededMemoryVersionID == nil,
+                  replacementMemoryVersionID == nil,
+                  replacementMemoryVersion == nil,
+                  answerOutdatedEventID == nil,
+                  authorityEpoch == nil,
+                  contentHash == nil else {
+                throw error("rejected resolution must not contain successor MemoryVersion metadata")
+            }
         }
     }
 }
@@ -7316,9 +7613,234 @@ final class OwnerTruthCorrectionRequestUseCase {
     }
 }
 
+enum OwnerTruthCorrectionResolutionIntent: Equatable, Sendable {
+    case resolve(
+        action: OwnerTruthCorrectionResolutionAction,
+        correctedValue: [String: OwnerTruthJSONValue]?,
+        correctedValueSchemaVersion: String?,
+        reasonCode: String
+    )
+}
+
+enum OwnerTruthCorrectionResolutionPhase: Equatable, Sendable {
+    case idle
+    case unavailable
+    case resolving(OwnerTruthRecordID)
+    case resolved
+    case failed
+}
+
+enum OwnerTruthCorrectionResolutionNotice: Equatable, Sendable {
+    case qaOnlyDisabled
+    case accountUnavailable
+    case staleAccountLease
+    case invalidVault
+    case invalidResolution
+    case resolutionResultMismatch
+    case resolutionFailed
+    case resolutionCreated
+    case resolutionDeduplicated
+}
+
+struct OwnerTruthCorrectionResolutionReceiptViewState: Equatable, Sendable {
+    let correctionRequestID: OwnerTruthRecordID
+    let candidateID: OwnerTruthRecordID
+    let decision: OwnerTruthCandidateDecision
+    let replacementMemoryVersionID: OwnerTruthRecordID?
+    let outcome: OwnerTruthCorrectionResolutionOutcome
+}
+
+/// Value-free state for the default-off correction resolver. It deliberately
+/// does not retain corrected values, source text or a Memory payload.
+struct OwnerTruthCorrectionResolutionViewState: Equatable, Sendable {
+    let phase: OwnerTruthCorrectionResolutionPhase
+    let notice: OwnerTruthCorrectionResolutionNotice?
+    let latestReceipt: OwnerTruthCorrectionResolutionReceiptViewState?
+
+    static let idle = OwnerTruthCorrectionResolutionViewState(
+        phase: .idle,
+        notice: nil,
+        latestReceipt: nil
+    )
+}
+
+/// Resolves a pending correction through the dedicated backend route. This is
+/// intentionally separate from generic Candidate review, which must not create
+/// a second MemoryRecord for a correction Candidate.
+final class OwnerTruthCorrectionResolutionUseCase {
+    typealias CommandIDFactory = () -> String
+
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let correctionRequestReceipt: OwnerTruthCorrectionRequestReceipt
+    private let client: OwnerTruthCorrectionResolutionClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
+    private let commandIDFactory: CommandIDFactory
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthCorrectionResolutionViewState = .idle {
+        didSet {
+            onViewStateChange?(viewState)
+        }
+    }
+
+    var onViewStateChange: ((OwnerTruthCorrectionResolutionViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        correctionRequestReceipt: OwnerTruthCorrectionRequestReceipt,
+        client: OwnerTruthCorrectionResolutionClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCorrectionRequestQAGate.isEnabled },
+        commandIDFactory: @escaping CommandIDFactory = {
+            "owner-truth-correction-resolution-\(UUID().uuidString.lowercased())"
+        }
+    ) {
+        self.accountLease = accountLease
+        vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.correctionRequestReceipt = correctionRequestReceipt
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
+        self.commandIDFactory = commandIDFactory
+    }
+
+    func send(_ intent: OwnerTruthCorrectionResolutionIntent) {
+        switch intent {
+        case .resolve(let action, let correctedValue, let correctedValueSchemaVersion, let reasonCode):
+            resolve(
+                action: action,
+                correctedValue: correctedValue,
+                correctedValueSchemaVersion: correctedValueSchemaVersion,
+                reasonCode: reasonCode
+            )
+        }
+    }
+
+    private func resolve(
+        action: OwnerTruthCorrectionResolutionAction,
+        correctedValue: [String: OwnerTruthJSONValue]?,
+        correctedValueSchemaVersion: String?,
+        reasonCode: String
+    ) {
+        guard let vaultID = beginResolutionOrFail() else { return }
+        let command: OwnerTruthCorrectionResolutionCommand
+        do {
+            command = try OwnerTruthCorrectionResolutionCommand(
+                commandID: commandIDFactory(),
+                correctionRequestReceipt: correctionRequestReceipt,
+                action: action,
+                correctedValue: correctedValue,
+                correctedValueSchemaVersion: correctedValueSchemaVersion,
+                reasonCode: reasonCode
+            )
+        } catch let error as OwnerTruthRemoteContractError {
+            switch error {
+            case .invalidCorrectionResolutionCommand:
+                transitionFailure(.invalidResolution)
+            default:
+                transitionFailure(.resolutionFailed)
+            }
+            return
+        } catch {
+            transitionFailure(.resolutionFailed)
+            return
+        }
+        guard command.vaultID == vaultID else {
+            resetForUnavailable(.invalidVault)
+            return
+        }
+
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthCorrectionResolutionViewState(
+            phase: .resolving(command.correctionRequestID),
+            notice: nil,
+            latestReceipt: nil
+        )
+        client.resolveOwnerTruthCorrection(
+            vaultID: vaultID,
+            expectedOwnerSubjectID: accountLease.subjectId,
+            command: command
+        ) { [weak self] result in
+            self?.receive(result, command: command, generation: generation)
+        }
+    }
+
+    private func beginResolutionOrFail() -> OwnerTruthVaultID? {
+        guard qaGateEnabled() else {
+            resetForUnavailable(.qaOnlyDisabled)
+            return nil
+        }
+        guard let vaultID, correctionRequestReceipt.vaultID == vaultID else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthCorrectionResolutionReceipt, Error>,
+        command: OwnerTruthCorrectionResolutionCommand,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let receipt):
+            guard receipt.correctionRequestID == command.correctionRequestID,
+                  receipt.candidateID == command.candidateID,
+                  receipt.candidateVersion == command.expectedCandidateVersion,
+                  receipt.decision == command.action.terminalDecision else {
+                transitionFailure(.resolutionResultMismatch)
+                return
+            }
+            viewState = OwnerTruthCorrectionResolutionViewState(
+                phase: .resolved,
+                notice: receipt.outcome == .created ? .resolutionCreated : .resolutionDeduplicated,
+                latestReceipt: OwnerTruthCorrectionResolutionReceiptViewState(
+                    correctionRequestID: receipt.correctionRequestID,
+                    candidateID: receipt.candidateID,
+                    decision: receipt.decision,
+                    replacementMemoryVersionID: receipt.replacementMemoryVersionID,
+                    outcome: receipt.outcome
+                )
+            )
+        case .failure:
+            transitionFailure(.resolutionFailed)
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthCorrectionResolutionNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthCorrectionResolutionViewState(
+            phase: .unavailable,
+            notice: notice,
+            latestReceipt: nil
+        )
+    }
+
+    private func transitionFailure(_ notice: OwnerTruthCorrectionResolutionNotice) {
+        viewState = OwnerTruthCorrectionResolutionViewState(
+            phase: .failed,
+            notice: notice,
+            latestReceipt: nil
+        )
+    }
+}
+
 /// QA-only bridge from a citation-bound correction request to the existing
-/// Candidate Inbox. It retains only opaque request/candidate identifiers and
-/// deliberately delegates every terminal decision to `OwnerTruthCandidateReviewUseCase`.
+/// Candidate Inbox. It retains only opaque request/candidate identifiers for
+/// visibility. Terminal decisions must use `OwnerTruthCorrectionResolutionUseCase`,
+/// because generic Candidate activation cannot supersede the cited MemoryVersion.
 /// No correction text, answer text or Memory authority is retained here.
 enum OwnerTruthCorrectionCandidateInboxHandoffIntent: Equatable, Sendable {
     case submit(citationID: OwnerTruthRecordID, correctionText: String, reasonCode: String)
@@ -7357,12 +7879,12 @@ struct OwnerTruthCorrectionCandidateInboxHandoffViewState: Equatable, Sendable {
     )
 }
 
-/// Composes two existing QA-only use cases without adding a second review or
-/// activation path. A submitted correction must reappear in Candidate Inbox
-/// before this handoff is considered ready; normal Archive/KBLite writers are
-/// never called.
+/// Composes the QA-only request and inbox refresh paths without exposing a
+/// generic terminal-review handle for correction Candidates. A submitted
+/// correction must reappear in Candidate Inbox before this handoff is
+/// considered ready; normal Archive/KBLite writers are never called.
 final class OwnerTruthCorrectionCandidateInboxHandoffUseCase {
-    let candidateInboxUseCase: OwnerTruthCandidateReviewUseCase
+    private let candidateInboxUseCase: OwnerTruthCandidateReviewUseCase
 
     private let correctionRequestUseCase: OwnerTruthCorrectionRequestUseCase
     private let correctionQAGateEnabled: () -> Bool
@@ -7733,6 +8255,18 @@ protocol OwnerTruthCorrectionRequestClient: AnyObject {
         expectedOwnerSubjectID: String,
         command: OwnerTruthCorrectionRequestCommand,
         completion: @escaping (Result<OwnerTruthCorrectionRequestReceipt, Error>) -> Void
+    )
+}
+
+/// Narrow write port for the terminal, QA-only correction resolver. The
+/// separate route preserves the cited MemoryRecord lineage instead of using the
+/// generic Candidate activation path.
+protocol OwnerTruthCorrectionResolutionClient: AnyObject {
+    func resolveOwnerTruthCorrection(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        command: OwnerTruthCorrectionResolutionCommand,
+        completion: @escaping (Result<OwnerTruthCorrectionResolutionReceipt, Error>) -> Void
     )
 }
 

@@ -2031,6 +2031,228 @@ final class OwnerTruthContractsTests: XCTestCase {
         }
     }
 
+    func testCorrectionResolutionCommandBindsPendingRequestAndReceiptIsValueFree() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let answer = "纠正处理回执不得回显原回答。"
+        let correctionText = "人物应更正为外祖父。"
+        let correctedSummary = "小时候在院子里听外祖父讲故事"
+        let answerReceipt = try verifiedAnswerCitationReceipt(
+            for: lease,
+            query: "请仅基于已确认记忆回答",
+            answer: answer,
+            commandID: "owner-truth-answer-citation-resolution-001"
+        )
+        let requestCommand = try OwnerTruthCorrectionRequestCommand(
+            commandID: "owner-truth-correction-request-resolution-001",
+            receipt: answerReceipt,
+            citationID: try XCTUnwrap(answerReceipt.citations.first).citationID,
+            correctionText: correctionText,
+            reasonCode: "ownerReportedCorrection"
+        )
+        let requestReceipt = try OwnerTruthCorrectionRequestReceipt(
+            backendJSONObject: correctionRequestReceiptResponse(for: requestCommand),
+            expectedCommand: requestCommand
+        )
+        let command = try OwnerTruthCorrectionResolutionCommand(
+            commandID: "owner-truth-correction-resolution-001",
+            correctionRequestReceipt: requestReceipt,
+            action: .correct,
+            correctedValue: ["summary": .string(correctedSummary)],
+            correctedValueSchemaVersion: "owner-truth-v1",
+            reasonCode: "ownerConfirmedCorrection"
+        )
+
+        XCTAssertEqual(command.vaultID, try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)))
+        XCTAssertEqual(command.correctionRequestID, requestReceipt.correctionRequestID)
+        XCTAssertEqual(command.candidateID, requestReceipt.candidateID)
+        XCTAssertEqual(command.expectedCandidateVersion, requestReceipt.candidateVersion)
+        XCTAssertEqual(command.expectedMemoryVersionID, requestReceipt.expectedMemoryVersionID)
+        XCTAssertEqual(command.backendPayload["action"] as? String, "correct")
+        XCTAssertEqual(
+            (command.backendPayload["correctedValue"] as? [String: Any])?["summary"] as? String,
+            correctedSummary
+        )
+
+        let receipt = try OwnerTruthCorrectionResolutionReceipt(
+            backendJSONObject: correctionResolutionReceiptResponse(for: command),
+            expectedCommand: command
+        )
+
+        XCTAssertEqual(receipt.outcome, .created)
+        XCTAssertEqual(receipt.decision, .corrected)
+        XCTAssertEqual(receipt.correctionRequestID, requestReceipt.correctionRequestID)
+        XCTAssertEqual(receipt.candidateID, requestReceipt.candidateID)
+        XCTAssertEqual(receipt.supersededMemoryVersionID, requestReceipt.expectedMemoryVersionID)
+        XCTAssertNotNil(receipt.replacementMemoryVersionID)
+        XCTAssertNotNil(receipt.answerOutdatedEventID)
+
+        let text = String(decoding: try JSONEncoder().encode(receipt), as: UTF8.self)
+        XCTAssertFalse(text.contains(correctedSummary))
+        XCTAssertFalse(text.contains(correctionText))
+        XCTAssertFalse(text.contains(answer))
+    }
+
+    func testCorrectionResolutionReceiptRejectsRawContentAndMismatchedTerminalState() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let answerReceipt = try verifiedAnswerCitationReceipt(
+            for: lease,
+            query: "纠正处理必须绑定待审核候选",
+            answer: "任何处理结果都不能回显原始内容。",
+            commandID: "owner-truth-answer-citation-resolution-invalid"
+        )
+        let requestCommand = try OwnerTruthCorrectionRequestCommand(
+            commandID: "owner-truth-correction-request-resolution-invalid",
+            receipt: answerReceipt,
+            citationID: try XCTUnwrap(answerReceipt.citations.first).citationID,
+            correctionText: "地点应更正为院子。",
+            reasonCode: "ownerReportedCorrection"
+        )
+        let requestReceipt = try OwnerTruthCorrectionRequestReceipt(
+            backendJSONObject: correctionRequestReceiptResponse(for: requestCommand),
+            expectedCommand: requestCommand
+        )
+        let command = try OwnerTruthCorrectionResolutionCommand(
+            commandID: "owner-truth-correction-resolution-invalid",
+            correctionRequestReceipt: requestReceipt,
+            action: .correct,
+            correctedValue: ["summary": .string("已更正的私密摘要")],
+            correctedValueSchemaVersion: "owner-truth-v1",
+            reasonCode: "ownerConfirmedCorrection"
+        )
+
+        var rawResponse = correctionResolutionReceiptResponse(for: command)
+        var rawResolution = try XCTUnwrap(rawResponse["correctionResolution"] as? [String: Any])
+        rawResolution["content"] = ["summary": "不得进入处理回执"]
+        rawResponse["correctionResolution"] = rawResolution
+        XCTAssertThrowsError(
+            try OwnerTruthCorrectionResolutionReceipt(
+                backendJSONObject: rawResponse,
+                expectedCommand: command
+            )
+        ) { error in
+            guard case .invalidCorrectionResolutionReceipt = error as? OwnerTruthRemoteContractError else {
+                return XCTFail("expected raw correction resolution rejection, got \(error)")
+            }
+        }
+
+        var mismatchResponse = correctionResolutionReceiptResponse(for: command)
+        var mismatchResolution = try XCTUnwrap(mismatchResponse["correctionResolution"] as? [String: Any])
+        mismatchResolution["candidateId"] = "00000000-0000-0000-0000-000000000399"
+        mismatchResponse["correctionResolution"] = mismatchResolution
+        XCTAssertThrowsError(
+            try OwnerTruthCorrectionResolutionReceipt(
+                backendJSONObject: mismatchResponse,
+                expectedCommand: command
+            )
+        ) { error in
+            guard case .invalidCorrectionResolutionReceipt = error as? OwnerTruthRemoteContractError else {
+                return XCTFail("expected correction resolution identity rejection, got \(error)")
+            }
+        }
+    }
+
+    func testCorrectionResolutionUseCaseUsesDedicatedResolverAndDropsStaleCompletion() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let answerReceipt = try verifiedAnswerCitationReceipt(
+            for: lease,
+            query: "处理纠正后不得让旧账户接收结果",
+            answer: "异步处理必须绑定当前账户租约。",
+            commandID: "owner-truth-answer-citation-resolution-stale"
+        )
+        let requestCommand = try OwnerTruthCorrectionRequestCommand(
+            commandID: "owner-truth-correction-request-resolution-stale",
+            receipt: answerReceipt,
+            citationID: try XCTUnwrap(answerReceipt.citations.first).citationID,
+            correctionText: "账户切换后应丢弃处理结果。",
+            reasonCode: "ownerReportedCorrection"
+        )
+        let requestReceipt = try OwnerTruthCorrectionRequestReceipt(
+            backendJSONObject: correctionRequestReceiptResponse(for: requestCommand),
+            expectedCommand: requestCommand
+        )
+        let expectedCommand = try OwnerTruthCorrectionResolutionCommand(
+            commandID: "owner-truth-correction-resolution-stale",
+            correctionRequestReceipt: requestReceipt,
+            action: .reject,
+            reasonCode: "ownerRejectedCorrection"
+        )
+        let client = CorrectionResolutionClientSpy()
+        client.deferResolution = true
+        let useCase = OwnerTruthCorrectionResolutionUseCase(
+            accountLease: lease,
+            correctionRequestReceipt: requestReceipt,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { expectedCommand.commandID }
+        )
+
+        useCase.send(.resolve(
+            action: .reject,
+            correctedValue: nil,
+            correctedValueSchemaVersion: nil,
+            reasonCode: expectedCommand.reasonCode
+        ))
+        XCTAssertEqual(useCase.viewState.phase, .resolving(requestReceipt.correctionRequestID))
+        XCTAssertEqual(client.requestedCommands, [expectedCommand])
+
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferredResolution(.success(try OwnerTruthCorrectionResolutionReceipt(
+            backendJSONObject: correctionResolutionReceiptResponse(for: expectedCommand),
+            expectedCommand: expectedCommand
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(useCase.viewState.latestReceipt)
+    }
+
+    func testCorrectionResolutionUseCaseFailsClosedWhenQAGateIsDisabled() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let answerReceipt = try verifiedAnswerCitationReceipt(
+            for: lease,
+            query: "关闭 QA gate 时不得处理纠正候选",
+            answer: "处理路径必须默认关闭。",
+            commandID: "owner-truth-answer-citation-resolution-gate"
+        )
+        let requestCommand = try OwnerTruthCorrectionRequestCommand(
+            commandID: "owner-truth-correction-request-resolution-gate",
+            receipt: answerReceipt,
+            citationID: try XCTUnwrap(answerReceipt.citations.first).citationID,
+            correctionText: "此请求不得在关闭 gate 时被处理。",
+            reasonCode: "ownerReportedCorrection"
+        )
+        let requestReceipt = try OwnerTruthCorrectionRequestReceipt(
+            backendJSONObject: correctionRequestReceiptResponse(for: requestCommand),
+            expectedCommand: requestCommand
+        )
+        let client = CorrectionResolutionClientSpy()
+        let useCase = OwnerTruthCorrectionResolutionUseCase(
+            accountLease: lease,
+            correctionRequestReceipt: requestReceipt,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { false },
+            commandIDFactory: { "owner-truth-correction-resolution-gate" }
+        )
+
+        useCase.send(.resolve(
+            action: .reject,
+            correctedValue: nil,
+            correctedValueSchemaVersion: nil,
+            reasonCode: "ownerRejectedCorrection"
+        ))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .qaOnlyDisabled)
+        XCTAssertTrue(client.requestedCommands.isEmpty)
+    }
+
     func testContextCitationQAEvidenceReadoutHashesReferencesWithoutRawText() throws {
         let (_, lease) = try makeActiveRuntime()
         let query = "这段问题不能进入 QA 导出包"
@@ -2350,7 +2572,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertNil(useCase.viewState.latestReceipt)
     }
 
-    func testCorrectionCandidateHandoffRefreshesExistingInboxAndLeavesReviewAuthorityWithInbox() throws {
+    func testCorrectionCandidateHandoffRefreshesExistingInboxWithoutExposingGenericTerminalReview() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let answerReceipt = try verifiedAnswerCitationReceipt(
             for: lease,
@@ -2378,10 +2600,6 @@ final class OwnerTruthContractsTests: XCTestCase {
             vaultID: lease.vaultId,
             candidateID: correctionReceipt.candidateID
         ))
-        candidateClient.reviewResult = .success(try decisionResult(
-            candidateID: correctionReceipt.candidateID,
-            decision: .accepted
-        ))
         let handoff = OwnerTruthCorrectionCandidateInboxHandoffUseCase(
             accountLease: lease,
             answerCitationReceipt: answerReceipt,
@@ -2404,21 +2622,6 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertNil(handoff.viewState.notice)
         XCTAssertEqual(handoff.viewState.correctionRequestID, correctionReceipt.correctionRequestID)
         XCTAssertEqual(handoff.viewState.candidateID, correctionReceipt.candidateID)
-        XCTAssertEqual(handoff.candidateInboxUseCase.viewState.phase, .ready)
-        XCTAssertEqual(
-            handoff.candidateInboxUseCase.viewState.items.map(\.id),
-            [correctionReceipt.candidateID]
-        )
-
-        handoff.candidateInboxUseCase.send(.accept(candidateID: correctionReceipt.candidateID))
-
-        XCTAssertEqual(handoff.candidateInboxUseCase.viewState.phase, .empty)
-        XCTAssertEqual(
-            handoff.candidateInboxUseCase.viewState.latestReceipt?.candidateID,
-            correctionReceipt.candidateID
-        )
-        XCTAssertTrue(handoff.candidateInboxUseCase.viewState.latestReceipt?.createdMemoryVersion == true)
-        XCTAssertEqual(handoff.viewState.phase, .ready)
     }
 
     func testCorrectionCandidateHandoffFailsClosedWhenPendingCandidateIsAbsentFromInbox() throws {
@@ -2685,6 +2888,39 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "correctionTextHash": command.correctionTextHash,
                 "correctionTextLength": command.correctionTextLength,
                 "status": "pendingReview",
+            ],
+        ]
+    }
+
+    private func correctionResolutionReceiptResponse(
+        for command: OwnerTruthCorrectionResolutionCommand,
+        outcome: OwnerTruthCorrectionResolutionOutcome = .created
+    ) -> [String: Any] {
+        let isCorrected = command.action == .correct
+        return [
+            "schemaVersion": "owner-truth-correction-resolution-response-v1",
+            "status": outcome.rawValue,
+            "correctionResolution": [
+                "schemaVersion": "owner-truth-correction-resolution-v1",
+                "outcome": outcome.rawValue,
+                "correctionRequestId": command.correctionRequestID.rawValue.uuidString.lowercased(),
+                "candidateId": command.candidateID.rawValue.uuidString.lowercased(),
+                "candidateVersion": command.expectedCandidateVersion,
+                "receiptId": "00000000-0000-0000-0000-000000000353",
+                "decision": command.action.terminalDecision.rawValue,
+                "supersededMemoryVersionId": isCorrected
+                    ? command.expectedMemoryVersionID.rawValue.uuidString.lowercased()
+                    : NSNull(),
+                "replacementMemoryVersionId": isCorrected
+                    ? "00000000-0000-0000-0000-000000000354"
+                    : NSNull(),
+                "replacementMemoryVersion": isCorrected ? 2 : NSNull(),
+                "answerOutdatedEventId": isCorrected
+                    ? "00000000-0000-0000-0000-000000000355"
+                    : NSNull(),
+                "authorityEpoch": isCorrected ? 7 : NSNull(),
+                "contentHash": isCorrected ? digest("correction-resolution-content") : NSNull(),
+                "projectionEffect": NSNull(),
             ],
         ]
     }
@@ -3839,4 +4075,35 @@ private final class CorrectionRequestClientSpy: OwnerTruthCorrectionRequestClien
 
 private enum CorrectionRequestClientSpyError: Error {
     case missingRequestResult
+}
+
+private final class CorrectionResolutionClientSpy: OwnerTruthCorrectionResolutionClient {
+    var resolutionResult: Result<OwnerTruthCorrectionResolutionReceipt, Error>?
+    var deferResolution = false
+    private var deferredResolutionCompletion: ((Result<OwnerTruthCorrectionResolutionReceipt, Error>) -> Void)?
+    private(set) var requestedCommands: [OwnerTruthCorrectionResolutionCommand] = []
+
+    func resolveOwnerTruthCorrection(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        command: OwnerTruthCorrectionResolutionCommand,
+        completion: @escaping (Result<OwnerTruthCorrectionResolutionReceipt, Error>) -> Void
+    ) {
+        requestedCommands.append(command)
+        if deferResolution {
+            deferredResolutionCompletion = completion
+            return
+        }
+        completion(resolutionResult ?? .failure(CorrectionResolutionClientSpyError.missingResolutionResult))
+    }
+
+    func completeDeferredResolution(_ result: Result<OwnerTruthCorrectionResolutionReceipt, Error>) {
+        let completion = deferredResolutionCompletion
+        deferredResolutionCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum CorrectionResolutionClientSpyError: Error {
+    case missingResolutionResult
 }

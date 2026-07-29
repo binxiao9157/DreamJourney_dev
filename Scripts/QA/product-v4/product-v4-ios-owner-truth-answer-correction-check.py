@@ -64,14 +64,21 @@ def main() -> None:
         "struct OwnerTruthCorrectionRequestCommand",
         "struct OwnerTruthCorrectionRequestReceipt",
         "final class OwnerTruthCorrectionRequestUseCase",
+        "enum OwnerTruthCorrectionResolutionAction",
+        "struct OwnerTruthCorrectionResolutionCommand",
+        "struct OwnerTruthCorrectionResolutionReceipt",
+        "final class OwnerTruthCorrectionResolutionUseCase",
         "enum OwnerTruthCorrectionCandidateInboxHandoffIntent",
         "enum OwnerTruthCorrectionCandidateInboxHandoffPhase",
         "enum OwnerTruthCorrectionCandidateInboxHandoffNotice",
         "struct OwnerTruthCorrectionCandidateInboxHandoffViewState",
         "final class OwnerTruthCorrectionCandidateInboxHandoffUseCase",
         "protocol OwnerTruthCorrectionRequestClient",
+        "protocol OwnerTruthCorrectionResolutionClient",
         "owner-truth-correction-request-response-v1",
         "owner-truth-correction-request-v1",
+        "owner-truth-correction-resolution-response-v1",
+        "owner-truth-correction-resolution-v1",
         "pendingReview",
         "citationId must belong to the verified answer receipt",
         "correctionRequest identity does not match the submitted citation command",
@@ -94,6 +101,18 @@ def main() -> None:
             f"correction receipt must not retain unsupported or raw content: {prohibited}",
         )
 
+    resolution_receipt_body = type_body(contracts, "struct OwnerTruthCorrectionResolutionReceipt")
+    for prohibited in (
+        "let correctedValue:",
+        "let correctionText:",
+        "let answerText:",
+        "let memoryContent:",
+    ):
+        require(
+            prohibited not in resolution_receipt_body,
+            f"correction resolution receipt must not retain raw content: {prohibited}",
+        )
+
     handoff_state_body = type_body(
         contracts,
         "struct OwnerTruthCorrectionCandidateInboxHandoffViewState",
@@ -112,7 +131,7 @@ def main() -> None:
         "state.items.contains(where: { $0.id == candidateID })",
         "awaitingCandidateID = nil",
         "OwnerTruthCorrectionRequestUseCase",
-        "OwnerTruthCandidateReviewUseCase",
+        "private let candidateInboxUseCase",
     ):
         require(required in handoff_body, f"correction-to-inbox handoff missing: {required}")
 
@@ -130,6 +149,20 @@ def main() -> None:
     ):
         require(required in request_body, f"correction client boundary missing: {required}")
 
+    resolution_body = function_body(client, "resolveOwnerTruthCorrection")
+    for required in (
+        "OwnerTruthCorrectionRequestQAGate.isEnabled",
+        'feature: "ownerTruthCorrectionResolution"',
+        "command.vaultID == vaultID",
+        'path: "/v2/vaults/\\(pathComponent(vaultID.rawValue))/correction-requests/\\(pathComponent(command.correctionRequestID.rawValue.uuidString))/resolve"',
+        "payload: command.backendPayload",
+        "authPolicy: .userRequired",
+        "sessionUserId: expectedOwnerSubjectID",
+        '"X-DreamJourney-QA-Owner-Truth": "1"',
+        "OwnerTruthCorrectionResolutionReceipt(",
+    ):
+        require(required in resolution_body, f"correction resolver client boundary missing: {required}")
+
     require(
         "var isOwnerTruthCorrectionRequestQAConfigured: Bool" in client,
         "runtime capability must expose only the QA-gated correction state",
@@ -138,10 +171,15 @@ def main() -> None:
         "extension DreamJourneyBackendClient: OwnerTruthCorrectionRequestClient {}" in client,
         "backend client must conform to the correction-request port",
     )
+    require(
+        "extension DreamJourneyBackendClient: OwnerTruthCorrectionResolutionClient {}" in client,
+        "backend client must conform to the correction-resolution port",
+    )
 
     for module in MODULES.rglob("*.swift"):
         require(
-            "OwnerTruthCorrectionRequest" not in module.read_text(encoding="utf-8"),
+            "OwnerTruthCorrectionRequest" not in module.read_text(encoding="utf-8")
+            and "OwnerTruthCorrectionResolution" not in module.read_text(encoding="utf-8"),
             f"default-public module must not expose answer correction: {module.relative_to(ROOT)}",
         )
 
@@ -151,15 +189,19 @@ def main() -> None:
         "func testCorrectionRequestReceiptRejectsMismatchedIdentityAndIntegrity()",
         "func testCorrectionRequestCommandRejectsInvalidInputAndUnknownCitation()",
         "func testCorrectionRequestUseCaseSubmitsPendingCandidateWithoutMutatingLegacyState()",
-        "func testCorrectionCandidateHandoffRefreshesExistingInboxAndLeavesReviewAuthorityWithInbox()",
+        "func testCorrectionCandidateHandoffRefreshesExistingInboxWithoutExposingGenericTerminalReview()",
         "func testCorrectionCandidateHandoffFailsClosedWhenPendingCandidateIsAbsentFromInbox()",
         "func testCorrectionCandidateHandoffRequiresBothQAGatesBeforeWritingOrReading()",
+        "func testCorrectionResolutionCommandBindsPendingRequestAndReceiptIsValueFree()",
+        "func testCorrectionResolutionReceiptRejectsRawContentAndMismatchedTerminalState()",
+        "func testCorrectionResolutionUseCaseUsesDedicatedResolverAndDropsStaleCompletion()",
+        "func testCorrectionResolutionUseCaseFailsClosedWhenQAGateIsDisabled()",
     ):
         require(test_name in tests, f"answer-correction contract test missing: {test_name}")
 
     print(
         "Product V4 iOS Owner Truth answer-correction check passed: default-off, "
-        "owner-authenticated, citation-bound, value-free, and absent from public modules"
+        "owner-authenticated, citation-bound, dedicated-resolution, value-free, and absent from public modules"
     )
 
 
