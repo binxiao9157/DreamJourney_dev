@@ -9056,8 +9056,14 @@ extension EchoViewController {
         guard let ownerTruthContextParityQueryHash = ownerTruthContextParityFingerprint.hash,
               let legacyParityPacket = EchoContextPacket(json: [
                 "traceId": "ctx_uiqa_owner_truth_parity",
-                "intent": "echo",
+                "intent": "echo_chat",
                 "userId": ownerUserId,
+                "requestCorrelation": [
+                    "schemaVersion": EchoContextPacketRequestCorrelation.schemaVersion,
+                    "intent": "echo_chat",
+                    "queryHash": ownerTruthContextParityQueryHash,
+                    "queryLength": ownerTruthContextParityFingerprint.length,
+                ],
                 "personaScope": "self",
                 "digitalHumanId": ownerUserId,
                 "contextVersion": "echo-context-v1",
@@ -9113,6 +9119,7 @@ extension EchoViewController {
             ),
             accountSubjectID: ownerUserId,
             vaultID: "vault-uiqa-owner-truth-context-parity",
+            requestIntent: "echo_chat",
             queryHash: ownerTruthContextParityQueryHash,
             queryLength: ownerTruthContextParityFingerprint.length
         )

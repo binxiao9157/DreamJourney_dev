@@ -490,6 +490,7 @@ struct EchoOwnerTruthContextParityLease: Equatable {
     let expectedIdentity: EchoKnowledgeContextIdentity
     let accountSubjectID: String
     let vaultID: String
+    let requestIntent: String
     let queryHash: String
     let queryLength: Int
 }
@@ -922,6 +923,7 @@ final class EchoApplicationCoordinator {
             expectedIdentity: expectedIdentity,
             accountSubjectID: accountLease.subjectId,
             vaultID: normalizedVaultID,
+            requestIntent: "echo_chat",
             queryHash: queryHash,
             queryLength: fingerprint.length
         )
@@ -974,6 +976,12 @@ final class EchoApplicationCoordinator {
                   responsePersonaScope: packet.personaScope,
                   responseDigitalHumanId: packet.digitalHumanId
               ),
+              packet.intent == parityLease.requestIntent,
+              packet.requestCorrelation?.matches(
+                  intent: parityLease.requestIntent,
+                  queryHash: parityLease.queryHash,
+                  queryLength: parityLease.queryLength
+              ) == true,
               var pending = ownerTruthContextParityPendingObservation,
               pending.lease == parityLease else {
             _ = invalidateOwnerTruthContextParity(matching: parityLease)

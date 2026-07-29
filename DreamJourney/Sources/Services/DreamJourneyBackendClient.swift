@@ -2071,12 +2071,82 @@ struct VoiceCloneSynthesisResult {
     }
 }
 
+/// Additive, value-free correlation metadata for a legacy Context Packet.
+/// Missing or malformed data must not change the public reply path; the
+/// Owner Truth QA parity path decides separately whether it is sufficient to
+/// retain a comparison observation.
+struct EchoContextPacketRequestCorrelation: Equatable {
+    static let schemaVersion = "echo-context-request-correlation-v1"
+
+    let intent: String
+    let queryHash: String?
+    let queryLength: Int
+
+    init?(json: [String: Any]) {
+        guard json["schemaVersion"] as? String == Self.schemaVersion,
+              let intent = Self.nonEmptyString(json["intent"]),
+              let queryLength = Self.intValue(json["queryLength"]),
+              queryLength >= 0 else {
+            return nil
+        }
+        let queryHash = Self.optionalSHA256(json["queryHash"])
+        guard (queryLength == 0 && queryHash == nil)
+                || (queryLength > 0 && queryHash != nil) else {
+            return nil
+        }
+        self.intent = intent
+        self.queryHash = queryHash
+        self.queryLength = queryLength
+    }
+
+    func matches(intent expectedIntent: String, queryHash expectedHash: String, queryLength expectedLength: Int) -> Bool {
+        intent == expectedIntent
+            && queryHash == expectedHash
+            && queryLength == expectedLength
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        if let value = value as? String {
+            return Int(value)
+        }
+        return nil
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else {
+            return nil
+        }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func optionalSHA256(_ value: Any?) -> String? {
+        guard let value = value as? String else {
+            return nil
+        }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.count == 64,
+              normalized.allSatisfy({ $0.isHexDigit }),
+              normalized == normalized.lowercased() else {
+            return nil
+        }
+        return normalized
+    }
+}
+
 struct EchoContextPacket {
     let schemaVersion: Int
     let contextVersion: String
     let traceId: String
     let intent: String
     let userId: String
+    let requestCorrelation: EchoContextPacketRequestCorrelation?
     let personaScope: String?
     let digitalHumanId: String?
     let archiveItemsAvailable: Int
@@ -2118,6 +2188,13 @@ struct EchoContextPacket {
         self.traceId = traceId
         self.intent = intent
         self.userId = userId
+        if let requestCorrelationJSON = json["requestCorrelation"] as? [String: Any],
+           let requestCorrelation = EchoContextPacketRequestCorrelation(json: requestCorrelationJSON),
+           requestCorrelation.intent == intent {
+            self.requestCorrelation = requestCorrelation
+        } else {
+            self.requestCorrelation = nil
+        }
         let persona = json["persona"] as? [String: Any]
         self.personaScope = Self.nonEmptyString(persona?["personaScope"])
             ?? Self.nonEmptyString(json["personaScope"])

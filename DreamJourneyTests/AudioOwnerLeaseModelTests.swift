@@ -770,6 +770,45 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
         wait(for: [expectation], timeout: 1)
     }
 
+    func testContextBuildStillDeliversLegacyPacketWhenRequestCorrelationIsMissing() {
+        let transport = DeferredEchoContextBuildTransport()
+        let coordinator = EchoApplicationCoordinator(contextBuildTransport: transport)
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let expectation = expectation(description: "legacy public packet is still delivered")
+
+        XCTAssertNotNil(
+            coordinator.requestContextBuild(
+                turnID: "turn-legacy-packet",
+                query: "ordinary public Echo cannot depend on QA correlation",
+                expectedIdentity: identity,
+                lifecycleMode: .sunlight,
+                viewerFamilyMemberID: nil
+            ) { _, delivery in
+                guard case .success(let packet) = delivery else {
+                    return XCTFail("legacy packet must retain public delivery compatibility")
+                }
+                XCTAssertNil(packet.requestCorrelation)
+                expectation.fulfill()
+            }
+        )
+        transport.complete(
+            at: 0,
+            result: .success(
+                makeEchoContextPacket(
+                    userId: "owner-1",
+                    personaScope: "self",
+                    digitalHumanId: "digital-human-1"
+                )
+            )
+        )
+
+        wait(for: [expectation], timeout: 1)
+    }
+
     func testOwnerTruthShadowStartsOnlyForCurrentSelfOwner() {
         let contextTransport = DeferredEchoContextBuildTransport()
         let shadowTransport = DeferredOwnerTruthContextShadowTransport()
@@ -1020,7 +1059,8 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
         let packet = makeEchoContextPacket(
             userId: "owner-1",
             personaScope: "self",
-            digitalHumanId: "digital-human-1"
+            digitalHumanId: "digital-human-1",
+            requestQuery: "同一回合只做上下文对照"
         )
 
         XCTAssertNil(
@@ -1043,6 +1083,70 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
         XCTAssertGreaterThan(evidence?.blockerCount ?? 0, 0)
         XCTAssertNil(coordinator.activeOwnerTruthContextParityLease)
         XCTAssertFalse(evidence?.panelLines().joined(separator: " ").contains("同一回合只做上下文对照") == true)
+    }
+
+    func testOwnerTruthContextParityRejectsMissingOrMismatchedLegacyRequestCorrelation() throws {
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 11)
+        let coordinator = EchoApplicationCoordinator(
+            ownerTruthContextCitationQAEnabled: { true },
+            ownerTruthMigrationParityQAEnabled: { true }
+        )
+
+        let missingContextLease = coordinator.beginContextBuild(
+            turnID: "turn-missing-correlation",
+            expectedIdentity: identity
+        )
+        let missingParityLease = try XCTUnwrap(
+            coordinator.beginOwnerTruthContextParity(
+                turnID: "turn-missing-correlation",
+                query: "同一请求必须有服务端关联指纹",
+                accountLease: accountLease,
+                expectedIdentity: identity
+            )
+        )
+        XCTAssertNil(
+            coordinator.recordOwnerTruthContextParityLegacy(
+                makeEchoContextPacket(
+                    userId: "owner-1",
+                    personaScope: "self",
+                    digitalHumanId: "digital-human-1"
+                ),
+                contextBuildLease: missingContextLease,
+                parityLease: missingParityLease
+            )
+        )
+        XCTAssertNil(coordinator.activeOwnerTruthContextParityLease)
+
+        let mismatchContextLease = coordinator.beginContextBuild(
+            turnID: "turn-mismatched-correlation",
+            expectedIdentity: identity
+        )
+        let mismatchParityLease = try XCTUnwrap(
+            coordinator.beginOwnerTruthContextParity(
+                turnID: "turn-mismatched-correlation",
+                query: "这个响应只能归属当前回合",
+                accountLease: accountLease,
+                expectedIdentity: identity
+            )
+        )
+        XCTAssertNil(
+            coordinator.recordOwnerTruthContextParityLegacy(
+                makeEchoContextPacket(
+                    userId: "owner-1",
+                    personaScope: "self",
+                    digitalHumanId: "digital-human-1",
+                    requestQuery: "另一条查询"
+                ),
+                contextBuildLease: mismatchContextLease,
+                parityLease: mismatchParityLease
+            )
+        )
+        XCTAssertNil(coordinator.activeOwnerTruthContextParityLease)
     }
 
     func testOwnerTruthContextParityRejectsQueryMismatchAndContextInvalidation() throws {
@@ -1798,15 +1902,26 @@ private final class DeferredOwnerTruthContextShadowTransport: EchoOwnerTruthCont
 private func makeEchoContextPacket(
     userId: String,
     personaScope: String,
-    digitalHumanId: String
+    digitalHumanId: String,
+    requestQuery: String? = nil
 ) -> EchoContextPacket {
-    guard let packet = EchoContextPacket(json: [
+    var json: [String: Any] = [
         "traceId": "trace-id",
-        "intent": "echo",
+        "intent": "echo_chat",
         "userId": userId,
         "personaScope": personaScope,
         "digitalHumanId": digitalHumanId,
-    ]) else {
+    ]
+    if let requestQuery {
+        let fingerprint = OwnerTruthContextCitationTraceSummary.queryFingerprint(for: requestQuery)
+        json["requestCorrelation"] = [
+            "schemaVersion": EchoContextPacketRequestCorrelation.schemaVersion,
+            "intent": "echo_chat",
+            "queryHash": fingerprint.hash as Any,
+            "queryLength": fingerprint.length,
+        ]
+    }
+    guard let packet = EchoContextPacket(json: json) else {
         fatalError("test context packet must decode")
     }
     return packet

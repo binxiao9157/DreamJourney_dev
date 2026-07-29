@@ -50,6 +50,8 @@ def main() -> int:
         "func invalidateOwnerTruthContextParity(",
         "OwnerTruthContextCitationQAGate.isEnabled",
         "OwnerTruthMigrationParityQAGate.isEnabled",
+        "packet.requestCorrelation?.matches(",
+        "requestIntent: \"echo_chat\"",
     ]:
         require(required in view_model, f"live Context parity must define {required}")
 
@@ -80,6 +82,8 @@ def main() -> int:
         require(required in controller, f"Echo controller must keep parity evidence QA-only: {required}")
 
     for required in [
+        "struct EchoContextPacketRequestCorrelation",
+        "echo-context-request-correlation-v1",
         "schemaVersion = 3",
         "ownerTruthContextParityEvidence",
         "echoQaBundle-v3",
@@ -91,6 +95,8 @@ def main() -> int:
         "testOwnerTruthContextParityRequiresBothQAGates",
         "testOwnerTruthContextParityPairsRealContractShapesWithoutPromotion",
         "testOwnerTruthContextParityRejectsQueryMismatchAndContextInvalidation",
+        "testOwnerTruthContextParityRejectsMissingOrMismatchedLegacyRequestCorrelation",
+        "testContextBuildStillDeliversLegacyPacketWhenRequestCorrelationIsMissing",
     ]:
         require(required in tests, f"focused coordinator tests must cover parity guard: {required}")
 
