@@ -43,7 +43,7 @@
     "backendPendingPaths": []
   },
   "baselines": {
-    "backend": "main@8214666 / Formal interview confirmation MemoryVersion activation, typed Projection Worker and fail-closed-to-ready Context materialization chain committed locally; candidate-proposal status invalidates stale admitted Source staging and accurately reflects any already-persisted synthetic result; Answer/Citation rejects a Projection that changed between Context build and persistence; Correction Resolution rechecks both Sources and current predecessor before terminal action, with migration 0058 direct-write trigger protection pending deployment and PostgreSQL smoke; additive migration 0060 adds a default-off read-only legacy identity inbox bridge with no rows, login integration, family inference, writer, deployment, G2 evidence or public cutover claim; Time Letter recipient admission is a separate default-off, no-write exact-grant shadow only",
+    "backend": "main@0aabdee / Formal interview confirmation MemoryVersion activation, typed Projection Worker and fail-closed-to-ready Context materialization chain remain local evidence; candidate-proposal status invalidates stale admitted Source staging and accurately reflects any already-persisted synthetic result; Answer/Citation rejects Projection drift; Correction Resolution direct-write protection still needs deployment and PostgreSQL smoke; additive migration 0060 remains a default-off read-only legacy identity inbox bridge; Time Letter recipient admission remains a separate default-off no-write exact-grant shadow. Recovery owner-orphan quarantine now adds a local read-only HMAC-redacted inventory over an isolated recovery target only; it neither mutates data nor removes the existing recovery NO_GO.",
     "ios": "feature/prd-stitch-ui-adaptation@3ce1a77 / same-turn QA-only Context V1/V4 parity now requires legacy response request correlation behind two gates; no public UI change or real Provider/device claim",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
@@ -403,9 +403,10 @@
       "registryClosure": "EXTERNAL_OFFHOST_KMS_PRIVACY_SRE_OPEN"
     },
     {
-      "evidence": "docs/superpowers/status/2026-07-17-wi-s0-04-05-postgres-recovery.md",
+      "evidence": "docs/superpowers/status/2026-07-17-wi-s0-04-05-postgres-recovery.md; docs/superpowers/status/2026-07-30-wi-s0-04-05-owner-orphan-quarantine-manifest-g0.md",
       "id": "WI-S0-04-05",
-      "implementationStatus": "DEPLOYED / G2_ISOLATED_RESTORE_EXECUTED / NO_GO_OWNER_ORPHANS_AND_REPLAY_AUTHORITY / G3_OPEN",
+      "implementationStatus": "DEPLOYED_LEGACY_RECOVERY_TOOLING / G0_READ_ONLY_OWNER_ORPHAN_QUARANTINE_MANIFEST_LOCAL / G2_ISOLATED_RESTORE_EXECUTED_NO_GO_OWNER_ORPHANS_AND_REPLAY_AUTHORITY / G3_OPEN",
+      "latestLocalEvidence": "main@0aabdee / HMAC-redacted, REPEATABLE READ + READ ONLY owner-orphan inventory; no owner mutation, raw locator map, deployed run or recovery cutover claim",
       "registryClosure": "NO_GO_REMEDIATION_AND_G3_OPEN"
     },
     {
