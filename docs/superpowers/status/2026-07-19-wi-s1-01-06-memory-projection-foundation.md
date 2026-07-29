@@ -267,3 +267,35 @@ Backend `b52562a feat(v4): materialize confirmed projection context` 补齐了 P
 `scripts/run-backend-owner-truth-postgres-smoke.sh` 未运行，未声明 G2 部署或线上 Postgres
 通过。本轮未改 iOS source、公开 `/context/build`、DialogEngine 输入、三 Tab/Stitch 视觉或
 业务写入。
+
+## 2026-07-30：Interview Turn Confirmed Projection Context Binding（default-off）
+
+Backend 本地新增了一个更窄的服务端回合边界：
+`OwnerTruthInterviewTurnContextService`。它把已经持久化的 M0-A 私有访谈
+Session/Owner narrative 与上一项 confirmed Projection materialization 绑定，但仍不把任何
+内容切入公开 Echo。
+
+- 准备请求必须同时校验当前 Vault Owner、active session、精确 session version、Owner
+  narrative、同一 thread/session 与相同 authority epoch；暂停 Session、旧 version、跨 Owner、
+  跨 thread 或非 narrative 都 fail closed。
+- 确认记忆仍只经既有 materializer 在后端进程内生成上限 4096 字符的
+  `generationContext.text`。若 Session epoch 和 Projection authority 不同，结果变为
+  `authorityMismatch`、清空 selected citation 与文本，并记录
+  `interview_session_authority_epoch_mismatch`。
+- 新增隐藏 QA 路由
+  `POST /v2/vaults/{vaultId}/interview-sessions/{sessionId}/turn-context/prepare`；它复用
+  Owner Truth QA feature/header/self-owner gate，OpenAPI 不公开、`Cache-Control: no-store`，
+  只返回状态、版本/epoch、消息类别/序号、计数、hash 与 fallback。不会返回 query、叙述、
+  Projection 正文、generation text、真实 identifier、answer 或 provider payload。
+- 结果显式标记 `providerDispatchAllowed=false` 与 `publicEchoUnchanged=true`。没有模型调用、
+  回复写入、公开 `/context/build` 修改、DialogEngine 输入切换、iOS source/UI 变更或部署。
+
+本地验证：服务边界 5 项通过；服务/API/route focused group 92 项通过；
+`scripts/verify_backend.sh` 通过（1467 个 backend unit tests 与既有 G0/FastAPI smoke）；
+Python compile、route inventory 121 和 `git diff --check` 均通过。Owner Truth Postgres smoke
+已扩展为该边界生成 confirmed Projection + persisted narrative 后的断言，但本机
+`DATABASE_URL` 未设置，所以未运行、未声明 G2/线上通过。后端详细证据见
+`../DreamJourneyBackend/docs/backend/2026-07-30-owner-truth-interview-turn-context-g0.md`。
+
+这仍只是 `WI-S1-01-06` 的本地 G0 服务端准备证据，不构成公开 Echo Context cutover、
+Provider dispatch、检索质量、KBLite retirement、部署、真机或公开能力完成。
