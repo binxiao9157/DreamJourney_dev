@@ -34,6 +34,29 @@ QA 证据把已变化的 Projection 当作新的当前引用，后端在写入�
 `OwnerTruthAnswerCitationConflict`，answer ledger 保持为空。该补强目前仅完成本地 G0
 验证，尚未部署；既有 G2 隔离 Postgres smoke 不应被用来声称这段新代码已线上验收。
 
+### 2026-07-30 Citation Currentness Read 与 Answer Feedback（本地 G0）
+
+后端 `main@17d7060` 增加了两条继续保持默认关闭的 Owner QA 合同：
+
+- `GET /v2/vaults/{vaultId}/answers/{answerId}/citations`：只读既有 Answer receipt 的
+  typed citation 与当前性。每条 citation 仅有 ID、版本、哈希和
+  `current/citationNotCurrent/projectionUnavailable/...` 状态，不返回 query、answer、
+  Projection 或 Memory 正文。
+- `POST /v2/vaults/{vaultId}/answers/{answerId}/feedback`：写入一次性的
+  `helpful: boolean` 无正文 receipt。同一 command 幂等、同一 Answer 不可覆盖；只有
+  `helpful=true` 且所有 citation 在相同 authority epoch 下仍当前时，才会产生
+  `metricEligible=true`。
+
+无 citation 的回答仍可保留一条 `noCitations` 反馈，但永久不是指标信号；Projection
+重建、Source 撤回或 rights 变化时，反馈同样不会变成指标。`0062` 还把 feedback
+receipt 纳入 Owner Truth data-rights 导出和终端清理计数，导出的只有哈希、布尔值、计数和
+时间，没有私密正文。
+
+验证已通过：新增 focused G0 gate、FastAPI QA 默认隐藏/Owner 边界测试、路由认证与
+ownership inventory、迁移合同、data-rights 测试以及完整
+`scripts/verify_backend.sh`（1,531 项测试及既有 gates）。该变更尚未部署，不能把
+本地验证写成 G2/Postgres 或公开 Owner QA 已验收。
+
 ## 实现
 
 ### 已有后端合同
@@ -125,8 +148,7 @@ Postgres smoke，才能更新该新 guard 的 G2 结论。
 
 ## 下一步
 
-`WI-S1-01-07` 的当前内部 QA 合同不再继续伪造 G3 基线。将 G3 保持为
-`DEFERRED_UNTIL_QUERY_QUALITY_GATE_EXISTS`，并转入不依赖它的 `WI-S1-01-08`：纠正必须
-形成 Correction Candidate 和新的不可变 MemoryVersion，而不是原地修改 Archive 或
-Projection。真实 Owner QA cohort 的线上观察、容量压测和后续 query retrieval 质量门仍
-作为后续受控 Gate，且不得把 legacy/private JSON 当作 Authority。
+`WI-S1-01-07` 的内部 QA 合同现已包含 citation currentness read 和无正文 feedback
+receipt，但 G3 仍保持 `DEFERRED_UNTIL_QUERY_QUALITY_GATE_EXISTS`。它不是公开反馈、
+训练数据入口或质量结论。后续只能在独立 cohort、检索质量分母、容量与隐私 Gate 存在后
+再讨论指标聚合或公开化；不得把 legacy/private JSON 当作 Authority。
