@@ -181,10 +181,10 @@
       "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G2_G3_OPEN"
     },
     {
-      "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-09-provider-query-operations-baseline.md",
+      "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-09-provider-query-operations-baseline.md; docs/superpowers/status/2026-07-30-wi-s1-02-09-readiness-manifest-persistence.md",
       "id": "WI-S1-02-09",
-      "implementationStatus": "INTERNAL_READY / G0_G2_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED_1d87023 / G3_EXTERNAL_BLOCKED / PROVIDER_CALLS_AND_REPLAY_DISABLED",
-      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G3_EXTERNAL_BLOCKED"
+      "implementationStatus": "INTERNAL_READY / G0_G2_SCOPED_EVIDENCE_PRESENT / BACKEND_DEPLOYED_1d87023 / READINESS_MANIFEST_PERSISTENCE_LOCAL_BACKEND_16f9aa6 / DISPOSABLE_POSTGRES_SMOKE_PENDING / G3_EXTERNAL_BLOCKED / PROVIDER_CALLS_AND_REPLAY_DISABLED",
+      "registryClosure": "SCOPED_G0_G2_EVIDENCE_PRESENT_G2_LOCAL_EXTENSION_PENDING_DEPLOYED_SMOKE_G3_EXTERNAL_BLOCKED"
     },
     {
       "evidence": "docs/superpowers/status/2026-07-20-wi-s1-02-08-business-message-notification-contract.md",
