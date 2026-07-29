@@ -8926,10 +8926,14 @@ extension EchoViewController {
         )
 
         let ownerTruthContextReference = "memory-version:00000000-0000-0000-0000-000000000901"
+        let ownerTruthContextQueryFingerprint = OwnerTruthContextCitationTraceSummary
+            .queryFingerprint(for: "uiqa echo context evidence")
         let ownerTruthContextSummary = OwnerTruthContextCitationTraceSummary(
             contextVersion: "echo-context-v4-shadow",
             policyVersion: "owner-truth-context-shadow-build-policy-v1",
             selectionMode: .projectionCitationOrder,
+            queryHash: ownerTruthContextQueryFingerprint.hash,
+            queryLength: ownerTruthContextQueryFingerprint.length,
             contextHash: "uiqa-owner-truth-context-hash",
             authorityState: .ready,
             authorityEpoch: 7,

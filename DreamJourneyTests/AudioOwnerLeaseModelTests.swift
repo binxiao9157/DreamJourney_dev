@@ -868,8 +868,14 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
 
         XCTAssertNotNil(first)
         XCTAssertNotNil(second)
-        shadowTransport.complete(at: 0, result: .success(makeOwnerTruthContextShadowSummary()))
-        shadowTransport.complete(at: 1, result: .success(makeOwnerTruthContextShadowSummary()))
+        shadowTransport.complete(
+            at: 0,
+            result: .success(makeOwnerTruthContextShadowSummary(query: "first query"))
+        )
+        shadowTransport.complete(
+            at: 1,
+            result: .success(makeOwnerTruthContextShadowSummary(query: "second query"))
+        )
 
         wait(for: [expectation], timeout: 1)
         XCTAssertEqual(deliveredLeases, [second].compactMap { $0 })
@@ -907,9 +913,51 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
         )
 
         XCTAssertNil(coordinator.invalidateContextBuild())
-        shadowTransport.complete(at: 0, result: .success(makeOwnerTruthContextShadowSummary()))
+        shadowTransport.complete(
+            at: 0,
+            result: .success(
+                makeOwnerTruthContextShadowSummary(query: "context cancellation must fence shadow")
+            )
+        )
         wait(for: [notDelivered], timeout: 0.1)
         XCTAssertNil(coordinator.activeOwnerTruthContextShadowLease)
+    }
+
+    func testOwnerTruthShadowRejectsSummaryForDifferentQuery() {
+        let contextTransport = DeferredEchoContextBuildTransport()
+        let shadowTransport = DeferredOwnerTruthContextShadowTransport()
+        let coordinator = EchoApplicationCoordinator(
+            contextBuildTransport: contextTransport,
+            ownerTruthContextShadowTransport: shadowTransport
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 7)
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let expectation = expectation(description: "query mismatch is delivered as failure")
+
+        XCTAssertNotNil(
+            coordinator.requestOwnerTruthContextShadow(
+                turnID: "turn-query-mismatch",
+                query: "this turn must stay isolated",
+                accountLease: accountLease,
+                expectedIdentity: identity
+            ) { _, delivery in
+                guard case .failure(let error) = delivery else {
+                    return XCTFail("mismatched shadow query must not be delivered as success")
+                }
+                XCTAssertEqual(error as? EchoOwnerTruthContextShadowCorrelationError, .queryMismatch)
+                expectation.fulfill()
+            }
+        )
+
+        shadowTransport.complete(
+            at: 0,
+            result: .success(makeOwnerTruthContextShadowSummary(query: "another turn"))
+        )
+        wait(for: [expectation], timeout: 1)
     }
 
     private func makeAccountLease(subjectId: String, generation: UInt64) -> AccountLease {
@@ -923,11 +971,16 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
         )
     }
 
-    private func makeOwnerTruthContextShadowSummary() -> OwnerTruthContextCitationTraceSummary {
-        OwnerTruthContextCitationTraceSummary(
+    private func makeOwnerTruthContextShadowSummary(
+        query: String = ""
+    ) -> OwnerTruthContextCitationTraceSummary {
+        let queryFingerprint = OwnerTruthContextCitationTraceSummary.queryFingerprint(for: query)
+        return OwnerTruthContextCitationTraceSummary(
             contextVersion: "echo-context-v4-shadow",
             policyVersion: "owner-truth-context-policy-v1",
             selectionMode: .projectionCitationOrder,
+            queryHash: queryFingerprint.hash,
+            queryLength: queryFingerprint.length,
             contextHash: String(repeating: "a", count: 64),
             authorityState: .ready,
             authorityEpoch: 7,

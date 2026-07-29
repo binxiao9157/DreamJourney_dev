@@ -8056,6 +8056,8 @@ struct OwnerTruthContextCitationTraceSummary: Codable, Equatable, Sendable {
     let contextVersion: String
     let policyVersion: String
     let selectionMode: OwnerTruthContextSelectionMode
+    let queryHash: String?
+    let queryLength: Int?
     let contextHash: String
     let authorityState: OwnerTruthContextShadowState
     let authorityEpoch: Int?
@@ -8075,6 +8077,8 @@ struct OwnerTruthContextCitationTraceSummary: Codable, Equatable, Sendable {
         contextVersion = context.contextVersion
         policyVersion = context.policyVersion
         selectionMode = context.request.selectionMode
+        queryHash = context.request.queryHash
+        queryLength = context.request.queryLength
         contextHash = context.contextHash
         authorityState = context.authority.state
         authorityEpoch = context.authority.authorityEpoch
@@ -8096,6 +8100,8 @@ struct OwnerTruthContextCitationTraceSummary: Codable, Equatable, Sendable {
         contextVersion: String,
         policyVersion: String,
         selectionMode: OwnerTruthContextSelectionMode,
+        queryHash: String? = nil,
+        queryLength: Int? = nil,
         contextHash: String,
         authorityState: OwnerTruthContextShadowState,
         authorityEpoch: Int?,
@@ -8114,6 +8120,8 @@ struct OwnerTruthContextCitationTraceSummary: Codable, Equatable, Sendable {
         self.contextVersion = contextVersion
         self.policyVersion = policyVersion
         self.selectionMode = selectionMode
+        self.queryHash = queryHash
+        self.queryLength = queryLength
         self.contextHash = contextHash
         self.authorityState = authorityState
         self.authorityEpoch = authorityEpoch
@@ -8129,6 +8137,23 @@ struct OwnerTruthContextCitationTraceSummary: Codable, Equatable, Sendable {
         self.selectedContextSourceCounts = selectedContextSourceCounts
         self.fallbacks = fallbacks
     }
+
+    /// The trace preserves only a normalized request hash and scalar count.
+    /// This lets a QA observer reject a response for another Echo turn without
+    /// retaining the user's text in a runtime trace or export bundle.
+    static func queryFingerprint(for query: String) -> (hash: String?, length: Int) {
+        let normalized = OwnerTruthContextCitationContract.normalizedText(query)
+        return (
+            normalized.isEmpty ? nil : OwnerTruthContextCitationContract.digest(normalized),
+            OwnerTruthContextCitationContract.scalarCount(normalized)
+        )
+    }
+
+    func matchesSubmittedQuery(_ query: String) -> Bool {
+        let fingerprint = Self.queryFingerprint(for: query)
+        guard let queryLength else { return false }
+        return queryHash == fingerprint.hash && queryLength == fingerprint.length
+    }
 }
 
 /// This is the only Owner Truth Context shape allowed into the Echo QA panel
@@ -8142,6 +8167,8 @@ struct OwnerTruthContextCitationQAEvidenceReadout: Codable, Equatable, Sendable 
     let contextVersion: String
     let policyVersion: String
     let selectionMode: OwnerTruthContextSelectionMode
+    let queryHashDigest: String?
+    let queryLength: Int?
     let contextHashDigest: String
     let authorityState: OwnerTruthContextShadowState
     let authorityEpoch: Int?
@@ -8162,6 +8189,8 @@ struct OwnerTruthContextCitationQAEvidenceReadout: Codable, Equatable, Sendable 
         contextVersion = summary.contextVersion
         policyVersion = summary.policyVersion
         selectionMode = summary.selectionMode
+        queryHashDigest = summary.queryHash.map(Self.digest)
+        queryLength = summary.queryLength
         contextHashDigest = Self.digest(summary.contextHash)
         authorityState = summary.authorityState
         authorityEpoch = summary.authorityEpoch
@@ -8183,6 +8212,7 @@ struct OwnerTruthContextCitationQAEvidenceReadout: Codable, Equatable, Sendable 
         [
             "\(prefix) schema: \(schemaVersion)",
             "\(prefix) selection: \(selectionMode.rawValue)",
+            "\(prefix) query: length=\(queryLength.map(String.init) ?? "unknown") hash=\(queryHashDigest ?? "none")",
             "\(prefix) authority: \(authorityState.rawValue) epoch=\(authorityEpoch.map(String.init) ?? "none")",
             "\(prefix) selected/filtered: \(selectedContextCount)/\(filteredContextCount)",
             "\(prefix) citation/answer: \(citationCount)/\(answerCitationCount)",

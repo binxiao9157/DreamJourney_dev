@@ -473,6 +473,13 @@ enum EchoOwnerTruthContextShadowDelivery {
     case failure(Error)
 }
 
+/// A shadow response is evidence for one exact Echo request, never a generic
+/// context result.  Rejecting a hash/length mismatch keeps a delayed callback
+/// from being attached to a different live turn.
+enum EchoOwnerTruthContextShadowCorrelationError: Error, Equatable {
+    case queryMismatch
+}
+
 /// Incremental application coordinator for Echo business requests.
 /// Runtime digital-human/audio lifecycles intentionally remain outside this seam.
 final class EchoApplicationCoordinator {
@@ -627,6 +634,13 @@ final class EchoApplicationCoordinator {
                 }
                 switch result {
                 case .success(let summary):
+                    guard summary.matchesSubmittedQuery(query) else {
+                        completion(
+                            lease,
+                            .failure(EchoOwnerTruthContextShadowCorrelationError.queryMismatch)
+                        )
+                        return
+                    }
                     completion(lease, .success(summary))
                 case .failure(let error):
                     completion(lease, .failure(error))
