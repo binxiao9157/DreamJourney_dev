@@ -6115,6 +6115,26 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    /// Narrows the hidden Owner Truth request to the value-free shape consumed
+    /// by Echo QA evidence.  The public Echo path never receives this result as
+    /// generation text.
+    func observeOwnerTruthContextShadow(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        query: String,
+        completion: @escaping (Result<OwnerTruthContextCitationTraceSummary, Error>) -> Void
+    ) {
+        buildOwnerTruthContextShadow(
+            vaultID: vaultID,
+            expectedOwnerSubjectID: expectedOwnerSubjectID,
+            intent: "echo_chat",
+            query: query,
+            selectionMode: .projectionCitationOrder
+        ) { result in
+            completion(result.map { $0.traceSummary() })
+        }
+    }
+
     func recordOwnerTruthAnswerCitationReceipt(
         vaultID: OwnerTruthVaultID,
         expectedOwnerSubjectID: String,
@@ -8079,5 +8099,6 @@ extension DreamJourneyBackendClient: OwnerTruthKnowledgeRecommendationPlanClient
 extension DreamJourneyBackendClient: OwnerTruthKnowledgeDimensionConfirmationClient {}
 extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}
 extension DreamJourneyBackendClient: OwnerTruthContextCitationClient {}
+extension DreamJourneyBackendClient: EchoOwnerTruthContextShadowTransport {}
 extension DreamJourneyBackendClient: OwnerTruthCorrectionRequestClient {}
 extension DreamJourneyBackendClient: OwnerTruthCorrectionResolutionClient {}

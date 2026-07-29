@@ -4767,6 +4767,9 @@ final class EchoViewController: UIViewController {
     private func cancelActiveEchoContextBuild(reason: String) {
         activeEchoTurnKnowledgeContextGate?.cancel()
         activeEchoTurnKnowledgeContextGate = nil
+        // Shadow evidence belongs to one Echo turn only.  It must not survive a
+        // cancellation, account/context switch, or a later turn.
+        lastOwnerTruthContextCitationEvidence = nil
         guard let lease = echoApplicationCoordinator.invalidateContextBuild() else {
             return
         }
@@ -4936,6 +4939,13 @@ final class EchoViewController: UIViewController {
                 )
             }
         }
+        observeOwnerTruthContextShadowForEchoTurn(
+            text: text,
+            turnID: turnID,
+            lifecycleToken: lifecycleToken,
+            expectedIdentity: expectedIdentity,
+            context: context
+        )
         guard contextBuildLease != nil else {
             if let gate {
                 submitLocalEchoTurnKnowledgeContext(
@@ -4948,6 +4958,101 @@ final class EchoViewController: UIViewController {
                 subsystem: "CFLite",
                 event: "contextBuildSkipped",
                 states: ["reason": "backendNotConfigured"],
+                correlations: ["turn": turnID]
+            )
+            return
+        }
+    }
+
+    /// Observes the typed Owner Truth Context path for a live Echo turn without
+    /// contributing any text to the public reply path.  This is deliberately
+    /// QA-only while Projection-to-Context remains in shadow mode.
+    private func observeOwnerTruthContextShadowForEchoTurn(
+        text: String,
+        turnID: String,
+        lifecycleToken: DigitalHumanLifecycleToken,
+        expectedIdentity: EchoKnowledgeContextIdentity,
+        context: DigitalHumanContext
+    ) {
+        guard OwnerTruthContextCitationQAGate.isEnabled else {
+            lastOwnerTruthContextCitationEvidence = nil
+            return
+        }
+        guard context.isSelfAssistant,
+              let accountLease = echoAccountLease,
+              expectedIdentity.userId == accountLease.subjectId,
+              validateEchoAccountLease(
+                  at: .request,
+                  expected: accountLease,
+                  reason: "ownerTruthContextShadowRequest"
+              ) else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "CFLite",
+                event: "ownerTruthContextShadowSkipped",
+                states: ["reason": "ineligibleOwnerScope"],
+                correlations: ["turn": turnID]
+            )
+            return
+        }
+
+        let shadowLease = echoApplicationCoordinator.requestOwnerTruthContextShadow(
+            turnID: turnID,
+            query: text,
+            accountLease: accountLease,
+            expectedIdentity: expectedIdentity
+        ) { [weak self] _, delivery in
+            guard let self,
+                  self.isCurrentDigitalHumanLifecycleToken(
+                      lifecycleToken,
+                      reason: "ownerTruthContextShadowResponse"
+                  ),
+                  self.validateEchoAccountLease(
+                      at: .runtime,
+                      expected: accountLease,
+                      reason: "ownerTruthContextShadowResponse"
+                  ) else {
+                return
+            }
+
+            switch delivery {
+            case .success(let summary):
+                guard self.recordOwnerTruthContextCitationQAEvidence(summary) else {
+                    return
+                }
+                self.recordEchoRuntimeDiagnosticsSnapshot(reason: "ownerTruthContextShadowObserved")
+                PrivacySafeDiagnostics.log(
+                    subsystem: "CFLite",
+                    event: "ownerTruthContextShadowObserved",
+                    states: [
+                        "authority": summary.authorityState.rawValue,
+                        "selectionMode": summary.selectionMode.rawValue,
+                    ],
+                    counts: [
+                        "selected": summary.selectedContextCount,
+                        "filtered": summary.filteredContextCount,
+                        "ranking": summary.rankingTraceCount,
+                        "citation": summary.citationCount,
+                    ],
+                    correlations: [
+                        "context": summary.contextHash,
+                        "turn": turnID,
+                    ]
+                )
+            case .failure:
+                self.lastOwnerTruthContextCitationEvidence = nil
+                PrivacySafeDiagnostics.log(
+                    subsystem: "CFLite",
+                    event: "ownerTruthContextShadowUnavailable",
+                    states: ["reason": "shadowRequestFailed"],
+                    correlations: ["turn": turnID]
+                )
+            }
+        }
+        guard shadowLease != nil else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "CFLite",
+                event: "ownerTruthContextShadowSkipped",
+                states: ["reason": "notConfiguredOrIneligible"],
                 correlations: ["turn": turnID]
             )
             return

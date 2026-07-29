@@ -420,6 +420,21 @@ protocol EchoContextBuildTransport {
 
 extension DreamJourneyBackendClient: EchoContextBuildTransport {}
 
+/// Default-off transport for observing the Owner Truth Context shadow during an
+/// ordinary Echo turn.  The transport returns only the value-free trace
+/// summary, so the coordinator cannot accidentally use Shadow output as
+/// generation text.
+protocol EchoOwnerTruthContextShadowTransport: AnyObject {
+    var isOwnerTruthContextCitationQAConfigured: Bool { get }
+
+    func observeOwnerTruthContextShadow(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        query: String,
+        completion: @escaping (Result<OwnerTruthContextCitationTraceSummary, Error>) -> Void
+    )
+}
+
 /// Provider-independent ownership for one backend context-build request.
 /// The controller still owns rendering and DialogEngine submission; this lease
 /// only prevents an older asynchronous response from mutating a newer Echo turn.
@@ -436,9 +451,25 @@ struct EchoContextBuildIdentityMismatch: Equatable {
     let responseDigitalHumanId: String?
 }
 
+/// Provider-independent ownership for a single QA-only Owner Truth Context
+/// observation.  It is intentionally separate from the public Context Packet
+/// lease: a shadow response must never unblock, replace, or retry a public
+/// Echo generation request.
+struct EchoOwnerTruthContextShadowLease: Equatable {
+    let generation: UInt64
+    let turnID: String
+    let expectedIdentity: EchoKnowledgeContextIdentity
+    let vaultID: OwnerTruthVaultID
+}
+
 enum EchoContextBuildDelivery {
     case success(EchoContextPacket)
     case identityMismatch(EchoContextBuildIdentityMismatch)
+    case failure(Error)
+}
+
+enum EchoOwnerTruthContextShadowDelivery {
+    case success(OwnerTruthContextCitationTraceSummary)
     case failure(Error)
 }
 
@@ -446,11 +477,18 @@ enum EchoContextBuildDelivery {
 /// Runtime digital-human/audio lifecycles intentionally remain outside this seam.
 final class EchoApplicationCoordinator {
     private var nextContextBuildGeneration: UInt64 = 0
+    private var nextOwnerTruthContextShadowGeneration: UInt64 = 0
     private let contextBuildTransport: EchoContextBuildTransport
+    private let ownerTruthContextShadowTransport: EchoOwnerTruthContextShadowTransport
     private(set) var activeContextBuildLease: EchoContextBuildLease?
+    private(set) var activeOwnerTruthContextShadowLease: EchoOwnerTruthContextShadowLease?
 
-    init(contextBuildTransport: EchoContextBuildTransport = DreamJourneyBackendClient.shared) {
+    init(
+        contextBuildTransport: EchoContextBuildTransport = DreamJourneyBackendClient.shared,
+        ownerTruthContextShadowTransport: EchoOwnerTruthContextShadowTransport = DreamJourneyBackendClient.shared
+    ) {
         self.contextBuildTransport = contextBuildTransport
+        self.ownerTruthContextShadowTransport = ownerTruthContextShadowTransport
     }
 
     @discardableResult
@@ -472,11 +510,23 @@ final class EchoApplicationCoordinator {
     func invalidateContextBuild() -> EchoContextBuildLease? {
         let invalidatedLease = activeContextBuildLease
         activeContextBuildLease = nil
+        invalidateOwnerTruthContextShadow()
         return invalidatedLease
     }
 
     func isCurrent(_ lease: EchoContextBuildLease) -> Bool {
         activeContextBuildLease == lease
+    }
+
+    @discardableResult
+    func invalidateOwnerTruthContextShadow() -> EchoOwnerTruthContextShadowLease? {
+        let invalidatedLease = activeOwnerTruthContextShadowLease
+        activeOwnerTruthContextShadowLease = nil
+        return invalidatedLease
+    }
+
+    func isCurrent(_ lease: EchoOwnerTruthContextShadowLease) -> Bool {
+        activeOwnerTruthContextShadowLease == lease
     }
 
     @discardableResult
@@ -491,6 +541,7 @@ final class EchoApplicationCoordinator {
         guard contextBuildTransport.isContextBuildConfigured else {
             return nil
         }
+        invalidateOwnerTruthContextShadow()
         let lease = beginContextBuild(
             turnID: turnID,
             expectedIdentity: expectedIdentity
@@ -529,6 +580,54 @@ final class EchoApplicationCoordinator {
                         return
                     }
                     completion(lease, .success(packet))
+                case .failure(let error):
+                    completion(lease, .failure(error))
+                }
+            }
+        }
+        return lease
+    }
+
+    /// Starts a value-free Owner Truth Context observation for an active owner
+    /// only.  Family/persona contexts stay out of this QA cohort until their
+    /// independent grants and read policy are ready.  This method never changes
+    /// the public Context Packet or any DialogEngine input.
+    @discardableResult
+    func requestOwnerTruthContextShadow(
+        turnID: String,
+        query: String,
+        accountLease: AccountLease,
+        expectedIdentity: EchoKnowledgeContextIdentity,
+        completion: @escaping (EchoOwnerTruthContextShadowLease, EchoOwnerTruthContextShadowDelivery) -> Void
+    ) -> EchoOwnerTruthContextShadowLease? {
+        guard ownerTruthContextShadowTransport.isOwnerTruthContextCitationQAConfigured,
+              expectedIdentity.userId == accountLease.subjectId,
+              expectedIdentity.isPersonal,
+              let vaultID = OwnerTruthVaultID(accountLease.vaultId) else {
+            return nil
+        }
+
+        invalidateOwnerTruthContextShadow()
+        nextOwnerTruthContextShadowGeneration &+= 1
+        let lease = EchoOwnerTruthContextShadowLease(
+            generation: nextOwnerTruthContextShadowGeneration,
+            turnID: turnID,
+            expectedIdentity: expectedIdentity,
+            vaultID: vaultID
+        )
+        activeOwnerTruthContextShadowLease = lease
+        ownerTruthContextShadowTransport.observeOwnerTruthContextShadow(
+            vaultID: vaultID,
+            expectedOwnerSubjectID: accountLease.subjectId,
+            query: query
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self, self.isCurrent(lease) else {
+                    return
+                }
+                switch result {
+                case .success(let summary):
+                    completion(lease, .success(summary))
                 case .failure(let error):
                     completion(lease, .failure(error))
                 }

@@ -769,6 +769,181 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
 
         wait(for: [expectation], timeout: 1)
     }
+
+    func testOwnerTruthShadowStartsOnlyForCurrentSelfOwner() {
+        let contextTransport = DeferredEchoContextBuildTransport()
+        let shadowTransport = DeferredOwnerTruthContextShadowTransport()
+        let coordinator = EchoApplicationCoordinator(
+            contextBuildTransport: contextTransport,
+            ownerTruthContextShadowTransport: shadowTransport
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 4)
+        let selfIdentity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let familyIdentity = EchoKnowledgeContextIdentity(
+            userId: "family-1",
+            personaScope: "family",
+            digitalHumanId: "digital-human-2"
+        )
+
+        let accepted = coordinator.requestOwnerTruthContextShadow(
+            turnID: "turn-self",
+            query: "只观察确认态上下文",
+            accountLease: accountLease,
+            expectedIdentity: selfIdentity
+        ) { _, _ in
+            XCTFail("completion is not expected before the transport resolves")
+        }
+        XCTAssertNotNil(accepted)
+        XCTAssertEqual(shadowTransport.requests.count, 1)
+        XCTAssertEqual(shadowTransport.requests.first?.vaultID, "vault-owner-1")
+        XCTAssertEqual(shadowTransport.requests.first?.ownerSubjectID, "owner-1")
+
+        XCTAssertNil(
+            coordinator.requestOwnerTruthContextShadow(
+                turnID: "turn-family",
+                query: "不得发起家人 Shadow 请求",
+                accountLease: accountLease,
+                expectedIdentity: familyIdentity
+            ) { _, _ in
+                XCTFail("family shadow must not invoke completion")
+            }
+        )
+        XCTAssertEqual(shadowTransport.requests.count, 1)
+
+        shadowTransport.isOwnerTruthContextCitationQAConfigured = false
+        XCTAssertNil(
+            coordinator.requestOwnerTruthContextShadow(
+                turnID: "turn-disabled",
+                query: "默认关闭",
+                accountLease: accountLease,
+                expectedIdentity: selfIdentity
+            ) { _, _ in
+                XCTFail("disabled shadow must not invoke completion")
+            }
+        )
+        XCTAssertEqual(shadowTransport.requests.count, 1)
+    }
+
+    func testOwnerTruthShadowDropsSupersededAndInvalidatedCallbacks() {
+        let contextTransport = DeferredEchoContextBuildTransport()
+        let shadowTransport = DeferredOwnerTruthContextShadowTransport()
+        let coordinator = EchoApplicationCoordinator(
+            contextBuildTransport: contextTransport,
+            ownerTruthContextShadowTransport: shadowTransport
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 5)
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let expectation = expectation(description: "only current shadow callback is delivered")
+        expectation.assertForOverFulfill = true
+        var deliveredLeases: [EchoOwnerTruthContextShadowLease] = []
+
+        let first = coordinator.requestOwnerTruthContextShadow(
+            turnID: "turn-1",
+            query: "first query",
+            accountLease: accountLease,
+            expectedIdentity: identity
+        ) { lease, _ in
+            deliveredLeases.append(lease)
+        }
+        let second = coordinator.requestOwnerTruthContextShadow(
+            turnID: "turn-2",
+            query: "second query",
+            accountLease: accountLease,
+            expectedIdentity: identity
+        ) { lease, delivery in
+            deliveredLeases.append(lease)
+            guard case .success = delivery else {
+                return XCTFail("current shadow result must remain typed success")
+            }
+            expectation.fulfill()
+        }
+
+        XCTAssertNotNil(first)
+        XCTAssertNotNil(second)
+        shadowTransport.complete(at: 0, result: .success(makeOwnerTruthContextShadowSummary()))
+        shadowTransport.complete(at: 1, result: .success(makeOwnerTruthContextShadowSummary()))
+
+        wait(for: [expectation], timeout: 1)
+        XCTAssertEqual(deliveredLeases, [second].compactMap { $0 })
+
+        XCTAssertNotNil(coordinator.invalidateOwnerTruthContextShadow())
+        shadowTransport.complete(at: 1, result: .failure(DeferredOwnerTruthContextShadowTransport.TestError.failed))
+        XCTAssertEqual(deliveredLeases, [second].compactMap { $0 })
+    }
+
+    func testContextBuildInvalidationAlsoDropsOwnerTruthShadowCallback() {
+        let contextTransport = DeferredEchoContextBuildTransport()
+        let shadowTransport = DeferredOwnerTruthContextShadowTransport()
+        let coordinator = EchoApplicationCoordinator(
+            contextBuildTransport: contextTransport,
+            ownerTruthContextShadowTransport: shadowTransport
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 6)
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let notDelivered = expectation(description: "invalidated shadow callback must not deliver")
+        notDelivered.isInverted = true
+
+        XCTAssertNotNil(
+            coordinator.requestOwnerTruthContextShadow(
+                turnID: "turn-1",
+                query: "context cancellation must fence shadow",
+                accountLease: accountLease,
+                expectedIdentity: identity
+            ) { _, _ in
+                notDelivered.fulfill()
+            }
+        )
+
+        XCTAssertNil(coordinator.invalidateContextBuild())
+        shadowTransport.complete(at: 0, result: .success(makeOwnerTruthContextShadowSummary()))
+        wait(for: [notDelivered], timeout: 0.1)
+        XCTAssertNil(coordinator.activeOwnerTruthContextShadowLease)
+    }
+
+    private func makeAccountLease(subjectId: String, generation: UInt64) -> AccountLease {
+        AccountLease(
+            subjectId: subjectId,
+            vaultId: "vault-\(subjectId)",
+            sessionId: "session-\(generation)",
+            generation: generation,
+            generationId: UUID(),
+            authorityEpoch: "epoch-v1"
+        )
+    }
+
+    private func makeOwnerTruthContextShadowSummary() -> OwnerTruthContextCitationTraceSummary {
+        OwnerTruthContextCitationTraceSummary(
+            contextVersion: "echo-context-v4-shadow",
+            policyVersion: "owner-truth-context-policy-v1",
+            selectionMode: .projectionCitationOrder,
+            contextHash: String(repeating: "a", count: 64),
+            authorityState: .ready,
+            authorityEpoch: 7,
+            projectionCheckpoint: String(repeating: "b", count: 64),
+            selectedContextRefs: ["memory-version:fixture"],
+            selectedContextRefsBySource: ["owner-truth-memory-projection": ["memory-version:fixture"]],
+            filteredContextReasons: [],
+            selectedContextCount: 1,
+            filteredContextCount: 0,
+            rankingTraceCount: 1,
+            citationCount: 1,
+            answerCitationCount: 0,
+            selectedContextSourceCounts: ["owner-truth-memory-projection": 1],
+            fallbacks: []
+        )
+    }
 }
 
 final class EchoRuntimeSessionCoordinatorTests: XCTestCase {
@@ -1387,6 +1562,42 @@ private final class DeferredEchoContextBuildTransport: EchoContextBuildTransport
     }
 
     func complete(at index: Int, result: Result<EchoContextPacket, Error>) {
+        completions[index](result)
+    }
+}
+
+private final class DeferredOwnerTruthContextShadowTransport: EchoOwnerTruthContextShadowTransport {
+    enum TestError: Error {
+        case failed
+    }
+
+    struct Request: Equatable {
+        let vaultID: String
+        let ownerSubjectID: String
+        let query: String
+    }
+
+    var isOwnerTruthContextCitationQAConfigured = true
+    private(set) var requests: [Request] = []
+    private var completions: [(Result<OwnerTruthContextCitationTraceSummary, Error>) -> Void] = []
+
+    func observeOwnerTruthContextShadow(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        query: String,
+        completion: @escaping (Result<OwnerTruthContextCitationTraceSummary, Error>) -> Void
+    ) {
+        requests.append(
+            Request(
+                vaultID: vaultID.rawValue,
+                ownerSubjectID: expectedOwnerSubjectID,
+                query: query
+            )
+        )
+        completions.append(completion)
+    }
+
+    func complete(at index: Int, result: Result<OwnerTruthContextCitationTraceSummary, Error>) {
         completions[index](result)
     }
 }
