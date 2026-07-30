@@ -6756,9 +6756,13 @@ enum OwnerTruthInterviewNaturalInputPresentation: Equatable {
 /// presentation is reached only through Echo's fresh release-policy gate.
 final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let useCase: OwnerTruthInterviewNaturalInputUseCase
+    private let guidedRecommendationUseCase: OwnerTruthGuidedRecommendationPresentationUseCase?
     private let presentation: OwnerTruthInterviewNaturalInputPresentation
     private let stackView = UIStackView()
     private let subtitleLabel = UILabel()
+    private let guidedRecommendationStack = UIStackView()
+    private let guidedRecommendationTitleLabel = UILabel()
+    private let guidedRecommendationPromptStack = UIStackView()
     private let statusLabel = UILabel()
     private let detailLabel = UILabel()
     private let inputTextView = UITextView()
@@ -6774,6 +6778,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let restoreCooldownButton = UIButton(type: .system)
 
     private var renderedState: OwnerTruthInterviewNaturalInputViewState = .idle
+    private var guidedRecommendationPrompts: [OwnerTruthGuidedRecommendationPrompt] = []
     var onViewStateRendered: ((OwnerTruthInterviewNaturalInputViewState) -> Void)?
 
     var isTranscriptClearForQA: Bool {
@@ -6832,15 +6837,32 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         client: OwnerTruthInterviewNaturalInputClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         presentation: OwnerTruthInterviewNaturalInputPresentation = .qa,
+        guidedRecommendationClient: OwnerTruthGuidedRecommendationPresentationClient = DreamJourneyBackendClient.shared,
+        guidedRecommendationPolicyAvailable: @escaping () -> Bool = {
+            guard FeatureFlagService.shared.isEnabled(.echoGuidedRecommendations) else {
+                return false
+            }
+            return FeatureGateService.shared
+                .requestDecision(for: .echoGuidedRecommendations)
+                .allowed
+        },
         qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
     ) {
         self.presentation = presentation
-        useCase = OwnerTruthInterviewNaturalInputUseCase(
+        self.useCase = OwnerTruthInterviewNaturalInputUseCase(
             accountLease: accountLease,
             client: client,
             accountLeaseRuntime: accountLeaseRuntime,
             qaGateEnabled: qaGateEnabled
         )
+        self.guidedRecommendationUseCase = presentation == .product
+            ? OwnerTruthGuidedRecommendationPresentationUseCase(
+                accountLease: accountLease,
+                client: guidedRecommendationClient,
+                accountLeaseRuntime: accountLeaseRuntime,
+                releasePolicyAvailable: guidedRecommendationPolicyAvailable
+            )
+            : nil
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
     }
@@ -6857,6 +6879,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         configureUseCase()
         render(useCase.viewState)
         useCase.send(.start)
+        guidedRecommendationUseCase?.refresh()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -6891,6 +6914,8 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
         subtitleLabel.numberOfLines = 0
 
+        configureGuidedRecommendations()
+
         statusLabel.font = DJDesignTokens.Font.title(20)
         statusLabel.textColor = DJDesignTokens.Color.textPrimary
         statusLabel.numberOfLines = 0
@@ -6919,7 +6944,11 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         submitButton.accessibilityIdentifier = "owner-truth-interview-natural-input-submit"
 
         configureBoundaryControls()
-        [subtitleLabel, statusLabel, detailLabel, inputTextView, submitButton].forEach(stackView.addArrangedSubview)
+        stackView.addArrangedSubview(subtitleLabel)
+        if presentation == .product {
+            stackView.addArrangedSubview(guidedRecommendationStack)
+        }
+        [statusLabel, detailLabel, inputTextView, submitButton].forEach(stackView.addArrangedSubview)
         if presentation == .qa {
             stackView.addArrangedSubview(boundaryActionsStack)
         }
@@ -6942,6 +6971,84 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
                     self?.render(state)
                 }
             }
+        }
+        guidedRecommendationUseCase?.onViewStateChange = { [weak self] state in
+            guard let self else { return }
+            if Thread.isMainThread {
+                renderGuidedRecommendations(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.renderGuidedRecommendations(state)
+                }
+            }
+        }
+        if let guidedRecommendationUseCase {
+            renderGuidedRecommendations(guidedRecommendationUseCase.viewState)
+        }
+    }
+
+    private func configureGuidedRecommendations() {
+        guidedRecommendationStack.axis = .vertical
+        guidedRecommendationStack.alignment = .fill
+        guidedRecommendationStack.spacing = 8
+        guidedRecommendationStack.isHidden = true
+        guidedRecommendationStack.accessibilityIdentifier = "owner-truth-guided-recommendations"
+
+        guidedRecommendationTitleLabel.text = "可以从这里开始"
+        guidedRecommendationTitleLabel.font = DJDesignTokens.Font.label(13)
+        guidedRecommendationTitleLabel.textColor = DJDesignTokens.Color.textTertiary
+
+        guidedRecommendationPromptStack.axis = .vertical
+        guidedRecommendationPromptStack.alignment = .fill
+        guidedRecommendationPromptStack.spacing = 8
+
+        guidedRecommendationStack.addArrangedSubview(guidedRecommendationTitleLabel)
+        guidedRecommendationStack.addArrangedSubview(guidedRecommendationPromptStack)
+    }
+
+    private func renderGuidedRecommendations(
+        _ state: OwnerTruthGuidedRecommendationPresentationViewState
+    ) {
+        guard presentation == .product,
+              state.phase == .ready,
+              !state.prompts.isEmpty else {
+            guidedRecommendationPrompts = []
+            clearGuidedRecommendationPromptButtons()
+            guidedRecommendationStack.isHidden = true
+            return
+        }
+
+        guidedRecommendationPrompts = state.prompts
+        clearGuidedRecommendationPromptButtons()
+        for (index, prompt) in state.prompts.enumerated() {
+            let button = UIButton(type: .system)
+            button.tag = index
+            button.contentHorizontalAlignment = .leading
+            button.contentVerticalAlignment = .center
+            button.titleLabel?.font = DJDesignTokens.Font.body(15)
+            button.titleLabel?.numberOfLines = 0
+            button.titleLabel?.lineBreakMode = .byWordWrapping
+            button.titleLabel?.textAlignment = .left
+            button.setTitle("\(prompt.label)\n\(prompt.question)", for: .normal)
+            button.setTitleColor(DJDesignTokens.Color.textPrimary, for: .normal)
+            button.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.72)
+            button.layer.cornerRadius = 10
+            button.contentEdgeInsets = UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
+            button.addTarget(
+                self,
+                action: #selector(guidedRecommendationTapped(_:)),
+                for: .touchUpInside
+            )
+            button.accessibilityIdentifier = "owner-truth-guided-recommendation-\(prompt.slot.rawValue)"
+            guidedRecommendationPromptStack.addArrangedSubview(button)
+        }
+        guidedRecommendationStack.isHidden = false
+    }
+
+    private func clearGuidedRecommendationPromptButtons() {
+        guidedRecommendationPromptStack.arrangedSubviews.forEach { view in
+            guidedRecommendationPromptStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
         }
     }
 
@@ -6994,6 +7101,12 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
     @objc private func submitTapped() {
         submitInput()
+    }
+
+    @objc private func guidedRecommendationTapped(_ sender: UIButton) {
+        guard guidedRecommendationPrompts.indices.contains(sender.tag) else { return }
+        inputTextView.text = guidedRecommendationPrompts[sender.tag].question
+        inputTextView.becomeFirstResponder()
     }
 
     private func submitInput() {

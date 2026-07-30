@@ -4208,6 +4208,155 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(decoded, digest)
     }
 
+    func testGuidedRecommendationPresentationStrictlyKeepsOnlyDisplaySafePrompts() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-a"))
+        let presentation = try OwnerTruthGuidedRecommendationPresentation(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthGuidedRecommendationPresentation.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "state": "ready",
+                "recommendations": [
+                    [
+                        "slot": "continuity",
+                        "label": "继续聊聊",
+                        "question": "那件事后来有什么变化？",
+                    ],
+                    [
+                        "slot": "breadth",
+                        "label": "换个角度",
+                        "question": "还有什么想分享的经历？",
+                    ],
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+
+        XCTAssertEqual(presentation.state, .ready)
+        XCTAssertEqual(presentation.prompts.map(\.slot), [.continuity, .breadth])
+        XCTAssertEqual(presentation.prompts[0].label, "继续聊聊")
+        XCTAssertEqual(presentation.prompts[1].question, "还有什么想分享的经历？")
+
+        XCTAssertThrowsError(
+            try OwnerTruthGuidedRecommendationPresentation(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthGuidedRecommendationPresentation.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "state": "ready",
+                    "recommendations": [[
+                        "slot": "continuity",
+                        "label": "继续聊聊",
+                        "question": "那件事后来有什么变化？",
+                        "candidateId": "must-not-cross-ui-boundary",
+                    ]],
+                ],
+                expectedVaultID: vaultID
+            )
+        ) { error in
+            guard case OwnerTruthRemoteContractError.invalidGuidedRecommendationPresentation = error else {
+                return XCTFail("unexpected error: \(error)")
+            }
+        }
+    }
+
+    func testGuidedRecommendationPresentationUseCaseDoesNotRequestWhenPolicyIsClosed() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = GuidedRecommendationPresentationClientSpy()
+        let useCase = OwnerTruthGuidedRecommendationPresentationUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { false }
+        )
+
+        useCase.refresh()
+
+        XCTAssertEqual(client.requestCount, 0)
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .releasePolicyDisabled)
+        XCTAssertTrue(useCase.viewState.prompts.isEmpty)
+    }
+
+    func testGuidedRecommendationPresentationUseCasePublishesOnlyCurrentAccountPrompts() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = GuidedRecommendationPresentationClientSpy()
+        client.result = .success(try OwnerTruthGuidedRecommendationPresentation(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthGuidedRecommendationPresentation.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "state": "ready",
+                "recommendations": [[
+                    "slot": "continuity",
+                    "label": "继续聊聊",
+                    "question": "那件事后来有什么变化？",
+                ]],
+            ],
+            expectedVaultID: vaultID
+        ))
+        let useCase = OwnerTruthGuidedRecommendationPresentationUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.refresh()
+
+        XCTAssertEqual(client.requestCount, 1)
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.prompts.map(\.slot), [.continuity])
+        XCTAssertNil(useCase.viewState.notice)
+    }
+
+    func testGuidedRecommendationPresentationUseCaseDiscardsDeferredReadAfterAccountSwitch() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = GuidedRecommendationPresentationClientSpy()
+        client.deferRead = true
+        let useCase = OwnerTruthGuidedRecommendationPresentationUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.refresh()
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferred(.success(try OwnerTruthGuidedRecommendationPresentation(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthGuidedRecommendationPresentation.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "state": "ready",
+                "recommendations": [[
+                    "slot": "continuity",
+                    "label": "继续聊聊",
+                    "question": "那件事后来有什么变化？",
+                ]],
+            ],
+            expectedVaultID: vaultID
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertTrue(useCase.viewState.prompts.isEmpty)
+    }
+
+    func testGuidedRecommendationPresentationPathUsesItsOwnFeatureGate() {
+        XCTAssertEqual(
+            FeatureGateService.shared.featureForRequest(
+                path: "/v2/vaults/vault-a/guided-recommendations",
+                method: .get,
+                payload: nil
+            ),
+            .echoGuidedRecommendations
+        )
+    }
+
     private func migrationParitySnapshot(
         source: OwnerTruthMigrationParityClientGeneration,
         presentationHash: OwnerTruthMigrationParityDigest? = nil
@@ -4275,6 +4424,36 @@ private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
 private enum CandidateReviewClientSpyError: Error {
     case missingInboxResult
     case missingReviewResult
+}
+
+private final class GuidedRecommendationPresentationClientSpy:
+    OwnerTruthGuidedRecommendationPresentationClient {
+    var result: Result<OwnerTruthGuidedRecommendationPresentation, Error>?
+    var deferRead = false
+    private var deferredCompletion: ((Result<OwnerTruthGuidedRecommendationPresentation, Error>) -> Void)?
+    private(set) var requestCount = 0
+
+    func fetchOwnerTruthGuidedRecommendationPresentation(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthGuidedRecommendationPresentation, Error>) -> Void
+    ) {
+        requestCount += 1
+        if deferRead {
+            deferredCompletion = completion
+            return
+        }
+        completion(result ?? .failure(GuidedRecommendationPresentationClientSpyError.missingResult))
+    }
+
+    func completeDeferred(_ result: Result<OwnerTruthGuidedRecommendationPresentation, Error>) {
+        let completion = deferredCompletion
+        deferredCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum GuidedRecommendationPresentationClientSpyError: Error {
+    case missingResult
 }
 
 private final class InterviewCandidateReviewClientSpy: OwnerTruthInterviewCandidateReviewClient {

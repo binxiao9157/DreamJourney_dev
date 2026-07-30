@@ -599,6 +599,7 @@ enum QAAuthenticatedBackendSessionFixture {
 
 enum DJFeature: String, CaseIterable {
     case echoTextInput
+    case echoGuidedRecommendations
     case ownerTruthCandidateReview
     case echoImageInput
     case timeLetters
@@ -633,6 +634,7 @@ final class FeatureFlagService {
     ]
     private static let nonPersistentFeatures: Set<DJFeature> = [
         .echoImageInput,
+        .echoGuidedRecommendations,
         .ownerTruthCandidateReview,
         .timeLetters,
         .personaSettings,

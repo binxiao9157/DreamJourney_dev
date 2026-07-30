@@ -140,6 +140,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidInterviewNaturalInput(String)
     case invalidKnowledgeDimensionConfirmation(String)
     case invalidKnowledgeRecommendationPlan(String)
+    case invalidGuidedRecommendationPresentation(String)
     case invalidKBLiteCompatibilityReadEnvelope(String)
     case invalidContextCitationShadowBuild(String)
     case invalidAnswerCitationReceipt(String)
@@ -174,6 +175,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "知识维度确认合同无效：\(detail)"
         case .invalidKnowledgeRecommendationPlan(let detail):
             return "知识推荐合同无效：\(detail)"
+        case .invalidGuidedRecommendationPresentation(let detail):
+            return "引导问题合同无效：\(detail)"
         case .invalidKBLiteCompatibilityReadEnvelope(let detail):
             return "兼容读取合同无效：\(detail)"
         case .invalidContextCitationShadowBuild(let detail):
@@ -4394,6 +4397,281 @@ final class OwnerTruthKnowledgeRecommendationPlanUseCase {
             recommendations: [],
             filteredCount: 0,
             policyVersion: nil,
+            notice: notice
+        )
+    }
+}
+
+// MARK: - Default-off Owner Truth guided recommendation presentation
+
+/// One display-safe prompt rendered by the formal M0-B route. Candidate,
+/// evidence, reason and knowledge-dimension metadata must not cross into this
+/// user-facing model.
+struct OwnerTruthGuidedRecommendationPrompt: Equatable, Sendable {
+    let slot: OwnerTruthKnowledgeRecommendationSlot
+    let label: String
+    let question: String
+}
+
+/// Strict response model for the formal product surface. It accepts only the
+/// policy-owned presentation fields and rejects planner metadata rather than
+/// accidentally retaining it for UI use.
+struct OwnerTruthGuidedRecommendationPresentation: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-guided-recommendation-presentation-response-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let state: OwnerTruthKnowledgeRecommendationPlanState
+    let prompts: [OwnerTruthGuidedRecommendationPrompt]
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        guard Set(object.keys) == ["schemaVersion", "vaultId", "state", "recommendations"],
+              OwnerTruthGuidedRecommendationPresentationContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthGuidedRecommendationPresentationContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let stateRaw = OwnerTruthGuidedRecommendationPresentationContract.requiredString(
+                object["state"]
+              ),
+              let state = OwnerTruthKnowledgeRecommendationPlanState(rawValue: stateRaw) else {
+            throw OwnerTruthRemoteContractError.invalidGuidedRecommendationPresentation(
+                "response misses a required presentation field"
+            )
+        }
+
+        let promptObjects = try OwnerTruthGuidedRecommendationPresentationContract.objectArray(
+            object["recommendations"],
+            field: "recommendations"
+        )
+        guard promptObjects.count <= 2 else {
+            throw OwnerTruthRemoteContractError.invalidGuidedRecommendationPresentation(
+                "response must not contain more than two prompts"
+            )
+        }
+        guard state == .ready || promptObjects.isEmpty else {
+            throw OwnerTruthRemoteContractError.invalidGuidedRecommendationPresentation(
+                "non-ready response must not retain prompts"
+            )
+        }
+
+        let prompts = try promptObjects.map { object -> OwnerTruthGuidedRecommendationPrompt in
+            guard Set(object.keys) == ["slot", "label", "question"],
+                  let rawSlot = OwnerTruthGuidedRecommendationPresentationContract.requiredString(
+                    object["slot"]
+                  ),
+                  let slot = OwnerTruthKnowledgeRecommendationSlot(rawValue: rawSlot),
+                  let label = OwnerTruthGuidedRecommendationPresentationContract.requiredString(
+                    object["label"]
+                  ),
+                  let question = OwnerTruthGuidedRecommendationPresentationContract.requiredString(
+                    object["question"]
+                  ),
+                  question.count <= 280 else {
+                throw OwnerTruthRemoteContractError.invalidGuidedRecommendationPresentation(
+                    "prompt contains an unsupported value"
+                )
+            }
+            return OwnerTruthGuidedRecommendationPrompt(
+                slot: slot,
+                label: label,
+                question: question
+            )
+        }
+        guard Set(prompts.map(\.slot)).count == prompts.count else {
+            throw OwnerTruthRemoteContractError.invalidGuidedRecommendationPresentation(
+                "response must not duplicate a prompt slot"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.state = state
+        self.prompts = prompts
+    }
+}
+
+protocol OwnerTruthGuidedRecommendationPresentationClient: AnyObject {
+    func fetchOwnerTruthGuidedRecommendationPresentation(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthGuidedRecommendationPresentation, Error>) -> Void
+    )
+}
+
+private enum OwnerTruthGuidedRecommendationPresentationContract {
+    static func requiredString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    static func objectArray(_ value: Any?, field: String) throws -> [[String: Any]] {
+        guard let values = value as? [Any] else {
+            throw OwnerTruthRemoteContractError.invalidGuidedRecommendationPresentation(
+                "\(field) must be an array"
+            )
+        }
+        return try values.map { value in
+            guard let object = value as? [String: Any] else {
+                throw OwnerTruthRemoteContractError.invalidGuidedRecommendationPresentation(
+                    "\(field) must contain objects"
+                )
+            }
+            return object
+        }
+    }
+}
+
+enum OwnerTruthGuidedRecommendationPresentationPhase: Equatable, Sendable {
+    case idle
+    case loading
+    case ready
+    case rebuilding
+    case unavailable
+    case failed
+}
+
+enum OwnerTruthGuidedRecommendationPresentationNotice: Equatable, Sendable {
+    case releasePolicyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case contractMismatch
+    case requestFailed
+}
+
+/// UI state keeps only approved display copy. The Vault identifier stays in
+/// the request boundary and is never retained by the natural-input surface.
+struct OwnerTruthGuidedRecommendationPresentationViewState: Equatable, Sendable {
+    let phase: OwnerTruthGuidedRecommendationPresentationPhase
+    let prompts: [OwnerTruthGuidedRecommendationPrompt]
+    let notice: OwnerTruthGuidedRecommendationPresentationNotice?
+
+    static let idle = OwnerTruthGuidedRecommendationPresentationViewState(
+        phase: .idle,
+        prompts: [],
+        notice: nil
+    )
+}
+
+/// Lease-fenced presentation reader for the existing server planner. A denied
+/// feature performs no network request and hidden/non-ready states publish no
+/// prompts, keeping the natural input surface stable by default.
+final class OwnerTruthGuidedRecommendationPresentationUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let client: OwnerTruthGuidedRecommendationPresentationClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAvailable: () -> Bool
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthGuidedRecommendationPresentationViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthGuidedRecommendationPresentationViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthGuidedRecommendationPresentationClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool
+    ) {
+        self.accountLease = accountLease
+        vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+    }
+
+    func refresh() {
+        guard let vaultID = beginRequestOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthGuidedRecommendationPresentationViewState(
+            phase: .loading,
+            prompts: [],
+            notice: nil
+        )
+        client.fetchOwnerTruthGuidedRecommendationPresentation(vaultID: vaultID) { [weak self] result in
+            self?.receive(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthGuidedRecommendationPresentation, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+
+        switch result {
+        case .success(let presentation):
+            guard presentation.vaultID == vaultID,
+                  presentation.vaultID.rawValue == accountLease.vaultId else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            let phase: OwnerTruthGuidedRecommendationPresentationPhase
+            switch presentation.state {
+            case .ready:
+                phase = .ready
+            case .rebuilding:
+                phase = .rebuilding
+            case .unavailable:
+                phase = .unavailable
+            }
+            viewState = OwnerTruthGuidedRecommendationPresentationViewState(
+                phase: phase,
+                prompts: phase == .ready ? presentation.prompts : [],
+                notice: nil
+            )
+        case .failure(let error):
+            if case OwnerTruthRemoteContractError.invalidGuidedRecommendationPresentation = error {
+                transitionFailure(.contractMismatch)
+            } else {
+                transitionFailure(.requestFailed)
+            }
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthGuidedRecommendationPresentationNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthGuidedRecommendationPresentationViewState(
+            phase: .unavailable,
+            prompts: [],
+            notice: notice
+        )
+    }
+
+    private func transitionFailure(_ notice: OwnerTruthGuidedRecommendationPresentationNotice) {
+        viewState = OwnerTruthGuidedRecommendationPresentationViewState(
+            phase: .failed,
+            prompts: [],
             notice: notice
         )
     }
