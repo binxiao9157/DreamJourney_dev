@@ -135,6 +135,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidInterviewCandidateConfirmation(String)
     case invalidInterviewCandidateDecision(String)
     case invalidInterviewSessionState(String)
+    case invalidInterviewOrchestration(String)
     case invalidInterviewNaturalInput(String)
     case invalidKnowledgeDimensionConfirmation(String)
     case invalidKnowledgeRecommendationPlan(String)
@@ -162,6 +163,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "访谈候选审核回执合同无效：\(detail)"
         case .invalidInterviewSessionState(let detail):
             return "访谈会话状态合同无效：\(detail)"
+        case .invalidInterviewOrchestration(let detail):
+            return "访谈编排合同无效：\(detail)"
         case .invalidInterviewNaturalInput(let detail):
             return "访谈自然输入合同无效：\(detail)"
         case .invalidKnowledgeDimensionConfirmation(let detail):
@@ -2601,6 +2604,425 @@ private enum OwnerTruthInterviewSessionStateContract {
     static func nonNegativeInt(_ value: Any?) -> Int? {
         guard let value = value as? Int, value >= 0 else { return nil }
         return value
+    }
+}
+
+// MARK: - Default-off interview orchestration read
+
+/// These are policy decisions, not generated responses. They remain distinct
+/// from product-facing Echo copy and cannot carry user message content.
+enum OwnerTruthInterviewOrchestrationAction: String, Equatable, Sendable {
+    case listen
+    case deepen
+    case clarify
+    case broaden
+    case summarize
+    case pause
+}
+
+enum OwnerTruthInterviewOrchestrationNextSessionState: String, Equatable, Sendable {
+    case active
+    case paused
+    case ending
+    case ended
+    case invalid
+}
+
+/// The five transient hints are the complete client payload. In particular,
+/// callers cannot pass topic text, a topic identifier, or an authorization
+/// assertion to the QA policy endpoint.
+struct OwnerTruthInterviewOrchestrationSignals: Equatable, Sendable {
+    let topicIncomplete: Bool
+    let needsClarification: Bool
+    let userChangedTopic: Bool
+    let isSensitive: Bool
+    let acceptedBroadenRecommendation: Bool
+
+    init(
+        topicIncomplete: Bool = false,
+        needsClarification: Bool = false,
+        userChangedTopic: Bool = false,
+        isSensitive: Bool = false,
+        acceptedBroadenRecommendation: Bool = false
+    ) {
+        self.topicIncomplete = topicIncomplete
+        self.needsClarification = needsClarification
+        self.userChangedTopic = userChangedTopic
+        self.isSensitive = isSensitive
+        self.acceptedBroadenRecommendation = acceptedBroadenRecommendation
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "topicIncomplete": topicIncomplete,
+            "needsClarification": needsClarification,
+            "userChangedTopic": userChangedTopic,
+            "isSensitive": isSensitive,
+            "acceptedBroadenRecommendation": acceptedBroadenRecommendation,
+        ]
+    }
+}
+
+struct OwnerTruthInterviewOrchestrationDecision: Equatable, Sendable {
+    let action: OwnerTruthInterviewOrchestrationAction
+    let reasonCode: String
+    let maxFollowupsRemaining: Int
+    let reviewBatchDue: Bool
+    let nextSessionState: OwnerTruthInterviewOrchestrationNextSessionState
+    let consumesOneShotBoundary: Bool
+}
+
+struct OwnerTruthInterviewOrchestrationPersistedSession: Equatable, Sendable {
+    let boundary: OwnerTruthInterviewSessionBoundary
+    let candidateBatchTurnCount: Int
+    let deepeningTurnCount: Int
+    let fatigue: OwnerTruthInterviewSessionFatigue
+    let ownerTurnCount: Int
+    let lifecycle: OwnerTruthInterviewSessionLifecycle
+}
+
+/// Value-free policy read used only by the hidden QA lane. The initializer
+/// checks every envelope key so a future backend expansion cannot quietly put
+/// a transcript, topic or Owner Truth identifier into this diagnostic path.
+struct OwnerTruthInterviewOrchestrationRead: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-session-orchestration-read-response-v1"
+    static let orchestrationSchemaVersion = "owner-truth-interview-session-orchestration-v1"
+    static let policySchemaVersion = "owner-truth-interview-orchestration-v1"
+    static let transientSignalsDescriptor = "opaqueTopicAndBooleanPolicySignalsOnly"
+
+    let vaultID: OwnerTruthVaultID
+    let decision: OwnerTruthInterviewOrchestrationDecision
+    let persistedSession: OwnerTruthInterviewOrchestrationPersistedSession
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        guard Set(object.keys) == ["schemaVersion", "vaultId", "orchestration"],
+              OwnerTruthInterviewOrchestrationContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthInterviewOrchestrationContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let orchestration = object["orchestration"] as? [String: Any],
+              Set(orchestration.keys) == [
+                "schemaVersion",
+                "policySchemaVersion",
+                "decision",
+                "persistedSession",
+                "transientSignals",
+              ],
+              OwnerTruthInterviewOrchestrationContract.requiredString(
+                orchestration["schemaVersion"]
+              ) == Self.orchestrationSchemaVersion,
+              OwnerTruthInterviewOrchestrationContract.requiredString(
+                orchestration["policySchemaVersion"]
+              ) == Self.policySchemaVersion,
+              OwnerTruthInterviewOrchestrationContract.requiredString(
+                orchestration["transientSignals"]
+              ) == Self.transientSignalsDescriptor,
+              let decisionObject = orchestration["decision"] as? [String: Any],
+              let persistedSessionObject = orchestration["persistedSession"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidInterviewOrchestration(
+                "response does not match the value-free envelope"
+            )
+        }
+
+        decision = try Self.decodeDecision(decisionObject)
+        persistedSession = try Self.decodePersistedSession(persistedSessionObject)
+        vaultID = expectedVaultID
+    }
+
+    private static func decodeDecision(
+        _ object: [String: Any]
+    ) throws -> OwnerTruthInterviewOrchestrationDecision {
+        guard Set(object.keys) == [
+            "action",
+            "consumesOneShotBoundary",
+            "maxFollowupsRemaining",
+            "nextSessionState",
+            "reasonCode",
+            "reviewBatchDue",
+            "schemaVersion",
+        ],
+              OwnerTruthInterviewOrchestrationContract.requiredString(object["schemaVersion"])
+                == policySchemaVersion,
+              let actionRaw = OwnerTruthInterviewOrchestrationContract.requiredString(object["action"]),
+              let action = OwnerTruthInterviewOrchestrationAction(rawValue: actionRaw),
+              let reasonCode = OwnerTruthInterviewOrchestrationContract.opaqueIdentifier(
+                object["reasonCode"]
+              ),
+              let maxFollowupsRemaining = OwnerTruthInterviewOrchestrationContract.boundedInt(
+                object["maxFollowupsRemaining"],
+                range: 0...4
+              ),
+              let reviewBatchDue = object["reviewBatchDue"] as? Bool,
+              let nextStateRaw = OwnerTruthInterviewOrchestrationContract.requiredString(
+                object["nextSessionState"]
+              ),
+              let nextSessionState = OwnerTruthInterviewOrchestrationNextSessionState(
+                rawValue: nextStateRaw
+              ),
+              let consumesOneShotBoundary = object["consumesOneShotBoundary"] as? Bool else {
+            throw OwnerTruthRemoteContractError.invalidInterviewOrchestration(
+                "decision does not match the bounded policy contract"
+            )
+        }
+        return OwnerTruthInterviewOrchestrationDecision(
+            action: action,
+            reasonCode: reasonCode,
+            maxFollowupsRemaining: maxFollowupsRemaining,
+            reviewBatchDue: reviewBatchDue,
+            nextSessionState: nextSessionState,
+            consumesOneShotBoundary: consumesOneShotBoundary
+        )
+    }
+
+    private static func decodePersistedSession(
+        _ object: [String: Any]
+    ) throws -> OwnerTruthInterviewOrchestrationPersistedSession {
+        guard Set(object.keys) == [
+            "boundary",
+            "candidateBatchTurnCount",
+            "deepeningTurnCount",
+            "fatigue",
+            "ownerTurnCount",
+            "state",
+        ],
+              let boundaryRaw = OwnerTruthInterviewOrchestrationContract.requiredString(
+                object["boundary"]
+              ),
+              let boundary = OwnerTruthInterviewSessionBoundary(rawValue: boundaryRaw),
+              let candidateBatchTurnCount = OwnerTruthInterviewOrchestrationContract.nonNegativeInt(
+                object["candidateBatchTurnCount"]
+              ),
+              let deepeningTurnCount = OwnerTruthInterviewOrchestrationContract.nonNegativeInt(
+                object["deepeningTurnCount"]
+              ),
+              let fatigueRaw = OwnerTruthInterviewOrchestrationContract.requiredString(
+                object["fatigue"]
+              ),
+              let fatigue = OwnerTruthInterviewSessionFatigue(rawValue: fatigueRaw),
+              let ownerTurnCount = OwnerTruthInterviewOrchestrationContract.nonNegativeInt(
+                object["ownerTurnCount"]
+              ),
+              let lifecycleRaw = OwnerTruthInterviewOrchestrationContract.requiredString(
+                object["state"]
+              ),
+              let lifecycle = OwnerTruthInterviewSessionLifecycle(rawValue: lifecycleRaw) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewOrchestration(
+                "persisted session does not match the value-free contract"
+            )
+        }
+        return OwnerTruthInterviewOrchestrationPersistedSession(
+            boundary: boundary,
+            candidateBatchTurnCount: candidateBatchTurnCount,
+            deepeningTurnCount: deepeningTurnCount,
+            fatigue: fatigue,
+            ownerTurnCount: ownerTurnCount,
+            lifecycle: lifecycle
+        )
+    }
+}
+
+protocol OwnerTruthInterviewOrchestrationClient: AnyObject {
+    func fetchOwnerTruthInterviewOrchestration(
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        signals: OwnerTruthInterviewOrchestrationSignals,
+        completion: @escaping (Result<OwnerTruthInterviewOrchestrationRead, Error>) -> Void
+    )
+}
+
+enum OwnerTruthInterviewOrchestrationIntent: Equatable, Sendable {
+    case refresh(OwnerTruthInterviewOrchestrationSignals)
+}
+
+enum OwnerTruthInterviewOrchestrationPhase: Equatable, Sendable {
+    case idle
+    case loading
+    case ready
+    case unavailable
+    case failed
+}
+
+enum OwnerTruthInterviewOrchestrationNotice: Equatable, Sendable {
+    case qaOnlyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case requestFailed
+}
+
+struct OwnerTruthInterviewOrchestrationViewState: Equatable, Sendable {
+    let phase: OwnerTruthInterviewOrchestrationPhase
+    let orchestration: OwnerTruthInterviewOrchestrationRead?
+    let notice: OwnerTruthInterviewOrchestrationNotice?
+
+    static let idle = OwnerTruthInterviewOrchestrationViewState(
+        phase: .idle,
+        orchestration: nil,
+        notice: nil
+    )
+}
+
+/// This lifecycle protects the QA diagnostic read from account switching. It
+/// deliberately has no UI ownership and cannot change the interview state.
+final class OwnerTruthInterviewOrchestrationUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let sessionID: OwnerTruthRecordID
+    private let client: OwnerTruthInterviewOrchestrationClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthInterviewOrchestrationViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthInterviewOrchestrationViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        sessionID: OwnerTruthRecordID,
+        client: OwnerTruthInterviewOrchestrationClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
+    ) {
+        self.accountLease = accountLease
+        vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.sessionID = sessionID
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
+    }
+
+    func send(_ intent: OwnerTruthInterviewOrchestrationIntent) {
+        switch intent {
+        case .refresh(let signals):
+            refresh(signals: signals)
+        }
+    }
+
+    private func refresh(signals: OwnerTruthInterviewOrchestrationSignals) {
+        guard let vaultID = beginRequestOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthInterviewOrchestrationViewState(
+            phase: .loading,
+            orchestration: nil,
+            notice: nil
+        )
+        client.fetchOwnerTruthInterviewOrchestration(
+            vaultID: vaultID,
+            sessionID: sessionID,
+            signals: signals
+        ) { [weak self] result in
+            self?.receive(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard qaGateEnabled() else {
+            transitionUnavailable(.qaOnlyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            transitionUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            transitionUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthInterviewOrchestrationRead, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard qaGateEnabled() else {
+            transitionUnavailable(.qaOnlyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            transitionUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let orchestration):
+            guard orchestration.vaultID == vaultID,
+                  orchestration.vaultID.rawValue == accountLease.vaultId else {
+                transitionFailure()
+                return
+            }
+            viewState = OwnerTruthInterviewOrchestrationViewState(
+                phase: .ready,
+                orchestration: orchestration,
+                notice: nil
+            )
+        case .failure:
+            transitionFailure()
+        }
+    }
+
+    private func transitionUnavailable(_ notice: OwnerTruthInterviewOrchestrationNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthInterviewOrchestrationViewState(
+            phase: .unavailable,
+            orchestration: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure() {
+        viewState = OwnerTruthInterviewOrchestrationViewState(
+            phase: .failed,
+            orchestration: nil,
+            notice: .requestFailed
+        )
+    }
+}
+
+private enum OwnerTruthInterviewOrchestrationContract {
+    static func requiredString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    static func nonNegativeInt(_ value: Any?) -> Int? {
+        guard let value = value as? Int, value >= 0 else { return nil }
+        return value
+    }
+
+    static func boundedInt(_ value: Any?, range: ClosedRange<Int>) -> Int? {
+        guard let value = nonNegativeInt(value), range.contains(value) else { return nil }
+        return value
+    }
+
+    static func opaqueIdentifier(_ value: Any?) -> String? {
+        guard let value = requiredString(value), value.utf8.count <= 128 else { return nil }
+        let scalars = Array(value.unicodeScalars)
+        guard let first = scalars.first, isASCIILetter(first) else { return nil }
+        guard scalars.dropFirst().allSatisfy(isAllowedOpaqueIdentifierScalar) else { return nil }
+        return value
+    }
+
+    private static func isASCIILetter(_ scalar: Unicode.Scalar) -> Bool {
+        (65...90).contains(scalar.value) || (97...122).contains(scalar.value)
+    }
+
+    private static func isAllowedOpaqueIdentifierScalar(_ scalar: Unicode.Scalar) -> Bool {
+        isASCIILetter(scalar)
+            || (48...57).contains(scalar.value)
+            || scalar == "."
+            || scalar == "_"
+            || scalar == ":"
+            || scalar == "-"
     }
 }
 

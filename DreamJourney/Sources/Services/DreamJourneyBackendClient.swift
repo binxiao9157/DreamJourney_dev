@@ -4779,6 +4779,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         hasExplicitBaseURL && OwnerTruthCandidateReviewQAGate.isEnabled
     }
 
+    var isOwnerTruthInterviewOrchestrationQAConfigured: Bool {
+        hasExplicitBaseURL && OwnerTruthCandidateReviewQAGate.isEnabled
+    }
+
     var isOwnerTruthInterviewNaturalInputQAConfigured: Bool {
         hasExplicitBaseURL && OwnerTruthCandidateReviewQAGate.isEnabled
     }
@@ -5556,6 +5560,45 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
             case .success(let object):
                 do {
                     completion(.success(try OwnerTruthInterviewSessionState(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func fetchOwnerTruthInterviewOrchestration(
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        signals: OwnerTruthInterviewOrchestrationSignals,
+        completion: @escaping (Result<OwnerTruthInterviewOrchestrationRead, Error>) -> Void
+    ) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthInterviewOrchestration",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions/\(pathComponent(sessionID.rawValue.uuidString))/orchestration/read"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: signals.backendPayload,
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewOrchestrationRead(
                         backendJSONObject: object,
                         expectedVaultID: vaultID
                     )))
@@ -8220,6 +8263,7 @@ extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationActionClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewSessionStateClient {}
+extension DreamJourneyBackendClient: OwnerTruthInterviewOrchestrationClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewNaturalInputClient {}
 extension DreamJourneyBackendClient: OwnerTruthKnowledgeRecommendationPlanClient {}
 extension DreamJourneyBackendClient: OwnerTruthKnowledgeDimensionConfirmationClient {}

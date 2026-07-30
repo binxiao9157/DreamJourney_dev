@@ -1082,6 +1082,112 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(client.requestCount, 0)
     }
 
+    func testInterviewOrchestrationDecodesExactValueFreeEnvelopeAndSignalPayload() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let orchestration = try interviewOrchestration(
+            vaultID: lease.vaultId,
+            action: .pause,
+            reasonCode: "topicChanged",
+            nextSessionState: .paused
+        )
+        let signals = OwnerTruthInterviewOrchestrationSignals(
+            topicIncomplete: true,
+            needsClarification: true,
+            userChangedTopic: false,
+            isSensitive: false,
+            acceptedBroadenRecommendation: true
+        )
+
+        XCTAssertEqual(orchestration.vaultID.rawValue, lease.vaultId)
+        XCTAssertEqual(orchestration.decision.action, .pause)
+        XCTAssertEqual(orchestration.decision.reasonCode, "topicChanged")
+        XCTAssertEqual(orchestration.decision.nextSessionState, .paused)
+        XCTAssertEqual(orchestration.persistedSession.lifecycle, .active)
+        XCTAssertEqual(orchestration.persistedSession.ownerTurnCount, 3)
+        XCTAssertEqual(
+            Set(signals.backendPayload.keys),
+            Set([
+                "topicIncomplete",
+                "needsClarification",
+                "userChangedTopic",
+                "isSensitive",
+                "acceptedBroadenRecommendation",
+            ])
+        )
+        XCTAssertNil(signals.backendPayload["topicId"])
+        XCTAssertNil(signals.backendPayload["topicText"])
+
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewOrchestrationRead(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewOrchestrationRead.schemaVersion,
+                    "vaultId": lease.vaultId,
+                    "orchestration": [
+                        "schemaVersion": OwnerTruthInterviewOrchestrationRead.orchestrationSchemaVersion,
+                        "policySchemaVersion": OwnerTruthInterviewOrchestrationRead.policySchemaVersion,
+                        "decision": [:],
+                        "persistedSession": [:],
+                        "transientSignals": OwnerTruthInterviewOrchestrationRead.transientSignalsDescriptor,
+                        "privateTopicText": "不能进入 QA 读取合同",
+                    ],
+                ],
+                expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+            )
+        )
+    }
+
+    func testInterviewOrchestrationUseCaseDiscardsDeferredReadAfterAccountChange() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = InterviewOrchestrationClientSpy()
+        client.deferRead = true
+        let useCase = OwnerTruthInterviewOrchestrationUseCase(
+            accountLease: lease,
+            sessionID: recordID("00000000-0000-0000-0000-000000000068"),
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        let signals = OwnerTruthInterviewOrchestrationSignals(userChangedTopic: true)
+
+        useCase.send(.refresh(signals))
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferredRead(.success(try interviewOrchestration(
+            vaultID: lease.vaultId,
+            action: .pause,
+            reasonCode: "topicChanged",
+            nextSessionState: .paused
+        )))
+
+        XCTAssertEqual(client.requestCount, 1)
+        XCTAssertEqual(client.lastSignals, signals)
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(useCase.viewState.orchestration)
+    }
+
+    func testInterviewOrchestrationUseCaseFailsClosedWhenQAGateIsDisabled() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = InterviewOrchestrationClientSpy()
+        let useCase = OwnerTruthInterviewOrchestrationUseCase(
+            accountLease: lease,
+            sessionID: recordID("00000000-0000-0000-0000-000000000069"),
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { false }
+        )
+
+        useCase.send(.refresh(OwnerTruthInterviewOrchestrationSignals()))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .qaOnlyDisabled)
+        XCTAssertEqual(client.requestCount, 0)
+    }
+
     func testInterviewNaturalInputReceiptDecodesOnlyValueMinimizedMetadata() throws {
         let (_, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
@@ -3350,6 +3456,46 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private func interviewOrchestration(
+        vaultID: String,
+        action: OwnerTruthInterviewOrchestrationAction = .listen,
+        reasonCode: String = "noSafePrimaryQuestion",
+        nextSessionState: OwnerTruthInterviewOrchestrationNextSessionState = .active,
+        maxFollowupsRemaining: Int = 3,
+        reviewBatchDue: Bool = false,
+        consumesOneShotBoundary: Bool = false
+    ) throws -> OwnerTruthInterviewOrchestrationRead {
+        try OwnerTruthInterviewOrchestrationRead(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewOrchestrationRead.schemaVersion,
+                "vaultId": vaultID,
+                "orchestration": [
+                    "schemaVersion": OwnerTruthInterviewOrchestrationRead.orchestrationSchemaVersion,
+                    "policySchemaVersion": OwnerTruthInterviewOrchestrationRead.policySchemaVersion,
+                    "decision": [
+                        "action": action.rawValue,
+                        "consumesOneShotBoundary": consumesOneShotBoundary,
+                        "maxFollowupsRemaining": maxFollowupsRemaining,
+                        "nextSessionState": nextSessionState.rawValue,
+                        "reasonCode": reasonCode,
+                        "reviewBatchDue": reviewBatchDue,
+                        "schemaVersion": OwnerTruthInterviewOrchestrationRead.policySchemaVersion,
+                    ],
+                    "persistedSession": [
+                        "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
+                        "candidateBatchTurnCount": 1,
+                        "deepeningTurnCount": 1,
+                        "fatigue": OwnerTruthInterviewSessionFatigue.normal.rawValue,
+                        "ownerTurnCount": 3,
+                        "state": OwnerTruthInterviewSessionLifecycle.active.rawValue,
+                    ],
+                    "transientSignals": OwnerTruthInterviewOrchestrationRead.transientSignalsDescriptor,
+                ],
+            ],
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID))
+        )
+    }
+
     private func interviewNaturalInputReceipt(
         vaultID: OwnerTruthVaultID,
         start: OwnerTruthInterviewNaturalInputStartCommand
@@ -4026,6 +4172,39 @@ private final class InterviewSessionStateClientSpy: OwnerTruthInterviewSessionSt
 }
 
 private enum InterviewSessionStateClientSpyError: Error {
+    case missingReadResult
+}
+
+private final class InterviewOrchestrationClientSpy: OwnerTruthInterviewOrchestrationClient {
+    var readResult: Result<OwnerTruthInterviewOrchestrationRead, Error>?
+    var deferRead = false
+    private var deferredReadCompletion: ((Result<OwnerTruthInterviewOrchestrationRead, Error>) -> Void)?
+    private(set) var requestCount = 0
+    private(set) var lastSignals: OwnerTruthInterviewOrchestrationSignals?
+
+    func fetchOwnerTruthInterviewOrchestration(
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        signals: OwnerTruthInterviewOrchestrationSignals,
+        completion: @escaping (Result<OwnerTruthInterviewOrchestrationRead, Error>) -> Void
+    ) {
+        requestCount += 1
+        lastSignals = signals
+        if deferRead {
+            deferredReadCompletion = completion
+            return
+        }
+        completion(readResult ?? .failure(InterviewOrchestrationClientSpyError.missingReadResult))
+    }
+
+    func completeDeferredRead(_ result: Result<OwnerTruthInterviewOrchestrationRead, Error>) {
+        let completion = deferredReadCompletion
+        deferredReadCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum InterviewOrchestrationClientSpyError: Error {
     case missingReadResult
 }
 
