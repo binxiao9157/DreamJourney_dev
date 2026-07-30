@@ -63,7 +63,8 @@
     "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_STATUS_VERIFIED_LOCAL_6fa71fc",
     "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_STATUS_IOS_TYPED_CONSUMER_VERIFIED_LOCAL",
     "WI-S1-01-03_G0_TOPIC_SHIFT_SHADOW_VERIFIED_LOCAL_06a0a85",
-    "WI-S1-01-03_G0_DO_NOT_ASK_REACTIVATION_PREFLIGHT_VERIFIED_LOCAL_7501669"
+    "WI-S1-01-03_G0_DO_NOT_ASK_REACTIVATION_PREFLIGHT_VERIFIED_LOCAL_7501669",
+    "WI-S1-01-06_G0_M0B_GUIDED_RECOMMENDATION_ACTIVATION_VALUE_FREE_VERIFIED_LOCAL_3cc0763"
   ],
   "currentSubSlice": "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_STATUS_IOS_TYPED_CONSUMER_VERIFIED_LOCAL / iOS now consumes the formal Owner-only candidate-proposal staging status through the captured ownerTruthCandidateReview decision and AccountLease request/commit fence. The strict value-free decoder rejects unknown/private fields and incoherent state combinations; it has no UI attachment, mutation API, Provider call, public Echo change, deployment or true-device claim.",
   "m0BGuidedRecommendationPresentationEvidence": {
@@ -83,6 +84,12 @@
     "evidence": "docs/superpowers/status/2026-07-30-m0b-guided-recommendation-timing-feedback-g0.md",
     "scope": "The existing formal guided feedback route now accepts only defer/timing from an opaque current recommendation set. The server derives the current confirmed continuation anchor, writes an append-only value-free feedback receipt while the interview remains active/open, then reuses the existing saved-continuation and cooldown services in one Postgres Unit of Work. The generic QA feedback route rejects defer/timing. iOS adds the bounded action only in the already default-off natural-input Sheet; no full-screen Echo change, public activation, private metadata, Provider call, production database proof or true-device claim.",
     "validation": "Focused backend API/feedback/release-policy/route suites passed 81/81; scripts/verify_backend.sh passed 1606 tests and existing gates; OwnerTruthContractsTests passed 99/99; generic/platform=iOS Debug build passed; both repository diff checks passed. Migration 0066 is local only and not deployed."
+  },
+  "m0BGuidedRecommendationActivationEvidence": {
+    "status": "VERIFIED_LOCAL / DEFAULT_OFF / NOT_DEPLOYED",
+    "evidence": "docs/superpowers/status/2026-07-31-m0b-guided-recommendation-activation-g0.md",
+    "scope": "The formal activation route accepts only an opaque recommendation-set binding and slot. It derives private candidate/session state server-side, records an append-only activation receipt, and returns only a value-free await-owner-narrative state. iOS renders the policy-owned question as display-only context and never pre-fills or submits it as Owner text. No full-screen Echo change, public activation, Candidate/evidence metadata, Provider call, production database proof or true-device claim.",
+    "validation": "Focused backend route/auth/runtime/migration suites passed 110/110 and full scripts/verify_backend.sh passed. OwnerTruthContractsTests passed 129/129; the dedicated iOS static guard and generic iOS Simulator build passed. The added route is included in the 142-route authentication inventory. Migration 0068 is local only and not deployed."
   },
   "m0BLifeMapPresentationEvidence": {
     "status": "VERIFIED_LOCAL / DEFAULT_OFF / NOT_DEPLOYED",
@@ -909,5 +916,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-31T03:15:00+08:00"
+  "updatedAt": "2026-07-31T03:24:00+08:00"
 }
