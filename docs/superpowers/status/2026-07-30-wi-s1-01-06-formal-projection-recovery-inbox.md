@@ -35,13 +35,24 @@ Projection Worker 仍是唯一恢复 owner。
 
 ## 实现边界
 
-- 后端只列出：正式确认、当前有效、已激活、当前 Projection 中尚未有条目的记忆。
+- 后端只列出：正式确认、当前有效、已激活、当前 Projection 中尚未有条目，且精确 rebuild
+  effect 仍可执行的记忆。
 - Projection 权利不再有效时不把它伪装成可自动恢复的 `rebuilding` 项。
 - 正式 MemoryVersion 激活现在会在写入前检查 Projection rebuild effect kernel；缺失
   kernel 时 fail closed，避免产生无法进入 Projection 的激活记录。
 - iOS 将合同绑定到 `AccountLease` 和同一正式 feature gate；既有默认关闭的“纳入正式
   记忆”页仅显示数量摘要“正在整理正式记忆”，读取失败不会影响激活待办。
 - 公开 Archive/Echo、三 Tab、Stitch 全屏视觉和普通用户导航均未改变。
+
+## 终态误报防线
+
+后续本地补强使“Projection 缺失”不再单独等价于 `rebuilding`。后端会将当前
+`MemoryVersion` 精确关联到兼容 Projection 的 async operation/job，并仅在 operation 仍为
+`accepted`、job 为 `pending`/`retryWait`/`leased` 且未请求取消时返回恢复项。
+
+已取消、阻断、失败、未知、完成或缺少精确 effect 的任务均从 inbox 隐去；不会把终态故障
+伪装为继续恢复。该收紧仍不暴露 job/operation ID、错误、MemoryVersion、Candidate、Source
+或客户端重试入口。
 
 ## 验证
 
@@ -56,6 +67,8 @@ Projection Worker 仍是唯一恢复 owner。
   `import UIKit` 不能作为 macOS package test 运行；已改用 iOS Simulator XCTest 验证。
 - 后端可执行的 disposable Postgres formal smoke 已扩展为先验证 `rebuilding`，再验证
   worker 完成后 inbox 为空；本机没有显式隔离 Postgres admin DSN，因此未执行该 smoke。
+- 本次 runnable-state fence 的后端聚焦套件：46/46 通过；完整
+  `scripts/verify_backend.sh`：1,619 个单测及现有 Gate 通过。
 
 ## 提交与状态
 
