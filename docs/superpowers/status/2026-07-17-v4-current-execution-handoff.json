@@ -64,9 +64,10 @@
     "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_STATUS_IOS_TYPED_CONSUMER_VERIFIED_LOCAL",
     "WI-S1-01-03_G0_TOPIC_SHIFT_SHADOW_VERIFIED_LOCAL_06a0a85",
     "WI-S1-01-03_G0_DO_NOT_ASK_REACTIVATION_PREFLIGHT_VERIFIED_LOCAL_7501669",
-    "WI-S1-01-06_G0_M0B_GUIDED_RECOMMENDATION_ACTIVATION_VALUE_FREE_VERIFIED_LOCAL_3cc0763"
+    "WI-S1-01-06_G0_M0B_GUIDED_RECOMMENDATION_ACTIVATION_VALUE_FREE_VERIFIED_LOCAL_3cc0763",
+    "WI-S1-01-06_G0_KBLITE_COMPATIBILITY_QA_CONSUMER_VERIFIED_LOCAL"
   ],
-  "currentSubSlice": "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_STATUS_IOS_TYPED_CONSUMER_VERIFIED_LOCAL / iOS now consumes the formal Owner-only candidate-proposal staging status through the captured ownerTruthCandidateReview decision and AccountLease request/commit fence. The strict value-free decoder rejects unknown/private fields and incoherent state combinations; it has no UI attachment, mutation API, Provider call, public Echo change, deployment or true-device claim.",
+  "currentSubSlice": "WI-S1-01-06_G0_KBLITE_COMPATIBILITY_QA_CONSUMER_VERIFIED_LOCAL / iOS now consumes the existing default-off Owner Truth compatibility read envelope through an AccountLease-fenced use case and isolated cache. It rejects stale completion, contract mismatch, non-ready state, disabled QA gate and any legacy KBLite path; it has no UI attachment, legacy writer mutation, public Echo change, deployment or true-device claim.",
   "m0BGuidedRecommendationPresentationEvidence": {
     "status": "VERIFIED_LOCAL / DEFAULT_OFF / NOT_DEPLOYED",
     "evidence": "docs/superpowers/status/2026-07-30-m0b-guided-recommendation-presentation-g0.md",

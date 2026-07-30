@@ -68,6 +68,10 @@ def main() -> None:
         "enum OwnerTruthKBLiteCompatibilityCacheLoadResult",
         "final class OwnerTruthKBLiteCompatibilityStore",
         "protocol OwnerTruthKBLiteCompatibilityClient",
+        "final class OwnerTruthKBLiteCompatibilityProjectionUseCase",
+        "enum OwnerTruthKBLiteCompatibilityProjectionPhase",
+        "struct OwnerTruthKBLiteCompatibilityProjectionReadout",
+        "struct OwnerTruthKBLiteCompatibilityProjectionViewState",
         "owner-truth-kblite-read-envelope-v1",
         "owner-truth-memory-projection",
         "case discard",
@@ -129,11 +133,40 @@ def main() -> None:
         "runtime capability must expose only the QA-gated configuration state",
     )
 
+    use_case_body = type_body(
+        contracts, "final class OwnerTruthKBLiteCompatibilityProjectionUseCase"
+    )
+    for required in (
+        "OwnerTruthKBLiteCompatibilityQAGate.isEnabled",
+        "accountLeaseRuntime.validate(accountLease, at: .request).allowed",
+        "accountLeaseRuntime.validate(accountLease, at: .commit).allowed",
+        "accountLeaseRuntime.validate(accountLease, at: .runtime).allowed",
+        "client.fetchOwnerTruthKBLiteCompatibilityReadEnvelope",
+        "store.apply(envelope, for: accountLease)",
+        "store.discardCachedProjection()",
+        "guard generation == operationGeneration else { return }",
+    ):
+        require(required in use_case_body, f"compatibility projection use case missing: {required}")
+    for forbidden in (
+        "KBLiteManager",
+        "KnowledgeSyncCoordinator",
+        "syncKnowledge",
+        "mutateKnowledge",
+        "applySyncedGraphCAS",
+    ):
+        require(
+            forbidden not in use_case_body,
+            f"compatibility projection use case must not touch legacy sync: {forbidden}",
+        )
+
     for test_name in (
         "func testKBLiteCompatibilityReadEnvelopeAcceptsOnlyConfirmedProjectionFacts()",
         "func testKBLiteCompatibilityReadEnvelopeRejectsTamperedContentHash()",
         "func testKBLiteCompatibilityStoreFailsClosedAcrossAccountABA()",
         "func testKBLiteCompatibilityStoreDiscardsNonReadyAndCorruptCaches()",
+        "func testKBLiteCompatibilityProjectionUseCaseRefreshesOnlyTheIsolatedCache()",
+        "func testKBLiteCompatibilityProjectionUseCaseDiscardsAStaleCompletion()",
+        "func testKBLiteCompatibilityProjectionUseCaseDoesNotRequestWhenQAGateIsClosed()",
     ):
         require(test_name in tests, f"compatibility cache test missing: {test_name}")
 

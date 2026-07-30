@@ -2651,6 +2651,116 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: cacheURL.path))
     }
 
+    func testKBLiteCompatibilityProjectionUseCaseRefreshesOnlyTheIsolatedCache() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-kblite-use-case-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let store = OwnerTruthKBLiteCompatibilityStore(
+            directoryURL: directoryURL,
+            accountLeaseRuntime: runtime
+        )
+        let client = KBLiteCompatibilityClientSpy()
+        let envelope = try compatibilityReadEnvelope(for: lease)
+        client.handler = { _, _ in .success(envelope) }
+        let useCase = OwnerTruthKBLiteCompatibilityProjectionUseCase(
+            accountLease: lease,
+            client: client,
+            store: store,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.refresh()
+
+        XCTAssertEqual(client.requestedVaultID?.rawValue, lease.vaultId)
+        XCTAssertEqual(client.requestedOwnerSubjectID, lease.subjectId)
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.readout?.authorityEpoch, 2)
+        XCTAssertEqual(useCase.viewState.readout?.projectionCheckpoint, "projection-checkpoint-2")
+        XCTAssertEqual(useCase.viewState.readout?.factCount, 1)
+        guard case .ready(let cached) = useCase.loadCachedProjection() else {
+            return XCTFail("expected the compatibility projection to be cacheable")
+        }
+        XCTAssertEqual(cached.graph.facts.first?.statement, "院子里有一棵树")
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: directoryURL
+                    .appendingPathComponent(OwnerTruthKBLiteCompatibilityStore.fileName)
+                    .path
+            )
+        )
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: directoryURL.appendingPathComponent("kb_graph_\(lease.subjectId).json").path
+            )
+        )
+    }
+
+    func testKBLiteCompatibilityProjectionUseCaseDiscardsAStaleCompletion() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-kblite-stale-use-case-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let store = OwnerTruthKBLiteCompatibilityStore(
+            directoryURL: directoryURL,
+            accountLeaseRuntime: runtime
+        )
+        let client = KBLiteCompatibilityClientSpy()
+        let useCase = OwnerTruthKBLiteCompatibilityProjectionUseCase(
+            accountLease: lease,
+            client: client,
+            store: store,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.refresh()
+        XCTAssertEqual(useCase.viewState.phase, .loading)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000202")!
+        ))
+        client.complete(.success(try compatibilityReadEnvelope(for: lease)))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertEqual(useCase.loadCachedProjection(), .unavailable)
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: directoryURL
+                    .appendingPathComponent(OwnerTruthKBLiteCompatibilityStore.fileName)
+                    .path
+            )
+        )
+    }
+
+    func testKBLiteCompatibilityProjectionUseCaseDoesNotRequestWhenQAGateIsClosed() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-kblite-closed-gate-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let client = KBLiteCompatibilityClientSpy()
+        let useCase = OwnerTruthKBLiteCompatibilityProjectionUseCase(
+            accountLease: lease,
+            client: client,
+            store: OwnerTruthKBLiteCompatibilityStore(
+                directoryURL: directoryURL,
+                accountLeaseRuntime: runtime
+            ),
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { false }
+        )
+
+        useCase.refresh()
+
+        XCTAssertNil(client.requestedVaultID)
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .qaOnlyDisabled)
+    }
+
     func testContextShadowBuildAcceptsTypedProjectionCitationsWithoutRawContent() throws {
         let (_, lease) = try makeActiveRuntime()
         let query = "只允许已确认记忆参与本轮回响"
@@ -5915,6 +6025,33 @@ final class OwnerTruthContractsTests: XCTestCase {
             }
         }
         return nil
+    }
+}
+
+private final class KBLiteCompatibilityClientSpy: OwnerTruthKBLiteCompatibilityClient {
+    var handler: ((OwnerTruthVaultID, String) -> Result<OwnerTruthKBLiteCompatibilityReadEnvelope, Error>)?
+    private(set) var requestedVaultID: OwnerTruthVaultID?
+    private(set) var requestedOwnerSubjectID: String?
+    private var deferredCompletion: ((Result<OwnerTruthKBLiteCompatibilityReadEnvelope, Error>) -> Void)?
+
+    func fetchOwnerTruthKBLiteCompatibilityReadEnvelope(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        completion: @escaping (Result<OwnerTruthKBLiteCompatibilityReadEnvelope, Error>) -> Void
+    ) {
+        requestedVaultID = vaultID
+        requestedOwnerSubjectID = expectedOwnerSubjectID
+        if let handler {
+            completion(handler(vaultID, expectedOwnerSubjectID))
+            return
+        }
+        deferredCompletion = completion
+    }
+
+    func complete(_ result: Result<OwnerTruthKBLiteCompatibilityReadEnvelope, Error>) {
+        let completion = deferredCompletion
+        deferredCompletion = nil
+        completion?(result)
     }
 }
 

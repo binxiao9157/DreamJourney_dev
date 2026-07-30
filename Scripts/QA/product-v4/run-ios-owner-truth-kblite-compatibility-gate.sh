@@ -3,11 +3,17 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOSTED_BUILD_DESTINATION="${DJ_IOS_TEST_BUILD_DESTINATION:-generic/platform=iOS}"
+IOS_TEST_DESTINATION="${DJ_IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 17}"
 
+python3 "$ROOT/Scripts/QA/product-v4/owner-truth-kblite-compatibility-projection-check.py"
 python3 "$ROOT/Scripts/QA/product-v4/product-v4-ios-owner-truth-kblite-compatibility-check.py"
-swift test \
-  --package-path "$ROOT" \
-  --scratch-path "${DJ_SWIFT_TEST_SCRATCH_PATH:-$ROOT/.build/product-v4-owner-truth-kblite-compatibility}"
+xcodebuild test \
+  -workspace "$ROOT/DreamJourney.xcworkspace" \
+  -scheme DreamJourney \
+  -configuration Debug \
+  -destination "$IOS_TEST_DESTINATION" \
+  -only-testing:DreamJourneyTests/OwnerTruthContractsTests \
+  CODE_SIGNING_ALLOWED=NO
 xcodebuild build-for-testing \
   -workspace "$ROOT/DreamJourney.xcworkspace" \
   -scheme DreamJourney \

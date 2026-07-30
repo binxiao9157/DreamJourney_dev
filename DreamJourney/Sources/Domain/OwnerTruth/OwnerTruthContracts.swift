@@ -9296,6 +9296,215 @@ protocol OwnerTruthKBLiteCompatibilityClient: AnyObject {
     )
 }
 
+// MARK: - Default-off Owner Truth Projection compatibility refresh
+
+/// The compatibility cache is deliberately separate from the mutable legacy
+/// KBLite graph. This use case is the only iOS path that may fetch and apply
+/// the derived Owner Truth envelope, and it remains QA-only until a later
+/// cutover work item explicitly promotes it.
+enum OwnerTruthKBLiteCompatibilityProjectionPhase: Equatable, Sendable {
+    case idle
+    case loading
+    case ready
+    case rebuilding
+    case unavailable
+    case failed
+}
+
+enum OwnerTruthKBLiteCompatibilityProjectionNotice: Equatable, Sendable {
+    case qaOnlyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case contractMismatch
+    case requestFailed
+}
+
+/// Value-minimized state suitable for QA diagnostics. The compatibility facts
+/// themselves remain only in the isolated cache and are never made UI state.
+struct OwnerTruthKBLiteCompatibilityProjectionReadout: Equatable, Sendable {
+    let authorityEpoch: Int
+    let projectionCheckpoint: String
+    let factCount: Int
+}
+
+struct OwnerTruthKBLiteCompatibilityProjectionViewState: Equatable, Sendable {
+    let phase: OwnerTruthKBLiteCompatibilityProjectionPhase
+    let readout: OwnerTruthKBLiteCompatibilityProjectionReadout?
+    let notice: OwnerTruthKBLiteCompatibilityProjectionNotice?
+
+    static let idle = OwnerTruthKBLiteCompatibilityProjectionViewState(
+        phase: .idle,
+        readout: nil,
+        notice: nil
+    )
+}
+
+/// Lease-fenced, default-off reader for the Owner Truth compatibility cache.
+/// It does not call, mutate, merge with, or expose the legacy KBLite sync
+/// graph. A stale request completion always discards the compatibility cache.
+final class OwnerTruthKBLiteCompatibilityProjectionUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let client: OwnerTruthKBLiteCompatibilityClient
+    private let store: OwnerTruthKBLiteCompatibilityStore
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthKBLiteCompatibilityProjectionViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthKBLiteCompatibilityProjectionViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthKBLiteCompatibilityClient,
+        store: OwnerTruthKBLiteCompatibilityStore,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthKBLiteCompatibilityQAGate.isEnabled }
+    ) {
+        self.accountLease = accountLease
+        vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.client = client
+        self.store = store
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
+    }
+
+    func refresh() {
+        guard let vaultID = beginRequestOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthKBLiteCompatibilityProjectionViewState(
+            phase: .loading,
+            readout: nil,
+            notice: nil
+        )
+        client.fetchOwnerTruthKBLiteCompatibilityReadEnvelope(
+            vaultID: vaultID,
+            expectedOwnerSubjectID: accountLease.subjectId
+        ) { [weak self] result in
+            self?.receive(result, generation: generation)
+        }
+    }
+
+    /// Cancels an in-flight QA read and removes its derived cache. Account
+    /// lifecycle callers may use this before unmounting a private runtime.
+    func invalidate() {
+        operationGeneration &+= 1
+        store.discardCachedProjection()
+        viewState = OwnerTruthKBLiteCompatibilityProjectionViewState(
+            phase: .unavailable,
+            readout: nil,
+            notice: .staleAccountLease
+        )
+    }
+
+    /// Returns only a current cache line. Any lease or integrity mismatch is
+    /// handled by the store as a destructive fail-closed cache discard.
+    func loadCachedProjection() -> OwnerTruthKBLiteCompatibilityCacheLoadResult {
+        guard qaGateEnabled(),
+              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+            store.discardCachedProjection()
+            return .unavailable
+        }
+        return store.load(for: accountLease)
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard qaGateEnabled() else {
+            transitionUnavailable(.qaOnlyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            transitionUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            transitionUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthKBLiteCompatibilityReadEnvelope, Error>,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard qaGateEnabled() else {
+            store.discardCachedProjection()
+            transitionUnavailable(.qaOnlyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            store.discardCachedProjection()
+            transitionUnavailable(.staleAccountLease)
+            return
+        }
+
+        switch result {
+        case .success(let envelope):
+            guard envelope.vaultID.rawValue == accountLease.vaultId,
+                  envelope.ownerSubjectID == accountLease.subjectId else {
+                store.discardCachedProjection()
+                transitionFailure(.contractMismatch)
+                return
+            }
+            switch store.apply(envelope, for: accountLease) {
+            case .ready(let projection):
+                viewState = OwnerTruthKBLiteCompatibilityProjectionViewState(
+                    phase: .ready,
+                    readout: OwnerTruthKBLiteCompatibilityProjectionReadout(
+                        authorityEpoch: projection.projectionAuthorityEpoch,
+                        projectionCheckpoint: projection.projectionCheckpoint,
+                        factCount: projection.graph.facts.count
+                    ),
+                    notice: nil
+                )
+            case .rebuilding:
+                viewState = OwnerTruthKBLiteCompatibilityProjectionViewState(
+                    phase: .rebuilding,
+                    readout: nil,
+                    notice: nil
+                )
+            case .unavailable:
+                transitionUnavailable(.staleAccountLease)
+            }
+        case .failure(let error):
+            store.discardCachedProjection()
+            if let contractError = error as? OwnerTruthRemoteContractError,
+               case .invalidKBLiteCompatibilityReadEnvelope = contractError {
+                transitionFailure(.contractMismatch)
+            } else {
+                transitionFailure(.requestFailed)
+            }
+        }
+    }
+
+    private func transitionUnavailable(
+        _ notice: OwnerTruthKBLiteCompatibilityProjectionNotice
+    ) {
+        viewState = OwnerTruthKBLiteCompatibilityProjectionViewState(
+            phase: .unavailable,
+            readout: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure(
+        _ notice: OwnerTruthKBLiteCompatibilityProjectionNotice
+    ) {
+        viewState = OwnerTruthKBLiteCompatibilityProjectionViewState(
+            phase: .failed,
+            readout: nil,
+            notice: notice
+        )
+    }
+}
+
 enum OwnerTruthCandidateReviewIntent: Equatable, Sendable {
     case refresh
     case accept(candidateID: OwnerTruthRecordID)
