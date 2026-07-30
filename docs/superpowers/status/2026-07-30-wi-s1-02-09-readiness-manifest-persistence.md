@@ -38,6 +38,7 @@ app/async_effects/readiness_manifest_projection.py
 tests/test_async_effect_readiness_manifest_projection.py
 scripts/run-backend-async-effect-readiness-manifest-gate.sh
 scripts/backend-async-effect-readiness-manifest-postgres-smoke.py
+scripts/run-backend-async-effect-readiness-manifest-postgres-smoke.sh
 ```
 
 临时 Postgres smoke 默认不运行，需显式启用：
@@ -51,6 +52,15 @@ scripts/run-backend-async-effect-readiness-manifest-gate.sh
 该 smoke 使用 `DATABASE_URL` 创建并删除 disposable database，只验证
 manifest 写入、重开读取、去重和过期；不写生产业务数据。
 
+生产 API 镜像不会包含 `tests/` 目录，因此部署环境使用单独的 runner：
+
+```bash
+bash scripts/run-backend-async-effect-readiness-manifest-postgres-smoke.sh
+```
+
+该 runner 只执行 disposable Postgres smoke，不会运行单元测试、启动 worker、
+claim/replay job 或调用 Provider。
+
 ## 本轮验证
 
 ```text
@@ -58,16 +68,26 @@ scripts/run-backend-async-effect-readiness-manifest-gate.sh
   15 tests passed
 
 scripts/verify_backend.sh
-  1,493 tests passed
+  1,579 tests passed
   existing FastAPI smoke / contract gates / git diff --check passed
 ```
+
+部署后端 `main@42e8dff` 后，在 API 容器中执行：
+
+```bash
+bash scripts/run-backend-async-effect-readiness-manifest-postgres-smoke.sh
+```
+
+结果：通过。该命令创建并清理独立临时数据库，确认 readiness manifest
+append、去重、重开读取、artifact 校验和过期清理均可用；不读取或修改生产业务
+数据，也不触发 worker、replay 或 Provider 调用。
 
 ## Gate 状态
 
 | Gate | 状态 | 说明 |
 | --- | --- | --- |
 | G0 | 本地通过 | value-free 映射、去重、负状态不提升和 sink 失败边界均有测试。 |
-| G2 | 代码与临时库 smoke 已具备 | 本轮没有部署后端，也没有运行 `DATABASE_URL` disposable Postgres smoke，不能计为部署/线上 G2 证据。 |
+| G2 | 范围内通过 | 后端 `main@42e8dff` 已部署，API 容器中的 disposable Postgres smoke 已验证持久化、重开读取、去重和过期行为。 |
 | G3 | 不适用/保持关闭 | 不查询 Provider、不 replay、不启动 worker。 |
 
 ## 下一步
