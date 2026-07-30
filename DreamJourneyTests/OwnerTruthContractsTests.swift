@@ -2761,6 +2761,94 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.notice, .qaOnlyDisabled)
     }
 
+    func testKBLiteCompatibilityRuntimeMountsOnlyTheSeparateProjectionCache() throws {
+        let (accountRuntime, lease) = try makeActiveRuntime()
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-kblite-runtime-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let client = KBLiteCompatibilityClientSpy()
+        let envelope = try compatibilityReadEnvelope(for: lease)
+        client.handler = { _, _ in .success(envelope) }
+        let runtime = OwnerTruthKBLiteCompatibilityProjectionRuntime(
+            client: client,
+            directoryURL: directoryURL,
+            accountLeaseRuntime: accountRuntime,
+            qaGateEnabled: { true }
+        )
+
+        runtime.mount(accountLease: lease)
+
+        XCTAssertEqual(client.requestedVaultID?.rawValue, lease.vaultId)
+        XCTAssertEqual(client.requestedOwnerSubjectID, lease.subjectId)
+        XCTAssertEqual(runtime.viewState.phase, .ready)
+        XCTAssertEqual(runtime.viewState.readout?.factCount, 1)
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: directoryURL
+                    .appendingPathComponent(OwnerTruthKBLiteCompatibilityStore.fileName)
+                    .path
+            )
+        )
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: directoryURL.appendingPathComponent("kb_graph_\(lease.subjectId).json").path
+            )
+        )
+    }
+
+    func testKBLiteCompatibilityRuntimeUnmountDiscardsCacheBeforeAccountReplacement() throws {
+        let (accountRuntime, lease) = try makeActiveRuntime()
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-kblite-runtime-unmount-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let client = KBLiteCompatibilityClientSpy()
+        let envelope = try compatibilityReadEnvelope(for: lease)
+        client.handler = { _, _ in .success(envelope) }
+        let runtime = OwnerTruthKBLiteCompatibilityProjectionRuntime(
+            client: client,
+            directoryURL: directoryURL,
+            accountLeaseRuntime: accountRuntime,
+            qaGateEnabled: { true }
+        )
+
+        runtime.mount(accountLease: lease)
+        XCTAssertEqual(runtime.viewState.phase, .ready)
+        accountRuntime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000202")!
+        ))
+
+        runtime.unmount()
+
+        XCTAssertEqual(runtime.viewState.phase, .idle)
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: directoryURL
+                    .appendingPathComponent(OwnerTruthKBLiteCompatibilityStore.fileName)
+                    .path
+            )
+        )
+    }
+
+    func testKBLiteCompatibilityRuntimeDoesNotMountWhenTheQAGateIsClosed() throws {
+        let (accountRuntime, lease) = try makeActiveRuntime()
+        let client = KBLiteCompatibilityClientSpy()
+        let runtime = OwnerTruthKBLiteCompatibilityProjectionRuntime(
+            client: client,
+            directoryURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("owner-truth-kblite-runtime-closed-\(UUID().uuidString)", isDirectory: true),
+            accountLeaseRuntime: accountRuntime,
+            qaGateEnabled: { false }
+        )
+
+        runtime.mount(accountLease: lease)
+
+        XCTAssertNil(client.requestedVaultID)
+        XCTAssertEqual(runtime.viewState.phase, .idle)
+    }
+
     func testContextShadowBuildAcceptsTypedProjectionCitationsWithoutRawContent() throws {
         let (_, lease) = try makeActiveRuntime()
         let query = "只允许已确认记忆参与本轮回响"

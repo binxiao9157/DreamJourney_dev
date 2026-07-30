@@ -9505,6 +9505,83 @@ final class OwnerTruthKBLiteCompatibilityProjectionUseCase {
     }
 }
 
+/// Owns the lifetime of the default-off compatibility read inside the existing
+/// knowledge-sync runtime. It is intentionally a shadow reader: mounting it
+/// can refresh only the isolated Owner Truth cache and never applies a graph
+/// to `KBLiteManager`, submits a legacy mutation, or selects an Echo context.
+final class OwnerTruthKBLiteCompatibilityProjectionRuntime {
+    private let client: OwnerTruthKBLiteCompatibilityClient
+    private let directoryURL: URL
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
+    private var activeAccountLease: AccountLease?
+    private var useCase: OwnerTruthKBLiteCompatibilityProjectionUseCase?
+
+    init(
+        client: OwnerTruthKBLiteCompatibilityClient = DreamJourneyBackendClient.shared,
+        directoryURL: URL? = nil,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthKBLiteCompatibilityQAGate.isEnabled }
+    ) {
+        self.client = client
+        self.directoryURL = directoryURL ?? Self.defaultDirectoryURL()
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
+    }
+
+    var viewState: OwnerTruthKBLiteCompatibilityProjectionViewState {
+        useCase?.viewState ?? .idle
+    }
+
+    /// Mounts the current private account and immediately performs a QA-only
+    /// read. A different account lease first invalidates the old cache, so an
+    /// A -> B transition cannot leave an A projection available to B.
+    func mount(accountLease: AccountLease) {
+        guard qaGateEnabled(),
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            unmount()
+            return
+        }
+
+        if activeAccountLease != accountLease {
+            unmount()
+            activeAccountLease = accountLease
+            useCase = OwnerTruthKBLiteCompatibilityProjectionUseCase(
+                accountLease: accountLease,
+                client: client,
+                store: OwnerTruthKBLiteCompatibilityStore(
+                    directoryURL: directoryURL,
+                    accountLeaseRuntime: accountLeaseRuntime
+                ),
+                accountLeaseRuntime: accountLeaseRuntime,
+                qaGateEnabled: qaGateEnabled
+            )
+        }
+        useCase?.refresh()
+    }
+
+    /// Must be called before account replacement, logout, suspension, or
+    /// deletion. It advances the use-case generation and deletes the isolated
+    /// cache; a late network completion is therefore a no-op.
+    func unmount() {
+        useCase?.invalidate()
+        useCase = nil
+        activeAccountLease = nil
+    }
+
+    private static func defaultDirectoryURL() -> URL {
+        let fileManager = FileManager.default
+        let root = fileManager.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first ?? fileManager.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+        ).first ?? fileManager.temporaryDirectory
+        return root.appendingPathComponent("owner_truth_kblite_compatibility", isDirectory: true)
+    }
+}
+
 enum OwnerTruthCandidateReviewIntent: Equatable, Sendable {
     case refresh
     case accept(candidateID: OwnerTruthRecordID)

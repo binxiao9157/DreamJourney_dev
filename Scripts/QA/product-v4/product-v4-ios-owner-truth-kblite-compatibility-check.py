@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 CONTRACTS = ROOT / "DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift"
 CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
+COORDINATOR = ROOT / "DreamJourney/Sources/Services/KnowledgeSyncCoordinator.swift"
 TESTS = ROOT / "DreamJourneyTests/OwnerTruthContractsTests.swift"
 
 
@@ -53,6 +54,7 @@ def type_body(source: str, marker: str) -> str:
 def main() -> None:
     contracts = CONTRACTS.read_text(encoding="utf-8")
     client = CLIENT.read_text(encoding="utf-8")
+    coordinator = COORDINATOR.read_text(encoding="utf-8")
     tests = TESTS.read_text(encoding="utf-8")
 
     for required in (
@@ -159,6 +161,33 @@ def main() -> None:
             f"compatibility projection use case must not touch legacy sync: {forbidden}",
         )
 
+    runtime_body = type_body(
+        contracts, "final class OwnerTruthKBLiteCompatibilityProjectionRuntime"
+    )
+    for required in (
+        "OwnerTruthKBLiteCompatibilityProjectionUseCase",
+        "OwnerTruthKBLiteCompatibilityStore",
+        "qaGateEnabled()",
+        "accountLeaseRuntime.validate(accountLease, at: .request).allowed",
+        "useCase?.refresh()",
+        "useCase?.invalidate()",
+        "activeAccountLease != accountLease",
+    ):
+        require(required in runtime_body, f"compatibility runtime boundary missing: {required}")
+    for forbidden in ("applySyncedGraphCAS", "writeGraph", "/kb/sync", "mutateKnowledge"):
+        require(
+            forbidden not in runtime_body,
+            f"compatibility runtime must not mutate the legacy graph: {forbidden}",
+        )
+
+    sync_body = type_body(coordinator, "final class KnowledgeSyncCoordinator")
+    for required in (
+        "OwnerTruthKBLiteCompatibilityProjectionRuntime()",
+        "ownerTruthKBLiteCompatibilityRuntime.mount(accountLease: context.accountLease)",
+        "ownerTruthKBLiteCompatibilityRuntime.unmount()",
+    ):
+        require(required in sync_body, f"knowledge sync runtime handoff missing: {required}")
+
     for test_name in (
         "func testKBLiteCompatibilityReadEnvelopeAcceptsOnlyConfirmedProjectionFacts()",
         "func testKBLiteCompatibilityReadEnvelopeRejectsTamperedContentHash()",
@@ -167,6 +196,9 @@ def main() -> None:
         "func testKBLiteCompatibilityProjectionUseCaseRefreshesOnlyTheIsolatedCache()",
         "func testKBLiteCompatibilityProjectionUseCaseDiscardsAStaleCompletion()",
         "func testKBLiteCompatibilityProjectionUseCaseDoesNotRequestWhenQAGateIsClosed()",
+        "func testKBLiteCompatibilityRuntimeMountsOnlyTheSeparateProjectionCache()",
+        "func testKBLiteCompatibilityRuntimeUnmountDiscardsCacheBeforeAccountReplacement()",
+        "func testKBLiteCompatibilityRuntimeDoesNotMountWhenTheQAGateIsClosed()",
     ):
         require(test_name in tests, f"compatibility cache test missing: {test_name}")
 

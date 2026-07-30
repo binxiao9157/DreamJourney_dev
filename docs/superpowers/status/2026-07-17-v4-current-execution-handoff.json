@@ -65,9 +65,10 @@
     "WI-S1-01-03_G0_TOPIC_SHIFT_SHADOW_VERIFIED_LOCAL_06a0a85",
     "WI-S1-01-03_G0_DO_NOT_ASK_REACTIVATION_PREFLIGHT_VERIFIED_LOCAL_7501669",
     "WI-S1-01-06_G0_M0B_GUIDED_RECOMMENDATION_ACTIVATION_VALUE_FREE_VERIFIED_LOCAL_3cc0763",
-    "WI-S1-01-06_G0_KBLITE_COMPATIBILITY_QA_CONSUMER_VERIFIED_LOCAL"
+    "WI-S1-01-06_G0_KBLITE_COMPATIBILITY_QA_CONSUMER_VERIFIED_LOCAL",
+    "WI-S1-01-06_G0_KBLITE_COMPATIBILITY_RUNTIME_SHADOW_VERIFIED_LOCAL"
   ],
-  "currentSubSlice": "WI-S1-01-06_G0_KBLITE_COMPATIBILITY_QA_CONSUMER_VERIFIED_LOCAL / iOS now consumes the existing default-off Owner Truth compatibility read envelope through an AccountLease-fenced use case and isolated cache. It rejects stale completion, contract mismatch, non-ready state, disabled QA gate and any legacy KBLite path; it has no UI attachment, legacy writer mutation, public Echo change, deployment or true-device claim.",
+  "currentSubSlice": "WI-S1-01-06_G0_KBLITE_COMPATIBILITY_RUNTIME_SHADOW_VERIFIED_LOCAL / The existing QA-only Owner Truth compatibility envelope now mounts through the current KnowledgeSync lifecycle using an AccountLease-fenced isolated cache. Account replacement, logout, suspension and deletion unmount it before legacy sync continues. It has no public UI attachment, KBLiteManager merge, legacy writer mutation, deployment or true-device claim.",
   "m0BGuidedRecommendationPresentationEvidence": {
     "status": "VERIFIED_LOCAL / DEFAULT_OFF / NOT_DEPLOYED",
     "evidence": "docs/superpowers/status/2026-07-30-m0b-guided-recommendation-presentation-g0.md",
@@ -917,5 +918,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-31T03:24:00+08:00"
+  "updatedAt": "2026-07-31T04:27:40+08:00"
 }

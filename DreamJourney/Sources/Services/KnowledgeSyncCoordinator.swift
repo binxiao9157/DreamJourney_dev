@@ -9,6 +9,9 @@ final class KnowledgeSyncCoordinator {
     private let pendingStore = KnowledgePendingMutationStore()
     private let governanceOutboxStore = KnowledgeGovernanceOutboxStore()
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    /// QA-only Owner Truth Projection shadow. It owns a separate cache and is
+    /// deliberately never passed to the legacy KBLite merge/apply paths below.
+    private let ownerTruthKBLiteCompatibilityRuntime = OwnerTruthKBLiteCompatibilityProjectionRuntime()
     private var governanceCompletions: [String: (Result<KBKnowledgeGovernanceResponse, Error>) -> Void] = [:]
     private var activeUserId: String?
     private var activeAccountLease: AccountLease?
@@ -42,6 +45,7 @@ final class KnowledgeSyncCoordinator {
         performSynchronouslyOnQueue {
             let staleCompletions = Array(self.governanceCompletions.values)
             self.governanceCompletions.removeAll()
+            self.ownerTruthKBLiteCompatibilityRuntime.unmount()
             self.activeUserId = userId
             self.activeAccountLease = nil
             self.activeSyncAuthorization = nil
@@ -108,6 +112,7 @@ final class KnowledgeSyncCoordinator {
             }
 
             self.governanceCompletions.removeAll()
+            self.ownerTruthKBLiteCompatibilityRuntime.unmount()
             self.debounceWorkItem?.cancel()
             self.debounceWorkItem = nil
             self.activeUserId = nil
@@ -349,6 +354,7 @@ final class KnowledgeSyncCoordinator {
             self.activePersonaIdentity = currentPersonaIdentity.flatMap {
                 authorization.allows(identity: $0) ? $0 : nil
             }
+            self.ownerTruthKBLiteCompatibilityRuntime.mount(accountLease: context.accountLease)
             self.enqueueSync(reason: reason, context: context)
         }
     }
@@ -1298,6 +1304,7 @@ final class KnowledgeSyncCoordinator {
         }
         if let activeAccountLease,
            !Self.isSameAccountLeaseGeneration(activeAccountLease, accountLease) {
+            ownerTruthKBLiteCompatibilityRuntime.unmount()
             governanceCompletions.removeAll()
             syncGeneration = UUID()
             isSyncing = false
