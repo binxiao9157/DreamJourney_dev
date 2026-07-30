@@ -363,6 +363,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewSessionStateSmoke() }
         case .ownerTruthInterviewOrchestrationSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewOrchestrationSmoke() }
+        case .ownerTruthInterviewTopicSwitchSmoke:
+            scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewTopicSwitchSmoke() }
         case .ownerTruthInterviewNaturalInputSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewNaturalInputSmoke() }
         case .ownerTruthKnowledgeDimensionConfirmationSmoke:
@@ -2068,6 +2070,48 @@ private extension AppDelegate {
         keyWindow.rootViewController = UINavigationController(rootViewController: controller)
         keyWindow.makeKeyAndVisible()
         print("[UI_QA] OwnerTruthInterviewOrchestrationSmoke started")
+    }
+
+    func runOwnerTruthInterviewTopicSwitchSmoke(retryCount: Int = 0) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            OwnerTruthInterviewTopicSwitchUIQASmoke.writeFailure("qaGateDisabled")
+            return
+        }
+        guard let userID = UserManager.shared.currentUser?.id,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userID),
+              accountLease.subjectId == userID,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            guard retryCount < 20 else {
+                OwnerTruthInterviewTopicSwitchUIQASmoke.writeFailure("accountLeaseUnavailable")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerTruthInterviewTopicSwitchSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+        guard let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }),
+              keyWindow.rootViewController is WarmTabBarController else {
+            guard retryCount < 20 else {
+                OwnerTruthInterviewTopicSwitchUIQASmoke.writeFailure("mainRootUnavailable")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerTruthInterviewTopicSwitchSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+        let navigationController = UINavigationController()
+        keyWindow.rootViewController = navigationController
+        keyWindow.makeKeyAndVisible()
+        OwnerTruthInterviewTopicSwitchUIQASmoke.start(
+            accountLease: accountLease,
+            navigationController: navigationController
+        )
+        print("[UI_QA] OwnerTruthInterviewTopicSwitchSmoke started")
     }
 
     func runOwnerTruthInterviewNaturalInputSmoke(retryCount: Int = 0) {

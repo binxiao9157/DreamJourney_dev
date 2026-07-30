@@ -6767,6 +6767,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let skipOnceButton = UIButton(type: .system)
     private let cooldownButton = UIButton(type: .system)
     private let doNotAskButton = UIButton(type: .system)
+    private let topicSwitchButton = UIButton(type: .system)
     private let restoreDoNotAskButton = UIButton(type: .system)
     private let restoreCooldownButton = UIButton(type: .system)
 
@@ -6805,6 +6806,13 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         presentation == .qa
             && restoreCooldownButton.superview != nil
             && !restoreCooldownButton.isHidden
+    }
+
+    var isTopicSwitchActionVisibleForQA: Bool {
+        presentation == .qa
+            && topicSwitchButton.superview != nil
+            && !topicSwitchButton.isHidden
+            && topicSwitchButton.isEnabled
     }
 
     init(
@@ -6939,6 +6947,10 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         let canRestoreCooldown = presentation == .qa
             && state.phase == .ready
             && state.latestReceipt?.boundary == .cooldown
+        let canSwitchTopic = presentation == .qa
+            && state.phase == .ready
+            && state.latestReceipt?.lifecycle == .active
+            && canContinue
         inputTextView.isEditable = canSubmit
         submitButton.isEnabled = canSubmit
         submitButton.alpha = canSubmit ? 1 : 0.45
@@ -6946,6 +6958,8 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             button.isEnabled = canSetBoundary
             button.alpha = canSetBoundary ? 1 : 0.45
         }
+        topicSwitchButton.isEnabled = canSwitchTopic
+        topicSwitchButton.alpha = canSwitchTopic ? 1 : 0.45
         restoreDoNotAskButton.isHidden = !canRestoreDoNotAsk
         restoreDoNotAskButton.isEnabled = canRestoreDoNotAsk
         restoreDoNotAskButton.alpha = canRestoreDoNotAsk ? 1 : 0.45
@@ -7004,6 +7018,12 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             action: #selector(doNotAskTapped)
         )
         configureBoundaryButton(
+            topicSwitchButton,
+            title: "切换话题（暂停当前）",
+            accessibilityIdentifier: "owner-truth-interview-topic-switch",
+            action: #selector(topicSwitchTapped)
+        )
+        configureBoundaryButton(
             restoreDoNotAskButton,
             title: "重新聊这个话题",
             accessibilityIdentifier: "owner-truth-interview-boundary-restore-do-not-ask",
@@ -7019,6 +7039,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             skipOnceButton,
             cooldownButton,
             doNotAskButton,
+            topicSwitchButton,
             restoreDoNotAskButton,
             restoreCooldownButton,
         ].forEach(boundaryActionsStack.addArrangedSubview)
@@ -7053,6 +7074,16 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
     @objc private func doNotAskTapped() {
         submitBoundary(.doNotAsk)
+    }
+
+    @objc private func topicSwitchTapped() {
+        guard presentation == .qa,
+              renderedState.phase == .ready,
+              renderedState.latestReceipt?.lifecycle == .active,
+              renderedState.continuation?.canContinue ?? true else {
+            return
+        }
+        useCase.send(.pauseForTopicSwitch)
     }
 
     @objc private func restoreDoNotAskTapped() {
@@ -7103,6 +7134,11 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         case .open:
             return
         }
+    }
+
+    func triggerTopicSwitchForQA() {
+        guard presentation == .qa else { return }
+        topicSwitchButton.sendActions(for: .touchUpInside)
     }
 
     func triggerDoNotAskRestoreForQA() {
@@ -7466,6 +7502,201 @@ private final class InterviewNaturalInputUIQAScenario {
     }
 }
 
+struct OwnerTruthInterviewTopicSwitchUIQASmokeResult: Codable {
+    static let fileName = "owner-truth-interview-topic-switch-uiqa-result.json"
+
+    let completed: Bool
+    let qaGateEnabled: Bool
+    let topicSwitchButtonVisible: Bool
+    let oldSessionPaused: Bool
+    let newSessionStarted: Bool
+    let oldAndNewSessionsDiffer: Bool
+    let startRequestCount: Int
+    let newSessionLifecycle: String?
+    let newSessionBoundary: String?
+    let launchArguments: [String]
+    let failureReason: String?
+
+    func writeToDocuments(fileManager: FileManager = .default) throws -> URL {
+        let documentsURL = try fileManager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let resultURL = documentsURL.appendingPathComponent(Self.fileName, isDirectory: false)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(self).write(to: resultURL, options: [.atomic])
+        return resultURL
+    }
+}
+
+enum OwnerTruthInterviewTopicSwitchUIQASmoke {
+    private static var activeScenario: InterviewNaturalInputTopicSwitchUIQAScenario?
+
+    static func start(
+        accountLease: AccountLease,
+        navigationController: UINavigationController
+    ) {
+        let scenario = InterviewNaturalInputTopicSwitchUIQAScenario(
+            accountLease: accountLease,
+            navigationController: navigationController
+        )
+        activeScenario = scenario
+        scenario.start()
+    }
+
+    static func writeFailure(_ reason: String) {
+        write(
+            OwnerTruthInterviewTopicSwitchUIQASmokeResult(
+                completed: false,
+                qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+                topicSwitchButtonVisible: false,
+                oldSessionPaused: false,
+                newSessionStarted: false,
+                oldAndNewSessionsDiffer: false,
+                startRequestCount: 0,
+                newSessionLifecycle: nil,
+                newSessionBoundary: nil,
+                launchArguments: [
+                    QALaunchScenario.ownerTruthInterviewTopicSwitchSmoke.rawValue,
+                    OwnerTruthCandidateReviewQAGate.launchArgument,
+                ],
+                failureReason: reason
+            ),
+            logPrefix: "failed"
+        )
+    }
+
+    fileprivate static func writeCompleted(
+        topicSwitchButtonVisible: Bool,
+        oldSessionPaused: Bool,
+        newReceipt: OwnerTruthInterviewNaturalInputReceipt,
+        oldAndNewSessionsDiffer: Bool,
+        startRequestCount: Int
+    ) {
+        let newSessionStarted = newReceipt.lifecycle == .active
+            && newReceipt.boundary == .open
+            && newReceipt.messageID == nil
+            && newReceipt.messageSequence == nil
+        let completed = OwnerTruthCandidateReviewQAGate.isEnabled
+            && topicSwitchButtonVisible
+            && oldSessionPaused
+            && newSessionStarted
+            && oldAndNewSessionsDiffer
+            && startRequestCount == 2
+        write(
+            OwnerTruthInterviewTopicSwitchUIQASmokeResult(
+                completed: completed,
+                qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+                topicSwitchButtonVisible: topicSwitchButtonVisible,
+                oldSessionPaused: oldSessionPaused,
+                newSessionStarted: newSessionStarted,
+                oldAndNewSessionsDiffer: oldAndNewSessionsDiffer,
+                startRequestCount: startRequestCount,
+                newSessionLifecycle: newReceipt.lifecycle.rawValue,
+                newSessionBoundary: newReceipt.boundary.rawValue,
+                launchArguments: [
+                    QALaunchScenario.ownerTruthInterviewTopicSwitchSmoke.rawValue,
+                    OwnerTruthCandidateReviewQAGate.launchArgument,
+                ],
+                failureReason: completed ? nil : "topicSwitchInvariantMismatch"
+            ),
+            logPrefix: completed ? "completed" : "failed"
+        )
+        activeScenario = nil
+    }
+
+    fileprivate static func writeScenarioFailure(_ reason: String) {
+        activeScenario = nil
+        writeFailure(reason)
+    }
+
+    private static func write(_ result: OwnerTruthInterviewTopicSwitchUIQASmokeResult, logPrefix: String) {
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] OwnerTruthInterviewTopicSwitchSmoke \(logPrefix) result=\(resultURL.path)")
+        } catch {
+            print("[UI_QA] OwnerTruthInterviewTopicSwitchSmoke \(logPrefix) write=\(error.localizedDescription)")
+        }
+    }
+}
+
+private final class InterviewNaturalInputTopicSwitchUIQAScenario {
+    private let accountLease: AccountLease
+    private weak var navigationController: UINavigationController?
+    private let client: InterviewNaturalInputUIQAClient
+    private var didTrigger = false
+    private var didFinish = false
+
+    init(accountLease: AccountLease, navigationController: UINavigationController) {
+        self.accountLease = accountLease
+        self.navigationController = navigationController
+        client = InterviewNaturalInputUIQAClient(vaultID: OwnerTruthVaultID(accountLease.vaultId))
+    }
+
+    func start() {
+        guard let navigationController else {
+            fail("navigationControllerUnavailable")
+            return
+        }
+        let controller = OwnerTruthInterviewNaturalInputUIQASmoke.makePreviewViewController(
+            accountLease: accountLease,
+            client: client
+        )
+        controller.onViewStateRendered = { [weak self, weak controller] state in
+            guard let self, let controller else { return }
+            self.consume(state, controller: controller)
+        }
+        navigationController.setViewControllers([controller], animated: false)
+        controller.loadViewIfNeeded()
+    }
+
+    private func consume(
+        _ state: OwnerTruthInterviewNaturalInputViewState,
+        controller: OwnerTruthInterviewNaturalInputViewController
+    ) {
+        guard !didFinish, state.phase == .ready, let receipt = state.latestReceipt else { return }
+        if !didTrigger {
+            guard receipt.lifecycle == .active,
+                  receipt.boundary == .open,
+                  client.startRequestCount == 1,
+                  controller.isTopicSwitchActionVisibleForQA else {
+                fail("topicSwitchControlUnavailable")
+                return
+            }
+            didTrigger = true
+            DispatchQueue.main.async {
+                controller.triggerTopicSwitchForQA()
+            }
+            return
+        }
+        guard let pausedReceipt = client.lastTopicSwitchPauseReceipt,
+              client.startRequestCount == 2 else {
+            return
+        }
+        let oldSessionPaused = pausedReceipt.lifecycle == .paused
+            && pausedReceipt.boundary == .open
+        let oldAndNewSessionsDiffer = pausedReceipt.threadID != receipt.threadID
+            && pausedReceipt.sessionID != receipt.sessionID
+        OwnerTruthInterviewTopicSwitchUIQASmoke.writeCompleted(
+            topicSwitchButtonVisible: controller.isTopicSwitchActionVisibleForQA,
+            oldSessionPaused: oldSessionPaused,
+            newReceipt: receipt,
+            oldAndNewSessionsDiffer: oldAndNewSessionsDiffer,
+            startRequestCount: client.startRequestCount
+        )
+        didFinish = true
+    }
+
+    private func fail(_ reason: String) {
+        guard !didFinish else { return }
+        didFinish = true
+        OwnerTruthInterviewTopicSwitchUIQASmoke.writeScenarioFailure(reason)
+    }
+}
+
 struct OwnerTruthInterviewBoundaryUIQASmokeResult: Codable {
     struct ActionResult: Codable {
         let boundary: String
@@ -7779,6 +8010,7 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
     private var boundariesBySessionID: [UUID: OwnerTruthInterviewSessionBoundary] = [:]
     private var currentSessionReceipt: OwnerTruthInterviewNaturalInputReceipt?
     private(set) var startRequestCount = 0
+    private(set) var lastTopicSwitchPauseReceipt: OwnerTruthInterviewNaturalInputReceipt?
 
     init(vaultID: OwnerTruthVaultID?) {
         self.vaultID = vaultID
@@ -7959,6 +8191,7 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
             )
             boundariesBySessionID[command.sessionID.rawValue] = current.boundary
             currentSessionReceipt = nil
+            lastTopicSwitchPauseReceipt = receipt
             completion(.success(receipt))
         } catch {
             completion(.failure(error))
