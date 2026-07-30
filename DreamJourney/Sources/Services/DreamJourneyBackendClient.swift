@@ -503,9 +503,10 @@ final class FeatureGateService {
            normalizedPath.hasSuffix("/interview-candidate-confirmations") {
             return .ownerTruthCandidateReview
         }
-        if method == .get,
+        if (method == .get || method == .post),
            normalizedPath.hasPrefix("/v2/vaults/"),
-           normalizedPath.hasSuffix("/guided-recommendations") {
+           (normalizedPath.hasSuffix("/guided-recommendations")
+                || normalizedPath.hasSuffix("/guided-recommendations/feedback")) {
             return .echoGuidedRecommendations
         }
         if method == .get,
@@ -5719,6 +5720,34 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
             case .success(let object):
                 do {
                     completion(.success(try OwnerTruthGuidedRecommendationPresentation(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func submitOwnerTruthGuidedRecommendationFeedback(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthGuidedRecommendationFeedbackCommand,
+        completion: @escaping (Result<OwnerTruthGuidedRecommendationFeedbackReceipt, Error>) -> Void
+    ) {
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/guided-recommendations/feedback"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthGuidedRecommendationFeedbackReceipt(
                         backendJSONObject: object,
                         expectedVaultID: vaultID
                     )))

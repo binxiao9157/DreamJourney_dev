@@ -6779,6 +6779,8 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
     private var renderedState: OwnerTruthInterviewNaturalInputViewState = .idle
     private var guidedRecommendationPrompts: [OwnerTruthGuidedRecommendationPrompt] = []
+    private var isSubmittingGuidedRecommendationFeedback = false
+    private var lastGuidedRecommendationFeedbackNotice: OwnerTruthGuidedRecommendationPresentationNotice?
     var onViewStateRendered: ((OwnerTruthInterviewNaturalInputViewState) -> Void)?
 
     var isTranscriptClearForQA: Bool {
@@ -7009,6 +7011,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private func renderGuidedRecommendations(
         _ state: OwnerTruthGuidedRecommendationPresentationViewState
     ) {
+        renderGuidedRecommendationFeedbackNoticeIfNeeded(state)
         guard presentation == .product,
               state.phase == .ready,
               !state.prompts.isEmpty else {
@@ -7021,6 +7024,11 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         guidedRecommendationPrompts = state.prompts
         clearGuidedRecommendationPromptButtons()
         for (index, prompt) in state.prompts.enumerated() {
+            let row = UIStackView()
+            row.axis = .horizontal
+            row.alignment = .center
+            row.spacing = 8
+
             let button = UIButton(type: .system)
             button.tag = index
             button.contentHorizontalAlignment = .leading
@@ -7040,9 +7048,65 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
                 for: .touchUpInside
             )
             button.accessibilityIdentifier = "owner-truth-guided-recommendation-\(prompt.slot.rawValue)"
-            guidedRecommendationPromptStack.addArrangedSubview(button)
+            row.addArrangedSubview(button)
+
+            let actionsButton = UIButton(type: .system)
+            actionsButton.tag = index
+            var configuration = UIButton.Configuration.plain()
+            configuration.image = UIImage(systemName: "ellipsis")
+            configuration.baseForegroundColor = DJDesignTokens.Color.textSecondary
+            configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+            actionsButton.configuration = configuration
+            actionsButton.widthAnchor.constraint(equalToConstant: 40).isActive = true
+            actionsButton.heightAnchor.constraint(equalToConstant: 40).isActive = true
+            actionsButton.accessibilityLabel = "调整引导问题"
+            actionsButton.accessibilityIdentifier = "owner-truth-guided-recommendation-actions-\(prompt.slot.rawValue)"
+            actionsButton.addTarget(
+                self,
+                action: #selector(guidedRecommendationActionsTapped(_:)),
+                for: .touchUpInside
+            )
+            row.addArrangedSubview(actionsButton)
+            guidedRecommendationPromptStack.addArrangedSubview(row)
         }
         guidedRecommendationStack.isHidden = false
+    }
+
+    private func renderGuidedRecommendationFeedbackNoticeIfNeeded(
+        _ state: OwnerTruthGuidedRecommendationPresentationViewState
+    ) {
+        guard isSubmittingGuidedRecommendationFeedback else { return }
+
+        guard let notice = state.notice else {
+            if state.phase == .ready {
+                isSubmittingGuidedRecommendationFeedback = false
+                lastGuidedRecommendationFeedbackNotice = nil
+            }
+            return
+        }
+        guard notice == .feedbackRequestFailed || notice == .contractMismatch,
+              notice != lastGuidedRecommendationFeedbackNotice else {
+            return
+        }
+
+        isSubmittingGuidedRecommendationFeedback = false
+        lastGuidedRecommendationFeedbackNotice = notice
+        let message: String
+        switch notice {
+        case .contractMismatch:
+            message = "这些引导问题已经更新，请重新选择。"
+        case .feedbackRequestFailed:
+            message = "暂时无法更新问题，请稍后重试。"
+        default:
+            return
+        }
+        let alert = UIAlertController(
+            title: "暂时无法调整问题",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "知道了", style: .default))
+        present(alert, animated: true)
     }
 
     private func clearGuidedRecommendationPromptButtons() {
@@ -7107,6 +7171,51 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         guard guidedRecommendationPrompts.indices.contains(sender.tag) else { return }
         inputTextView.text = guidedRecommendationPrompts[sender.tag].question
         inputTextView.becomeFirstResponder()
+    }
+
+    @objc private func guidedRecommendationActionsTapped(_ sender: UIButton) {
+        guard guidedRecommendationPrompts.indices.contains(sender.tag) else { return }
+        let prompt = guidedRecommendationPrompts[sender.tag]
+        let alert = UIAlertController(
+            title: "调整引导问题",
+            message: "选择后会更新后续引导问题。",
+            preferredStyle: .actionSheet
+        )
+        alert.addAction(UIAlertAction(title: "换一个问题", style: .default) { [weak self] _ in
+            self?.submitGuidedRecommendationFeedback(
+                slot: prompt.slot,
+                action: .replace,
+                reason: .questionWording
+            )
+        })
+        alert.addAction(UIAlertAction(title: "不想聊这个方向", style: .default) { [weak self] _ in
+            self?.submitGuidedRecommendationFeedback(
+                slot: prompt.slot,
+                action: .notInterested,
+                reason: .topicPreference
+            )
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = sender
+            popover.sourceRect = sender.bounds
+        }
+        present(alert, animated: true)
+    }
+
+    private func submitGuidedRecommendationFeedback(
+        slot: OwnerTruthKnowledgeRecommendationSlot,
+        action: OwnerTruthGuidedRecommendationFeedbackAction,
+        reason: OwnerTruthGuidedRecommendationFeedbackReason
+    ) {
+        guard let guidedRecommendationUseCase else { return }
+        isSubmittingGuidedRecommendationFeedback = true
+        lastGuidedRecommendationFeedbackNotice = nil
+        guidedRecommendationUseCase.submitFeedback(
+            slot: slot,
+            action: action,
+            reason: reason
+        )
     }
 
     private func submitInput() {
