@@ -61,7 +61,8 @@
     "WI-S1-01-07_G0_CITATION_STALE_REASON_PRESERVATION_VERIFIED_LOCAL",
     "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_ADMISSION_AUTHORIZATION_VERIFIED_LOCAL_1eb2359",
     "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_STATUS_VERIFIED_LOCAL_6fa71fc",
-    "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_STATUS_IOS_TYPED_CONSUMER_VERIFIED_LOCAL"
+    "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_STATUS_IOS_TYPED_CONSUMER_VERIFIED_LOCAL",
+    "WI-S1-01-03_G0_TOPIC_SHIFT_SHADOW_VERIFIED_LOCAL_06a0a85"
   ],
   "currentSubSlice": "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_STATUS_IOS_TYPED_CONSUMER_VERIFIED_LOCAL / iOS now consumes the formal Owner-only candidate-proposal staging status through the captured ownerTruthCandidateReview decision and AccountLease request/commit fence. The strict value-free decoder rejects unknown/private fields and incoherent state combinations; it has no UI attachment, mutation API, Provider call, public Echo change, deployment or true-device claim.",
   "m0BGuidedRecommendationPresentationEvidence": {
@@ -318,9 +319,9 @@
     "registryClosure": "SCOPED_G0_EVIDENCE_PRESENT_G1_G2_G4_OPEN"
   },
     {
-      "evidence": "docs/superpowers/status/2026-07-23-wi-s1-01-03-m0a-boundary-qa-surface.md; ../DreamJourneyBackend/docs/backend/2026-07-23-owner-truth-same-vault-thread-isolation.md",
+      "evidence": "docs/superpowers/status/2026-07-23-wi-s1-01-03-m0a-boundary-qa-surface.md; ../DreamJourneyBackend/docs/backend/2026-07-23-owner-truth-same-vault-thread-isolation.md; ../DreamJourneyBackend/docs/backend/2026-07-31-owner-truth-topic-shift-shadow-g0.md",
       "id": "WI-S1-01-03",
-      "implementationStatus": "INTERNAL_READY / SELECTED_EXTRACTION_BASELINE_G0_G2_DEPLOYED_179efbd / FORMAL_USER_BOUNDARY_COMMAND_G0_G2_DEPLOYED_a45170d / LEASE_FENCED_BOUNDARY_USE_CASE_G0_SCOPED_07ef43e / QA_BOUNDARY_ACTION_SURFACE_G0_G1_SCOPED_303e168 / DO_NOT_ASK_CONFIRMED_RESTORE_G0_G1_G2_DEPLOYED_58ec52f / CRISIS_SAFETY_OVERRIDE_G0_G2_DEPLOYED_4ebeda0 / ATOMIC_DEFER_WITH_SAVED_CONTINUATION_G0_G2_DEPLOYED_f74f18b / SAME_VAULT_THREAD_PREFERENCE_ISOLATION_G0_G2_DEPLOYED_8a28825 / DEFAULT_OFF / G3_G4_OPEN",
+      "implementationStatus": "INTERNAL_READY / SELECTED_EXTRACTION_BASELINE_G0_G2_DEPLOYED_179efbd / FORMAL_USER_BOUNDARY_COMMAND_G0_G2_DEPLOYED_a45170d / LEASE_FENCED_BOUNDARY_USE_CASE_G0_SCOPED_07ef43e / QA_BOUNDARY_ACTION_SURFACE_G0_G1_SCOPED_303e168 / DO_NOT_ASK_CONFIRMED_RESTORE_G0_G1_G2_DEPLOYED_58ec52f / CRISIS_SAFETY_OVERRIDE_G0_G2_DEPLOYED_4ebeda0 / ATOMIC_DEFER_WITH_SAVED_CONTINUATION_G0_G2_DEPLOYED_f74f18b / SAME_VAULT_THREAD_PREFERENCE_ISOLATION_G0_G2_DEPLOYED_8a28825 / TOPIC_SHIFT_SHADOW_G0_LOCAL_06a0a85 / DEFAULT_OFF / G3_G4_OPEN",
       "registryClosure": "SCOPED_G0_G1_G2_EVIDENCE_PRESENT_G3_G4_OPEN"
     },
     {
@@ -907,5 +908,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-31T02:17:51+08:00"
+  "updatedAt": "2026-07-31T02:36:28+08:00"
 }
