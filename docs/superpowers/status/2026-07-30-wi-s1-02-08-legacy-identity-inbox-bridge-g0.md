@@ -25,7 +25,8 @@ main@5f90da0 feat(v4): add legacy identity inbox bridge
 - 不创建任何 `legacy_identity_aliases` 数据行，不自动迁移或合并历史账号。
 - 不改登录、refresh token、身份绑定、家庭关系、Time Letter、Echo、业务消息 writer、`mailbox_letters`、公开 API 或 iOS UI。
 - 不通过手机号、家庭关系或默认授权推断收件人身份；未来业务 writer 仍必须单独证明 exact resource/purpose 的 access grant。
-- 不运行 legacy identity resolver 的 PostgreSQL disposable smoke，不声称跨账号消息已可见或可投递。
+- 不接入跨账号 writer、reader 或公开消息中心；bridge resolver 虽已完成独立
+  PostgreSQL disposable smoke，仍不代表跨账号消息可见或可投递。
 
 ## 验证
 
@@ -37,11 +38,10 @@ git diff --check
 
 结果：
 
-- 专用 gate `9` 项通过，覆盖已验证正常路径、缺失/重复 bridge、claim pending、身份/Subject/Vault/账户生命周期失效、value-free summary 与只读 Postgres 查询边界。
+- 专用 gate `11` 项通过，覆盖已验证正常路径、缺失/重复 bridge、claim pending、身份/Subject/Vault/账户生命周期失效、value-free summary、只读 Postgres 查询边界和 disposable smoke runner。
 - 全量 `scripts/verify_backend.sh` 通过，包含既有业务消息、异步 effect、Owner Truth、Provider、知识库、迁移、FastAPI 与静态边界回归。
-- migration manifest 已由加载器解析到 version `0060`。后端 `main@f3e026d` 的
-  schema verify 已确认生产环境 schema head 为 `0065`，因而 `0060` 已应用；但尚未
-  运行 legacy identity resolver 的独立 disposable PostgreSQL 行为 smoke。
+- 后端 `main@fe9eefa` 已部署，API 容器执行
+  `scripts/run-backend-legacy-identity-inbox-bridge-postgres-smoke.sh` 通过。该脚本仅创建、迁移和删除独立临时数据库，验证 active 解析、account suspend/soft-delete fail-closed、坐标不可变、value-free summary，以及零 `mailbox_letters` / business-message projection 写入；`/ready` 的 database、schema、auth、incident 均为 `ready`。
 
 ## Gate 状态
 
@@ -49,7 +49,7 @@ git diff --check
 | --- | --- | --- |
 | G0 | 已通过（本地） | 内部 identity/account/vault 桥接与 fail-closed resolver 合同已验证。 |
 | G1 | 未开始 | 没有 iOS 或公开 reader 使用 bridge。 |
-| G2 | 部署仅验证 | migration 已随 schema head `0065` 应用；resolver 行为的 disposable PostgreSQL smoke 仍未运行。 |
+| G2 | 范围内通过 | `main@fe9eefa` 的 API 容器已执行 resolver disposable PostgreSQL smoke；只证明读桥的 fail-closed 边界。 |
 | G3/G4 | 未开始 | 没有 Provider、通知或真机行为。 |
 
 ## 后续前提
@@ -58,5 +58,5 @@ git diff --check
 
 1. 对 exact resource、purpose、recipient 的 `DelegatedAccessService` 授权决定；
 2. 业务完成 receipt 与业务目标的一致性重校验；
-3. legacy identity resolver 与 recipient admission 的独立 disposable PostgreSQL smoke；
+3. recipient admission 的独立 disposable PostgreSQL smoke；
 4. 仅在前三项具备后，才讨论受控 writer、内部 reader 与公开消息中心接入。
