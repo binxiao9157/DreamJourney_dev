@@ -48,12 +48,20 @@
       "WI-S1-01-09_G0_LEGACY_PARITY_EVIDENCE_REMEDIATION_FENCE_VERIFIED_LOCAL",
     "WI-S1-01-07_G0_CONTEXT_CITATION_OFFLINE_NEGATIVE_CORPUS_VERIFIED_LOCAL",
     "WI-S1-01-10_G0_AUTHORITY_EPOCH_CROSS_CHAIN_NEGATIVE_CORPUS_VERIFIED_LOCAL",
-    "WI-S1-03-05_G0_CONTEXT_BUILD_ACCOUNT_LEASE_DELIVERY_FENCE_VERIFIED_LOCAL"
+    "WI-S1-03-05_G0_CONTEXT_BUILD_ACCOUNT_LEASE_DELIVERY_FENCE_VERIFIED_LOCAL",
+    "WI-S1-01-06_G2_OWNER_TRUTH_WORKER_AND_CORRECTION_CHAIN_VERIFIED_DEPLOYED_e4e4713"
   ],
-  "currentSubSlice": "WI-S1-03-05_G0_CONTEXT_BUILD_ACCOUNT_LEASE_DELIVERY_FENCE_VERIFIED_LOCAL / EchoApplicationCoordinator now binds the AccountLease that started /context/build, revalidates it at request and runtime delivery, and reports an explicit value-minimized authority invalidation instead of passing a stale packet to EchoViewController. The controller cancels the old turn/gate without a local fallback. This is local iOS G0 evidence only; it makes no deployment, PostgreSQL, provider, public-UI or true-device claim.",
+  "currentSubSlice": "WI-S1-01-06_G2_OWNER_TRUTH_WORKER_AND_CORRECTION_CHAIN_VERIFIED_DEPLOYED_e4e4713 / The deployed disposable PostgreSQL chain now verifies Source Candidate extraction, Projection/SearchDocument rebuild, current Citation protection and correction resolution under the forward-only 0064/0065 trigger fixes. This is scoped G2 evidence only; it does not promote public Context/Echo, retrieval quality, provider delivery, G3 operations or G4 product/device acceptance.",
     "gateEvidence": {
     "G0": "VERIFIED_LOCAL / LEGACY_KBLITE_GAP_PROMPT_FENCE / QUERY_RANKED_CONTEXT_SHADOW / LIVE_ECHO_OWNER_TRUTH_CONTEXT_SHADOW_OBSERVER / LIVE_ECHO_OWNER_TRUTH_CONTEXT_QUERY_CORRELATION / LIVE_ECHO_CONTEXT_V1_V4_PARITY_OBSERVATION / CONTEXT_V1_RESPONSE_REQUEST_CORRELATION / CONFIRMED_PROJECTION_CONTEXT_MATERIALIZATION / INTERVIEW_TURN_CONFIRMED_PROJECTION_CONTEXT_BINDING / INTERVIEW_REVIEW_BATCH_AUTOMATION / INTERVIEW_REVIEW_BATCH_ACKNOWLEDGEMENT_API / INTERVIEW_CANDIDATE_PROPOSAL_ADMISSION_API / INTERVIEW_CANDIDATE_PROPOSAL_STATUS_API / FORMAL_INTERVIEW_CONFIRMATION_MEMORY_ACTIVATION / FORMAL_INTERVIEW_SINGLE_CONFIRMATION_MEMORY_ACTIVATION / FORMAL_CONFIRMATION_PROJECTION_WORKER_CHAIN / FORMAL_CONFIRMATION_CONTEXT_MATERIALIZATION_CHAIN / INTERVIEW_CANDIDATE_PROPOSAL_SOURCE_LIVENESS_STATUS / INTERVIEW_CANDIDATE_PROPOSAL_RESULT_STATUS / CONTEXT_CITATION_CURRENTNESS_GUARD / CORRECTION_RESOLUTION_SOURCE_CURRENTNESS / PROJECTION_RIGHTS_REVISION_FENCE / OWNER_QA_CITATION_CURRENTNESS_READ_AND_VALUE_FREE_FEEDBACK / INTERVIEW_SESSION_EXPLICIT_END / SOURCE_CANDIDATE_EXTRACTION_WORKER / SOURCE_CANDIDATE_EXTRACTION_POSTGRES_SMOKE_PREPARED_NOT_EXECUTED / WORKER_FORMAL_PROVENANCE_FENCE_STATIC_VERIFIED_LOCAL / INTERVIEW_TOPIC_SWITCH_QA_CONTRACT_VERIFIED_LOCAL / INTERVIEW_ORCHESTRATION_QA_READ_VERIFIED_LOCAL / CONTEXT_CITATION_OFFLINE_NEGATIVE_CORPUS_VERIFIED_LOCAL_BACKEND_f4f1182 / AUTHORITY_EPOCH_CROSS_CHAIN_NEGATIVE_CORPUS_VERIFIED_LOCAL_BACKEND_8f84567 / BACKEND_LOCAL_COMMITTED_f3c476d_10c8cf0_defb350_44046ae_eb2b085_96e05ff_3a4ae63_7c86649_86196eb_6cb4a4d_d1887f3_3c21462_17d7060_41d3731_8a4423f_d7ef8f3_8d21a42_333a506_7a88fcb_d793865_76f0b4b / IOS_LOCAL_COMMITTED_31f4fc8_PLUS_INTERVIEW_ORCHESTRATION_READ",
-      "G1": "VERIFIED_LOCAL / INTERVIEW_ORCHESTRATION_UIQA_SMOKE / INTERVIEW_TOPIC_SWITCH_UIQA_SMOKE / default-off simulator-only policy page renders pause/topicChanged/paused without state mutation, and the separate QA-only natural-input control proves old-session pause plus exactly one distinct active/open replacement session; result JSON and screenshots captured; no public navigation, network, provider, PostgreSQL, deployment or true-device evidence"
+      "G1": "VERIFIED_LOCAL / INTERVIEW_ORCHESTRATION_UIQA_SMOKE / INTERVIEW_TOPIC_SWITCH_UIQA_SMOKE / default-off simulator-only policy page renders pause/topicChanged/paused without state mutation, and the separate QA-only natural-input control proves old-session pause plus exactly one distinct active/open replacement session; result JSON and screenshots captured; no public navigation, network, provider, PostgreSQL, deployment or true-device evidence",
+      "G2": "VERIFIED_DEPLOYED_SCOPED / backend main@e4e4713 / schema head 0065 verified in the API container; disposable Owner Truth Postgres smoke passed Source Candidate worker, Projection/SearchDocument rebuild, typed Citation, correction success/rejection/idempotency and rights/currentness fences; async-effects, readiness and operation-metrics deployed smokes also passed. This is not a global release GO or G3/G4 claim."
+    },
+    "deployedG2Evidence": {
+      "backendRevision": "e4e4713",
+      "schemaHead": "0065",
+      "evidence": "../DreamJourneyBackend/docs/backend/2026-07-30-owner-truth-correction-resolution-corrected-currentness.md",
+      "scope": "Disposable PostgreSQL smoke only; no production business rows, provider execution, public Context/Echo cutover, retrieval-quality claim, true-device acceptance or release promotion."
     },
     "interviewPacingEvidence": {
       "G0": "VERIFIED_LOCAL / backend main@3ea898a / QA-header-only exact pacing command accepts only completion events with optimistic session version; summary is rejected before the minimum deepening count and resets the count only after acceptance",
@@ -820,7 +828,7 @@
   "nextWorkItem": {
     "id": "WI-S1-01-06",
     "state": "RECONCILE_AFTER_CURRENT",
-    "summary": "The Source -> Candidate execution boundary remains locally closed behind explicit default-off flags: current text/conversation Sources become only restricted pending Candidates, with live admission, idempotent immutable receipts and per-lease failure handling. The QA-only explicit topic-switch boundary is also locally closed: pause the old active interview thread/session using exact optimistic versions, then start a new session only after its value-minimized receipt matches. It is not an automatic classifier, does not carry topic value and is not a public UI. The disposable Postgres smoke is still not locally G2-verified because this workstation cannot reach the Docker-only database hostname. Select the next genuinely unproven P0 gap from the current evidence set; do not repeat existing Correction, Context, KBLite compatibility, formal confirmation or public Echo work, and do not claim deployment, retrieval quality, true-device or public release from local evidence."
+    "summary": "The deployed disposable PostgreSQL smoke now closes scoped G2 evidence for the Source -> Candidate worker, Projection/SearchDocument rebuild, Citation currentness and correction-resolution chain. Keep all flags default-off and select the next genuinely unproven P0 gap; do not repeat this worker/correction smoke or claim public Context/Echo cutover, retrieval quality, provider delivery, true-device or public release from it."
   },
   "plan": "docs/superpowers/plans/2026-07-17-dreamjourney-v4-final-requirements-execution-plan.md",
   "registry": {
@@ -829,5 +837,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-30T13:17:00+08:00"
+  "updatedAt": "2026-07-30T14:18:00+08:00"
 }
