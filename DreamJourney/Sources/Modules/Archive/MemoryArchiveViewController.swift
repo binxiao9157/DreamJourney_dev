@@ -608,6 +608,7 @@ final class MemoryArchiveViewController: UIViewController {
     private let analysisPrivacyDisclaimerLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
     private let timeLetterReminderButton = UIButton(type: .system)
     private let candidateConfirmationButton = UIButton(type: .system)
+    private let candidateMemoryActivationButton = UIButton(type: .system)
     private let candidateReviewQAButton = UIButton(type: .system)
     private var isRefreshingFromBackend = false
     private var isRefreshingTimeLetterMailbox = false
@@ -800,6 +801,7 @@ final class MemoryArchiveViewController: UIViewController {
         configureRemoteSyncCaptionLabel()
         configureTimeLetterReminderButton()
         configureCandidateConfirmationButton()
+        configureCandidateMemoryActivationButton()
         configureCandidateReviewQAButton()
         configureArchiveFilterButton()
         let bookEntry = makeBookEntryCard()
@@ -811,6 +813,7 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.addArrangedSubview(remoteSyncCaptionLabel)
         mainStack.addArrangedSubview(timeLetterReminderButton)
         mainStack.addArrangedSubview(candidateConfirmationButton)
+        mainStack.addArrangedSubview(candidateMemoryActivationButton)
         mainStack.addArrangedSubview(candidateReviewQAButton)
         mainStack.addArrangedSubview(bookEntry)
         mainStack.addArrangedSubview(materialsHeader)
@@ -823,6 +826,7 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.setCustomSpacing(8, after: remoteSyncCaptionLabel)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: timeLetterReminderButton)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: candidateConfirmationButton)
+        mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: candidateMemoryActivationButton)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: candidateReviewQAButton)
         mainStack.setCustomSpacing(22, after: bookEntry)
         mainStack.setCustomSpacing(10, after: materialsHeader)
@@ -866,6 +870,7 @@ final class MemoryArchiveViewController: UIViewController {
         reloadFeatureCards(summary: summary)
         updateTimeLetterReminderButton()
         updateCandidateConfirmationButton()
+        updateCandidateMemoryActivationButton()
         updateCandidateReviewQAButton()
         updateArchiveFilterButton()
         reloadArchiveList()
@@ -1031,6 +1036,23 @@ final class MemoryArchiveViewController: UIViewController {
         )
     }
 
+    private func configureCandidateMemoryActivationButton() {
+        candidateMemoryActivationButton.titleLabel?.font = DJDesignTokens.Font.label(12)
+        candidateMemoryActivationButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        candidateMemoryActivationButton.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.72)
+        candidateMemoryActivationButton.layer.cornerRadius = 14
+        candidateMemoryActivationButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+        candidateMemoryActivationButton.contentHorizontalAlignment = .leading
+        candidateMemoryActivationButton.accessibilityIdentifier = "owner-truth-memory-activation-inbox-entry"
+        candidateMemoryActivationButton.accessibilityLabel = "待纳入正式记忆"
+        candidateMemoryActivationButton.isHidden = true
+        candidateMemoryActivationButton.addTarget(
+            self,
+            action: #selector(ownerTruthCandidateMemoryActivationTapped),
+            for: .touchUpInside
+        )
+    }
+
     private func configureArchiveFilterButton() {
         archiveFilterButton.titleLabel?.font = DJDesignTokens.Font.label(12)
         archiveFilterButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
@@ -1120,6 +1142,17 @@ final class MemoryArchiveViewController: UIViewController {
         candidateConfirmationButton.accessibilityLabel = isVisible ? "待确认记忆" : nil
         candidateConfirmationButton.isHidden = !isVisible
         candidateConfirmationButton.isUserInteractionEnabled = isVisible
+    }
+
+    private func updateCandidateMemoryActivationButton() {
+        let isVisible = isSelfAutobiographyMode && FeatureGateService.shared.isRouteAllowed(
+            .ownerTruthCandidateReview,
+            localEnabled: FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview)
+        )
+        candidateMemoryActivationButton.setTitle(isVisible ? "待纳入正式记忆" : nil, for: .normal)
+        candidateMemoryActivationButton.accessibilityLabel = isVisible ? "待纳入正式记忆" : nil
+        candidateMemoryActivationButton.isHidden = !isVisible
+        candidateMemoryActivationButton.isUserInteractionEnabled = isVisible
     }
 
     private func reloadFeatureCards(summary: (total: Int, photos: Int, audio: Int, text: Int)) {
@@ -2786,6 +2819,23 @@ final class MemoryArchiveViewController: UIViewController {
         )
     }
 
+    @objc private func ownerTruthCandidateMemoryActivationTapped() {
+        guard isSelfAutobiographyMode,
+              FeatureGateService.shared.isRouteAllowed(
+                  .ownerTruthCandidateReview,
+                  localEnabled: FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview)
+              ),
+              let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
+            return
+        }
+        navigationController?.pushViewController(
+            OwnerTruthInterviewCandidateMemoryActivationInboxViewController(
+                accountLease: accountLease
+            ),
+            animated: true
+        )
+    }
+
     @objc private func ownerTruthCandidateReviewQATapped() {
         guard OwnerTruthCandidateReviewQAGate.isEnabled,
               isSelfAutobiographyMode,
@@ -3771,6 +3821,330 @@ final class MemoryArchiveViewController: UIViewController {
 }
 
 // MARK: - Default-off formal candidate confirmation
+
+final class OwnerTruthInterviewCandidateMemoryActivationInboxViewController: UIViewController {
+    private let accountLease: AccountLease
+    private let useCase: OwnerTruthInterviewCandidateMemoryActivationInboxUseCase
+    private let activationClient: OwnerTruthInterviewCandidateMemoryActivationClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAvailable: () -> Bool
+    private let tableView = UITableView(frame: .zero, style: .insetGrouped)
+    private let statusLabel = UILabel()
+    private let emptyStateLabel = UILabel()
+    private lazy var refreshButton = UIBarButtonItem(
+        barButtonSystemItem: .refresh,
+        target: self,
+        action: #selector(refreshTapped)
+    )
+
+    private var renderedState = OwnerTruthInterviewCandidateMemoryActivationInboxViewState.idle
+    private var activationUseCase: OwnerTruthInterviewCandidateMemoryActivationUseCase?
+
+    init(
+        accountLease: AccountLease,
+        inboxClient: OwnerTruthInterviewCandidateMemoryActivationInboxClient = DreamJourneyBackendClient.shared,
+        activationClient: OwnerTruthInterviewCandidateMemoryActivationClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool = {
+            FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview).allowed
+        }
+    ) {
+        self.accountLease = accountLease
+        self.activationClient = activationClient
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+        useCase = OwnerTruthInterviewCandidateMemoryActivationInboxUseCase(
+            accountLease: accountLease,
+            client: inboxClient,
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyAvailable: releasePolicyAvailable
+        )
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "纳入正式记忆"
+        view.backgroundColor = DJDesignTokens.Color.background
+        view.accessibilityIdentifier = "owner-truth-memory-activation-inbox"
+        navigationItem.rightBarButtonItem = refreshButton
+        configureHeader()
+        configureTableView()
+        configureUseCase()
+        render(useCase.viewState)
+        useCase.send(.refresh)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+    }
+
+    private func configureHeader() {
+        statusLabel.font = DJDesignTokens.Font.body(14)
+        statusLabel.textColor = DJDesignTokens.Color.textSecondary
+        statusLabel.numberOfLines = 0
+        statusLabel.text = "已确认的记忆线索，等待你明确纳入正式记忆。"
+        statusLabel.accessibilityIdentifier = "owner-truth-memory-activation-inbox-status"
+        view.addSubview(statusLabel)
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+    }
+
+    private func configureTableView() {
+        tableView.backgroundColor = .clear
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.register(
+            OwnerTruthCandidateMemoryActivationInboxCell.self,
+            forCellReuseIdentifier: OwnerTruthCandidateMemoryActivationInboxCell.reuseIdentifier
+        )
+        tableView.accessibilityIdentifier = "owner-truth-memory-activation-inbox-list"
+
+        emptyStateLabel.font = DJDesignTokens.Font.body(15)
+        emptyStateLabel.textColor = DJDesignTokens.Color.textTertiary
+        emptyStateLabel.textAlignment = .center
+        emptyStateLabel.numberOfLines = 0
+        emptyStateLabel.isHidden = true
+        emptyStateLabel.accessibilityIdentifier = "owner-truth-memory-activation-inbox-empty"
+        tableView.backgroundView = emptyStateLabel
+
+        view.addSubview(tableView)
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            statusLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            tableView.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 8),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+    }
+
+    private func configureUseCase() {
+        useCase.onViewStateChange = { [weak self] state in
+            guard let self else { return }
+            if Thread.isMainThread {
+                render(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.render(state)
+                }
+            }
+        }
+    }
+
+    private func render(_ state: OwnerTruthInterviewCandidateMemoryActivationInboxViewState) {
+        renderedState = state
+        let isActivating = activationUseCase?.viewState.phase == .activating
+        refreshButton.isEnabled = state.phase != .loading && !isActivating
+        if !isActivating {
+            statusLabel.text = statusText(for: state)
+        }
+        emptyStateLabel.text = emptyText(for: state)
+        emptyStateLabel.isHidden = emptyStateLabel.text == nil
+        tableView.isUserInteractionEnabled = state.phase == .ready && !isActivating
+        tableView.reloadData()
+    }
+
+    private func statusText(for state: OwnerTruthInterviewCandidateMemoryActivationInboxViewState) -> String {
+        switch state.phase {
+        case .idle:
+            return "正在准备待纳入的正式记忆。"
+        case .unavailable:
+            return "待纳入正式记忆暂未开放。"
+        case .loading:
+            return "正在读取待纳入的正式记忆。"
+        case .ready:
+            return "已确认的记忆线索，等待你明确纳入正式记忆。"
+        case .empty:
+            return "当前没有等待纳入正式记忆的线索。"
+        case .failed:
+            return "暂时无法读取待纳入的正式记忆，请稍后重试。"
+        }
+    }
+
+    private func emptyText(for state: OwnerTruthInterviewCandidateMemoryActivationInboxViewState) -> String? {
+        switch state.phase {
+        case .empty:
+            return "你确认的记忆线索会在这里等待你明确纳入正式记忆。"
+        case .unavailable:
+            return "该功能仅会在获准的发布策略下开放。"
+        case .failed:
+            return "请点右上角重新载入。"
+        default:
+            return nil
+        }
+    }
+
+    private func presentActivationConfirmation(
+        item: OwnerTruthInterviewCandidateMemoryActivationInboxItem,
+        inbox: OwnerTruthInterviewCandidateMemoryActivationInbox
+    ) {
+        let alert = UIAlertController(
+            title: "纳入正式记忆",
+            message: "这项已确认的记忆线索将被明确纳入正式记忆。请确认后继续。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "确认纳入", style: .default) { [weak self] _ in
+            self?.activate(item: item, from: inbox)
+        })
+        present(alert, animated: true)
+    }
+
+    private func activate(
+        item: OwnerTruthInterviewCandidateMemoryActivationInboxItem,
+        from inbox: OwnerTruthInterviewCandidateMemoryActivationInbox
+    ) {
+        guard releasePolicyAvailable(),
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+              inbox.isBound(to: accountLease),
+              inbox.items.contains(item) else {
+            failClosedForUnavailableState()
+            return
+        }
+
+        let activationUseCase = OwnerTruthInterviewCandidateMemoryActivationUseCase(
+            accountLease: accountLease,
+            activationInbox: inbox,
+            item: item,
+            client: activationClient,
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyAvailable: releasePolicyAvailable
+        )
+        self.activationUseCase = activationUseCase
+        activationUseCase.onViewStateChange = { [weak self] state in
+            guard let self else { return }
+            if Thread.isMainThread {
+                handleActivationState(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.handleActivationState(state)
+                }
+            }
+        }
+        activationUseCase.send(.activate)
+    }
+
+    private func handleActivationState(_ state: OwnerTruthInterviewCandidateMemoryActivationViewState) {
+        switch state.phase {
+        case .idle:
+            break
+        case .activating:
+            refreshButton.isEnabled = false
+            tableView.isUserInteractionEnabled = false
+            statusLabel.text = "正在纳入正式记忆。"
+        case .activated:
+            activationUseCase = nil
+            refreshButton.isEnabled = false
+            tableView.isUserInteractionEnabled = false
+            statusLabel.text = "已纳入正式记忆，正在刷新待办。"
+            useCase.send(.refresh)
+        case .failed:
+            activationUseCase = nil
+            statusLabel.text = "暂时无法纳入正式记忆，请稍后重试。"
+            refreshButton.isEnabled = renderedState.phase != .loading
+            tableView.isUserInteractionEnabled = renderedState.phase == .ready
+        case .unavailable:
+            activationUseCase = nil
+            failClosedForUnavailableState()
+        }
+    }
+
+    private func failClosedForUnavailableState() {
+        activationUseCase = nil
+        refreshButton.isEnabled = false
+        tableView.isUserInteractionEnabled = false
+        statusLabel.text = "当前无法纳入正式记忆。"
+        useCase.send(.refresh)
+    }
+
+    @objc private func refreshTapped() {
+        guard activationUseCase == nil else { return }
+        useCase.send(.refresh)
+    }
+}
+
+extension OwnerTruthInterviewCandidateMemoryActivationInboxViewController: UITableViewDataSource, UITableViewDelegate {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        renderedState.inbox?.items.count ?? 0
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        cellForRowAt indexPath: IndexPath
+    ) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(
+            withIdentifier: OwnerTruthCandidateMemoryActivationInboxCell.reuseIdentifier,
+            for: indexPath
+        ) as! OwnerTruthCandidateMemoryActivationInboxCell
+        if let item = renderedState.inbox?.items[indexPath.row] {
+            cell.configure(item)
+        }
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        guard releasePolicyAvailable(),
+              accountLeaseRuntime.validate(accountLease, at: .ui).allowed,
+              let inbox = renderedState.inbox,
+              inbox.isBound(to: accountLease),
+              inbox.items.indices.contains(indexPath.row),
+              activationUseCase == nil else {
+            failClosedForUnavailableState()
+            return
+        }
+        tableView.deselectRow(at: indexPath, animated: true)
+        presentActivationConfirmation(item: inbox.items[indexPath.row], inbox: inbox)
+    }
+}
+
+private final class OwnerTruthCandidateMemoryActivationInboxCell: UITableViewCell {
+    static let reuseIdentifier = "OwnerTruthCandidateMemoryActivationInboxCell"
+
+    private let titleLabel = UILabel()
+    private let detailLabel = UILabel()
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        backgroundColor = DJDesignTokens.Color.surface
+        selectionStyle = .default
+        titleLabel.font = DJDesignTokens.Font.body(16)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        detailLabel.font = DJDesignTokens.Font.label(13)
+        detailLabel.textColor = DJDesignTokens.Color.textSecondary
+        detailLabel.numberOfLines = 0
+        let stack = UIStackView(arrangedSubviews: [titleLabel, detailLabel])
+        stack.axis = .vertical
+        stack.spacing = 4
+        contentView.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
+            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
+        ])
+        accessibilityIdentifier = "owner-truth-memory-activation-inbox-item"
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(_: OwnerTruthInterviewCandidateMemoryActivationInboxItem) {
+        titleLabel.text = "已确认的记忆线索"
+        detailLabel.text = "等待你明确纳入正式记忆"
+        accessibilityLabel = "已确认的记忆线索，等待你明确纳入正式记忆"
+    }
+}
 
 final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewController {
     private let accountLease: AccountLease
