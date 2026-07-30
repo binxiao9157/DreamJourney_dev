@@ -92,6 +92,7 @@ enum QALaunchScenario: String, CaseIterable {
     case digitalHumanRuntimeStubSmoke = "DJRunDigitalHumanRuntimeStubSmoke"
     case voiceCloneProfileSelectionSmoke = "DJRunVoiceCloneProfileSelectionSmoke"
     case voiceCloneSynthesisRuntimeSmoke = "DJRunVoiceCloneSynthesisRuntimeSmoke"
+    case voiceCloneOwnerScopeSmoke = "DJRunVoiceCloneOwnerScopeSmoke"
     case tencentBackendPCMDriveMockSmoke = "DJRunTencentBackendPCMDriveMockSmoke"
     case echoTraceExportSmoke = "DJRunEchoTraceExportSmoke"
     case echoRuntimeDiagnosticsExportSmoke = "DJRunEchoRuntimeDiagnosticsExportSmoke"
@@ -143,6 +144,7 @@ enum QALaunchScenario: String, CaseIterable {
         .digitalHumanRuntimeStubSmoke,
         .voiceCloneProfileSelectionSmoke,
         .voiceCloneSynthesisRuntimeSmoke,
+        .voiceCloneOwnerScopeSmoke,
         .tencentBackendPCMDriveMockSmoke,
         .echoTraceExportSmoke,
         .echoRuntimeDiagnosticsExportSmoke,
@@ -194,6 +196,7 @@ enum QALaunchScenario: String, CaseIterable {
     var sessionPreparation: QALaunchScenarioSessionPreparation {
         switch self {
         case .globalPrivateStoreRetirementSmoke,
+             .voiceCloneOwnerScopeSmoke,
              .backendEnvironmentSmoke,
              .seedEchoArchiveContext,
              .seedArchiveAnalysisInsights,

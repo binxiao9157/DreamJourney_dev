@@ -5,8 +5,8 @@
 - Work Item：`WI-S0-01-07`
 - 子闭环：`WI-S0-01-07B Voice / TTS / Digital Human local owner scope`
 - Authority：`ACCOUNT_LOCAL_STATE`
-- 结论：07B 内部实现、G0 可执行检查和通用 iOS 构建完成；结合 07A，`WI-S0-01-07` 达到内部代码完成状态，下一任务进入 `WI-S0-01-08`。
-- 状态上限：本轮未修改后端或 Provider 行为，也未声明真实设备、恢复演练或产品验收完成；G1 真实 A/B 交互、G3 恢复/回滚证据和 G4 外部验收继续开放。
+- 结论：07B 内部实现、G0 可执行检查和通用 iOS 构建完成；Voice Clone 本地状态已补一条 simulator-only 的 A/B G1 子证据。结合 07A，`WI-S0-01-07` 达到内部代码完成状态，下一任务进入 `WI-S0-01-08`。
+- 状态上限：本轮未修改后端或 Provider 行为，也未声明真实设备、恢复演练或产品验收完成；Memoir TTS / Digital Human 与真实账号 UI 切换的 G1、G3 恢复/回滚证据和 G4 外部验收继续开放。
 
 ## 2. 实现结果
 
@@ -61,6 +61,16 @@
 - generic iOS Simulator Debug build：通过；日志为 `tmp/visual-qa/prd-stitch-ui/wi-s0-01-07b/simulator-build.log`。
 - generic iPhoneOS Debug build：通过；使用本机签名覆盖 `2BTR77V3R8 / com.yxj.dreamjourney.app`，未修改共享工程签名。
 - iPhoneOS 报告：`tmp/visual-qa/prd-stitch-ui/iphoneos-generic-build/20260718-wi-s0-01-07b-owner-scope/report.md`。
+
+### 4.1 Voice Clone 本地状态 simulator-only G1 子证据（2026-07-30）
+
+- 新增 QA-only launch arg：`DJRunVoiceCloneOwnerScopeSmoke`；仅在 `UI_QA_SIMULATOR && targetEnvironment(simulator)` 编译，不进入公开 UI、Provider 调用或真实音色训练。
+- Smoke 实际使用 `VoiceCloneLocalStateStore`，验证 Account A/B 相互隔离、generation 变化不继承旧 profile、旧 lease 写入被拒绝、删除 Account A 只清理 A 的 scoped state、旧全局 voice clone payload 被 quarantine。
+- `Scripts/QA/product-v4/run-voice-clone-owner-scope-uiqa-smoke.sh`：通过。
+- result：`tmp/visual-qa/product-v4/voice-clone-owner-scope/20260730-voice-clone-owner-scope-r3/voice-clone-owner-scope-uiqa-result.json`，六项断言均为 `true`。
+- screenshot：`tmp/visual-qa/product-v4/voice-clone-owner-scope/20260730-voice-clone-owner-scope-r3/01-voice-clone-owner-scope.png`。
+- 既有 `Scripts/QA/product-v4/run-voice-clone-local-owner-scope-gate.sh` 保持通过；generic iPhoneOS Debug build 通过，日志为 `tmp/visual-qa/product-v4/voice-clone-owner-scope/20260730-voice-clone-owner-scope-r3/generic-iphoneos-build.log`。
+- 此证据不覆盖真实登录/退出 UI、Memoir TTS、Digital Human session、Provider、恢复演练或真机验收，不能单独关闭整个 `WI-S0-01-07` 的外部门。
 
 ## 5. 后续交接
 

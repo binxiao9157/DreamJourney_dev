@@ -2,6 +2,10 @@ import CocoaLumberjack
 import CryptoKit
 import Foundation
 
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+import UIKit
+#endif
+
 enum VoiceCloneSampleStatus: String, Codable {
     case notProvided
     case pending
@@ -546,6 +550,280 @@ private final class VoiceCloneLocalStateStore {
         return defaults.bool(forKey: key)
     }
 }
+
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+/// Simulator-only evidence for the Voice Clone store's account boundary. This
+/// exercises the production local store without creating a provider session or
+/// exposing any QA state in the public product surface.
+private struct VoiceCloneOwnerScopeUIQAResult: Codable {
+    static let fileName = "voice-clone-owner-scope-uiqa-result.json"
+
+    let completed: Bool
+    let accountIsolation: Bool
+    let generationFence: Bool
+    let staleWriteRejected: Bool
+    let deletePurgesOnlyOldScope: Bool
+    let legacyPayloadQuarantined: Bool
+    let failureReason: String?
+
+    func writeToDocuments(fileManager: FileManager = .default) throws -> URL {
+        let documentsURL = try fileManager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let resultURL = documentsURL.appendingPathComponent(Self.fileName, isDirectory: false)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(self).write(to: resultURL, options: [.atomic])
+        return resultURL
+    }
+}
+
+enum VoiceCloneOwnerScopeUIQASmoke {
+    private static let accountA = "uiqa-voice-account-a"
+    private static let accountB = "uiqa-voice-account-b"
+
+    static func runAndPresent() {
+        let result = run()
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] VoiceCloneOwnerScopeSmoke result=\(resultURL.path)")
+        } catch {
+            print(
+                "[UI_QA] VoiceCloneOwnerScopeSmoke failed to write result " +
+                    "error=\(error.localizedDescription)"
+            )
+        }
+
+        if let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }) {
+            keyWindow.rootViewController = VoiceCloneOwnerScopeUIQAViewController(result: result)
+            keyWindow.makeKeyAndVisible()
+        }
+        print("[UI_QA] VoiceCloneOwnerScopeSmoke completed success=\(result.completed)")
+    }
+
+    private static func run() -> VoiceCloneOwnerScopeUIQAResult {
+        let suiteName = "voice-clone-owner-scope-uiqa.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            return failedResult(reason: "unableToCreateUserDefaultsSuite")
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let leaseA = makeLease(
+            subjectId: accountA,
+            vaultId: "uiqa-voice-vault-a",
+            generation: 1,
+            generationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        )
+        let leaseANext = makeLease(
+            subjectId: accountA,
+            vaultId: "uiqa-voice-vault-a",
+            generation: 2,
+            generationId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        )
+        let leaseB = makeLease(
+            subjectId: accountB,
+            vaultId: "uiqa-voice-vault-b",
+            generation: 1,
+            generationId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        )
+        let runtime = VoiceCloneOwnerScopeUIQAMutableLeaseRuntime(activeLease: leaseA)
+        let store = VoiceCloneLocalStateStore(
+            defaults: defaults,
+            accountLeaseRuntime: runtime,
+            now: { Date(timeIntervalSince1970: 1_784_736_000) }
+        )
+
+        let legacySpeakerKey = ["dj", "voiceclone", "speakerId"].joined(separator: ".")
+        defaults.set("legacy-unattributed-speaker", forKey: legacySpeakerKey)
+        let storedA = store.update(accountLease: leaseA) { state in
+            state.speakerId = "uiqa-profile-a"
+            state.sampleStatus = .ready
+            state.isEnabled = true
+            state.realCloneProviderReady = true
+            state.qualityAcceptanceRequired = false
+        }
+        let legacyPayloadQuarantined = defaults.object(forKey: legacySpeakerKey) == nil
+            && storedA?.speakerId == "uiqa-profile-a"
+
+        runtime.publish(leaseB)
+        let bInitiallyEmpty = store.load(accountLease: leaseB) == nil
+        let staleWriteRejected = store.update(accountLease: leaseA) { state in
+            state.speakerId = "stale-profile-a"
+        } == nil
+        let storedB = store.update(accountLease: leaseB) { state in
+            state.speakerId = "uiqa-profile-b"
+            state.sampleStatus = .ready
+            state.isEnabled = true
+        }
+        let bStateWritten = storedB?.speakerId == "uiqa-profile-b"
+
+        runtime.publish(leaseA)
+        let originalAStillPresent = store.load(accountLease: leaseA)?.speakerId == "uiqa-profile-a"
+
+        runtime.publish(leaseANext)
+        let oldGenerationRejected = store.load(accountLease: leaseA) == nil
+        let nextGenerationDoesNotInherit = store.load(accountLease: leaseANext) == nil
+
+        let removal = store.handleAccountLifecycle(accountLease: leaseA, purge: true)
+        runtime.publish(leaseA)
+        let oldScopeRemoved = store.load(accountLease: leaseA) == nil
+        runtime.publish(leaseB)
+        let bSurvivesOldScopeDeletion = store.load(accountLease: leaseB)?.speakerId == "uiqa-profile-b"
+
+        let accountIsolation = bInitiallyEmpty && originalAStillPresent && bStateWritten
+        let generationFence = oldGenerationRejected && nextGenerationDoesNotInherit
+        let deletePurgesOnlyOldScope = removal == .removed
+            && oldScopeRemoved
+            && bSurvivesOldScopeDeletion
+        let completed = accountIsolation
+            && generationFence
+            && staleWriteRejected
+            && deletePurgesOnlyOldScope
+            && legacyPayloadQuarantined
+
+        return VoiceCloneOwnerScopeUIQAResult(
+            completed: completed,
+            accountIsolation: accountIsolation,
+            generationFence: generationFence,
+            staleWriteRejected: staleWriteRejected,
+            deletePurgesOnlyOldScope: deletePurgesOnlyOldScope,
+            legacyPayloadQuarantined: legacyPayloadQuarantined,
+            failureReason: completed ? nil : "voiceCloneOwnerScopeAssertionFailed"
+        )
+    }
+
+    private static func makeLease(
+        subjectId: String,
+        vaultId: String,
+        generation: UInt64,
+        generationId: String
+    ) -> AccountLease {
+        AccountLease(
+            subjectId: subjectId,
+            vaultId: vaultId,
+            sessionId: "uiqa-voice-session-\(subjectId)-\(generation)",
+            generation: generation,
+            generationId: UUID(uuidString: generationId)!,
+            authorityEpoch: "uiqa-voice-authority"
+        )
+    }
+
+    private static func failedResult(reason: String) -> VoiceCloneOwnerScopeUIQAResult {
+        VoiceCloneOwnerScopeUIQAResult(
+            completed: false,
+            accountIsolation: false,
+            generationFence: false,
+            staleWriteRejected: false,
+            deletePurgesOnlyOldScope: false,
+            legacyPayloadQuarantined: false,
+            failureReason: reason
+        )
+    }
+}
+
+private final class VoiceCloneOwnerScopeUIQAMutableLeaseRuntime: AccountLeaseRuntimePort, @unchecked Sendable {
+    private let lock = NSLock()
+    private var activeLease: AccountLease?
+
+    init(activeLease: AccountLease?) {
+        self.activeLease = activeLease
+    }
+
+    func publish(_ lease: AccountLease?) {
+        lock.lock()
+        activeLease = lease
+        lock.unlock()
+    }
+
+    func capture(forSubjectId subjectId: String?) -> AccountLease? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let activeLease,
+              subjectId == nil || subjectId == activeLease.subjectId else {
+            return nil
+        }
+        return activeLease
+    }
+
+    func validate(
+        _ lease: AccountLease,
+        at checkpoint: AccountLeaseCheckpoint
+    ) -> AccountLeaseValidationDecision {
+        lock.lock()
+        let activeLease = activeLease
+        lock.unlock()
+        let allowed = activeLease == lease
+        return AccountLeaseValidationDecision(
+            checkpoint: checkpoint,
+            allowed: allowed,
+            reason: allowed ? .allowed : .generationMismatch,
+            sessionRotated: false
+        )
+    }
+}
+
+private final class VoiceCloneOwnerScopeUIQAViewController: UIViewController {
+    private let result: VoiceCloneOwnerScopeUIQAResult
+
+    init(result: VoiceCloneOwnerScopeUIQAResult) {
+        self.result = result
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .systemBackground
+
+        let titleLabel = UILabel()
+        titleLabel.text = "Voice Clone 账号隔离"
+        titleLabel.font = .systemFont(ofSize: 25, weight: .bold)
+        titleLabel.textColor = .label
+
+        let statusLabel = UILabel()
+        statusLabel.text = result.completed ? "G1 UIQA 通过" : "G1 UIQA 失败"
+        statusLabel.font = .systemFont(ofSize: 21, weight: .semibold)
+        statusLabel.textColor = result.completed ? .systemGreen : .systemRed
+
+        let detailLabel = UILabel()
+        detailLabel.numberOfLines = 0
+        detailLabel.font = .monospacedSystemFont(ofSize: 14, weight: .regular)
+        detailLabel.textColor = .secondaryLabel
+        detailLabel.text = [
+            "Account A/B: \(mark(result.accountIsolation))",
+            "Generation fence: \(mark(result.generationFence))",
+            "Stale write: \(mark(result.staleWriteRejected))",
+            "Delete scope: \(mark(result.deletePurgesOnlyOldScope))",
+            "Legacy quarantine: \(mark(result.legacyPayloadQuarantined))",
+        ].joined(separator: "\n")
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, statusLabel, detailLabel])
+        stack.axis = .vertical
+        stack.spacing = 18
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 28),
+            stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -28),
+            stack.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        ])
+    }
+
+    private func mark(_ passed: Bool) -> String {
+        passed ? "PASS" : "FAIL"
+    }
+}
+#endif
 
 /// 封装 DreamJourney 后端声音复刻合同：
 /// 1. iOS 只提交授权后的声音样本给后端

@@ -323,6 +323,10 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runVoiceCloneProfileSelectionSmoke() }
         case .voiceCloneSynthesisRuntimeSmoke:
             scheduleUIQAScenario(scenario) { $0.runVoiceCloneSynthesisRuntimeSmoke() }
+        case .voiceCloneOwnerScopeSmoke:
+            scheduleUIQAScenario(scenario) { _ in
+                VoiceCloneOwnerScopeUIQASmoke.runAndPresent()
+            }
         case .tencentBackendPCMDriveMockSmoke:
             scheduleUIQAScenario(scenario) { $0.runTencentBackendPCMDriveMockSmoke() }
         case .echoTraceExportSmoke:
