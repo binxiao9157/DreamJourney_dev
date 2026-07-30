@@ -1274,6 +1274,147 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.latestResult?.candidateID, singleCandidateID)
     }
 
+    func testInterviewCandidateMemoryActivationDecodesValueMinimizedResult() throws {
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000110")
+        let candidateID = recordID("00000000-0000-0000-0000-000000000111")
+        let command = try OwnerTruthInterviewCandidateMemoryActivationCommand(
+            commandID: "confirmation-memory-activation-ios-001",
+            reviewBatchID: reviewBatchID,
+            candidateID: candidateID
+        )
+        XCTAssertEqual(command.backendPayload.keys.sorted(), ["commandId"])
+        let result = try interviewCandidateMemoryActivationResult(
+            command: command,
+            outcome: .created
+        )
+
+        XCTAssertEqual(result.reviewBatchID, reviewBatchID)
+        XCTAssertEqual(result.candidateID, candidateID)
+        XCTAssertEqual(result.memoryActivationOutcome, .created)
+        XCTAssertTrue(result.projectionRebuildRequested)
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewCandidateMemoryActivationResult(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewCandidateMemoryActivationResult.schemaVersion,
+                    "status": OwnerTruthCommandOutcome.created.rawValue,
+                    "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                    "candidateId": candidateID.rawValue.uuidString,
+                    "memoryVersionId": "must-not-appear",
+                    "memoryActivation": [
+                        "status": OwnerTruthMemoryActivationOutcome.created.rawValue,
+                        "memoryVersionCreated": true,
+                    ],
+                    "projectionRebuildRequested": true,
+                ],
+                expectedCommand: command
+            )
+        )
+    }
+
+    func testInterviewCandidateMemoryActivationUseCaseFailsClosedForPolicyAndEligibility() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000112")
+        let batchCandidateID = recordID("00000000-0000-0000-0000-000000000113")
+        let singleCandidateID = recordID("00000000-0000-0000-0000-000000000114")
+        let confirmation = try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: singleCandidateID
+        ).bound(to: lease)
+        let eligibility = OwnerTruthInterviewCandidateMemoryActivationEligibility.batchConfirmation(
+            try interviewCandidateConfirmationActionResult(
+                reviewBatchID: reviewBatchID,
+                candidateIDs: [batchCandidateID],
+                commandID: "confirmation-memory-activation-batch"
+            )
+        )
+        let client = InterviewCandidateMemoryActivationClientSpy()
+        let disabled = OwnerTruthInterviewCandidateMemoryActivationUseCase(
+            accountLease: lease,
+            confirmation: confirmation,
+            eligibility: eligibility,
+            candidateID: batchCandidateID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { false }
+        )
+
+        disabled.send(.activate)
+
+        XCTAssertEqual(disabled.viewState.phase, .unavailable)
+        XCTAssertEqual(disabled.viewState.notice, .releasePolicyDisabled)
+        XCTAssertTrue(client.requestedCommands.isEmpty)
+
+        let invalid = OwnerTruthInterviewCandidateMemoryActivationUseCase(
+            accountLease: lease,
+            confirmation: confirmation,
+            eligibility: eligibility,
+            candidateID: singleCandidateID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+        invalid.send(.activate)
+
+        XCTAssertEqual(invalid.viewState.phase, .failed)
+        XCTAssertEqual(invalid.viewState.notice, .invalidEligibility)
+        XCTAssertTrue(client.requestedCommands.isEmpty)
+    }
+
+    func testInterviewCandidateMemoryActivationUseCaseRetriesWithStableCommandID() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000115")
+        let batchCandidateID = recordID("00000000-0000-0000-0000-000000000116")
+        let singleCandidateID = recordID("00000000-0000-0000-0000-000000000117")
+        let confirmation = try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: singleCandidateID
+        ).bound(to: lease)
+        let eligibility = OwnerTruthInterviewCandidateMemoryActivationEligibility.batchConfirmation(
+            try interviewCandidateConfirmationActionResult(
+                reviewBatchID: reviewBatchID,
+                candidateIDs: [batchCandidateID],
+                commandID: "confirmation-memory-activation-result"
+            )
+        )
+        let client = InterviewCandidateMemoryActivationClientSpy()
+        client.result = .failure(InterviewCandidateMemoryActivationClientSpyError.missingActivationResult)
+        let useCase = OwnerTruthInterviewCandidateMemoryActivationUseCase(
+            accountLease: lease,
+            confirmation: confirmation,
+            eligibility: eligibility,
+            candidateID: batchCandidateID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true },
+            commandIDFactory: { "stable-memory-activation-command" }
+        )
+
+        useCase.send(.activate)
+        XCTAssertEqual(useCase.viewState.phase, .failed)
+        client.result = .success(try interviewCandidateMemoryActivationResult(
+            command: try OwnerTruthInterviewCandidateMemoryActivationCommand(
+                commandID: "stable-memory-activation-command",
+                reviewBatchID: reviewBatchID,
+                candidateID: batchCandidateID
+            ),
+            outcome: .deduplicated
+        ))
+
+        useCase.send(.activate)
+
+        XCTAssertEqual(client.requestedCommands.map(\.commandID), [
+            "stable-memory-activation-command",
+            "stable-memory-activation-command",
+        ])
+        XCTAssertEqual(useCase.viewState.phase, .activated)
+        XCTAssertEqual(useCase.viewState.notice, .activated)
+        XCTAssertEqual(useCase.viewState.latestResult?.outcome, .deduplicated)
+    }
+
     func testInterviewSessionStateDecodesValueMinimizedEnvelope() throws {
         let (_, lease) = try makeActiveRuntime()
         let state = try interviewSessionState(vaultID: lease.vaultId)
@@ -4100,6 +4241,26 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private func interviewCandidateMemoryActivationResult(
+        command: OwnerTruthInterviewCandidateMemoryActivationCommand,
+        outcome: OwnerTruthCommandOutcome
+    ) throws -> OwnerTruthInterviewCandidateMemoryActivationResult {
+        try OwnerTruthInterviewCandidateMemoryActivationResult(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewCandidateMemoryActivationResult.schemaVersion,
+                "status": outcome.rawValue,
+                "reviewBatchId": command.reviewBatchID.rawValue.uuidString,
+                "candidateId": command.candidateID.rawValue.uuidString,
+                "memoryActivation": [
+                    "status": outcome.rawValue,
+                    "memoryVersionCreated": true,
+                ],
+                "projectionRebuildRequested": true,
+            ],
+            expectedCommand: command
+        )
+    }
+
     private func interviewSingleReviewResult(
         reviewBatchID: OwnerTruthRecordID,
         candidateID: OwnerTruthRecordID,
@@ -5529,6 +5690,24 @@ private final class InterviewCandidateConfirmationSingleActionClientSpy: OwnerTr
 
 private enum InterviewCandidateConfirmationSingleActionClientSpyError: Error {
     case missingActionResult
+}
+
+private final class InterviewCandidateMemoryActivationClientSpy: OwnerTruthInterviewCandidateMemoryActivationClient {
+    var result: Result<OwnerTruthInterviewCandidateMemoryActivationResult, Error>?
+    private(set) var requestedCommands: [OwnerTruthInterviewCandidateMemoryActivationCommand] = []
+
+    func activateOwnerTruthInterviewCandidateMemory(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateMemoryActivationCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateMemoryActivationResult, Error>) -> Void
+    ) {
+        requestedCommands.append(command)
+        completion(result ?? .failure(InterviewCandidateMemoryActivationClientSpyError.missingActivationResult))
+    }
+}
+
+private enum InterviewCandidateMemoryActivationClientSpyError: Error {
+    case missingActivationResult
 }
 
 private final class InterviewSessionStateClientSpy: OwnerTruthInterviewSessionStateClient {
