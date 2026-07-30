@@ -26,7 +26,7 @@ main@6d6a7b8 feat(v4): add business message projection shadow
 - 不接 Time Letter、Echo delayed reply、家庭邀请或关怀提醒的真实业务 writer。
 - 不新增 API route、iOS UI、公开消息中心 reader、APNs、本地通知、worker 或 Provider 调用。
 - 不实现跨账号 `subject -> vault` 解析器、access grant 判定或家庭关系授权推断。
-- 不声称 PostgreSQL、部署、线上 smoke、真实设备通知或跨账号可见性已经验证。
+- 不声称公开消息中心、真实设备通知或跨账号可见性已经验证。
 
 ## 验证
 
@@ -40,16 +40,34 @@ git diff --check
 
 - 专用 projection gate `16` 项通过。
 - 全量 `scripts/verify_backend.sh` 通过，包含既有业务消息、Time Letter、Echo、异步 effect、Provider 和 FastAPI smoke 回归。
-- `backend-business-message-projection-postgres-smoke.py` 已实现，但本机 `DATABASE_URL` 未配置，未运行 disposable PostgreSQL G2 smoke。
+- 部署后补充见下文。
+
+## 部署后补充
+
+后端 `main@f3e026d` 已部署。首次运行 disposable smoke 时，脚本为了模拟
+receipt 坐标漂移而直接修改 `business_receipts`，被正确的 append-only trigger
+拒绝，导致后续断言没有执行。这是 smoke 的测试建模缺陷，不是生产业务写入缺陷。
+
+修复后的 smoke 分别验证 receipt 不可变、projection 不可变、直接插入错误
+receipt/resource 坐标 fail-closed，以及 owner/family 显式 inbox 坐标的幂等和重开
+读取。生产 API 容器使用专用 runner：
+
+```bash
+bash scripts/run-backend-business-message-projection-postgres-smoke.sh
+```
+
+结果：通过。smoke 只创建和删除独立临时数据库，确认不会写入
+`mailbox_letters`、不会启动 worker、不会发送通知或调用 Provider。部署后的
+`/ready` 同时确认 database、schema、auth、incident 均为 `ready`。
 
 ## Gate 状态
 
 | Gate | 状态 | 说明 |
 | --- | --- | --- |
 | G0 | 已通过（本地） | 显式 inbox snapshot、receipt 重校验、独立 resource/inbox 坐标、幂等与直接 DB fail-closed trigger 已验证。 |
-| G2A | 已通过（本地影子实现） | 迁移、repository、disposable Postgres smoke 工具已就绪；尚未实际运行 PostgreSQL。 |
+| G2A | 已通过（本地影子实现） | 迁移、repository、disposable Postgres smoke 工具已就绪。 |
 | G1 | 未开始 | iOS 和公开消息中心没有消费本影子投影。 |
-| G2 | 未验证 | 未部署 migration，未执行 disposable PostgreSQL smoke。 |
+| G2 | 范围内通过 | `main@f3e026d` 的 API 容器已执行 disposable PostgreSQL smoke；仅验证内部、metadata-only projection。 |
 | G3/G4 | 未开始 | 没有 APNs、本地通知或真机证据。 |
 
 ## 后续前提
@@ -58,5 +76,5 @@ git diff --check
 
 1. 可审计、fail-closed 的 inbox account/vault resolver；
 2. 对应 resource 的真实 access grant / recipient eligibility 证明；
-3. 已部署 migration 的 disposable PostgreSQL smoke；
+3. legacy identity bridge 与 recipient admission 的独立 G2 行为 smoke；
 4. 仅在上述条件满足后，才讨论内部 reader、业务 writer 和公开消息中心接入。

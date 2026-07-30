@@ -30,7 +30,7 @@ main@8214666 feat(v4): add time letter recipient admission shadow
 
 - 不启用真实跨账号业务消息 writer，不向 `business_message_projections` 或 legacy `mailbox_letters` 写入。
 - 不改现有 Time Letter 到期投递、提醒中心 reader、公开 API、登录/refresh、family 关系或 iOS UI。
-- 不部署后端，不运行 PostgreSQL disposable smoke，不声称用户可见、可读或可投递。
+- 不运行本服务的 PostgreSQL disposable smoke，不声称用户可见、可读或可投递。
 - 不处理 legacy mailbox 和 future business-message projection 的双写/切换；该切换必须单独设计、验证并具备回滚证据。
 
 ## 验证
@@ -58,7 +58,7 @@ git diff --check
 | --- | --- | --- |
 | G0 | 已通过（本地） | 默认关闭的准入影子合同、exact grant 和 fail-closed 路径已验证。 |
 | G1 | 未开始 | 没有 iOS、reader 或公开 UI 接入。 |
-| G2 | 未验证 | 无 migration；但既有 bridge/projection 的 PostgreSQL disposable smoke 和部署仍是未来 writer 的前置条件。 |
+| G2 | 部分通过 | 后端 `main@f3e026d` 已部署，business-message projection 的 disposable PostgreSQL smoke 已通过；本服务仍没有独立的 G2 行为 smoke。 |
 | G3/G4 | 未开始 | 没有 Provider、通知或真机行为。 |
 
 ## 后续前提
@@ -66,6 +66,6 @@ git diff --check
 任何真实 writer 讨论前，必须先完成并分别验收：
 
 1. legacy `mailbox_letters` 与 future business-message projection 的单写/双写/切换和回滚策略；
-2. `0059/0060` 及相关 projection 合同的部署后 disposable PostgreSQL smoke；
+2. legacy identity resolver、recipient admission 与相关 projection 合同的独立 PostgreSQL smoke；
 3. 受控 writer、内部 reader 和实际 access receipt 的独立 G0/G2 证据；
 4. 最后才是公开消息中心可见性和通知投递。
