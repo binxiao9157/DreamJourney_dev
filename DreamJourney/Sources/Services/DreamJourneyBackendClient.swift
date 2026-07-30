@@ -520,6 +520,11 @@ final class FeatureGateService {
             return .ownerTruthMemorySearch
         }
         if method == .get,
+           normalizedPath.hasPrefix("/v2/vaults/"),
+           normalizedPath.hasSuffix("/outcome") {
+            return .ownerTruthInterviewOutcome
+        }
+        if method == .get,
            normalizedPath.contains("/interview-review-batches/"),
            normalizedPath.hasSuffix("/confirmation") {
             return .ownerTruthCandidateReview
@@ -5827,6 +5832,34 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    func fetchOwnerTruthInterviewOutcomePresentation(
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewOutcomePresentation, Error>) -> Void
+    ) {
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions/\(pathComponent(sessionID.rawValue.uuidString.lowercased()))/outcome"
+        requestJSON(
+            path: path,
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewOutcomePresentation(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func confirmOwnerTruthKnowledgeDimension(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthKnowledgeDimensionConfirmationCommand,
@@ -8490,6 +8523,7 @@ extension DreamJourneyBackendClient: OwnerTruthKnowledgeRecommendationPlanClient
 extension DreamJourneyBackendClient: OwnerTruthGuidedRecommendationPresentationClient {}
 extension DreamJourneyBackendClient: OwnerTruthLifeMapPresentationClient {}
 extension DreamJourneyBackendClient: OwnerTruthMemorySearchPresentationClient {}
+extension DreamJourneyBackendClient: OwnerTruthInterviewOutcomePresentationClient {}
 extension DreamJourneyBackendClient: OwnerTruthKnowledgeDimensionConfirmationClient {}
 extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}
 extension DreamJourneyBackendClient: OwnerTruthContextCitationClient {}

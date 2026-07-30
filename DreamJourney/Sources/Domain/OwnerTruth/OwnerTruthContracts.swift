@@ -144,6 +144,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidGuidedRecommendationFeedback(String)
     case invalidLifeMapPresentation(String)
     case invalidMemorySearchPresentation(String)
+    case invalidInterviewOutcomePresentation(String)
     case invalidKBLiteCompatibilityReadEnvelope(String)
     case invalidContextCitationShadowBuild(String)
     case invalidAnswerCitationReceipt(String)
@@ -186,6 +187,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "人生地图合同无效：\(detail)"
         case .invalidMemorySearchPresentation(let detail):
             return "回顾检索合同无效：\(detail)"
+        case .invalidInterviewOutcomePresentation(let detail):
+            return "本次回顾合同无效：\(detail)"
         case .invalidKBLiteCompatibilityReadEnvelope(let detail):
             return "兼容读取合同无效：\(detail)"
         case .invalidContextCitationShadowBuild(let detail):
@@ -5552,6 +5555,268 @@ final class OwnerTruthMemorySearchPresentationUseCase {
 
     private func transitionFailure(_ notice: OwnerTruthMemorySearchPresentationNotice) {
         viewState = OwnerTruthMemorySearchPresentationViewState(
+            phase: .failed,
+            presentation: nil,
+            notice: notice
+        )
+    }
+}
+
+// MARK: - Default-off Owner Truth interview outcome presentation
+
+/// The product view intentionally has only two states. It never exposes a
+/// thread/session id, review batch, source, Candidate, raw interview content,
+/// or a model-inferred statement as an Owner-confirmed fact.
+enum OwnerTruthInterviewOutcomePresentationState: String, Equatable, Sendable {
+    case ready
+    case rebuilding
+}
+
+/// Read-only ending summary for one Owner interview. Counts are current server
+/// projections only; `rebuilding` responses retain no historical count.
+struct OwnerTruthInterviewOutcomePresentation: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-session-outcome-presentation-v1"
+    static let maximumCount = 100_000
+
+    let vaultID: OwnerTruthVaultID
+    let state: OwnerTruthInterviewOutcomePresentationState
+    let confirmedMemoryCount: Int
+    let pendingReviewBatchCount: Int
+    let canContinueLater: Bool
+    let eligibleCueCount: Int
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        guard Set(object.keys) == ["schemaVersion", "vaultId", "sessionOutcome"],
+              OwnerTruthInterviewOutcomePresentationContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthInterviewOutcomePresentationContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let outcome = object["sessionOutcome"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidInterviewOutcomePresentation(
+                "response misses a required presentation field"
+            )
+        }
+        guard Set(outcome.keys) == ["state", "thisSession", "laterContinue"],
+              let rawState = OwnerTruthInterviewOutcomePresentationContract.requiredString(
+                outcome["state"]
+              ),
+              let state = OwnerTruthInterviewOutcomePresentationState(rawValue: rawState),
+              let thisSession = outcome["thisSession"] as? [String: Any],
+              let laterContinue = outcome["laterContinue"] as? [String: Any],
+              Set(thisSession.keys) == ["confirmedMemoryCount", "pendingReviewBatchCount"],
+              Set(laterContinue.keys) == ["canContinueLater", "eligibleCueCount"],
+              let confirmedMemoryCount = OwnerTruthInterviewOutcomePresentationContract.nonNegativeInt(
+                thisSession["confirmedMemoryCount"]
+              ),
+              let pendingReviewBatchCount = OwnerTruthInterviewOutcomePresentationContract.nonNegativeInt(
+                thisSession["pendingReviewBatchCount"]
+              ),
+              let canContinueLater = laterContinue["canContinueLater"] as? Bool,
+              let eligibleCueCount = OwnerTruthInterviewOutcomePresentationContract.nonNegativeInt(
+                laterContinue["eligibleCueCount"]
+              ),
+              confirmedMemoryCount <= Self.maximumCount,
+              pendingReviewBatchCount <= Self.maximumCount,
+              eligibleCueCount <= Self.maximumCount else {
+            throw OwnerTruthRemoteContractError.invalidInterviewOutcomePresentation(
+                "response contains unsupported fields"
+            )
+        }
+        guard state == .ready || (
+            confirmedMemoryCount == 0
+                && pendingReviewBatchCount == 0
+                && eligibleCueCount == 0
+        ) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewOutcomePresentation(
+                "rebuilding response must not retain counts"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.state = state
+        self.confirmedMemoryCount = confirmedMemoryCount
+        self.pendingReviewBatchCount = pendingReviewBatchCount
+        self.canContinueLater = canContinueLater
+        self.eligibleCueCount = eligibleCueCount
+    }
+}
+
+protocol OwnerTruthInterviewOutcomePresentationClient: AnyObject {
+    func fetchOwnerTruthInterviewOutcomePresentation(
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewOutcomePresentation, Error>) -> Void
+    )
+}
+
+private enum OwnerTruthInterviewOutcomePresentationContract {
+    static func requiredString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    static func nonNegativeInt(_ value: Any?) -> Int? {
+        guard let value = value as? NSNumber,
+              CFGetTypeID(value) != CFBooleanGetTypeID(),
+              value.doubleValue.isFinite,
+              value.doubleValue.rounded() == value.doubleValue,
+              value.intValue >= 0 else {
+            return nil
+        }
+        return value.intValue
+    }
+}
+
+enum OwnerTruthInterviewOutcomePresentationPhase: Equatable, Sendable {
+    case idle
+    case loading
+    case ready
+    case rebuilding
+    case unavailable
+    case failed
+}
+
+enum OwnerTruthInterviewOutcomePresentationNotice: Equatable, Sendable {
+    case releasePolicyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case contractMismatch
+    case requestFailed
+}
+
+struct OwnerTruthInterviewOutcomePresentationViewState: Equatable, Sendable {
+    let phase: OwnerTruthInterviewOutcomePresentationPhase
+    let presentation: OwnerTruthInterviewOutcomePresentation?
+    let notice: OwnerTruthInterviewOutcomePresentationNotice?
+
+    static let idle = OwnerTruthInterviewOutcomePresentationViewState(
+        phase: .idle,
+        presentation: nil,
+        notice: nil
+    )
+}
+
+/// Lease-fenced reader for the per-session ending summary. The session id is
+/// intentionally confined to the request path; the response contains no
+/// correlating identifier and is accepted only for the captured Owner Vault.
+final class OwnerTruthInterviewOutcomePresentationUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let sessionID: OwnerTruthRecordID
+    private let client: OwnerTruthInterviewOutcomePresentationClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAvailable: () -> Bool
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthInterviewOutcomePresentationViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthInterviewOutcomePresentationViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        sessionID: OwnerTruthRecordID,
+        client: OwnerTruthInterviewOutcomePresentationClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool
+    ) {
+        self.accountLease = accountLease
+        vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.sessionID = sessionID
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+    }
+
+    func refresh() {
+        guard let vaultID = beginRequestOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthInterviewOutcomePresentationViewState(
+            phase: .loading,
+            presentation: nil,
+            notice: nil
+        )
+        client.fetchOwnerTruthInterviewOutcomePresentation(
+            vaultID: vaultID,
+            sessionID: sessionID
+        ) { [weak self] result in
+            self?.receive(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthInterviewOutcomePresentation, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+
+        switch result {
+        case .success(let presentation):
+            guard presentation.vaultID == vaultID,
+                  presentation.vaultID.rawValue == accountLease.vaultId else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            let phase: OwnerTruthInterviewOutcomePresentationPhase = presentation.state == .ready
+                ? .ready
+                : .rebuilding
+            viewState = OwnerTruthInterviewOutcomePresentationViewState(
+                phase: phase,
+                presentation: phase == .ready ? presentation : nil,
+                notice: nil
+            )
+        case .failure(let error):
+            if case OwnerTruthRemoteContractError.invalidInterviewOutcomePresentation = error {
+                transitionFailure(.contractMismatch)
+            } else {
+                transitionFailure(.requestFailed)
+            }
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthInterviewOutcomePresentationNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthInterviewOutcomePresentationViewState(
+            phase: .unavailable,
+            presentation: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure(_ notice: OwnerTruthInterviewOutcomePresentationNotice) {
+        viewState = OwnerTruthInterviewOutcomePresentationViewState(
             phase: .failed,
             presentation: nil,
             notice: notice

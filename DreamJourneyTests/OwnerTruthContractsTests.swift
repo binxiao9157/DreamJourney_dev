@@ -4845,6 +4845,103 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    func testInterviewOutcomePresentationDecodesOnlyProductFields() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-interview-outcome-a"))
+        let presentation = try OwnerTruthInterviewOutcomePresentation(
+            backendJSONObject: interviewOutcomePresentationJSON(vaultID: vaultID),
+            expectedVaultID: vaultID
+        )
+
+        XCTAssertEqual(presentation.vaultID, vaultID)
+        XCTAssertEqual(presentation.state, .ready)
+        XCTAssertEqual(presentation.confirmedMemoryCount, 2)
+        XCTAssertEqual(presentation.pendingReviewBatchCount, 1)
+        XCTAssertTrue(presentation.canContinueLater)
+        XCTAssertEqual(presentation.eligibleCueCount, 1)
+
+        var unsafe = interviewOutcomePresentationJSON(vaultID: vaultID)
+        var outcome = try XCTUnwrap(unsafe["sessionOutcome"] as? [String: Any])
+        outcome["sessionId"] = "internal-session-id"
+        unsafe["sessionOutcome"] = outcome
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewOutcomePresentation(
+                backendJSONObject: unsafe,
+                expectedVaultID: vaultID
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? OwnerTruthRemoteContractError,
+                .invalidInterviewOutcomePresentation("response contains unsupported fields")
+            )
+        }
+    }
+
+    func testInterviewOutcomePresentationUseCaseDoesNotRequestWhenPolicyIsClosed() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let sessionID = OwnerTruthRecordID(
+            rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000402")!
+        )
+        let client = InterviewOutcomePresentationClientSpy()
+        let useCase = OwnerTruthInterviewOutcomePresentationUseCase(
+            accountLease: lease,
+            sessionID: sessionID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { false }
+        )
+
+        useCase.refresh()
+
+        XCTAssertEqual(client.requestCount, 0)
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .releasePolicyDisabled)
+        XCTAssertNil(useCase.viewState.presentation)
+    }
+
+    func testInterviewOutcomePresentationUseCaseDiscardsDeferredReadAfterAccountSwitch() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let sessionID = OwnerTruthRecordID(
+            rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000403")!
+        )
+        let client = InterviewOutcomePresentationClientSpy()
+        client.deferRead = true
+        let useCase = OwnerTruthInterviewOutcomePresentationUseCase(
+            accountLease: lease,
+            sessionID: sessionID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.refresh()
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000114")!
+        ))
+        client.completeDeferred(.success(try OwnerTruthInterviewOutcomePresentation(
+            backendJSONObject: interviewOutcomePresentationJSON(vaultID: vaultID),
+            expectedVaultID: vaultID
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(useCase.viewState.presentation)
+    }
+
+    func testInterviewOutcomePresentationPathUsesItsOwnFeatureGate() {
+        XCTAssertEqual(
+            FeatureGateService.shared.featureForRequest(
+                path: "/v2/vaults/vault-a/interview-sessions/session-a/outcome",
+                method: .get,
+                payload: nil
+            ),
+            .ownerTruthInterviewOutcome
+        )
+    }
+
     private func lifeMapPresentationJSON(vaultID: OwnerTruthVaultID) -> [String: Any] {
         [
             "schemaVersion": OwnerTruthLifeMapPresentation.schemaVersion,
@@ -4884,6 +4981,24 @@ final class OwnerTruthContractsTests: XCTestCase {
                     "sensitivity": "standard",
                     "matchKind": "searchText",
                 ]],
+            ],
+        ]
+    }
+
+    private func interviewOutcomePresentationJSON(vaultID: OwnerTruthVaultID) -> [String: Any] {
+        [
+            "schemaVersion": OwnerTruthInterviewOutcomePresentation.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "sessionOutcome": [
+                "state": "ready",
+                "thisSession": [
+                    "confirmedMemoryCount": 2,
+                    "pendingReviewBatchCount": 1,
+                ],
+                "laterContinue": [
+                    "canContinueLater": true,
+                    "eligibleCueCount": 1,
+                ],
             ],
         ]
     }
@@ -5065,6 +5180,37 @@ private final class MemorySearchPresentationClientSpy: OwnerTruthMemorySearchPre
 }
 
 private enum MemorySearchPresentationClientSpyError: Error {
+    case missingResult
+}
+
+private final class InterviewOutcomePresentationClientSpy:
+    OwnerTruthInterviewOutcomePresentationClient {
+    var result: Result<OwnerTruthInterviewOutcomePresentation, Error>?
+    var deferRead = false
+    private var deferredCompletion: ((Result<OwnerTruthInterviewOutcomePresentation, Error>) -> Void)?
+    private(set) var requestCount = 0
+
+    func fetchOwnerTruthInterviewOutcomePresentation(
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewOutcomePresentation, Error>) -> Void
+    ) {
+        requestCount += 1
+        if deferRead {
+            deferredCompletion = completion
+            return
+        }
+        completion(result ?? .failure(InterviewOutcomePresentationClientSpyError.missingResult))
+    }
+
+    func completeDeferred(_ result: Result<OwnerTruthInterviewOutcomePresentation, Error>) {
+        let completion = deferredCompletion
+        deferredCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum InterviewOutcomePresentationClientSpyError: Error {
     case missingResult
 }
 

@@ -122,6 +122,7 @@ enum QALaunchScenario: String, CaseIterable {
     case ownerTruthInterviewNaturalInputProductSurfaceSmoke = "DJRunOwnerTruthInterviewNaturalInputProductSurfaceSmoke"
     case ownerTruthLifeMapPresentationSmoke = "DJRunOwnerTruthLifeMapPresentationSmoke"
     case ownerTruthMemorySearchPresentationSmoke = "DJRunOwnerTruthMemorySearchPresentationSmoke"
+    case ownerTruthInterviewOutcomePresentationSmoke = "DJRunOwnerTruthInterviewOutcomePresentationSmoke"
     case archiveFailedAnalysisRetrySmoke = "DJRunArchiveFailedAnalysisRetrySmoke"
     case echoDelayedReplyNotificationSmoke = "DJRunEchoDelayedReplyNotificationSmoke"
     case notificationRuntimeRouteSmoke = "DJRunNotificationRuntimeRouteSmoke"
@@ -176,6 +177,7 @@ enum QALaunchScenario: String, CaseIterable {
         .ownerTruthInterviewNaturalInputProductSurfaceSmoke,
         .ownerTruthLifeMapPresentationSmoke,
         .ownerTruthMemorySearchPresentationSmoke,
+        .ownerTruthInterviewOutcomePresentationSmoke,
         .archiveFailedAnalysisRetrySmoke,
         .echoDelayedReplyNotificationSmoke,
         .notificationRuntimeRouteSmoke,
@@ -230,6 +232,7 @@ enum QALaunchScenario: String, CaseIterable {
              .ownerTruthKnowledgeDimensionConfirmationSmoke,
              .ownerTruthKnowledgeRecommendationPlanSmoke,
              .ownerTruthMemorySearchPresentationSmoke,
+             .ownerTruthInterviewOutcomePresentationSmoke,
              .archiveFailedAnalysisRetrySmoke,
              .timeLetterDispatchReminderSmoke:
             return .loginAndResetFeatureFlags
@@ -607,6 +610,7 @@ enum DJFeature: String, CaseIterable {
     case echoGuidedRecommendations
     case ownerTruthLifeMap
     case ownerTruthMemorySearch
+    case ownerTruthInterviewOutcome
     case ownerTruthCandidateReview
     case echoImageInput
     case timeLetters
@@ -644,6 +648,7 @@ final class FeatureFlagService {
         .echoGuidedRecommendations,
         .ownerTruthLifeMap,
         .ownerTruthMemorySearch,
+        .ownerTruthInterviewOutcome,
         .ownerTruthCandidateReview,
         .timeLetters,
         .personaSettings,

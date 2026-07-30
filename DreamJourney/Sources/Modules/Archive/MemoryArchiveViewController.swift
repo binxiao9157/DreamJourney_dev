@@ -4572,6 +4572,258 @@ private final class OwnerTruthInterviewCandidateReviewCell: UITableViewCell {
     }
 }
 
+/// Default-off ending-summary surface for one Owner interview. The request
+/// path carries the private session identifier, while this view only renders
+/// the value-minimized presentation contract.
+final class OwnerTruthInterviewOutcomeViewController: UIViewController {
+    private let useCase: OwnerTruthInterviewOutcomePresentationUseCase
+    private let scrollView = UIScrollView()
+    private let stackView = UIStackView()
+    private let introductionLabel = UILabel()
+    private let statusLabel = UILabel()
+    private let detailLabel = UILabel()
+    private let thisSessionCard = UIStackView()
+    private let laterContinueCard = UIStackView()
+    private let thisSessionDetailLabel = UILabel()
+    private let laterContinueDetailLabel = UILabel()
+
+    init(
+        accountLease: AccountLease,
+        sessionID: OwnerTruthRecordID,
+        client: OwnerTruthInterviewOutcomePresentationClient = DreamJourneyBackendClient.shared,
+        releasePolicyAvailable: @escaping () -> Bool
+    ) {
+        useCase = OwnerTruthInterviewOutcomePresentationUseCase(
+            accountLease: accountLease,
+            sessionID: sessionID,
+            client: client,
+            releasePolicyAvailable: releasePolicyAvailable
+        )
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "本次回顾"
+        view.backgroundColor = DJDesignTokens.Color.background
+        configureView()
+        configureUseCase()
+        render(useCase.viewState)
+        useCase.refresh()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .refresh,
+            target: self,
+            action: #selector(refreshTapped)
+        )
+    }
+
+    private func configureView() {
+        scrollView.alwaysBounceVertical = true
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scrollView)
+
+        stackView.axis = .vertical
+        stackView.alignment = .fill
+        stackView.spacing = 14
+        stackView.isLayoutMarginsRelativeArrangement = true
+        stackView.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 24,
+            leading: DJDesignTokens.Spacing.page,
+            bottom: 24,
+            trailing: DJDesignTokens.Spacing.page
+        )
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(stackView)
+
+        introductionLabel.font = DJDesignTokens.Font.body(15)
+        introductionLabel.textColor = DJDesignTokens.Color.textSecondary
+        introductionLabel.numberOfLines = 0
+        introductionLabel.text = "这里只呈现本次真实确认的变化，不把推测当作事实。"
+
+        statusLabel.font = DJDesignTokens.Font.title(20)
+        statusLabel.textColor = DJDesignTokens.Color.textPrimary
+        statusLabel.numberOfLines = 0
+        statusLabel.accessibilityIdentifier = "owner-truth-interview-outcome-status"
+
+        detailLabel.font = DJDesignTokens.Font.body(15)
+        detailLabel.textColor = DJDesignTokens.Color.textSecondary
+        detailLabel.numberOfLines = 0
+        detailLabel.accessibilityIdentifier = "owner-truth-interview-outcome-detail"
+
+        configureSection(
+            thisSessionCard,
+            title: "本次补充",
+            detailLabel: thisSessionDetailLabel,
+            accessibilityIdentifier: "owner-truth-interview-outcome-this-session"
+        )
+        configureSection(
+            laterContinueCard,
+            title: "以后可续",
+            detailLabel: laterContinueDetailLabel,
+            accessibilityIdentifier: "owner-truth-interview-outcome-later-continue"
+        )
+
+        [
+            introductionLabel,
+            statusLabel,
+            detailLabel,
+            thisSessionCard,
+            laterContinueCard,
+        ].forEach(stackView.addArrangedSubview)
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            stackView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            stackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+        ])
+    }
+
+    private func configureSection(
+        _ container: UIStackView,
+        title: String,
+        detailLabel: UILabel,
+        accessibilityIdentifier: String
+    ) {
+        container.axis = .vertical
+        container.alignment = .fill
+        container.spacing = 6
+        container.isLayoutMarginsRelativeArrangement = true
+        container.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 14,
+            leading: 14,
+            bottom: 14,
+            trailing: 14
+        )
+        container.backgroundColor = DJDesignTokens.Color.surface
+        container.layer.cornerRadius = 10
+        container.accessibilityIdentifier = accessibilityIdentifier
+
+        let titleLabel = UILabel()
+        titleLabel.font = DJDesignTokens.Font.label(13)
+        titleLabel.textColor = DJDesignTokens.Color.textTertiary
+        titleLabel.text = title
+
+        detailLabel.font = DJDesignTokens.Font.body(16)
+        detailLabel.textColor = DJDesignTokens.Color.textPrimary
+        detailLabel.numberOfLines = 0
+
+        container.addArrangedSubview(titleLabel)
+        container.addArrangedSubview(detailLabel)
+    }
+
+    private func configureUseCase() {
+        useCase.onViewStateChange = { [weak self] state in
+            if Thread.isMainThread {
+                self?.render(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.render(state)
+                }
+            }
+        }
+    }
+
+    private func render(_ state: OwnerTruthInterviewOutcomePresentationViewState) {
+        let isLoading = state.phase == .loading
+        navigationItem.rightBarButtonItem?.isEnabled = !isLoading
+        thisSessionCard.isHidden = false
+        laterContinueCard.isHidden = false
+
+        switch state.phase {
+        case .idle:
+            statusLabel.text = "整理本次回顾"
+            detailLabel.text = "完成本轮访谈后，这里会显示已确认的变化。"
+            thisSessionDetailLabel.text = "本次暂无可确认的内容。"
+            laterContinueDetailLabel.text = "想继续时，可以再回来。"
+        case .loading:
+            statusLabel.text = "正在整理本次回顾"
+            detailLabel.text = "请稍候。"
+            thisSessionCard.isHidden = true
+            laterContinueCard.isHidden = true
+        case .ready:
+            guard let presentation = state.presentation else {
+                renderUnavailable()
+                return
+            }
+            statusLabel.text = "本次回顾已整理"
+            detailLabel.text = "只统计当前已确认的内容。"
+            if presentation.confirmedMemoryCount > 0 {
+                thisSessionDetailLabel.text = "已确认 \(presentation.confirmedMemoryCount) 条内容。"
+            } else {
+                thisSessionDetailLabel.text = "本次暂无可确认的内容。"
+            }
+            if presentation.pendingReviewBatchCount > 0 {
+                thisSessionDetailLabel.text? += " 有 \(presentation.pendingReviewBatchCount) 批内容等待确认。"
+            }
+            if presentation.canContinueLater {
+                laterContinueDetailLabel.text = "想继续时，可以再回来。"
+                if presentation.eligibleCueCount > 0 {
+                    laterContinueDetailLabel.text? += " 已保留 \(presentation.eligibleCueCount) 条可继续线索。"
+                }
+            } else {
+                laterContinueDetailLabel.text = "本次暂不保留继续线索。"
+            }
+        case .rebuilding:
+            statusLabel.text = "正在整理本次回顾"
+            detailLabel.text = "整理完成后，会显示当前已确认的变化。"
+            thisSessionCard.isHidden = true
+            laterContinueCard.isHidden = true
+        case .unavailable:
+            renderUnavailable()
+        case .failed:
+            statusLabel.text = "暂时无法整理本次回顾"
+            detailLabel.text = "请稍后重试。"
+            thisSessionCard.isHidden = true
+            laterContinueCard.isHidden = true
+        }
+    }
+
+    private func renderUnavailable() {
+        statusLabel.text = "本次回顾暂不可用"
+        detailLabel.text = "当前不会显示不完整或不属于你的访谈结果。"
+        thisSessionCard.isHidden = true
+        laterContinueCard.isHidden = true
+    }
+
+    @objc private func refreshTapped() {
+        useCase.refresh()
+    }
+
+    #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+    var renderedStatusForUIQA: String {
+        statusLabel.text ?? ""
+    }
+
+    var renderedDetailForUIQA: String {
+        detailLabel.text ?? ""
+    }
+
+    var renderedThisSessionForUIQA: String {
+        thisSessionDetailLabel.text ?? ""
+    }
+
+    var renderedLaterContinueForUIQA: String {
+        laterContinueDetailLabel.text ?? ""
+    }
+    #endif
+}
+
 #if UI_QA_SIMULATOR && targetEnvironment(simulator)
 struct OwnerTruthCandidateInboxUIQASmokeResult: Codable {
     static let fileName = "owner-truth-candidate-inbox-uiqa-result.json"
@@ -5890,6 +6142,123 @@ enum OwnerTruthMemorySearchPresentationUIQASmoke {
                                 "sensitivity": "standard",
                                 "matchKind": "searchText",
                             ]],
+                        ],
+                    ],
+                    expectedVaultID: vaultID
+                )))
+            } catch {
+                completion(.failure(error))
+            }
+        }
+    }
+}
+
+/// In-memory only. This smoke exercises the display-safe ending summary
+/// without opening a release route, reading a real interview or writing data.
+enum OwnerTruthInterviewOutcomePresentationUIQASmoke {
+    static func run(
+        accountLease: AccountLease,
+        navigationController: UINavigationController,
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        guard let vaultID = OwnerTruthVaultID(accountLease.vaultId) else {
+            completion([
+                "completed": false,
+                "failureReason": "invalidVault",
+            ])
+            return
+        }
+        let sessionID = OwnerTruthRecordID(
+            rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000401")!
+        )
+        let client = FixtureClient(vaultID: vaultID, sessionID: sessionID)
+        let controller = OwnerTruthInterviewOutcomeViewController(
+            accountLease: accountLease,
+            sessionID: sessionID,
+            client: client,
+            releasePolicyAvailable: { true }
+        )
+        navigationController.setViewControllers([controller], animated: false)
+        controller.loadViewIfNeeded()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            let visibleText = [
+                controller.renderedStatusForUIQA,
+                controller.renderedDetailForUIQA,
+                controller.renderedThisSessionForUIQA,
+                controller.renderedLaterContinueForUIQA,
+            ].joined(separator: " ")
+            let privateFieldsRendered = visibleText.localizedCaseInsensitiveContains("source")
+                || visibleText.localizedCaseInsensitiveContains("thread")
+                || visibleText.localizedCaseInsensitiveContains("policy")
+                || visibleText.localizedCaseInsensitiveContains("memoryVersionId")
+                || visibleText.localizedCaseInsensitiveContains("candidate")
+                || visibleText.localizedCaseInsensitiveContains("sessionId")
+            let completed = client.requestCount == 1
+                && controller.title == "本次回顾"
+                && controller.renderedStatusForUIQA == "本次回顾已整理"
+                && controller.renderedThisSessionForUIQA
+                    == "已确认 2 条内容。 有 1 批内容等待确认。"
+                && controller.renderedLaterContinueForUIQA
+                    == "想继续时，可以再回来。 已保留 1 条可继续线索。"
+                && !privateFieldsRendered
+
+            completion([
+                "completed": completed,
+                "requestCount": client.requestCount,
+                "confirmedCount": 2,
+                "pendingReviewBatchCount": 1,
+                "eligibleCueCount": 1,
+                "privateFieldsRendered": privateFieldsRendered,
+                "inMemoryPreview": true,
+                "releasePolicyBypassedForPreview": true,
+                "backendNetworkStarted": false,
+                "persistentInterviewWriteStarted": false,
+                "publicRouteChanged": false,
+                "launchArguments": [
+                    QALaunchScenario.ownerTruthInterviewOutcomePresentationSmoke.rawValue,
+                ],
+            ])
+        }
+    }
+
+    private final class FixtureClient: OwnerTruthInterviewOutcomePresentationClient {
+        private let vaultID: OwnerTruthVaultID
+        private let sessionID: OwnerTruthRecordID
+        private(set) var requestCount = 0
+
+        init(vaultID: OwnerTruthVaultID, sessionID: OwnerTruthRecordID) {
+            self.vaultID = vaultID
+            self.sessionID = sessionID
+        }
+
+        func fetchOwnerTruthInterviewOutcomePresentation(
+            vaultID: OwnerTruthVaultID,
+            sessionID: OwnerTruthRecordID,
+            completion: @escaping (Result<OwnerTruthInterviewOutcomePresentation, Error>) -> Void
+        ) {
+            guard vaultID == self.vaultID, sessionID == self.sessionID else {
+                completion(.failure(OwnerTruthRemoteContractError.invalidInterviewOutcomePresentation(
+                    "fixture request mismatch"
+                )))
+                return
+            }
+            requestCount += 1
+            do {
+                completion(.success(try OwnerTruthInterviewOutcomePresentation(
+                    backendJSONObject: [
+                        "schemaVersion": OwnerTruthInterviewOutcomePresentation.schemaVersion,
+                        "vaultId": vaultID.rawValue,
+                        "sessionOutcome": [
+                            "state": "ready",
+                            "thisSession": [
+                                "confirmedMemoryCount": 2,
+                                "pendingReviewBatchCount": 1,
+                            ],
+                            "laterContinue": [
+                                "canContinueLater": true,
+                                "eligibleCueCount": 1,
+                            ],
                         ],
                     ],
                     expectedVaultID: vaultID
@@ -7504,6 +7873,8 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let lifeMapPolicyAvailable: () -> Bool
     private let memorySearchClient: OwnerTruthMemorySearchPresentationClient
     private let memorySearchPolicyAvailable: () -> Bool
+    private let interviewOutcomeClient: OwnerTruthInterviewOutcomePresentationClient
+    private let interviewOutcomePolicyAvailable: () -> Bool
     private let stackView = UIStackView()
     private let subtitleLabel = UILabel()
     private let guidedRecommendationStack = UIStackView()
@@ -7511,6 +7882,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let guidedRecommendationPromptStack = UIStackView()
     private let lifeMapButton = UIButton(type: .system)
     private let memorySearchButton = UIButton(type: .system)
+    private let interviewOutcomeButton = UIButton(type: .system)
     private let statusLabel = UILabel()
     private let detailLabel = UILabel()
     private let inputTextView = UITextView()
@@ -7614,6 +7986,15 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
                 .requestDecision(for: .ownerTruthMemorySearch)
                 .allowed
         },
+        interviewOutcomeClient: OwnerTruthInterviewOutcomePresentationClient = DreamJourneyBackendClient.shared,
+        interviewOutcomePolicyAvailable: @escaping () -> Bool = {
+            guard FeatureFlagService.shared.isEnabled(.ownerTruthInterviewOutcome) else {
+                return false
+            }
+            return FeatureGateService.shared
+                .requestDecision(for: .ownerTruthInterviewOutcome)
+                .allowed
+        },
         qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
     ) {
         self.presentation = presentation
@@ -7622,6 +8003,8 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         self.lifeMapPolicyAvailable = lifeMapPolicyAvailable
         self.memorySearchClient = memorySearchClient
         self.memorySearchPolicyAvailable = memorySearchPolicyAvailable
+        self.interviewOutcomeClient = interviewOutcomeClient
+        self.interviewOutcomePolicyAvailable = interviewOutcomePolicyAvailable
         self.useCase = OwnerTruthInterviewNaturalInputUseCase(
             accountLease: accountLease,
             client: client,
@@ -7690,6 +8073,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         configureGuidedRecommendations()
         configureLifeMapEntry()
         configureMemorySearchEntry()
+        configureInterviewOutcomeEntry()
 
         statusLabel.font = DJDesignTokens.Font.title(20)
         statusLabel.textColor = DJDesignTokens.Color.textPrimary
@@ -7724,6 +8108,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             stackView.addArrangedSubview(guidedRecommendationStack)
             stackView.addArrangedSubview(lifeMapButton)
             stackView.addArrangedSubview(memorySearchButton)
+            stackView.addArrangedSubview(interviewOutcomeButton)
         }
         [statusLabel, detailLabel, inputTextView, submitButton].forEach(stackView.addArrangedSubview)
         if presentation == .qa {
@@ -7825,6 +8210,34 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         memorySearchButton.accessibilityLabel = "回顾已确认的记忆"
         memorySearchButton.addTarget(self, action: #selector(memorySearchTapped), for: .touchUpInside)
         memorySearchButton.isHidden = presentation != .product || !memorySearchPolicyAvailable()
+    }
+
+    private func configureInterviewOutcomeEntry() {
+        var configuration = UIButton.Configuration.tinted()
+        configuration.title = "本次回顾"
+        configuration.image = UIImage(systemName: "text.badge.checkmark")
+        configuration.imagePadding = 8
+        configuration.baseForegroundColor = DJDesignTokens.Color.textPrimary
+        configuration.baseBackgroundColor = DJDesignTokens.Color.surface
+        configuration.contentInsets = NSDirectionalEdgeInsets(
+            top: 12,
+            leading: 14,
+            bottom: 12,
+            trailing: 14
+        )
+        interviewOutcomeButton.configuration = configuration
+        interviewOutcomeButton.contentHorizontalAlignment = .leading
+        interviewOutcomeButton.layer.cornerRadius = 10
+        interviewOutcomeButton.accessibilityIdentifier = "owner-truth-interview-outcome-entry"
+        interviewOutcomeButton.accessibilityLabel = "查看本次回顾"
+        interviewOutcomeButton.addTarget(
+            self,
+            action: #selector(interviewOutcomeTapped),
+            for: .touchUpInside
+        )
+        interviewOutcomeButton.isHidden = presentation != .product || !interviewOutcomePolicyAvailable()
+        interviewOutcomeButton.isEnabled = false
+        interviewOutcomeButton.alpha = 0.45
     }
 
     private func renderGuidedRecommendations(
@@ -7977,6 +8390,12 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         restoreCooldownButton.isHidden = !canRestoreCooldown
         restoreCooldownButton.isEnabled = canRestoreCooldown
         restoreCooldownButton.alpha = canRestoreCooldown ? 1 : 0.45
+        let canReadInterviewOutcome = presentation == .product
+            && interviewOutcomePolicyAvailable()
+            && state.latestReceipt != nil
+        interviewOutcomeButton.isHidden = presentation != .product || !interviewOutcomePolicyAvailable()
+        interviewOutcomeButton.isEnabled = canReadInterviewOutcome
+        interviewOutcomeButton.alpha = canReadInterviewOutcome ? 1 : 0.45
         statusLabel.text = statusText(for: state)
         detailLabel.text = detailText(for: state)
         onViewStateRendered?(state)
@@ -8080,6 +8499,22 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             accountLease: accountLease,
             client: memorySearchClient,
             releasePolicyAvailable: memorySearchPolicyAvailable
+        )
+        navigationController?.pushViewController(controller, animated: true)
+    }
+
+    @objc private func interviewOutcomeTapped() {
+        guard presentation == .product,
+              interviewOutcomePolicyAvailable(),
+              let sessionID = renderedState.latestReceipt?.sessionID else {
+            interviewOutcomeButton.isHidden = true
+            return
+        }
+        let controller = OwnerTruthInterviewOutcomeViewController(
+            accountLease: accountLease,
+            sessionID: sessionID,
+            client: interviewOutcomeClient,
+            releasePolicyAvailable: interviewOutcomePolicyAvailable
         )
         navigationController?.pushViewController(controller, animated: true)
     }
