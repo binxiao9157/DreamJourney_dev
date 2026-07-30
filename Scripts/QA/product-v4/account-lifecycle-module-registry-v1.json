@@ -399,6 +399,7 @@
       "moduleId": "LM-11-widget-and-temporary-exports",
       "surfaceIds": [
         "S05::S05.temporary-knowledge-share-exports",
+        "S14::S14.account-data-rights-receipt-cache",
         "S16::S16.widget-app-group-projection"
       ],
       "phase": "P06_CLEAR_DERIVED_OUTPUTS",
@@ -429,7 +430,7 @@
         "afterLogout": ["none"],
         "afterAccountDeletion": ["none"]
       },
-      "owner": "iOS Knowledge Export and Widget",
+      "owner": "iOS Export, Widget and Data Rights Receipt",
       "status": "MAPPED"
     },
     {
