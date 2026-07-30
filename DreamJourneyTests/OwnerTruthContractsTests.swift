@@ -652,6 +652,106 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(confirmation.singleCandidates.map(\.id), [singleCandidateID])
     }
 
+    func testInterviewCandidateConfirmationInboxDecodesContentFreeBatchHandles() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let firstBatchID = recordID("00000000-0000-0000-0000-000000000071")
+        let secondBatchID = recordID("00000000-0000-0000-0000-000000000072")
+
+        let inbox = try interviewCandidateConfirmationInbox(
+            vaultID: lease.vaultId,
+            reviewBatchIDs: [firstBatchID, secondBatchID]
+        )
+
+        XCTAssertEqual(inbox.vaultID.rawValue, lease.vaultId)
+        XCTAssertEqual(inbox.items.map(\.reviewBatchID), [firstBatchID, secondBatchID])
+        XCTAssertTrue(inbox.items.allSatisfy { $0.readiness == .reviewReady })
+        XCTAssertTrue(inbox.items.allSatisfy { $0.batchCandidateCount == 1 && $0.singleCandidateCount == 1 })
+    }
+
+    func testInterviewCandidateConfirmationInboxRejectsCandidateContentField() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000072")
+
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewCandidateConfirmationInbox(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewCandidateConfirmationInbox.schemaVersion,
+                    "vaultId": lease.vaultId,
+                    "confirmations": [[
+                        "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                        "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
+                        "batchCandidateCount": 1,
+                        "singleCandidateCount": 0,
+                        "candidateId": "must-not-be-in-discovery-response",
+                    ]],
+                ],
+                expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? OwnerTruthRemoteContractError,
+                .invalidInterviewCandidateConfirmationInbox(
+                    "confirmation inbox item misses a required content-free field"
+                )
+            )
+        }
+    }
+
+    func testInterviewCandidateConfirmationInboxUseCaseFailsClosedWithoutReleasePolicy() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = InterviewCandidateConfirmationInboxClientSpy()
+        let useCase = OwnerTruthInterviewCandidateConfirmationInboxUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { false }
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .releasePolicyDisabled)
+        XCTAssertEqual(client.requestCount, 0)
+    }
+
+    func testInterviewCandidateConfirmationInboxUseCaseBindsReadAndRejectsStaleAccountCompletion() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = InterviewCandidateConfirmationInboxClientSpy()
+        client.deferRead = true
+        let useCase = OwnerTruthInterviewCandidateConfirmationInboxUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.refresh)
+        client.completeDeferredRead(.success(try interviewCandidateConfirmationInbox(
+            vaultID: lease.vaultId,
+            reviewBatchIDs: [recordID("00000000-0000-0000-0000-000000000073")]
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertTrue(try XCTUnwrap(useCase.viewState.inbox).isBound(to: lease))
+
+        client.deferRead = true
+        useCase.send(.refresh)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferredRead(.success(try interviewCandidateConfirmationInbox(
+            vaultID: lease.vaultId,
+            reviewBatchIDs: [recordID("00000000-0000-0000-0000-000000000074")]
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(useCase.viewState.inbox)
+    }
+
     func testInterviewCandidateConfirmationUseCaseFailsClosedWithoutReleasePolicy() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let client = InterviewCandidateConfirmationClientSpy()
@@ -3480,6 +3580,27 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private func interviewCandidateConfirmationInbox(
+        vaultID: String,
+        reviewBatchIDs: [OwnerTruthRecordID]
+    ) throws -> OwnerTruthInterviewCandidateConfirmationInbox {
+        try OwnerTruthInterviewCandidateConfirmationInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewCandidateConfirmationInbox.schemaVersion,
+                "vaultId": vaultID,
+                "confirmations": reviewBatchIDs.map { reviewBatchID in
+                    [
+                        "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                        "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
+                        "batchCandidateCount": 1,
+                        "singleCandidateCount": 1,
+                    ]
+                },
+            ],
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID))
+        )
+    }
+
     private func reconciledInterviewCandidateConfirmation(
         vaultID: String,
         reviewBatchID: OwnerTruthRecordID,
@@ -4236,6 +4357,35 @@ private final class InterviewCandidateConfirmationClientSpy: OwnerTruthInterview
 }
 
 private enum InterviewCandidateConfirmationClientSpyError: Error {
+    case missingReadResult
+}
+
+private final class InterviewCandidateConfirmationInboxClientSpy: OwnerTruthInterviewCandidateConfirmationInboxClient {
+    var readResult: Result<OwnerTruthInterviewCandidateConfirmationInbox, Error>?
+    var deferRead = false
+    private var deferredReadCompletion: ((Result<OwnerTruthInterviewCandidateConfirmationInbox, Error>) -> Void)?
+    private(set) var requestCount = 0
+
+    func fetchOwnerTruthInterviewCandidateConfirmationInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmationInbox, Error>) -> Void
+    ) {
+        requestCount += 1
+        if deferRead {
+            deferredReadCompletion = completion
+            return
+        }
+        completion(readResult ?? .failure(InterviewCandidateConfirmationInboxClientSpyError.missingReadResult))
+    }
+
+    func completeDeferredRead(_ result: Result<OwnerTruthInterviewCandidateConfirmationInbox, Error>) {
+        let completion = deferredReadCompletion
+        deferredReadCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum InterviewCandidateConfirmationInboxClientSpyError: Error {
     case missingReadResult
 }
 

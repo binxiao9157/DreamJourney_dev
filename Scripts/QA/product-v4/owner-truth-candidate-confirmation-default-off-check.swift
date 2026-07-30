@@ -20,6 +20,7 @@ let root = URL(fileURLWithPath: #filePath)
 let featureFlags = try read("\(root)/DreamJourney/Sources/App/FeatureFlagService.swift")
 let backendClient = try read("\(root)/DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let contracts = try read("\(root)/DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift")
+let tests = try read("\(root)/DreamJourneyTests/OwnerTruthContractsTests.swift")
 
 require(featureFlags.contains("case ownerTruthCandidateReview"), "feature must be modeled explicitly")
 require(
@@ -40,6 +41,11 @@ require(
     backendClient.contains("normalizedPath.hasSuffix(\"/confirmation\")") &&
         backendClient.contains("return .ownerTruthCandidateReview"),
     "confirmation route must map to its dedicated feature"
+)
+require(
+    backendClient.contains("normalizedPath.hasSuffix(\"/interview-candidate-confirmations\")") &&
+        backendClient.contains("return .ownerTruthCandidateReview"),
+    "confirmation inbox route must map to its dedicated feature"
 )
 require(
     backendClient.contains("normalizedPath.hasSuffix(\"/confirmation/batch-accept\")") &&
@@ -75,6 +81,56 @@ require(
     !typedMethod.contains("X-DreamJourney-QA-Owner-Truth"),
     "typed confirmation client must never carry the QA review header"
 )
+
+guard let inboxMethodStart = backendClient.range(of: "func fetchOwnerTruthInterviewCandidateConfirmationInbox("),
+      let inboxMethodEnd = backendClient.range(
+        of: "func fetchOwnerTruthInterviewCandidateConfirmation(",
+        range: inboxMethodStart.upperBound..<backendClient.endIndex
+      ) else {
+    fatalError("owner-truth candidate confirmation default-off check failed: typed confirmation inbox client is missing")
+}
+let inboxMethod = String(backendClient[inboxMethodStart.lowerBound..<inboxMethodEnd.lowerBound])
+require(
+    inboxMethod.contains("FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)"),
+    "typed confirmation inbox client must capture the dedicated release-policy decision"
+)
+require(
+    inboxMethod.contains("/interview-candidate-confirmations\"") &&
+        inboxMethod.contains("featureDecision: decision"),
+    "typed confirmation inbox client must call discovery with its captured decision"
+)
+require(
+    inboxMethod.contains("OwnerTruthInterviewCandidateConfirmationInbox(") &&
+        !inboxMethod.contains("X-DreamJourney-QA-Owner-Truth") &&
+        !inboxMethod.contains("/candidate-review"),
+    "typed confirmation inbox client must parse only the content-free formal contract"
+)
+
+for required in [
+    "struct OwnerTruthInterviewCandidateConfirmationInboxItem",
+    "struct OwnerTruthInterviewCandidateConfirmationInbox",
+    "protocol OwnerTruthInterviewCandidateConfirmationInboxClient",
+    "final class OwnerTruthInterviewCandidateConfirmationInboxUseCase",
+    "confirmation inbox item misses a required content-free field",
+    "accountLeaseRuntime.validate(accountLease, at: .request).allowed",
+    "accountLeaseRuntime.validate(accountLease, at: .commit).allowed",
+    "a future UI must explicitly select an opaque `reviewBatchID`",
+] {
+    require(contracts.contains(required), "formal confirmation inbox contract missing: \(required)")
+}
+
+require(
+    backendClient.contains("extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationInboxClient {}"),
+    "concrete backend client must conform to the confirmation inbox port"
+)
+for testName in [
+    "func testInterviewCandidateConfirmationInboxDecodesContentFreeBatchHandles()",
+    "func testInterviewCandidateConfirmationInboxRejectsCandidateContentField()",
+    "func testInterviewCandidateConfirmationInboxUseCaseFailsClosedWithoutReleasePolicy()",
+    "func testInterviewCandidateConfirmationInboxUseCaseBindsReadAndRejectsStaleAccountCompletion()",
+] {
+    require(tests.contains(testName), "formal confirmation inbox test missing: \(testName)")
+}
 
 guard let actionStart = backendClient.range(of: "func confirmOwnerTruthInterviewCandidateBatch("),
       let actionEnd = backendClient.range(

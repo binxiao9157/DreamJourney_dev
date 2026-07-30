@@ -132,6 +132,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidDecision(String)
     case invalidCommand(String)
     case invalidInterviewCandidateReview(String)
+    case invalidInterviewCandidateConfirmationInbox(String)
     case invalidInterviewCandidateConfirmation(String)
     case invalidInterviewCandidateDecision(String)
     case invalidInterviewSessionState(String)
@@ -157,6 +158,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "候选审核命令无效：\(detail)"
         case .invalidInterviewCandidateReview(let detail):
             return "访谈候选审核合同无效：\(detail)"
+        case .invalidInterviewCandidateConfirmationInbox(let detail):
+            return "访谈候选确认待办合同无效：\(detail)"
         case .invalidInterviewCandidateConfirmation(let detail):
             return "访谈候选确认合同无效：\(detail)"
         case .invalidInterviewCandidateDecision(let detail):
@@ -916,6 +919,101 @@ private struct OwnerTruthInterviewCandidateConfirmationLeaseBinding: Equatable, 
     }
 }
 
+/// A confirmation inbox is only a content-free batch discovery projection. It
+/// receives its own binding type so it cannot accidentally be treated as a
+/// per-batch confirmation with Candidate material.
+private struct OwnerTruthInterviewCandidateConfirmationInboxLeaseBinding: Equatable, Sendable {
+    let accountLease: AccountLease
+
+    func matches(_ accountLease: AccountLease) -> Bool {
+        self.accountLease == accountLease
+    }
+}
+
+/// Opaque, content-free metadata used to discover one formal confirmation
+/// batch. A caller must perform the separately governed per-batch read before
+/// it can receive Candidate, Source, admission, or receipt data.
+struct OwnerTruthInterviewCandidateConfirmationInboxItem: Equatable, Sendable, Identifiable {
+    let reviewBatchID: OwnerTruthRecordID
+    let readiness: OwnerTruthInterviewCandidateReviewReadiness
+    let batchCandidateCount: Int
+    let singleCandidateCount: Int
+
+    var id: OwnerTruthRecordID { reviewBatchID }
+
+    init(backendJSONObject object: [String: Any]) throws {
+        let allowedKeys: Set<String> = [
+            "reviewBatchId",
+            "readiness",
+            "batchCandidateCount",
+            "singleCandidateCount",
+        ]
+        guard Set(object.keys).isSubset(of: allowedKeys),
+              let reviewBatchID = OwnerTruthCandidateEvidenceReference.recordID(object["reviewBatchId"]),
+              let readinessRaw = OwnerTruthInterviewCandidateContract.requiredString(object["readiness"]),
+              let readiness = OwnerTruthInterviewCandidateReviewReadiness(rawValue: readinessRaw),
+              let batchCandidateCount = OwnerTruthInterviewCandidateContract.nonNegativeInt(object["batchCandidateCount"]),
+              let singleCandidateCount = OwnerTruthInterviewCandidateContract.nonNegativeInt(object["singleCandidateCount"]) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateConfirmationInbox(
+                "confirmation inbox item misses a required content-free field"
+            )
+        }
+
+        self.reviewBatchID = reviewBatchID
+        self.readiness = readiness
+        self.batchCandidateCount = batchCandidateCount
+        self.singleCandidateCount = singleCandidateCount
+    }
+}
+
+/// Formal confirmation batch discovery. This is intentionally not Codable and
+/// rejects unexpected fields, so future product code cannot silently turn the
+/// discovery endpoint into a Candidate content transport.
+struct OwnerTruthInterviewCandidateConfirmationInbox: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-candidate-confirmation-inbox-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let items: [OwnerTruthInterviewCandidateConfirmationInboxItem]
+    private var leaseBinding: OwnerTruthInterviewCandidateConfirmationInboxLeaseBinding?
+
+    init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID) throws {
+        let allowedKeys: Set<String> = ["schemaVersion", "vaultId", "confirmations"]
+        guard Set(object.keys).isSubset(of: allowedKeys),
+              OwnerTruthInterviewCandidateContract.requiredString(object["schemaVersion"]) == Self.schemaVersion,
+              OwnerTruthInterviewCandidateContract.requiredString(object["vaultId"]) == expectedVaultID.rawValue,
+              let itemObjects = object["confirmations"] as? [[String: Any]] else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateConfirmationInbox(
+                "schemaVersion, vaultId or confirmations does not match the contract"
+            )
+        }
+
+        let items = try itemObjects.map(OwnerTruthInterviewCandidateConfirmationInboxItem.init)
+        guard Set(items.map(\.reviewBatchID)).count == items.count else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateConfirmationInbox(
+                "confirmation inbox repeats a review batch"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.items = items
+        leaseBinding = nil
+    }
+
+    /// A remote discovery payload becomes usable only after the AccountLease
+    /// that passed the completion fence binds it in memory.
+    func bound(to accountLease: AccountLease) -> Self {
+        var copy = self
+        copy.leaseBinding = OwnerTruthInterviewCandidateConfirmationInboxLeaseBinding(
+            accountLease: accountLease
+        )
+        return copy
+    }
+
+    func isBound(to accountLease: AccountLease) -> Bool {
+        leaseBinding?.matches(accountLease) == true
+    }
+}
+
 /// Read-only confirmation material behind the separately captured product
 /// policy. It deliberately has a distinct schema from the QA review route so
 /// a future product surface cannot accidentally reuse a QA-only transport.
@@ -1283,6 +1381,16 @@ protocol OwnerTruthInterviewCandidateConfirmationClient: AnyObject {
         vaultID: OwnerTruthVaultID,
         reviewBatchID: OwnerTruthRecordID,
         completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmation, Error>) -> Void
+    )
+}
+
+/// Content-free discovery port for formal confirmation batches. It has no
+/// Candidate detail or decision method; those remain behind the separately
+/// captured per-batch confirmation contracts.
+protocol OwnerTruthInterviewCandidateConfirmationInboxClient: AnyObject {
+    func fetchOwnerTruthInterviewCandidateConfirmationInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmationInbox, Error>) -> Void
     )
 }
 
@@ -1904,6 +2012,159 @@ final class OwnerTruthInterviewCandidateReviewUseCase {
             return key
         }
         return "summary"
+    }
+}
+
+// MARK: - Default-off product confirmation inbox
+
+enum OwnerTruthInterviewCandidateConfirmationInboxIntent: Equatable, Sendable {
+    case refresh
+}
+
+enum OwnerTruthInterviewCandidateConfirmationInboxPhase: Equatable, Sendable {
+    case idle
+    case unavailable
+    case loading
+    case ready
+    case empty
+    case failed
+}
+
+enum OwnerTruthInterviewCandidateConfirmationInboxNotice: Equatable, Sendable {
+    case releasePolicyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case requestFailed
+}
+
+struct OwnerTruthInterviewCandidateConfirmationInboxViewState: Equatable, Sendable {
+    let phase: OwnerTruthInterviewCandidateConfirmationInboxPhase
+    let inbox: OwnerTruthInterviewCandidateConfirmationInbox?
+    let notice: OwnerTruthInterviewCandidateConfirmationInboxNotice?
+
+    static let idle = OwnerTruthInterviewCandidateConfirmationInboxViewState(
+        phase: .idle,
+        inbox: nil,
+        notice: nil
+    )
+}
+
+/// Lease-fenced, default-off discovery consumer for formal confirmation
+/// batches. It does not automatically read an item or expose Candidate content;
+/// a future UI must explicitly select an opaque `reviewBatchID` and invoke the
+/// existing per-batch confirmation reader.
+final class OwnerTruthInterviewCandidateConfirmationInboxUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let client: OwnerTruthInterviewCandidateConfirmationInboxClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAvailable: () -> Bool
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthInterviewCandidateConfirmationInboxViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthInterviewCandidateConfirmationInboxViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthInterviewCandidateConfirmationInboxClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool = { false }
+    ) {
+        self.accountLease = accountLease
+        vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+    }
+
+    func send(_ intent: OwnerTruthInterviewCandidateConfirmationInboxIntent) {
+        switch intent {
+        case .refresh:
+            refresh()
+        }
+    }
+
+    private func refresh() {
+        guard let vaultID = beginRequestOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthInterviewCandidateConfirmationInboxViewState(
+            phase: .loading,
+            inbox: nil,
+            notice: nil
+        )
+        client.fetchOwnerTruthInterviewCandidateConfirmationInbox(vaultID: vaultID) { [weak self] result in
+            self?.receive(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthInterviewCandidateConfirmationInbox, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let inbox):
+            guard inbox.vaultID == vaultID,
+                  inbox.vaultID.rawValue == accountLease.vaultId else {
+                transitionFailure()
+                return
+            }
+            let boundInbox = inbox.bound(to: accountLease)
+            viewState = OwnerTruthInterviewCandidateConfirmationInboxViewState(
+                phase: boundInbox.items.isEmpty ? .empty : .ready,
+                inbox: boundInbox,
+                notice: nil
+            )
+        case .failure:
+            transitionFailure()
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthInterviewCandidateConfirmationInboxNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthInterviewCandidateConfirmationInboxViewState(
+            phase: .unavailable,
+            inbox: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure() {
+        viewState = OwnerTruthInterviewCandidateConfirmationInboxViewState(
+            phase: .failed,
+            inbox: nil,
+            notice: .requestFailed
+        )
     }
 }
 
