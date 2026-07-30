@@ -6297,6 +6297,425 @@ private enum InterviewSessionStateUIQAClientError: Error {
     case invalidRequest
 }
 
+// MARK: - Default-off interview orchestration QA
+
+/// This simulator-only page renders the bounded, value-free orchestration
+/// decision. It intentionally has no navigation entry in the product UI.
+final class OwnerTruthInterviewOrchestrationViewController: UIViewController {
+    private let useCase: OwnerTruthInterviewOrchestrationUseCase
+    private let stackView = UIStackView()
+    private let subtitleLabel = UILabel()
+    private let statusLabel = UILabel()
+    private let detailLabel = UILabel()
+    private lazy var refreshButton = UIBarButtonItem(
+        barButtonSystemItem: .refresh,
+        target: self,
+        action: #selector(refreshTapped)
+    )
+
+    private var renderedState: OwnerTruthInterviewOrchestrationViewState = .idle
+    var onViewStateRendered: ((OwnerTruthInterviewOrchestrationViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        sessionID: OwnerTruthRecordID,
+        client: OwnerTruthInterviewOrchestrationClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
+    ) {
+        useCase = OwnerTruthInterviewOrchestrationUseCase(
+            accountLease: accountLease,
+            sessionID: sessionID,
+            client: client,
+            accountLeaseRuntime: accountLeaseRuntime,
+            qaGateEnabled: qaGateEnabled
+        )
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "访谈编排（QA）"
+        view.backgroundColor = DJDesignTokens.Color.background
+        navigationItem.rightBarButtonItem = refreshButton
+        refreshButton.accessibilityIdentifier = "owner-truth-interview-orchestration-refresh"
+        configureView()
+        configureUseCase()
+        render(useCase.viewState)
+        refresh()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+        navigationController?.navigationBar.titleTextAttributes = [
+            .foregroundColor: DJDesignTokens.Color.textPrimary,
+            .font: DJDesignTokens.Font.title(18),
+        ]
+    }
+
+    private func configureView() {
+        stackView.axis = .vertical
+        stackView.alignment = .fill
+        stackView.spacing = 14
+        stackView.isLayoutMarginsRelativeArrangement = true
+        stackView.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 24,
+            leading: DJDesignTokens.Spacing.page,
+            bottom: 24,
+            trailing: DJDesignTokens.Spacing.page
+        )
+
+        subtitleLabel.text = "仅用于受控 QA：只读取策略动作和计数，不展示主题、对话内容或记忆标识，也不会写入会话。"
+        subtitleLabel.font = DJDesignTokens.Font.body(14)
+        subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
+        subtitleLabel.numberOfLines = 0
+
+        statusLabel.font = DJDesignTokens.Font.title(20)
+        statusLabel.textColor = DJDesignTokens.Color.textPrimary
+        statusLabel.numberOfLines = 0
+        statusLabel.accessibilityIdentifier = "owner-truth-interview-orchestration-status"
+
+        detailLabel.font = DJDesignTokens.Font.body(15)
+        detailLabel.textColor = DJDesignTokens.Color.textSecondary
+        detailLabel.numberOfLines = 0
+        detailLabel.accessibilityIdentifier = "owner-truth-interview-orchestration-detail"
+
+        [subtitleLabel, statusLabel, detailLabel].forEach(stackView.addArrangedSubview)
+        view.addSubview(stackView)
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stackView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            stackView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+    }
+
+    private func configureUseCase() {
+        useCase.onViewStateChange = { [weak self] state in
+            guard let self else { return }
+            if Thread.isMainThread {
+                render(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.render(state)
+                }
+            }
+        }
+    }
+
+    private func refresh() {
+        useCase.send(.refresh(OwnerTruthInterviewOrchestrationUIQASmoke.signals))
+    }
+
+    private func render(_ state: OwnerTruthInterviewOrchestrationViewState) {
+        renderedState = state
+        refreshButton.isEnabled = state.phase != .loading
+        statusLabel.text = statusText(for: state)
+        detailLabel.text = detailText(for: state)
+        onViewStateRendered?(state)
+    }
+
+    private func statusText(for state: OwnerTruthInterviewOrchestrationViewState) -> String {
+        switch state.phase {
+        case .idle:
+            return "准备读取引导策略"
+        case .loading:
+            return "正在读取引导策略"
+        case .ready:
+            return "策略动作：\(actionText(state.orchestration?.decision.action))"
+        case .unavailable:
+            return unavailableText(state.notice)
+        case .failed:
+            return "引导策略暂不可用"
+        }
+    }
+
+    private func detailText(for state: OwnerTruthInterviewOrchestrationViewState) -> String {
+        guard let read = state.orchestration else {
+            switch state.phase {
+            case .failed:
+                return "未保留旧策略，可在受控 QA 环境重新读取。"
+            case .unavailable:
+                return "此入口只在 QA 开关和当前账号租约有效时可用。"
+            default:
+                return ""
+            }
+        }
+        let decision = read.decision
+        let session = read.persistedSession
+        return [
+            "原因：\(decision.reasonCode) · 后续追问余量：\(decision.maxFollowupsRemaining)",
+            "下个会话建议：\(lifecycleText(decision.nextSessionState)) · 待审核：\(decision.reviewBatchDue ? "是" : "否")",
+            "当前会话：\(lifecycleText(session.lifecycle)) · \(boundaryText(session.boundary)) · \(fatigueText(session.fatigue))",
+            "轮次：\(session.ownerTurnCount) · 深入：\(session.deepeningTurnCount) · 候选批次：\(session.candidateBatchTurnCount)",
+        ].joined(separator: "\n")
+    }
+
+    @objc private func refreshTapped() {
+        refresh()
+    }
+
+    private func actionText(_ action: OwnerTruthInterviewOrchestrationAction?) -> String {
+        switch action {
+        case .listen: return "先聆听"
+        case .deepen: return "继续深入"
+        case .clarify: return "先澄清"
+        case .broaden: return "换个角度"
+        case .summarize: return "先总结"
+        case .pause: return "暂停本话题"
+        case nil: return "暂不可用"
+        }
+    }
+
+    private func lifecycleText(_ lifecycle: OwnerTruthInterviewOrchestrationNextSessionState) -> String {
+        switch lifecycle {
+        case .active: return "进行中"
+        case .paused: return "已暂停"
+        case .ending: return "准备结束"
+        case .ended: return "已结束"
+        case .invalid: return "无效"
+        }
+    }
+
+    private func lifecycleText(_ lifecycle: OwnerTruthInterviewSessionLifecycle) -> String {
+        switch lifecycle {
+        case .active: return "进行中"
+        case .paused: return "已暂停"
+        case .ended: return "已结束"
+        }
+    }
+
+    private func boundaryText(_ boundary: OwnerTruthInterviewSessionBoundary) -> String {
+        switch boundary {
+        case .open: return "可继续"
+        case .skipOnce: return "本轮跳过"
+        case .cooldown: return "冷却中"
+        case .doNotAsk: return "不再追问"
+        }
+    }
+
+    private func fatigueText(_ fatigue: OwnerTruthInterviewSessionFatigue) -> String {
+        switch fatigue {
+        case .normal: return "正常"
+        case .guarded: return "谨慎"
+        case .exhausted: return "疲劳"
+        }
+    }
+
+    private func unavailableText(_ notice: OwnerTruthInterviewOrchestrationNotice?) -> String {
+        switch notice {
+        case .qaOnlyDisabled:
+            return "QA 开关未启用"
+        case .invalidVault:
+            return "当前档案空间不可用"
+        case .accountUnavailable, .staleAccountLease:
+            return "账号已变化，请重新进入"
+        case .requestFailed, nil:
+            return "引导策略暂不可用"
+        }
+    }
+}
+
+struct OwnerTruthInterviewOrchestrationUIQASmokeResult: Codable {
+    static let fileName = "owner-truth-interview-orchestration-uiqa-result.json"
+
+    let completed: Bool
+    let qaGateEnabled: Bool
+    let stateRendered: Bool
+    let action: String?
+    let reasonCode: String?
+    let nextSessionState: String?
+    let persistedLifecycle: String?
+    let persistedBoundary: String?
+    let launchArguments: [String]
+    let failureReason: String?
+
+    func writeToDocuments(fileManager: FileManager = .default) throws -> URL {
+        let documentsURL = try fileManager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let resultURL = documentsURL.appendingPathComponent(Self.fileName, isDirectory: false)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(self).write(to: resultURL, options: [.atomic])
+        return resultURL
+    }
+}
+
+enum OwnerTruthInterviewOrchestrationUIQASmoke {
+    static let sessionID = OwnerTruthRecordID(
+        rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000267")!
+    )
+    static let signals = OwnerTruthInterviewOrchestrationSignals(userChangedTopic: true)
+
+    static func makeViewController(
+        accountLease: AccountLease
+    ) -> OwnerTruthInterviewOrchestrationViewController {
+        let client = InterviewOrchestrationUIQAClient(
+            vaultID: OwnerTruthVaultID(accountLease.vaultId),
+            sessionID: sessionID
+        )
+        let controller = OwnerTruthInterviewOrchestrationViewController(
+            accountLease: accountLease,
+            sessionID: sessionID,
+            client: client,
+            qaGateEnabled: { OwnerTruthCandidateReviewQAGate.isEnabled }
+        )
+        let scenario = InterviewOrchestrationUIQAScenario()
+        controller.onViewStateRendered = { state in
+            scenario.consume(state)
+        }
+        return controller
+    }
+
+    static func writeFailure(_ reason: String) {
+        write(
+            OwnerTruthInterviewOrchestrationUIQASmokeResult(
+                completed: false,
+                qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+                stateRendered: false,
+                action: nil,
+                reasonCode: nil,
+                nextSessionState: nil,
+                persistedLifecycle: nil,
+                persistedBoundary: nil,
+                launchArguments: [
+                    QALaunchScenario.ownerTruthInterviewOrchestrationSmoke.rawValue,
+                    OwnerTruthCandidateReviewQAGate.launchArgument,
+                ],
+                failureReason: reason
+            ),
+            logPrefix: "failed"
+        )
+    }
+
+    fileprivate static func writeCompleted(_ read: OwnerTruthInterviewOrchestrationRead) {
+        let decision = read.decision
+        let persisted = read.persistedSession
+        let completed = OwnerTruthCandidateReviewQAGate.isEnabled
+            && decision.action == .pause
+            && decision.reasonCode == "topicChanged"
+            && decision.nextSessionState == .paused
+            && !decision.reviewBatchDue
+            && persisted.lifecycle == .active
+            && persisted.boundary == .open
+            && persisted.ownerTurnCount == 1
+        write(
+            OwnerTruthInterviewOrchestrationUIQASmokeResult(
+                completed: completed,
+                qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+                stateRendered: true,
+                action: decision.action.rawValue,
+                reasonCode: decision.reasonCode,
+                nextSessionState: decision.nextSessionState.rawValue,
+                persistedLifecycle: persisted.lifecycle.rawValue,
+                persistedBoundary: persisted.boundary.rawValue,
+                launchArguments: [
+                    QALaunchScenario.ownerTruthInterviewOrchestrationSmoke.rawValue,
+                    OwnerTruthCandidateReviewQAGate.launchArgument,
+                ],
+                failureReason: completed ? nil : "unexpectedOrchestrationRead"
+            ),
+            logPrefix: completed ? "completed" : "failed"
+        )
+    }
+
+    private static func write(_ result: OwnerTruthInterviewOrchestrationUIQASmokeResult, logPrefix: String) {
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] OwnerTruthInterviewOrchestrationSmoke \(logPrefix) result=\(resultURL.path)")
+        } catch {
+            print("[UI_QA] OwnerTruthInterviewOrchestrationSmoke \(logPrefix) write=\(error.localizedDescription)")
+        }
+    }
+}
+
+private final class InterviewOrchestrationUIQAScenario {
+    private var didWrite = false
+
+    func consume(_ state: OwnerTruthInterviewOrchestrationViewState) {
+        guard !didWrite,
+              case .ready = state.phase,
+              let read = state.orchestration else {
+            return
+        }
+        didWrite = true
+        OwnerTruthInterviewOrchestrationUIQASmoke.writeCompleted(read)
+    }
+}
+
+private final class InterviewOrchestrationUIQAClient: OwnerTruthInterviewOrchestrationClient {
+    private let vaultID: OwnerTruthVaultID?
+    private let sessionID: OwnerTruthRecordID
+
+    init(vaultID: OwnerTruthVaultID?, sessionID: OwnerTruthRecordID) {
+        self.vaultID = vaultID
+        self.sessionID = sessionID
+    }
+
+    func fetchOwnerTruthInterviewOrchestration(
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        signals: OwnerTruthInterviewOrchestrationSignals,
+        completion: @escaping (Result<OwnerTruthInterviewOrchestrationRead, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID,
+              self.sessionID == sessionID,
+              signals == OwnerTruthInterviewOrchestrationUIQASmoke.signals else {
+            completion(.failure(InterviewOrchestrationUIQAClientError.invalidRequest))
+            return
+        }
+        do {
+            let read = try OwnerTruthInterviewOrchestrationRead(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewOrchestrationRead.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "orchestration": [
+                        "schemaVersion": OwnerTruthInterviewOrchestrationRead.orchestrationSchemaVersion,
+                        "policySchemaVersion": OwnerTruthInterviewOrchestrationRead.policySchemaVersion,
+                        "decision": [
+                            "schemaVersion": OwnerTruthInterviewOrchestrationRead.policySchemaVersion,
+                            "action": OwnerTruthInterviewOrchestrationAction.pause.rawValue,
+                            "reasonCode": "topicChanged",
+                            "maxFollowupsRemaining": 0,
+                            "reviewBatchDue": false,
+                            "nextSessionState": OwnerTruthInterviewOrchestrationNextSessionState.paused.rawValue,
+                            "consumesOneShotBoundary": false,
+                        ],
+                        "persistedSession": [
+                            "state": OwnerTruthInterviewSessionLifecycle.active.rawValue,
+                            "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
+                            "ownerTurnCount": 1,
+                            "deepeningTurnCount": 0,
+                            "candidateBatchTurnCount": 1,
+                            "fatigue": OwnerTruthInterviewSessionFatigue.normal.rawValue,
+                        ],
+                        "transientSignals": OwnerTruthInterviewOrchestrationRead.transientSignalsDescriptor,
+                    ],
+                ],
+                expectedVaultID: vaultID
+            )
+            completion(.success(read))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+}
+
+private enum InterviewOrchestrationUIQAClientError: Error {
+    case invalidRequest
+}
+
 #endif
 
 // MARK: - Default-off interview natural-input QA
