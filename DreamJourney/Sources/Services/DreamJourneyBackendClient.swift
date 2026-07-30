@@ -6007,6 +6007,47 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    func recordOwnerTruthInterviewPacing(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewPacingCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        // Pacing is a default-off QA contract. It must never inherit a
+        // released echoTextInput policy decision or make its controls public.
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthInterviewPacing",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions/\(pathComponent(command.sessionID.rawValue.uuidString))/pacing"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewNaturalInputReceipt(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func restoreOwnerTruthInterviewCooldown(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewRestoreCooldownCommand,

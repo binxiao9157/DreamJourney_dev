@@ -6768,6 +6768,8 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let cooldownButton = UIButton(type: .system)
     private let doNotAskButton = UIButton(type: .system)
     private let topicSwitchButton = UIButton(type: .system)
+    private let deepeningCompletedButton = UIButton(type: .system)
+    private let summaryCompletedButton = UIButton(type: .system)
     private let restoreDoNotAskButton = UIButton(type: .system)
     private let restoreCooldownButton = UIButton(type: .system)
 
@@ -6813,6 +6815,16 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             && topicSwitchButton.superview != nil
             && !topicSwitchButton.isHidden
             && topicSwitchButton.isEnabled
+    }
+
+    var arePacingActionsVisibleForQA: Bool {
+        presentation == .qa
+            && deepeningCompletedButton.superview != nil
+            && summaryCompletedButton.superview != nil
+            && !deepeningCompletedButton.isHidden
+            && !summaryCompletedButton.isHidden
+            && deepeningCompletedButton.isEnabled
+            && summaryCompletedButton.isEnabled
     }
 
     init(
@@ -6951,6 +6963,11 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             && state.phase == .ready
             && state.latestReceipt?.lifecycle == .active
             && canContinue
+        let canRecordPacing = presentation == .qa
+            && state.phase == .ready
+            && state.latestReceipt?.lifecycle == .active
+            && state.latestReceipt?.boundary == .open
+            && canContinue
         inputTextView.isEditable = canSubmit
         submitButton.isEnabled = canSubmit
         submitButton.alpha = canSubmit ? 1 : 0.45
@@ -6960,6 +6977,10 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         }
         topicSwitchButton.isEnabled = canSwitchTopic
         topicSwitchButton.alpha = canSwitchTopic ? 1 : 0.45
+        [deepeningCompletedButton, summaryCompletedButton].forEach { button in
+            button.isEnabled = canRecordPacing
+            button.alpha = canRecordPacing ? 1 : 0.45
+        }
         restoreDoNotAskButton.isHidden = !canRestoreDoNotAsk
         restoreDoNotAskButton.isEnabled = canRestoreDoNotAsk
         restoreDoNotAskButton.alpha = canRestoreDoNotAsk ? 1 : 0.45
@@ -7024,6 +7045,18 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             action: #selector(topicSwitchTapped)
         )
         configureBoundaryButton(
+            deepeningCompletedButton,
+            title: "记录一次追问完成",
+            accessibilityIdentifier: "owner-truth-interview-pacing-deepening-completed",
+            action: #selector(deepeningCompletedTapped)
+        )
+        configureBoundaryButton(
+            summaryCompletedButton,
+            title: "记录本轮总结完成",
+            accessibilityIdentifier: "owner-truth-interview-pacing-summary-completed",
+            action: #selector(summaryCompletedTapped)
+        )
+        configureBoundaryButton(
             restoreDoNotAskButton,
             title: "重新聊这个话题",
             accessibilityIdentifier: "owner-truth-interview-boundary-restore-do-not-ask",
@@ -7040,6 +7073,8 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             cooldownButton,
             doNotAskButton,
             topicSwitchButton,
+            deepeningCompletedButton,
+            summaryCompletedButton,
             restoreDoNotAskButton,
             restoreCooldownButton,
         ].forEach(boundaryActionsStack.addArrangedSubview)
@@ -7086,6 +7121,14 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         useCase.send(.pauseForTopicSwitch)
     }
 
+    @objc private func deepeningCompletedTapped() {
+        submitPacing(.deepeningCompleted)
+    }
+
+    @objc private func summaryCompletedTapped() {
+        submitPacing(.summaryCompleted)
+    }
+
     @objc private func restoreDoNotAskTapped() {
         guard presentation == .qa,
               renderedState.phase == .ready,
@@ -7122,6 +7165,16 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         useCase.send(.setBoundary(boundary))
     }
 
+    private func submitPacing(_ event: OwnerTruthInterviewPacingEvent) {
+        guard presentation == .qa,
+              renderedState.phase == .ready,
+              renderedState.latestReceipt?.lifecycle == .active,
+              renderedState.latestReceipt?.boundary == .open else {
+            return
+        }
+        useCase.send(.recordPacing(event))
+    }
+
     func triggerBoundaryButtonForQA(_ boundary: OwnerTruthInterviewSessionBoundary) {
         guard presentation == .qa else { return }
         switch boundary {
@@ -7139,6 +7192,16 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     func triggerTopicSwitchForQA() {
         guard presentation == .qa else { return }
         topicSwitchButton.sendActions(for: .touchUpInside)
+    }
+
+    func triggerPacingForQA(_ event: OwnerTruthInterviewPacingEvent) {
+        guard presentation == .qa else { return }
+        switch event {
+        case .deepeningCompleted:
+            deepeningCompletedButton.sendActions(for: .touchUpInside)
+        case .summaryCompleted:
+            summaryCompletedButton.sendActions(for: .touchUpInside)
+        }
     }
 
     func triggerDoNotAskRestoreForQA() {
@@ -7697,6 +7760,222 @@ private final class InterviewNaturalInputTopicSwitchUIQAScenario {
     }
 }
 
+struct OwnerTruthInterviewPacingUIQASmokeResult: Codable {
+    static let fileName = "owner-truth-interview-pacing-uiqa-result.json"
+
+    let completed: Bool
+    let qaGateEnabled: Bool
+    let pacingActionsVisible: Bool
+    let deepeningCompletedCount: Int
+    let summaryCompletedCount: Int
+    let summaryResetObserved: Bool
+    let finalDeepeningTurnCount: Int
+    let finalSessionVersion: Int?
+    let launchArguments: [String]
+    let failureReason: String?
+
+    func writeToDocuments(fileManager: FileManager = .default) throws -> URL {
+        let documentsURL = try fileManager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let resultURL = documentsURL.appendingPathComponent(Self.fileName, isDirectory: false)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(self).write(to: resultURL, options: [.atomic])
+        return resultURL
+    }
+}
+
+enum OwnerTruthInterviewPacingUIQASmoke {
+    private static var activeScenario: InterviewNaturalInputPacingUIQAScenario?
+
+    static func start(
+        accountLease: AccountLease,
+        navigationController: UINavigationController
+    ) {
+        let scenario = InterviewNaturalInputPacingUIQAScenario(
+            accountLease: accountLease,
+            navigationController: navigationController
+        )
+        activeScenario = scenario
+        scenario.start()
+    }
+
+    static func writeFailure(_ reason: String) {
+        write(
+            OwnerTruthInterviewPacingUIQASmokeResult(
+                completed: false,
+                qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+                pacingActionsVisible: false,
+                deepeningCompletedCount: 0,
+                summaryCompletedCount: 0,
+                summaryResetObserved: false,
+                finalDeepeningTurnCount: 0,
+                finalSessionVersion: nil,
+                launchArguments: [
+                    QALaunchScenario.ownerTruthInterviewPacingSmoke.rawValue,
+                    OwnerTruthCandidateReviewQAGate.launchArgument,
+                ],
+                failureReason: reason
+            ),
+            logPrefix: "failed"
+        )
+    }
+
+    fileprivate static func writeCompleted(
+        pacingActionsVisible: Bool,
+        events: [OwnerTruthInterviewPacingEvent],
+        summaryResetObserved: Bool,
+        finalDeepeningTurnCount: Int,
+        finalReceipt: OwnerTruthInterviewNaturalInputReceipt
+    ) {
+        let deepeningCompletedCount = events.filter { $0 == .deepeningCompleted }.count
+        let summaryCompletedCount = events.filter { $0 == .summaryCompleted }.count
+        let finalReceiptIsActive = finalReceipt.lifecycle == .active
+            && finalReceipt.boundary == .open
+            && finalReceipt.messageID == nil
+            && finalReceipt.messageSequence == nil
+        let completed = OwnerTruthCandidateReviewQAGate.isEnabled
+            && pacingActionsVisible
+            && deepeningCompletedCount == 5
+            && summaryCompletedCount == 1
+            && summaryResetObserved
+            && finalDeepeningTurnCount == 1
+            && finalReceiptIsActive
+        write(
+            OwnerTruthInterviewPacingUIQASmokeResult(
+                completed: completed,
+                qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+                pacingActionsVisible: pacingActionsVisible,
+                deepeningCompletedCount: deepeningCompletedCount,
+                summaryCompletedCount: summaryCompletedCount,
+                summaryResetObserved: summaryResetObserved,
+                finalDeepeningTurnCount: finalDeepeningTurnCount,
+                finalSessionVersion: finalReceipt.sessionVersion,
+                launchArguments: [
+                    QALaunchScenario.ownerTruthInterviewPacingSmoke.rawValue,
+                    OwnerTruthCandidateReviewQAGate.launchArgument,
+                ],
+                failureReason: completed ? nil : "pacingInvariantMismatch"
+            ),
+            logPrefix: completed ? "completed" : "failed"
+        )
+        activeScenario = nil
+    }
+
+    fileprivate static func writeScenarioFailure(_ reason: String) {
+        activeScenario = nil
+        writeFailure(reason)
+    }
+
+    private static func write(_ result: OwnerTruthInterviewPacingUIQASmokeResult, logPrefix: String) {
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] OwnerTruthInterviewPacingSmoke \(logPrefix) result=\(resultURL.path)")
+        } catch {
+            print("[UI_QA] OwnerTruthInterviewPacingSmoke \(logPrefix) write=\(error.localizedDescription)")
+        }
+    }
+}
+
+private final class InterviewNaturalInputPacingUIQAScenario {
+    private let accountLease: AccountLease
+    private weak var navigationController: UINavigationController?
+    private let client: InterviewNaturalInputUIQAClient
+    private let plannedEvents: [OwnerTruthInterviewPacingEvent] = [
+        .deepeningCompleted,
+        .deepeningCompleted,
+        .deepeningCompleted,
+        .deepeningCompleted,
+        .summaryCompleted,
+        .deepeningCompleted,
+    ]
+    private var nextEventIndex = 0
+    private var awaitingRecordedEvent = false
+    private var summaryResetObserved = false
+    private var didFinish = false
+
+    init(accountLease: AccountLease, navigationController: UINavigationController) {
+        self.accountLease = accountLease
+        self.navigationController = navigationController
+        client = InterviewNaturalInputUIQAClient(vaultID: OwnerTruthVaultID(accountLease.vaultId))
+    }
+
+    func start() {
+        guard let navigationController else {
+            fail("navigationControllerUnavailable")
+            return
+        }
+        let controller = OwnerTruthInterviewNaturalInputUIQASmoke.makePreviewViewController(
+            accountLease: accountLease,
+            client: client
+        )
+        controller.onViewStateRendered = { [weak self, weak controller] state in
+            guard let self, let controller else { return }
+            self.consume(state, controller: controller)
+        }
+        navigationController.setViewControllers([controller], animated: false)
+        controller.loadViewIfNeeded()
+    }
+
+    private func consume(
+        _ state: OwnerTruthInterviewNaturalInputViewState,
+        controller: OwnerTruthInterviewNaturalInputViewController
+    ) {
+        guard !didFinish,
+              state.phase == .ready,
+              let receipt = state.latestReceipt else {
+            return
+        }
+        guard controller.arePacingActionsVisibleForQA else {
+            fail("pacingControlsUnavailable")
+            return
+        }
+
+        let recordedCount = client.pacingEvents.count
+        guard recordedCount <= nextEventIndex else {
+            fail("pacingEventCountOutOfOrder")
+            return
+        }
+        if awaitingRecordedEvent {
+            guard recordedCount == nextEventIndex else { return }
+            awaitingRecordedEvent = false
+        }
+        if recordedCount >= 5,
+           client.pacingEvents[4] == .summaryCompleted,
+           client.pacingDeepeningTurnCount == 0 {
+            summaryResetObserved = true
+        }
+        guard nextEventIndex < plannedEvents.count else {
+            didFinish = true
+            OwnerTruthInterviewPacingUIQASmoke.writeCompleted(
+                pacingActionsVisible: controller.arePacingActionsVisibleForQA,
+                events: client.pacingEvents,
+                summaryResetObserved: summaryResetObserved,
+                finalDeepeningTurnCount: client.pacingDeepeningTurnCount,
+                finalReceipt: receipt
+            )
+            return
+        }
+
+        let nextEvent = plannedEvents[nextEventIndex]
+        nextEventIndex += 1
+        awaitingRecordedEvent = true
+        DispatchQueue.main.async {
+            controller.triggerPacingForQA(nextEvent)
+        }
+    }
+
+    private func fail(_ reason: String) {
+        guard !didFinish else { return }
+        didFinish = true
+        OwnerTruthInterviewPacingUIQASmoke.writeScenarioFailure(reason)
+    }
+}
+
 struct OwnerTruthInterviewBoundaryUIQASmokeResult: Codable {
     struct ActionResult: Codable {
         let boundary: String
@@ -8011,6 +8290,8 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
     private var currentSessionReceipt: OwnerTruthInterviewNaturalInputReceipt?
     private(set) var startRequestCount = 0
     private(set) var lastTopicSwitchPauseReceipt: OwnerTruthInterviewNaturalInputReceipt?
+    private(set) var pacingEvents: [OwnerTruthInterviewPacingEvent] = []
+    private(set) var pacingDeepeningTurnCount = 0
 
     init(vaultID: OwnerTruthVaultID?) {
         self.vaultID = vaultID
@@ -8192,6 +8473,56 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
             boundariesBySessionID[command.sessionID.rawValue] = current.boundary
             currentSessionReceipt = nil
             lastTopicSwitchPauseReceipt = receipt
+            completion(.success(receipt))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func recordOwnerTruthInterviewPacing(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewPacingCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID,
+              let current = currentSessionReceipt,
+              current.threadID == command.threadID,
+              current.sessionID == command.sessionID,
+              current.lifecycle == .active,
+              current.boundary == .open,
+              current.sessionVersion == command.expectedSessionVersion else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        if command.event == .summaryCompleted, pacingDeepeningTurnCount < 2 {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        switch command.event {
+        case .deepeningCompleted:
+            pacingDeepeningTurnCount += 1
+        case .summaryCompleted:
+            pacingDeepeningTurnCount = 0
+        }
+        pacingEvents.append(command.event)
+        do {
+            let receipt = try OwnerTruthInterviewNaturalInputReceipt(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "receipt": [
+                        "status": OwnerTruthCommandOutcome.created.rawValue,
+                        "threadId": command.threadID.rawValue.uuidString,
+                        "sessionId": command.sessionID.rawValue.uuidString,
+                        "threadVersion": current.threadVersion,
+                        "sessionVersion": command.expectedSessionVersion + 1,
+                        "state": OwnerTruthInterviewSessionLifecycle.active.rawValue,
+                        "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
+                    ],
+                ],
+                expectedVaultID: vaultID
+            )
+            currentSessionReceipt = receipt
             completion(.success(receipt))
         } catch {
             completion(.failure(error))

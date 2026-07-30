@@ -112,6 +112,7 @@ enum QALaunchScenario: String, CaseIterable {
     case ownerTruthInterviewSessionStateSmoke = "DJRunOwnerTruthInterviewSessionStateSmoke"
     case ownerTruthInterviewOrchestrationSmoke = "DJRunOwnerTruthInterviewOrchestrationSmoke"
     case ownerTruthInterviewTopicSwitchSmoke = "DJRunOwnerTruthInterviewTopicSwitchSmoke"
+    case ownerTruthInterviewPacingSmoke = "DJRunOwnerTruthInterviewPacingSmoke"
     case ownerTruthInterviewNaturalInputSmoke = "DJRunOwnerTruthInterviewNaturalInputSmoke"
     case ownerTruthKnowledgeDimensionConfirmationSmoke = "DJRunOwnerTruthKnowledgeDimensionConfirmationSmoke"
     case ownerTruthKnowledgeRecommendationPlanSmoke = "DJRunOwnerTruthKnowledgeRecommendationPlanSmoke"
@@ -162,6 +163,7 @@ enum QALaunchScenario: String, CaseIterable {
         .ownerTruthInterviewSessionStateSmoke,
         .ownerTruthInterviewOrchestrationSmoke,
         .ownerTruthInterviewTopicSwitchSmoke,
+        .ownerTruthInterviewPacingSmoke,
         .ownerTruthInterviewNaturalInputSmoke,
         .ownerTruthKnowledgeDimensionConfirmationSmoke,
         .ownerTruthKnowledgeRecommendationPlanSmoke,
@@ -216,6 +218,7 @@ enum QALaunchScenario: String, CaseIterable {
              .ownerTruthInterviewSessionStateSmoke,
              .ownerTruthInterviewOrchestrationSmoke,
              .ownerTruthInterviewTopicSwitchSmoke,
+             .ownerTruthInterviewPacingSmoke,
              .ownerTruthInterviewNaturalInputSmoke,
              .ownerTruthKnowledgeDimensionConfirmationSmoke,
              .ownerTruthKnowledgeRecommendationPlanSmoke,

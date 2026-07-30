@@ -365,6 +365,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewOrchestrationSmoke() }
         case .ownerTruthInterviewTopicSwitchSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewTopicSwitchSmoke() }
+        case .ownerTruthInterviewPacingSmoke:
+            scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewPacingSmoke() }
         case .ownerTruthInterviewNaturalInputSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewNaturalInputSmoke() }
         case .ownerTruthKnowledgeDimensionConfirmationSmoke:
@@ -2112,6 +2114,48 @@ private extension AppDelegate {
             navigationController: navigationController
         )
         print("[UI_QA] OwnerTruthInterviewTopicSwitchSmoke started")
+    }
+
+    func runOwnerTruthInterviewPacingSmoke(retryCount: Int = 0) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            OwnerTruthInterviewPacingUIQASmoke.writeFailure("qaGateDisabled")
+            return
+        }
+        guard let userID = UserManager.shared.currentUser?.id,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userID),
+              accountLease.subjectId == userID,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            guard retryCount < 20 else {
+                OwnerTruthInterviewPacingUIQASmoke.writeFailure("accountLeaseUnavailable")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerTruthInterviewPacingSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+        guard let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }),
+              keyWindow.rootViewController is WarmTabBarController else {
+            guard retryCount < 20 else {
+                OwnerTruthInterviewPacingUIQASmoke.writeFailure("mainRootUnavailable")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerTruthInterviewPacingSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+        let navigationController = UINavigationController()
+        keyWindow.rootViewController = navigationController
+        keyWindow.makeKeyAndVisible()
+        OwnerTruthInterviewPacingUIQASmoke.start(
+            accountLease: accountLease,
+            navigationController: navigationController
+        )
+        print("[UI_QA] OwnerTruthInterviewPacingSmoke started")
     }
 
     func runOwnerTruthInterviewNaturalInputSmoke(retryCount: Int = 0) {

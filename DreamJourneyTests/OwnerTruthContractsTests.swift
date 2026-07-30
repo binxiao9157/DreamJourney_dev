@@ -1333,6 +1333,105 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(receipt.boundary, .open)
     }
 
+    func testInterviewPacingCommandUsesValueFreePayloadAndMatchesActiveReceipt() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let command = try OwnerTruthInterviewPacingCommand(
+            commandID: "natural-input-pacing",
+            threadID: recordID("00000000-0000-0000-0000-000000000080"),
+            sessionID: recordID("00000000-0000-0000-0000-000000000081"),
+            expectedSessionVersion: 2,
+            event: .deepeningCompleted
+        )
+
+        XCTAssertEqual(Set(command.backendPayload.keys), [
+            "commandId",
+            "threadId",
+            "expectedSessionVersion",
+            "event",
+        ])
+        XCTAssertEqual(command.backendPayload["commandId"] as? String, command.commandID)
+        XCTAssertEqual(
+            command.backendPayload["threadId"] as? String,
+            command.threadID.rawValue.uuidString.lowercased()
+        )
+        XCTAssertEqual(command.backendPayload["expectedSessionVersion"] as? Int, 2)
+        XCTAssertEqual(command.backendPayload["event"] as? String, "deepeningCompleted")
+        XCTAssertFalse(String(describing: command.backendPayload).contains("text"))
+        XCTAssertFalse(String(describing: command.backendPayload).contains("topic"))
+
+        let receipt = try interviewNaturalInputReceipt(vaultID: vaultID, pacing: command)
+        XCTAssertTrue(receipt.matches(command))
+        XCTAssertEqual(receipt.lifecycle, .active)
+        XCTAssertEqual(receipt.boundary, .open)
+        XCTAssertNil(receipt.messageID)
+        XCTAssertNil(receipt.messageSequence)
+    }
+
+    func testInterviewNaturalInputUseCaseRecordsPacingWithLeaseFence() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        client.pacingHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, pacing: command) }
+        }
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.start)
+        let initialReceipt = try XCTUnwrap(useCase.viewState.latestReceipt)
+        useCase.send(.recordPacing(.deepeningCompleted))
+
+        let command = try XCTUnwrap(client.pacingCommand)
+        XCTAssertEqual(command.threadID, initialReceipt.threadID)
+        XCTAssertEqual(command.sessionID, initialReceipt.sessionID)
+        XCTAssertEqual(command.expectedSessionVersion, initialReceipt.sessionVersion)
+        XCTAssertEqual(command.event, .deepeningCompleted)
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertTrue(try XCTUnwrap(useCase.viewState.latestReceipt).matches(command))
+    }
+
+    func testInterviewNaturalInputUseCaseDiscardsDeferredPacingAfterAccountChange() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        client.deferPacing = true
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.start)
+        useCase.send(.recordPacing(.deepeningCompleted))
+        let command = try XCTUnwrap(client.pacingCommand)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferredPacing(.success(try interviewNaturalInputReceipt(
+            vaultID: vaultID,
+            pacing: command
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(useCase.viewState.latestReceipt)
+    }
+
     func testInterviewNaturalInputUseCaseStartsAndAppendsWithoutRetainingText() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
@@ -3568,6 +3667,28 @@ final class OwnerTruthContractsTests: XCTestCase {
 
     private func interviewNaturalInputReceipt(
         vaultID: OwnerTruthVaultID,
+        pacing: OwnerTruthInterviewPacingCommand
+    ) throws -> OwnerTruthInterviewNaturalInputReceipt {
+        try OwnerTruthInterviewNaturalInputReceipt(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "receipt": [
+                    "status": OwnerTruthCommandOutcome.created.rawValue,
+                    "threadId": pacing.threadID.rawValue.uuidString,
+                    "sessionId": pacing.sessionID.rawValue.uuidString,
+                    "threadVersion": 1,
+                    "sessionVersion": pacing.expectedSessionVersion + 1,
+                    "state": OwnerTruthInterviewSessionLifecycle.active.rawValue,
+                    "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+    }
+
+    private func interviewNaturalInputReceipt(
+        vaultID: OwnerTruthVaultID,
         topicSwitch: OwnerTruthInterviewPauseForTopicSwitchCommand
     ) throws -> OwnerTruthInterviewNaturalInputReceipt {
         try OwnerTruthInterviewNaturalInputReceipt(
@@ -4213,16 +4334,19 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
     var startHandler: ((OwnerTruthInterviewNaturalInputStartCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var appendHandler: ((OwnerTruthInterviewNaturalInputAppendCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var boundaryHandler: ((OwnerTruthInterviewBoundaryCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
+    var pacingHandler: ((OwnerTruthInterviewPacingCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var topicSwitchHandler: ((OwnerTruthInterviewPauseForTopicSwitchCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var restoreDoNotAskHandler: ((OwnerTruthInterviewRestoreDoNotAskCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var restoreCooldownHandler: ((OwnerTruthInterviewRestoreCooldownCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var continuationHandler: ((OwnerTruthRecordID) -> Result<OwnerTruthInterviewNaturalInputContinuation, Error>)?
     var deferAppend = false
     var deferBoundary = false
+    var deferPacing = false
     var deferTopicSwitch = false
     var deferRestoreCooldown = false
     private var deferredAppendCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
     private var deferredBoundaryCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
+    private var deferredPacingCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
     private var deferredTopicSwitchCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
     private var deferredRestoreCooldownCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
 
@@ -4230,6 +4354,7 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
     private(set) var startCommands: [OwnerTruthInterviewNaturalInputStartCommand] = []
     private(set) var appendCommand: OwnerTruthInterviewNaturalInputAppendCommand?
     private(set) var boundaryCommand: OwnerTruthInterviewBoundaryCommand?
+    private(set) var pacingCommand: OwnerTruthInterviewPacingCommand?
     private(set) var topicSwitchCommand: OwnerTruthInterviewPauseForTopicSwitchCommand?
     private(set) var restoreDoNotAskCommand: OwnerTruthInterviewRestoreDoNotAskCommand?
     private(set) var restoreCooldownCommand: OwnerTruthInterviewRestoreCooldownCommand?
@@ -4291,6 +4416,21 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
         }
         completion(boundaryHandler?(command) ?? .failure(
             InterviewNaturalInputClientSpyError.missingBoundaryResult
+        ))
+    }
+
+    func recordOwnerTruthInterviewPacing(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewPacingCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        pacingCommand = command
+        if deferPacing {
+            deferredPacingCompletion = completion
+            return
+        }
+        completion(pacingHandler?(command) ?? .failure(
+            InterviewNaturalInputClientSpyError.missingPacingResult
         ))
     }
 
@@ -4357,6 +4497,12 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
         completion?(result)
     }
 
+    func completeDeferredPacing(_ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>) {
+        let completion = deferredPacingCompletion
+        deferredPacingCompletion = nil
+        completion?(result)
+    }
+
     func completeDeferredTopicSwitch(_ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>) {
         let completion = deferredTopicSwitchCompletion
         deferredTopicSwitchCompletion = nil
@@ -4374,6 +4520,7 @@ private enum InterviewNaturalInputClientSpyError: Error {
     case missingStartResult
     case missingAppendResult
     case missingBoundaryResult
+    case missingPacingResult
     case missingTopicSwitchResult
     case missingRestoreDoNotAskResult
     case missingRestoreCooldownResult

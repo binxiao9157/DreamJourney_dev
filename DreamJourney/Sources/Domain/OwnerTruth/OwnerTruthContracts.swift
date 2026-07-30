@@ -3145,6 +3145,16 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
             && sessionVersion > command.expectedSessionVersion
     }
 
+    func matches(_ command: OwnerTruthInterviewPacingCommand) -> Bool {
+        threadID == command.threadID
+            && sessionID == command.sessionID
+            && lifecycle == .active
+            && boundary == .open
+            && messageID == nil
+            && messageSequence == nil
+            && sessionVersion > command.expectedSessionVersion
+    }
+
     func matches(_ command: OwnerTruthInterviewPauseForTopicSwitchCommand) -> Bool {
         threadID == command.threadID
             && sessionID == command.sessionID
@@ -3394,6 +3404,51 @@ struct OwnerTruthInterviewBoundaryCommand: Equatable, Sendable {
     }
 }
 
+/// A QA-only pacing fact for the private interview orchestrator. It carries
+/// no transcript text, topic identifier, candidate, or client-owned policy.
+/// The server owns the allowed sequence and follow-up budget.
+enum OwnerTruthInterviewPacingEvent: String, Equatable, Sendable {
+    case deepeningCompleted
+    case summaryCompleted
+}
+
+struct OwnerTruthInterviewPacingCommand: Equatable, Sendable {
+    let commandID: String
+    let threadID: OwnerTruthRecordID
+    let sessionID: OwnerTruthRecordID
+    let expectedSessionVersion: Int
+    let event: OwnerTruthInterviewPacingEvent
+
+    init(
+        commandID: String,
+        threadID: OwnerTruthRecordID,
+        sessionID: OwnerTruthRecordID,
+        expectedSessionVersion: Int,
+        event: OwnerTruthInterviewPacingEvent
+    ) throws {
+        guard let commandID = OwnerTruthInterviewNaturalInputContract.nonEmptyString(commandID),
+              expectedSessionVersion > 0 else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "pacing command requires a non-empty command id and positive session version"
+            )
+        }
+        self.commandID = commandID
+        self.threadID = threadID
+        self.sessionID = sessionID
+        self.expectedSessionVersion = expectedSessionVersion
+        self.event = event
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "commandId": commandID,
+            "threadId": threadID.rawValue.uuidString.lowercased(),
+            "expectedSessionVersion": expectedSessionVersion,
+            "event": event.rawValue,
+        ]
+    }
+}
+
 /// A QA-only lifecycle fence for an explicit owner topic switch. It carries
 /// no topic text, topic identifier, classifier result, or next-session id;
 /// the next session is created by the existing start command after this pause
@@ -3529,6 +3584,12 @@ protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
     func setOwnerTruthInterviewBoundary(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewBoundaryCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    )
+
+    func recordOwnerTruthInterviewPacing(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewPacingCommand,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
     )
 
@@ -4473,6 +4534,7 @@ enum OwnerTruthInterviewNaturalInputIntent: Equatable, Sendable {
     case start
     case submit(text: String)
     case setBoundary(OwnerTruthInterviewSessionBoundary)
+    case recordPacing(OwnerTruthInterviewPacingEvent)
     case pauseForTopicSwitch
     case restoreDoNotAsk
     case restoreCooldown
@@ -4554,6 +4616,8 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             submit(text: text)
         case .setBoundary(let boundary):
             setBoundary(boundary)
+        case .recordPacing(let event):
+            recordPacing(event)
         case .pauseForTopicSwitch:
             pauseForTopicSwitch()
         case .restoreDoNotAsk:
@@ -4700,6 +4764,43 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             )
             client.setOwnerTruthInterviewBoundary(vaultID: vaultID, command: command) { [weak self] result in
                 self?.receiveBoundary(result, vaultID: vaultID, command: command, generation: generation)
+            }
+        } catch {
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .ready,
+                latestReceipt: receipt,
+                continuation: viewState.continuation,
+                notice: .invalidInput
+            )
+        }
+    }
+
+    private func recordPacing(_ event: OwnerTruthInterviewPacingEvent) {
+        guard let receipt = viewState.latestReceipt,
+              viewState.phase == .ready,
+              receipt.lifecycle == .active,
+              receipt.boundary == .open else {
+            return
+        }
+        guard let vaultID = beginRequestOrFail() else { return }
+        do {
+            let command = try OwnerTruthInterviewPacingCommand(
+                commandID: identifierFactory().uuidString.lowercased(),
+                threadID: receipt.threadID,
+                sessionID: receipt.sessionID,
+                expectedSessionVersion: receipt.sessionVersion,
+                event: event
+            )
+            operationGeneration &+= 1
+            let generation = operationGeneration
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .submitting,
+                latestReceipt: receipt,
+                continuation: viewState.continuation,
+                notice: nil
+            )
+            client.recordOwnerTruthInterviewPacing(vaultID: vaultID, command: command) { [weak self] result in
+                self?.receivePacing(result, vaultID: vaultID, command: command, generation: generation)
             }
         } catch {
             viewState = OwnerTruthInterviewNaturalInputViewState(
@@ -4895,6 +4996,31 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         _ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>,
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewBoundaryCommand,
+        generation: UInt
+    ) {
+        guard canCommit(generation: generation) else { return }
+        switch result {
+        case .success(let receipt):
+            guard receipt.vaultID == vaultID, receipt.matches(command) else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .ready,
+                latestReceipt: receipt,
+                continuation: nil,
+                notice: nil
+            )
+            refreshContinuation(vaultID: vaultID, receipt: receipt)
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private func receivePacing(
+        _ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewPacingCommand,
         generation: UInt
     ) {
         guard canCommit(generation: generation) else { return }
