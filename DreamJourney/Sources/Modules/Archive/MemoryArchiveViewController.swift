@@ -607,6 +607,7 @@ final class MemoryArchiveViewController: UIViewController {
     private let remoteSyncCaptionLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
     private let analysisPrivacyDisclaimerLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
     private let timeLetterReminderButton = UIButton(type: .system)
+    private let candidateConfirmationButton = UIButton(type: .system)
     private let candidateReviewQAButton = UIButton(type: .system)
     private var isRefreshingFromBackend = false
     private var isRefreshingTimeLetterMailbox = false
@@ -798,6 +799,7 @@ final class MemoryArchiveViewController: UIViewController {
         configureAnalysisPrivacyDisclaimerLabel()
         configureRemoteSyncCaptionLabel()
         configureTimeLetterReminderButton()
+        configureCandidateConfirmationButton()
         configureCandidateReviewQAButton()
         configureArchiveFilterButton()
         let bookEntry = makeBookEntryCard()
@@ -808,6 +810,7 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.addArrangedSubview(analysisPrivacyDisclaimerLabel)
         mainStack.addArrangedSubview(remoteSyncCaptionLabel)
         mainStack.addArrangedSubview(timeLetterReminderButton)
+        mainStack.addArrangedSubview(candidateConfirmationButton)
         mainStack.addArrangedSubview(candidateReviewQAButton)
         mainStack.addArrangedSubview(bookEntry)
         mainStack.addArrangedSubview(materialsHeader)
@@ -819,6 +822,7 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.setCustomSpacing(ArchiveLayout.afterFeatureGridSpacing, after: analysisPrivacyDisclaimerLabel)
         mainStack.setCustomSpacing(8, after: remoteSyncCaptionLabel)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: timeLetterReminderButton)
+        mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: candidateConfirmationButton)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: candidateReviewQAButton)
         mainStack.setCustomSpacing(22, after: bookEntry)
         mainStack.setCustomSpacing(10, after: materialsHeader)
@@ -861,6 +865,7 @@ final class MemoryArchiveViewController: UIViewController {
         updateAutobiographyPageCopy()
         reloadFeatureCards(summary: summary)
         updateTimeLetterReminderButton()
+        updateCandidateConfirmationButton()
         updateCandidateReviewQAButton()
         updateArchiveFilterButton()
         reloadArchiveList()
@@ -1009,6 +1014,23 @@ final class MemoryArchiveViewController: UIViewController {
         )
     }
 
+    private func configureCandidateConfirmationButton() {
+        candidateConfirmationButton.titleLabel?.font = DJDesignTokens.Font.label(12)
+        candidateConfirmationButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        candidateConfirmationButton.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.72)
+        candidateConfirmationButton.layer.cornerRadius = 14
+        candidateConfirmationButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+        candidateConfirmationButton.contentHorizontalAlignment = .leading
+        candidateConfirmationButton.accessibilityIdentifier = "archive-owner-truth-candidate-confirmation"
+        candidateConfirmationButton.accessibilityLabel = "待确认记忆"
+        candidateConfirmationButton.isHidden = true
+        candidateConfirmationButton.addTarget(
+            self,
+            action: #selector(ownerTruthCandidateConfirmationTapped),
+            for: .touchUpInside
+        )
+    }
+
     private func configureArchiveFilterButton() {
         archiveFilterButton.titleLabel?.font = DJDesignTokens.Font.label(12)
         archiveFilterButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
@@ -1087,6 +1109,17 @@ final class MemoryArchiveViewController: UIViewController {
         candidateReviewQAButton.setTitle(isVisible ? "审核候选记忆（QA）" : nil, for: .normal)
         candidateReviewQAButton.isHidden = !isVisible
         candidateReviewQAButton.isUserInteractionEnabled = isVisible
+    }
+
+    private func updateCandidateConfirmationButton() {
+        let isVisible = isSelfAutobiographyMode && FeatureGateService.shared.isRouteAllowed(
+            .ownerTruthCandidateReview,
+            localEnabled: FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview)
+        )
+        candidateConfirmationButton.setTitle(isVisible ? "待确认记忆" : nil, for: .normal)
+        candidateConfirmationButton.accessibilityLabel = isVisible ? "待确认记忆" : nil
+        candidateConfirmationButton.isHidden = !isVisible
+        candidateConfirmationButton.isUserInteractionEnabled = isVisible
     }
 
     private func reloadFeatureCards(summary: (total: Int, photos: Int, audio: Int, text: Int)) {
@@ -2738,6 +2771,21 @@ final class MemoryArchiveViewController: UIViewController {
         )
     }
 
+    @objc private func ownerTruthCandidateConfirmationTapped() {
+        guard isSelfAutobiographyMode,
+              FeatureGateService.shared.isRouteAllowed(
+                  .ownerTruthCandidateReview,
+                  localEnabled: FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview)
+              ),
+              let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
+            return
+        }
+        navigationController?.pushViewController(
+            OwnerTruthInterviewCandidateConfirmationInboxViewController(accountLease: accountLease),
+            animated: true
+        )
+    }
+
     @objc private func ownerTruthCandidateReviewQATapped() {
         guard OwnerTruthCandidateReviewQAGate.isEnabled,
               isSelfAutobiographyMode,
@@ -3721,6 +3769,773 @@ final class MemoryArchiveViewController: UIViewController {
         showToast("家人故事仅可阅读，切回自己后可管理我的自传", type: .info)
     }
 }
+
+// MARK: - Default-off formal candidate confirmation
+
+final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewController {
+    private let accountLease: AccountLease
+    private let useCase: OwnerTruthInterviewCandidateConfirmationInboxUseCase
+    private let tableView = UITableView(frame: .zero, style: .insetGrouped)
+    private let statusLabel = UILabel()
+    private let emptyStateLabel = UILabel()
+    private lazy var refreshButton = UIBarButtonItem(
+        barButtonSystemItem: .refresh,
+        target: self,
+        action: #selector(refreshTapped)
+    )
+
+    private var renderedState = OwnerTruthInterviewCandidateConfirmationInboxViewState.idle
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthInterviewCandidateConfirmationInboxClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool = {
+            FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview).allowed
+        }
+    ) {
+        self.accountLease = accountLease
+        useCase = OwnerTruthInterviewCandidateConfirmationInboxUseCase(
+            accountLease: accountLease,
+            client: client,
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyAvailable: releasePolicyAvailable
+        )
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "待确认记忆"
+        view.backgroundColor = DJDesignTokens.Color.background
+        navigationItem.rightBarButtonItem = refreshButton
+        configureHeader()
+        configureTableView()
+        configureUseCase()
+        render(useCase.viewState)
+        useCase.send(.refresh)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+    }
+
+    private func configureHeader() {
+        statusLabel.font = DJDesignTokens.Font.body(14)
+        statusLabel.textColor = DJDesignTokens.Color.textSecondary
+        statusLabel.numberOfLines = 0
+        statusLabel.text = "确认后只记录审核结果，暂不会写入正式记忆。"
+        statusLabel.accessibilityIdentifier = "owner-truth-candidate-confirmation-inbox-status"
+        view.addSubview(statusLabel)
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+    }
+
+    private func configureTableView() {
+        tableView.backgroundColor = .clear
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.register(
+            OwnerTruthCandidateConfirmationInboxCell.self,
+            forCellReuseIdentifier: OwnerTruthCandidateConfirmationInboxCell.reuseIdentifier
+        )
+        tableView.accessibilityIdentifier = "owner-truth-candidate-confirmation-inbox-list"
+
+        emptyStateLabel.font = DJDesignTokens.Font.body(15)
+        emptyStateLabel.textColor = DJDesignTokens.Color.textTertiary
+        emptyStateLabel.textAlignment = .center
+        emptyStateLabel.numberOfLines = 0
+        emptyStateLabel.isHidden = true
+        tableView.backgroundView = emptyStateLabel
+
+        view.addSubview(tableView)
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            statusLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            tableView.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 8),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+    }
+
+    private func configureUseCase() {
+        useCase.onViewStateChange = { [weak self] state in
+            guard let self else { return }
+            if Thread.isMainThread {
+                render(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.render(state)
+                }
+            }
+        }
+    }
+
+    private func render(_ state: OwnerTruthInterviewCandidateConfirmationInboxViewState) {
+        renderedState = state
+        refreshButton.isEnabled = state.phase != .loading
+        statusLabel.text = statusText(for: state)
+        emptyStateLabel.text = emptyText(for: state)
+        emptyStateLabel.isHidden = emptyStateLabel.text == nil
+        tableView.reloadData()
+    }
+
+    private func statusText(for state: OwnerTruthInterviewCandidateConfirmationInboxViewState) -> String {
+        switch state.phase {
+        case .idle:
+            return "正在准备待确认记忆。"
+        case .unavailable:
+            return "待确认记忆暂未开放。"
+        case .loading:
+            return "正在读取待确认记忆。"
+        case .ready:
+            return "确认后只记录审核结果，暂不会写入正式记忆。"
+        case .empty:
+            return "当前没有需要你确认的记忆。"
+        case .failed:
+            return "暂时无法读取待确认记忆，请稍后重试。"
+        }
+    }
+
+    private func emptyText(for state: OwnerTruthInterviewCandidateConfirmationInboxViewState) -> String? {
+        switch state.phase {
+        case .empty:
+            return "你的访谈线索确认完成后，会在这里等待你确认。"
+        case .unavailable:
+            return "该功能仅会在获准的发布策略下开放。"
+        case .failed:
+            return "请点右上角重新载入。"
+        default:
+            return nil
+        }
+    }
+
+    @objc private func refreshTapped() {
+        useCase.send(.refresh)
+    }
+}
+
+extension OwnerTruthInterviewCandidateConfirmationInboxViewController: UITableViewDataSource, UITableViewDelegate {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        renderedState.inbox?.items.count ?? 0
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        cellForRowAt indexPath: IndexPath
+    ) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(
+            withIdentifier: OwnerTruthCandidateConfirmationInboxCell.reuseIdentifier,
+            for: indexPath
+        ) as! OwnerTruthCandidateConfirmationInboxCell
+        if let item = renderedState.inbox?.items[indexPath.row] {
+            cell.configure(item)
+        }
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        guard let inbox = renderedState.inbox,
+              inbox.isBound(to: accountLease),
+              inbox.items.indices.contains(indexPath.row) else {
+            return
+        }
+        tableView.deselectRow(at: indexPath, animated: true)
+        navigationController?.pushViewController(
+            OwnerTruthInterviewCandidateConfirmationViewController(
+                accountLease: accountLease,
+                reviewBatchID: inbox.items[indexPath.row].reviewBatchID
+            ),
+            animated: true
+        )
+    }
+}
+
+private final class OwnerTruthCandidateConfirmationInboxCell: UITableViewCell {
+    static let reuseIdentifier = "OwnerTruthCandidateConfirmationInboxCell"
+
+    private let titleLabel = UILabel()
+    private let detailLabel = UILabel()
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        backgroundColor = DJDesignTokens.Color.surface
+        accessoryType = .disclosureIndicator
+        titleLabel.font = DJDesignTokens.Font.body(16)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        detailLabel.font = DJDesignTokens.Font.label(13)
+        detailLabel.textColor = DJDesignTokens.Color.textSecondary
+        detailLabel.numberOfLines = 0
+        let stack = UIStackView(arrangedSubviews: [titleLabel, detailLabel])
+        stack.axis = .vertical
+        stack.spacing = 4
+        contentView.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
+            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -28),
+            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(_ item: OwnerTruthInterviewCandidateConfirmationInboxItem) {
+        titleLabel.text = "一组待确认线索"
+        let readiness: String
+        switch item.readiness {
+        case .reviewReady: readiness = "可确认"
+        case .noCandidates: readiness = "暂无候选"
+        case .awaitingExtraction: readiness = "整理中"
+        case .extractionFailed: readiness = "整理失败"
+        case .extractionQuarantined: readiness = "等待处理"
+        }
+        detailLabel.text = "普通线索 \(item.batchCandidateCount) 条 · 逐条确认 \(item.singleCandidateCount) 条 · \(readiness)"
+        accessibilityLabel = "\(titleLabel.text ?? "")，\(detailLabel.text ?? "")"
+    }
+}
+
+final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewController {
+    private enum Section: Int, CaseIterable {
+        case batch
+        case single
+
+        var title: String {
+            switch self {
+            case .batch: return "可确认的普通线索"
+            case .single: return "需要逐条确认"
+            }
+        }
+    }
+
+    private let accountLease: AccountLease
+    private let readUseCase: OwnerTruthInterviewCandidateConfirmationUseCase
+    private let batchActionClient: OwnerTruthInterviewCandidateConfirmationActionClient
+    private let singleActionClient: OwnerTruthInterviewCandidateConfirmationSingleActionClient
+    private let confirmationClient: OwnerTruthInterviewCandidateConfirmationClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAvailable: () -> Bool
+    private let tableView = UITableView(frame: .zero, style: .insetGrouped)
+    private let statusLabel = UILabel()
+    private let emptyStateLabel = UILabel()
+    private let confirmSelectionButton = UIButton(type: .system)
+    private lazy var refreshButton = UIBarButtonItem(
+        barButtonSystemItem: .refresh,
+        target: self,
+        action: #selector(refreshTapped)
+    )
+
+    private var renderedState = OwnerTruthInterviewCandidateConfirmationViewState.idle
+    private var selectedBatchCandidateIDs = Set<OwnerTruthRecordID>()
+    private var batchActionUseCase: OwnerTruthInterviewCandidateConfirmationActionUseCase?
+    private var singleActionUseCase: OwnerTruthInterviewCandidateConfirmationSingleActionUseCase?
+
+    init(
+        accountLease: AccountLease,
+        reviewBatchID: OwnerTruthRecordID,
+        confirmationClient: OwnerTruthInterviewCandidateConfirmationClient = DreamJourneyBackendClient.shared,
+        batchActionClient: OwnerTruthInterviewCandidateConfirmationActionClient = DreamJourneyBackendClient.shared,
+        singleActionClient: OwnerTruthInterviewCandidateConfirmationSingleActionClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool = {
+            FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview).allowed
+        }
+    ) {
+        self.accountLease = accountLease
+        self.confirmationClient = confirmationClient
+        self.batchActionClient = batchActionClient
+        self.singleActionClient = singleActionClient
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+        readUseCase = OwnerTruthInterviewCandidateConfirmationUseCase(
+            accountLease: accountLease,
+            reviewBatchID: reviewBatchID,
+            client: confirmationClient,
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyAvailable: releasePolicyAvailable
+        )
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "确认记忆线索"
+        view.backgroundColor = DJDesignTokens.Color.background
+        navigationItem.rightBarButtonItem = refreshButton
+        configureViews()
+        configureReadUseCase()
+        render(readUseCase.viewState)
+        readUseCase.send(.refresh)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+    }
+
+    private func configureViews() {
+        statusLabel.font = DJDesignTokens.Font.body(14)
+        statusLabel.textColor = DJDesignTokens.Color.textSecondary
+        statusLabel.numberOfLines = 0
+        statusLabel.accessibilityIdentifier = "owner-truth-candidate-confirmation-status"
+
+        confirmSelectionButton.titleLabel?.font = DJDesignTokens.Font.body(15)
+        confirmSelectionButton.setTitleColor(.white, for: .normal)
+        confirmSelectionButton.setTitleColor(DJDesignTokens.Color.textTertiary, for: .disabled)
+        confirmSelectionButton.backgroundColor = DJDesignTokens.Color.accentDeep
+        confirmSelectionButton.layer.cornerRadius = 12
+        confirmSelectionButton.contentEdgeInsets = UIEdgeInsets(top: 12, left: 16, bottom: 12, right: 16)
+        confirmSelectionButton.accessibilityIdentifier = "owner-truth-candidate-confirmation-batch-submit"
+        confirmSelectionButton.addTarget(self, action: #selector(confirmSelectionTapped), for: .touchUpInside)
+
+        tableView.backgroundColor = .clear
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.register(
+            OwnerTruthCandidateConfirmationCell.self,
+            forCellReuseIdentifier: OwnerTruthCandidateConfirmationCell.reuseIdentifier
+        )
+        tableView.accessibilityIdentifier = "owner-truth-candidate-confirmation-list"
+
+        emptyStateLabel.font = DJDesignTokens.Font.body(15)
+        emptyStateLabel.textColor = DJDesignTokens.Color.textTertiary
+        emptyStateLabel.textAlignment = .center
+        emptyStateLabel.numberOfLines = 0
+        emptyStateLabel.isHidden = true
+        tableView.backgroundView = emptyStateLabel
+
+        view.addSubview(statusLabel)
+        view.addSubview(confirmSelectionButton)
+        view.addSubview(tableView)
+        [statusLabel, confirmSelectionButton, tableView].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+        NSLayoutConstraint.activate([
+            statusLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            confirmSelectionButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            confirmSelectionButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            confirmSelectionButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12),
+            tableView.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 8),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: confirmSelectionButton.topAnchor, constant: -8),
+        ])
+    }
+
+    private func configureReadUseCase() {
+        readUseCase.onViewStateChange = { [weak self] state in
+            guard let self else { return }
+            if Thread.isMainThread {
+                render(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.render(state)
+                }
+            }
+        }
+    }
+
+    private func render(_ state: OwnerTruthInterviewCandidateConfirmationViewState) {
+        renderedState = state
+        refreshButton.isEnabled = state.phase != .loading
+        if let confirmation = state.confirmation {
+            let validBatchIDs = Set(confirmation.batchCandidates.map(\.id))
+            selectedBatchCandidateIDs.formIntersection(validBatchIDs)
+            configureActionUseCases(confirmation)
+        } else {
+            selectedBatchCandidateIDs.removeAll()
+            batchActionUseCase = nil
+            singleActionUseCase = nil
+        }
+        statusLabel.text = statusText(for: state)
+        emptyStateLabel.text = emptyText(for: state)
+        emptyStateLabel.isHidden = emptyStateLabel.text == nil
+        updateBatchButton()
+        tableView.reloadData()
+    }
+
+    private func configureActionUseCases(_ confirmation: OwnerTruthInterviewCandidateConfirmation) {
+        batchActionUseCase = OwnerTruthInterviewCandidateConfirmationActionUseCase(
+            accountLease: accountLease,
+            confirmation: confirmation,
+            client: batchActionClient,
+            confirmationReader: confirmationClient,
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyAvailable: releasePolicyAvailable
+        )
+        batchActionUseCase?.onViewStateChange = { [weak self] state in
+            self?.handleBatchActionState(state)
+        }
+        singleActionUseCase = OwnerTruthInterviewCandidateConfirmationSingleActionUseCase(
+            accountLease: accountLease,
+            confirmation: confirmation,
+            client: singleActionClient,
+            confirmationReader: confirmationClient,
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyAvailable: releasePolicyAvailable
+        )
+        singleActionUseCase?.onViewStateChange = { [weak self] state in
+            self?.handleSingleActionState(state)
+        }
+    }
+
+    private func handleBatchActionState(
+        _ state: OwnerTruthInterviewCandidateConfirmationActionViewState
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            switch state.phase {
+            case .submitting, .reconciling:
+                confirmSelectionButton.isEnabled = false
+                statusLabel.text = "正在确认所选普通线索。"
+            case .confirmed:
+                statusLabel.text = "已记录确认结果，正在刷新待确认线索。"
+                readUseCase.send(.refresh)
+            case .failed, .unavailable:
+                statusLabel.text = batchActionText(for: state.notice)
+                updateBatchButton()
+            case .idle:
+                break
+            }
+        }
+    }
+
+    private func handleSingleActionState(
+        _ state: OwnerTruthInterviewCandidateConfirmationSingleActionViewState
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            switch state.phase {
+            case .submitting, .reconciling:
+                tableView.isUserInteractionEnabled = false
+                statusLabel.text = "正在记录逐条确认结果。"
+            case .confirmed:
+                tableView.isUserInteractionEnabled = true
+                statusLabel.text = singleActionText(for: state.notice)
+                readUseCase.send(.refresh)
+            case .failed, .unavailable:
+                tableView.isUserInteractionEnabled = true
+                statusLabel.text = singleActionText(for: state.notice)
+            case .idle:
+                break
+            }
+        }
+    }
+
+    private func statusText(for state: OwnerTruthInterviewCandidateConfirmationViewState) -> String {
+        switch state.phase {
+        case .idle:
+            return "正在准备确认线索。"
+        case .unavailable:
+            return "当前无法确认这些线索。"
+        case .loading:
+            return "正在读取确认线索。"
+        case .ready:
+            return "确认只会记录审核结果，正式记忆仍需后续明确激活。"
+        case .empty:
+            return "这一组线索已经没有待确认内容。"
+        case .failed:
+            return "暂时无法读取确认线索，请稍后重试。"
+        }
+    }
+
+    private func emptyText(for state: OwnerTruthInterviewCandidateConfirmationViewState) -> String? {
+        switch state.phase {
+        case .empty:
+            return "当前没有需要确认的线索。"
+        case .unavailable:
+            return "该功能仅会在获准的发布策略下开放。"
+        case .failed:
+            return "请点右上角重新载入。"
+        default:
+            return nil
+        }
+    }
+
+    private func updateBatchButton() {
+        let batchCount = renderedState.confirmation?.batchCandidates.count ?? 0
+        let isSubmitting = batchActionUseCase?.viewState.phase == .submitting
+            || batchActionUseCase?.viewState.phase == .reconciling
+        guard batchCount > 0 else {
+            confirmSelectionButton.isHidden = true
+            return
+        }
+        confirmSelectionButton.isHidden = false
+        let selectedCount = selectedBatchCandidateIDs.count
+        confirmSelectionButton.setTitle(
+            selectedCount == 0 ? "选择普通线索后确认" : "确认所选普通线索（\(selectedCount)）",
+            for: .normal
+        )
+        confirmSelectionButton.isEnabled = selectedCount > 0 && !isSubmitting
+        confirmSelectionButton.alpha = confirmSelectionButton.isEnabled ? 1 : 0.5
+    }
+
+    private var visibleSections: [Section] {
+        guard let confirmation = renderedState.confirmation else { return [] }
+        return Section.allCases.filter { section in
+            switch section {
+            case .batch: return !confirmation.batchCandidates.isEmpty
+            case .single: return !confirmation.singleCandidates.isEmpty
+            }
+        }
+    }
+
+    private func candidate(
+        at indexPath: IndexPath
+    ) -> (item: OwnerTruthInterviewCandidateReviewItem, section: Section)? {
+        let sections = visibleSections
+        guard sections.indices.contains(indexPath.section),
+              let confirmation = renderedState.confirmation else {
+            return nil
+        }
+        let section = sections[indexPath.section]
+        let items: [OwnerTruthInterviewCandidateReviewItem]
+        switch section {
+        case .batch: items = confirmation.batchCandidates
+        case .single: items = confirmation.singleCandidates
+        }
+        guard items.indices.contains(indexPath.row) else { return nil }
+        return (items[indexPath.row], section)
+    }
+
+    @objc private func refreshTapped() {
+        readUseCase.send(.refresh)
+    }
+
+    @objc private func confirmSelectionTapped() {
+        let candidateIDs = selectedBatchCandidateIDs.sorted {
+            $0.rawValue.uuidString < $1.rawValue.uuidString
+        }
+        guard !candidateIDs.isEmpty else { return }
+        let alert = UIAlertController(
+            title: "确认普通线索",
+            message: "确认后将生成审核回执，不会直接写入正式记忆。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "确认", style: .default) { [weak self] _ in
+            self?.batchActionUseCase?.send(.confirmBatch(candidateIDs: candidateIDs))
+        })
+        present(alert, animated: true)
+    }
+
+    private func showSingleActions(
+        for item: OwnerTruthInterviewCandidateReviewItem,
+        sourceView: UIView
+    ) {
+        let alert = UIAlertController(
+            title: "逐条确认线索",
+            message: "敏感线索需要你单独确认、更正或拒绝；操作不会直接写入正式记忆。",
+            preferredStyle: .actionSheet
+        )
+        alert.addAction(UIAlertAction(title: "确认", style: .default) { [weak self] _ in
+            self?.singleActionUseCase?.send(.accept(candidateID: item.id))
+        })
+        alert.addAction(UIAlertAction(title: "更正后确认", style: .default) { [weak self] _ in
+            self?.presentCorrectionAlert(for: item)
+        })
+        alert.addAction(UIAlertAction(title: "拒绝", style: .destructive) { [weak self] _ in
+            self?.singleActionUseCase?.send(.reject(candidateID: item.id))
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = sourceView
+            popover.sourceRect = sourceView.bounds
+        }
+        present(alert, animated: true)
+    }
+
+    private func presentCorrectionAlert(for item: OwnerTruthInterviewCandidateReviewItem) {
+        let alert = UIAlertController(
+            title: "更正线索",
+            message: "更正只会保存为本次审核结果。",
+            preferredStyle: .alert
+        )
+        alert.addTextField { textField in
+            textField.text = Self.proposalPreview(for: item)
+            textField.clearButtonMode = .whileEditing
+            textField.accessibilityIdentifier = "owner-truth-candidate-confirmation-correction-input"
+        }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "提交更正", style: .default) { [weak self, weak alert] _ in
+            self?.singleActionUseCase?.send(.correct(
+                candidateID: item.id,
+                correctedSummary: alert?.textFields?.first?.text ?? ""
+            ))
+        })
+        present(alert, animated: true)
+    }
+
+    private func batchActionText(
+        for notice: OwnerTruthInterviewCandidateConfirmationActionNotice?
+    ) -> String {
+        switch notice {
+        case .releasePolicyDisabled: return "待确认记忆当前未开放。"
+        case .invalidVault, .accountUnavailable, .staleAccountLease: return "账号状态已变化，请重新进入。"
+        case .invalidSelection: return "所选线索已变化，请重新选择。"
+        case .responseMismatch, .reconciliationFailed: return "确认结果尚未核对完成，请重新载入。"
+        case .requestFailed: return "确认失败，请稍后重试。"
+        case .batchConfirmed: return "已确认所选普通线索。"
+        case .none: return "确认失败，请稍后重试。"
+        }
+    }
+
+    private func singleActionText(
+        for notice: OwnerTruthInterviewCandidateConfirmationSingleActionNotice?
+    ) -> String {
+        switch notice {
+        case .releasePolicyDisabled: return "待确认记忆当前未开放。"
+        case .invalidVault, .accountUnavailable, .staleAccountLease: return "账号状态已变化，请重新进入。"
+        case .invalidSelection: return "该线索已变化，请重新载入。"
+        case .correctionRequired: return "请填写更正后的线索。"
+        case .responseMismatch, .reconciliationFailed: return "确认结果尚未核对完成，请重新载入。"
+        case .requestFailed: return "确认失败，请稍后重试。"
+        case .singleAccepted: return "已确认该线索。"
+        case .singleCorrected: return "已保存更正后的线索。"
+        case .singleRejected: return "已拒绝该线索。"
+        case .none: return "确认失败，请稍后重试。"
+        }
+    }
+
+    static func proposalPreview(for item: OwnerTruthInterviewCandidateReviewItem) -> String {
+        for key in ["summary", "title", "text"] {
+            guard case .string(let rawValue)? = item.candidate.content[key] else { continue }
+            let normalized = rawValue
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !normalized.isEmpty {
+                return String(normalized.prefix(160))
+            }
+        }
+        return "待确认访谈线索"
+    }
+}
+
+extension OwnerTruthInterviewCandidateConfirmationViewController: UITableViewDataSource, UITableViewDelegate {
+    func numberOfSections(in tableView: UITableView) -> Int {
+        visibleSections.count
+    }
+
+    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        guard visibleSections.indices.contains(section) else { return nil }
+        return visibleSections[section].title
+    }
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        guard visibleSections.indices.contains(section),
+              let confirmation = renderedState.confirmation else {
+            return 0
+        }
+        switch visibleSections[section] {
+        case .batch: return confirmation.batchCandidates.count
+        case .single: return confirmation.singleCandidates.count
+        }
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        cellForRowAt indexPath: IndexPath
+    ) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(
+            withIdentifier: OwnerTruthCandidateConfirmationCell.reuseIdentifier,
+            for: indexPath
+        ) as! OwnerTruthCandidateConfirmationCell
+        if let candidate = candidate(at: indexPath) {
+            cell.configure(
+                candidate.item,
+                isSelectedForBatch: candidate.section == .batch && selectedBatchCandidateIDs.contains(candidate.item.id)
+            )
+        }
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        guard let candidate = candidate(at: indexPath),
+              let cell = tableView.cellForRow(at: indexPath) else {
+            return
+        }
+        tableView.deselectRow(at: indexPath, animated: true)
+        switch candidate.section {
+        case .batch:
+            if selectedBatchCandidateIDs.contains(candidate.item.id) {
+                selectedBatchCandidateIDs.remove(candidate.item.id)
+            } else {
+                selectedBatchCandidateIDs.insert(candidate.item.id)
+            }
+            updateBatchButton()
+            tableView.reloadRows(at: [indexPath], with: .none)
+        case .single:
+            showSingleActions(for: candidate.item, sourceView: cell)
+        }
+    }
+}
+
+private final class OwnerTruthCandidateConfirmationCell: UITableViewCell {
+    static let reuseIdentifier = "OwnerTruthCandidateConfirmationCell"
+
+    private let titleLabel = UILabel()
+    private let detailLabel = UILabel()
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        backgroundColor = DJDesignTokens.Color.surface
+        titleLabel.font = DJDesignTokens.Font.body(16)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        titleLabel.numberOfLines = 0
+        detailLabel.font = DJDesignTokens.Font.label(13)
+        detailLabel.textColor = DJDesignTokens.Color.textSecondary
+        detailLabel.numberOfLines = 0
+        let stack = UIStackView(arrangedSubviews: [titleLabel, detailLabel])
+        stack.axis = .vertical
+        stack.spacing = 6
+        contentView.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
+            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -34),
+            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(
+        _ item: OwnerTruthInterviewCandidateReviewItem,
+        isSelectedForBatch: Bool
+    ) {
+        titleLabel.text = OwnerTruthInterviewCandidateConfirmationViewController.proposalPreview(for: item)
+        let pathText = item.reviewPath == .single ? "需逐条确认" : "普通线索"
+        detailLabel.text = "\(pathText) · \(item.candidate.sensitivity.rawValue) · 来源 \(item.candidate.sourceReferences.count) 条"
+        accessoryType = item.reviewPath == .single ? .disclosureIndicator : (isSelectedForBatch ? .checkmark : .none)
+        tintColor = DJDesignTokens.Color.accentDeep
+        accessibilityLabel = "\(titleLabel.text ?? "")，\(detailLabel.text ?? "")"
+    }
+}
+
+// MARK: - QA candidate inbox
 
 /// QA-only Archive page for reviewing Owner Truth candidates. The page consumes
 /// a lease-fenced Intent/ViewState use case and deliberately has no direct

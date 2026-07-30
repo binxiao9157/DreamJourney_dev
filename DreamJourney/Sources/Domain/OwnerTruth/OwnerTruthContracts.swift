@@ -1506,6 +1506,129 @@ protocol OwnerTruthInterviewCandidateConfirmationActionClient: AnyObject {
     )
 }
 
+/// A formal product command for one sensitive or explicitly single-review
+/// Candidate. It intentionally does not reuse the QA receipt envelope.
+struct OwnerTruthInterviewCandidateConfirmationSingleCommand: Equatable, Sendable {
+    let commandID: String
+    let reviewBatchID: OwnerTruthRecordID
+    let candidateID: OwnerTruthRecordID
+    let expectedCandidateVersion: Int
+    let action: OwnerTruthCandidateReviewAction
+    let correctedValue: [String: OwnerTruthJSONValue]?
+    let correctedValueSchemaVersion: String?
+
+    init(
+        commandID: String,
+        reviewBatchID: OwnerTruthRecordID,
+        candidateID: OwnerTruthRecordID,
+        expectedCandidateVersion: Int,
+        action: OwnerTruthCandidateReviewAction,
+        correctedValue: [String: OwnerTruthJSONValue]? = nil,
+        correctedValueSchemaVersion: String? = nil
+    ) throws {
+        let normalizedCommandID = commandID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSchemaVersion = correctedValueSchemaVersion?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedCommandID.isEmpty, expectedCandidateVersion > 0 else {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "confirmation single action requires a command id and candidate version"
+            )
+        }
+        switch action {
+        case .correct:
+            guard let correctedValue, !correctedValue.isEmpty,
+                  let normalizedSchemaVersion, !normalizedSchemaVersion.isEmpty else {
+                throw OwnerTruthRemoteContractError.invalidCommand(
+                    "confirmation correct requires correctedValue and correctedValueSchemaVersion"
+                )
+            }
+            self.correctedValue = correctedValue
+            self.correctedValueSchemaVersion = normalizedSchemaVersion
+        case .accept, .reject:
+            guard correctedValue == nil, correctedValueSchemaVersion == nil else {
+                throw OwnerTruthRemoteContractError.invalidCommand(
+                    "only confirmation correct may carry a corrected value"
+                )
+            }
+            self.correctedValue = nil
+            self.correctedValueSchemaVersion = nil
+        }
+        self.commandID = normalizedCommandID
+        self.reviewBatchID = reviewBatchID
+        self.candidateID = candidateID
+        self.expectedCandidateVersion = expectedCandidateVersion
+        self.action = action
+    }
+
+    var backendPayload: [String: Any] {
+        var payload: [String: Any] = [
+            "commandId": commandID,
+            "expectedCandidateVersion": expectedCandidateVersion,
+            "action": action.rawValue,
+        ]
+        if let correctedValue, let correctedValueSchemaVersion {
+            payload["correctedValue"] = correctedValue.mapValues(\.backendJSONObject)
+            payload["correctedValueSchemaVersion"] = correctedValueSchemaVersion
+        }
+        return payload
+    }
+}
+
+/// Value-minimized product result for a single Candidate decision. Receipt
+/// identifiers and any Candidate content are deliberately excluded.
+struct OwnerTruthInterviewCandidateConfirmationSingleResult: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-candidate-confirmation-single-decision-response-v1"
+
+    let outcome: OwnerTruthCommandOutcome
+    let batchDecisionID: OwnerTruthRecordID
+    let reviewBatchID: OwnerTruthRecordID
+    let candidateID: OwnerTruthRecordID
+    let decision: OwnerTruthCandidateDecision
+    let memoryVersionCreated: Bool
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedCommand: OwnerTruthInterviewCandidateConfirmationSingleCommand
+    ) throws {
+        guard object["receipt"] == nil,
+              object["review"] == nil,
+              object["confirmation"] == nil,
+              object["content"] == nil,
+              OwnerTruthInterviewCandidateContract.requiredString(object["schemaVersion"]) == Self.schemaVersion,
+              let outcomeRaw = OwnerTruthInterviewCandidateContract.requiredString(object["status"]),
+              let outcome = OwnerTruthCommandOutcome(rawValue: outcomeRaw),
+              let batchDecisionID = OwnerTruthCandidateEvidenceReference.recordID(object["batchDecisionId"]),
+              let reviewBatchID = OwnerTruthCandidateEvidenceReference.recordID(object["reviewBatchId"]),
+              reviewBatchID == expectedCommand.reviewBatchID,
+              let candidateID = OwnerTruthCandidateEvidenceReference.recordID(object["candidateId"]),
+              candidateID == expectedCommand.candidateID,
+              let decisionRaw = OwnerTruthInterviewCandidateContract.requiredString(object["decision"]),
+              let decision = OwnerTruthCandidateDecision(rawValue: decisionRaw),
+              decision == expectedCommand.action.terminalDecision else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateDecision(
+                "confirmation single action result does not match the typed command"
+            )
+        }
+        try OwnerTruthInterviewCandidateContract.assertNoMemoryActivation(object["memoryActivation"])
+        self.outcome = outcome
+        self.batchDecisionID = batchDecisionID
+        self.reviewBatchID = reviewBatchID
+        self.candidateID = candidateID
+        self.decision = decision
+        self.memoryVersionCreated = false
+    }
+}
+
+/// Narrow write port for a formal sensitive/single Candidate decision. It is
+/// separate from QA review so the client cannot accidentally use QA headers.
+protocol OwnerTruthInterviewCandidateConfirmationSingleActionClient: AnyObject {
+    func confirmOwnerTruthInterviewCandidateSingle(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateConfirmationSingleCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmationSingleResult, Error>) -> Void
+    )
+}
+
 private enum OwnerTruthInterviewCandidateContract {
     static func requiredString(_ value: Any?) -> String? {
         guard let value = value as? String else { return nil }
@@ -2620,6 +2743,329 @@ final class OwnerTruthInterviewCandidateConfirmationActionUseCase {
             latestResult: latestResult,
             notice: notice
         )
+    }
+}
+
+// MARK: - Default-off product single confirmation action
+
+enum OwnerTruthInterviewCandidateConfirmationSingleActionIntent: Equatable, Sendable {
+    case accept(candidateID: OwnerTruthRecordID)
+    case correct(candidateID: OwnerTruthRecordID, correctedSummary: String)
+    case reject(candidateID: OwnerTruthRecordID)
+}
+
+enum OwnerTruthInterviewCandidateConfirmationSingleActionPhase: Equatable, Sendable {
+    case idle
+    case unavailable
+    case submitting
+    case reconciling
+    case confirmed
+    case failed
+}
+
+enum OwnerTruthInterviewCandidateConfirmationSingleActionNotice: Equatable, Sendable {
+    case releasePolicyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case invalidSelection
+    case correctionRequired
+    case responseMismatch
+    case reconciliationFailed
+    case requestFailed
+    case singleAccepted
+    case singleCorrected
+    case singleRejected
+}
+
+struct OwnerTruthInterviewCandidateConfirmationSingleActionViewState: Equatable, Sendable {
+    let phase: OwnerTruthInterviewCandidateConfirmationSingleActionPhase
+    let latestResult: OwnerTruthInterviewCandidateConfirmationSingleResult?
+    let notice: OwnerTruthInterviewCandidateConfirmationSingleActionNotice?
+
+    static let idle = OwnerTruthInterviewCandidateConfirmationSingleActionViewState(
+        phase: .idle,
+        latestResult: nil,
+        notice: nil
+    )
+}
+
+/// Lease-fenced formal product action for a sensitive or explicitly
+/// single-review Candidate. Like the batch path, it records a terminal receipt
+/// only and reconciles the same authority composition before reporting success.
+final class OwnerTruthInterviewCandidateConfirmationSingleActionUseCase {
+    typealias CommandIDFactory = () -> String
+
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let confirmation: OwnerTruthInterviewCandidateConfirmation
+    private let client: OwnerTruthInterviewCandidateConfirmationSingleActionClient
+    private let confirmationReader: OwnerTruthInterviewCandidateConfirmationClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAvailable: () -> Bool
+    private let commandIDFactory: CommandIDFactory
+    private var commandIDsByActionSignature: [String: String] = [:]
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthInterviewCandidateConfirmationSingleActionViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthInterviewCandidateConfirmationSingleActionViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        confirmation: OwnerTruthInterviewCandidateConfirmation,
+        client: OwnerTruthInterviewCandidateConfirmationSingleActionClient,
+        confirmationReader: OwnerTruthInterviewCandidateConfirmationClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool = { false },
+        commandIDFactory: @escaping CommandIDFactory = { UUID().uuidString.lowercased() }
+    ) {
+        self.accountLease = accountLease
+        vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.confirmation = confirmation
+        self.client = client
+        self.confirmationReader = confirmationReader
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+        self.commandIDFactory = commandIDFactory
+    }
+
+    func send(_ intent: OwnerTruthInterviewCandidateConfirmationSingleActionIntent) {
+        switch intent {
+        case .accept(let candidateID):
+            submit(candidateID: candidateID, action: .accept, correctedSummary: nil)
+        case .correct(let candidateID, let correctedSummary):
+            submit(candidateID: candidateID, action: .correct, correctedSummary: correctedSummary)
+        case .reject(let candidateID):
+            submit(candidateID: candidateID, action: .reject, correctedSummary: nil)
+        }
+    }
+
+    private func submit(
+        candidateID: OwnerTruthRecordID,
+        action: OwnerTruthCandidateReviewAction,
+        correctedSummary: String?
+    ) {
+        guard let vaultID = beginRequestOrFail(),
+              let command = makeCommand(
+                  candidateID: candidateID,
+                  action: action,
+                  correctedSummary: correctedSummary
+              ) else {
+            return
+        }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthInterviewCandidateConfirmationSingleActionViewState(
+            phase: .submitting,
+            latestResult: nil,
+            notice: nil
+        )
+        client.confirmOwnerTruthInterviewCandidateSingle(vaultID: vaultID, command: command) { [weak self] result in
+            self?.receive(result, expectedCommand: command, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return nil
+        }
+        guard let vaultID,
+              confirmation.vaultID == vaultID,
+              confirmation.vaultID.rawValue == accountLease.vaultId else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard confirmation.isBound(to: accountLease) else {
+            resetForUnavailable(.staleAccountLease)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func makeCommand(
+        candidateID: OwnerTruthRecordID,
+        action: OwnerTruthCandidateReviewAction,
+        correctedSummary: String?
+    ) -> OwnerTruthInterviewCandidateConfirmationSingleCommand? {
+        guard let candidate = confirmation.singleCandidates.first(where: { $0.id == candidateID }),
+              candidate.reviewPath == .single else {
+            transitionFailure(.invalidSelection)
+            return nil
+        }
+
+        let normalizedSummary = correctedSummary?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if action == .correct, normalizedSummary.isEmpty {
+            transitionFailure(.correctionRequired)
+            return nil
+        }
+        let signature = [
+            candidateID.rawValue.uuidString.lowercased(),
+            action.rawValue,
+            normalizedSummary,
+        ].joined(separator: "|")
+        let commandID = commandIDsByActionSignature[signature] ?? commandIDFactory()
+        commandIDsByActionSignature[signature] = commandID
+
+        do {
+            switch action {
+            case .accept, .reject:
+                return try OwnerTruthInterviewCandidateConfirmationSingleCommand(
+                    commandID: commandID,
+                    reviewBatchID: confirmation.reviewBatchID,
+                    candidateID: candidateID,
+                    expectedCandidateVersion: candidate.candidate.candidateVersion,
+                    action: action
+                )
+            case .correct:
+                var correctedValue = candidate.candidate.content
+                correctedValue[Self.correctionTextKey(for: candidate.candidate)] = .string(normalizedSummary)
+                return try OwnerTruthInterviewCandidateConfirmationSingleCommand(
+                    commandID: commandID,
+                    reviewBatchID: confirmation.reviewBatchID,
+                    candidateID: candidateID,
+                    expectedCandidateVersion: candidate.candidate.candidateVersion,
+                    action: .correct,
+                    correctedValue: correctedValue,
+                    correctedValueSchemaVersion: candidate.candidate.contentSchemaVersion
+                )
+            }
+        } catch {
+            transitionFailure(.requestFailed)
+            return nil
+        }
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthInterviewCandidateConfirmationSingleResult, Error>,
+        expectedCommand: OwnerTruthInterviewCandidateConfirmationSingleCommand,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let actionResult):
+            guard confirmation.vaultID == vaultID,
+                  actionResult.reviewBatchID == confirmation.reviewBatchID,
+                  actionResult.candidateID == expectedCommand.candidateID,
+                  actionResult.decision == expectedCommand.action.terminalDecision,
+                  !actionResult.memoryVersionCreated else {
+                transitionFailure(.responseMismatch)
+                return
+            }
+            viewState = OwnerTruthInterviewCandidateConfirmationSingleActionViewState(
+                phase: .reconciling,
+                latestResult: actionResult,
+                notice: nil
+            )
+            confirmationReader.fetchOwnerTruthInterviewCandidateConfirmation(
+                vaultID: vaultID,
+                reviewBatchID: confirmation.reviewBatchID
+            ) { [weak self] readResult in
+                self?.receiveReconciliation(
+                    readResult,
+                    actionResult: actionResult,
+                    expectedCandidateID: expectedCommand.candidateID,
+                    expectedAction: expectedCommand.action,
+                    vaultID: vaultID,
+                    generation: generation
+                )
+            }
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private func receiveReconciliation(
+        _ result: Result<OwnerTruthInterviewCandidateConfirmation, Error>,
+        actionResult: OwnerTruthInterviewCandidateConfirmationSingleResult,
+        expectedCandidateID: OwnerTruthRecordID,
+        expectedAction: OwnerTruthCandidateReviewAction,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let reconciledConfirmation):
+            let remainingCandidateIDs = Set(
+                reconciledConfirmation.batchCandidates.map(\.id) +
+                    reconciledConfirmation.singleCandidates.map(\.id)
+            )
+            guard reconciledConfirmation.vaultID == vaultID,
+                  reconciledConfirmation.vaultID.rawValue == accountLease.vaultId,
+                  reconciledConfirmation.reviewBatchID == confirmation.reviewBatchID,
+                  reconciledConfirmation.hasSameAuthorityComposition(as: confirmation),
+                  !remainingCandidateIDs.contains(expectedCandidateID) else {
+                transitionFailure(.reconciliationFailed, latestResult: actionResult)
+                return
+            }
+            let notice: OwnerTruthInterviewCandidateConfirmationSingleActionNotice
+            switch expectedAction {
+            case .accept: notice = .singleAccepted
+            case .correct: notice = .singleCorrected
+            case .reject: notice = .singleRejected
+            }
+            viewState = OwnerTruthInterviewCandidateConfirmationSingleActionViewState(
+                phase: .confirmed,
+                latestResult: actionResult,
+                notice: notice
+            )
+        case .failure:
+            transitionFailure(.reconciliationFailed, latestResult: actionResult)
+        }
+    }
+
+    private func resetForUnavailable(
+        _ notice: OwnerTruthInterviewCandidateConfirmationSingleActionNotice
+    ) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthInterviewCandidateConfirmationSingleActionViewState(
+            phase: .unavailable,
+            latestResult: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure(
+        _ notice: OwnerTruthInterviewCandidateConfirmationSingleActionNotice,
+        latestResult: OwnerTruthInterviewCandidateConfirmationSingleResult? = nil
+    ) {
+        viewState = OwnerTruthInterviewCandidateConfirmationSingleActionViewState(
+            phase: .failed,
+            latestResult: latestResult,
+            notice: notice
+        )
+    }
+
+    private static func correctionTextKey(for candidate: OwnerTruthCandidateInboxItem) -> String {
+        for key in ["summary", "title", "text"] where candidate.content[key] != nil {
+            return key
+        }
+        return "summary"
     }
 }
 

@@ -52,8 +52,18 @@ require(
         backendClient.contains("method == .post"),
     "confirmation batch action route must map to its dedicated feature"
 )
+guard let riskClassStart = backendClient.range(of: "private func riskClass(for feature: DJFeature)"),
+      let riskClassEnd = backendClient.range(
+        of: "private func archiveMediaFeature",
+        range: riskClassStart.upperBound..<backendClient.endIndex
+      ) else {
+    fatalError("owner-truth candidate confirmation default-off check failed: feature risk class is missing")
+}
+let riskClass = String(backendClient[riskClassStart.lowerBound..<riskClassEnd.lowerBound])
 require(
-    backendClient.contains(".ownerTruthCandidateReview, .profileSettings"),
+    riskClass.contains(".ownerTruthCandidateReview") &&
+        riskClass.contains(".profileSettings") &&
+        riskClass.contains("return .ownerTextCore"),
     "confirmation route must keep owner-text policy handling"
 )
 

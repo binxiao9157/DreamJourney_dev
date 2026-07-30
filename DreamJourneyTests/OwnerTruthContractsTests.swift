@@ -1122,6 +1122,158 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.latestResult?.acceptedCandidateIDs, [batchCandidateID])
     }
 
+    func testInterviewCandidateConfirmationSingleActionDecodesValueMinimizedResult() throws {
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000099")
+        let candidateID = recordID("00000000-0000-0000-0000-000000000100")
+        let command = try OwnerTruthInterviewCandidateConfirmationSingleCommand(
+            commandID: "confirmation-single-action-ios-001",
+            reviewBatchID: reviewBatchID,
+            candidateID: candidateID,
+            expectedCandidateVersion: 1,
+            action: .accept
+        )
+        let result = try OwnerTruthInterviewCandidateConfirmationSingleResult(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewCandidateConfirmationSingleResult.schemaVersion,
+                "status": OwnerTruthCommandOutcome.created.rawValue,
+                "batchDecisionId": "00000000-0000-0000-0000-000000000101",
+                "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                "candidateId": candidateID.rawValue.uuidString,
+                "decision": OwnerTruthCandidateDecision.accepted.rawValue,
+                "memoryActivation": [
+                    "status": OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+                    "memoryVersionCreated": false,
+                ],
+            ],
+            expectedCommand: command
+        )
+
+        XCTAssertEqual(result.candidateID, candidateID)
+        XCTAssertEqual(result.decision, .accepted)
+        XCTAssertFalse(result.memoryVersionCreated)
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewCandidateConfirmationSingleResult(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewCandidateConfirmationSingleResult.schemaVersion,
+                    "status": OwnerTruthCommandOutcome.created.rawValue,
+                    "batchDecisionId": "00000000-0000-0000-0000-000000000101",
+                    "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                    "candidateId": candidateID.rawValue.uuidString,
+                    "decision": OwnerTruthCandidateDecision.accepted.rawValue,
+                    "receipt": ["mustNotAppear": true],
+                    "memoryActivation": [
+                        "status": OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+                        "memoryVersionCreated": false,
+                    ],
+                ],
+                expectedCommand: command
+            )
+        )
+    }
+
+    func testInterviewCandidateConfirmationSingleActionUseCaseFailsClosedAndRejectsBatchCandidate() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000102")
+        let batchCandidateID = recordID("00000000-0000-0000-0000-000000000103")
+        let singleCandidateID = recordID("00000000-0000-0000-0000-000000000104")
+        let confirmation = try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: singleCandidateID
+        ).bound(to: lease)
+        let client = InterviewCandidateConfirmationSingleActionClientSpy()
+        let reader = InterviewCandidateConfirmationClientSpy()
+        let disabled = OwnerTruthInterviewCandidateConfirmationSingleActionUseCase(
+            accountLease: lease,
+            confirmation: confirmation,
+            client: client,
+            confirmationReader: reader,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { false }
+        )
+
+        disabled.send(.accept(candidateID: singleCandidateID))
+
+        XCTAssertEqual(disabled.viewState.phase, .unavailable)
+        XCTAssertEqual(disabled.viewState.notice, .releasePolicyDisabled)
+        XCTAssertTrue(client.requestedCommands.isEmpty)
+
+        let enabled = OwnerTruthInterviewCandidateConfirmationSingleActionUseCase(
+            accountLease: lease,
+            confirmation: confirmation,
+            client: client,
+            confirmationReader: reader,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+        enabled.send(.accept(candidateID: batchCandidateID))
+
+        XCTAssertEqual(enabled.viewState.phase, .failed)
+        XCTAssertEqual(enabled.viewState.notice, .invalidSelection)
+        XCTAssertTrue(client.requestedCommands.isEmpty)
+    }
+
+    func testInterviewCandidateConfirmationSingleActionUseCaseReconcilesTerminalDecision() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000105")
+        let batchCandidateID = recordID("00000000-0000-0000-0000-000000000106")
+        let singleCandidateID = recordID("00000000-0000-0000-0000-000000000107")
+        let confirmation = try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: singleCandidateID
+        ).bound(to: lease)
+        let client = InterviewCandidateConfirmationSingleActionClientSpy()
+        let expectedCommand = try OwnerTruthInterviewCandidateConfirmationSingleCommand(
+            commandID: "confirmation-single-reconciliation-command",
+            reviewBatchID: reviewBatchID,
+            candidateID: singleCandidateID,
+            expectedCandidateVersion: 1,
+            action: .accept
+        )
+        client.result = .success(try OwnerTruthInterviewCandidateConfirmationSingleResult(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewCandidateConfirmationSingleResult.schemaVersion,
+                "status": OwnerTruthCommandOutcome.created.rawValue,
+                "batchDecisionId": "00000000-0000-0000-0000-000000000108",
+                "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                "candidateId": singleCandidateID.rawValue.uuidString,
+                "decision": OwnerTruthCandidateDecision.accepted.rawValue,
+                "memoryActivation": [
+                    "status": OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+                    "memoryVersionCreated": false,
+                ],
+            ],
+            expectedCommand: expectedCommand
+        ))
+        let reader = InterviewCandidateConfirmationClientSpy()
+        reader.readResult = .success(try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: recordID("00000000-0000-0000-0000-000000000109")
+        ))
+        let useCase = OwnerTruthInterviewCandidateConfirmationSingleActionUseCase(
+            accountLease: lease,
+            confirmation: confirmation,
+            client: client,
+            confirmationReader: reader,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true },
+            commandIDFactory: { "confirmation-single-reconciliation-command" }
+        )
+
+        useCase.send(.accept(candidateID: singleCandidateID))
+
+        XCTAssertEqual(client.requestedCommands.map(\.commandID), ["confirmation-single-reconciliation-command"])
+        XCTAssertEqual(reader.requestCount, 1)
+        XCTAssertEqual(useCase.viewState.phase, .confirmed)
+        XCTAssertEqual(useCase.viewState.notice, .singleAccepted)
+        XCTAssertEqual(useCase.viewState.latestResult?.candidateID, singleCandidateID)
+    }
+
     func testInterviewSessionStateDecodesValueMinimizedEnvelope() throws {
         let (_, lease) = try makeActiveRuntime()
         let state = try interviewSessionState(vaultID: lease.vaultId)
@@ -5358,6 +5510,24 @@ private final class InterviewCandidateConfirmationActionClientSpy: OwnerTruthInt
 }
 
 private enum InterviewCandidateConfirmationActionClientSpyError: Error {
+    case missingActionResult
+}
+
+private final class InterviewCandidateConfirmationSingleActionClientSpy: OwnerTruthInterviewCandidateConfirmationSingleActionClient {
+    var result: Result<OwnerTruthInterviewCandidateConfirmationSingleResult, Error>?
+    private(set) var requestedCommands: [OwnerTruthInterviewCandidateConfirmationSingleCommand] = []
+
+    func confirmOwnerTruthInterviewCandidateSingle(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateConfirmationSingleCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmationSingleResult, Error>) -> Void
+    ) {
+        requestedCommands.append(command)
+        completion(result ?? .failure(InterviewCandidateConfirmationSingleActionClientSpyError.missingActionResult))
+    }
+}
+
+private enum InterviewCandidateConfirmationSingleActionClientSpyError: Error {
     case missingActionResult
 }
 
