@@ -121,6 +121,7 @@ enum QALaunchScenario: String, CaseIterable {
     case ownerTruthInterviewNaturalInputEchoSurfaceSmoke = "DJRunOwnerTruthInterviewNaturalInputEchoSurfaceSmoke"
     case ownerTruthInterviewNaturalInputProductSurfaceSmoke = "DJRunOwnerTruthInterviewNaturalInputProductSurfaceSmoke"
     case ownerTruthLifeMapPresentationSmoke = "DJRunOwnerTruthLifeMapPresentationSmoke"
+    case ownerTruthMemorySearchPresentationSmoke = "DJRunOwnerTruthMemorySearchPresentationSmoke"
     case archiveFailedAnalysisRetrySmoke = "DJRunArchiveFailedAnalysisRetrySmoke"
     case echoDelayedReplyNotificationSmoke = "DJRunEchoDelayedReplyNotificationSmoke"
     case notificationRuntimeRouteSmoke = "DJRunNotificationRuntimeRouteSmoke"
@@ -174,6 +175,7 @@ enum QALaunchScenario: String, CaseIterable {
         .ownerTruthInterviewNaturalInputEchoSurfaceSmoke,
         .ownerTruthInterviewNaturalInputProductSurfaceSmoke,
         .ownerTruthLifeMapPresentationSmoke,
+        .ownerTruthMemorySearchPresentationSmoke,
         .archiveFailedAnalysisRetrySmoke,
         .echoDelayedReplyNotificationSmoke,
         .notificationRuntimeRouteSmoke,
@@ -227,6 +229,7 @@ enum QALaunchScenario: String, CaseIterable {
              .ownerTruthInterviewNaturalInputSmoke,
              .ownerTruthKnowledgeDimensionConfirmationSmoke,
              .ownerTruthKnowledgeRecommendationPlanSmoke,
+             .ownerTruthMemorySearchPresentationSmoke,
              .archiveFailedAnalysisRetrySmoke,
              .timeLetterDispatchReminderSmoke:
             return .loginAndResetFeatureFlags
@@ -603,6 +606,7 @@ enum DJFeature: String, CaseIterable {
     case echoTextInput
     case echoGuidedRecommendations
     case ownerTruthLifeMap
+    case ownerTruthMemorySearch
     case ownerTruthCandidateReview
     case echoImageInput
     case timeLetters
@@ -639,6 +643,7 @@ final class FeatureFlagService {
         .echoImageInput,
         .echoGuidedRecommendations,
         .ownerTruthLifeMap,
+        .ownerTruthMemorySearch,
         .ownerTruthCandidateReview,
         .timeLetters,
         .personaSettings,

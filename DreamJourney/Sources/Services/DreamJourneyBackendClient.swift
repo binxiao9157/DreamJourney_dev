@@ -514,6 +514,11 @@ final class FeatureGateService {
            normalizedPath.hasSuffix("/life-map") {
             return .ownerTruthLifeMap
         }
+        if method == .post,
+           normalizedPath.hasPrefix("/v2/vaults/"),
+           normalizedPath.hasSuffix("/memory-search") {
+            return .ownerTruthMemorySearch
+        }
         if method == .get,
            normalizedPath.contains("/interview-review-batches/"),
            normalizedPath.hasSuffix("/confirmation") {
@@ -599,6 +604,7 @@ final class FeatureGateService {
         case .echoTextInput,
              .echoGuidedRecommendations,
              .ownerTruthLifeMap,
+             .ownerTruthMemorySearch,
              .ownerTruthCandidateReview,
              .profileSettings,
              .legalCenter,
@@ -5793,6 +5799,34 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    func searchOwnerTruthMemoryPresentation(
+        vaultID: OwnerTruthVaultID,
+        query: String,
+        completion: @escaping (Result<OwnerTruthMemorySearchPresentation, Error>) -> Void
+    ) {
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/memory-search"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: ["query": query],
+            authPolicy: .userRequired
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthMemorySearchPresentation(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func confirmOwnerTruthKnowledgeDimension(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthKnowledgeDimensionConfirmationCommand,
@@ -8455,6 +8489,7 @@ extension DreamJourneyBackendClient: OwnerTruthInterviewNaturalInputClient {}
 extension DreamJourneyBackendClient: OwnerTruthKnowledgeRecommendationPlanClient {}
 extension DreamJourneyBackendClient: OwnerTruthGuidedRecommendationPresentationClient {}
 extension DreamJourneyBackendClient: OwnerTruthLifeMapPresentationClient {}
+extension DreamJourneyBackendClient: OwnerTruthMemorySearchPresentationClient {}
 extension DreamJourneyBackendClient: OwnerTruthKnowledgeDimensionConfirmationClient {}
 extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}
 extension DreamJourneyBackendClient: OwnerTruthContextCitationClient {}

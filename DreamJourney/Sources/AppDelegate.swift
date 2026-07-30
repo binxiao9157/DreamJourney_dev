@@ -385,6 +385,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewNaturalInputProductSurfaceSmoke() }
         case .ownerTruthLifeMapPresentationSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthLifeMapPresentationSmoke() }
+        case .ownerTruthMemorySearchPresentationSmoke:
+            scheduleUIQAScenario(scenario) { $0.runOwnerTruthMemorySearchPresentationSmoke() }
         case .archiveFailedAnalysisRetrySmoke:
             seedFailedArchiveAnalysisRetryContext()
             scheduleUIQAScenario(scenario) { $0.runArchiveFailedAnalysisRetrySmoke() }
@@ -2433,6 +2435,69 @@ private extension AppDelegate {
                 "[UI_QA] OwnerTruthLifeMapPresentationSmoke completed " +
                 "completed=\(result["completed"] as? Bool == true) " +
                 "dimensionCount=\(result["dimensionCount"] as? Int ?? 0)"
+            )
+        }
+    }
+
+    func runOwnerTruthMemorySearchPresentationSmoke(retryCount: Int = 0) {
+        guard let userID = UserManager.shared.currentUser?.id,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userID),
+              accountLease.subjectId == userID,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            guard retryCount < 20 else {
+                QAScenarioResultWriter.writeAndLog(
+                    [
+                        "completed": false,
+                        "failureReason": "accountLeaseUnavailable",
+                    ],
+                    fileName: "owner-truth-memory-search-presentation-smoke-result.json",
+                    smokeName: "OwnerTruthMemorySearchPresentationSmoke"
+                )
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerTruthMemorySearchPresentationSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+        guard let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }),
+              keyWindow.rootViewController is WarmTabBarController else {
+            guard retryCount < 20 else {
+                QAScenarioResultWriter.writeAndLog(
+                    [
+                        "completed": false,
+                        "failureReason": "mainRootUnavailable",
+                    ],
+                    fileName: "owner-truth-memory-search-presentation-smoke-result.json",
+                    smokeName: "OwnerTruthMemorySearchPresentationSmoke"
+                )
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerTruthMemorySearchPresentationSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        let navigationController = UINavigationController()
+        keyWindow.rootViewController = navigationController
+        keyWindow.makeKeyAndVisible()
+        OwnerTruthMemorySearchPresentationUIQASmoke.run(
+            accountLease: accountLease,
+            navigationController: navigationController
+        ) { result in
+            QAScenarioResultWriter.writeAndLog(
+                result,
+                fileName: "owner-truth-memory-search-presentation-smoke-result.json",
+                smokeName: "OwnerTruthMemorySearchPresentationSmoke"
+            )
+            print(
+                "[UI_QA] OwnerTruthMemorySearchPresentationSmoke completed " +
+                "completed=\(result["completed"] as? Bool == true) " +
+                "resultCount=\(result["resultCount"] as? Int ?? 0)"
             )
         }
     }

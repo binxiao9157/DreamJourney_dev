@@ -4586,6 +4586,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             guidedRecommendationClient: guidedClient,
             guidedRecommendationPolicyAvailable: { true },
             lifeMapPolicyAvailable: { true },
+            memorySearchPolicyAvailable: { true },
             qaGateEnabled: { true }
         )
 
@@ -4609,6 +4610,35 @@ final class OwnerTruthContractsTests: XCTestCase {
                 accessibilityIdentifier: "owner-truth-life-map-entry"
             )
         )
+        XCTAssertNotNil(
+            findView(
+                in: controller.view,
+                accessibilityIdentifier: "owner-truth-memory-search-entry"
+            )
+        )
+    }
+
+    @MainActor
+    func testMemorySearchProductEntryStaysHiddenWithoutItsPolicy() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let controller = OwnerTruthInterviewNaturalInputViewController(
+            accountLease: lease,
+            client: InterviewNaturalInputClientSpy(),
+            accountLeaseRuntime: runtime,
+            presentation: .product,
+            guidedRecommendationPolicyAvailable: { false },
+            lifeMapPolicyAvailable: { false },
+            memorySearchPolicyAvailable: { false },
+            qaGateEnabled: { true }
+        )
+
+        controller.loadViewIfNeeded()
+
+        let entry = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-memory-search-entry"
+        ))
+        XCTAssertTrue(entry.isHidden)
     }
 
     func testLifeMapPresentationDecodesOnlyDisplaySafeFields() throws {
@@ -4725,6 +4755,96 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    func testMemorySearchPresentationDecodesOnlyProductFields() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-memory-search-a"))
+        let presentation = try OwnerTruthMemorySearchPresentation(
+            backendJSONObject: memorySearchPresentationJSON(vaultID: vaultID),
+            expectedVaultID: vaultID
+        )
+
+        XCTAssertEqual(presentation.vaultID, vaultID)
+        XCTAssertEqual(presentation.state, .ready)
+        XCTAssertEqual(presentation.retrievalMode, .deterministicTextFallback)
+        XCTAssertEqual(presentation.results.count, 1)
+        XCTAssertEqual(presentation.results[0].preview, "小时候在院子里听外婆讲故事。")
+
+        var unsafe = memorySearchPresentationJSON(vaultID: vaultID)
+        var search = try XCTUnwrap(unsafe["memorySearch"] as? [String: Any])
+        var results = try XCTUnwrap(search["results"] as? [[String: Any]])
+        results[0]["memoryVersionId"] = "internal-memory-version"
+        search["results"] = results
+        unsafe["memorySearch"] = search
+        XCTAssertThrowsError(
+            try OwnerTruthMemorySearchPresentation(
+                backendJSONObject: unsafe,
+                expectedVaultID: vaultID
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? OwnerTruthRemoteContractError,
+                .invalidMemorySearchPresentation("result contains unsupported fields")
+            )
+        }
+    }
+
+    func testMemorySearchPresentationUseCaseDoesNotRequestWhenPolicyIsClosed() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = MemorySearchPresentationClientSpy()
+        let useCase = OwnerTruthMemorySearchPresentationUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { false }
+        )
+
+        useCase.search(query: "童年")
+
+        XCTAssertEqual(client.requestCount, 0)
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .releasePolicyDisabled)
+        XCTAssertNil(useCase.viewState.presentation)
+    }
+
+    func testMemorySearchPresentationUseCaseDiscardsDeferredReadAfterAccountSwitch() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = MemorySearchPresentationClientSpy()
+        client.deferRead = true
+        let useCase = OwnerTruthMemorySearchPresentationUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.search(query: "童年")
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000113")!
+        ))
+        client.completeDeferred(.success(try OwnerTruthMemorySearchPresentation(
+            backendJSONObject: memorySearchPresentationJSON(vaultID: vaultID),
+            expectedVaultID: vaultID
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(useCase.viewState.presentation)
+    }
+
+    func testMemorySearchPresentationPathUsesItsOwnFeatureGate() {
+        XCTAssertEqual(
+            FeatureGateService.shared.featureForRequest(
+                path: "/v2/vaults/vault-a/memory-search",
+                method: .post,
+                payload: ["query": "童年"]
+            ),
+            .ownerTruthMemorySearch
+        )
+    }
+
     private func lifeMapPresentationJSON(vaultID: OwnerTruthVaultID) -> [String: Any] {
         [
             "schemaVersion": OwnerTruthLifeMapPresentation.schemaVersion,
@@ -4744,6 +4864,26 @@ final class OwnerTruthContractsTests: XCTestCase {
                         "relatedStoryCount": index == 0 ? 1 : 0,
                     ]
                 },
+            ],
+        ]
+    }
+
+    private func memorySearchPresentationJSON(vaultID: OwnerTruthVaultID) -> [String: Any] {
+        [
+            "schemaVersion": OwnerTruthMemorySearchPresentation.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "memorySearch": [
+                "state": "ready",
+                "retrievalMode": "deterministicTextFallback",
+                "resultCount": 1,
+                "results": [[
+                    "rank": 1,
+                    "preview": "小时候在院子里听外婆讲故事。",
+                    "memoryKind": "knowledge",
+                    "perspectiveType": "firstPerson",
+                    "sensitivity": "standard",
+                    "matchKind": "searchText",
+                ]],
             ],
         ]
     }
@@ -4895,6 +5035,36 @@ private final class LifeMapPresentationClientSpy: OwnerTruthLifeMapPresentationC
 }
 
 private enum LifeMapPresentationClientSpyError: Error {
+    case missingResult
+}
+
+private final class MemorySearchPresentationClientSpy: OwnerTruthMemorySearchPresentationClient {
+    var result: Result<OwnerTruthMemorySearchPresentation, Error>?
+    var deferRead = false
+    private var deferredCompletion: ((Result<OwnerTruthMemorySearchPresentation, Error>) -> Void)?
+    private(set) var requestCount = 0
+
+    func searchOwnerTruthMemoryPresentation(
+        vaultID: OwnerTruthVaultID,
+        query: String,
+        completion: @escaping (Result<OwnerTruthMemorySearchPresentation, Error>) -> Void
+    ) {
+        requestCount += 1
+        if deferRead {
+            deferredCompletion = completion
+            return
+        }
+        completion(result ?? .failure(MemorySearchPresentationClientSpyError.missingResult))
+    }
+
+    func completeDeferred(_ result: Result<OwnerTruthMemorySearchPresentation, Error>) {
+        let completion = deferredCompletion
+        deferredCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum MemorySearchPresentationClientSpyError: Error {
     case missingResult
 }
 

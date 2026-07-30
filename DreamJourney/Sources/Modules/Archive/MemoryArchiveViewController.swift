@@ -5513,6 +5513,396 @@ enum OwnerTruthLifeMapPresentationUIQASmoke {
 
 #endif
 
+/// Default-off, Owner-only recall tool. It is intentionally a secondary
+/// reader: users can revisit confirmed memory previews without creating a
+/// parallel editable memory store or exposing internal retrieval evidence.
+final class OwnerTruthMemorySearchViewController: UIViewController {
+    private let useCase: OwnerTruthMemorySearchPresentationUseCase
+    private let scrollView = UIScrollView()
+    private let stackView = UIStackView()
+    private let introductionLabel = UILabel()
+    private let queryTextField = UITextField()
+    private let searchButton = UIButton(type: .system)
+    private let statusLabel = UILabel()
+    private let detailLabel = UILabel()
+    private let resultsStack = UIStackView()
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthMemorySearchPresentationClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool
+    ) {
+        useCase = OwnerTruthMemorySearchPresentationUseCase(
+            accountLease: accountLease,
+            client: client,
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyAvailable: releasePolicyAvailable
+        )
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "回顾检索"
+        view.backgroundColor = DJDesignTokens.Color.background
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "arrow.clockwise"),
+            style: .plain,
+            target: self,
+            action: #selector(refreshTapped)
+        )
+        navigationItem.rightBarButtonItem?.accessibilityLabel = "重新检索"
+        configureView()
+        configureUseCase()
+        render(useCase.viewState)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+        navigationController?.navigationBar.titleTextAttributes = [
+            .foregroundColor: DJDesignTokens.Color.textPrimary,
+            .font: DJDesignTokens.Font.title(18),
+        ]
+    }
+
+    private func configureView() {
+        scrollView.alwaysBounceVertical = true
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scrollView)
+
+        stackView.axis = .vertical
+        stackView.alignment = .fill
+        stackView.spacing = 14
+        stackView.isLayoutMarginsRelativeArrangement = true
+        stackView.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 24,
+            leading: DJDesignTokens.Spacing.page,
+            bottom: 28,
+            trailing: DJDesignTokens.Spacing.page
+        )
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(stackView)
+
+        introductionLabel.text = "输入一个词或一句回忆，只回顾你已确认的内容。"
+        introductionLabel.font = DJDesignTokens.Font.body(15)
+        introductionLabel.textColor = DJDesignTokens.Color.textSecondary
+        introductionLabel.numberOfLines = 0
+
+        queryTextField.placeholder = "例如：童年、第一次工作"
+        queryTextField.font = DJDesignTokens.Font.body(16)
+        queryTextField.textColor = DJDesignTokens.Color.textPrimary
+        queryTextField.backgroundColor = DJDesignTokens.Color.surface
+        queryTextField.layer.cornerRadius = 10
+        queryTextField.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 12, height: 1))
+        queryTextField.leftViewMode = .always
+        queryTextField.returnKeyType = .search
+        queryTextField.autocorrectionType = .no
+        queryTextField.accessibilityIdentifier = "owner-truth-memory-search-query"
+        queryTextField.addTarget(self, action: #selector(searchSubmitted), for: .editingDidEndOnExit)
+
+        var searchConfiguration = UIButton.Configuration.filled()
+        searchConfiguration.title = "检索"
+        searchConfiguration.baseBackgroundColor = DJDesignTokens.Color.accent
+        searchConfiguration.baseForegroundColor = .white
+        searchConfiguration.contentInsets = NSDirectionalEdgeInsets(
+            top: 11,
+            leading: 16,
+            bottom: 11,
+            trailing: 16
+        )
+        searchButton.configuration = searchConfiguration
+        searchButton.layer.cornerRadius = 10
+        searchButton.accessibilityIdentifier = "owner-truth-memory-search-submit"
+        searchButton.addTarget(self, action: #selector(searchTapped), for: .touchUpInside)
+
+        let searchRow = UIStackView(arrangedSubviews: [queryTextField, searchButton])
+        searchRow.axis = .horizontal
+        searchRow.alignment = .fill
+        searchRow.spacing = 8
+        searchButton.widthAnchor.constraint(equalToConstant: 76).isActive = true
+        queryTextField.heightAnchor.constraint(equalToConstant: 46).isActive = true
+
+        statusLabel.font = DJDesignTokens.Font.title(20)
+        statusLabel.textColor = DJDesignTokens.Color.textPrimary
+        statusLabel.numberOfLines = 0
+        statusLabel.accessibilityIdentifier = "owner-truth-memory-search-status"
+
+        detailLabel.font = DJDesignTokens.Font.body(15)
+        detailLabel.textColor = DJDesignTokens.Color.textSecondary
+        detailLabel.numberOfLines = 0
+        detailLabel.accessibilityIdentifier = "owner-truth-memory-search-detail"
+
+        resultsStack.axis = .vertical
+        resultsStack.alignment = .fill
+        resultsStack.spacing = 10
+        resultsStack.accessibilityIdentifier = "owner-truth-memory-search-results"
+
+        [introductionLabel, searchRow, statusLabel, detailLabel, resultsStack].forEach {
+            stackView.addArrangedSubview($0)
+        }
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            stackView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            stackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+        ])
+    }
+
+    private func configureUseCase() {
+        useCase.onViewStateChange = { [weak self] state in
+            if Thread.isMainThread {
+                self?.render(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.render(state)
+                }
+            }
+        }
+    }
+
+    private func render(_ state: OwnerTruthMemorySearchPresentationViewState) {
+        clearResultRows()
+        let isLoading = state.phase == .loading
+        searchButton.isEnabled = !isLoading
+        queryTextField.isEnabled = !isLoading
+        navigationItem.rightBarButtonItem?.isEnabled = !isLoading
+
+        switch state.phase {
+        case .idle:
+            statusLabel.text = "回顾已确认的记忆"
+            detailLabel.text = "检索结果只用于帮助你回顾，不会创建或修改任何记忆。"
+        case .loading:
+            statusLabel.text = "正在回顾已确认的故事线索"
+            detailLabel.text = "请稍候。"
+        case .ready:
+            guard let presentation = state.presentation else {
+                renderUnavailable()
+                return
+            }
+            if presentation.results.isEmpty {
+                statusLabel.text = "没有找到相关的已确认记忆"
+                detailLabel.text = "可以换一个词，或在回响中继续补充新的故事。"
+            } else {
+                statusLabel.text = "找到 \(presentation.results.count) 条已确认线索"
+                detailLabel.text = "以下内容仅供你回顾已经确认的记忆。"
+                presentation.results.forEach { resultsStack.addArrangedSubview(resultRow(for: $0)) }
+            }
+        case .rebuilding:
+            statusLabel.text = "正在整理回顾索引"
+            detailLabel.text = "已确认的内容整理完成后，可再次检索。"
+        case .unavailable:
+            renderUnavailable()
+        case .failed:
+            statusLabel.text = "暂时无法完成回顾检索"
+            detailLabel.text = "请稍后重试。"
+        }
+    }
+
+    private func renderUnavailable() {
+        statusLabel.text = "回顾检索暂不可用"
+        detailLabel.text = "当前不会显示不完整或不属于你的记忆线索。"
+    }
+
+    private func resultRow(for result: OwnerTruthMemorySearchPresentationResult) -> UIView {
+        let container = UIStackView()
+        container.axis = .vertical
+        container.alignment = .fill
+        container.spacing = 6
+        container.isLayoutMarginsRelativeArrangement = true
+        container.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 14,
+            leading: 14,
+            bottom: 14,
+            trailing: 14
+        )
+        container.backgroundColor = DJDesignTokens.Color.surface
+        container.layer.cornerRadius = 10
+
+        let title = UILabel()
+        title.font = DJDesignTokens.Font.label(13)
+        title.textColor = DJDesignTokens.Color.textTertiary
+        title.text = "已确认线索 \(result.rank)"
+
+        let preview = UILabel()
+        preview.font = DJDesignTokens.Font.body(16)
+        preview.textColor = DJDesignTokens.Color.textPrimary
+        preview.numberOfLines = 0
+        preview.text = result.preview
+
+        container.addArrangedSubview(title)
+        container.addArrangedSubview(preview)
+        return container
+    }
+
+    private func clearResultRows() {
+        resultsStack.arrangedSubviews.forEach { view in
+            resultsStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+    }
+
+    private func performSearch() {
+        useCase.search(query: queryTextField.text ?? "")
+    }
+
+    @objc private func searchTapped() {
+        performSearch()
+    }
+
+    @objc private func searchSubmitted() {
+        performSearch()
+    }
+
+    @objc private func refreshTapped() {
+        performSearch()
+    }
+
+    #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+    var renderedStatusForUIQA: String {
+        statusLabel.text ?? ""
+    }
+
+    var renderedDetailForUIQA: String {
+        detailLabel.text ?? ""
+    }
+
+    var renderedResultCountForUIQA: Int {
+        resultsStack.arrangedSubviews.count
+    }
+
+    func submitQueryForUIQA(_ query: String) {
+        queryTextField.text = query
+        performSearch()
+    }
+    #endif
+}
+
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+
+/// In-memory only. The smoke proves the presentation is bounded and readable
+/// without opening a release route or sending any Owner Truth request.
+enum OwnerTruthMemorySearchPresentationUIQASmoke {
+    static func run(
+        accountLease: AccountLease,
+        navigationController: UINavigationController,
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        guard let vaultID = OwnerTruthVaultID(accountLease.vaultId) else {
+            completion([
+                "completed": false,
+                "failureReason": "invalidVault",
+            ])
+            return
+        }
+
+        let client = FixtureClient(vaultID: vaultID)
+        let controller = OwnerTruthMemorySearchViewController(
+            accountLease: accountLease,
+            client: client,
+            releasePolicyAvailable: { true }
+        )
+        navigationController.setViewControllers([controller], animated: false)
+        controller.loadViewIfNeeded()
+        controller.submitQueryForUIQA("童年")
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            let visibleText = [
+                controller.renderedStatusForUIQA,
+                controller.renderedDetailForUIQA,
+            ].joined(separator: " ")
+            let privateFieldsRendered = visibleText.localizedCaseInsensitiveContains("source")
+                || visibleText.localizedCaseInsensitiveContains("thread")
+                || visibleText.localizedCaseInsensitiveContains("policy")
+                || visibleText.localizedCaseInsensitiveContains("memoryVersionId")
+                || visibleText.localizedCaseInsensitiveContains("checkpoint")
+            let resultCount = controller.renderedResultCountForUIQA
+            let completed = client.requestCount == 1
+                && controller.title == "回顾检索"
+                && controller.renderedStatusForUIQA == "找到 1 条已确认线索"
+                && resultCount == 1
+                && !privateFieldsRendered
+
+            completion([
+                "completed": completed,
+                "requestCount": client.requestCount,
+                "resultCount": resultCount,
+                "privateFieldsRendered": privateFieldsRendered,
+                "inMemoryPreview": true,
+                "releasePolicyBypassedForPreview": true,
+                "backendNetworkStarted": false,
+                "persistentInterviewWriteStarted": false,
+                "publicRouteChanged": false,
+                "launchArguments": [
+                    QALaunchScenario.ownerTruthMemorySearchPresentationSmoke.rawValue,
+                ],
+            ])
+        }
+    }
+
+    private final class FixtureClient: OwnerTruthMemorySearchPresentationClient {
+        private let vaultID: OwnerTruthVaultID
+        private(set) var requestCount = 0
+
+        init(vaultID: OwnerTruthVaultID) {
+            self.vaultID = vaultID
+        }
+
+        func searchOwnerTruthMemoryPresentation(
+            vaultID: OwnerTruthVaultID,
+            query: String,
+            completion: @escaping (Result<OwnerTruthMemorySearchPresentation, Error>) -> Void
+        ) {
+            guard vaultID == self.vaultID, query == "童年" else {
+                completion(.failure(OwnerTruthRemoteContractError.invalidMemorySearchPresentation(
+                    "fixture request mismatch"
+                )))
+                return
+            }
+            requestCount += 1
+            do {
+                completion(.success(try OwnerTruthMemorySearchPresentation(
+                    backendJSONObject: [
+                        "schemaVersion": OwnerTruthMemorySearchPresentation.schemaVersion,
+                        "vaultId": vaultID.rawValue,
+                        "memorySearch": [
+                            "state": "ready",
+                            "retrievalMode": "deterministicTextFallback",
+                            "resultCount": 1,
+                            "results": [[
+                                "rank": 1,
+                                "preview": "小时候在院子里听外婆讲故事。",
+                                "memoryKind": "knowledge",
+                                "perspectiveType": "firstPerson",
+                                "sensitivity": "standard",
+                                "matchKind": "searchText",
+                            ]],
+                        ],
+                    ],
+                    expectedVaultID: vaultID
+                )))
+            } catch {
+                completion(.failure(error))
+            }
+        }
+    }
+}
+
+#endif
+
 private enum AutobiographyBookLayout {
     static let pageCornerRadius: CGFloat = 12
     static let pageInset: CGFloat = 24
@@ -7112,12 +7502,15 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let accountLease: AccountLease
     private let lifeMapClient: OwnerTruthLifeMapPresentationClient
     private let lifeMapPolicyAvailable: () -> Bool
+    private let memorySearchClient: OwnerTruthMemorySearchPresentationClient
+    private let memorySearchPolicyAvailable: () -> Bool
     private let stackView = UIStackView()
     private let subtitleLabel = UILabel()
     private let guidedRecommendationStack = UIStackView()
     private let guidedRecommendationTitleLabel = UILabel()
     private let guidedRecommendationPromptStack = UIStackView()
     private let lifeMapButton = UIButton(type: .system)
+    private let memorySearchButton = UIButton(type: .system)
     private let statusLabel = UILabel()
     private let detailLabel = UILabel()
     private let inputTextView = UITextView()
@@ -7212,12 +7605,23 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
                 .requestDecision(for: .ownerTruthLifeMap)
                 .allowed
         },
+        memorySearchClient: OwnerTruthMemorySearchPresentationClient = DreamJourneyBackendClient.shared,
+        memorySearchPolicyAvailable: @escaping () -> Bool = {
+            guard FeatureFlagService.shared.isEnabled(.ownerTruthMemorySearch) else {
+                return false
+            }
+            return FeatureGateService.shared
+                .requestDecision(for: .ownerTruthMemorySearch)
+                .allowed
+        },
         qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
     ) {
         self.presentation = presentation
         self.accountLease = accountLease
         self.lifeMapClient = lifeMapClient
         self.lifeMapPolicyAvailable = lifeMapPolicyAvailable
+        self.memorySearchClient = memorySearchClient
+        self.memorySearchPolicyAvailable = memorySearchPolicyAvailable
         self.useCase = OwnerTruthInterviewNaturalInputUseCase(
             accountLease: accountLease,
             client: client,
@@ -7285,6 +7689,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
         configureGuidedRecommendations()
         configureLifeMapEntry()
+        configureMemorySearchEntry()
 
         statusLabel.font = DJDesignTokens.Font.title(20)
         statusLabel.textColor = DJDesignTokens.Color.textPrimary
@@ -7318,6 +7723,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         if presentation == .product {
             stackView.addArrangedSubview(guidedRecommendationStack)
             stackView.addArrangedSubview(lifeMapButton)
+            stackView.addArrangedSubview(memorySearchButton)
         }
         [statusLabel, detailLabel, inputTextView, submitButton].forEach(stackView.addArrangedSubview)
         if presentation == .qa {
@@ -7397,6 +7803,28 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         lifeMapButton.accessibilityLabel = "查看人生地图"
         lifeMapButton.addTarget(self, action: #selector(lifeMapTapped), for: .touchUpInside)
         lifeMapButton.isHidden = presentation != .product || !lifeMapPolicyAvailable()
+    }
+
+    private func configureMemorySearchEntry() {
+        var configuration = UIButton.Configuration.tinted()
+        configuration.title = "回顾检索"
+        configuration.image = UIImage(systemName: "magnifyingglass")
+        configuration.imagePadding = 8
+        configuration.baseForegroundColor = DJDesignTokens.Color.textPrimary
+        configuration.baseBackgroundColor = DJDesignTokens.Color.surface
+        configuration.contentInsets = NSDirectionalEdgeInsets(
+            top: 12,
+            leading: 14,
+            bottom: 12,
+            trailing: 14
+        )
+        memorySearchButton.configuration = configuration
+        memorySearchButton.contentHorizontalAlignment = .leading
+        memorySearchButton.layer.cornerRadius = 10
+        memorySearchButton.accessibilityIdentifier = "owner-truth-memory-search-entry"
+        memorySearchButton.accessibilityLabel = "回顾已确认的记忆"
+        memorySearchButton.addTarget(self, action: #selector(memorySearchTapped), for: .touchUpInside)
+        memorySearchButton.isHidden = presentation != .product || !memorySearchPolicyAvailable()
     }
 
     private func renderGuidedRecommendations(
@@ -7639,6 +8067,19 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             accountLease: accountLease,
             client: lifeMapClient,
             releasePolicyAvailable: lifeMapPolicyAvailable
+        )
+        navigationController?.pushViewController(controller, animated: true)
+    }
+
+    @objc private func memorySearchTapped() {
+        guard presentation == .product, memorySearchPolicyAvailable() else {
+            memorySearchButton.isHidden = true
+            return
+        }
+        let controller = OwnerTruthMemorySearchViewController(
+            accountLease: accountLease,
+            client: memorySearchClient,
+            releasePolicyAvailable: memorySearchPolicyAvailable
         )
         navigationController?.pushViewController(controller, animated: true)
     }

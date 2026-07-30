@@ -143,6 +143,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidGuidedRecommendationPresentation(String)
     case invalidGuidedRecommendationFeedback(String)
     case invalidLifeMapPresentation(String)
+    case invalidMemorySearchPresentation(String)
     case invalidKBLiteCompatibilityReadEnvelope(String)
     case invalidContextCitationShadowBuild(String)
     case invalidAnswerCitationReceipt(String)
@@ -183,6 +184,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "引导问题反馈合同无效：\(detail)"
         case .invalidLifeMapPresentation(let detail):
             return "人生地图合同无效：\(detail)"
+        case .invalidMemorySearchPresentation(let detail):
+            return "回顾检索合同无效：\(detail)"
         case .invalidKBLiteCompatibilityReadEnvelope(let detail):
             return "兼容读取合同无效：\(detail)"
         case .invalidContextCitationShadowBuild(let detail):
@@ -5203,6 +5206,352 @@ final class OwnerTruthLifeMapPresentationUseCase {
 
     private func transitionFailure(_ notice: OwnerTruthLifeMapPresentationNotice) {
         viewState = OwnerTruthLifeMapPresentationViewState(
+            phase: .failed,
+            presentation: nil,
+            notice: notice
+        )
+    }
+}
+
+// MARK: - Default-off Owner Truth memory-search presentation
+
+/// The product surface deliberately reports the current fallback mode.  Until
+/// a semantic provider has its own approved contract, this must not be
+/// presented as semantic ranking.
+enum OwnerTruthMemorySearchRetrievalMode: String, Equatable, Sendable {
+    case deterministicTextFallback
+}
+
+enum OwnerTruthMemorySearchPresentationState: String, Equatable, Sendable {
+    case ready
+    case rebuilding
+}
+
+/// A bounded display-safe result.  Identity, source, thread, citation,
+/// checkpoint and policy fields never cross this Owner-only read model.
+struct OwnerTruthMemorySearchPresentationResult: Equatable, Sendable {
+    let rank: Int
+    let preview: String
+    let memoryKind: String
+    let perspectiveType: String
+    let sensitivity: String
+    let matchKind: String
+}
+
+/// Read-only M0-B recall-search response.  A result can only originate from
+/// the Owner's current confirmed MemoryVersion projection on the server.
+struct OwnerTruthMemorySearchPresentation: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-memory-search-presentation-response-v1"
+    static let maximumResultCount = 8
+    static let maximumPreviewCharacterCount = 200
+
+    let vaultID: OwnerTruthVaultID
+    let state: OwnerTruthMemorySearchPresentationState
+    let retrievalMode: OwnerTruthMemorySearchRetrievalMode
+    let results: [OwnerTruthMemorySearchPresentationResult]
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        guard Set(object.keys) == ["schemaVersion", "vaultId", "memorySearch"],
+              OwnerTruthMemorySearchPresentationContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthMemorySearchPresentationContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let search = object["memorySearch"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidMemorySearchPresentation(
+                "response misses a required presentation field"
+            )
+        }
+        guard Set(search.keys) == ["state", "retrievalMode", "resultCount", "results"],
+              let rawState = OwnerTruthMemorySearchPresentationContract.requiredString(search["state"]),
+              let state = OwnerTruthMemorySearchPresentationState(rawValue: rawState),
+              let rawMode = OwnerTruthMemorySearchPresentationContract.requiredString(search["retrievalMode"]),
+              let retrievalMode = OwnerTruthMemorySearchRetrievalMode(rawValue: rawMode),
+              let resultCount = OwnerTruthMemorySearchPresentationContract.nonNegativeInt(search["resultCount"]),
+              resultCount <= Self.maximumResultCount else {
+            throw OwnerTruthRemoteContractError.invalidMemorySearchPresentation(
+                "response contains an invalid aggregate"
+            )
+        }
+
+        let resultObjects = try OwnerTruthMemorySearchPresentationContract.objectArray(
+            search["results"],
+            field: "results"
+        )
+        guard resultObjects.count == resultCount else {
+            throw OwnerTruthRemoteContractError.invalidMemorySearchPresentation(
+                "result count does not match results"
+            )
+        }
+        let results = try resultObjects.map { item -> OwnerTruthMemorySearchPresentationResult in
+            guard Set(item.keys) == [
+                "rank",
+                "preview",
+                "memoryKind",
+                "perspectiveType",
+                "sensitivity",
+                "matchKind",
+            ],
+            let rank = OwnerTruthMemorySearchPresentationContract.nonNegativeInt(item["rank"]),
+            rank > 0,
+            let preview = OwnerTruthMemorySearchPresentationContract.boundedString(
+                item["preview"],
+                maximumCharacterCount: Self.maximumPreviewCharacterCount
+            ),
+            let memoryKind = OwnerTruthMemorySearchPresentationContract.boundedString(
+                item["memoryKind"],
+                maximumCharacterCount: 80
+            ),
+            let perspectiveType = OwnerTruthMemorySearchPresentationContract.boundedString(
+                item["perspectiveType"],
+                maximumCharacterCount: 80
+            ),
+            let sensitivity = OwnerTruthMemorySearchPresentationContract.boundedString(
+                item["sensitivity"],
+                maximumCharacterCount: 80
+            ),
+            let matchKind = OwnerTruthMemorySearchPresentationContract.boundedString(
+                item["matchKind"],
+                maximumCharacterCount: 80
+            ) else {
+                throw OwnerTruthRemoteContractError.invalidMemorySearchPresentation(
+                    "result contains unsupported fields"
+                )
+            }
+            return OwnerTruthMemorySearchPresentationResult(
+                rank: rank,
+                preview: preview,
+                memoryKind: memoryKind,
+                perspectiveType: perspectiveType,
+                sensitivity: sensitivity,
+                matchKind: matchKind
+            )
+        }
+
+        guard state == .ready || results.isEmpty else {
+            throw OwnerTruthRemoteContractError.invalidMemorySearchPresentation(
+                "rebuilding response must not retain results"
+            )
+        }
+        guard results.enumerated().allSatisfy({ index, result in result.rank == index + 1 }) else {
+            throw OwnerTruthRemoteContractError.invalidMemorySearchPresentation(
+                "result ranks must be contiguous"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.state = state
+        self.retrievalMode = retrievalMode
+        self.results = results
+    }
+}
+
+protocol OwnerTruthMemorySearchPresentationClient: AnyObject {
+    func searchOwnerTruthMemoryPresentation(
+        vaultID: OwnerTruthVaultID,
+        query: String,
+        completion: @escaping (Result<OwnerTruthMemorySearchPresentation, Error>) -> Void
+    )
+}
+
+private enum OwnerTruthMemorySearchPresentationContract {
+    static func requiredString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    static func boundedString(_ value: Any?, maximumCharacterCount: Int) -> String? {
+        guard let normalized = requiredString(value),
+              normalized.count <= maximumCharacterCount else {
+            return nil
+        }
+        return normalized
+    }
+
+    static func nonNegativeInt(_ value: Any?) -> Int? {
+        guard let value = value as? NSNumber,
+              CFGetTypeID(value) != CFBooleanGetTypeID(),
+              value.doubleValue.isFinite,
+              value.doubleValue.rounded() == value.doubleValue,
+              value.intValue >= 0 else {
+            return nil
+        }
+        return value.intValue
+    }
+
+    static func objectArray(_ value: Any?, field: String) throws -> [[String: Any]] {
+        guard let values = value as? [Any] else {
+            throw OwnerTruthRemoteContractError.invalidMemorySearchPresentation(
+                "\(field) must be an array"
+            )
+        }
+        return try values.map { value in
+            guard let object = value as? [String: Any] else {
+                throw OwnerTruthRemoteContractError.invalidMemorySearchPresentation(
+                    "\(field) must contain objects"
+                )
+            }
+            return object
+        }
+    }
+}
+
+enum OwnerTruthMemorySearchPresentationPhase: Equatable, Sendable {
+    case idle
+    case loading
+    case ready
+    case rebuilding
+    case unavailable
+    case failed
+}
+
+enum OwnerTruthMemorySearchPresentationNotice: Equatable, Sendable {
+    case releasePolicyDisabled
+    case invalidQuery
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case contractMismatch
+    case requestFailed
+}
+
+struct OwnerTruthMemorySearchPresentationViewState: Equatable, Sendable {
+    let phase: OwnerTruthMemorySearchPresentationPhase
+    let presentation: OwnerTruthMemorySearchPresentation?
+    let notice: OwnerTruthMemorySearchPresentationNotice?
+
+    static let idle = OwnerTruthMemorySearchPresentationViewState(
+        phase: .idle,
+        presentation: nil,
+        notice: nil
+    )
+}
+
+/// Lease-fenced product reader.  A closed policy, stale account or failed
+/// request clears the previous results rather than retaining another account's
+/// private memory preview.
+final class OwnerTruthMemorySearchPresentationUseCase {
+    static let maximumQueryCharacterCount = 240
+
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let client: OwnerTruthMemorySearchPresentationClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAvailable: () -> Bool
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthMemorySearchPresentationViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthMemorySearchPresentationViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthMemorySearchPresentationClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool
+    ) {
+        self.accountLease = accountLease
+        vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+    }
+
+    func search(query: String) {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedQuery.isEmpty,
+              normalizedQuery.count <= Self.maximumQueryCharacterCount else {
+            resetForUnavailable(.invalidQuery)
+            return
+        }
+        guard let vaultID = beginRequestOrFail() else { return }
+
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthMemorySearchPresentationViewState(
+            phase: .loading,
+            presentation: nil,
+            notice: nil
+        )
+        client.searchOwnerTruthMemoryPresentation(
+            vaultID: vaultID,
+            query: normalizedQuery
+        ) { [weak self] result in
+            self?.receive(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthMemorySearchPresentation, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+
+        switch result {
+        case .success(let presentation):
+            guard presentation.vaultID == vaultID,
+                  presentation.vaultID.rawValue == accountLease.vaultId else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            let phase: OwnerTruthMemorySearchPresentationPhase = presentation.state == .ready
+                ? .ready
+                : .rebuilding
+            viewState = OwnerTruthMemorySearchPresentationViewState(
+                phase: phase,
+                presentation: phase == .ready ? presentation : nil,
+                notice: nil
+            )
+        case .failure(let error):
+            if case OwnerTruthRemoteContractError.invalidMemorySearchPresentation = error {
+                transitionFailure(.contractMismatch)
+            } else {
+                transitionFailure(.requestFailed)
+            }
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthMemorySearchPresentationNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthMemorySearchPresentationViewState(
+            phase: .unavailable,
+            presentation: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure(_ notice: OwnerTruthMemorySearchPresentationNotice) {
+        viewState = OwnerTruthMemorySearchPresentationViewState(
             phase: .failed,
             presentation: nil,
             notice: notice
