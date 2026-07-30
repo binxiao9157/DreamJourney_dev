@@ -183,3 +183,31 @@ G2 `/context/build` 到 Answer 的后端运行时证据均已可复跑。G3 的�
 按终版路线的 Stage 1 规则，Voice/Digital Human 的真实 Provider 门不能阻塞 Owner 文字核心。因此本项保持
 `INTERNAL_READY / G3_EXTERNAL_DEFERRED`，当前执行租约移交给 M0-A 的 Owner Truth Conversation/InterviewSession
 bootstrap；不会因该移交删除或弱化 G3。
+
+### 2026-07-30 G0 Context Build AccountLease 交付栅栏
+
+`EchoApplicationCoordinator` 现在将发起 `/context/build` 的 `AccountLease` 绑定到对应
+`EchoContextBuildLease`，并在两个检查点验证它：
+
+- request：无效账户 lease 时不发起 transport；
+- runtime：异步回调回到主线程后重新验证 lease。若 session、generation、vault 或 authority epoch
+  已失效，coordinator 清除该 Context lease，并只交付 value-minimized 的
+  `authorityInvalidated(checkpoint, reason)`。
+
+`EchoViewController` 对这类拒绝只取消当前 Context turn/gate 和记录脱敏诊断；不会持久化 packet、提交
+DialogEngine，也不会以本地 KBLite fallback 继续旧 owner 的回合。身份不匹配和后端失败的既有处理保持不变。
+
+新增 XCTest 使 request 发出后切换 authority epoch，再返回同一 owner 的 packet；结果必须为
+`authorityInvalidated(.runtime, .authorityEpochMismatch)`，且 coordinator 不保留 active lease。
+
+执行：
+
+```bash
+DJ_IOS_TEST_DESTINATION='platform=iOS Simulator,id=F54C960B-005F-434A-81E2-557D21AF14ED' \
+  bash Scripts/QA/product-v4/run-ios-echo-application-coordinator-gate.sh
+xcodebuild build -workspace DreamJourney.xcworkspace -scheme DreamJourney \
+  -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO
+```
+
+结果：静态 gate、`EchoApplicationCoordinatorTests` 和 generic simulator Debug build 均通过。
+这是本地 G0 证据，不包含后端部署、Postgres、真实 Provider、公开 UI 或真机声明。

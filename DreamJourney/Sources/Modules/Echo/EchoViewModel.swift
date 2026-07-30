@@ -442,6 +442,10 @@ struct EchoContextBuildLease: Equatable {
     let generation: UInt64
     let turnID: String
     let expectedIdentity: EchoKnowledgeContextIdentity
+    /// Context packets are private reads.  Bind the request to the exact
+    /// account lease so a late response cannot survive an authority-epoch,
+    /// account, or session transition.
+    let accountLease: AccountLease?
 }
 
 struct EchoContextBuildIdentityMismatch: Equatable {
@@ -449,6 +453,13 @@ struct EchoContextBuildIdentityMismatch: Equatable {
     let responseUserId: String
     let responsePersonaScope: String?
     let responseDigitalHumanId: String?
+}
+
+/// Value-minimized reason for refusing a Context response after the account
+/// authority that started the request is no longer current.
+struct EchoContextBuildAuthorityInvalidation: Equatable {
+    let checkpoint: AccountLeaseCheckpoint
+    let reason: AccountLeaseValidationReason
 }
 
 /// Provider-independent ownership for a single QA-only Owner Truth Context
@@ -465,6 +476,7 @@ struct EchoOwnerTruthContextShadowLease: Equatable {
 enum EchoContextBuildDelivery {
     case success(EchoContextPacket)
     case identityMismatch(EchoContextBuildIdentityMismatch)
+    case authorityInvalidated(EchoContextBuildAuthorityInvalidation)
     case failure(Error)
 }
 
@@ -829,6 +841,7 @@ final class EchoApplicationCoordinator {
     private var nextOwnerTruthContextParityGeneration: UInt64 = 0
     private let contextBuildTransport: EchoContextBuildTransport
     private let ownerTruthContextShadowTransport: EchoOwnerTruthContextShadowTransport
+    private let accountLeaseValidator: (AccountLease, AccountLeaseCheckpoint) -> AccountLeaseValidationDecision
     private let ownerTruthContextCitationQAEnabled: () -> Bool
     private let ownerTruthMigrationParityQAEnabled: () -> Bool
     private(set) var activeContextBuildLease: EchoContextBuildLease?
@@ -839,6 +852,9 @@ final class EchoApplicationCoordinator {
     init(
         contextBuildTransport: EchoContextBuildTransport = DreamJourneyBackendClient.shared,
         ownerTruthContextShadowTransport: EchoOwnerTruthContextShadowTransport = DreamJourneyBackendClient.shared,
+        accountLeaseValidator: @escaping (AccountLease, AccountLeaseCheckpoint) -> AccountLeaseValidationDecision = { lease, checkpoint in
+            AccountLeaseRuntime.shared.validate(lease, at: checkpoint)
+        },
         ownerTruthContextCitationQAEnabled: @escaping () -> Bool = {
             OwnerTruthContextCitationQAGate.isEnabled
         },
@@ -848,6 +864,7 @@ final class EchoApplicationCoordinator {
     ) {
         self.contextBuildTransport = contextBuildTransport
         self.ownerTruthContextShadowTransport = ownerTruthContextShadowTransport
+        self.accountLeaseValidator = accountLeaseValidator
         self.ownerTruthContextCitationQAEnabled = ownerTruthContextCitationQAEnabled
         self.ownerTruthMigrationParityQAEnabled = ownerTruthMigrationParityQAEnabled
     }
@@ -855,13 +872,15 @@ final class EchoApplicationCoordinator {
     @discardableResult
     func beginContextBuild(
         turnID: String,
-        expectedIdentity: EchoKnowledgeContextIdentity
+        expectedIdentity: EchoKnowledgeContextIdentity,
+        accountLease: AccountLease? = nil
     ) -> EchoContextBuildLease {
         nextContextBuildGeneration &+= 1
         let lease = EchoContextBuildLease(
             generation: nextContextBuildGeneration,
             turnID: turnID,
-            expectedIdentity: expectedIdentity
+            expectedIdentity: expectedIdentity,
+            accountLease: accountLease
         )
         activeContextBuildLease = lease
         return lease
@@ -1033,17 +1052,20 @@ final class EchoApplicationCoordinator {
         turnID: String,
         query: String,
         expectedIdentity: EchoKnowledgeContextIdentity,
+        accountLease: AccountLease,
         lifecycleMode: DigitalHumanMode,
         viewerFamilyMemberID: String?,
         completion: @escaping (EchoContextBuildLease, EchoContextBuildDelivery) -> Void
     ) -> EchoContextBuildLease? {
-        guard contextBuildTransport.isContextBuildConfigured else {
+        guard contextBuildTransport.isContextBuildConfigured,
+              accountLeaseValidator(accountLease, .request).allowed else {
             return nil
         }
         invalidateOwnerTruthContextShadow()
         let lease = beginContextBuild(
             turnID: turnID,
-            expectedIdentity: expectedIdentity
+            expectedIdentity: expectedIdentity,
+            accountLease: accountLease
         )
         contextBuildTransport.buildEchoContextPacket(
             userId: expectedIdentity.userId,
@@ -1055,6 +1077,20 @@ final class EchoApplicationCoordinator {
         ) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self, self.isCurrent(lease) else {
+                    return
+                }
+                let authorityDecision = self.accountLeaseValidator(accountLease, .runtime)
+                guard authorityDecision.allowed else {
+                    _ = self.invalidateContextBuild()
+                    completion(
+                        lease,
+                        .authorityInvalidated(
+                            EchoContextBuildAuthorityInvalidation(
+                                checkpoint: authorityDecision.checkpoint,
+                                reason: authorityDecision.reason
+                            )
+                        )
+                    )
                     return
                 }
                 switch result {

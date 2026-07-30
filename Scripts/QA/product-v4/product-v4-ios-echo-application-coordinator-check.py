@@ -34,9 +34,11 @@ def main() -> None:
         "protocol EchoContextBuildTransport",
         "struct EchoContextBuildLease: Equatable",
         "struct EchoContextBuildIdentityMismatch: Equatable",
+        "struct EchoContextBuildAuthorityInvalidation: Equatable",
         "enum EchoContextBuildDelivery",
         "final class EchoApplicationCoordinator",
         "private(set) var activeContextBuildLease: EchoContextBuildLease?",
+        "private let accountLeaseValidator: (AccountLease, AccountLeaseCheckpoint) -> AccountLeaseValidationDecision",
         "func beginContextBuild(",
         "func requestContextBuild(",
         "func invalidateContextBuild() -> EchoContextBuildLease?",
@@ -82,6 +84,18 @@ def main() -> None:
         "case .identityMismatch(let mismatch):" in context_build,
         "the controller must retain its explicit local fallback for rejected context identity",
     )
+    require(
+        "accountLease: accountLease" in context_build,
+        "context build requests must bind the caller's AccountLease",
+    )
+    require(
+        "case .authorityInvalidated(let invalidation):" in context_build,
+        "the controller must cancel a context turn after authority invalidation",
+    )
+    require(
+        "contextPacketAuthorityInvalidated" in context_build,
+        "authority-invalidated Context packets must not reach local fallback submission",
+    )
 
     for test_name in (
         "func testContextBuildLeaseSupersedesEarlierRequest()",
@@ -90,6 +104,7 @@ def main() -> None:
         "func testCoordinatorDropsSupersededTransportCallbackBeforeDelivery()",
         "func testCoordinatorDoesNotStartWhenContextTransportIsUnavailable()",
         "func testCoordinatorClassifiesIdentityMismatchedPacketBeforeControllerDelivery()",
+        "func testCoordinatorRejectsLateContextPacketAfterAuthorityEpochChanges()",
     ):
         require(test_name in tests, f"Echo application coordinator test missing: {test_name}")
 

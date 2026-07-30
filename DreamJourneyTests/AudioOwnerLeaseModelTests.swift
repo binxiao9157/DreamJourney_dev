@@ -665,7 +665,11 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
 
     func testCoordinatorDropsSupersededTransportCallbackBeforeDelivery() {
         let transport = DeferredEchoContextBuildTransport()
-        let coordinator = EchoApplicationCoordinator(contextBuildTransport: transport)
+        let coordinator = EchoApplicationCoordinator(
+            contextBuildTransport: transport,
+            accountLeaseValidator: allowedAccountLeaseValidation
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 1)
         let identity = EchoKnowledgeContextIdentity(
             userId: "owner-1",
             personaScope: "self",
@@ -679,6 +683,7 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
             turnID: "turn-1",
             query: "first query",
             expectedIdentity: identity,
+            accountLease: accountLease,
             lifecycleMode: .sunlight,
             viewerFamilyMemberID: nil
         ) { lease, _ in
@@ -688,6 +693,7 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
             turnID: "turn-2",
             query: "second query",
             expectedIdentity: identity,
+            accountLease: accountLease,
             lifecycleMode: .sunlight,
             viewerFamilyMemberID: nil
         ) { lease, _ in
@@ -707,7 +713,10 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
     func testCoordinatorDoesNotStartWhenContextTransportIsUnavailable() {
         let transport = DeferredEchoContextBuildTransport()
         transport.isContextBuildConfigured = false
-        let coordinator = EchoApplicationCoordinator(contextBuildTransport: transport)
+        let coordinator = EchoApplicationCoordinator(
+            contextBuildTransport: transport,
+            accountLeaseValidator: allowedAccountLeaseValidation
+        )
         let result = coordinator.requestContextBuild(
             turnID: "turn-1",
             query: "query",
@@ -716,6 +725,7 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
                 personaScope: "self",
                 digitalHumanId: "digital-human-1"
             ),
+            accountLease: makeAccountLease(subjectId: "owner-1", generation: 1),
             lifecycleMode: .sunlight,
             viewerFamilyMemberID: nil
         ) { _, _ in
@@ -729,7 +739,11 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
 
     func testCoordinatorClassifiesIdentityMismatchedPacketBeforeControllerDelivery() {
         let transport = DeferredEchoContextBuildTransport()
-        let coordinator = EchoApplicationCoordinator(contextBuildTransport: transport)
+        let coordinator = EchoApplicationCoordinator(
+            contextBuildTransport: transport,
+            accountLeaseValidator: allowedAccountLeaseValidation
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 1)
         let expectedIdentity = EchoKnowledgeContextIdentity(
             userId: "owner-1",
             personaScope: "self",
@@ -741,6 +755,7 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
             turnID: "turn-1",
             query: "query",
             expectedIdentity: expectedIdentity,
+            accountLease: accountLease,
             lifecycleMode: .sunlight,
             viewerFamilyMemberID: nil
         ) { _, delivery in
@@ -772,7 +787,11 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
 
     func testContextBuildStillDeliversLegacyPacketWhenRequestCorrelationIsMissing() {
         let transport = DeferredEchoContextBuildTransport()
-        let coordinator = EchoApplicationCoordinator(contextBuildTransport: transport)
+        let coordinator = EchoApplicationCoordinator(
+            contextBuildTransport: transport,
+            accountLeaseValidator: allowedAccountLeaseValidation
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 1)
         let identity = EchoKnowledgeContextIdentity(
             userId: "owner-1",
             personaScope: "self",
@@ -785,6 +804,7 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
                 turnID: "turn-legacy-packet",
                 query: "ordinary public Echo cannot depend on QA correlation",
                 expectedIdentity: identity,
+                accountLease: accountLease,
                 lifecycleMode: .sunlight,
                 viewerFamilyMemberID: nil
             ) { _, delivery in
@@ -807,6 +827,64 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
         )
 
         wait(for: [expectation], timeout: 1)
+    }
+
+    func testCoordinatorRejectsLateContextPacketAfterAuthorityEpochChanges() {
+        let transport = DeferredEchoContextBuildTransport()
+        var currentAuthorityEpoch = "epoch-v1"
+        let coordinator = EchoApplicationCoordinator(
+            contextBuildTransport: transport,
+            accountLeaseValidator: { lease, checkpoint in
+                AccountLeaseValidationDecision(
+                    checkpoint: checkpoint,
+                    allowed: lease.authorityEpoch == currentAuthorityEpoch,
+                    reason: lease.authorityEpoch == currentAuthorityEpoch
+                        ? .allowed
+                        : .authorityEpochMismatch,
+                    sessionRotated: false
+                )
+            }
+        )
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 1)
+        let expectation = expectation(description: "authority invalidation is delivered")
+
+        XCTAssertNotNil(
+            coordinator.requestContextBuild(
+                turnID: "turn-authority-epoch",
+                query: "late response must not survive an epoch change",
+                expectedIdentity: identity,
+                accountLease: accountLease,
+                lifecycleMode: .sunlight,
+                viewerFamilyMemberID: nil
+            ) { _, delivery in
+                guard case .authorityInvalidated(let invalidation) = delivery else {
+                    return XCTFail("stale account authority must not deliver a context packet")
+                }
+                XCTAssertEqual(invalidation.checkpoint, .runtime)
+                XCTAssertEqual(invalidation.reason, .authorityEpochMismatch)
+                expectation.fulfill()
+            }
+        )
+
+        currentAuthorityEpoch = "epoch-v2"
+        transport.complete(
+            at: 0,
+            result: .success(
+                makeEchoContextPacket(
+                    userId: "owner-1",
+                    personaScope: "self",
+                    digitalHumanId: "digital-human-1"
+                )
+            )
+        )
+
+        wait(for: [expectation], timeout: 1)
+        XCTAssertNil(coordinator.activeContextBuildLease)
     }
 
     func testOwnerTruthShadowStartsOnlyForCurrentSelfOwner() {
@@ -1239,6 +1317,18 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
             answerCitationCount: 0,
             selectedContextSourceCounts: ["owner-truth-memory-projection": 1],
             fallbacks: []
+        )
+    }
+
+    private func allowedAccountLeaseValidation(
+        _ accountLease: AccountLease,
+        _ checkpoint: AccountLeaseCheckpoint
+    ) -> AccountLeaseValidationDecision {
+        AccountLeaseValidationDecision(
+            checkpoint: checkpoint,
+            allowed: true,
+            reason: .allowed,
+            sessionRotated: false
         )
     }
 }

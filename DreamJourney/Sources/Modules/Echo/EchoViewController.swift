@@ -4821,10 +4821,21 @@ final class EchoViewController: UIViewController {
             return
         }
 
+        guard let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                  at: .request,
+                  expected: accountLease,
+                  reason: "contextBuildRequest"
+              ) else {
+            cancelActiveEchoContextBuild(reason: "contextBuildAccountLeaseUnavailable")
+            lastEchoRuntimeFallbackReason = "contextBuildAccountLeaseUnavailable"
+            recordEchoRuntimeDiagnosticsSnapshot(reason: "contextBuildAccountLeaseUnavailable")
+            return
+        }
+
         cancelActiveEchoContextBuild(reason: "newEchoTurn")
         let contextParityLease: EchoOwnerTruthContextParityLease?
         if context.isSelfAssistant,
-           let accountLease = echoAccountLease,
            validateEchoAccountLease(
                at: .request,
                expected: accountLease,
@@ -4869,6 +4880,7 @@ final class EchoViewController: UIViewController {
             turnID: turnID,
             query: text,
             expectedIdentity: expectedIdentity,
+            accountLease: accountLease,
             lifecycleMode: context.mode,
             viewerFamilyMemberID: context.isSelfAssistant ? nil : context.ownerId
         ) { [weak self] contextBuildLease, delivery in
@@ -4937,6 +4949,21 @@ final class EchoViewController: UIViewController {
                     ]
                 )
                 print(record.logLine)
+            case .authorityInvalidated(let invalidation):
+                guard let self else { return }
+                self.cancelActiveEchoContextBuild(reason: "contextPacketAuthorityInvalidated")
+                self.lastEchoRuntimeFallbackReason = "contextPacketAuthorityInvalidated"
+                self.recordEchoRuntimeDiagnosticsSnapshot(reason: "contextPacketAuthorityInvalidated")
+                PrivacySafeDiagnostics.log(
+                    subsystem: "CFLite",
+                    event: "contextPacketIgnored",
+                    states: [
+                        "reason": "authorityInvalidated",
+                        "checkpoint": invalidation.checkpoint.rawValue,
+                        "validation": invalidation.reason.rawValue,
+                    ],
+                    correlations: ["turn": turnID]
+                )
             case .identityMismatch(let mismatch):
                 guard let self,
                       self.isCurrentDigitalHumanLifecycleToken(
