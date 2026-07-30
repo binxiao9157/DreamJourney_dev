@@ -2628,13 +2628,14 @@ enum OwnerTruthInterviewOrchestrationNextSessionState: String, Equatable, Sendab
     case invalid
 }
 
-/// The five transient hints are the complete client payload. In particular,
+/// The six transient hints are the complete client payload. In particular,
 /// callers cannot pass topic text, a topic identifier, or an authorization
 /// assertion to the QA policy endpoint.
 struct OwnerTruthInterviewOrchestrationSignals: Equatable, Sendable {
     let topicIncomplete: Bool
     let needsClarification: Bool
     let userChangedTopic: Bool
+    let userReopenedDoNotAskTopic: Bool
     let isSensitive: Bool
     let acceptedBroadenRecommendation: Bool
 
@@ -2642,12 +2643,14 @@ struct OwnerTruthInterviewOrchestrationSignals: Equatable, Sendable {
         topicIncomplete: Bool = false,
         needsClarification: Bool = false,
         userChangedTopic: Bool = false,
+        userReopenedDoNotAskTopic: Bool = false,
         isSensitive: Bool = false,
         acceptedBroadenRecommendation: Bool = false
     ) {
         self.topicIncomplete = topicIncomplete
         self.needsClarification = needsClarification
         self.userChangedTopic = userChangedTopic
+        self.userReopenedDoNotAskTopic = userReopenedDoNotAskTopic
         self.isSensitive = isSensitive
         self.acceptedBroadenRecommendation = acceptedBroadenRecommendation
     }
@@ -2657,6 +2660,7 @@ struct OwnerTruthInterviewOrchestrationSignals: Equatable, Sendable {
             "topicIncomplete": topicIncomplete,
             "needsClarification": needsClarification,
             "userChangedTopic": userChangedTopic,
+            "userReopenedDoNotAskTopic": userReopenedDoNotAskTopic,
             "isSensitive": isSensitive,
             "acceptedBroadenRecommendation": acceptedBroadenRecommendation,
         ]

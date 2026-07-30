@@ -1094,6 +1094,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             topicIncomplete: true,
             needsClarification: true,
             userChangedTopic: false,
+            userReopenedDoNotAskTopic: true,
             isSensitive: false,
             acceptedBroadenRecommendation: true
         )
@@ -1110,12 +1111,14 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "topicIncomplete",
                 "needsClarification",
                 "userChangedTopic",
+                "userReopenedDoNotAskTopic",
                 "isSensitive",
                 "acceptedBroadenRecommendation",
             ])
         )
         XCTAssertNil(signals.backendPayload["topicId"])
         XCTAssertNil(signals.backendPayload["topicText"])
+        XCTAssertEqual(signals.backendPayload["userReopenedDoNotAskTopic"] as? Bool, true)
 
         XCTAssertThrowsError(
             try OwnerTruthInterviewOrchestrationRead(
