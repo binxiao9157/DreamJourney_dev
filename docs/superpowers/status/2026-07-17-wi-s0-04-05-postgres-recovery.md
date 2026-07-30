@@ -60,6 +60,30 @@ Vault 和 async scope mismatch 三类 fixture 均被归因并输出 NO_GO；临�
 
 owner orphan 分布：`archive_items=115`、`care_snapshots=54`、`digital_human_sessions=62`、`echo_delayed_replies=8`、`family_members=45`、`kb_snapshots=13`、`mailbox_letters=27`、`profiles=11`、`push_device_tokens=6`、`voice_profiles=20`。
 
+### 2026-07-30 当前 schema 复演
+
+在当前线上 schema head `0065` 下重新生成并校验了加密备份，随后恢复到新的
+`dj_recovery_*` 隔离库。migration verify 的 `expectedHead=appliedHead=0065`，
+manifest、restore、integrity、replay 和 recovery record 均已生成；生产库、生产流量和
+recovery mode 没有变更。
+
+本次恢复记录仍为 `cutoverDecision=NO_GO`：
+
+- 当前快照发现 `367` 条 legacy direct-user owner orphan。该数量是新的恢复时间点观测，
+  不能与 2026-07-17 的历史快照混作“数据修复已发生”或“回归”；
+- integrity audit 继续明确 `ownerTruthIdentityRootUnverified` 和
+  `asyncEffectsRootAuthorityUnverified`；
+- replay 继续是 `replayBundleMissing`，没有可信 cutoff 后 replay producer/evidence。
+
+同一隔离库已经运行只读 orphan quarantine inventory：覆盖 21 个带 `user_id` 的 public
+表、无 unlocatable table、状态为 `quarantineRequired`。生成内容只有 HMAC 定位摘要和表级
+计数，并固定 `automaticMutation=false`、`automaticOwnerClaim=false`、
+`automaticDelete=false`；没有重绑 owner、删除记录、切换流量或输出原始标识。
+
+因此本次只新增“当前 schema 的真实隔离恢复和可审计 NO_GO”证据，不关闭 replay、身份根、
+authority root 或 G3/G4 缺口。后端部署证据见
+`DreamJourneyBackend/docs/backend/2026-07-30-postgres-recovery-drill-no-go.md`。
+
 ## 安全边界
 
 - 演练没有修改生产 DSN、生产数据库或负载均衡；
