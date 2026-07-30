@@ -7177,8 +7177,8 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         guard guidedRecommendationPrompts.indices.contains(sender.tag) else { return }
         let prompt = guidedRecommendationPrompts[sender.tag]
         let alert = UIAlertController(
-            title: "调整引导问题",
-            message: "选择后会更新后续引导问题。",
+            title: "调整引导",
+            message: "可换一个问题、调整方向，或稍后再聊。",
             preferredStyle: .actionSheet
         )
         alert.addAction(UIAlertAction(title: "换一个问题", style: .default) { [weak self] _ in
@@ -7193,6 +7193,13 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
                 slot: prompt.slot,
                 action: .notInterested,
                 reason: .topicPreference
+            )
+        })
+        alert.addAction(UIAlertAction(title: "以后再聊", style: .default) { [weak self] _ in
+            self?.submitGuidedRecommendationFeedback(
+                slot: prompt.slot,
+                action: .defer,
+                reason: .timing
             )
         })
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))

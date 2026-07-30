@@ -4573,12 +4573,14 @@ private enum OwnerTruthGuidedRecommendationPresentationContract {
 enum OwnerTruthGuidedRecommendationFeedbackAction: String, Equatable, Sendable {
     case replace
     case notInterested
+    case `defer`
 }
 
 enum OwnerTruthGuidedRecommendationFeedbackReason: String, Equatable, Sendable {
     case questionWording
     case topicPreference
     case recommendationType
+    case timing
 }
 
 struct OwnerTruthGuidedRecommendationFeedbackCommand: Equatable, Sendable {

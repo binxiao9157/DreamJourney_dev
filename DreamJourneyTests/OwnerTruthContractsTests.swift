@@ -4464,6 +4464,58 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.prompts.map(\.slot), [.breadth])
     }
 
+    func testGuidedRecommendationTimingFeedbackRefreshesPromptsAfterValueFreeReceipt() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = GuidedRecommendationPresentationClientSpy()
+        client.result = .success(try OwnerTruthGuidedRecommendationPresentation(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthGuidedRecommendationPresentation.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "state": "ready",
+                "recommendationSetId": String(repeating: "a", count: 64),
+                "recommendations": [[
+                    "slot": "continuity",
+                    "label": "继续聊聊",
+                    "question": "那件事后来有什么变化？",
+                ]],
+            ],
+            expectedVaultID: vaultID
+        ))
+        client.feedbackResult = .success(try OwnerTruthGuidedRecommendationFeedbackReceipt(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthGuidedRecommendationFeedbackReceipt.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "feedback": ["status": "created"],
+            ],
+            expectedVaultID: vaultID
+        ))
+        let useCase = OwnerTruthGuidedRecommendationPresentationUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.refresh()
+        useCase.submitFeedback(
+            slot: .continuity,
+            action: .defer,
+            reason: .timing
+        )
+
+        XCTAssertEqual(client.requestCount, 2)
+        XCTAssertEqual(client.feedbackCommands.count, 1)
+        XCTAssertEqual(client.feedbackCommands[0].recommendationSetID, String(repeating: "a", count: 64))
+        XCTAssertEqual(client.feedbackCommands[0].slot, .continuity)
+        XCTAssertEqual(client.feedbackCommands[0].action, .defer)
+        XCTAssertEqual(client.feedbackCommands[0].reason, .timing)
+        XCTAssertEqual(client.feedbackCommands[0].backendPayload["feedbackAction"] as? String, "defer")
+        XCTAssertEqual(client.feedbackCommands[0].backendPayload["feedbackReason"] as? String, "timing")
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.prompts.map(\.slot), [.continuity])
+    }
+
     func testGuidedRecommendationFeedbackFailurePreservesPromptsForRetry() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
