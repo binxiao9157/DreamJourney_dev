@@ -5164,6 +5164,84 @@ final class OwnerTruthContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testNaturalInputProductSheetExposesOnlyProductBoundaryControlsWithConfirmedRestore() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        client.boundaryHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, boundary: command) }
+        }
+        client.continuationHandler = { _ in
+            Result {
+                let isDoNotAsk = client.boundaryCommand?.boundary == .doNotAsk
+                return try self.interviewNaturalInputContinuation(
+                    vaultID: vaultID,
+                    state: isDoNotAsk ? .paused : .readyForNarrative,
+                    canContinue: !isDoNotAsk,
+                    canContinueLater: !isDoNotAsk
+                )
+            }
+        }
+        let controller = OwnerTruthInterviewNaturalInputViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            presentation: .product,
+            guidedRecommendationPolicyAvailable: { false },
+            lifeMapPolicyAvailable: { false },
+            memorySearchPolicyAvailable: { false },
+            interviewOutcomePolicyAvailable: { false },
+            qaGateEnabled: { true }
+        )
+
+        controller.loadViewIfNeeded()
+
+        let skipOnce = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-interview-boundary-skip-once"
+        ) as? UIButton)
+        let cooldown = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-interview-boundary-cooldown"
+        ) as? UIButton)
+        let doNotAsk = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-interview-boundary-do-not-ask"
+        ) as? UIButton)
+        XCTAssertFalse(skipOnce.isHidden)
+        XCTAssertFalse(cooldown.isHidden)
+        XCTAssertFalse(doNotAsk.isHidden)
+        XCTAssertTrue(skipOnce.isEnabled)
+        XCTAssertTrue(cooldown.isEnabled)
+        XCTAssertTrue(doNotAsk.isEnabled)
+        XCTAssertNil(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-interview-topic-switch"
+        ))
+        XCTAssertNil(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-interview-pacing-deepening-completed"
+        ))
+        XCTAssertNil(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-interview-boundary-restore-cooldown"
+        ))
+
+        doNotAsk.sendActions(for: .touchUpInside)
+
+        XCTAssertEqual(client.boundaryCommand?.boundary, .doNotAsk)
+        let restore = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-interview-boundary-restore-do-not-ask"
+        ) as? UIButton)
+        XCTAssertFalse(restore.isHidden)
+        XCTAssertNil(client.restoreDoNotAskCommand)
+    }
+
+    @MainActor
     func testMemorySearchProductEntryStaysHiddenWithoutItsPolicy() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let controller = OwnerTruthInterviewNaturalInputViewController(

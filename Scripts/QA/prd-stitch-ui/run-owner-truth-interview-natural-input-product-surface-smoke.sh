@@ -113,6 +113,8 @@ grep -Eq '"summaryState"[[:space:]]*:[[:space:]]*"narrativeRecorded"' "$RESULT_F
 grep -Eq '"summaryStatus"[[:space:]]*:[[:space:]]*"这段分享已经留好"' "$RESULT_FILE" || fail "Product summary status drifted."
 grep -Eq '"summaryDetail"[[:space:]]*:[[:space:]]*"这段分享已经留好。想起来时，可以继续补充。"' "$RESULT_FILE" || fail "Product summary detail drifted."
 grep -Eq '"transcriptCleared"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Product preview must clear submitted text."
+grep -Eq '"productBoundaryControlsVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Product boundary controls should be visible."
+grep -Eq '"qaOnlyBoundaryControlsHidden"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "QA-only boundary controls must remain hidden."
 grep -Eq '"inMemoryPreview"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Smoke must remain an in-memory preview."
 grep -Eq '"releasePolicyBypassedForPreview"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Preview policy isolation marker missing."
 grep -Eq '"voiceTurnStarted"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Opening the sheet must not start a voice turn."

@@ -9135,6 +9135,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let inputTextView = UITextView()
     private let submitButton = UIButton(type: .system)
     private let boundaryActionsStack = UIStackView()
+    private let productBoundaryActionsRow = UIStackView()
     private let skipOnceButton = UIButton(type: .system)
     private let cooldownButton = UIButton(type: .system)
     private let doNotAskButton = UIButton(type: .system)
@@ -9170,6 +9171,25 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         presentation == .qa
             && boundaryActionsStack.superview != nil
             && !boundaryActionsStack.isHidden
+    }
+
+    var areProductBoundaryActionsVisibleForUIQA: Bool {
+        presentation == .product
+            && boundaryActionsStack.superview != nil
+            && !boundaryActionsStack.isHidden
+            && [skipOnceButton, cooldownButton, doNotAskButton].allSatisfy {
+                $0.superview != nil && !$0.isHidden && $0.isEnabled
+            }
+    }
+
+    var areQAOnlyBoundaryActionsHiddenForProductUIQA: Bool {
+        presentation == .product
+            && [
+                topicSwitchButton,
+                deepeningCompletedButton,
+                summaryCompletedButton,
+                restoreCooldownButton,
+            ].allSatisfy { $0.superview == nil || $0.isHidden }
     }
 
     var isDoNotAskRestoreActionVisibleForQA: Bool {
@@ -9358,7 +9378,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             stackView.addArrangedSubview(interviewOutcomeButton)
         }
         [statusLabel, detailLabel, inputTextView, submitButton].forEach(stackView.addArrangedSubview)
-        if presentation == .qa {
+        if presentation == .qa || presentation == .product {
             stackView.addArrangedSubview(boundaryActionsStack)
         }
         view.addSubview(stackView)
@@ -9599,11 +9619,11 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         renderedState = state
         let canContinue = state.continuation?.canContinue ?? true
         let canSubmit = state.phase == .ready && canContinue
-        let canSetBoundary = presentation == .qa
+        let canSetBoundary = (presentation == .qa || presentation == .product)
             && state.phase == .ready
             && state.latestReceipt?.boundary == .open
             && canContinue
-        let canRestoreDoNotAsk = presentation == .qa
+        let canRestoreDoNotAsk = (presentation == .qa || presentation == .product)
             && state.phase == .ready
             && state.latestReceipt?.boundary == .doNotAsk
         let canRestoreCooldown = presentation == .qa
@@ -9767,18 +9787,14 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     }
 
     private func configureBoundaryControls() {
-        #if DEBUG || UI_QA_SIMULATOR
-        guard presentation == .qa else {
-            boundaryActionsStack.isHidden = true
-            return
-        }
         boundaryActionsStack.axis = .vertical
         boundaryActionsStack.alignment = .fill
         boundaryActionsStack.spacing = 8
+        boundaryActionsStack.distribution = .fill
 
         configureBoundaryButton(
             skipOnceButton,
-            title: "本轮跳过",
+            title: presentation == .product ? "这次先跳过" : "本轮跳过",
             accessibilityIdentifier: "owner-truth-interview-boundary-skip-once",
             action: #selector(skipOnceTapped)
         )
@@ -9793,6 +9809,29 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             title: "不再问",
             accessibilityIdentifier: "owner-truth-interview-boundary-do-not-ask",
             action: #selector(doNotAskTapped)
+        )
+
+        switch presentation {
+        case .product:
+            productBoundaryActionsRow.axis = .horizontal
+            productBoundaryActionsRow.alignment = .fill
+            productBoundaryActionsRow.spacing = 8
+            productBoundaryActionsRow.distribution = .fillEqually
+            [skipOnceButton, cooldownButton, doNotAskButton].forEach(
+                productBoundaryActionsRow.addArrangedSubview
+            )
+            boundaryActionsStack.addArrangedSubview(productBoundaryActionsRow)
+            configureBoundaryButton(
+                restoreDoNotAskButton,
+                title: "重新开启这个话题",
+                accessibilityIdentifier: "owner-truth-interview-boundary-restore-do-not-ask",
+                action: #selector(restoreDoNotAskTapped)
+            )
+            boundaryActionsStack.addArrangedSubview(restoreDoNotAskButton)
+        case .qa:
+            #if DEBUG || UI_QA_SIMULATOR
+        [skipOnceButton, cooldownButton, doNotAskButton].forEach(
+            boundaryActionsStack.addArrangedSubview
         )
         configureBoundaryButton(
             topicSwitchButton,
@@ -9825,18 +9864,16 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             action: #selector(restoreCooldownTapped)
         )
         [
-            skipOnceButton,
-            cooldownButton,
-            doNotAskButton,
             topicSwitchButton,
             deepeningCompletedButton,
             summaryCompletedButton,
             restoreDoNotAskButton,
             restoreCooldownButton,
         ].forEach(boundaryActionsStack.addArrangedSubview)
-        #else
-        boundaryActionsStack.isHidden = true
-        #endif
+            #else
+            boundaryActionsStack.isHidden = true
+            #endif
+        }
     }
 
     private func configureBoundaryButton(
@@ -9846,11 +9883,13 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         action: Selector
     ) {
         button.setTitle(title, for: .normal)
-        button.titleLabel?.font = DJDesignTokens.Font.body(15)
+        button.titleLabel?.font = DJDesignTokens.Font.body(presentation == .product ? 13 : 15)
+        button.titleLabel?.adjustsFontSizeToFitWidth = presentation == .product
+        button.titleLabel?.minimumScaleFactor = 0.82
         button.setTitleColor(DJDesignTokens.Color.textPrimary, for: .normal)
         button.backgroundColor = DJDesignTokens.Color.surface
         button.layer.cornerRadius = 10
-        button.heightAnchor.constraint(equalToConstant: 42).isActive = true
+        button.heightAnchor.constraint(equalToConstant: presentation == .product ? 40 : 42).isActive = true
         button.addTarget(self, action: action, for: .touchUpInside)
         button.accessibilityIdentifier = accessibilityIdentifier
     }
@@ -9886,7 +9925,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     }
 
     @objc private func restoreDoNotAskTapped() {
-        guard presentation == .qa,
+        guard presentation == .qa || presentation == .product,
               renderedState.phase == .ready,
               renderedState.latestReceipt?.boundary == .doNotAsk else {
             return
@@ -9913,7 +9952,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     }
 
     private func submitBoundary(_ boundary: OwnerTruthInterviewSessionBoundary) {
-        guard presentation == .qa,
+        guard presentation == .qa || presentation == .product,
               renderedState.phase == .ready,
               renderedState.latestReceipt?.boundary == .open else {
             return

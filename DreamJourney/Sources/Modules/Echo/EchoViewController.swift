@@ -8140,6 +8140,10 @@ extension EchoViewController {
                         let summaryDetail = controller.renderedDetailTextForUIQA
                         let inputRecorded = controller.renderedStateForUIQA
                             .latestReceipt?.messageSequence == 1
+                        let productBoundaryControlsVisible = controller
+                            .areProductBoundaryActionsVisibleForUIQA
+                        let qaOnlyBoundaryControlsHidden = controller
+                            .areQAOnlyBoundaryActionsHiddenForProductUIQA
                         let summaryRendered = summaryState == "narrativeRecorded"
                             && summaryStatus == "这段分享已经留好"
                             && summaryDetail == "这段分享已经留好。想起来时，可以继续补充。"
@@ -8147,7 +8151,9 @@ extension EchoViewController {
                             "completed": controller.title == "今天想聊点什么？"
                                 && inputRecorded
                                 && summaryRendered
-                                && controller.isTranscriptClearForQA,
+                                && controller.isTranscriptClearForQA
+                                && productBoundaryControlsVisible
+                                && qaOnlyBoundaryControlsHidden,
                             "productEntryVisible": productEntryVisible,
                             "qaEntryVisible": qaEntryVisible,
                             "sheetPresented": true,
@@ -8158,6 +8164,8 @@ extension EchoViewController {
                             "summaryStatus": summaryStatus,
                             "summaryDetail": summaryDetail,
                             "transcriptCleared": controller.isTranscriptClearForQA,
+                            "productBoundaryControlsVisible": productBoundaryControlsVisible,
+                            "qaOnlyBoundaryControlsHidden": qaOnlyBoundaryControlsHidden,
                             "inMemoryPreview": true,
                             "releasePolicyBypassedForPreview": true,
                             "voiceTurnStarted": false,

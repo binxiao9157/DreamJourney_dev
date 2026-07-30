@@ -70,12 +70,12 @@ def main() -> None:
 
     configure_body = body(surface, "private func configureBoundaryControls()")
     require(
-        "guard presentation == .qa else" in configure_body,
-        "boundary controls must remain QA presentation only",
+        "case .qa:" in configure_body,
+        "QA controls must remain isolated from the product boundary controls",
     )
     require(
         "#if DEBUG || UI_QA_SIMULATOR" in configure_body,
-        "Release builds must compile the boundary controls out",
+        "Release builds must compile QA-only boundary controls out",
     )
     require(
         "OwnerTruthCandidateReviewQAGate.isEnabled" in surface,

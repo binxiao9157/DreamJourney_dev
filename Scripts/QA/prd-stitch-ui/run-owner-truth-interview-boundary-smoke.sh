@@ -106,7 +106,7 @@ printf '\n'
 
 grep -Eq '"completed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Boundary UIQA did not complete."
 grep -Eq '"qaGateEnabled"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "QA gate should be enabled."
-grep -Eq '"boundaryButtonsVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Boundary controls should be visible only in QA."
+grep -Eq '"boundaryButtonsVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "QA boundary controls should be visible."
 grep -Eq '"boundary"[[:space:]]*:[[:space:]]*"skipOnce"' "$RESULT_FILE" || fail "skipOnce result missing."
 grep -Eq '"boundary"[[:space:]]*:[[:space:]]*"cooldown"' "$RESULT_FILE" || fail "cooldown result missing."
 grep -Eq '"boundary"[[:space:]]*:[[:space:]]*"doNotAsk"' "$RESULT_FILE" || fail "doNotAsk result missing."
