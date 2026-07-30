@@ -84,6 +84,16 @@ recovery mode 没有变更。
 authority root 或 G3/G4 缺口。后端部署证据见
 `DreamJourneyBackend/docs/backend/2026-07-30-postgres-recovery-drill-no-go.md`。
 
+### 2026-07-30 Replay attestation G0 硬化
+
+后端 `main@c61f809` 已将任何可进入 `GO` 的 replay bundle 收敛为 schema v2，并要求
+root-only（`0600`）HMAC attestation。完整但未签名的 bundle、被篡改的 bundle、错误 key id
+和权限过宽的 key file 都会 fail-closed；没有 bundle 的线上演练仍输出
+`replayBundleMissing/NO_GO`，不要求新增服务器密钥。本次只修复“手写完整测试 bundle 可形成
+GO 合同”的 G0 可信度缺口；未实现可信 receipt producer，不产生生产 key，不改变当前
+G2 `NO_GO`、owner orphan、identity/authority root 或 G3/G4 结论。详细运维边界见
+`DreamJourneyBackend/docs/backend/2026-07-30-recovery-replay-attestation-g0.md`。
+
 ## 安全边界
 
 - 演练没有修改生产 DSN、生产数据库或负载均衡；
