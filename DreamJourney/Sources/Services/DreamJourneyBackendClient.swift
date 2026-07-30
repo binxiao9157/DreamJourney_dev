@@ -503,6 +503,11 @@ final class FeatureGateService {
            normalizedPath.hasSuffix("/interview-candidate-confirmations") {
             return .ownerTruthCandidateReview
         }
+        if method == .get,
+           normalizedPath.hasPrefix("/v2/vaults/"),
+           normalizedPath.hasSuffix("/interview-memory-activation-inbox") {
+            return .ownerTruthCandidateReview
+        }
         if (method == .get || method == .post),
            normalizedPath.hasPrefix("/v2/vaults/"),
            (normalizedPath.hasSuffix("/guided-recommendations")
@@ -5536,6 +5541,47 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    /// Recovers only opaque, formally confirmed activation handles. Candidate
+    /// content and receipt identifiers remain server-side; each handle still
+    /// needs the separate MemoryVersion activation command.
+    func fetchOwnerTruthInterviewCandidateMemoryActivationInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateMemoryActivationInbox, Error>) -> Void
+    ) {
+        let decision = FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)
+        guard decision.allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                    reason: decision.reason
+                )))
+            }
+            return
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-memory-activation-inbox"
+        requestJSON(
+            path: path,
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            featureDecision: decision
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewCandidateMemoryActivationInbox(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     /// Reads the future product confirmation projection. This is deliberately
     /// separate from the QA review transport: it has a captured release-policy
     /// decision, carries no QA header, and exposes no decision mutation APIs.
@@ -8610,6 +8656,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
 extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationInboxClient {}
+extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateMemoryActivationInboxClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationActionClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationSingleActionClient {}

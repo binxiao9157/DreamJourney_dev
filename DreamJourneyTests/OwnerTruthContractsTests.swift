@@ -753,6 +753,119 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertNil(useCase.viewState.inbox)
     }
 
+    func testInterviewCandidateMemoryActivationInboxDecodesOnlyOpaqueHandles() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000075")
+        let candidateID = recordID("00000000-0000-0000-0000-000000000076")
+
+        let inbox = try interviewCandidateMemoryActivationInbox(
+            vaultID: lease.vaultId,
+            handles: [(reviewBatchID: reviewBatchID, candidateID: candidateID)]
+        )
+
+        XCTAssertEqual(inbox.vaultID.rawValue, lease.vaultId)
+        XCTAssertEqual(inbox.items.map(\.reviewBatchID), [reviewBatchID])
+        XCTAssertEqual(inbox.items.map(\.candidateID), [candidateID])
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewCandidateMemoryActivationInbox(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewCandidateMemoryActivationInbox.schemaVersion,
+                    "vaultId": lease.vaultId,
+                    "items": [[
+                        "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                        "candidateId": candidateID.rawValue.uuidString,
+                        "receiptId": "must-not-leave-the-server",
+                    ]],
+                ],
+                expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+            )
+        )
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewCandidateMemoryActivationInbox(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewCandidateMemoryActivationInbox.schemaVersion,
+                    "vaultId": lease.vaultId,
+                    "items": [
+                        [
+                            "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                            "candidateId": candidateID.rawValue.uuidString,
+                        ],
+                        [
+                            "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                            "candidateId": candidateID.rawValue.uuidString,
+                        ],
+                    ],
+                ],
+                expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+            )
+        )
+    }
+
+    func testInterviewCandidateMemoryActivationInboxBindsAndPermitsOnlyBoundRecoveryActivation() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000077")
+        let candidateID = recordID("00000000-0000-0000-0000-000000000078")
+        let rawInbox = try interviewCandidateMemoryActivationInbox(
+            vaultID: lease.vaultId,
+            handles: [(reviewBatchID: reviewBatchID, candidateID: candidateID)]
+        )
+        let reader = InterviewCandidateMemoryActivationInboxClientSpy()
+        reader.readResult = .success(rawInbox)
+        let inboxUseCase = OwnerTruthInterviewCandidateMemoryActivationInboxUseCase(
+            accountLease: lease,
+            client: reader,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        inboxUseCase.send(.refresh)
+
+        let boundInbox = try XCTUnwrap(inboxUseCase.viewState.inbox)
+        let item = try XCTUnwrap(boundInbox.items.first)
+        XCTAssertEqual(inboxUseCase.viewState.phase, .ready)
+        XCTAssertTrue(boundInbox.isBound(to: lease))
+
+        let activationClient = InterviewCandidateMemoryActivationClientSpy()
+        let expectedCommand = try OwnerTruthInterviewCandidateMemoryActivationCommand(
+            commandID: "recovery-activation-command",
+            reviewBatchID: reviewBatchID,
+            candidateID: candidateID
+        )
+        activationClient.result = .success(try interviewCandidateMemoryActivationResult(
+            command: expectedCommand,
+            outcome: .created
+        ))
+        let recoveryActivation = OwnerTruthInterviewCandidateMemoryActivationUseCase(
+            accountLease: lease,
+            activationInbox: boundInbox,
+            item: item,
+            client: activationClient,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true },
+            commandIDFactory: { "recovery-activation-command" }
+        )
+
+        recoveryActivation.send(.activate)
+
+        XCTAssertEqual(activationClient.requestedCommands, [expectedCommand])
+        XCTAssertEqual(recoveryActivation.viewState.phase, .activated)
+        XCTAssertEqual(recoveryActivation.viewState.notice, .activated)
+
+        let unboundActivation = OwnerTruthInterviewCandidateMemoryActivationUseCase(
+            accountLease: lease,
+            activationInbox: rawInbox,
+            item: item,
+            client: activationClient,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+        unboundActivation.send(.activate)
+
+        XCTAssertEqual(unboundActivation.viewState.phase, .failed)
+        XCTAssertEqual(unboundActivation.viewState.notice, .invalidEligibility)
+        XCTAssertEqual(activationClient.requestedCommands, [expectedCommand])
+    }
+
     func testInterviewCandidateConfirmationUseCaseFailsClosedWithoutReleasePolicy() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let client = InterviewCandidateConfirmationClientSpy()
@@ -3895,6 +4008,25 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private func interviewCandidateMemoryActivationInbox(
+        vaultID: String,
+        handles: [(reviewBatchID: OwnerTruthRecordID, candidateID: OwnerTruthRecordID)]
+    ) throws -> OwnerTruthInterviewCandidateMemoryActivationInbox {
+        try OwnerTruthInterviewCandidateMemoryActivationInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewCandidateMemoryActivationInbox.schemaVersion,
+                "vaultId": vaultID,
+                "items": handles.map { handle -> [String: Any] in
+                    [
+                        "reviewBatchId": handle.reviewBatchID.rawValue.uuidString,
+                        "candidateId": handle.candidateID.rawValue.uuidString,
+                    ]
+                },
+            ],
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID))
+        )
+    }
+
     private func reconciledInterviewCandidateConfirmation(
         vaultID: String,
         reviewBatchID: OwnerTruthRecordID,
@@ -5641,6 +5773,35 @@ private final class InterviewCandidateConfirmationInboxClientSpy: OwnerTruthInte
 }
 
 private enum InterviewCandidateConfirmationInboxClientSpyError: Error {
+    case missingReadResult
+}
+
+private final class InterviewCandidateMemoryActivationInboxClientSpy: OwnerTruthInterviewCandidateMemoryActivationInboxClient {
+    var readResult: Result<OwnerTruthInterviewCandidateMemoryActivationInbox, Error>?
+    var deferRead = false
+    private var deferredReadCompletion: ((Result<OwnerTruthInterviewCandidateMemoryActivationInbox, Error>) -> Void)?
+    private(set) var requestCount = 0
+
+    func fetchOwnerTruthInterviewCandidateMemoryActivationInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateMemoryActivationInbox, Error>) -> Void
+    ) {
+        requestCount += 1
+        if deferRead {
+            deferredReadCompletion = completion
+            return
+        }
+        completion(readResult ?? .failure(InterviewCandidateMemoryActivationInboxClientSpyError.missingReadResult))
+    }
+
+    func completeDeferredRead(_ result: Result<OwnerTruthInterviewCandidateMemoryActivationInbox, Error>) {
+        let completion = deferredReadCompletion
+        deferredReadCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum InterviewCandidateMemoryActivationInboxClientSpyError: Error {
     case missingReadResult
 }
 

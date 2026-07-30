@@ -133,6 +133,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidCommand(String)
     case invalidInterviewCandidateReview(String)
     case invalidInterviewCandidateConfirmationInbox(String)
+    case invalidInterviewCandidateMemoryActivationInbox(String)
     case invalidInterviewCandidateConfirmation(String)
     case invalidInterviewCandidateDecision(String)
     case invalidInterviewSessionState(String)
@@ -165,6 +166,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "访谈候选审核合同无效：\(detail)"
         case .invalidInterviewCandidateConfirmationInbox(let detail):
             return "访谈候选确认待办合同无效：\(detail)"
+        case .invalidInterviewCandidateMemoryActivationInbox(let detail):
+            return "访谈正式记忆待办合同无效：\(detail)"
         case .invalidInterviewCandidateConfirmation(let detail):
             return "访谈候选确认合同无效：\(detail)"
         case .invalidInterviewCandidateDecision(let detail):
@@ -1029,6 +1032,90 @@ struct OwnerTruthInterviewCandidateConfirmationInbox: Equatable, Sendable {
     }
 }
 
+/// Separate lease binding for the value-minimized activation inbox. A pending
+/// activation is not a pending Candidate and must not inherit the confirmation
+/// inbox binding by accident.
+private struct OwnerTruthInterviewCandidateMemoryActivationInboxLeaseBinding: Equatable, Sendable {
+    let accountLease: AccountLease
+
+    func matches(_ accountLease: AccountLease) -> Bool {
+        self.accountLease == accountLease
+    }
+}
+
+/// One value-free handle for a formally confirmed Candidate whose
+/// MemoryVersion has not been created yet. It intentionally contains no
+/// Candidate text, DecisionReceipt, or MemoryVersion identifier.
+struct OwnerTruthInterviewCandidateMemoryActivationInboxItem: Equatable, Sendable, Identifiable {
+    let reviewBatchID: OwnerTruthRecordID
+    let candidateID: OwnerTruthRecordID
+
+    var id: OwnerTruthRecordID { candidateID }
+
+    init(backendJSONObject object: [String: Any]) throws {
+        let allowedKeys: Set<String> = ["reviewBatchId", "candidateId"]
+        guard Set(object.keys).isSubset(of: allowedKeys),
+              let reviewBatchID = OwnerTruthCandidateEvidenceReference.recordID(object["reviewBatchId"]),
+              let candidateID = OwnerTruthCandidateEvidenceReference.recordID(object["candidateId"]) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateMemoryActivationInbox(
+                "activation inbox item must contain only reviewBatchId and candidateId"
+            )
+        }
+        self.reviewBatchID = reviewBatchID
+        self.candidateID = candidateID
+    }
+}
+
+/// Formal, default-off recovery projection for explicit MemoryVersion
+/// activation. It is deliberately content-free, strict about schema fields,
+/// and bound in memory after the same account lease used for the request has
+/// passed its completion fence.
+struct OwnerTruthInterviewCandidateMemoryActivationInbox: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-candidate-memory-activation-inbox-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let items: [OwnerTruthInterviewCandidateMemoryActivationInboxItem]
+    private var leaseBinding: OwnerTruthInterviewCandidateMemoryActivationInboxLeaseBinding?
+
+    init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID) throws {
+        let allowedKeys: Set<String> = ["schemaVersion", "vaultId", "items"]
+        guard Set(object.keys).isSubset(of: allowedKeys),
+              OwnerTruthInterviewCandidateContract.requiredString(object["schemaVersion"]) == Self.schemaVersion,
+              OwnerTruthInterviewCandidateContract.requiredString(object["vaultId"]) == expectedVaultID.rawValue,
+              let itemObjects = object["items"] as? [[String: Any]] else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateMemoryActivationInbox(
+                "schemaVersion, vaultId or items does not match the contract"
+            )
+        }
+
+        let items = try itemObjects.map(OwnerTruthInterviewCandidateMemoryActivationInboxItem.init)
+        let activationKeys = items.map {
+            "\($0.reviewBatchID.rawValue.uuidString.lowercased()):\($0.candidateID.rawValue.uuidString.lowercased())"
+        }
+        guard Set(activationKeys).count == activationKeys.count else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateMemoryActivationInbox(
+                "activation inbox repeats a review batch Candidate handle"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.items = items
+        leaseBinding = nil
+    }
+
+    func bound(to accountLease: AccountLease) -> Self {
+        var copy = self
+        copy.leaseBinding = OwnerTruthInterviewCandidateMemoryActivationInboxLeaseBinding(
+            accountLease: accountLease
+        )
+        return copy
+    }
+
+    func isBound(to accountLease: AccountLease) -> Bool {
+        leaseBinding?.matches(accountLease) == true
+    }
+}
+
 /// Read-only confirmation material behind the separately captured product
 /// policy. It deliberately has a distinct schema from the QA review route so
 /// a future product surface cannot accidentally reuse a QA-only transport.
@@ -1406,6 +1493,16 @@ protocol OwnerTruthInterviewCandidateConfirmationInboxClient: AnyObject {
     func fetchOwnerTruthInterviewCandidateConfirmationInbox(
         vaultID: OwnerTruthVaultID,
         completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmationInbox, Error>) -> Void
+    )
+}
+
+/// Content-free recovery port for formally confirmed Candidates that need a
+/// separate explicit MemoryVersion activation. It cannot be used to discover
+/// arbitrary Candidate material or DecisionReceipt identifiers.
+protocol OwnerTruthInterviewCandidateMemoryActivationInboxClient: AnyObject {
+    func fetchOwnerTruthInterviewCandidateMemoryActivationInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateMemoryActivationInbox, Error>) -> Void
     )
 }
 
@@ -2299,6 +2396,159 @@ final class OwnerTruthInterviewCandidateConfirmationInboxUseCase {
 
     private func transitionFailure() {
         viewState = OwnerTruthInterviewCandidateConfirmationInboxViewState(
+            phase: .failed,
+            inbox: nil,
+            notice: .requestFailed
+        )
+    }
+}
+
+// MARK: - Default-off formal MemoryVersion activation inbox
+
+enum OwnerTruthInterviewCandidateMemoryActivationInboxIntent: Equatable, Sendable {
+    case refresh
+}
+
+enum OwnerTruthInterviewCandidateMemoryActivationInboxPhase: Equatable, Sendable {
+    case idle
+    case unavailable
+    case loading
+    case ready
+    case empty
+    case failed
+}
+
+enum OwnerTruthInterviewCandidateMemoryActivationInboxNotice: Equatable, Sendable {
+    case releasePolicyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case requestFailed
+}
+
+struct OwnerTruthInterviewCandidateMemoryActivationInboxViewState: Equatable, Sendable {
+    let phase: OwnerTruthInterviewCandidateMemoryActivationInboxPhase
+    let inbox: OwnerTruthInterviewCandidateMemoryActivationInbox?
+    let notice: OwnerTruthInterviewCandidateMemoryActivationInboxNotice?
+
+    static let idle = OwnerTruthInterviewCandidateMemoryActivationInboxViewState(
+        phase: .idle,
+        inbox: nil,
+        notice: nil
+    )
+}
+
+/// Lease-fenced recovery reader for the second Authority transition. It only
+/// receives opaque handles that the server has already tied to a formal Owner
+/// confirmation; any later activation still goes through its own typed write
+/// command and server-side admission checks.
+final class OwnerTruthInterviewCandidateMemoryActivationInboxUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let client: OwnerTruthInterviewCandidateMemoryActivationInboxClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAvailable: () -> Bool
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthInterviewCandidateMemoryActivationInboxViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthInterviewCandidateMemoryActivationInboxViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthInterviewCandidateMemoryActivationInboxClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool = { false }
+    ) {
+        self.accountLease = accountLease
+        vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+    }
+
+    func send(_ intent: OwnerTruthInterviewCandidateMemoryActivationInboxIntent) {
+        switch intent {
+        case .refresh:
+            refresh()
+        }
+    }
+
+    private func refresh() {
+        guard let vaultID = beginRequestOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthInterviewCandidateMemoryActivationInboxViewState(
+            phase: .loading,
+            inbox: nil,
+            notice: nil
+        )
+        client.fetchOwnerTruthInterviewCandidateMemoryActivationInbox(vaultID: vaultID) { [weak self] result in
+            self?.receive(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthInterviewCandidateMemoryActivationInbox, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let inbox):
+            guard inbox.vaultID == vaultID,
+                  inbox.vaultID.rawValue == accountLease.vaultId else {
+                transitionFailure()
+                return
+            }
+            let boundInbox = inbox.bound(to: accountLease)
+            viewState = OwnerTruthInterviewCandidateMemoryActivationInboxViewState(
+                phase: boundInbox.items.isEmpty ? .empty : .ready,
+                inbox: boundInbox,
+                notice: nil
+            )
+        case .failure:
+            transitionFailure()
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthInterviewCandidateMemoryActivationInboxNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthInterviewCandidateMemoryActivationInboxViewState(
+            phase: .unavailable,
+            inbox: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure() {
+        viewState = OwnerTruthInterviewCandidateMemoryActivationInboxViewState(
             phase: .failed,
             inbox: nil,
             notice: .requestFailed
@@ -3234,10 +3484,18 @@ struct OwnerTruthInterviewCandidateMemoryActivationViewState: Equatable, Sendabl
 final class OwnerTruthInterviewCandidateMemoryActivationUseCase {
     typealias CommandIDFactory = () -> String
 
+    private enum EligibilitySource: Equatable, Sendable {
+        case freshConfirmation(
+            confirmation: OwnerTruthInterviewCandidateConfirmation,
+            eligibility: OwnerTruthInterviewCandidateMemoryActivationEligibility
+        )
+        case activationInbox(OwnerTruthInterviewCandidateMemoryActivationInbox)
+    }
+
     private let accountLease: AccountLease
     private let vaultID: OwnerTruthVaultID?
-    private let confirmation: OwnerTruthInterviewCandidateConfirmation
-    private let eligibility: OwnerTruthInterviewCandidateMemoryActivationEligibility
+    private let eligibilitySource: EligibilitySource
+    private let reviewBatchID: OwnerTruthRecordID
     private let candidateID: OwnerTruthRecordID
     private let client: OwnerTruthInterviewCandidateMemoryActivationClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
@@ -3264,9 +3522,36 @@ final class OwnerTruthInterviewCandidateMemoryActivationUseCase {
     ) {
         self.accountLease = accountLease
         vaultID = OwnerTruthVaultID(accountLease.vaultId)
-        self.confirmation = confirmation
-        self.eligibility = eligibility
+        eligibilitySource = .freshConfirmation(
+            confirmation: confirmation,
+            eligibility: eligibility
+        )
+        reviewBatchID = confirmation.reviewBatchID
         self.candidateID = candidateID
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+        self.commandIDFactory = commandIDFactory
+    }
+
+    /// Replays a server-discovered, value-free pending activation after the
+    /// original confirmation screen has gone away. The inbox must already be
+    /// bound to the active AccountLease; arbitrary UUIDs cannot be promoted by
+    /// this overload.
+    init(
+        accountLease: AccountLease,
+        activationInbox: OwnerTruthInterviewCandidateMemoryActivationInbox,
+        item: OwnerTruthInterviewCandidateMemoryActivationInboxItem,
+        client: OwnerTruthInterviewCandidateMemoryActivationClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool = { false },
+        commandIDFactory: @escaping CommandIDFactory = { UUID().uuidString.lowercased() }
+    ) {
+        self.accountLease = accountLease
+        vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        eligibilitySource = .activationInbox(activationInbox)
+        reviewBatchID = item.reviewBatchID
+        candidateID = item.candidateID
         self.client = client
         self.accountLeaseRuntime = accountLeaseRuntime
         self.releasePolicyAvailable = releasePolicyAvailable
@@ -3303,24 +3588,40 @@ final class OwnerTruthInterviewCandidateMemoryActivationUseCase {
             return nil
         }
         guard let vaultID,
-              confirmation.vaultID == vaultID,
-              confirmation.vaultID.rawValue == accountLease.vaultId else {
+              vaultID.rawValue == accountLease.vaultId else {
             resetForUnavailable(.invalidVault)
-            return nil
-        }
-        guard confirmation.isBound(to: accountLease),
-              eligibility.reviewBatchID == confirmation.reviewBatchID,
-              eligibility.eligibleCandidateIDs.contains(candidateID),
-              (confirmation.batchCandidates.contains(where: { $0.id == candidateID })
-                || confirmation.singleCandidates.contains(where: { $0.id == candidateID })) else {
-            transitionFailure(.invalidEligibility)
             return nil
         }
         guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
             resetForUnavailable(.accountUnavailable)
             return nil
         }
+        guard isEligible(for: vaultID) else {
+            transitionFailure(.invalidEligibility)
+            return nil
+        }
         return vaultID
+    }
+
+    private func isEligible(for vaultID: OwnerTruthVaultID) -> Bool {
+        switch eligibilitySource {
+        case .freshConfirmation(let confirmation, let eligibility):
+            return confirmation.vaultID == vaultID
+                && confirmation.vaultID.rawValue == accountLease.vaultId
+                && confirmation.isBound(to: accountLease)
+                && eligibility.reviewBatchID == confirmation.reviewBatchID
+                && reviewBatchID == confirmation.reviewBatchID
+                && eligibility.eligibleCandidateIDs.contains(candidateID)
+                && (confirmation.batchCandidates.contains(where: { $0.id == candidateID })
+                    || confirmation.singleCandidates.contains(where: { $0.id == candidateID }))
+        case .activationInbox(let inbox):
+            return inbox.vaultID == vaultID
+                && inbox.vaultID.rawValue == accountLease.vaultId
+                && inbox.isBound(to: accountLease)
+                && inbox.items.contains(where: {
+                    $0.reviewBatchID == reviewBatchID && $0.candidateID == candidateID
+                })
+        }
     }
 
     private func makeCommandOrFail() -> OwnerTruthInterviewCandidateMemoryActivationCommand? {
@@ -3329,7 +3630,7 @@ final class OwnerTruthInterviewCandidateMemoryActivationUseCase {
         do {
             return try OwnerTruthInterviewCandidateMemoryActivationCommand(
                 commandID: stableCommandID,
-                reviewBatchID: confirmation.reviewBatchID,
+                reviewBatchID: reviewBatchID,
                 candidateID: candidateID
             )
         } catch {
@@ -3355,8 +3656,7 @@ final class OwnerTruthInterviewCandidateMemoryActivationUseCase {
         }
         switch result {
         case .success(let activation):
-            guard confirmation.vaultID == vaultID,
-                  activation.reviewBatchID == expectedCommand.reviewBatchID,
+            guard activation.reviewBatchID == expectedCommand.reviewBatchID,
                   activation.candidateID == expectedCommand.candidateID else {
                 transitionFailure(.responseMismatch)
                 return
