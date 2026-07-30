@@ -134,6 +134,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidInterviewCandidateReview(String)
     case invalidInterviewCandidateConfirmationInbox(String)
     case invalidInterviewCandidateMemoryActivationInbox(String)
+    case invalidInterviewCandidateMemoryProjectionRecoveryInbox(String)
     case invalidInterviewCandidateConfirmation(String)
     case invalidInterviewCandidateDecision(String)
     case invalidInterviewSessionState(String)
@@ -168,6 +169,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "访谈候选确认待办合同无效：\(detail)"
         case .invalidInterviewCandidateMemoryActivationInbox(let detail):
             return "访谈正式记忆待办合同无效：\(detail)"
+        case .invalidInterviewCandidateMemoryProjectionRecoveryInbox(let detail):
+            return "访谈正式记忆整理状态合同无效：\(detail)"
         case .invalidInterviewCandidateConfirmation(let detail):
             return "访谈候选确认合同无效：\(detail)"
         case .invalidInterviewCandidateDecision(let detail):
@@ -1116,6 +1119,99 @@ struct OwnerTruthInterviewCandidateMemoryActivationInbox: Equatable, Sendable {
     }
 }
 
+/// Separate lease binding for the value-minimized projection recovery inbox.
+/// It must not be reusable as either a confirmation or activation capability.
+private struct OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxLeaseBinding: Equatable, Sendable {
+    let accountLease: AccountLease
+
+    func matches(_ accountLease: AccountLease) -> Bool {
+        self.accountLease == accountLease
+    }
+}
+
+/// The only recovery state exposed to the client. Worker attempts, effect
+/// identifiers, MemoryVersion identifiers, and record content remain server-side.
+enum OwnerTruthInterviewCandidateMemoryProjectionRecoveryState: String, Equatable, Sendable {
+    case rebuilding
+}
+
+/// One opaque handle for a formal MemoryVersion whose compatibility projection
+/// is still being rebuilt. It is informational only and cannot trigger a
+/// rebuild from the client.
+struct OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxItem: Equatable, Sendable, Identifiable {
+    let reviewBatchID: OwnerTruthRecordID
+    let candidateID: OwnerTruthRecordID
+    let state: OwnerTruthInterviewCandidateMemoryProjectionRecoveryState
+
+    var id: OwnerTruthRecordID { candidateID }
+
+    init(backendJSONObject object: [String: Any]) throws {
+        let allowedKeys: Set<String> = ["reviewBatchId", "candidateId", "state"]
+        guard Set(object.keys).isSubset(of: allowedKeys),
+              let reviewBatchID = OwnerTruthCandidateEvidenceReference.recordID(object["reviewBatchId"]),
+              let candidateID = OwnerTruthCandidateEvidenceReference.recordID(object["candidateId"]),
+              OwnerTruthInterviewCandidateMemoryProjectionRecoveryState(
+                  rawValue: OwnerTruthInterviewCandidateContract.requiredString(object["state"]) ?? ""
+              ) == .rebuilding else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateMemoryProjectionRecoveryInbox(
+                "projection recovery item must contain only rebuilding state and opaque handles"
+            )
+        }
+        self.reviewBatchID = reviewBatchID
+        self.candidateID = candidateID
+        state = .rebuilding
+    }
+}
+
+/// Read-only, value-minimized discovery for an already activated formal memory
+/// that is not materialized yet. The existing durable worker owns retry; this
+/// contract deliberately provides no retry, rebuild, or detail command.
+struct OwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-memory-projection-recovery-inbox-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let items: [OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxItem]
+    private var leaseBinding: OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxLeaseBinding?
+
+    init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID) throws {
+        let allowedKeys: Set<String> = ["schemaVersion", "vaultId", "items"]
+        guard Set(object.keys).isSubset(of: allowedKeys),
+              OwnerTruthInterviewCandidateContract.requiredString(object["schemaVersion"]) == Self.schemaVersion,
+              OwnerTruthInterviewCandidateContract.requiredString(object["vaultId"]) == expectedVaultID.rawValue,
+              let itemObjects = object["items"] as? [[String: Any]] else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateMemoryProjectionRecoveryInbox(
+                "schemaVersion, vaultId or items does not match the contract"
+            )
+        }
+
+        let items = try itemObjects.map(OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxItem.init)
+        let recoveryKeys = items.map {
+            "\($0.reviewBatchID.rawValue.uuidString.lowercased()):\($0.candidateID.rawValue.uuidString.lowercased())"
+        }
+        guard Set(recoveryKeys).count == recoveryKeys.count else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateMemoryProjectionRecoveryInbox(
+                "projection recovery inbox repeats a review batch Candidate handle"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.items = items
+        leaseBinding = nil
+    }
+
+    func bound(to accountLease: AccountLease) -> Self {
+        var copy = self
+        copy.leaseBinding = OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxLeaseBinding(
+            accountLease: accountLease
+        )
+        return copy
+    }
+
+    func isBound(to accountLease: AccountLease) -> Bool {
+        leaseBinding?.matches(accountLease) == true
+    }
+}
+
 /// Read-only confirmation material behind the separately captured product
 /// policy. It deliberately has a distinct schema from the QA review route so
 /// a future product surface cannot accidentally reuse a QA-only transport.
@@ -1503,6 +1599,16 @@ protocol OwnerTruthInterviewCandidateMemoryActivationInboxClient: AnyObject {
     func fetchOwnerTruthInterviewCandidateMemoryActivationInbox(
         vaultID: OwnerTruthVaultID,
         completion: @escaping (Result<OwnerTruthInterviewCandidateMemoryActivationInbox, Error>) -> Void
+    )
+}
+
+/// Read-only discovery for formal memories that are already activated but are
+/// still being materialized by the server-side projection worker. No client
+/// action is available through this port.
+protocol OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxClient: AnyObject {
+    func fetchOwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox, Error>) -> Void
     )
 }
 
@@ -2549,6 +2655,157 @@ final class OwnerTruthInterviewCandidateMemoryActivationInboxUseCase {
 
     private func transitionFailure() {
         viewState = OwnerTruthInterviewCandidateMemoryActivationInboxViewState(
+            phase: .failed,
+            inbox: nil,
+            notice: .requestFailed
+        )
+    }
+}
+
+// MARK: - Default-off formal MemoryVersion projection recovery inbox
+
+enum OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxIntent: Equatable, Sendable {
+    case refresh
+}
+
+enum OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxPhase: Equatable, Sendable {
+    case idle
+    case unavailable
+    case loading
+    case ready
+    case empty
+    case failed
+}
+
+enum OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxNotice: Equatable, Sendable {
+    case releasePolicyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case requestFailed
+}
+
+struct OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxViewState: Equatable, Sendable {
+    let phase: OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxPhase
+    let inbox: OwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox?
+    let notice: OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxNotice?
+
+    static let idle = OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxViewState(
+        phase: .idle,
+        inbox: nil,
+        notice: nil
+    )
+}
+
+/// Lease-fenced read-only visibility for server-managed projection recovery.
+/// A failed summary read cannot change the independent activation inbox state.
+final class OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let client: OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAvailable: () -> Bool
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool = { false }
+    ) {
+        self.accountLease = accountLease
+        vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+    }
+
+    func send(_ intent: OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxIntent) {
+        switch intent {
+        case .refresh:
+            refresh()
+        }
+    }
+
+    private func refresh() {
+        guard let vaultID = beginRequestOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxViewState(
+            phase: .loading,
+            inbox: nil,
+            notice: nil
+        )
+        client.fetchOwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox(vaultID: vaultID) { [weak self] result in
+            self?.receive(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let inbox):
+            guard inbox.vaultID == vaultID,
+                  inbox.vaultID.rawValue == accountLease.vaultId else {
+                transitionFailure()
+                return
+            }
+            let boundInbox = inbox.bound(to: accountLease)
+            viewState = OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxViewState(
+                phase: boundInbox.items.isEmpty ? .empty : .ready,
+                inbox: boundInbox,
+                notice: nil
+            )
+        case .failure:
+            transitionFailure()
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxViewState(
+            phase: .unavailable,
+            inbox: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure() {
+        viewState = OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxViewState(
             phase: .failed,
             inbox: nil,
             notice: .requestFailed

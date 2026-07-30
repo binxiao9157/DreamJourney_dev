@@ -38,6 +38,7 @@ for required in [
     "owner-truth-memory-activation-inbox-list",
     "owner-truth-memory-activation-inbox-status",
     "owner-truth-memory-activation-inbox-item",
+    "owner-truth-memory-projection-recovery-summary",
 ] {
     require(archive.contains(required), "formal activation inbox presentation missing: \(required)")
 }
@@ -88,6 +89,7 @@ guard let inboxSection = slice(
 }
 for required in [
     "OwnerTruthInterviewCandidateMemoryActivationInboxUseCase",
+    "OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxUseCase",
     "OwnerTruthInterviewCandidateMemoryActivationUseCase",
     "activationInbox: inbox",
     "item: item",
@@ -98,6 +100,8 @@ for required in [
     "useCase.send(.refresh)",
     "已确认的记忆线索",
     "等待你明确纳入正式记忆",
+    "正在整理，完成后将自动可用",
+    "projectionRecoveryUseCase.send(.refresh)",
 ] {
     require(inboxSection.contains(required), "activation inbox controller missing: \(required)")
 }
@@ -112,6 +116,13 @@ require(
         !inboxSection.contains("X-DreamJourney-QA-Owner-Truth"),
     "formal activation inbox must not depend on QA-only transport or a QA header"
 )
+require(
+    inboxSection.contains("state.phase == .ready") &&
+        inboxSection.contains("itemCount > 0") &&
+        inboxSection.contains("projectionRecoverySummaryLabel.isHidden = true") &&
+        inboxSection.contains("projectionRecoverySummaryLabel.isHidden = false"),
+    "projection recovery must remain a count-only, non-blocking summary that is hidden without items"
+)
 
 for forbidden in [
     "item.candidateID",
@@ -122,6 +133,8 @@ for forbidden in [
     "providerData",
     "receiptId",
     "memoryVersionId",
+    "projectionJobId",
+    "jobId",
     "String(describing: item)",
 ] {
     require(!inboxSection.contains(forbidden), "opaque activation inbox must not render or expose: \(forbidden)")

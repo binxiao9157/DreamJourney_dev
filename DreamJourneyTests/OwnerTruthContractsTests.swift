@@ -866,6 +866,86 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(activationClient.requestedCommands, [expectedCommand])
     }
 
+    func testInterviewCandidateMemoryProjectionRecoveryInboxDecodesOnlyRebuildingOpaqueHandles() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000079")
+        let candidateID = recordID("00000000-0000-0000-0000-000000000080")
+
+        let inbox = try interviewCandidateMemoryProjectionRecoveryInbox(
+            vaultID: lease.vaultId,
+            handles: [(reviewBatchID: reviewBatchID, candidateID: candidateID)]
+        )
+
+        XCTAssertEqual(inbox.vaultID.rawValue, lease.vaultId)
+        XCTAssertEqual(inbox.items.map(\.state), [.rebuilding])
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox.schemaVersion,
+                    "vaultId": lease.vaultId,
+                    "items": [[
+                        "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                        "candidateId": candidateID.rawValue.uuidString,
+                        "state": "rebuilding",
+                        "memoryVersionId": "must-not-leave-the-server",
+                    ]],
+                ],
+                expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+            )
+        )
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox.schemaVersion,
+                    "vaultId": lease.vaultId,
+                    "items": [[
+                        "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                        "candidateId": candidateID.rawValue.uuidString,
+                        "state": "retryWait",
+                    ]],
+                ],
+                expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+            )
+        )
+    }
+
+    func testInterviewCandidateMemoryProjectionRecoveryInboxIsLeaseBoundAndFailsClosedWithoutReleasePolicy() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000081")
+        let candidateID = recordID("00000000-0000-0000-0000-000000000082")
+        let client = InterviewCandidateMemoryProjectionRecoveryInboxClientSpy()
+        client.readResult = .success(try interviewCandidateMemoryProjectionRecoveryInbox(
+            vaultID: lease.vaultId,
+            handles: [(reviewBatchID: reviewBatchID, candidateID: candidateID)]
+        ))
+        let useCase = OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.refresh)
+
+        let boundInbox = try XCTUnwrap(useCase.viewState.inbox)
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertTrue(boundInbox.isBound(to: lease))
+        XCTAssertEqual(boundInbox.items.count, 1)
+
+        let deniedClient = InterviewCandidateMemoryProjectionRecoveryInboxClientSpy()
+        let deniedUseCase = OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxUseCase(
+            accountLease: lease,
+            client: deniedClient,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { false }
+        )
+        deniedUseCase.send(.refresh)
+
+        XCTAssertEqual(deniedUseCase.viewState.phase, .unavailable)
+        XCTAssertEqual(deniedUseCase.viewState.notice, .releasePolicyDisabled)
+        XCTAssertEqual(deniedClient.requestCount, 0)
+    }
+
     func testInterviewCandidateConfirmationUseCaseFailsClosedWithoutReleasePolicy() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let client = InterviewCandidateConfirmationClientSpy()
@@ -4027,6 +4107,26 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private func interviewCandidateMemoryProjectionRecoveryInbox(
+        vaultID: String,
+        handles: [(reviewBatchID: OwnerTruthRecordID, candidateID: OwnerTruthRecordID)]
+    ) throws -> OwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox {
+        try OwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox.schemaVersion,
+                "vaultId": vaultID,
+                "items": handles.map { handle -> [String: Any] in
+                    [
+                        "reviewBatchId": handle.reviewBatchID.rawValue.uuidString,
+                        "candidateId": handle.candidateID.rawValue.uuidString,
+                        "state": "rebuilding",
+                    ]
+                },
+            ],
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID))
+        )
+    }
+
     private func reconciledInterviewCandidateConfirmation(
         vaultID: String,
         reviewBatchID: OwnerTruthRecordID,
@@ -5802,6 +5902,23 @@ private final class InterviewCandidateMemoryActivationInboxClientSpy: OwnerTruth
 }
 
 private enum InterviewCandidateMemoryActivationInboxClientSpyError: Error {
+    case missingReadResult
+}
+
+private final class InterviewCandidateMemoryProjectionRecoveryInboxClientSpy: OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxClient {
+    var readResult: Result<OwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox, Error>?
+    private(set) var requestCount = 0
+
+    func fetchOwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox, Error>) -> Void
+    ) {
+        requestCount += 1
+        completion(readResult ?? .failure(InterviewCandidateMemoryProjectionRecoveryInboxClientSpyError.missingReadResult))
+    }
+}
+
+private enum InterviewCandidateMemoryProjectionRecoveryInboxClientSpyError: Error {
     case missingReadResult
 }
 

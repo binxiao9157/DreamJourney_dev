@@ -3825,11 +3825,14 @@ final class MemoryArchiveViewController: UIViewController {
 final class OwnerTruthInterviewCandidateMemoryActivationInboxViewController: UIViewController {
     private let accountLease: AccountLease
     private let useCase: OwnerTruthInterviewCandidateMemoryActivationInboxUseCase
+    private let projectionRecoveryUseCase: OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxUseCase
     private let activationClient: OwnerTruthInterviewCandidateMemoryActivationClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let releasePolicyAvailable: () -> Bool
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
     private let statusLabel = UILabel()
+    private let projectionRecoverySummaryLabel = UILabel()
+    private var projectionRecoverySummaryHeightConstraint: NSLayoutConstraint!
     private let emptyStateLabel = UILabel()
     private lazy var refreshButton = UIBarButtonItem(
         barButtonSystemItem: .refresh,
@@ -3843,6 +3846,7 @@ final class OwnerTruthInterviewCandidateMemoryActivationInboxViewController: UIV
     init(
         accountLease: AccountLease,
         inboxClient: OwnerTruthInterviewCandidateMemoryActivationInboxClient = DreamJourneyBackendClient.shared,
+        projectionRecoveryInboxClient: OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxClient = DreamJourneyBackendClient.shared,
         activationClient: OwnerTruthInterviewCandidateMemoryActivationClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = {
@@ -3856,6 +3860,12 @@ final class OwnerTruthInterviewCandidateMemoryActivationInboxViewController: UIV
         useCase = OwnerTruthInterviewCandidateMemoryActivationInboxUseCase(
             accountLease: accountLease,
             client: inboxClient,
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyAvailable: releasePolicyAvailable
+        )
+        projectionRecoveryUseCase = OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxUseCase(
+            accountLease: accountLease,
+            client: projectionRecoveryInboxClient,
             accountLeaseRuntime: accountLeaseRuntime,
             releasePolicyAvailable: releasePolicyAvailable
         )
@@ -3876,8 +3886,11 @@ final class OwnerTruthInterviewCandidateMemoryActivationInboxViewController: UIV
         configureHeader()
         configureTableView()
         configureUseCase()
+        configureProjectionRecoveryUseCase()
         render(useCase.viewState)
+        renderProjectionRecovery(projectionRecoveryUseCase.viewState)
         useCase.send(.refresh)
+        projectionRecoveryUseCase.send(.refresh)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -3894,6 +3907,16 @@ final class OwnerTruthInterviewCandidateMemoryActivationInboxViewController: UIV
         statusLabel.accessibilityIdentifier = "owner-truth-memory-activation-inbox-status"
         view.addSubview(statusLabel)
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        projectionRecoverySummaryLabel.font = DJDesignTokens.Font.body(14)
+        projectionRecoverySummaryLabel.textColor = DJDesignTokens.Color.textSecondary
+        projectionRecoverySummaryLabel.numberOfLines = 0
+        projectionRecoverySummaryLabel.isHidden = true
+        projectionRecoverySummaryLabel.accessibilityIdentifier = "owner-truth-memory-projection-recovery-summary"
+        view.addSubview(projectionRecoverySummaryLabel)
+        projectionRecoverySummaryLabel.translatesAutoresizingMaskIntoConstraints = false
+        projectionRecoverySummaryHeightConstraint = projectionRecoverySummaryLabel.heightAnchor.constraint(equalToConstant: 0)
+        projectionRecoverySummaryHeightConstraint.isActive = true
     }
 
     private func configureTableView() {
@@ -3920,7 +3943,10 @@ final class OwnerTruthInterviewCandidateMemoryActivationInboxViewController: UIV
             statusLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
             statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
             statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
-            tableView.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 8),
+            projectionRecoverySummaryLabel.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 6),
+            projectionRecoverySummaryLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            projectionRecoverySummaryLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            tableView.topAnchor.constraint(equalTo: projectionRecoverySummaryLabel.bottomAnchor, constant: 8),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -3940,6 +3966,19 @@ final class OwnerTruthInterviewCandidateMemoryActivationInboxViewController: UIV
         }
     }
 
+    private func configureProjectionRecoveryUseCase() {
+        projectionRecoveryUseCase.onViewStateChange = { [weak self] state in
+            guard let self else { return }
+            if Thread.isMainThread {
+                renderProjectionRecovery(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.renderProjectionRecovery(state)
+                }
+            }
+        }
+    }
+
     private func render(_ state: OwnerTruthInterviewCandidateMemoryActivationInboxViewState) {
         renderedState = state
         let isActivating = activationUseCase?.viewState.phase == .activating
@@ -3951,6 +3990,24 @@ final class OwnerTruthInterviewCandidateMemoryActivationInboxViewController: UIV
         emptyStateLabel.isHidden = emptyStateLabel.text == nil
         tableView.isUserInteractionEnabled = state.phase == .ready && !isActivating
         tableView.reloadData()
+    }
+
+    /// This read is intentionally non-blocking: failure or absence of the
+    /// server-side materialization summary must never alter activation actions.
+    private func renderProjectionRecovery(
+        _ state: OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxViewState
+    ) {
+        guard state.phase == .ready,
+              let itemCount = state.inbox?.items.count,
+              itemCount > 0 else {
+            projectionRecoverySummaryLabel.text = nil
+            projectionRecoverySummaryLabel.isHidden = true
+            projectionRecoverySummaryHeightConstraint.isActive = true
+            return
+        }
+        projectionRecoverySummaryLabel.text = "\(itemCount) 项正式记忆正在整理，完成后将自动可用。"
+        projectionRecoverySummaryLabel.isHidden = false
+        projectionRecoverySummaryHeightConstraint.isActive = false
     }
 
     private func statusText(for state: OwnerTruthInterviewCandidateMemoryActivationInboxViewState) -> String {
@@ -4069,6 +4126,7 @@ final class OwnerTruthInterviewCandidateMemoryActivationInboxViewController: UIV
     @objc private func refreshTapped() {
         guard activationUseCase == nil else { return }
         useCase.send(.refresh)
+        projectionRecoveryUseCase.send(.refresh)
     }
 }
 
