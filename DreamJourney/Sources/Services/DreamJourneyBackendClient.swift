@@ -516,7 +516,8 @@ final class FeatureGateService {
         if (method == .get || method == .post),
            normalizedPath.hasPrefix("/v2/vaults/"),
            (normalizedPath.hasSuffix("/guided-recommendations")
-                || normalizedPath.hasSuffix("/guided-recommendations/feedback")) {
+                || normalizedPath.hasSuffix("/guided-recommendations/feedback")
+                || normalizedPath.hasSuffix("/guided-recommendations/activate")) {
             return .echoGuidedRecommendations
         }
         if method == .get,
@@ -6001,6 +6002,34 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
             case .success(let object):
                 do {
                     completion(.success(try OwnerTruthGuidedRecommendationFeedbackReceipt(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func activateOwnerTruthGuidedRecommendation(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthGuidedRecommendationActivationCommand,
+        completion: @escaping (Result<OwnerTruthGuidedRecommendationActivationReceipt, Error>) -> Void
+    ) {
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/guided-recommendations/activate"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthGuidedRecommendationActivationReceipt(
                         backendJSONObject: object,
                         expectedVaultID: vaultID
                     )))

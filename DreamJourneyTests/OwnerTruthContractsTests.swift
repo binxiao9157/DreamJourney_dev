@@ -5096,6 +5096,14 @@ final class OwnerTruthContractsTests: XCTestCase {
             ),
             .echoGuidedRecommendations
         )
+        XCTAssertEqual(
+            FeatureGateService.shared.featureForRequest(
+                path: "/v2/vaults/vault-a/guided-recommendations/activate",
+                method: .post,
+                payload: nil
+            ),
+            .echoGuidedRecommendations
+        )
     }
 
     func testGuidedRecommendationFeedbackContractKeepsOnlyValueFreeStatus() throws {
@@ -5117,6 +5125,44 @@ final class OwnerTruthContractsTests: XCTestCase {
                     "vaultId": vaultID.rawValue,
                     "feedback": [
                         "status": "created",
+                        "candidateId": "must-not-cross-ui-boundary",
+                    ],
+                ],
+                expectedVaultID: vaultID
+            )
+        )
+    }
+
+    func testGuidedRecommendationActivationContractKeepsOnlyAwaitingOwnerNarrativeState() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-a"))
+        let receipt = try OwnerTruthGuidedRecommendationActivationReceipt(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthGuidedRecommendationActivationReceipt.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "activation": [
+                    "status": "created",
+                    "slot": "continuity",
+                    "nextAction": "listen",
+                    "inputState": "awaitingOwnerNarrative",
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+
+        XCTAssertEqual(receipt.status, .created)
+        XCTAssertEqual(receipt.slot, .continuity)
+        XCTAssertEqual(receipt.nextAction, .listen)
+        XCTAssertEqual(receipt.inputState, .awaitingOwnerNarrative)
+        XCTAssertThrowsError(
+            try OwnerTruthGuidedRecommendationActivationReceipt(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthGuidedRecommendationActivationReceipt.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "activation": [
+                        "status": "created",
+                        "slot": "continuity",
+                        "nextAction": "broaden",
+                        "inputState": "awaitingOwnerNarrative",
                         "candidateId": "must-not-cross-ui-boundary",
                     ],
                 ],
@@ -5288,6 +5334,19 @@ final class OwnerTruthContractsTests: XCTestCase {
             ],
             expectedVaultID: vaultID
         ))
+        guidedClient.activationResult = .success(try OwnerTruthGuidedRecommendationActivationReceipt(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthGuidedRecommendationActivationReceipt.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "activation": [
+                    "status": "created",
+                    "slot": "continuity",
+                    "nextAction": "listen",
+                    "inputState": "awaitingOwnerNarrative",
+                ],
+            ],
+            expectedVaultID: vaultID
+        ))
         let controller = OwnerTruthInterviewNaturalInputViewController(
             accountLease: lease,
             client: naturalInputClient,
@@ -5326,6 +5385,30 @@ final class OwnerTruthContractsTests: XCTestCase {
                 accessibilityIdentifier: "owner-truth-memory-search-entry"
             )
         )
+
+        let promptButton = try XCTUnwrap(
+            findView(
+                in: controller.view,
+                accessibilityIdentifier: "owner-truth-guided-recommendation-continuity"
+            ) as? UIButton
+        )
+        promptButton.sendActions(for: .touchUpInside)
+
+        XCTAssertEqual(guidedClient.activationCommands.count, 1)
+        XCTAssertEqual(guidedClient.activationCommands[0].slot, .continuity)
+        XCTAssertEqual(
+            Set(guidedClient.activationCommands[0].backendPayload.keys),
+            ["commandId", "recommendationSetId", "slot"]
+        )
+        XCTAssertNil(naturalInputClient.appendCommand)
+        XCTAssertTrue(controller.isTranscriptClearForQA)
+        let activePrompt = try XCTUnwrap(
+            findView(
+                in: controller.view,
+                accessibilityIdentifier: "owner-truth-guided-recommendation-active-prompt"
+            ) as? UILabel
+        )
+        XCTAssertEqual(activePrompt.text, "那件事后来有什么变化？")
     }
 
     @MainActor
@@ -5879,10 +5962,12 @@ private final class GuidedRecommendationPresentationClientSpy:
     OwnerTruthGuidedRecommendationPresentationClient {
     var result: Result<OwnerTruthGuidedRecommendationPresentation, Error>?
     var feedbackResult: Result<OwnerTruthGuidedRecommendationFeedbackReceipt, Error>?
+    var activationResult: Result<OwnerTruthGuidedRecommendationActivationReceipt, Error>?
     var deferRead = false
     private var deferredCompletion: ((Result<OwnerTruthGuidedRecommendationPresentation, Error>) -> Void)?
     private(set) var requestCount = 0
     private(set) var feedbackCommands: [OwnerTruthGuidedRecommendationFeedbackCommand] = []
+    private(set) var activationCommands: [OwnerTruthGuidedRecommendationActivationCommand] = []
 
     func fetchOwnerTruthGuidedRecommendationPresentation(
         vaultID: OwnerTruthVaultID,
@@ -5903,6 +5988,17 @@ private final class GuidedRecommendationPresentationClientSpy:
     ) {
         feedbackCommands.append(command)
         completion(feedbackResult ?? .failure(GuidedRecommendationPresentationClientSpyError.missingFeedbackResult))
+    }
+
+    func activateOwnerTruthGuidedRecommendation(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthGuidedRecommendationActivationCommand,
+        completion: @escaping (Result<OwnerTruthGuidedRecommendationActivationReceipt, Error>) -> Void
+    ) {
+        activationCommands.append(command)
+        completion(activationResult ?? .failure(
+            GuidedRecommendationPresentationClientSpyError.missingActivationResult
+        ))
     }
 
     func completeDeferred(_ result: Result<OwnerTruthGuidedRecommendationPresentation, Error>) {
@@ -6005,6 +6101,7 @@ private enum InterviewOutcomePresentationClientSpyError: Error {
 private enum GuidedRecommendationPresentationClientSpyError: Error {
     case missingResult
     case missingFeedbackResult
+    case missingActivationResult
 }
 
 private final class InterviewCandidateReviewClientSpy: OwnerTruthInterviewCandidateReviewClient {

@@ -145,6 +145,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidKnowledgeRecommendationPlan(String)
     case invalidGuidedRecommendationPresentation(String)
     case invalidGuidedRecommendationFeedback(String)
+    case invalidGuidedRecommendationActivation(String)
     case invalidLifeMapPresentation(String)
     case invalidMemorySearchPresentation(String)
     case invalidInterviewOutcomePresentation(String)
@@ -192,6 +193,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "引导问题合同无效：\(detail)"
         case .invalidGuidedRecommendationFeedback(let detail):
             return "引导问题反馈合同无效：\(detail)"
+        case .invalidGuidedRecommendationActivation(let detail):
+            return "引导问题启用合同无效：\(detail)"
         case .invalidLifeMapPresentation(let detail):
             return "人生地图合同无效：\(detail)"
         case .invalidMemorySearchPresentation(let detail):
@@ -6233,6 +6236,12 @@ protocol OwnerTruthGuidedRecommendationPresentationClient: AnyObject {
         command: OwnerTruthGuidedRecommendationFeedbackCommand,
         completion: @escaping (Result<OwnerTruthGuidedRecommendationFeedbackReceipt, Error>) -> Void
     )
+
+    func activateOwnerTruthGuidedRecommendation(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthGuidedRecommendationActivationCommand,
+        completion: @escaping (Result<OwnerTruthGuidedRecommendationActivationReceipt, Error>) -> Void
+    )
 }
 
 private enum OwnerTruthGuidedRecommendationPresentationContract {
@@ -6346,9 +6355,98 @@ struct OwnerTruthGuidedRecommendationFeedbackReceipt: Equatable, Sendable {
     }
 }
 
+/// A formal prompt activation never carries the assistant question, candidate,
+/// evidence, thread, session, or user narrative across the client boundary.
+struct OwnerTruthGuidedRecommendationActivationCommand: Equatable, Sendable {
+    let commandID: String
+    let recommendationSetID: String
+    let slot: OwnerTruthKnowledgeRecommendationSlot
+
+    init(
+        commandID: String = UUID().uuidString.lowercased(),
+        recommendationSetID: String,
+        slot: OwnerTruthKnowledgeRecommendationSlot
+    ) {
+        self.commandID = commandID
+        self.recommendationSetID = recommendationSetID
+        self.slot = slot
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "commandId": commandID,
+            "recommendationSetId": recommendationSetID,
+            "slot": slot.rawValue,
+        ]
+    }
+}
+
+enum OwnerTruthGuidedRecommendationActivationStatus: String, Equatable, Sendable {
+    case created
+    case deduplicated
+}
+
+enum OwnerTruthGuidedRecommendationActivationInputState: String, Equatable, Sendable {
+    case awaitingOwnerNarrative
+}
+
+struct OwnerTruthGuidedRecommendationActivationReceipt: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-guided-recommendation-activation-response-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let status: OwnerTruthGuidedRecommendationActivationStatus
+    let slot: OwnerTruthKnowledgeRecommendationSlot
+    let nextAction: OwnerTruthInterviewOrchestrationAction
+    let inputState: OwnerTruthGuidedRecommendationActivationInputState
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        guard Set(object.keys) == ["schemaVersion", "vaultId", "activation"],
+              OwnerTruthGuidedRecommendationPresentationContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthGuidedRecommendationPresentationContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let activation = object["activation"] as? [String: Any],
+              Set(activation.keys) == ["status", "slot", "nextAction", "inputState"],
+              let rawStatus = OwnerTruthGuidedRecommendationPresentationContract.requiredString(
+                activation["status"]
+              ),
+              let status = OwnerTruthGuidedRecommendationActivationStatus(rawValue: rawStatus),
+              let rawSlot = OwnerTruthGuidedRecommendationPresentationContract.requiredString(
+                activation["slot"]
+              ),
+              let slot = OwnerTruthKnowledgeRecommendationSlot(rawValue: rawSlot),
+              let rawAction = OwnerTruthGuidedRecommendationPresentationContract.requiredString(
+                activation["nextAction"]
+              ),
+              let nextAction = OwnerTruthInterviewOrchestrationAction(rawValue: rawAction),
+              let rawInputState = OwnerTruthGuidedRecommendationPresentationContract.requiredString(
+                activation["inputState"]
+              ),
+              let inputState = OwnerTruthGuidedRecommendationActivationInputState(
+                rawValue: rawInputState
+              ),
+              (slot == .continuity && nextAction == .listen)
+                || (slot == .breadth && nextAction == .broaden) else {
+            throw OwnerTruthRemoteContractError.invalidGuidedRecommendationActivation(
+                "response misses a valid value-free activation state"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.status = status
+        self.slot = slot
+        self.nextAction = nextAction
+        self.inputState = inputState
+    }
+}
+
 enum OwnerTruthGuidedRecommendationPresentationPhase: Equatable, Sendable {
     case idle
     case loading
+    case activating
     case ready
     case rebuilding
     case unavailable
@@ -6363,6 +6461,7 @@ enum OwnerTruthGuidedRecommendationPresentationNotice: Equatable, Sendable {
     case contractMismatch
     case requestFailed
     case feedbackRequestFailed
+    case activationRequestFailed
 }
 
 /// UI state keeps only approved display copy. The Vault identifier stays in
@@ -6371,12 +6470,15 @@ struct OwnerTruthGuidedRecommendationPresentationViewState: Equatable, Sendable 
     let phase: OwnerTruthGuidedRecommendationPresentationPhase
     let prompts: [OwnerTruthGuidedRecommendationPrompt]
     let recommendationSetID: String?
+    /// Display-only assistant question currently awaiting a user-authored response.
+    let activePrompt: OwnerTruthGuidedRecommendationPrompt?
     let notice: OwnerTruthGuidedRecommendationPresentationNotice?
 
     static let idle = OwnerTruthGuidedRecommendationPresentationViewState(
         phase: .idle,
         prompts: [],
         recommendationSetID: nil,
+        activePrompt: nil,
         notice: nil
     )
 }
@@ -6419,6 +6521,7 @@ final class OwnerTruthGuidedRecommendationPresentationUseCase {
             phase: .loading,
             prompts: [],
             recommendationSetID: nil,
+            activePrompt: nil,
             notice: nil
         )
         client.fetchOwnerTruthGuidedRecommendationPresentation(vaultID: vaultID) { [weak self] result in
@@ -6451,6 +6554,7 @@ final class OwnerTruthGuidedRecommendationPresentationUseCase {
             phase: .rebuilding,
             prompts: prompts,
             recommendationSetID: recommendationSetID,
+            activePrompt: nil,
             notice: nil
         )
         client.submitOwnerTruthGuidedRecommendationFeedback(
@@ -6458,6 +6562,44 @@ final class OwnerTruthGuidedRecommendationPresentationUseCase {
             command: command
         ) { [weak self] result in
             self?.receiveFeedback(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    /// Bind the policy-owned question, then wait for a separate Owner-authored
+    /// narrative. The question never enters the natural-input write lane.
+    func activate(slot: OwnerTruthKnowledgeRecommendationSlot) {
+        guard let vaultID = beginRequestOrFail() else { return }
+        guard viewState.phase == .ready,
+              viewState.activePrompt == nil,
+              let prompt = viewState.prompts.first(where: { $0.slot == slot }),
+              let recommendationSetID = viewState.recommendationSetID else {
+            preservePromptsWithActivationFailure(.contractMismatch)
+            return
+        }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        let prompts = viewState.prompts
+        let command = OwnerTruthGuidedRecommendationActivationCommand(
+            recommendationSetID: recommendationSetID,
+            slot: slot
+        )
+        viewState = OwnerTruthGuidedRecommendationPresentationViewState(
+            phase: .activating,
+            prompts: prompts,
+            recommendationSetID: recommendationSetID,
+            activePrompt: nil,
+            notice: nil
+        )
+        client.activateOwnerTruthGuidedRecommendation(
+            vaultID: vaultID,
+            command: command
+        ) { [weak self] result in
+            self?.receiveActivation(
+                result,
+                vaultID: vaultID,
+                prompt: prompt,
+                generation: generation
+            )
         }
     }
 
@@ -6512,6 +6654,7 @@ final class OwnerTruthGuidedRecommendationPresentationUseCase {
                 phase: phase,
                 prompts: phase == .ready ? presentation.prompts : [],
                 recommendationSetID: phase == .ready ? presentation.recommendationSetID : nil,
+                activePrompt: nil,
                 notice: nil
             )
         case .failure(let error):
@@ -6519,6 +6662,46 @@ final class OwnerTruthGuidedRecommendationPresentationUseCase {
                 transitionFailure(.contractMismatch)
             } else {
                 transitionFailure(.requestFailed)
+            }
+        }
+    }
+
+    private func receiveActivation(
+        _ result: Result<OwnerTruthGuidedRecommendationActivationReceipt, Error>,
+        vaultID: OwnerTruthVaultID,
+        prompt: OwnerTruthGuidedRecommendationPrompt,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let receipt):
+            guard receipt.vaultID == vaultID,
+                  receipt.vaultID.rawValue == accountLease.vaultId,
+                  receipt.slot == prompt.slot,
+                  receipt.inputState == .awaitingOwnerNarrative else {
+                preservePromptsWithActivationFailure(.contractMismatch)
+                return
+            }
+            viewState = OwnerTruthGuidedRecommendationPresentationViewState(
+                phase: .ready,
+                prompts: [],
+                recommendationSetID: nil,
+                activePrompt: prompt,
+                notice: nil
+            )
+        case .failure(let error):
+            if case OwnerTruthRemoteContractError.invalidGuidedRecommendationActivation = error {
+                preservePromptsWithActivationFailure(.contractMismatch)
+            } else {
+                preservePromptsWithActivationFailure(.activationRequestFailed)
             }
         }
     }
@@ -6560,6 +6743,7 @@ final class OwnerTruthGuidedRecommendationPresentationUseCase {
             phase: .unavailable,
             prompts: [],
             recommendationSetID: nil,
+            activePrompt: nil,
             notice: notice
         )
     }
@@ -6569,6 +6753,7 @@ final class OwnerTruthGuidedRecommendationPresentationUseCase {
             phase: .failed,
             prompts: [],
             recommendationSetID: nil,
+            activePrompt: nil,
             notice: notice
         )
     }
@@ -6580,6 +6765,19 @@ final class OwnerTruthGuidedRecommendationPresentationUseCase {
             phase: .ready,
             prompts: viewState.prompts,
             recommendationSetID: viewState.recommendationSetID,
+            activePrompt: nil,
+            notice: notice
+        )
+    }
+
+    private func preservePromptsWithActivationFailure(
+        _ notice: OwnerTruthGuidedRecommendationPresentationNotice
+    ) {
+        viewState = OwnerTruthGuidedRecommendationPresentationViewState(
+            phase: .ready,
+            prompts: viewState.prompts,
+            recommendationSetID: viewState.recommendationSetID,
+            activePrompt: nil,
             notice: notice
         )
     }

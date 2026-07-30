@@ -9127,6 +9127,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let guidedRecommendationStack = UIStackView()
     private let guidedRecommendationTitleLabel = UILabel()
     private let guidedRecommendationPromptStack = UIStackView()
+    private let guidedRecommendationActivePromptLabel = UILabel()
     private let lifeMapButton = UIButton(type: .system)
     private let memorySearchButton = UIButton(type: .system)
     private let interviewOutcomeButton = UIButton(type: .system)
@@ -9149,6 +9150,8 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private var guidedRecommendationPrompts: [OwnerTruthGuidedRecommendationPrompt] = []
     private var isSubmittingGuidedRecommendationFeedback = false
     private var lastGuidedRecommendationFeedbackNotice: OwnerTruthGuidedRecommendationPresentationNotice?
+    private var isActivatingGuidedRecommendation = false
+    private var lastGuidedRecommendationActivationNotice: OwnerTruthGuidedRecommendationPresentationNotice?
     var onViewStateRendered: ((OwnerTruthInterviewNaturalInputViewState) -> Void)?
 
     var isTranscriptClearForQA: Bool {
@@ -9431,8 +9434,16 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         guidedRecommendationPromptStack.alignment = .fill
         guidedRecommendationPromptStack.spacing = 8
 
+        guidedRecommendationActivePromptLabel.font = DJDesignTokens.Font.body(16)
+        guidedRecommendationActivePromptLabel.textColor = DJDesignTokens.Color.textPrimary
+        guidedRecommendationActivePromptLabel.numberOfLines = 0
+        guidedRecommendationActivePromptLabel.accessibilityIdentifier =
+            "owner-truth-guided-recommendation-active-prompt"
+        guidedRecommendationActivePromptLabel.isHidden = true
+
         guidedRecommendationStack.addArrangedSubview(guidedRecommendationTitleLabel)
         guidedRecommendationStack.addArrangedSubview(guidedRecommendationPromptStack)
+        guidedRecommendationStack.addArrangedSubview(guidedRecommendationActivePromptLabel)
     }
 
     private func configureLifeMapEntry() {
@@ -9511,17 +9522,37 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         _ state: OwnerTruthGuidedRecommendationPresentationViewState
     ) {
         renderGuidedRecommendationFeedbackNoticeIfNeeded(state)
+        renderGuidedRecommendationActivationNoticeIfNeeded(state)
+        guard presentation == .product else {
+            guidedRecommendationPrompts = []
+            clearGuidedRecommendationPromptButtons()
+            guidedRecommendationActivePromptLabel.isHidden = true
+            guidedRecommendationStack.isHidden = true
+            return
+        }
+        if let activePrompt = state.activePrompt {
+            guidedRecommendationPrompts = []
+            clearGuidedRecommendationPromptButtons()
+            guidedRecommendationTitleLabel.text = "想听你说说"
+            guidedRecommendationActivePromptLabel.text = activePrompt.question
+            guidedRecommendationActivePromptLabel.isHidden = false
+            guidedRecommendationStack.isHidden = false
+            return
+        }
         guard presentation == .product,
               state.phase == .ready,
               !state.prompts.isEmpty else {
             guidedRecommendationPrompts = []
             clearGuidedRecommendationPromptButtons()
+            guidedRecommendationActivePromptLabel.isHidden = true
             guidedRecommendationStack.isHidden = true
             return
         }
 
         guidedRecommendationPrompts = state.prompts
         clearGuidedRecommendationPromptButtons()
+        guidedRecommendationTitleLabel.text = "可以从这里开始"
+        guidedRecommendationActivePromptLabel.isHidden = true
         for (index, prompt) in state.prompts.enumerated() {
             let row = UIStackView()
             row.axis = .horizontal
@@ -9608,6 +9639,43 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    private func renderGuidedRecommendationActivationNoticeIfNeeded(
+        _ state: OwnerTruthGuidedRecommendationPresentationViewState
+    ) {
+        guard isActivatingGuidedRecommendation else { return }
+
+        guard let notice = state.notice else {
+            if state.phase == .ready, state.activePrompt != nil {
+                isActivatingGuidedRecommendation = false
+                lastGuidedRecommendationActivationNotice = nil
+            }
+            return
+        }
+        guard notice == .activationRequestFailed || notice == .contractMismatch,
+              notice != lastGuidedRecommendationActivationNotice else {
+            return
+        }
+
+        isActivatingGuidedRecommendation = false
+        lastGuidedRecommendationActivationNotice = notice
+        let message: String
+        switch notice {
+        case .contractMismatch:
+            message = "这个引导已经更新，请重新选择。"
+        case .activationRequestFailed:
+            message = "暂时无法开始这个引导，请稍后重试。"
+        default:
+            return
+        }
+        let alert = UIAlertController(
+            title: "暂时无法开始",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "知道了", style: .default))
+        present(alert, animated: true)
+    }
+
     private func clearGuidedRecommendationPromptButtons() {
         guidedRecommendationPromptStack.arrangedSubviews.forEach { view in
             guidedRecommendationPromptStack.removeArrangedSubview(view)
@@ -9674,8 +9742,10 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
     @objc private func guidedRecommendationTapped(_ sender: UIButton) {
         guard guidedRecommendationPrompts.indices.contains(sender.tag) else { return }
-        inputTextView.text = guidedRecommendationPrompts[sender.tag].question
-        inputTextView.becomeFirstResponder()
+        let prompt = guidedRecommendationPrompts[sender.tag]
+        isActivatingGuidedRecommendation = true
+        lastGuidedRecommendationActivationNotice = nil
+        guidedRecommendationUseCase?.activate(slot: prompt.slot)
     }
 
     @objc private func guidedRecommendationActionsTapped(_ sender: UIButton) {
