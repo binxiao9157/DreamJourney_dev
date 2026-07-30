@@ -5162,6 +5162,357 @@ private enum InterviewCandidateReviewUIQAClientError: Error {
 }
 #endif
 
+/// Default-off, read-only M0-B navigation surface. It deliberately renders
+/// only confirmed aggregate counts; raw memory, Source, thread and policy data
+/// remain inside the Owner Truth boundary.
+final class OwnerTruthLifeMapViewController: UIViewController {
+    private let useCase: OwnerTruthLifeMapPresentationUseCase
+    private let scrollView = UIScrollView()
+    private let stackView = UIStackView()
+    private let summaryLabel = UILabel()
+    private let detailLabel = UILabel()
+    private let dimensionStack = UIStackView()
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthLifeMapPresentationClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool
+    ) {
+        useCase = OwnerTruthLifeMapPresentationUseCase(
+            accountLease: accountLease,
+            client: client,
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyAvailable: releasePolicyAvailable
+        )
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "人生地图"
+        view.backgroundColor = DJDesignTokens.Color.background
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "arrow.clockwise"),
+            style: .plain,
+            target: self,
+            action: #selector(refreshTapped)
+        )
+        navigationItem.rightBarButtonItem?.accessibilityLabel = "刷新人生地图"
+        configureView()
+        configureUseCase()
+        render(useCase.viewState)
+        useCase.refresh()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+        navigationController?.navigationBar.titleTextAttributes = [
+            .foregroundColor: DJDesignTokens.Color.textPrimary,
+            .font: DJDesignTokens.Font.title(18),
+        ]
+    }
+
+    private func configureView() {
+        scrollView.alwaysBounceVertical = true
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scrollView)
+
+        stackView.axis = .vertical
+        stackView.alignment = .fill
+        stackView.spacing = 14
+        stackView.isLayoutMarginsRelativeArrangement = true
+        stackView.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 24,
+            leading: DJDesignTokens.Spacing.page,
+            bottom: 28,
+            trailing: DJDesignTokens.Spacing.page
+        )
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(stackView)
+
+        summaryLabel.font = DJDesignTokens.Font.title(22)
+        summaryLabel.textColor = DJDesignTokens.Color.textPrimary
+        summaryLabel.numberOfLines = 0
+        summaryLabel.accessibilityIdentifier = "owner-truth-life-map-summary"
+
+        detailLabel.font = DJDesignTokens.Font.body(15)
+        detailLabel.textColor = DJDesignTokens.Color.textSecondary
+        detailLabel.numberOfLines = 0
+        detailLabel.accessibilityIdentifier = "owner-truth-life-map-detail"
+
+        dimensionStack.axis = .vertical
+        dimensionStack.alignment = .fill
+        dimensionStack.spacing = 10
+        dimensionStack.accessibilityIdentifier = "owner-truth-life-map-dimensions"
+
+        stackView.addArrangedSubview(summaryLabel)
+        stackView.addArrangedSubview(detailLabel)
+        stackView.addArrangedSubview(dimensionStack)
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            stackView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            stackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+        ])
+    }
+
+    private func configureUseCase() {
+        useCase.onViewStateChange = { [weak self] state in
+            if Thread.isMainThread {
+                self?.render(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.render(state)
+                }
+            }
+        }
+    }
+
+    private func render(_ state: OwnerTruthLifeMapPresentationViewState) {
+        clearDimensionRows()
+        navigationItem.rightBarButtonItem?.isEnabled = state.phase != .loading
+
+        switch state.phase {
+        case .idle, .loading:
+            summaryLabel.text = "正在整理已确认的故事线索"
+            detailLabel.text = "这里只回顾你已确认的内容，不展示完成度。"
+        case .ready:
+            guard let presentation = state.presentation else {
+                renderUnavailable()
+                return
+            }
+            if presentation.storyCount == 0 {
+                summaryLabel.text = "还没有可回顾的故事线索"
+                detailLabel.text = "当你确认新的故事片段后，它会在这里形成清晰的脉络。"
+            } else {
+                summaryLabel.text = "已整理 \(presentation.storyCount) 条故事线索"
+                detailLabel.text = presentation.associatedStoryCount > 0
+                    ? "其中 \(presentation.associatedStoryCount) 处关联帮助你回顾不同阶段的故事。"
+                    : "你可以从不同方面回顾已经确认的故事。"
+            }
+            presentation.dimensions.forEach { dimensionStack.addArrangedSubview(dimensionRow(for: $0)) }
+        case .rebuilding:
+            summaryLabel.text = "正在更新人生地图"
+            detailLabel.text = "已确认的内容整理完成后会显示在这里。"
+        case .unavailable:
+            renderUnavailable()
+        case .failed:
+            summaryLabel.text = "暂时无法读取人生地图"
+            detailLabel.text = "请稍后刷新重试。"
+        }
+    }
+
+    private func renderUnavailable() {
+        summaryLabel.text = "人生地图暂不可用"
+        detailLabel.text = "当前不会显示不完整或过期的故事线索。"
+    }
+
+    private func dimensionRow(for dimension: OwnerTruthLifeMapDimension) -> UIView {
+        let container = UIStackView()
+        container.axis = .vertical
+        container.alignment = .fill
+        container.spacing = 4
+        container.isLayoutMarginsRelativeArrangement = true
+        container.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 14,
+            leading: 14,
+            bottom: 14,
+            trailing: 14
+        )
+        container.backgroundColor = DJDesignTokens.Color.surface
+        container.layer.cornerRadius = 10
+
+        let title = UILabel()
+        title.font = DJDesignTokens.Font.body(16)
+        title.textColor = DJDesignTokens.Color.textPrimary
+        title.text = dimension.dimension.lifeMapTitle
+
+        let detail = UILabel()
+        detail.font = DJDesignTokens.Font.body(14)
+        detail.textColor = DJDesignTokens.Color.textSecondary
+        detail.numberOfLines = 0
+        detail.text = dimension.confirmedEvidenceCount == 0
+            ? "还没有已确认的线索"
+            : "已确认 \(dimension.confirmedEvidenceCount) 条线索"
+
+        container.addArrangedSubview(title)
+        container.addArrangedSubview(detail)
+        return container
+    }
+
+    private func clearDimensionRows() {
+        dimensionStack.arrangedSubviews.forEach { view in
+            dimensionStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+    }
+
+    @objc private func refreshTapped() {
+        useCase.refresh()
+    }
+
+    #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+    var renderedSummaryForUIQA: String {
+        summaryLabel.text ?? ""
+    }
+
+    var renderedDetailForUIQA: String {
+        detailLabel.text ?? ""
+    }
+
+    var renderedDimensionCountForUIQA: Int {
+        dimensionStack.arrangedSubviews.count
+    }
+    #endif
+}
+
+private extension OwnerTruthKnowledgeRecommendationDimension {
+    var lifeMapTitle: String {
+        switch self {
+        case .lifeStage:
+            return "人生阶段"
+        case .importantPeople:
+            return "重要的人"
+        case .keyDecisions:
+            return "关键决定"
+        case .professionalExperience:
+            return "职业经历"
+        case .values:
+            return "价值与感受"
+        case .aspirationsAndBoundaries:
+            return "愿望与边界"
+        }
+    }
+}
+
+#if UI_QA_SIMULATOR && targetEnvironment(simulator)
+
+/// In-memory preview only. It verifies the default-off read surface without
+/// granting a release policy, reading a backend response, or showing raw
+/// Owner Truth fields in a simulator screenshot.
+enum OwnerTruthLifeMapPresentationUIQASmoke {
+    static func run(
+        accountLease: AccountLease,
+        navigationController: UINavigationController,
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        guard let vaultID = OwnerTruthVaultID(accountLease.vaultId) else {
+            completion([
+                "completed": false,
+                "failureReason": "invalidVault",
+            ])
+            return
+        }
+
+        let client = FixtureClient(vaultID: vaultID)
+        let controller = OwnerTruthLifeMapViewController(
+            accountLease: accountLease,
+            client: client,
+            releasePolicyAvailable: { true }
+        )
+        navigationController.setViewControllers([controller], animated: false)
+        controller.loadViewIfNeeded()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            let visibleText = [
+                controller.renderedSummaryForUIQA,
+                controller.renderedDetailForUIQA,
+            ].joined(separator: " ")
+            let privateFieldsRendered = visibleText.localizedCaseInsensitiveContains("source")
+                || visibleText.localizedCaseInsensitiveContains("thread")
+                || visibleText.localizedCaseInsensitiveContains("policy")
+                || visibleText.contains("memoryVersionId")
+            let dimensionCount = controller.renderedDimensionCountForUIQA
+            let completed = client.requestCount == 1
+                && controller.title == "人生地图"
+                && controller.renderedSummaryForUIQA == "已整理 2 条故事线索"
+                && dimensionCount == OwnerTruthKnowledgeRecommendationDimension.allCases.count
+                && !privateFieldsRendered
+                && !visibleText.contains("%")
+
+            completion([
+                "completed": completed,
+                "requestCount": client.requestCount,
+                "storyCount": 2,
+                "dimensionCount": dimensionCount,
+                "privateFieldsRendered": privateFieldsRendered,
+                "completionPercentageRendered": visibleText.contains("%"),
+                "inMemoryPreview": true,
+                "releasePolicyBypassedForPreview": true,
+                "backendNetworkStarted": false,
+                "persistentInterviewWriteStarted": false,
+                "publicRouteChanged": false,
+                "launchArguments": [
+                    QALaunchScenario.ownerTruthLifeMapPresentationSmoke.rawValue,
+                ],
+            ])
+        }
+    }
+
+    private final class FixtureClient: OwnerTruthLifeMapPresentationClient {
+        private let vaultID: OwnerTruthVaultID
+        private(set) var requestCount = 0
+
+        init(vaultID: OwnerTruthVaultID) {
+            self.vaultID = vaultID
+        }
+
+        func fetchOwnerTruthLifeMapPresentation(
+            vaultID: OwnerTruthVaultID,
+            completion: @escaping (Result<OwnerTruthLifeMapPresentation, Error>) -> Void
+        ) {
+            guard vaultID == self.vaultID else {
+                completion(.failure(OwnerTruthRemoteContractError.invalidLifeMapPresentation("vault mismatch")))
+                return
+            }
+            requestCount += 1
+            do {
+                completion(.success(try OwnerTruthLifeMapPresentation(
+                    backendJSONObject: [
+                        "schemaVersion": OwnerTruthLifeMapPresentation.schemaVersion,
+                        "vaultId": vaultID.rawValue,
+                        "lifeMap": [
+                            "state": "ready",
+                            "storyCount": 2,
+                            "associatedStoryCount": 1,
+                            "dimensions": OwnerTruthKnowledgeRecommendationDimension.allCases.enumerated().map {
+                                index,
+                                dimension in
+                                [
+                                    "dimension": dimension.rawValue,
+                                    "confirmedEvidenceCount": dimension == .keyDecisions ? 1 : 0,
+                                    "coveredFacetCount": index == 0 ? 1 : 0,
+                                    "unfilledFacetCount": max(0, dimension.facetOrder.count - (index == 0 ? 1 : 0)),
+                                    "relatedStoryCount": index == 0 ? 1 : 0,
+                                ]
+                            },
+                        ],
+                    ],
+                    expectedVaultID: vaultID
+                )))
+            } catch {
+                completion(.failure(error))
+            }
+        }
+    }
+}
+
+#endif
+
 private enum AutobiographyBookLayout {
     static let pageCornerRadius: CGFloat = 12
     static let pageInset: CGFloat = 24
@@ -6758,11 +7109,15 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let useCase: OwnerTruthInterviewNaturalInputUseCase
     private let guidedRecommendationUseCase: OwnerTruthGuidedRecommendationPresentationUseCase?
     private let presentation: OwnerTruthInterviewNaturalInputPresentation
+    private let accountLease: AccountLease
+    private let lifeMapClient: OwnerTruthLifeMapPresentationClient
+    private let lifeMapPolicyAvailable: () -> Bool
     private let stackView = UIStackView()
     private let subtitleLabel = UILabel()
     private let guidedRecommendationStack = UIStackView()
     private let guidedRecommendationTitleLabel = UILabel()
     private let guidedRecommendationPromptStack = UIStackView()
+    private let lifeMapButton = UIButton(type: .system)
     private let statusLabel = UILabel()
     private let detailLabel = UILabel()
     private let inputTextView = UITextView()
@@ -6848,9 +7203,21 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
                 .requestDecision(for: .echoGuidedRecommendations)
                 .allowed
         },
+        lifeMapClient: OwnerTruthLifeMapPresentationClient = DreamJourneyBackendClient.shared,
+        lifeMapPolicyAvailable: @escaping () -> Bool = {
+            guard FeatureFlagService.shared.isEnabled(.ownerTruthLifeMap) else {
+                return false
+            }
+            return FeatureGateService.shared
+                .requestDecision(for: .ownerTruthLifeMap)
+                .allowed
+        },
         qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
     ) {
         self.presentation = presentation
+        self.accountLease = accountLease
+        self.lifeMapClient = lifeMapClient
+        self.lifeMapPolicyAvailable = lifeMapPolicyAvailable
         self.useCase = OwnerTruthInterviewNaturalInputUseCase(
             accountLease: accountLease,
             client: client,
@@ -6917,6 +7284,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         subtitleLabel.numberOfLines = 0
 
         configureGuidedRecommendations()
+        configureLifeMapEntry()
 
         statusLabel.font = DJDesignTokens.Font.title(20)
         statusLabel.textColor = DJDesignTokens.Color.textPrimary
@@ -6949,6 +7317,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         stackView.addArrangedSubview(subtitleLabel)
         if presentation == .product {
             stackView.addArrangedSubview(guidedRecommendationStack)
+            stackView.addArrangedSubview(lifeMapButton)
         }
         [statusLabel, detailLabel, inputTextView, submitButton].forEach(stackView.addArrangedSubview)
         if presentation == .qa {
@@ -7006,6 +7375,28 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
         guidedRecommendationStack.addArrangedSubview(guidedRecommendationTitleLabel)
         guidedRecommendationStack.addArrangedSubview(guidedRecommendationPromptStack)
+    }
+
+    private func configureLifeMapEntry() {
+        var configuration = UIButton.Configuration.tinted()
+        configuration.title = "人生地图"
+        configuration.image = UIImage(systemName: "map")
+        configuration.imagePadding = 8
+        configuration.baseForegroundColor = DJDesignTokens.Color.textPrimary
+        configuration.baseBackgroundColor = DJDesignTokens.Color.surface
+        configuration.contentInsets = NSDirectionalEdgeInsets(
+            top: 12,
+            leading: 14,
+            bottom: 12,
+            trailing: 14
+        )
+        lifeMapButton.configuration = configuration
+        lifeMapButton.contentHorizontalAlignment = .leading
+        lifeMapButton.layer.cornerRadius = 10
+        lifeMapButton.accessibilityIdentifier = "owner-truth-life-map-entry"
+        lifeMapButton.accessibilityLabel = "查看人生地图"
+        lifeMapButton.addTarget(self, action: #selector(lifeMapTapped), for: .touchUpInside)
+        lifeMapButton.isHidden = presentation != .product || !lifeMapPolicyAvailable()
     }
 
     private func renderGuidedRecommendations(
@@ -7237,6 +7628,19 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             inputTextView.text = ""
         }
         useCase.send(.submit(text: text))
+    }
+
+    @objc private func lifeMapTapped() {
+        guard presentation == .product, lifeMapPolicyAvailable() else {
+            lifeMapButton.isHidden = true
+            return
+        }
+        let controller = OwnerTruthLifeMapViewController(
+            accountLease: accountLease,
+            client: lifeMapClient,
+            releasePolicyAvailable: lifeMapPolicyAvailable
+        )
+        navigationController?.pushViewController(controller, animated: true)
     }
 
     private func configureBoundaryControls() {

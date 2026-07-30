@@ -383,6 +383,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewNaturalInputEchoSurfaceSmoke() }
         case .ownerTruthInterviewNaturalInputProductSurfaceSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewNaturalInputProductSurfaceSmoke() }
+        case .ownerTruthLifeMapPresentationSmoke:
+            scheduleUIQAScenario(scenario) { $0.runOwnerTruthLifeMapPresentationSmoke() }
         case .archiveFailedAnalysisRetrySmoke:
             seedFailedArchiveAnalysisRetryContext()
             scheduleUIQAScenario(scenario) { $0.runArchiveFailedAnalysisRetrySmoke() }
@@ -2370,6 +2372,69 @@ private extension AppDelegate {
                 )
             }
         )
+    }
+
+    func runOwnerTruthLifeMapPresentationSmoke(retryCount: Int = 0) {
+        guard let userID = UserManager.shared.currentUser?.id,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userID),
+              accountLease.subjectId == userID,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            guard retryCount < 20 else {
+                QAScenarioResultWriter.writeAndLog(
+                    [
+                        "completed": false,
+                        "failureReason": "accountLeaseUnavailable",
+                    ],
+                    fileName: "owner-truth-life-map-presentation-smoke-result.json",
+                    smokeName: "OwnerTruthLifeMapPresentationSmoke"
+                )
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerTruthLifeMapPresentationSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+        guard let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }),
+              keyWindow.rootViewController is WarmTabBarController else {
+            guard retryCount < 20 else {
+                QAScenarioResultWriter.writeAndLog(
+                    [
+                        "completed": false,
+                        "failureReason": "mainRootUnavailable",
+                    ],
+                    fileName: "owner-truth-life-map-presentation-smoke-result.json",
+                    smokeName: "OwnerTruthLifeMapPresentationSmoke"
+                )
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerTruthLifeMapPresentationSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        let navigationController = UINavigationController()
+        keyWindow.rootViewController = navigationController
+        keyWindow.makeKeyAndVisible()
+        OwnerTruthLifeMapPresentationUIQASmoke.run(
+            accountLease: accountLease,
+            navigationController: navigationController
+        ) { result in
+            QAScenarioResultWriter.writeAndLog(
+                result,
+                fileName: "owner-truth-life-map-presentation-smoke-result.json",
+                smokeName: "OwnerTruthLifeMapPresentationSmoke"
+            )
+            print(
+                "[UI_QA] OwnerTruthLifeMapPresentationSmoke completed " +
+                "completed=\(result["completed"] as? Bool == true) " +
+                "dimensionCount=\(result["dimensionCount"] as? Int ?? 0)"
+            )
+        }
     }
 
     func runArchiveAudioLifecycleSmoke(retryCount: Int = 0) {

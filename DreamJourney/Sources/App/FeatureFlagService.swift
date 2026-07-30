@@ -120,6 +120,7 @@ enum QALaunchScenario: String, CaseIterable {
     case ownerTruthInterviewBoundarySmoke = "DJRunOwnerTruthInterviewBoundarySmoke"
     case ownerTruthInterviewNaturalInputEchoSurfaceSmoke = "DJRunOwnerTruthInterviewNaturalInputEchoSurfaceSmoke"
     case ownerTruthInterviewNaturalInputProductSurfaceSmoke = "DJRunOwnerTruthInterviewNaturalInputProductSurfaceSmoke"
+    case ownerTruthLifeMapPresentationSmoke = "DJRunOwnerTruthLifeMapPresentationSmoke"
     case archiveFailedAnalysisRetrySmoke = "DJRunArchiveFailedAnalysisRetrySmoke"
     case echoDelayedReplyNotificationSmoke = "DJRunEchoDelayedReplyNotificationSmoke"
     case notificationRuntimeRouteSmoke = "DJRunNotificationRuntimeRouteSmoke"
@@ -172,6 +173,7 @@ enum QALaunchScenario: String, CaseIterable {
         .ownerTruthInterviewBoundarySmoke,
         .ownerTruthInterviewNaturalInputEchoSurfaceSmoke,
         .ownerTruthInterviewNaturalInputProductSurfaceSmoke,
+        .ownerTruthLifeMapPresentationSmoke,
         .archiveFailedAnalysisRetrySmoke,
         .echoDelayedReplyNotificationSmoke,
         .notificationRuntimeRouteSmoke,
@@ -600,6 +602,7 @@ enum QAAuthenticatedBackendSessionFixture {
 enum DJFeature: String, CaseIterable {
     case echoTextInput
     case echoGuidedRecommendations
+    case ownerTruthLifeMap
     case ownerTruthCandidateReview
     case echoImageInput
     case timeLetters
@@ -635,6 +638,7 @@ final class FeatureFlagService {
     private static let nonPersistentFeatures: Set<DJFeature> = [
         .echoImageInput,
         .echoGuidedRecommendations,
+        .ownerTruthLifeMap,
         .ownerTruthCandidateReview,
         .timeLetters,
         .personaSettings,

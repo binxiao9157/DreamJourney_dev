@@ -142,6 +142,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidKnowledgeRecommendationPlan(String)
     case invalidGuidedRecommendationPresentation(String)
     case invalidGuidedRecommendationFeedback(String)
+    case invalidLifeMapPresentation(String)
     case invalidKBLiteCompatibilityReadEnvelope(String)
     case invalidContextCitationShadowBuild(String)
     case invalidAnswerCitationReceipt(String)
@@ -180,6 +181,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "引导问题合同无效：\(detail)"
         case .invalidGuidedRecommendationFeedback(let detail):
             return "引导问题反馈合同无效：\(detail)"
+        case .invalidLifeMapPresentation(let detail):
+            return "人生地图合同无效：\(detail)"
         case .invalidKBLiteCompatibilityReadEnvelope(let detail):
             return "兼容读取合同无效：\(detail)"
         case .invalidContextCitationShadowBuild(let detail):
@@ -4884,6 +4887,324 @@ final class OwnerTruthGuidedRecommendationPresentationUseCase {
             phase: .ready,
             prompts: viewState.prompts,
             recommendationSetID: viewState.recommendationSetID,
+            notice: notice
+        )
+    }
+}
+
+// MARK: - Default-off Owner Truth life-map presentation
+
+/// One display-safe dimension node. Internal thread, association, source,
+/// memory-version, checkpoint and policy identifiers never cross this model.
+struct OwnerTruthLifeMapDimension: Equatable, Sendable {
+    let dimension: OwnerTruthKnowledgeRecommendationDimension
+    let confirmedEvidenceCount: Int
+    let coveredFacetCount: Int
+    let unfilledFacetCount: Int
+    let relatedStoryCount: Int
+}
+
+/// Read-only M0-B life-map response for the product surface. The counts are
+/// navigation hints, not a personal score or a claim of memory completeness.
+struct OwnerTruthLifeMapPresentation: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-life-map-presentation-response-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let state: OwnerTruthKnowledgeRecommendationPlanState
+    let storyCount: Int
+    let associatedStoryCount: Int
+    let dimensions: [OwnerTruthLifeMapDimension]
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        guard Set(object.keys) == ["schemaVersion", "vaultId", "lifeMap"],
+              OwnerTruthLifeMapPresentationContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthLifeMapPresentationContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let lifeMap = object["lifeMap"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidLifeMapPresentation(
+                "response misses a required presentation field"
+            )
+        }
+        guard Set(lifeMap.keys) == [
+            "state",
+            "storyCount",
+            "associatedStoryCount",
+            "dimensions",
+        ] else {
+            throw OwnerTruthRemoteContractError.invalidLifeMapPresentation(
+                "response contains unsupported fields"
+            )
+        }
+        guard let stateRaw = OwnerTruthLifeMapPresentationContract.requiredString(lifeMap["state"]),
+              let state = OwnerTruthKnowledgeRecommendationPlanState(rawValue: stateRaw),
+              let storyCount = OwnerTruthLifeMapPresentationContract.nonNegativeInt(
+                lifeMap["storyCount"]
+              ),
+              let associatedStoryCount = OwnerTruthLifeMapPresentationContract.nonNegativeInt(
+                lifeMap["associatedStoryCount"]
+              ) else {
+            throw OwnerTruthRemoteContractError.invalidLifeMapPresentation(
+                "response contains an invalid aggregate"
+            )
+        }
+
+        let dimensionObjects = try OwnerTruthLifeMapPresentationContract.objectArray(
+            lifeMap["dimensions"],
+            field: "dimensions"
+        )
+        let dimensions = try dimensionObjects.map { item -> OwnerTruthLifeMapDimension in
+            guard Set(item.keys) == [
+                "dimension",
+                "confirmedEvidenceCount",
+                "coveredFacetCount",
+                "unfilledFacetCount",
+                "relatedStoryCount",
+            ],
+            let rawDimension = OwnerTruthLifeMapPresentationContract.requiredString(item["dimension"]),
+            let dimension = OwnerTruthKnowledgeRecommendationDimension(rawValue: rawDimension),
+            let confirmedEvidenceCount = OwnerTruthLifeMapPresentationContract.nonNegativeInt(
+                item["confirmedEvidenceCount"]
+            ),
+            let coveredFacetCount = OwnerTruthLifeMapPresentationContract.nonNegativeInt(
+                item["coveredFacetCount"]
+            ),
+            let unfilledFacetCount = OwnerTruthLifeMapPresentationContract.nonNegativeInt(
+                item["unfilledFacetCount"]
+            ),
+            let relatedStoryCount = OwnerTruthLifeMapPresentationContract.nonNegativeInt(
+                item["relatedStoryCount"]
+            ) else {
+                throw OwnerTruthRemoteContractError.invalidLifeMapPresentation(
+                    "dimension contains an unsupported value"
+                )
+            }
+            return OwnerTruthLifeMapDimension(
+                dimension: dimension,
+                confirmedEvidenceCount: confirmedEvidenceCount,
+                coveredFacetCount: coveredFacetCount,
+                unfilledFacetCount: unfilledFacetCount,
+                relatedStoryCount: relatedStoryCount
+            )
+        }
+
+        let expectedDimensions = OwnerTruthKnowledgeRecommendationDimension.allCases
+        guard state != .ready || dimensions.map(\.dimension) == expectedDimensions else {
+            throw OwnerTruthRemoteContractError.invalidLifeMapPresentation(
+                "ready response must contain each stable dimension once"
+            )
+        }
+        guard state == .ready || (
+            storyCount == 0
+                && associatedStoryCount == 0
+                && dimensions.isEmpty
+        ) else {
+            throw OwnerTruthRemoteContractError.invalidLifeMapPresentation(
+                "non-ready response must not retain map content"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.state = state
+        self.storyCount = storyCount
+        self.associatedStoryCount = associatedStoryCount
+        self.dimensions = dimensions
+    }
+}
+
+protocol OwnerTruthLifeMapPresentationClient: AnyObject {
+    func fetchOwnerTruthLifeMapPresentation(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthLifeMapPresentation, Error>) -> Void
+    )
+}
+
+private enum OwnerTruthLifeMapPresentationContract {
+    static func requiredString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    static func nonNegativeInt(_ value: Any?) -> Int? {
+        guard let value = value as? NSNumber,
+              CFGetTypeID(value) != CFBooleanGetTypeID(),
+              value.doubleValue.isFinite,
+              value.doubleValue.rounded() == value.doubleValue,
+              value.intValue >= 0 else {
+            return nil
+        }
+        return value.intValue
+    }
+
+    static func objectArray(_ value: Any?, field: String) throws -> [[String: Any]] {
+        guard let values = value as? [Any] else {
+            throw OwnerTruthRemoteContractError.invalidLifeMapPresentation(
+                "\(field) must be an array"
+            )
+        }
+        return try values.map { value in
+            guard let object = value as? [String: Any] else {
+                throw OwnerTruthRemoteContractError.invalidLifeMapPresentation(
+                    "\(field) must contain objects"
+                )
+            }
+            return object
+        }
+    }
+}
+
+enum OwnerTruthLifeMapPresentationPhase: Equatable, Sendable {
+    case idle
+    case loading
+    case ready
+    case rebuilding
+    case unavailable
+    case failed
+}
+
+enum OwnerTruthLifeMapPresentationNotice: Equatable, Sendable {
+    case releasePolicyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case contractMismatch
+    case requestFailed
+}
+
+struct OwnerTruthLifeMapPresentationViewState: Equatable, Sendable {
+    let phase: OwnerTruthLifeMapPresentationPhase
+    let presentation: OwnerTruthLifeMapPresentation?
+    let notice: OwnerTruthLifeMapPresentationNotice?
+
+    static let idle = OwnerTruthLifeMapPresentationViewState(
+        phase: .idle,
+        presentation: nil,
+        notice: nil
+    )
+}
+
+/// Lease-fenced reader for the independent life-map policy. A closed policy
+/// does not issue a request, and rebuilding/unavailable replies retain no
+/// stale counts from an earlier account or projection.
+final class OwnerTruthLifeMapPresentationUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let client: OwnerTruthLifeMapPresentationClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAvailable: () -> Bool
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthLifeMapPresentationViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthLifeMapPresentationViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthLifeMapPresentationClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool
+    ) {
+        self.accountLease = accountLease
+        vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+    }
+
+    func refresh() {
+        guard let vaultID = beginRequestOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthLifeMapPresentationViewState(
+            phase: .loading,
+            presentation: nil,
+            notice: nil
+        )
+        client.fetchOwnerTruthLifeMapPresentation(vaultID: vaultID) { [weak self] result in
+            self?.receive(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthLifeMapPresentation, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+
+        switch result {
+        case .success(let presentation):
+            guard presentation.vaultID == vaultID,
+                  presentation.vaultID.rawValue == accountLease.vaultId else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            let phase: OwnerTruthLifeMapPresentationPhase
+            switch presentation.state {
+            case .ready:
+                phase = .ready
+            case .rebuilding:
+                phase = .rebuilding
+            case .unavailable:
+                phase = .unavailable
+            }
+            viewState = OwnerTruthLifeMapPresentationViewState(
+                phase: phase,
+                presentation: phase == .ready ? presentation : nil,
+                notice: nil
+            )
+        case .failure(let error):
+            if case OwnerTruthRemoteContractError.invalidLifeMapPresentation = error {
+                transitionFailure(.contractMismatch)
+            } else {
+                transitionFailure(.requestFailed)
+            }
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthLifeMapPresentationNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthLifeMapPresentationViewState(
+            phase: .unavailable,
+            presentation: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure(_ notice: OwnerTruthLifeMapPresentationNotice) {
+        viewState = OwnerTruthLifeMapPresentationViewState(
+            phase: .failed,
+            presentation: nil,
             notice: notice
         )
     }

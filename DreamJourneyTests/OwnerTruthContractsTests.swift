@@ -4585,6 +4585,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             presentation: .product,
             guidedRecommendationClient: guidedClient,
             guidedRecommendationPolicyAvailable: { true },
+            lifeMapPolicyAvailable: { true },
             qaGateEnabled: { true }
         )
 
@@ -4602,6 +4603,149 @@ final class OwnerTruthContractsTests: XCTestCase {
                 accessibilityIdentifier: "owner-truth-guided-recommendation-actions-continuity"
             )
         )
+        XCTAssertNotNil(
+            findView(
+                in: controller.view,
+                accessibilityIdentifier: "owner-truth-life-map-entry"
+            )
+        )
+    }
+
+    func testLifeMapPresentationDecodesOnlyDisplaySafeFields() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-life-map-a"))
+        let presentation = try OwnerTruthLifeMapPresentation(
+            backendJSONObject: lifeMapPresentationJSON(vaultID: vaultID),
+            expectedVaultID: vaultID
+        )
+
+        XCTAssertEqual(presentation.vaultID, vaultID)
+        XCTAssertEqual(presentation.state, .ready)
+        XCTAssertEqual(presentation.storyCount, 2)
+        XCTAssertEqual(presentation.associatedStoryCount, 1)
+        XCTAssertEqual(presentation.dimensions.count, OwnerTruthKnowledgeRecommendationDimension.allCases.count)
+        XCTAssertEqual(
+            presentation.dimensions.first(where: { $0.dimension == .keyDecisions })?.confirmedEvidenceCount,
+            1
+        )
+
+        var unsafe = lifeMapPresentationJSON(vaultID: vaultID)
+        var map = try XCTUnwrap(unsafe["lifeMap"] as? [String: Any])
+        map["threadId"] = "internal-thread-id"
+        unsafe["lifeMap"] = map
+        XCTAssertThrowsError(
+            try OwnerTruthLifeMapPresentation(
+                backendJSONObject: unsafe,
+                expectedVaultID: vaultID
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? OwnerTruthRemoteContractError,
+                .invalidLifeMapPresentation("response contains unsupported fields")
+            )
+        }
+    }
+
+    func testLifeMapPresentationUseCaseDoesNotRequestWhenPolicyIsClosed() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = LifeMapPresentationClientSpy()
+        let useCase = OwnerTruthLifeMapPresentationUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { false }
+        )
+
+        useCase.refresh()
+
+        XCTAssertEqual(client.requestCount, 0)
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .releasePolicyDisabled)
+        XCTAssertNil(useCase.viewState.presentation)
+    }
+
+    func testLifeMapPresentationUseCasePublishesOnlyCurrentAccountResult() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = LifeMapPresentationClientSpy()
+        client.result = .success(try OwnerTruthLifeMapPresentation(
+            backendJSONObject: lifeMapPresentationJSON(vaultID: vaultID),
+            expectedVaultID: vaultID
+        ))
+        let useCase = OwnerTruthLifeMapPresentationUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.refresh()
+
+        XCTAssertEqual(client.requestCount, 1)
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.presentation?.storyCount, 2)
+    }
+
+    func testLifeMapPresentationUseCaseDiscardsDeferredReadAfterAccountSwitch() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = LifeMapPresentationClientSpy()
+        client.deferRead = true
+        let useCase = OwnerTruthLifeMapPresentationUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.refresh()
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000112")!
+        ))
+        client.completeDeferred(.success(try OwnerTruthLifeMapPresentation(
+            backendJSONObject: lifeMapPresentationJSON(vaultID: vaultID),
+            expectedVaultID: vaultID
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(useCase.viewState.presentation)
+    }
+
+    func testLifeMapPresentationPathUsesItsOwnFeatureGate() {
+        XCTAssertEqual(
+            FeatureGateService.shared.featureForRequest(
+                path: "/v2/vaults/vault-a/life-map",
+                method: .get,
+                payload: nil
+            ),
+            .ownerTruthLifeMap
+        )
+    }
+
+    private func lifeMapPresentationJSON(vaultID: OwnerTruthVaultID) -> [String: Any] {
+        [
+            "schemaVersion": OwnerTruthLifeMapPresentation.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "lifeMap": [
+                "state": "ready",
+                "storyCount": 2,
+                "associatedStoryCount": 1,
+                "dimensions": OwnerTruthKnowledgeRecommendationDimension.allCases.enumerated().map {
+                    index,
+                    dimension in
+                    [
+                        "dimension": dimension.rawValue,
+                        "confirmedEvidenceCount": dimension == .keyDecisions ? 1 : 0,
+                        "coveredFacetCount": index == 0 ? 1 : 0,
+                        "unfilledFacetCount": max(0, dimension.facetOrder.count - (index == 0 ? 1 : 0)),
+                        "relatedStoryCount": index == 0 ? 1 : 0,
+                    ]
+                },
+            ],
+        ]
     }
 
     private func migrationParitySnapshot(
@@ -4723,6 +4867,35 @@ private final class GuidedRecommendationPresentationClientSpy:
         deferredCompletion = nil
         completion?(result)
     }
+}
+
+private final class LifeMapPresentationClientSpy: OwnerTruthLifeMapPresentationClient {
+    var result: Result<OwnerTruthLifeMapPresentation, Error>?
+    var deferRead = false
+    private var deferredCompletion: ((Result<OwnerTruthLifeMapPresentation, Error>) -> Void)?
+    private(set) var requestCount = 0
+
+    func fetchOwnerTruthLifeMapPresentation(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthLifeMapPresentation, Error>) -> Void
+    ) {
+        requestCount += 1
+        if deferRead {
+            deferredCompletion = completion
+            return
+        }
+        completion(result ?? .failure(LifeMapPresentationClientSpyError.missingResult))
+    }
+
+    func completeDeferred(_ result: Result<OwnerTruthLifeMapPresentation, Error>) {
+        let completion = deferredCompletion
+        deferredCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum LifeMapPresentationClientSpyError: Error {
+    case missingResult
 }
 
 private enum GuidedRecommendationPresentationClientSpyError: Error {
