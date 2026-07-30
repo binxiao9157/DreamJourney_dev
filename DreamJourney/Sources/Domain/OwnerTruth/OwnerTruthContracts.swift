@@ -2723,6 +2723,16 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
             && sessionVersion > command.expectedSessionVersion
     }
 
+    func matches(_ command: OwnerTruthInterviewPauseForTopicSwitchCommand) -> Bool {
+        threadID == command.threadID
+            && sessionID == command.sessionID
+            && lifecycle == .paused
+            && messageID == nil
+            && messageSequence == nil
+            && threadVersion > command.expectedThreadVersion
+            && sessionVersion > command.expectedSessionVersion
+    }
+
     func matches(_ command: OwnerTruthInterviewRestoreDoNotAskCommand) -> Bool {
         threadID == command.threadID
             && sessionID == command.sessionID
@@ -2962,6 +2972,48 @@ struct OwnerTruthInterviewBoundaryCommand: Equatable, Sendable {
     }
 }
 
+/// A QA-only lifecycle fence for an explicit owner topic switch. It carries
+/// no topic text, topic identifier, classifier result, or next-session id;
+/// the next session is created by the existing start command after this pause
+/// receipt has been accepted.
+struct OwnerTruthInterviewPauseForTopicSwitchCommand: Equatable, Sendable {
+    let commandID: String
+    let threadID: OwnerTruthRecordID
+    let sessionID: OwnerTruthRecordID
+    let expectedThreadVersion: Int
+    let expectedSessionVersion: Int
+
+    init(
+        commandID: String,
+        threadID: OwnerTruthRecordID,
+        sessionID: OwnerTruthRecordID,
+        expectedThreadVersion: Int,
+        expectedSessionVersion: Int
+    ) throws {
+        guard let commandID = OwnerTruthInterviewNaturalInputContract.nonEmptyString(commandID),
+              expectedThreadVersion > 0,
+              expectedSessionVersion > 0 else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "topic switch requires a non-empty command id and positive versions"
+            )
+        }
+        self.commandID = commandID
+        self.threadID = threadID
+        self.sessionID = sessionID
+        self.expectedThreadVersion = expectedThreadVersion
+        self.expectedSessionVersion = expectedSessionVersion
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "commandId": commandID,
+            "threadId": threadID.rawValue.uuidString.lowercased(),
+            "expectedThreadVersion": expectedThreadVersion,
+            "expectedSessionVersion": expectedSessionVersion,
+        ]
+    }
+}
+
 /// A separately named, explicitly confirmed action that can reopen only a
 /// persisted `doNotAsk` boundary. It is not a generic `boundary=open` write.
 struct OwnerTruthInterviewRestoreDoNotAskCommand: Equatable, Sendable {
@@ -3055,6 +3107,12 @@ protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
     func setOwnerTruthInterviewBoundary(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewBoundaryCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    )
+
+    func pauseOwnerTruthInterviewForTopicSwitch(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewPauseForTopicSwitchCommand,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
     )
 
@@ -3993,6 +4051,7 @@ enum OwnerTruthInterviewNaturalInputIntent: Equatable, Sendable {
     case start
     case submit(text: String)
     case setBoundary(OwnerTruthInterviewSessionBoundary)
+    case pauseForTopicSwitch
     case restoreDoNotAsk
     case restoreCooldown
 }
@@ -4073,6 +4132,8 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             submit(text: text)
         case .setBoundary(let boundary):
             setBoundary(boundary)
+        case .pauseForTopicSwitch:
+            pauseForTopicSwitch()
         case .restoreDoNotAsk:
             restoreDoNotAsk()
         case .restoreCooldown:
@@ -4263,6 +4324,50 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         }
     }
 
+    private func pauseForTopicSwitch() {
+        guard let receipt = viewState.latestReceipt,
+              viewState.phase == .ready,
+              receipt.lifecycle == .active else {
+            return
+        }
+        guard let vaultID = beginRequestOrFail() else { return }
+        do {
+            let command = try OwnerTruthInterviewPauseForTopicSwitchCommand(
+                commandID: identifierFactory().uuidString.lowercased(),
+                threadID: receipt.threadID,
+                sessionID: receipt.sessionID,
+                expectedThreadVersion: receipt.threadVersion,
+                expectedSessionVersion: receipt.sessionVersion
+            )
+            operationGeneration &+= 1
+            let generation = operationGeneration
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .submitting,
+                latestReceipt: receipt,
+                continuation: viewState.continuation,
+                notice: nil
+            )
+            client.pauseOwnerTruthInterviewForTopicSwitch(
+                vaultID: vaultID,
+                command: command
+            ) { [weak self] result in
+                self?.receiveTopicSwitchPause(
+                    result,
+                    vaultID: vaultID,
+                    command: command,
+                    generation: generation
+                )
+            }
+        } catch {
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .ready,
+                latestReceipt: receipt,
+                continuation: viewState.continuation,
+                notice: .invalidInput
+            )
+        }
+    }
+
     private func restoreCooldown() {
         guard let receipt = viewState.latestReceipt,
               viewState.phase == .ready,
@@ -4384,6 +4489,28 @@ final class OwnerTruthInterviewNaturalInputUseCase {
                 notice: nil
             )
             refreshContinuation(vaultID: vaultID, receipt: receipt)
+        case .failure:
+            transitionFailure(.requestFailed)
+        }
+    }
+
+    private func receiveTopicSwitchPause(
+        _ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewPauseForTopicSwitchCommand,
+        generation: UInt
+    ) {
+        guard canCommit(generation: generation) else { return }
+        switch result {
+        case .success(let receipt):
+            guard receipt.vaultID == vaultID, receipt.matches(command) else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            // The old thread is now fenced. Starting the new thread is an
+            // explicit second command so the backend never receives topic
+            // text or a client-selected replacement session in this pause.
+            startNewSession(vaultID: vaultID)
         case .failure:
             transitionFailure(.requestFailed)
         }

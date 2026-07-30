@@ -5922,6 +5922,48 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    func pauseOwnerTruthInterviewForTopicSwitch(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewPauseForTopicSwitchCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        // Topic switches remain a default-off QA lifecycle contract. They
+        // must not inherit a released echoTextInput policy capture until the
+        // product flow has its own approval Gate.
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthInterviewTopicSwitch",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions/\(pathComponent(command.sessionID.rawValue.uuidString))/pause-for-topic-switch"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewNaturalInputReceipt(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func restoreOwnerTruthInterviewCooldown(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewRestoreCooldownCommand,

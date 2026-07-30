@@ -1163,6 +1163,41 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    func testInterviewTopicSwitchCommandUsesValueFreePayloadAndMatchesPausedReceipt() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let command = try OwnerTruthInterviewPauseForTopicSwitchCommand(
+            commandID: "natural-input-topic-switch",
+            threadID: recordID("00000000-0000-0000-0000-000000000078"),
+            sessionID: recordID("00000000-0000-0000-0000-000000000079"),
+            expectedThreadVersion: 2,
+            expectedSessionVersion: 3
+        )
+
+        XCTAssertEqual(Set(command.backendPayload.keys), [
+            "commandId",
+            "threadId",
+            "expectedThreadVersion",
+            "expectedSessionVersion",
+        ])
+        XCTAssertEqual(command.backendPayload["commandId"] as? String, command.commandID)
+        XCTAssertEqual(
+            command.backendPayload["threadId"] as? String,
+            command.threadID.rawValue.uuidString.lowercased()
+        )
+        XCTAssertEqual(command.backendPayload["expectedThreadVersion"] as? Int, 2)
+        XCTAssertEqual(command.backendPayload["expectedSessionVersion"] as? Int, 3)
+        XCTAssertFalse(String(describing: command.backendPayload).contains("topicId"))
+        XCTAssertFalse(String(describing: command.backendPayload).contains("text"))
+
+        let receipt = try interviewNaturalInputReceipt(vaultID: vaultID, topicSwitch: command)
+        XCTAssertTrue(receipt.matches(command))
+        XCTAssertEqual(receipt.lifecycle, .paused)
+        XCTAssertEqual(receipt.boundary, .open)
+        XCTAssertNil(receipt.messageID)
+        XCTAssertNil(receipt.messageSequence)
+    }
+
     func testInterviewRestoreCooldownCommandUsesValueFreePayloadAndMatchesActiveReceipt() throws {
         let (_, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
@@ -1221,6 +1256,76 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.latestReceipt?.messageSequence, 1)
         XCTAssertEqual(client.appendCommand?.text, text)
         XCTAssertFalse(String(describing: useCase.viewState).contains(text))
+    }
+
+    func testInterviewNaturalInputUseCasePausesOldThreadAndStartsNewSession() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        client.topicSwitchHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, topicSwitch: command) }
+        }
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.start)
+        let oldReceipt = try XCTUnwrap(useCase.viewState.latestReceipt)
+        useCase.send(.pauseForTopicSwitch)
+
+        let pauseCommand = try XCTUnwrap(client.topicSwitchCommand)
+        let newReceipt = try XCTUnwrap(useCase.viewState.latestReceipt)
+        XCTAssertEqual(pauseCommand.threadID, oldReceipt.threadID)
+        XCTAssertEqual(pauseCommand.sessionID, oldReceipt.sessionID)
+        XCTAssertEqual(pauseCommand.expectedThreadVersion, oldReceipt.threadVersion)
+        XCTAssertEqual(pauseCommand.expectedSessionVersion, oldReceipt.sessionVersion)
+        XCTAssertEqual(client.startCommands.count, 2)
+        XCTAssertNotEqual(newReceipt.threadID, oldReceipt.threadID)
+        XCTAssertNotEqual(newReceipt.sessionID, oldReceipt.sessionID)
+        XCTAssertEqual(newReceipt.lifecycle, .active)
+        XCTAssertEqual(newReceipt.boundary, .open)
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+    }
+
+    func testInterviewNaturalInputUseCaseDiscardsDeferredTopicSwitchAfterAccountChange() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        client.deferTopicSwitch = true
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.start)
+        useCase.send(.pauseForTopicSwitch)
+        let command = try XCTUnwrap(client.topicSwitchCommand)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferredTopicSwitch(.success(try interviewNaturalInputReceipt(
+            vaultID: vaultID,
+            topicSwitch: command
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(useCase.viewState.latestReceipt)
+        XCTAssertEqual(client.startCommands.count, 1)
     }
 
     func testInterviewNaturalInputUseCaseDiscardsDeferredAppendAfterAccountChange() throws {
@@ -3317,6 +3422,28 @@ final class OwnerTruthContractsTests: XCTestCase {
 
     private func interviewNaturalInputReceipt(
         vaultID: OwnerTruthVaultID,
+        topicSwitch: OwnerTruthInterviewPauseForTopicSwitchCommand
+    ) throws -> OwnerTruthInterviewNaturalInputReceipt {
+        try OwnerTruthInterviewNaturalInputReceipt(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "receipt": [
+                    "status": OwnerTruthCommandOutcome.created.rawValue,
+                    "threadId": topicSwitch.threadID.rawValue.uuidString,
+                    "sessionId": topicSwitch.sessionID.rawValue.uuidString,
+                    "threadVersion": topicSwitch.expectedThreadVersion + 1,
+                    "sessionVersion": topicSwitch.expectedSessionVersion + 1,
+                    "state": OwnerTruthInterviewSessionLifecycle.paused.rawValue,
+                    "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+    }
+
+    private func interviewNaturalInputReceipt(
+        vaultID: OwnerTruthVaultID,
         restoreCooldown: OwnerTruthInterviewRestoreCooldownCommand
     ) throws -> OwnerTruthInterviewNaturalInputReceipt {
         try OwnerTruthInterviewNaturalInputReceipt(
@@ -3907,19 +4034,24 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
     var startHandler: ((OwnerTruthInterviewNaturalInputStartCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var appendHandler: ((OwnerTruthInterviewNaturalInputAppendCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var boundaryHandler: ((OwnerTruthInterviewBoundaryCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
+    var topicSwitchHandler: ((OwnerTruthInterviewPauseForTopicSwitchCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var restoreDoNotAskHandler: ((OwnerTruthInterviewRestoreDoNotAskCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var restoreCooldownHandler: ((OwnerTruthInterviewRestoreCooldownCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var continuationHandler: ((OwnerTruthRecordID) -> Result<OwnerTruthInterviewNaturalInputContinuation, Error>)?
     var deferAppend = false
     var deferBoundary = false
+    var deferTopicSwitch = false
     var deferRestoreCooldown = false
     private var deferredAppendCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
     private var deferredBoundaryCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
+    private var deferredTopicSwitchCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
     private var deferredRestoreCooldownCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
 
     private(set) var startCommand: OwnerTruthInterviewNaturalInputStartCommand?
+    private(set) var startCommands: [OwnerTruthInterviewNaturalInputStartCommand] = []
     private(set) var appendCommand: OwnerTruthInterviewNaturalInputAppendCommand?
     private(set) var boundaryCommand: OwnerTruthInterviewBoundaryCommand?
+    private(set) var topicSwitchCommand: OwnerTruthInterviewPauseForTopicSwitchCommand?
     private(set) var restoreDoNotAskCommand: OwnerTruthInterviewRestoreDoNotAskCommand?
     private(set) var restoreCooldownCommand: OwnerTruthInterviewRestoreCooldownCommand?
 
@@ -3951,6 +4083,7 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
     ) {
         startCommand = command
+        startCommands.append(command)
         completion(startHandler?(command) ?? .failure(InterviewNaturalInputClientSpyError.missingStartResult))
     }
 
@@ -3993,6 +4126,21 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
         ))
     }
 
+    func pauseOwnerTruthInterviewForTopicSwitch(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewPauseForTopicSwitchCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        topicSwitchCommand = command
+        if deferTopicSwitch {
+            deferredTopicSwitchCompletion = completion
+            return
+        }
+        completion(topicSwitchHandler?(command) ?? .failure(
+            InterviewNaturalInputClientSpyError.missingTopicSwitchResult
+        ))
+    }
+
     func restoreOwnerTruthInterviewCooldown(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewRestoreCooldownCommand,
@@ -4030,6 +4178,12 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
         completion?(result)
     }
 
+    func completeDeferredTopicSwitch(_ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>) {
+        let completion = deferredTopicSwitchCompletion
+        deferredTopicSwitchCompletion = nil
+        completion?(result)
+    }
+
     func completeDeferredRestoreCooldown(_ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>) {
         let completion = deferredRestoreCooldownCompletion
         deferredRestoreCooldownCompletion = nil
@@ -4041,6 +4195,7 @@ private enum InterviewNaturalInputClientSpyError: Error {
     case missingStartResult
     case missingAppendResult
     case missingBoundaryResult
+    case missingTopicSwitchResult
     case missingRestoreDoNotAskResult
     case missingRestoreCooldownResult
     case missingContinuationResult

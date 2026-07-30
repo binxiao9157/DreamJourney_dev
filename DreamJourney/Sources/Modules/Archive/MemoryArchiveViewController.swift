@@ -7506,6 +7506,46 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
         }
     }
 
+    func pauseOwnerTruthInterviewForTopicSwitch(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewPauseForTopicSwitchCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID,
+              let current = currentSessionReceipt,
+              current.threadID == command.threadID,
+              current.sessionID == command.sessionID,
+              current.lifecycle == .active,
+              current.threadVersion == command.expectedThreadVersion,
+              current.sessionVersion == command.expectedSessionVersion else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        do {
+            let receipt = try OwnerTruthInterviewNaturalInputReceipt(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "receipt": [
+                        "status": OwnerTruthCommandOutcome.created.rawValue,
+                        "threadId": command.threadID.rawValue.uuidString,
+                        "sessionId": command.sessionID.rawValue.uuidString,
+                        "threadVersion": command.expectedThreadVersion + 1,
+                        "sessionVersion": command.expectedSessionVersion + 1,
+                        "state": OwnerTruthInterviewSessionLifecycle.paused.rawValue,
+                        "boundary": current.boundary.rawValue,
+                    ],
+                ],
+                expectedVaultID: vaultID
+            )
+            boundariesBySessionID[command.sessionID.rawValue] = current.boundary
+            currentSessionReceipt = nil
+            completion(.success(receipt))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
     func restoreOwnerTruthInterviewDoNotAsk(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewRestoreDoNotAskCommand,
