@@ -60,9 +60,10 @@
     "WI-S1-01-07_G0_CITATION_RIGHTS_CURRENTNESS_REASON_VERIFIED_LOCAL",
     "WI-S1-01-07_G0_CITATION_STALE_REASON_PRESERVATION_VERIFIED_LOCAL",
     "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_ADMISSION_AUTHORIZATION_VERIFIED_LOCAL_1eb2359",
-    "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_STATUS_VERIFIED_LOCAL_6fa71fc"
+    "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_STATUS_VERIFIED_LOCAL_6fa71fc",
+    "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_STATUS_IOS_TYPED_CONSUMER_VERIFIED_LOCAL"
   ],
-  "currentSubSlice": "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_STATUS_VERIFIED_LOCAL_6fa71fc / Formal Owner-only proposal staging status now requires a captured ownerTruthCandidateReview decision outside the retained QA lane. It returns only value-free progress labels, remains default-off and no-store, and cannot execute extraction, create Candidates, write MemoryVersions, call Providers, change public Echo, claim deployment or true-device behavior.",
+  "currentSubSlice": "WI-S1-01-06_G0_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_STATUS_IOS_TYPED_CONSUMER_VERIFIED_LOCAL / iOS now consumes the formal Owner-only candidate-proposal staging status through the captured ownerTruthCandidateReview decision and AccountLease request/commit fence. The strict value-free decoder rejects unknown/private fields and incoherent state combinations; it has no UI attachment, mutation API, Provider call, public Echo change, deployment or true-device claim.",
   "m0BGuidedRecommendationPresentationEvidence": {
     "status": "VERIFIED_LOCAL / DEFAULT_OFF / NOT_DEPLOYED",
     "evidence": "docs/superpowers/status/2026-07-30-m0b-guided-recommendation-presentation-g0.md",
@@ -129,6 +130,9 @@
     },
     "formalCandidateProposalAuthorizationEvidence": {
       "G0": "VERIFIED_LOCAL / backend main@1eb2359 and main@6fa71fc / Formal candidate-proposal admission requires and persists only captured ownerTruthCandidateReview evidence in the admission ledger; it never copies that capture into Source metadata or effect payloads. The retained QA lane cannot replay the formal command. Formal proposal status uses the same captured policy outside QA, returns only staging labels with no-store, rejects missing capture and cross-owner access, and never executes the disabled extraction worker or exposes narrative, Source/Candidate/effect/provider/authorization values. Focused API/service/route/release-policy suites passed 53/53; Python compile, git diff --check and scripts/verify_backend.sh passed 1,628 tests and configured gates. No isolated Postgres run, deployment, public UI, Provider delivery, or true-device claim."
+    },
+    "formalCandidateProposalStatusIOSEvidence": {
+      "G0": "VERIFIED_LOCAL / iOS feature/prd-stitch-ui-adaptation working tree / The formal candidate-proposal status client reuses the captured ownerTruthCandidateReview FeatureDecision, adds no QA header, and maps the route to the same feature gate. Its exact decoder retains only vaultId, reviewBatchId and durable status labels; it rejects unknown/private fields, unknown labels and impossible review/source/extraction combinations. The default-off AccountLease-fenced use case validates policy and lease before request and commit, binds only a current result, and has no public UI or mutation action. OwnerTruthContractsTests passed 128/128 on the iPhone 17 simulator; generic iOS Simulator Debug workspace build and handoff check passed. No backend deployment, PostgreSQL, Provider delivery, public UI or true-device claim."
     },
     "projectionRightsRebuildIntentEvidence": {
       "G0": "VERIFIED_LOCAL / backend main@ad154ff plus working tree / Rights revision record and the value-free Projection rebuild effect share one Unit of Work and deduplicate on replay. The existing worker accepts only current active rights, performs the normal Projection rebuild without a MemoryVersion payload target, and writes a blocked completion for revoked rights. The Postgres target-admission adapter directly proves current active admission and fail-closed newer revision, revoked state and event-hash replay behavior under the same Vault and epoch lock. The isolated disposable Postgres smoke path now asserts the active revision's typed completion/checkpoint and the revoked revision's terminal blocked receipt, behind RUN_OWNER_TRUTH_PROJECTION_RIGHTS_POSTGRES_SMOKE=1; it was not executed because this host has no DATABASE_URL. Focused adapter tests (13), the Projection rights fence gate (35), git diff --check and scripts/verify_backend.sh (1,600 unit tests plus configured gates) passed. The worker remains default-disabled; no new ingress, route, provider, deployment, public Context/Echo cutover or true-device claim."
@@ -903,5 +907,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-31T02:06:06+08:00"
+  "updatedAt": "2026-07-31T02:17:51+08:00"
 }

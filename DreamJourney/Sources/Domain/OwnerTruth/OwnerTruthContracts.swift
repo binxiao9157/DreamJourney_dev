@@ -136,6 +136,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidInterviewCandidateMemoryActivationInbox(String)
     case invalidInterviewCandidateMemoryProjectionRecoveryInbox(String)
     case invalidInterviewCandidateConfirmation(String)
+    case invalidInterviewCandidateProposalStatus(String)
     case invalidInterviewCandidateDecision(String)
     case invalidInterviewSessionState(String)
     case invalidInterviewOrchestration(String)
@@ -173,6 +174,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "访谈正式记忆整理状态合同无效：\(detail)"
         case .invalidInterviewCandidateConfirmation(let detail):
             return "访谈候选确认合同无效：\(detail)"
+        case .invalidInterviewCandidateProposalStatus(let detail):
+            return "访谈候选提议状态合同无效：\(detail)"
         case .invalidInterviewCandidateDecision(let detail):
             return "访谈候选审核回执合同无效：\(detail)"
         case .invalidInterviewSessionState(let detail):
@@ -1354,6 +1357,196 @@ struct OwnerTruthInterviewCandidateConfirmation: Equatable, Sendable {
     }
 }
 
+/// Value-free staging state for a formally acknowledged interview review
+/// batch. This is intentionally distinct from the confirmation projection: it
+/// contains no Source, Candidate, extraction, effect or Provider identifier.
+enum OwnerTruthInterviewCandidateProposalReviewBatchState: String, Equatable, Sendable {
+    case pendingAcknowledgement
+    case acknowledged
+}
+
+enum OwnerTruthInterviewCandidateProposalAdmissionState: String, Equatable, Sendable {
+    case pendingAcknowledgement
+    case readyForAdmission
+    case admitted
+    case invalidated
+}
+
+enum OwnerTruthInterviewCandidateProposalSourceState: String, Equatable, Sendable {
+    case notAdmitted
+    case admitted
+    case inactive
+}
+
+enum OwnerTruthInterviewCandidateProposalExtractionState: String, Equatable, Sendable {
+    case notRequested
+    case requested
+    case blocked
+    case succeeded
+    case failed
+    case quarantined
+}
+
+enum OwnerTruthInterviewCandidateProposalEffectState: String, Equatable, Sendable {
+    case disabled
+}
+
+enum OwnerTruthInterviewCandidateProposalReviewState: String, Equatable, Sendable {
+    case notReady
+    case reviewReady
+    case noCandidates
+    case extractionFailed
+    case extractionQuarantined
+}
+
+/// In-memory binding added only after the value-free staging response passes
+/// the AccountLease request/commit fence. It never crosses the backend
+/// boundary and carries no archive content.
+private struct OwnerTruthInterviewCandidateProposalStatusLeaseBinding: Equatable, Sendable {
+    let accountLease: AccountLease
+
+    func matches(_ accountLease: AccountLease) -> Bool {
+        self.accountLease == accountLease
+    }
+}
+
+struct OwnerTruthInterviewCandidateProposalStatus: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-candidate-proposal-status-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let reviewBatchID: OwnerTruthRecordID
+    let reviewBatchState: OwnerTruthInterviewCandidateProposalReviewBatchState
+    let candidateProposalState: OwnerTruthInterviewCandidateProposalAdmissionState
+    let sourceState: OwnerTruthInterviewCandidateProposalSourceState
+    let candidateExtractionState: OwnerTruthInterviewCandidateProposalExtractionState
+    let effectExecutionState: OwnerTruthInterviewCandidateProposalEffectState
+    let candidateReviewState: OwnerTruthInterviewCandidateProposalReviewState
+    private var leaseBinding: OwnerTruthInterviewCandidateProposalStatusLeaseBinding?
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID,
+        expectedReviewBatchID: OwnerTruthRecordID
+    ) throws {
+        guard Set(object.keys) == Set([
+            "schemaVersion",
+            "vaultId",
+            "reviewBatch",
+            "candidateProposal",
+            "source",
+            "candidateExtraction",
+            "effectExecution",
+            "candidateReview",
+        ]),
+              OwnerTruthInterviewCandidateContract.requiredString(object["schemaVersion"]) == Self.schemaVersion,
+              OwnerTruthInterviewCandidateContract.requiredString(object["vaultId"]) == expectedVaultID.rawValue,
+              let reviewBatch = object["reviewBatch"] as? [String: Any],
+              let candidateProposal = object["candidateProposal"] as? [String: Any],
+              let source = object["source"] as? [String: Any],
+              let candidateExtraction = object["candidateExtraction"] as? [String: Any],
+              let effectExecution = object["effectExecution"] as? [String: Any],
+              let candidateReview = object["candidateReview"] as? [String: Any],
+              Set(reviewBatch.keys) == Set(["reviewBatchId", "state"]),
+              Set(candidateProposal.keys) == Set(["status"]),
+              Set(source.keys) == Set(["status"]),
+              Set(candidateExtraction.keys) == Set(["status"]),
+              Set(effectExecution.keys) == Set(["status"]),
+              Set(candidateReview.keys) == Set(["status"]),
+              let reviewBatchID = OwnerTruthCandidateEvidenceReference.recordID(reviewBatch["reviewBatchId"]),
+              reviewBatchID == expectedReviewBatchID,
+              let reviewBatchRaw = OwnerTruthInterviewCandidateContract.requiredString(reviewBatch["state"]),
+              let reviewBatchState = OwnerTruthInterviewCandidateProposalReviewBatchState(rawValue: reviewBatchRaw),
+              let proposalRaw = OwnerTruthInterviewCandidateContract.requiredString(candidateProposal["status"]),
+              let candidateProposalState = OwnerTruthInterviewCandidateProposalAdmissionState(rawValue: proposalRaw),
+              let sourceRaw = OwnerTruthInterviewCandidateContract.requiredString(source["status"]),
+              let sourceState = OwnerTruthInterviewCandidateProposalSourceState(rawValue: sourceRaw),
+              let extractionRaw = OwnerTruthInterviewCandidateContract.requiredString(candidateExtraction["status"]),
+              let candidateExtractionState = OwnerTruthInterviewCandidateProposalExtractionState(rawValue: extractionRaw),
+              let effectRaw = OwnerTruthInterviewCandidateContract.requiredString(effectExecution["status"]),
+              let effectExecutionState = OwnerTruthInterviewCandidateProposalEffectState(rawValue: effectRaw),
+              let reviewRaw = OwnerTruthInterviewCandidateContract.requiredString(candidateReview["status"]),
+              let candidateReviewState = OwnerTruthInterviewCandidateProposalReviewState(rawValue: reviewRaw),
+              Self.isCoherent(
+                reviewBatchState: reviewBatchState,
+                candidateProposalState: candidateProposalState,
+                sourceState: sourceState,
+                candidateExtractionState: candidateExtractionState,
+                effectExecutionState: effectExecutionState,
+                candidateReviewState: candidateReviewState
+              ) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateProposalStatus(
+                "status response misses a required typed field or has an unsupported state combination"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.reviewBatchID = reviewBatchID
+        self.reviewBatchState = reviewBatchState
+        self.candidateProposalState = candidateProposalState
+        self.sourceState = sourceState
+        self.candidateExtractionState = candidateExtractionState
+        self.effectExecutionState = effectExecutionState
+        self.candidateReviewState = candidateReviewState
+        leaseBinding = nil
+    }
+
+    func bound(to accountLease: AccountLease) -> Self {
+        var copy = self
+        copy.leaseBinding = OwnerTruthInterviewCandidateProposalStatusLeaseBinding(
+            accountLease: accountLease
+        )
+        return copy
+    }
+
+    func isBound(to accountLease: AccountLease) -> Bool {
+        leaseBinding?.matches(accountLease) == true
+    }
+
+    private static func isCoherent(
+        reviewBatchState: OwnerTruthInterviewCandidateProposalReviewBatchState,
+        candidateProposalState: OwnerTruthInterviewCandidateProposalAdmissionState,
+        sourceState: OwnerTruthInterviewCandidateProposalSourceState,
+        candidateExtractionState: OwnerTruthInterviewCandidateProposalExtractionState,
+        effectExecutionState: OwnerTruthInterviewCandidateProposalEffectState,
+        candidateReviewState: OwnerTruthInterviewCandidateProposalReviewState
+    ) -> Bool {
+        guard effectExecutionState == .disabled else { return false }
+        switch (reviewBatchState, candidateProposalState) {
+        case (.pendingAcknowledgement, .pendingAcknowledgement):
+            return sourceState == .notAdmitted
+                && candidateExtractionState == .notRequested
+                && candidateReviewState == .notReady
+        case (.acknowledged, .readyForAdmission):
+            return sourceState == .notAdmitted
+                && candidateExtractionState == .notRequested
+                && candidateReviewState == .notReady
+        case (.acknowledged, .invalidated):
+            return sourceState == .inactive
+                && candidateExtractionState == .blocked
+                && candidateReviewState == .notReady
+        case (.acknowledged, .admitted):
+            guard sourceState == .admitted else { return false }
+            switch candidateExtractionState {
+            case .requested:
+                return candidateReviewState == .notReady
+            case .succeeded:
+                return candidateReviewState == .reviewReady || candidateReviewState == .noCandidates
+            case .failed:
+                return candidateReviewState == .extractionFailed
+            case .quarantined:
+                return candidateReviewState == .extractionQuarantined
+            case .notRequested, .blocked:
+                return false
+            }
+        case (.pendingAcknowledgement, .readyForAdmission),
+             (.pendingAcknowledgement, .admitted),
+             (.pendingAcknowledgement, .invalidated),
+             (.acknowledged, .pendingAcknowledgement):
+            return false
+        }
+    }
+}
+
 struct OwnerTruthInterviewCandidateBatchSelection: Equatable, Sendable {
     let candidateID: OwnerTruthRecordID
     let expectedCandidateVersion: Int
@@ -1579,6 +1772,16 @@ protocol OwnerTruthInterviewCandidateConfirmationClient: AnyObject {
         vaultID: OwnerTruthVaultID,
         reviewBatchID: OwnerTruthRecordID,
         completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmation, Error>) -> Void
+    )
+}
+
+/// Narrow read-only port for the formal value-free candidate-proposal staging
+/// status. It has no admission, extraction, Candidate or Memory action.
+protocol OwnerTruthInterviewCandidateProposalStatusClient: AnyObject {
+    func fetchOwnerTruthInterviewCandidateProposalStatus(
+        vaultID: OwnerTruthVaultID,
+        reviewBatchID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateProposalStatus, Error>) -> Void
     )
 }
 
@@ -2971,6 +3174,163 @@ final class OwnerTruthInterviewCandidateConfirmationUseCase {
         viewState = OwnerTruthInterviewCandidateConfirmationViewState(
             phase: .failed,
             confirmation: nil,
+            notice: .requestFailed
+        )
+    }
+}
+
+// MARK: - Default-off formal candidate-proposal staging status
+
+enum OwnerTruthInterviewCandidateProposalStatusIntent: Equatable, Sendable {
+    case refresh
+}
+
+enum OwnerTruthInterviewCandidateProposalStatusPhase: Equatable, Sendable {
+    case idle
+    case unavailable
+    case loading
+    case ready
+    case failed
+}
+
+enum OwnerTruthInterviewCandidateProposalStatusNotice: Equatable, Sendable {
+    case releasePolicyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case requestFailed
+}
+
+struct OwnerTruthInterviewCandidateProposalStatusViewState: Equatable, Sendable {
+    let phase: OwnerTruthInterviewCandidateProposalStatusPhase
+    let status: OwnerTruthInterviewCandidateProposalStatus?
+    let notice: OwnerTruthInterviewCandidateProposalStatusNotice?
+
+    static let idle = OwnerTruthInterviewCandidateProposalStatusViewState(
+        phase: .idle,
+        status: nil,
+        notice: nil
+    )
+}
+
+/// Lease-fenced, read-only consumer for the formal staging status route. The
+/// default policy is fail-closed and this use case intentionally has no UI
+/// attachment yet; it exists to keep transport/authority semantics stable.
+final class OwnerTruthInterviewCandidateProposalStatusUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let reviewBatchID: OwnerTruthRecordID
+    private let client: OwnerTruthInterviewCandidateProposalStatusClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAvailable: () -> Bool
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthInterviewCandidateProposalStatusViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthInterviewCandidateProposalStatusViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        reviewBatchID: OwnerTruthRecordID,
+        client: OwnerTruthInterviewCandidateProposalStatusClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool = { false }
+    ) {
+        self.accountLease = accountLease
+        vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.reviewBatchID = reviewBatchID
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+    }
+
+    func send(_ intent: OwnerTruthInterviewCandidateProposalStatusIntent) {
+        switch intent {
+        case .refresh:
+            refresh()
+        }
+    }
+
+    private func refresh() {
+        guard let vaultID = beginRequestOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthInterviewCandidateProposalStatusViewState(
+            phase: .loading,
+            status: nil,
+            notice: nil
+        )
+        client.fetchOwnerTruthInterviewCandidateProposalStatus(
+            vaultID: vaultID,
+            reviewBatchID: reviewBatchID
+        ) { [weak self] result in
+            self?.receive(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            resetForUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthInterviewCandidateProposalStatus, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard releasePolicyAvailable() else {
+            resetForUnavailable(.releasePolicyDisabled)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let status):
+            guard status.vaultID == vaultID,
+                  status.vaultID.rawValue == accountLease.vaultId,
+                  status.reviewBatchID == reviewBatchID else {
+                transitionFailure()
+                return
+            }
+            viewState = OwnerTruthInterviewCandidateProposalStatusViewState(
+                phase: .ready,
+                status: status.bound(to: accountLease),
+                notice: nil
+            )
+        case .failure:
+            transitionFailure()
+        }
+    }
+
+    private func resetForUnavailable(_ notice: OwnerTruthInterviewCandidateProposalStatusNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthInterviewCandidateProposalStatusViewState(
+            phase: .unavailable,
+            status: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure() {
+        viewState = OwnerTruthInterviewCandidateProposalStatusViewState(
+            phase: .failed,
+            status: nil,
             notice: .requestFailed
         )
     }

@@ -536,6 +536,11 @@ final class FeatureGateService {
         }
         if method == .get,
            normalizedPath.contains("/interview-review-batches/"),
+           normalizedPath.hasSuffix("/candidate-proposal/status") {
+            return .ownerTruthCandidateReview
+        }
+        if method == .get,
+           normalizedPath.contains("/interview-review-batches/"),
            normalizedPath.hasSuffix("/confirmation") {
             return .ownerTruthCandidateReview
         }
@@ -5671,6 +5676,49 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    /// Reads only formal, value-free staging labels for an admitted proposal.
+    /// This is separate from the QA transport and intentionally never adds a
+    /// QA header or exposes Candidate/Source detail.
+    func fetchOwnerTruthInterviewCandidateProposalStatus(
+        vaultID: OwnerTruthVaultID,
+        reviewBatchID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateProposalStatus, Error>) -> Void
+    ) {
+        let decision = FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)
+        guard decision.allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                    reason: decision.reason
+                )))
+            }
+            return
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-review-batches/\(pathComponent(reviewBatchID.rawValue.uuidString))/candidate-proposal/status"
+        requestJSON(
+            path: path,
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            featureDecision: decision
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewCandidateProposalStatus(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID,
+                        expectedReviewBatchID: reviewBatchID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     /// Sends the default-off product confirmation action. It is intentionally
     /// separate from the QA review endpoint and has no QA header bypass.
     func confirmOwnerTruthInterviewCandidateBatch(
@@ -8705,6 +8753,7 @@ extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationInb
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateMemoryActivationInboxClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateMemoryProjectionRecoveryInboxClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationClient {}
+extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateProposalStatusClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationActionClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationSingleActionClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateMemoryActivationClient {}

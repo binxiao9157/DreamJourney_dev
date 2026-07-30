@@ -1020,6 +1020,120 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(useCase.viewState.confirmation).isBound(to: lease))
     }
 
+    func testInterviewCandidateProposalStatusDecodesOnlyCoherentValueFreeContract() throws {
+        let vaultID = "vault-owner-a"
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000118")
+        let status = try OwnerTruthInterviewCandidateProposalStatus(
+            backendJSONObject: interviewCandidateProposalStatusPayload(
+                vaultID: vaultID,
+                reviewBatchID: reviewBatchID
+            ),
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID)),
+            expectedReviewBatchID: reviewBatchID
+        )
+
+        XCTAssertEqual(status.reviewBatchState, .acknowledged)
+        XCTAssertEqual(status.candidateProposalState, .admitted)
+        XCTAssertEqual(status.candidateExtractionState, .requested)
+        XCTAssertEqual(status.candidateReviewState, .notReady)
+
+        var privateFieldPayload = interviewCandidateProposalStatusPayload(
+            vaultID: vaultID,
+            reviewBatchID: reviewBatchID
+        )
+        privateFieldPayload["sourceId"] = "00000000-0000-0000-0000-000000000119"
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewCandidateProposalStatus(
+                backendJSONObject: privateFieldPayload,
+                expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID)),
+                expectedReviewBatchID: reviewBatchID
+            )
+        )
+
+        var incoherentPayload = interviewCandidateProposalStatusPayload(
+            vaultID: vaultID,
+            reviewBatchID: reviewBatchID
+        )
+        incoherentPayload["candidateReview"] = ["status": "reviewReady"]
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewCandidateProposalStatus(
+                backendJSONObject: incoherentPayload,
+                expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID)),
+                expectedReviewBatchID: reviewBatchID
+            )
+        )
+    }
+
+    func testInterviewCandidateProposalStatusUseCaseFailsClosedWithoutReleasePolicy() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = InterviewCandidateProposalStatusClientSpy()
+        let useCase = OwnerTruthInterviewCandidateProposalStatusUseCase(
+            accountLease: lease,
+            reviewBatchID: recordID("00000000-0000-0000-0000-000000000120"),
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { false }
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .releasePolicyDisabled)
+        XCTAssertEqual(client.requestCount, 0)
+    }
+
+    func testInterviewCandidateProposalStatusUseCaseDiscardsDeferredReadAfterAccountChange() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000121")
+        let client = InterviewCandidateProposalStatusClientSpy()
+        client.deferRead = true
+        let useCase = OwnerTruthInterviewCandidateProposalStatusUseCase(
+            accountLease: lease,
+            reviewBatchID: reviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.refresh)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferredRead(.success(try interviewCandidateProposalStatus(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(useCase.viewState.status)
+    }
+
+    func testInterviewCandidateProposalStatusUseCaseBindsSuccessfulReadToAccountLease() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000122")
+        let client = InterviewCandidateProposalStatusClientSpy()
+        client.readResult = .success(try interviewCandidateProposalStatus(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID
+        ))
+        let useCase = OwnerTruthInterviewCandidateProposalStatusUseCase(
+            accountLease: lease,
+            reviewBatchID: reviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertTrue(try XCTUnwrap(useCase.viewState.status).isBound(to: lease))
+    }
+
     func testInterviewCandidateConfirmationActionDecodesValueMinimizedResult() throws {
         let reviewBatchID = recordID("00000000-0000-0000-0000-000000000077")
         let candidateID = recordID("00000000-0000-0000-0000-000000000078")
@@ -4067,6 +4181,57 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private func interviewCandidateProposalStatus(
+        vaultID: String,
+        reviewBatchID: OwnerTruthRecordID,
+        reviewBatchState: OwnerTruthInterviewCandidateProposalReviewBatchState = .acknowledged,
+        candidateProposalState: OwnerTruthInterviewCandidateProposalAdmissionState = .admitted,
+        sourceState: OwnerTruthInterviewCandidateProposalSourceState = .admitted,
+        candidateExtractionState: OwnerTruthInterviewCandidateProposalExtractionState = .requested,
+        effectExecutionState: OwnerTruthInterviewCandidateProposalEffectState = .disabled,
+        candidateReviewState: OwnerTruthInterviewCandidateProposalReviewState = .notReady
+    ) throws -> OwnerTruthInterviewCandidateProposalStatus {
+        try OwnerTruthInterviewCandidateProposalStatus(
+            backendJSONObject: interviewCandidateProposalStatusPayload(
+                vaultID: vaultID,
+                reviewBatchID: reviewBatchID,
+                reviewBatchState: reviewBatchState,
+                candidateProposalState: candidateProposalState,
+                sourceState: sourceState,
+                candidateExtractionState: candidateExtractionState,
+                effectExecutionState: effectExecutionState,
+                candidateReviewState: candidateReviewState
+            ),
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID)),
+            expectedReviewBatchID: reviewBatchID
+        )
+    }
+
+    private func interviewCandidateProposalStatusPayload(
+        vaultID: String,
+        reviewBatchID: OwnerTruthRecordID,
+        reviewBatchState: OwnerTruthInterviewCandidateProposalReviewBatchState = .acknowledged,
+        candidateProposalState: OwnerTruthInterviewCandidateProposalAdmissionState = .admitted,
+        sourceState: OwnerTruthInterviewCandidateProposalSourceState = .admitted,
+        candidateExtractionState: OwnerTruthInterviewCandidateProposalExtractionState = .requested,
+        effectExecutionState: OwnerTruthInterviewCandidateProposalEffectState = .disabled,
+        candidateReviewState: OwnerTruthInterviewCandidateProposalReviewState = .notReady
+    ) -> [String: Any] {
+        [
+            "schemaVersion": OwnerTruthInterviewCandidateProposalStatus.schemaVersion,
+            "vaultId": vaultID,
+            "reviewBatch": [
+                "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                "state": reviewBatchState.rawValue,
+            ],
+            "candidateProposal": ["status": candidateProposalState.rawValue],
+            "source": ["status": sourceState.rawValue],
+            "candidateExtraction": ["status": candidateExtractionState.rawValue],
+            "effectExecution": ["status": effectExecutionState.rawValue],
+            "candidateReview": ["status": candidateReviewState.rawValue],
+        ]
+    }
+
     private func interviewCandidateConfirmationInbox(
         vaultID: String,
         reviewBatchIDs: [OwnerTruthRecordID]
@@ -5922,6 +6087,36 @@ private final class InterviewCandidateConfirmationClientSpy: OwnerTruthInterview
 }
 
 private enum InterviewCandidateConfirmationClientSpyError: Error {
+    case missingReadResult
+}
+
+private final class InterviewCandidateProposalStatusClientSpy: OwnerTruthInterviewCandidateProposalStatusClient {
+    var readResult: Result<OwnerTruthInterviewCandidateProposalStatus, Error>?
+    var deferRead = false
+    private var deferredReadCompletion: ((Result<OwnerTruthInterviewCandidateProposalStatus, Error>) -> Void)?
+    private(set) var requestCount = 0
+
+    func fetchOwnerTruthInterviewCandidateProposalStatus(
+        vaultID: OwnerTruthVaultID,
+        reviewBatchID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateProposalStatus, Error>) -> Void
+    ) {
+        requestCount += 1
+        if deferRead {
+            deferredReadCompletion = completion
+            return
+        }
+        completion(readResult ?? .failure(InterviewCandidateProposalStatusClientSpyError.missingReadResult))
+    }
+
+    func completeDeferredRead(_ result: Result<OwnerTruthInterviewCandidateProposalStatus, Error>) {
+        let completion = deferredReadCompletion
+        deferredReadCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum InterviewCandidateProposalStatusClientSpyError: Error {
     case missingReadResult
 }
 
