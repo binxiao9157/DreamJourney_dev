@@ -118,8 +118,19 @@ tmp/visual-qa/prd-stitch-ui/echo-qa-evidence-bundle-export-smoke/20260719-233143
 不包含原始 MemoryVersion。
 
 截至最初的 2026-07-19 交付，服务器上的既有 QA contract 无需重新部署。2026-07-30
-已新增本地 Context 当前性 guard，后端现有未部署代码；后续部署后需要重新运行隔离
-Postgres smoke，才能更新该新 guard 的 G2 结论。
+新增 Context 当前性 guard 时，它最初只有本地 G0 证据；下节记录了随后完成的部署复演，
+因此不能再把该历史描述理解为当前仍未部署。
+
+### 2026-07-30 当前性 guard 部署复演
+
+后端 `main@e4e4713` 已将 `0064/0065` 的 forward-only 修复部署到 API 容器，并在 disposable
+Postgres smoke 中验证：Source Candidate 提取、Projection/SearchDocument 重建、当前 Citation
+保护和 correction resolution 均通过。该 smoke 使用独立临时数据库，不向业务库写入测试
+Owner、Memory、Answer 或 Citation。
+
+因此本条 Context 当前性 guard 的 G2 状态已更新为**已部署且 scoped 验证**。这只证明
+Owner Truth 默认关闭链路的 schema/service/transaction 约束；不打开公开 `/context/build`、
+不宣称检索质量、Provider、真实 Owner cohort 或公开 Echo 已验收。
 
 ### G2 服务器隔离验证
 

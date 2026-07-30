@@ -91,9 +91,19 @@ Candidate；候选可在 QA-only Candidate Inbox 中被定位，但终态必须�
 | `PYTHON_BIN=.venv/bin/python ./scripts/verify_backend.sh` | 1,487 项后端测试、G0 gates、FastAPI smoke 与 diff 检查通过 |
 | `scripts/backend-owner-truth-postgres-smoke.py` 新增路径 | 已纳入代码；要求部署 migration `0058` 后在隔离 PostgreSQL 实际执行 |
 
-本地未配置 `DATABASE_URL` 或 `OWNER_TRUTH_FORMAL_SMOKE_ADMIN_DATABASE_URL`。因此先前
-`main@162afb0` 的已部署 G2 证据不覆盖本轮新增 migration `0058`；本轮新 guard 的 G2 状态为
-**待部署并运行隔离 PostgreSQL smoke**，不能据此宣称线上已生效。
+本地未配置 `DATABASE_URL` 或 `OWNER_TRUTH_FORMAL_SMOKE_ADMIN_DATABASE_URL`，因此当时不能
+在本机完成新 migration `0058` 的隔离 PostgreSQL 验证。该限制已由后续服务器复演处理，
+见下节；本段只保留本地验证边界。
+
+### 2026-07-30 当前性 migration 部署复演
+
+后端 `main@e4e4713` 已部署包含 `0058` 与 `0065` 修正的迁移，并在 disposable Postgres
+smoke 中通过 corrected/rejected resolution、stale-resolution 拒绝、幂等、当前 Citation
+保护与 Projection rebuild。验证在独立临时库中执行，未打开 QA-only HTTP 路由、未创建
+生产测试用户，也未改变公开开关。
+
+因此 Source currentness guard 的 G2 状态为**已部署且 scoped 验证**；公开纠错入口、真实
+生产账号在线写入、review cohort、Provider 与 G4 仍保持未完成。
 
 ## 不能宣称完成的内容
 
