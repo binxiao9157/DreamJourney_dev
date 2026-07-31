@@ -7313,7 +7313,7 @@ extension EchoViewController: DialogEngineDelegate {
                 expectedOwner: .echoCapture,
                 reason: "asrFinal"
             )
-            self.viewModel.finishUserVoice(
+            let acceptedUserTurn = self.viewModel.finishUserVoice(
                 text: text,
                 accountLease: accountLease,
                 resourceOwnerId: accountLease.subjectId,
@@ -7323,6 +7323,14 @@ extension EchoViewController: DialogEngineDelegate {
             )
             if let safetyDecision = self.viewModel.neutralSafetyDecision {
                 self.enterNeutralSafetyMode(safetyDecision)
+                return
+            }
+            guard acceptedUserTurn else {
+                PrivacySafeDiagnostics.log(
+                    subsystem: "Echo",
+                    event: "userTurnRejectedBeforeRuntimeDispatch",
+                    states: ["reason": "turnIntentRejected"]
+                )
                 return
             }
             if self.routeEchoAudioThroughDigitalHuman,
@@ -7554,21 +7562,21 @@ extension EchoViewController {
         )
         for turn in 1..<EchoReplyPacingPolicy.waitAfterUserTurnCount {
             viewModel.beginVoiceInteraction()
-            viewModel.finishUserVoice(
+            guard viewModel.finishUserVoice(
                 text: "第 \(turn) 次想起爸爸小时候的故事",
                 accountLease: echoAccountLease,
                 resourceOwnerId: echoAccountLease.subjectId,
                 roleContextKey: roleContextKey
-            )
+            ) else { return }
             viewModel.receiveAIReply("我在听，慢慢说。")
         }
         viewModel.beginVoiceInteraction()
-        viewModel.finishUserVoice(
+        guard viewModel.finishUserVoice(
             text: "第十次想起这件事",
             accountLease: echoAccountLease,
             resourceOwnerId: echoAccountLease.subjectId,
             roleContextKey: roleContextKey
-        )
+        ) else { return }
         if viewModel.isWaitingForDelayedReply {
             beginDelayedReplyWait()
         }
@@ -8361,7 +8369,7 @@ extension EchoViewController {
                         return
                     }
                     let listening = stateName() == "listening"
-                    self.viewModel.finishUserVoice(
+                    let acceptedUserTurn = self.viewModel.finishUserVoice(
                         text: userText,
                         accountLease: echoAccountLease,
                         resourceOwnerId: echoAccountLease.subjectId,
@@ -8373,7 +8381,7 @@ extension EchoViewController {
                             completion(false)
                             return
                         }
-                        let thinking = stateName() == "thinking"
+                        let thinking = acceptedUserTurn && stateName() == "thinking"
                         self.viewModel.receiveAIReply(replyText)
 
                         DispatchQueue.main.async { [weak self] in

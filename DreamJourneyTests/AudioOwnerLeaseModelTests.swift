@@ -600,6 +600,67 @@ final class EchoTurnIntentReducerTests: XCTestCase {
     }
 }
 
+final class EchoViewModelTurnAdmissionTests: XCTestCase {
+    func testDuplicateFinalUserVoiceIsRejectedBeforeTranscriptSideEffects() throws {
+        let suiteName = "EchoViewModelTurnAdmissionTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
+        runtime.publish(session: AccountSession(
+            subjectId: "owner-1",
+            vaultId: "vault-1",
+            sessionId: "session-1",
+            tokenFamilyId: "token-family-1",
+            sessionVersion: 1,
+            generation: 1,
+            generationId: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+            state: .active,
+            activatedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        ))
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-1"))
+        let viewModel = EchoViewModel(
+            archiveContextStatusProvider: { .empty },
+            accountLeaseRuntime: runtime,
+            delayedReplyStore: EchoDelayedReplyStore(
+                defaults: defaults,
+                accountLeaseRuntime: runtime
+            ),
+            delayedReplyCallsiteScopeStore: EchoDelayedReplyCallsiteScopeStore(
+                defaults: defaults,
+                accountLeaseRuntime: runtime
+            )
+        )
+        var appendedUserTurns: [String] = []
+        viewModel.onTranscriptAppend = { text, isUser in
+            if isUser {
+                appendedUserTurns.append(text)
+            }
+        }
+
+        viewModel.prepareVoiceInteraction()
+        viewModel.beginVoiceInteraction()
+
+        XCTAssertTrue(viewModel.finishUserVoice(
+            text: "我想讲讲小时候散步的事",
+            accountLease: lease,
+            resourceOwnerId: lease.subjectId,
+            roleContextKey: "owner-1|self"
+        ))
+        XCTAssertFalse(viewModel.finishUserVoice(
+            text: "我想讲讲小时候散步的事",
+            accountLease: lease,
+            resourceOwnerId: lease.subjectId,
+            roleContextKey: "owner-1|self"
+        ))
+        XCTAssertEqual(appendedUserTurns, ["我想讲讲小时候散步的事"])
+        guard case .thinking = viewModel.state else {
+            return XCTFail("the accepted first turn must remain the sole thinking turn")
+        }
+    }
+}
+
 final class EchoApplicationCoordinatorTests: XCTestCase {
     func testContextBuildLeaseSupersedesEarlierRequest() {
         let coordinator = EchoApplicationCoordinator()

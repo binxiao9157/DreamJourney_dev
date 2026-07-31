@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 VIEW_MODEL = ROOT / "DreamJourney/Sources/Modules/Echo/EchoViewModel.swift"
+VIEW_CONTROLLER = ROOT / "DreamJourney/Sources/Modules/Echo/EchoViewController.swift"
 TESTS = ROOT / "DreamJourneyTests/AudioOwnerLeaseModelTests.swift"
 
 
@@ -26,6 +27,7 @@ def source_slice(source: str, start: str, end: str) -> str:
 
 def main() -> None:
     view_model = VIEW_MODEL.read_text(encoding="utf-8")
+    view_controller = VIEW_CONTROLLER.read_text(encoding="utf-8")
     tests = TESTS.read_text(encoding="utf-8")
 
     for required in (
@@ -60,11 +62,41 @@ def main() -> None:
         "    func finishUserVoice(\n        text: String,",
         "    func receiveAIReply(_ text: String)",
     )
-    reducer_guard = "guard turnIntentReducer.accepts(.userTurnAccepted)"
+    reducer_guard = "guard turnIntentReducer.accepts(acceptedIntent)"
     require(reducer_guard in finish_user_voice, "user turn must be reducer-fenced before side effects")
     require(
         finish_user_voice.find(reducer_guard) < finish_user_voice.find("memoryManager.recordUserTurn"),
         "stale user turns must be rejected before memory/transcript writes",
+    )
+    require(
+        ") -> Bool {" in finish_user_voice,
+        "finishUserVoice must return whether the reducer accepted the originating turn",
+    )
+    require(
+        "return applyTurnIntent(.userTurnAccepted, state: .thinking)" in finish_user_voice,
+        "user-turn admission must return the reducer result to its caller",
+    )
+
+    asr_final = source_slice(
+        view_controller,
+        "    func onASRResult(text: String, isFinal: Bool)",
+        "    func onTTSStarted(text: String)",
+    )
+    for snippet in (
+        "let acceptedUserTurn = self.viewModel.finishUserVoice(",
+        "guard acceptedUserTurn else",
+        "userTurnRejectedBeforeRuntimeDispatch",
+    ):
+        require(snippet in asr_final, f"ASR final dispatch fence missing: {snippet}")
+    require(
+        asr_final.find("guard acceptedUserTurn else")
+        < asr_final.find("self.digitalHumanConversation.startUserTurn"),
+        "a rejected ASR final must not create a digital-human turn",
+    )
+    require(
+        asr_final.find("guard acceptedUserTurn else")
+        < asr_final.find("self.recordEchoContextPacketForUserTurn("),
+        "a rejected ASR final must not build Context",
     )
 
     receive_reply = source_slice(
@@ -88,6 +120,7 @@ def main() -> None:
         "func testDelayedReplyCanBeScheduledAndDeliveredWithoutOpeningAnotherTurn()",
         "func testStoredDueReplyAwaitsServerResultAfterAppRelaunchWithoutAcceptingStaleReply()",
         "func testFailureOnlyRetriesFromFailureState()",
+        "func testDuplicateFinalUserVoiceIsRejectedBeforeTranscriptSideEffects()",
     ):
         require(test_name in tests, f"Echo turn reducer test missing: {test_name}")
 

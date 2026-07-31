@@ -1450,12 +1450,13 @@ final class EchoViewModel {
         _ = applyTurnIntent(.voiceCaptureStarted, state: .listening)
     }
 
-    func finishUserVoice(text: String) {
+    @discardableResult
+    func finishUserVoice(text: String) -> Bool {
         guard let accountLease = accountLeaseRuntime.capture(forSubjectId: nil) else {
             _ = applyTurnIntent(.failure, state: .error("账号状态已变化，请重新进入回响"))
-            return
+            return false
         }
-        finishUserVoice(
+        return finishUserVoice(
             text: text,
             accountLease: accountLease,
             resourceOwnerId: accountLease.subjectId,
@@ -1463,19 +1464,20 @@ final class EchoViewModel {
         )
     }
 
+    @discardableResult
     func finishUserVoice(
         text: String,
         accountLease: AccountLease,
         resourceOwnerId: String,
         roleContextKey: String
-    ) {
+    ) -> Bool {
         guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
-            return
+            return false
         }
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else {
             _ = applyTurnIntent(.failure, state: .error("刚才没有听清，可以再说一次"))
-            return
+            return false
         }
 
         let safetyDecision = EchoSafetyPolicy.evaluate(text: normalizedText)
@@ -1485,27 +1487,36 @@ final class EchoViewModel {
                 userText: normalizedText,
                 accountLease: accountLease
             )
-            return
+            return false
         }
 
-        guard turnIntentReducer.accepts(.userTurnAccepted)
-                || turnIntentReducer.accepts(.delayedReplyScheduled) else {
-            return
+        let nextUserTurnCount = currentSessionUserTurnCount + 1
+        let delayedReplyTrigger: EchoDelayedReplyTrigger?
+        if EchoReplyPacingPolicy.shouldWaitForReply(
+            afterUserTurnCount: nextUserTurnCount,
+            userText: normalizedText
+        ) {
+            delayedReplyTrigger = EchoReplyPacingPolicy.triggerForWait(
+                afterUserTurnCount: nextUserTurnCount,
+                userText: normalizedText
+            )
+        } else {
+            delayedReplyTrigger = nil
+        }
+        let acceptedIntent: EchoTurnIntent = delayedReplyTrigger == nil
+            ? .userTurnAccepted
+            : .delayedReplyScheduled
+        guard turnIntentReducer.accepts(acceptedIntent) else {
+            return false
         }
 
         memoryManager.refreshForCurrentContext()
         refreshArchiveContextStatus()
         memoryManager.recordUserTurn(text: normalizedText)
         onTranscriptAppend?(normalizedText, true)
-        currentSessionUserTurnCount += 1
+        currentSessionUserTurnCount = nextUserTurnCount
 
-        if EchoReplyPacingPolicy.shouldWaitForReply(
-            afterUserTurnCount: currentSessionUserTurnCount,
-            userText: normalizedText
-        ), let waitTrigger = EchoReplyPacingPolicy.triggerForWait(
-            afterUserTurnCount: currentSessionUserTurnCount,
-            userText: normalizedText
-        ) {
+        if let waitTrigger = delayedReplyTrigger {
             let wait = EchoReplyPacingPolicy.replyDelayMinutes(
                 forCompletedSessionCount: memoryManager.currentMemory.sessionCount
             )
@@ -1530,7 +1541,7 @@ final class EchoViewModel {
                 accountLease: callsiteContext.accountLease
             ) else {
                 _ = applyTurnIntent(.failure, state: .error("等待回信保存失败，请稍后重试"))
-                return
+                return false
             }
             guard delayedReplyCallsiteScopeStore.save(callsiteContext) else {
                 _ = delayedReplyStore.clear(
@@ -1539,15 +1550,14 @@ final class EchoViewModel {
                     accountLease: callsiteContext.accountLease
                 )
                 _ = applyTurnIntent(.failure, state: .error("等待回信保存失败，请稍后重试"))
-                return
+                return false
             }
             pendingDelayedReply = delayedReply
             pendingDelayedReplyContext = callsiteContext
-            _ = applyTurnIntent(.delayedReplyScheduled, state: .waitingReply(minutes: wait))
-            return
+            return applyTurnIntent(.delayedReplyScheduled, state: .waitingReply(minutes: wait))
         }
 
-        _ = applyTurnIntent(.userTurnAccepted, state: .thinking)
+        return applyTurnIntent(.userTurnAccepted, state: .thinking)
     }
 
     func receiveAIReply(_ text: String) {

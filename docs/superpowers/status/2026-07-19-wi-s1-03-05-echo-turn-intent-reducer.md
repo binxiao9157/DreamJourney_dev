@@ -1,6 +1,6 @@
 # WI-S1-03-05 Echo Turn Intent And Context Coordination
 
-日期：2026-07-19；更新：2026-07-20
+日期：2026-07-19；更新：2026-07-31
 
 ## 当前状态
 
@@ -244,3 +244,33 @@ xcodebuild build -workspace DreamJourney.xcworkspace -scheme DreamJourney \
 
 该变化只涉及 iOS application composition，不修改 `/context/build` payload、后端、Echo 视觉、数字人、
 音频 owner 或公开发布策略。
+
+### 2026-07-31 G0 最终 ASR 回合接纳栅栏
+
+`EchoViewModel.finishUserVoice(...)` 现在返回本次用户最终语音是否真的被 `EchoTurnIntentReducer`
+接受。它会先依据下一条用户回合和可能的延迟回信计算目标 intent，再在写入记忆、转录、Context 或
+延迟回信持久化前做一次精确的 reducer admission。
+
+`EchoViewController.onASRResult(...)` 只在该结果为 `true` 时才继续：创建腾讯数智人用户回合、请求
+`/context/build`、持久化 Context trace，以及安排延迟回信通知。重复的最终 ASR callback、迟到回调或
+当前状态不接受的回合会记录 value-minimized 的
+`userTurnRejectedBeforeRuntimeDispatch`，不会再触发这些运行时副作用。
+
+新增 `EchoViewModelTurnAdmissionTests` 覆盖一条成功 final 后紧跟同内容 duplicate final：仅首条写入
+用户 transcript，第二条返回拒绝，状态仍保持首条回合的 `thinking`。正式
+`run-ios-echo-application-coordinator-gate.sh` 已纳入 coordinator、turn reducer 和 turn-admission 三组
+测试，避免该行为只依赖一次性本地命令。
+
+执行：
+
+```bash
+DJ_IOS_TEST_DESTINATION='platform=iOS Simulator,name=iPhone 17' \
+  bash Scripts/QA/product-v4/run-ios-echo-application-coordinator-gate.sh
+python3 Scripts/QA/product-v4/product-v4-ios-echo-turn-reducer-check.py
+python3 Scripts/QA/product-v4/product-v4-current-handoff-check.py
+git diff --check
+```
+
+结果：`PASS`。模拟器 scoped XCTest 为 `26/26`；静态 reducer/handoff checks 与 diff check 均通过。此前
+同一源码修订已完成 `generic/platform=iOS`、Debug、无签名 build。本条仍仅是本地 G0 防重入证据，不包含
+后端、Provider、数字人音频、公开 UI、部署或真机结论。
