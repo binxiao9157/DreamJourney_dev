@@ -2247,16 +2247,17 @@ final class EchoViewController: UIViewController {
         return true
     }
 
-    private func markEchoReplyDelivered() {
+    @discardableResult
+    private func markEchoReplyDelivered() -> Bool {
         guard let echoAccountLease,
               validateEchoAccountLease(
                   at: .commit,
                   expected: echoAccountLease,
                   reason: "markReplyDelivered"
               ) else {
-            return
+            return false
         }
-        viewModel.markReplyDelivered(accountLease: echoAccountLease)
+        return viewModel.markReplyDelivered(accountLease: echoAccountLease)
     }
 
     private func refreshDelayedReplyAnswerReconciliation(reason: String) {
@@ -7442,7 +7443,14 @@ extension EchoViewController: DialogEngineDelegate {
                 reason: "dialogTTSFinished"
             )
             self.stopDigitalHumanAudioLevelMetering()
-            self.markEchoReplyDelivered()
+            guard self.markEchoReplyDelivered() else {
+                PrivacySafeDiagnostics.log(
+                    subsystem: "Echo",
+                    event: "replyDeliveryRejectedBeforeCaptureResume",
+                    states: ["reason": "turnIntentRejected"]
+                )
+                return
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 guard let self,
                       self.validateEchoAccountLease(at: .timer, reason: "ttsFinishedResume"),

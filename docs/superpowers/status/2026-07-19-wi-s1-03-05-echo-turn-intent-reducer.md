@@ -332,3 +332,29 @@ git diff --check
 预期验证范围：coordinator、turn reducer 和 view-model turn admission 共 `27/27` 项 scoped XCTest；此前相同
 Swift 源码已经通过 generic unsigned iPhoneOS Debug build。该栅栏仅收紧本地 G0 生命周期，不变更 Echo
 视觉、Context payload、后端、Provider、部署或真机结论。
+
+### 2026-07-31 G0 AI 回信 Delivery 与 Capture Resume 栅栏
+
+本地 TTS 的 `onTTSFinished(...)` 过去会无条件安排下一次麦克风恢复。现在
+`markEchoReplyDelivered()` 返回 reducer/AccountLease 的实际接纳结果；本地 TTS 完成回调只有在该回信
+仍可从 `speaking` 合法转到 `replied` 时，才会安排 `prepareEchoCaptureAudioSession(...)` 和
+`beginVoiceInteraction()`。
+
+如果一个迟到或重复的 TTS completion 已不再属于当前回合，回调仍会以 expected owner 方式清理其
+`.echoLocalPlayback` lease，但随后记录 `replyDeliveryRejectedBeforeCaptureResume` 并退出。它不能重新打开
+麦克风、抢占新的 audio owner，或让旧回信重启对话。
+
+新增 `EchoViewModelTurnAdmissionTests.testDuplicateAIReplyDeliveryIsRejectedBeforeLifecycleResume`：第一条
+delivery 被接受，第二条被拒绝，状态保持 `replied`。静态 gate 同时断言 completion admission 必须位于
+延迟 resume 排程之前。
+
+执行：
+
+```bash
+DJ_IOS_TEST_DESTINATION='platform=iOS Simulator,name=iPhone 17' \\
+  bash Scripts/QA/product-v4/run-ios-echo-application-coordinator-gate.sh
+python3 Scripts/QA/product-v4/product-v4-ios-echo-turn-reducer-check.py
+```
+
+结果：`28/28` scoped XCTest 通过，coordinator 与 reducer 静态检查通过。该变更仍仅是本地 G0
+生命周期防重入，未变更公开 Echo、后端、Provider、部署或真机范围。

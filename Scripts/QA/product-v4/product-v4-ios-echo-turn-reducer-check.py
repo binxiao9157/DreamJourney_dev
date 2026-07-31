@@ -152,6 +152,34 @@ def main() -> None:
         "a rejected AI reply must not acquire local playback audio ownership",
     )
 
+    reply_delivery = source_slice(
+        view_controller,
+        "    private func markEchoReplyDelivered()",
+        "    private func refreshDelayedReplyAnswerReconciliation",
+    )
+    for snippet in (
+        ") -> Bool {",
+        "return false",
+        "return viewModel.markReplyDelivered(accountLease: echoAccountLease)",
+    ):
+        require(snippet in reply_delivery, f"reply delivery admission fence missing: {snippet}")
+
+    tts_finished = source_slice(
+        view_controller,
+        "    func onTTSFinished()",
+        "    func onChatStreaming",
+    )
+    for snippet in (
+        "guard self.markEchoReplyDelivered() else",
+        "replyDeliveryRejectedBeforeCaptureResume",
+    ):
+        require(snippet in tts_finished, f"TTS completion admission fence missing: {snippet}")
+    require(
+        tts_finished.find("guard self.markEchoReplyDelivered() else")
+        < tts_finished.find("DispatchQueue.main.asyncAfter"),
+        "a rejected reply delivery must not resume microphone capture",
+    )
+
     require(
         view_model.count("updateState(") == 3,
         "Echo state transitions must flow through the reducer except the explicit safety overlay",
@@ -164,6 +192,7 @@ def main() -> None:
         "func testFailureOnlyRetriesFromFailureState()",
         "func testDuplicateFinalUserVoiceIsRejectedBeforeTranscriptSideEffects()",
         "func testDuplicateAIReplyIsRejectedBeforeTranscriptSideEffects()",
+        "func testDuplicateAIReplyDeliveryIsRejectedBeforeLifecycleResume()",
     ):
         require(test_name in tests, f"Echo turn reducer test missing: {test_name}")
 
