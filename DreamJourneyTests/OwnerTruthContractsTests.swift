@@ -4241,6 +4241,90 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertNil(useCase.viewState.receipt)
     }
 
+    func testInterviewCandidateProposalAdmissionUsesAcknowledgedReceiptAndSeparatePolicy() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000851")
+        let acknowledgementReceipt = try pendingReviewBatchAcknowledgementReceipt(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            threadID: recordID("00000000-0000-0000-0000-000000000852"),
+            sessionID: recordID("00000000-0000-0000-0000-000000000853"),
+            reviewBatchVersion: 4,
+            sessionVersion: 3
+        )
+        let disabledClient = InterviewCandidateProposalAdmissionClientSpy()
+        let disabledUseCase = OwnerTruthInterviewCandidateProposalAdmissionUseCase(
+            accountLease: lease,
+            acknowledgementReceipt: acknowledgementReceipt,
+            client: disabledClient,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { false }
+        )
+
+        disabledUseCase.send(.admit)
+
+        XCTAssertEqual(disabledUseCase.viewState.phase, .unavailable)
+        XCTAssertEqual(disabledUseCase.viewState.notice, .releasePolicyDisabled)
+        XCTAssertTrue(disabledClient.requestedCommands.isEmpty)
+
+        let client = InterviewCandidateProposalAdmissionClientSpy()
+        client.result = .success(try candidateProposalAdmissionReceipt(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID
+        ))
+        let useCase = OwnerTruthInterviewCandidateProposalAdmissionUseCase(
+            accountLease: lease,
+            acknowledgementReceipt: acknowledgementReceipt,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true },
+            identifierFactory: { UUID(uuidString: "00000000-0000-0000-0000-000000000854")! }
+        )
+
+        useCase.send(.admit)
+
+        let command = try XCTUnwrap(client.requestedCommands.first)
+        XCTAssertEqual(command.reviewBatchID, reviewBatchID)
+        XCTAssertEqual(command.expectedReviewBatchVersion, 4)
+        XCTAssertEqual(
+            Set(command.backendPayload.keys),
+            Set(["commandId", "expectedReviewBatchVersion"])
+        )
+        XCTAssertEqual(useCase.viewState.phase, .admitted)
+        XCTAssertEqual(useCase.viewState.receipt?.reviewBatchID, reviewBatchID)
+    }
+
+    func testInterviewCandidateProposalAdmissionReceiptRejectsCandidatePayload() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000855")
+        let payload: [String: Any] = [
+            "schemaVersion": OwnerTruthInterviewCandidateProposalAdmissionReceipt.schemaVersion,
+            "vaultId": lease.vaultId,
+            "status": OwnerTruthCommandOutcome.created.rawValue,
+            "reviewBatch": ["reviewBatchId": reviewBatchID.rawValue.uuidString],
+            "source": ["status": "admitted", "kind": "conversation", "version": 1],
+            "candidateExtraction": ["status": "requested", "ownerMessageCount": 1],
+            "candidate": ["status": "notCreated", "candidateId": "must-not-be-exposed"],
+            "memoryActivation": ["status": "notApplicable"],
+        ]
+
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewCandidateProposalAdmissionReceipt(
+                backendJSONObject: payload,
+                expectedVaultID: vaultID,
+                expectedReviewBatchID: reviewBatchID
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? OwnerTruthRemoteContractError,
+                .invalidInterviewCandidateProposalAdmission(
+                    "admission receipt does not match the value-minimized formal contract"
+                )
+            )
+        }
+    }
+
     private func contextShadowBuildResponse(
         for lease: AccountLease,
         query: String
@@ -4670,6 +4754,33 @@ final class OwnerTruthContractsTests: XCTestCase {
                     "rowVersion": reviewBatchVersion,
                 ],
                 "candidateProposal": ["status": "notStarted"],
+                "memoryActivation": ["status": "notApplicable"],
+            ],
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID)),
+            expectedReviewBatchID: reviewBatchID
+        )
+    }
+
+    private func candidateProposalAdmissionReceipt(
+        vaultID: String,
+        reviewBatchID: OwnerTruthRecordID
+    ) throws -> OwnerTruthInterviewCandidateProposalAdmissionReceipt {
+        try OwnerTruthInterviewCandidateProposalAdmissionReceipt(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewCandidateProposalAdmissionReceipt.schemaVersion,
+                "vaultId": vaultID,
+                "status": OwnerTruthCommandOutcome.created.rawValue,
+                "reviewBatch": ["reviewBatchId": reviewBatchID.rawValue.uuidString],
+                "source": [
+                    "status": "admitted",
+                    "kind": "conversation",
+                    "version": 1,
+                ],
+                "candidateExtraction": [
+                    "status": "requested",
+                    "ownerMessageCount": 1,
+                ],
+                "candidate": ["status": "notCreated"],
                 "memoryActivation": ["status": "notApplicable"],
             ],
             expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID)),
@@ -6198,7 +6309,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(controller.renderedStateForUIQA.continuation?.canContinueLater ?? false)
         XCTAssertTrue(controller.isReviewBatchAcknowledgementEntryVisibleForUIQA)
         XCTAssertEqual(controller.renderedStatusTextForUIQA, "这段分享等待整理")
-        XCTAssertEqual(controller.renderedDetailTextForUIQA, "确认整理后，会开始整理本次内容。")
+        XCTAssertEqual(controller.renderedDetailTextForUIQA, "确认本次分享后，你可以选择是否开始整理。")
     }
 
     @MainActor
@@ -6284,10 +6395,101 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(command.sessionID, endedReceipt.sessionID)
         XCTAssertEqual(controller.reviewBatchAcknowledgementStateForUIQA.phase, .acknowledged)
         XCTAssertFalse(controller.isReviewBatchAcknowledgementEntryVisibleForUIQA)
-        XCTAssertEqual(controller.renderedStatusTextForUIQA, "这段分享正在整理")
+        XCTAssertEqual(controller.renderedStatusTextForUIQA, "这段分享已确认")
         XCTAssertEqual(
             controller.renderedDetailTextForUIQA,
-            "整理完成后，会等待你确认要不要保存为记忆。"
+            "你可以开始整理本次内容；整理完成后，仍由你确认是否保存为记忆。"
+        )
+    }
+
+    @MainActor
+    func testNaturalInputProductStartsCandidateProposalOnlyAfterAcknowledgement() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let naturalInputClient = InterviewNaturalInputClientSpy()
+        naturalInputClient.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        naturalInputClient.appendHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, append: command) }
+        }
+        naturalInputClient.endHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, end: command) }
+        }
+        naturalInputClient.continuationHandler = { _ in
+            Result {
+                let ended = naturalInputClient.endCommand != nil
+                return try self.interviewNaturalInputContinuation(
+                    vaultID: vaultID,
+                    state: ended ? .reviewPending : .readyForNarrative,
+                    canContinue: !ended,
+                    canContinueLater: true
+                )
+            }
+        }
+        let inboxClient = InterviewPendingReviewBatchInboxClientSpy()
+        let acknowledgementClient = InterviewReviewBatchAcknowledgementClientSpy()
+        let admissionClient = InterviewCandidateProposalAdmissionClientSpy()
+        let controller = OwnerTruthInterviewNaturalInputViewController(
+            accountLease: lease,
+            client: naturalInputClient,
+            accountLeaseRuntime: runtime,
+            presentation: .product,
+            guidedRecommendationPolicyAvailable: { false },
+            lifeMapPolicyAvailable: { false },
+            memorySearchPolicyAvailable: { false },
+            interviewOutcomePolicyAvailable: { false },
+            reviewBatchInboxClient: inboxClient,
+            reviewBatchAcknowledgementClient: acknowledgementClient,
+            reviewBatchAcknowledgementPolicyAvailable: { true },
+            candidateProposalAdmissionClient: admissionClient,
+            candidateProposalAdmissionPolicyAvailable: { true },
+            qaGateEnabled: { true }
+        )
+
+        controller.loadViewIfNeeded()
+        controller.submitQAFixture("确认后才可以选择是否开始整理。")
+        let endButton = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-interview-natural-input-end"
+        ) as? UIButton)
+        endButton.sendActions(for: .touchUpInside)
+        let endedReceipt = try XCTUnwrap(controller.renderedStateForUIQA.latestReceipt)
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000077")
+        inboxClient.result = .success(try pendingReviewBatchInbox(
+            vaultID: lease.vaultId,
+            batches: [(reviewBatchID, endedReceipt.threadID, endedReceipt.sessionID, 1, endedReceipt.sessionVersion)]
+        ))
+        acknowledgementClient.result = .success(try pendingReviewBatchAcknowledgementReceipt(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            threadID: endedReceipt.threadID,
+            sessionID: endedReceipt.sessionID,
+            reviewBatchVersion: 2,
+            sessionVersion: endedReceipt.sessionVersion + 1
+        ))
+        admissionClient.result = .success(try candidateProposalAdmissionReceipt(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID
+        ))
+
+        XCTAssertFalse(controller.isCandidateProposalAdmissionEntryVisibleForUIQA)
+        controller.acknowledgeReviewBatchForUIQA()
+        XCTAssertEqual(controller.reviewBatchAcknowledgementStateForUIQA.phase, .acknowledged)
+        XCTAssertTrue(controller.isCandidateProposalAdmissionEntryVisibleForUIQA)
+        XCTAssertTrue(admissionClient.requestedCommands.isEmpty)
+
+        controller.startCandidateProposalAdmissionForUIQA()
+
+        let command = try XCTUnwrap(admissionClient.requestedCommands.first)
+        XCTAssertEqual(command.reviewBatchID, reviewBatchID)
+        XCTAssertEqual(command.expectedReviewBatchVersion, 2)
+        XCTAssertEqual(controller.candidateProposalAdmissionStateForUIQA.phase, .admitted)
+        XCTAssertFalse(controller.isCandidateProposalAdmissionEntryVisibleForUIQA)
+        XCTAssertEqual(controller.renderedStatusTextForUIQA, "这段分享已进入整理队列")
+        XCTAssertEqual(
+            controller.renderedDetailTextForUIQA,
+            "后续整理结果仍会等待你确认是否保存为记忆。"
         )
     }
 
@@ -7165,6 +7367,25 @@ private final class InterviewReviewBatchAcknowledgementClientSpy:
 }
 
 private enum InterviewReviewBatchAcknowledgementClientSpyError: Error {
+    case missingResult
+}
+
+private final class InterviewCandidateProposalAdmissionClientSpy:
+    OwnerTruthInterviewCandidateProposalAdmissionClient {
+    var result: Result<OwnerTruthInterviewCandidateProposalAdmissionReceipt, Error>?
+    private(set) var requestedCommands: [OwnerTruthInterviewCandidateProposalAdmissionCommand] = []
+
+    func admitOwnerTruthInterviewCandidateProposal(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateProposalAdmissionReceipt, Error>) -> Void
+    ) {
+        requestedCommands.append(command)
+        completion(result ?? .failure(InterviewCandidateProposalAdmissionClientSpyError.missingResult))
+    }
+}
+
+private enum InterviewCandidateProposalAdmissionClientSpyError: Error {
     case missingResult
 }
 

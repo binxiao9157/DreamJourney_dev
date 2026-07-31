@@ -189,7 +189,7 @@ let acknowledgementTap = requireSlice(
 for required in [
     "canOfferReviewBatchAcknowledgement(for: renderedState)",
     "UIAlertController(",
-    "确认整理",
+    "确认进入整理",
     "acknowledgeCurrentReviewBatch()",
 ] {
     require(acknowledgementTap.contains(required), "acknowledgement action must re-check the current thread/session and require a second confirmation: \(required)")

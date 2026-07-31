@@ -557,6 +557,11 @@ final class FeatureGateService {
            normalizedPath.hasSuffix("/candidate-proposal/status") {
             return .ownerTruthCandidateReview
         }
+        if method == .post,
+           normalizedPath.contains("/interview-review-batches/"),
+           normalizedPath.hasSuffix("/candidate-proposal/admit") {
+            return .ownerTruthCandidateReview
+        }
         if method == .get,
            normalizedPath.contains("/interview-review-batches/"),
            normalizedPath.hasSuffix("/confirmation") {
@@ -6815,6 +6820,50 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    /// Starts the separately-authorized candidate-proposal staging action.
+    /// This product path deliberately never borrows the natural-input policy
+    /// or adds the QA Owner Truth header.
+    func admitOwnerTruthInterviewCandidateProposal(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateProposalAdmissionReceipt, Error>) -> Void
+    ) {
+        let decision = FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)
+        guard decision.allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                    reason: decision.reason
+                )))
+            }
+            return
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-review-batches/\(pathComponent(command.reviewBatchID.rawValue.uuidString))/candidate-proposal/admit"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            featureDecision: decision
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewCandidateProposalAdmissionReceipt(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID,
+                        expectedReviewBatchID: command.reviewBatchID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     private enum OwnerTruthInterviewNaturalInputTransport {
         case qa
         case releasePolicy(FeatureDecision)
@@ -9030,6 +9079,7 @@ extension DreamJourneyBackendClient: OwnerTruthInterviewOrchestrationClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewNaturalInputClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewPendingReviewBatchInboxClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewReviewBatchAcknowledgementClient {}
+extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateProposalAdmissionClient {}
 extension DreamJourneyBackendClient: OwnerTruthKnowledgeRecommendationPlanClient {}
 extension DreamJourneyBackendClient: OwnerTruthGuidedRecommendationPresentationClient {}
 extension DreamJourneyBackendClient: OwnerTruthLifeMapPresentationClient {}

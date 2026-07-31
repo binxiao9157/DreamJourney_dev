@@ -137,6 +137,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidInterviewCandidateMemoryProjectionRecoveryInbox(String)
     case invalidInterviewCandidateConfirmation(String)
     case invalidInterviewCandidateProposalStatus(String)
+    case invalidInterviewCandidateProposalAdmission(String)
     case invalidInterviewCandidateDecision(String)
     case invalidInterviewSessionState(String)
     case invalidInterviewOrchestration(String)
@@ -180,6 +181,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "访谈候选确认合同无效：\(detail)"
         case .invalidInterviewCandidateProposalStatus(let detail):
             return "访谈候选提议状态合同无效：\(detail)"
+        case .invalidInterviewCandidateProposalAdmission(let detail):
+            return "访谈候选整理准入合同无效：\(detail)"
         case .invalidInterviewCandidateDecision(let detail):
             return "访谈候选审核回执合同无效：\(detail)"
         case .invalidInterviewSessionState(let detail):
@@ -6163,6 +6166,302 @@ final class OwnerTruthInterviewReviewBatchAcknowledgementUseCase {
 
     private func transitionFailure(_ notice: OwnerTruthInterviewReviewBatchAcknowledgementNotice) {
         viewState = OwnerTruthInterviewReviewBatchAcknowledgementViewState(
+            phase: .failed,
+            receipt: nil,
+            notice: notice
+        )
+    }
+}
+
+// MARK: - Formal candidate proposal admission
+
+/// The second explicit Owner action after a review batch is acknowledged.
+/// It only names the frozen batch/version fence and cannot inject narrative,
+/// Source metadata, Candidates, MemoryVersions, or provider instructions.
+struct OwnerTruthInterviewCandidateProposalAdmissionCommand: Equatable, Sendable {
+    let commandID: String
+    let reviewBatchID: OwnerTruthRecordID
+    let expectedReviewBatchVersion: Int
+
+    init(
+        commandID: String,
+        reviewBatchID: OwnerTruthRecordID,
+        expectedReviewBatchVersion: Int
+    ) throws {
+        guard let commandID = OwnerTruthInterviewReviewBatchContract.nonEmptyString(commandID),
+              expectedReviewBatchVersion > 0 else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateProposalAdmission(
+                "admission command requires a non-empty id and a positive review-batch version"
+            )
+        }
+        self.commandID = commandID
+        self.reviewBatchID = reviewBatchID
+        self.expectedReviewBatchVersion = expectedReviewBatchVersion
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "commandId": commandID,
+            "expectedReviewBatchVersion": expectedReviewBatchVersion,
+        ]
+    }
+}
+
+/// Value-minimized evidence that one acknowledged review batch entered the
+/// private Source/effect staging lane. It is not an extraction, Candidate, or
+/// Memory completion result.
+struct OwnerTruthInterviewCandidateProposalAdmissionReceipt: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-interview-candidate-proposal-admission-response-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let outcome: OwnerTruthCommandOutcome
+    let reviewBatchID: OwnerTruthRecordID
+    let sourceVersion: Int
+    let ownerMessageCount: Int
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID,
+        expectedReviewBatchID: OwnerTruthRecordID
+    ) throws {
+        let allowedKeys: Set<String> = [
+            "schemaVersion",
+            "vaultId",
+            "status",
+            "reviewBatch",
+            "source",
+            "candidateExtraction",
+            "candidate",
+            "memoryActivation",
+        ]
+        guard Set(object.keys) == allowedKeys,
+              OwnerTruthInterviewReviewBatchContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthInterviewReviewBatchContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let outcomeRaw = OwnerTruthInterviewReviewBatchContract.requiredString(object["status"]),
+              let outcome = OwnerTruthCommandOutcome(rawValue: outcomeRaw),
+              let reviewBatch = object["reviewBatch"] as? [String: Any],
+              Set(reviewBatch.keys) == Set(["reviewBatchId"]),
+              let reviewBatchID = OwnerTruthInterviewReviewBatchContract.recordID(
+                reviewBatch["reviewBatchId"]
+              ),
+              reviewBatchID == expectedReviewBatchID,
+              let source = object["source"] as? [String: Any],
+              Set(source.keys) == Set(["status", "kind", "version"]),
+              OwnerTruthInterviewReviewBatchContract.requiredString(source["status"]) == "admitted",
+              OwnerTruthInterviewReviewBatchContract.requiredString(source["kind"]) == "conversation",
+              let sourceVersion = OwnerTruthInterviewReviewBatchContract.positiveInt(source["version"]),
+              let candidateExtraction = object["candidateExtraction"] as? [String: Any],
+              Set(candidateExtraction.keys) == Set(["status", "ownerMessageCount"]),
+              OwnerTruthInterviewReviewBatchContract.requiredString(candidateExtraction["status"])
+                == "requested",
+              let ownerMessageCount = OwnerTruthInterviewReviewBatchContract.positiveInt(
+                candidateExtraction["ownerMessageCount"]
+              ),
+              let candidate = object["candidate"] as? [String: Any],
+              Set(candidate.keys) == Set(["status"]),
+              OwnerTruthInterviewReviewBatchContract.requiredString(candidate["status"])
+                == "notCreated",
+              let memoryActivation = object["memoryActivation"] as? [String: Any],
+              Set(memoryActivation.keys) == Set(["status"]),
+              OwnerTruthInterviewReviewBatchContract.requiredString(memoryActivation["status"])
+                == "notApplicable" else {
+            throw OwnerTruthRemoteContractError.invalidInterviewCandidateProposalAdmission(
+                "admission receipt does not match the value-minimized formal contract"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.outcome = outcome
+        self.reviewBatchID = reviewBatchID
+        self.sourceVersion = sourceVersion
+        self.ownerMessageCount = ownerMessageCount
+    }
+
+    func matches(_ command: OwnerTruthInterviewCandidateProposalAdmissionCommand) -> Bool {
+        reviewBatchID == command.reviewBatchID
+    }
+}
+
+protocol OwnerTruthInterviewCandidateProposalAdmissionClient: AnyObject {
+    func admitOwnerTruthInterviewCandidateProposal(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateProposalAdmissionReceipt, Error>) -> Void
+    )
+}
+
+enum OwnerTruthInterviewCandidateProposalAdmissionIntent: Equatable, Sendable {
+    case admit
+}
+
+enum OwnerTruthInterviewCandidateProposalAdmissionPhase: Equatable, Sendable {
+    case idle
+    case admitting
+    case admitted
+    case unavailable
+    case failed
+}
+
+enum OwnerTruthInterviewCandidateProposalAdmissionNotice: Equatable, Sendable {
+    case releasePolicyDisabled
+    case invalidVault
+    case accountUnavailable
+    case staleAccountLease
+    case contractMismatch
+    case requestFailed
+}
+
+struct OwnerTruthInterviewCandidateProposalAdmissionViewState: Equatable, Sendable {
+    let phase: OwnerTruthInterviewCandidateProposalAdmissionPhase
+    let receipt: OwnerTruthInterviewCandidateProposalAdmissionReceipt?
+    let notice: OwnerTruthInterviewCandidateProposalAdmissionNotice?
+
+    static let idle = OwnerTruthInterviewCandidateProposalAdmissionViewState(
+        phase: .idle,
+        receipt: nil,
+        notice: nil
+    )
+}
+
+/// Lease-fenced formal staging. It can run only after the distinct review
+/// acknowledgement receipt and under the separately captured
+/// `ownerTruthCandidateReview` release policy.
+final class OwnerTruthInterviewCandidateProposalAdmissionUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let acknowledgementReceipt: OwnerTruthInterviewReviewBatchAcknowledgementReceipt
+    private let client: OwnerTruthInterviewCandidateProposalAdmissionClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAvailable: () -> Bool
+    private let identifierFactory: () -> UUID
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthInterviewCandidateProposalAdmissionViewState = .idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthInterviewCandidateProposalAdmissionViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        acknowledgementReceipt: OwnerTruthInterviewReviewBatchAcknowledgementReceipt,
+        client: OwnerTruthInterviewCandidateProposalAdmissionClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool = { false },
+        identifierFactory: @escaping () -> UUID = UUID.init
+    ) {
+        self.accountLease = accountLease
+        vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.acknowledgementReceipt = acknowledgementReceipt
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+        self.identifierFactory = identifierFactory
+    }
+
+    func send(_ intent: OwnerTruthInterviewCandidateProposalAdmissionIntent) {
+        switch intent {
+        case .admit:
+            admit()
+        }
+    }
+
+    private func admit() {
+        guard viewState.phase != .admitting,
+              viewState.phase != .admitted,
+              let vaultID = beginRequestOrFail(),
+              acknowledgementReceipt.vaultID == vaultID else {
+            return
+        }
+        do {
+            let command = try OwnerTruthInterviewCandidateProposalAdmissionCommand(
+                commandID: identifierFactory().uuidString.lowercased(),
+                reviewBatchID: acknowledgementReceipt.reviewBatchID,
+                expectedReviewBatchVersion: acknowledgementReceipt.reviewBatchVersion
+            )
+            operationGeneration &+= 1
+            let generation = operationGeneration
+            viewState = OwnerTruthInterviewCandidateProposalAdmissionViewState(
+                phase: .admitting,
+                receipt: nil,
+                notice: nil
+            )
+            client.admitOwnerTruthInterviewCandidateProposal(
+                vaultID: vaultID,
+                command: command
+            ) { [weak self] result in
+                self?.receive(result, vaultID: vaultID, command: command, generation: generation)
+            }
+        } catch {
+            transitionFailure(.contractMismatch)
+        }
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthInterviewCandidateProposalAdmissionReceipt, Error>,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
+        generation: UInt
+    ) {
+        guard canCommit(generation: generation) else { return }
+        switch result {
+        case .failure:
+            transitionFailure(.requestFailed)
+        case .success(let receipt):
+            guard receipt.vaultID == vaultID, receipt.matches(command) else {
+                transitionFailure(.contractMismatch)
+                return
+            }
+            viewState = OwnerTruthInterviewCandidateProposalAdmissionViewState(
+                phase: .admitted,
+                receipt: receipt,
+                notice: nil
+            )
+        }
+    }
+
+    private func beginRequestOrFail() -> OwnerTruthVaultID? {
+        guard releasePolicyAvailable() else {
+            transitionUnavailable(.releasePolicyDisabled)
+            return nil
+        }
+        guard let vaultID else {
+            transitionUnavailable(.invalidVault)
+            return nil
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            transitionUnavailable(.accountUnavailable)
+            return nil
+        }
+        return vaultID
+    }
+
+    private func canCommit(generation: UInt) -> Bool {
+        guard generation == operationGeneration else { return false }
+        guard releasePolicyAvailable() else {
+            transitionUnavailable(.releasePolicyDisabled)
+            return false
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            transitionUnavailable(.staleAccountLease)
+            return false
+        }
+        return true
+    }
+
+    private func transitionUnavailable(_ notice: OwnerTruthInterviewCandidateProposalAdmissionNotice) {
+        operationGeneration &+= 1
+        viewState = OwnerTruthInterviewCandidateProposalAdmissionViewState(
+            phase: .unavailable,
+            receipt: nil,
+            notice: notice
+        )
+    }
+
+    private func transitionFailure(_ notice: OwnerTruthInterviewCandidateProposalAdmissionNotice) {
+        viewState = OwnerTruthInterviewCandidateProposalAdmissionViewState(
             phase: .failed,
             receipt: nil,
             notice: notice

@@ -645,6 +645,7 @@ for guard in \
   knowledge-evidence-context-policy-check.swift \
   knowledge-proposal-persona-policy-check.swift \
   knowledge-widget-privacy-lifecycle-check.swift \
+  owner-truth-candidate-proposal-admission-check.swift \
   profile-settings-save-state-check.swift \
   profile-account-fields-check.swift \
   profile-password-change-check.swift \
