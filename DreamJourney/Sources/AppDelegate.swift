@@ -383,6 +383,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewNaturalInputEchoSurfaceSmoke() }
         case .ownerTruthInterviewNaturalInputProductSurfaceSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewNaturalInputProductSurfaceSmoke() }
+        case .ownerTruthInterviewCandidateProposalReviewReadySmoke:
+            scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewCandidateProposalReviewReadySmoke() }
         case .ownerTruthLifeMapPresentationSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthLifeMapPresentationSmoke() }
         case .ownerTruthMemorySearchPresentationSmoke:
@@ -2373,6 +2375,41 @@ private extension AppDelegate {
                     "completed=\\(result[\"completed\"] as? Bool == true) " +
                     "productEntryVisible=\\(result[\"productEntryVisible\"] as? Bool == true) " +
                     "sheetPresented=\\(result[\"sheetPresented\"] as? Bool == true)"
+                )
+            }
+        )
+    }
+
+    func runOwnerTruthInterviewCandidateProposalReviewReadySmoke(retryCount: Int = 0) {
+        QAEchoScenarioRunner.run(
+            retryCount: retryCount,
+            smokeName: "OwnerTruthInterviewCandidateProposalReviewReadySmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runOwnerTruthInterviewCandidateProposalReviewReadySmoke(
+                    retryCount: nextRetryCount
+                )
+            },
+            writeResult: { result in
+                QAScenarioResultWriter.writeAndLog(
+                    result,
+                    fileName: "owner-truth-interview-candidate-proposal-review-ready-smoke-result.json",
+                    smokeName: "OwnerTruthInterviewCandidateProposalReviewReadySmoke"
+                )
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQAOwnerTruthInterviewCandidateProposalReviewReadySmoke(
+                    completion: completion
+                )
+            },
+            completionLog: { result in
+                let completed = result["completed"] as? Bool == true
+                let focusedInboxPresented = result[
+                    "candidateProposalConfirmationInboxPresented"
+                ] as? Bool == true
+                print(
+                    "[UI_QA] OwnerTruthInterviewCandidateProposalReviewReadySmoke completed " +
+                    "completed=\(completed) " +
+                    "focusedInbox=\(focusedInboxPresented)"
                 )
             }
         )

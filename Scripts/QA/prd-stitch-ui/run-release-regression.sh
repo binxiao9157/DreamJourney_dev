@@ -76,6 +76,7 @@ RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE="${RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMO
 RUN_ARCHIVE_HIDDEN_SHELL_SMOKE="${RUN_ARCHIVE_HIDDEN_SHELL_SMOKE:-0}"
 RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE="${RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE:-0}"
 RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE="${RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE:-0}"
+RUN_OWNER_TRUTH_CANDIDATE_PROPOSAL_REVIEW_READY_SMOKE="${RUN_OWNER_TRUTH_CANDIDATE_PROPOSAL_REVIEW_READY_SMOKE:-0}"
 RUN_P0_PROFILE_CARE_REGRESSION="${RUN_P0_PROFILE_CARE_REGRESSION:-0}"
 RUN_PROFILE_CARE_STATE_SMOKE="${RUN_PROFILE_CARE_STATE_SMOKE:-0}"
 RUN_PROFILE_CARE_BACKEND_STATE_SMOKE="${RUN_PROFILE_CARE_BACKEND_STATE_SMOKE:-0}"
@@ -183,6 +184,7 @@ Run ID: \`$RUN_ID\`
 - Public MVP minimum regression: \`$RUN_PUBLIC_MVP_REGRESSION\`
 - P0 Archive -> Echo regression gate: \`$RUN_P0_ARCHIVE_ECHO_REGRESSION\`
 - Archive -> Echo simulator smoke: \`$RUN_SIMULATOR_SMOKE\`
+- Owner Truth review-ready focused confirmation UIQA smoke: \`$RUN_OWNER_TRUTH_CANDIDATE_PROPOSAL_REVIEW_READY_SMOKE\`
 - Echo delayed reply notification smoke: \`$RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE\`
 - Echo trace export UIQA smoke: \`$RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE\`
 - Echo trace evidence package export UIQA smoke: \`$RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE\`
@@ -268,7 +270,7 @@ Run ID: \`$RUN_ID\`
 - Optional deployed credential boundary smoke when \`RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE=1\`; release handoff forces this gate and verifies no-store, value-free realtime voice, and blocked digital-human broker contracts.
 - Optional backend auth session/ownership shadow smoke when \`RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE=1\`; this verifies opaque login tokens, refresh rotation/replay rejection, logout revocation, and principal-bound owner mismatch rejection while global mode remains shadow.
 - Optional backend cross-account authorization shadow smoke when \`RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE=1\`; this verifies owner/family/time-letter/invitation policy decisions, forged-viewer deny evidence, and retained production shadow mode without invoking global dispatch.
-- Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 62 classified routes, zero omissions, owner path/body denial (including knowledge governance), system-only denial, and retained global shadow mode without invoking global dispatch.
+- Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 99 classified routes, zero omissions, owner path/body denial (including knowledge governance), system-only denial, and retained global shadow mode without invoking global dispatch.
 - Optional backend release-policy smoke when \`RUN_BACKEND_RELEASE_POLICY_SMOKE=1\`; release handoff forces this gate to verify the deployed typed shadow snapshot, no-store response, explicit Closed Pilot allowlist, unknown-feature deny, and version-downgrade rejection.
 - Optional backend evidence persistence smoke when \`RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE=1\`; release handoff forces this gate to verify the deployed rollout writer uses the persistent append-only source. Restart continuity is verified by running the same smoke before and after an API restart with \`BASELINE_PATH\`.
 - Optional backend database request UoW smoke when \`RUN_BACKEND_DB_UOW_SMOKE=1\`; release handoff forces this gate to verify request-scoped checkouts, explicit success commits, error-response rollbacks, correlation IDs, and zero new pool/return failures. The direct Postgres smoke separately proves concurrent isolation, aborted-transaction recovery, and pool-exhaustion fail-closed behavior.
@@ -430,10 +432,10 @@ run_step "Swift model guard profile-care-snapshot-check" "$STATIC_LOG_DIR/profil
   bash -lc "swiftc -parse-as-library '$ROOT_DIR/DreamJourney/Sources/Modules/Profile/ProfileCareModels.swift' '$SCRIPT_DIR/profile-care-snapshot-check.swift' -o '$STATIC_LOG_DIR/profile-care-snapshot-check' && '$STATIC_LOG_DIR/profile-care-snapshot-check' '$ROOT_DIR'"
 
 run_step "Swift model guard archive-context-snapshot-check" "$STATIC_LOG_DIR/archive-context-snapshot-check.log" \
-  bash -lc "swiftc -parse-as-library '$SCRIPT_DIR/archive-context-snapshot-check.swift' '$ROOT_DIR/DreamJourney/Sources/App/FeatureFlagService.swift' '$ROOT_DIR/DreamJourney/Sources/Services/RuntimeCapabilitySnapshot.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveDisplayMetadata.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaReleaseReadiness.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/InAppMessageCenter.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift' -o '$STATIC_LOG_DIR/archive-context-snapshot-check' && '$STATIC_LOG_DIR/archive-context-snapshot-check'"
+  bash -lc "swiftc -parse-as-library '$SCRIPT_DIR/archive-context-snapshot-check.swift' '$ROOT_DIR/DreamJourney/Sources/App/FeatureFlagService.swift' '$ROOT_DIR/DreamJourney/Sources/Services/RuntimeCapabilitySnapshot.swift' '$ROOT_DIR/DreamJourney/Sources/App/AccountSessionActor.swift' '$ROOT_DIR/DreamJourney/Sources/App/AccountLease.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/ArchiveLocalStorage.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/ArchiveMediaStore.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveDisplayMetadata.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaReleaseReadiness.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/InAppMessageCenter.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift' -o '$STATIC_LOG_DIR/archive-context-snapshot-check' && '$STATIC_LOG_DIR/archive-context-snapshot-check'"
 
 run_step "Swift model guard echo-digital-human-lifecycle-coordinator-check" "$STATIC_LOG_DIR/echo-digital-human-lifecycle-coordinator-check.log" \
-  bash -lc "swiftc '$ROOT_DIR/DreamJourney/Sources/Modules/Echo/DigitalHumanConversationCoordinator.swift' '$SCRIPT_DIR/echo-digital-human-lifecycle-coordinator-check.swift' -o '$STATIC_LOG_DIR/echo-digital-human-lifecycle-coordinator-check' && '$STATIC_LOG_DIR/echo-digital-human-lifecycle-coordinator-check'"
+  bash -lc "swiftc '$ROOT_DIR/DreamJourney/Sources/App/AccountSessionActor.swift' '$ROOT_DIR/DreamJourney/Sources/App/AccountLease.swift' '$ROOT_DIR/DreamJourney/Sources/Modules/Echo/DigitalHumanConversationCoordinator.swift' '$SCRIPT_DIR/echo-digital-human-lifecycle-coordinator-check.swift' -o '$STATIC_LOG_DIR/echo-digital-human-lifecycle-coordinator-check' && '$STATIC_LOG_DIR/echo-digital-human-lifecycle-coordinator-check'"
 
 run_step "Swift model guard knowledge-governance-model" "$STATIC_LOG_DIR/knowledge-governance-model-smoke.log" \
   "$SCRIPT_DIR/run-knowledge-governance-model-smoke.sh"
@@ -1375,6 +1377,17 @@ if [[ "$RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/archive-media-echo-context-smoke/$RUN_ID"
   echo "Skipped by RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE=0" > "$OUTPUT_DIR/archive-media-echo-context-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_OWNER_TRUTH_CANDIDATE_PROPOSAL_REVIEW_READY_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/owner-truth-candidate-proposal-review-ready-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataOwnerTruthCandidateProposalReviewReadySmoke" \
+  "$SCRIPT_DIR/run-owner-truth-interview-candidate-proposal-review-ready-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/owner-truth-candidate-proposal-review-ready-smoke/$RUN_ID"
+  echo "Skipped by RUN_OWNER_TRUTH_CANDIDATE_PROPOSAL_REVIEW_READY_SMOKE=0" \
+    > "$OUTPUT_DIR/owner-truth-candidate-proposal-review-ready-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_PROFILE_CARE_STATE_SMOKE" == "1" ]]; then

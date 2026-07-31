@@ -4220,6 +4220,13 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
     private var renderedState = OwnerTruthInterviewCandidateConfirmationInboxViewState.idle
     private var visibleItems: [OwnerTruthInterviewCandidateConfirmationInboxItem] = []
 
+    /// Simulator-only observation for the focused handoff smoke. It exposes
+    /// opaque review-batch handles only, never Candidate content or decisions.
+    var focusedReviewBatchIDForUIQA: OwnerTruthRecordID? { focusedReviewBatchID }
+    var visibleReviewBatchIDsForUIQA: [OwnerTruthRecordID] {
+        visibleItems.map(\.reviewBatchID)
+    }
+
     init(
         accountLease: AccountLease,
         focusedReviewBatchID: OwnerTruthRecordID? = nil,
@@ -9274,6 +9281,12 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             && candidateProposalStatusEntryButton.isEnabled
     }
 
+    var candidateProposalStatusEntryTitleForUIQA: String {
+        candidateProposalStatusEntryButton.configuration?.title
+            ?? candidateProposalStatusEntryButton.currentTitle
+            ?? ""
+    }
+
     var isEndSessionActionVisibleForUIQA: Bool {
         presentation == .product
             && endSessionButton.superview != nil
@@ -10702,8 +10715,11 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     }
 
     func checkCandidateProposalStatusForUIQA() {
-        guard presentation == .product else { return }
-        candidateProposalStatusEntryTapped()
+        guard presentation == .product,
+              candidateProposalStatusEntryButton.isEnabled else {
+            return
+        }
+        candidateProposalStatusEntryButton.sendActions(for: .touchUpInside)
     }
 
     private func statusText(for state: OwnerTruthInterviewNaturalInputViewState) -> String {
@@ -11100,6 +11116,89 @@ enum OwnerTruthInterviewNaturalInputUIQASmoke {
         } catch {
             print("[UI_QA] OwnerTruthInterviewNaturalInputSmoke failed reason=\(reason) write=\(error.localizedDescription)")
         }
+    }
+}
+
+/// Keeps the review-ready simulator fixture inside the Archive module where the
+/// private in-memory client lives. Echo receives only opaque batch observations.
+struct OwnerTruthInterviewCandidateProposalReviewReadyUIQAObservation {
+    let confirmationInboxPresented: Bool
+    let focusedReviewBatchMatches: Bool
+    let focusedInboxVisibleItemCount: Int
+    let otherReviewBatchHidden: Bool
+    let confirmationDetailPresented: Bool
+}
+
+final class OwnerTruthInterviewCandidateProposalReviewReadyUIQAScenario {
+    private let accountLease: AccountLease
+    private let naturalInputClient: InterviewNaturalInputUIQAClient
+    private let confirmationInboxClient: InterviewNaturalInputUIQAClient.CandidateConfirmationInboxFixture
+    private var requestedReviewBatchID: OwnerTruthRecordID?
+    private weak var confirmationInboxController: OwnerTruthInterviewCandidateConfirmationInboxViewController?
+
+    init(accountLease: AccountLease) {
+        self.accountLease = accountLease
+        naturalInputClient = InterviewNaturalInputUIQAClient(
+            vaultID: OwnerTruthVaultID(accountLease.vaultId),
+            postNarrativeContinuationState: .reviewPending,
+            candidateProposalReviewState: .reviewReady
+        )
+        confirmationInboxClient = InterviewNaturalInputUIQAClient.CandidateConfirmationInboxFixture(
+            vaultID: OwnerTruthVaultID(accountLease.vaultId),
+            focusedReviewBatchID: naturalInputClient.reviewBatchIDForUIQA
+        )
+    }
+
+    var candidateProposalStatusRequestCount: Int {
+        naturalInputClient.candidateProposalStatusRequestCount
+    }
+
+    var confirmationInboxReadCount: Int {
+        confirmationInboxClient.requestCount
+    }
+
+    func makePreviewViewController() -> OwnerTruthInterviewNaturalInputViewController {
+        OwnerTruthInterviewNaturalInputUIQASmoke.makePreviewViewController(
+            accountLease: accountLease,
+            presentation: .product,
+            client: naturalInputClient,
+            postNarrativeContinuationState: .reviewPending,
+            reviewBatchAcknowledgementPolicyAvailable: { true },
+            candidateProposalAdmissionPolicyAvailable: { true },
+            candidateProposalStatusPolicyAvailable: { true },
+            candidateProposalConfirmationInboxControllerProvider: { [weak self] lease, reviewBatchID in
+                guard let self else {
+                    preconditionFailure("Review-ready UIQA scenario was released before confirmation handoff")
+                }
+                requestedReviewBatchID = reviewBatchID
+                let inbox = OwnerTruthInterviewCandidateConfirmationInboxViewController(
+                    accountLease: lease,
+                    focusedReviewBatchID: reviewBatchID,
+                    client: confirmationInboxClient,
+                    releasePolicyAvailable: { true }
+                )
+                confirmationInboxController = inbox
+                return inbox
+            }
+        )
+    }
+
+    func observeHandoff(
+        in navigationController: UINavigationController
+    ) -> OwnerTruthInterviewCandidateProposalReviewReadyUIQAObservation {
+        let visibleReviewBatchIDs = confirmationInboxController?.visibleReviewBatchIDsForUIQA ?? []
+        let expectedReviewBatchID = naturalInputClient.reviewBatchIDForUIQA
+        return OwnerTruthInterviewCandidateProposalReviewReadyUIQAObservation(
+            confirmationInboxPresented: navigationController.topViewController === confirmationInboxController,
+            focusedReviewBatchMatches: requestedReviewBatchID == expectedReviewBatchID
+                && confirmationInboxController?.focusedReviewBatchIDForUIQA == expectedReviewBatchID,
+            focusedInboxVisibleItemCount: visibleReviewBatchIDs.count,
+            otherReviewBatchHidden: !visibleReviewBatchIDs.contains(
+                confirmationInboxClient.otherReviewBatchIDForUIQA
+            ),
+            confirmationDetailPresented: navigationController.topViewController
+                is OwnerTruthInterviewCandidateConfirmationViewController
+        )
     }
 }
 
@@ -11939,6 +12038,7 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
     OwnerTruthInterviewCandidateProposalStatusClient {
     private let vaultID: OwnerTruthVaultID?
     private let postNarrativeContinuationState: OwnerTruthInterviewNaturalInputContinuationState
+    private let candidateProposalReviewState: OwnerTruthInterviewCandidateProposalReviewState
     private var sessionsWithNarrative = Set<UUID>()
     private var endedSessions = Set<UUID>()
     private var boundariesBySessionID: [UUID: OwnerTruthInterviewSessionBoundary] = [:]
@@ -11953,13 +12053,18 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
     )
     private var acknowledgedReviewBatch = false
     private var candidateProposalAdmitted = false
+    private(set) var candidateProposalStatusRequestCount = 0
+
+    var reviewBatchIDForUIQA: OwnerTruthRecordID { reviewBatchID }
 
     init(
         vaultID: OwnerTruthVaultID?,
-        postNarrativeContinuationState: OwnerTruthInterviewNaturalInputContinuationState = .narrativeRecorded
+        postNarrativeContinuationState: OwnerTruthInterviewNaturalInputContinuationState = .narrativeRecorded,
+        candidateProposalReviewState: OwnerTruthInterviewCandidateProposalReviewState = .notReady
     ) {
         self.vaultID = vaultID
         self.postNarrativeContinuationState = postNarrativeContinuationState
+        self.candidateProposalReviewState = candidateProposalReviewState
     }
 
     func fetchOwnerTruthInterviewNaturalInputCurrentSession(
@@ -12244,6 +12349,18 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
             return
         }
         do {
+            candidateProposalStatusRequestCount += 1
+            let extractionState: OwnerTruthInterviewCandidateProposalExtractionState
+            switch candidateProposalReviewState {
+            case .notReady:
+                extractionState = .requested
+            case .reviewReady, .noCandidates:
+                extractionState = .succeeded
+            case .extractionFailed:
+                extractionState = .failed
+            case .extractionQuarantined:
+                extractionState = .quarantined
+            }
             completion(.success(try OwnerTruthInterviewCandidateProposalStatus(
                 backendJSONObject: [
                     "schemaVersion": OwnerTruthInterviewCandidateProposalStatus.schemaVersion,
@@ -12259,13 +12376,13 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
                         "status": OwnerTruthInterviewCandidateProposalSourceState.admitted.rawValue,
                     ],
                     "candidateExtraction": [
-                        "status": OwnerTruthInterviewCandidateProposalExtractionState.requested.rawValue,
+                        "status": extractionState.rawValue,
                     ],
                     "effectExecution": [
                         "status": OwnerTruthInterviewCandidateProposalEffectState.disabled.rawValue,
                     ],
                     "candidateReview": [
-                        "status": OwnerTruthInterviewCandidateProposalReviewState.notReady.rawValue,
+                        "status": candidateProposalReviewState.rawValue,
                     ],
                 ],
                 expectedVaultID: vaultID,
@@ -12273,6 +12390,61 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
             )))
         } catch {
             completion(.failure(error))
+        }
+    }
+
+    /// A local-only, content-free discovery fixture for the focused reviewReady
+    /// handoff. The view under test receives two opaque batches and must show
+    /// only the batch admitted by the current natural-input session.
+    final class CandidateConfirmationInboxFixture: OwnerTruthInterviewCandidateConfirmationInboxClient {
+        private let vaultID: OwnerTruthVaultID?
+        private let focusedReviewBatchID: OwnerTruthRecordID
+        private let otherReviewBatchID = OwnerTruthRecordID(
+            rawValue: UUID(uuidString: "00000000-0000-0000-0000-0000000000b8")!
+        )
+        private(set) var requestCount = 0
+
+        init(vaultID: OwnerTruthVaultID?, focusedReviewBatchID: OwnerTruthRecordID) {
+            self.vaultID = vaultID
+            self.focusedReviewBatchID = focusedReviewBatchID
+        }
+
+        var otherReviewBatchIDForUIQA: OwnerTruthRecordID { otherReviewBatchID }
+
+        func fetchOwnerTruthInterviewCandidateConfirmationInbox(
+            vaultID: OwnerTruthVaultID,
+            completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmationInbox, Error>) -> Void
+        ) {
+            guard self.vaultID == vaultID else {
+                completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+                return
+            }
+            requestCount += 1
+            do {
+                completion(.success(try OwnerTruthInterviewCandidateConfirmationInbox(
+                    backendJSONObject: [
+                        "schemaVersion": OwnerTruthInterviewCandidateConfirmationInbox.schemaVersion,
+                        "vaultId": vaultID.rawValue,
+                        "confirmations": [
+                            [
+                                "reviewBatchId": focusedReviewBatchID.rawValue.uuidString,
+                                "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
+                                "batchCandidateCount": 1,
+                                "singleCandidateCount": 0,
+                            ],
+                            [
+                                "reviewBatchId": otherReviewBatchID.rawValue.uuidString,
+                                "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
+                                "batchCandidateCount": 1,
+                                "singleCandidateCount": 1,
+                            ],
+                        ],
+                    ],
+                    expectedVaultID: vaultID
+                )))
+            } catch {
+                completion(.failure(error))
+            }
         }
     }
 

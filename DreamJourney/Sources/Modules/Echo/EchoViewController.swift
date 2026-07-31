@@ -8163,6 +8163,8 @@ extension EchoViewController {
     /// policy grant or a backend write.
     func runUIQAOwnerTruthInterviewNaturalInputProductSurfaceSmoke(
         retryCount: Int = 0,
+        candidateProposalReviewState: OwnerTruthInterviewCandidateProposalReviewState = .notReady,
+        launchScenario: QALaunchScenario = .ownerTruthInterviewNaturalInputProductSurfaceSmoke,
         completion: @escaping ([String: Any]) -> Void
     ) {
         guard !shouldShowOwnerTruthInterviewNaturalInputEntry else {
@@ -8193,6 +8195,8 @@ extension EchoViewController {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                 self?.runUIQAOwnerTruthInterviewNaturalInputProductSurfaceSmoke(
                     retryCount: retryCount + 1,
+                    candidateProposalReviewState: candidateProposalReviewState,
+                    launchScenario: launchScenario,
                     completion: completion
                 )
             }
@@ -8244,14 +8248,20 @@ extension EchoViewController {
                 return
             }
 
-            let controller = OwnerTruthInterviewNaturalInputUIQASmoke.makePreviewViewController(
-                accountLease: accountLease,
-                presentation: .product,
-                postNarrativeContinuationState: .reviewPending,
-                reviewBatchAcknowledgementPolicyAvailable: { true },
-                candidateProposalAdmissionPolicyAvailable: { true },
-                candidateProposalStatusPolicyAvailable: { true }
-            )
+            let reviewReadyScenario = candidateProposalReviewState == .reviewReady
+                ? OwnerTruthInterviewCandidateProposalReviewReadyUIQAScenario(
+                    accountLease: accountLease
+                )
+                : nil
+            let controller = reviewReadyScenario?.makePreviewViewController()
+                ?? OwnerTruthInterviewNaturalInputUIQASmoke.makePreviewViewController(
+                    accountLease: accountLease,
+                    presentation: .product,
+                    postNarrativeContinuationState: .reviewPending,
+                    reviewBatchAcknowledgementPolicyAvailable: { true },
+                    candidateProposalAdmissionPolicyAvailable: { true },
+                    candidateProposalStatusPolicyAvailable: { true }
+                )
             let navigationController = UINavigationController(rootViewController: controller)
             navigationController.modalPresentationStyle = .pageSheet
             if let sheet = navigationController.sheetPresentationController {
@@ -8326,15 +8336,46 @@ extension EchoViewController {
                                         .candidateProposalStatusStateForUIQA
                                     let candidateProposalStatusEntryVisible = controller
                                         .isCandidateProposalStatusEntryVisibleForUIQA
+                                    let expectedCandidateProposalStatusText = candidateProposalReviewState
+                                        == .reviewReady
+                                        ? "整理完成，等待你确认"
+                                        : "这段分享正在整理"
+                                    let expectedCandidateProposalDetailText = candidateProposalReviewState
+                                        == .reviewReady
+                                        ? "候选记忆仍需由你逐项确认，未确认不会写入正式记忆。"
+                                        : "整理完成后，仍会等待你确认是否保存为记忆。"
                                     let admissionRendered = admissionState.phase == .admitted
                                         && candidateProposalStatusState.phase == .ready
-                                        && candidateProposalStatusState.status?.candidateReviewState == .notReady
-                                        && controller.renderedStatusTextForUIQA == "这段分享正在整理"
+                                        && candidateProposalStatusState.status?.candidateReviewState
+                                            == candidateProposalReviewState
+                                        && controller.renderedStatusTextForUIQA
+                                            == expectedCandidateProposalStatusText
                                         && controller.renderedDetailTextForUIQA
-                                            == "整理完成后，仍会等待你确认是否保存为记忆。"
+                                            == expectedCandidateProposalDetailText
                                         && !controller.isCandidateProposalAdmissionEntryVisibleForUIQA
                                         && candidateProposalStatusEntryVisible
-                                    var result: [String: Any] = [
+                                    let candidateProposalStatusEntryTitle = controller
+                                        .candidateProposalStatusEntryTitleForUIQA
+
+                                    func complete(
+                                        confirmationInboxPresented: Bool,
+                                        focusedReviewBatchMatches: Bool,
+                                        focusedInboxVisibleItemCount: Int,
+                                        otherReviewBatchHidden: Bool,
+                                        confirmationDetailPresented: Bool
+                                    ) {
+                                        let reviewReadyHandoffRendered = candidateProposalReviewState
+                                            != .reviewReady
+                                            || (
+                                                confirmationInboxPresented
+                                                    && focusedReviewBatchMatches
+                                                    && focusedInboxVisibleItemCount == 1
+                                                    && otherReviewBatchHidden
+                                                    && !confirmationDetailPresented
+                                                    && candidateProposalStatusEntryTitle == "查看待确认内容"
+                                                    && reviewReadyScenario?.confirmationInboxReadCount == 1
+                                            )
+                                        var result: [String: Any] = [
                                         "completed": controller.title == "今天想聊点什么？"
                                             && endActionHiddenBeforeNarrative
                                             && inputRecorded
@@ -8348,7 +8389,8 @@ extension EchoViewController {
                                             && reviewBatchAcknowledgementEntryVisible
                                             && acknowledgementRendered
                                             && candidateProposalAdmissionEntryVisible
-                                            && admissionRendered,
+                                            && admissionRendered
+                                            && reviewReadyHandoffRendered,
                                         "productEntryVisible": productEntryVisible,
                                         "qaEntryVisible": qaEntryVisible,
                                         "sheetPresented": true,
@@ -8374,6 +8416,17 @@ extension EchoViewController {
                                         "candidateProposalStatusPhase": String(describing: candidateProposalStatusState.phase),
                                         "candidateProposalReviewState": candidateProposalStatusState.status?.candidateReviewState.rawValue ?? "",
                                         "candidateProposalStatusEntryVisible": candidateProposalStatusEntryVisible,
+                                        "candidateProposalStatusEntryTitle": candidateProposalStatusEntryTitle,
+                                        "candidateProposalStatusRequestCount": reviewReadyScenario?
+                                            .candidateProposalStatusRequestCount ?? 0,
+                                        "candidateProposalConfirmationInboxPresented": confirmationInboxPresented,
+                                        "candidateProposalFocusedReviewBatchMatches": focusedReviewBatchMatches,
+                                        "candidateProposalFocusedInboxVisibleItemCount": focusedInboxVisibleItemCount,
+                                        "candidateProposalOtherReviewBatchHidden": otherReviewBatchHidden,
+                                        "candidateProposalConfirmationInboxReadCount": reviewReadyScenario?
+                                            .confirmationInboxReadCount ?? 0,
+                                        "candidateProposalConfirmationDetailPresented": confirmationDetailPresented,
+                                        "candidateProposalConfirmationActionTriggered": false,
                                         "inMemoryPreview": true,
                                         "releasePolicyBypassedForPreview": true,
                                         "voiceTurnStarted": false,
@@ -8381,13 +8434,45 @@ extension EchoViewController {
                                         "backendNetworkStarted": false,
                                         "persistentInterviewWriteStarted": false,
                                         "launchArguments": [
-                                            QALaunchScenario.ownerTruthInterviewNaturalInputProductSurfaceSmoke.rawValue
+                                            launchScenario.rawValue
                                         ]
                                     ]
                                     if !(result["completed"] as? Bool ?? false) {
-                                        result["failureReason"] = "productEndFlowNotRendered"
+                                        result["failureReason"] = candidateProposalReviewState == .reviewReady
+                                            ? "reviewReadyFocusedConfirmationInboxNotRendered"
+                                            : "productEndFlowNotRendered"
                                     }
                                     completion(result)
+                                    }
+
+                                    guard candidateProposalReviewState == .reviewReady else {
+                                        complete(
+                                            confirmationInboxPresented: false,
+                                            focusedReviewBatchMatches: false,
+                                            focusedInboxVisibleItemCount: 0,
+                                            otherReviewBatchHidden: true,
+                                            confirmationDetailPresented: false
+                                        )
+                                        return
+                                    }
+
+                                    controller.checkCandidateProposalStatusForUIQA()
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                                        let handoffObservation = reviewReadyScenario?
+                                            .observeHandoff(in: navigationController)
+                                        complete(
+                                            confirmationInboxPresented: handoffObservation?
+                                                .confirmationInboxPresented ?? false,
+                                            focusedReviewBatchMatches: handoffObservation?
+                                                .focusedReviewBatchMatches ?? false,
+                                            focusedInboxVisibleItemCount: handoffObservation?
+                                                .focusedInboxVisibleItemCount ?? 0,
+                                            otherReviewBatchHidden: handoffObservation?
+                                                .otherReviewBatchHidden ?? false,
+                                            confirmationDetailPresented: handoffObservation?
+                                                .confirmationDetailPresented ?? false
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -8395,6 +8480,16 @@ extension EchoViewController {
                 }
             }
         }
+    }
+
+    func runUIQAOwnerTruthInterviewCandidateProposalReviewReadySmoke(
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        runUIQAOwnerTruthInterviewNaturalInputProductSurfaceSmoke(
+            candidateProposalReviewState: .reviewReady,
+            launchScenario: .ownerTruthInterviewCandidateProposalReviewReadySmoke,
+            completion: completion
+        )
     }
 
     /// Exercises the ordinary Echo controller path without starting a microphone,

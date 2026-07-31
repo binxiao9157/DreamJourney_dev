@@ -39,6 +39,11 @@ let contracts = try read("\(root)/DreamJourney/Sources/Domain/OwnerTruth/OwnerTr
 let echo = try read("\(root)/DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let tests = try read("\(root)/DreamJourneyTests/OwnerTruthContractsTests.swift")
 let releaseRegression = try read("\(root)/Scripts/QA/prd-stitch-ui/run-release-regression.sh")
+let featureFlags = try read("\(root)/DreamJourney/Sources/App/FeatureFlagService.swift")
+let appDelegate = try read("\(root)/DreamJourney/Sources/AppDelegate.swift")
+let reviewReadySmoke = try read(
+    "\(root)/Scripts/QA/prd-stitch-ui/run-owner-truth-interview-candidate-proposal-review-ready-smoke.sh"
+)
 
 require(
     releaseRegression.contains("owner-truth-candidate-proposal-status-handoff-check.swift"),
@@ -157,8 +162,51 @@ for required in [
     "candidateProposalStatusPhase",
     "candidateProposalReviewState",
     "candidateProposalStatusEntryVisible",
+    "runUIQAOwnerTruthInterviewCandidateProposalReviewReadySmoke",
+    "OwnerTruthInterviewCandidateProposalReviewReadyUIQAScenario",
+    "candidateProposalConfirmationInboxPresented",
+    "candidateProposalFocusedReviewBatchMatches",
+    "candidateProposalOtherReviewBatchHidden",
+    "candidateProposalConfirmationActionTriggered",
 ] {
     require(echo.contains(required), "product UIQA smoke must exercise status handoff: \(required)")
+}
+
+require(
+    archive.contains("final class CandidateConfirmationInboxFixture") &&
+        archive.contains("OwnerTruthInterviewCandidateProposalReviewReadyUIQAScenario"),
+    "review-ready UIQA must keep its content-free fixture inside the Archive module"
+)
+
+for required in [
+    "candidateProposalReviewState: .reviewReady",
+    "candidateProposalStatusEntryTitle == \"查看待确认内容\"",
+    "focusedInboxVisibleItemCount == 1",
+    "reviewReadyScenario?.confirmationInboxReadCount == 1",
+    "confirmationDetailPresented: false",
+] {
+    require(
+        echo.contains(required),
+        "review-ready UIQA must stay scoped to one read-only confirmation inbox: \(required)"
+    )
+}
+
+require(
+    featureFlags.contains(
+        "case ownerTruthInterviewCandidateProposalReviewReadySmoke = \"DJRunOwnerTruthInterviewCandidateProposalReviewReadySmoke\""
+    ) && appDelegate.contains("case .ownerTruthInterviewCandidateProposalReviewReadySmoke:"),
+    "review-ready UIQA launch scenario must remain explicitly simulator-routable"
+)
+
+for required in [
+    "SMOKE_VARIANT=review-ready",
+    "LAUNCH_SCENARIO=DJRunOwnerTruthInterviewCandidateProposalReviewReadySmoke",
+    "RESULT_FILE_NAME=owner-truth-interview-candidate-proposal-review-ready-smoke-result.json",
+] {
+    require(
+        reviewReadySmoke.contains(required),
+        "review-ready UIQA wrapper must retain its isolated launch contract: \(required)"
+    )
 }
 
 print("owner-truth candidate proposal status handoff check passed")

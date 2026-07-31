@@ -11,22 +11,26 @@ SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG UI_QA_SIMULATOR'
 LOCAL_BUNDLE_ID="${LOCAL_BUNDLE_ID:-com.yxj.dreamjourney.app}"
 LOCAL_DEVELOPMENT_TEAM="${LOCAL_DEVELOPMENT_TEAM:-2BTR77V3R8}"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/tmp/visual-qa/product-v4/DerivedDataOwnerTruthInterviewNaturalInputProductSurfaceSmoke}"
-OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/product-v4/owner-truth-interview-natural-input-product-surface-smoke}"
+SMOKE_VARIANT="${SMOKE_VARIANT:-not-ready}"
+SMOKE_ID="${SMOKE_ID:-owner-truth-interview-natural-input-product-surface-smoke}"
+LAUNCH_SCENARIO="${LAUNCH_SCENARIO:-DJRunOwnerTruthInterviewNaturalInputProductSurfaceSmoke}"
+RESULT_FILE_NAME="${RESULT_FILE_NAME:-owner-truth-interview-natural-input-product-surface-smoke-result.json}"
+COMPLETION_PATTERN="${COMPLETION_PATTERN:-OwnerTruthInterviewNaturalInputProductSurfaceSmoke completed}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/product-v4/$SMOKE_ID}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 OUTPUT_DIR="$OUTPUT_ROOT/$RUN_ID"
 BUILD_LOG="$OUTPUT_DIR/build.log"
 RUNTIME_LOG="$OUTPUT_DIR/runtime.log"
 OS_LOG="$OUTPUT_DIR/oslog.log"
-SCREENSHOT_PATH="$OUTPUT_DIR/01-owner-truth-interview-natural-input-product-surface.png"
-RESULT_COPY_PATH="$OUTPUT_DIR/owner-truth-interview-natural-input-product-surface-smoke-result.json"
-COMPLETION_PATTERN="OwnerTruthInterviewNaturalInputProductSurfaceSmoke completed"
+SCREENSHOT_PATH="$OUTPUT_DIR/01-$SMOKE_ID.png"
+RESULT_COPY_PATH="$OUTPUT_DIR/$RESULT_FILE_NAME"
 LOG_WAIT_TIMEOUT="${LOG_WAIT_TIMEOUT:-45}"
 
 mkdir -p "$OUTPUT_DIR"
 cd "$ROOT_DIR"
 
 fail() {
-  printf '[owner-truth-interview-natural-input-product-surface-smoke] %s\n' "$*" >&2
+  printf '[%s] %s\n' "$SMOKE_ID" "$*" >&2
   [[ -f "$RUNTIME_LOG" ]] && tail -80 "$RUNTIME_LOG" >&2 || true
   [[ -f "$OS_LOG" ]] && tail -80 "$OS_LOG" >&2 || true
   exit 1
@@ -43,9 +47,9 @@ if [[ -z "$SIMULATOR_UDID" ]]; then
 fi
 [[ -n "$SIMULATOR_UDID" ]] || fail "No booted simulator. Set SIMULATOR_UDID or SIMULATOR_NAME."
 
-printf '[owner-truth-interview-natural-input-product-surface-smoke] Building UIQA app...\n'
-printf '[owner-truth-interview-natural-input-product-surface-smoke] Local QA bundle id: %s\n' "$LOCAL_BUNDLE_ID"
-printf '[owner-truth-interview-natural-input-product-surface-smoke] Local QA team id: %s\n' "$LOCAL_DEVELOPMENT_TEAM"
+printf '[%s] Building UIQA app...\n' "$SMOKE_ID"
+printf '[%s] Local QA bundle id: %s\n' "$SMOKE_ID" "$LOCAL_BUNDLE_ID"
+printf '[%s] Local QA team id: %s\n' "$SMOKE_ID" "$LOCAL_DEVELOPMENT_TEAM"
 xcodebuild \
   -workspace DreamJourney.xcworkspace \
   -scheme "$SCHEME" \
@@ -69,13 +73,13 @@ BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/I
 [[ "$BUNDLE_ID" == "$LOCAL_BUNDLE_ID" ]] || fail "Built app bundle id is $BUNDLE_ID, expected $LOCAL_BUNDLE_ID"
 [[ "$BUNDLE_ID" != "com.gaominge.dreamjourney.app" ]] || fail "Built app is using the shared default bundle id."
 
-printf '[owner-truth-interview-natural-input-product-surface-smoke] Installing %s on %s...\n' "$BUNDLE_ID" "$SIMULATOR_UDID"
+printf '[%s] Installing %s on %s...\n' "$SMOKE_ID" "$BUNDLE_ID" "$SIMULATOR_UDID"
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
 xcrun simctl uninstall "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
 xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
 xcrun simctl spawn "$SIMULATOR_UDID" defaults delete "$BUNDLE_ID" >/dev/null 2>&1 || true
 DATA_CONTAINER="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data)"
-RESULT_FILE="$DATA_CONTAINER/Documents/owner-truth-interview-natural-input-product-surface-smoke-result.json"
+RESULT_FILE="$DATA_CONTAINER/Documents/$RESULT_FILE_NAME"
 rm -f "$RESULT_FILE"
 
 CONSOLE_PID=""
@@ -94,10 +98,10 @@ xcrun simctl spawn "$SIMULATOR_UDID" log stream \
 OSLOG_PID="$!"
 sleep 1
 
-printf '[owner-truth-interview-natural-input-product-surface-smoke] Launching in-memory product preview...\n'
+printf '[%s] Launching in-memory product preview...\n' "$SMOKE_ID"
 xcrun simctl launch --console "$SIMULATOR_UDID" "$BUNDLE_ID" \
   DJUITestBypassLogin \
-  DJRunOwnerTruthInterviewNaturalInputProductSurfaceSmoke > "$RUNTIME_LOG" 2>&1 &
+  "$LAUNCH_SCENARIO" > "$RUNTIME_LOG" 2>&1 &
 CONSOLE_PID="$!"
 
 deadline=$((SECONDS + LOG_WAIT_TIMEOUT))
@@ -131,7 +135,6 @@ grep -Eq '"candidateProposalAdmissionEntryVisible"[[:space:]]*:[[:space:]]*true'
 grep -Eq '"candidateProposalAdmissionPhase"[[:space:]]*:[[:space:]]*"admitted"' "$RESULT_FILE" || fail "Preview candidate proposal admission should enter the staging lane."
 grep -Eq '"candidateProposalAdmissionRendered"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate proposal admission should render staging, not a completed Memory."
 grep -Eq '"candidateProposalStatusPhase"[[:space:]]*:[[:space:]]*"ready"' "$RESULT_FILE" || fail "Preview should read the value-minimized candidate proposal status after admission."
-grep -Eq '"candidateProposalReviewState"[[:space:]]*:[[:space:]]*"notReady"' "$RESULT_FILE" || fail "Preview must keep confirmation closed while candidate review is not ready."
 grep -Eq '"candidateProposalStatusEntryVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Preview should expose an explicit status refresh entry after admission."
 grep -Eq '"transcriptCleared"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Product preview must clear submitted text."
 grep -Eq '"productBoundaryControlsVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Product boundary controls should be visible."
@@ -142,13 +145,34 @@ grep -Eq '"voiceTurnStarted"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fa
 grep -Eq '"digitalHumanSessionStarted"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Opening the sheet must not start a Digital Human session."
 grep -Eq '"backendNetworkStarted"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Opening the preview must not start a backend request."
 grep -Eq '"persistentInterviewWriteStarted"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Opening the preview must not write private interview data."
-grep -Eq '"DJRunOwnerTruthInterviewNaturalInputProductSurfaceSmoke"' "$RESULT_FILE" || fail "Product surface launch scenario drifted."
+case "$SMOKE_VARIANT" in
+  not-ready)
+    grep -Eq '"candidateProposalReviewState"[[:space:]]*:[[:space:]]*"notReady"' "$RESULT_FILE" || fail "Preview must keep confirmation closed while candidate review is not ready."
+    grep -Eq '"candidateProposalConfirmationInboxPresented"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Not-ready preview must not open confirmation inbox."
+    grep -Eq '"DJRunOwnerTruthInterviewNaturalInputProductSurfaceSmoke"' "$RESULT_FILE" || fail "Product surface launch scenario drifted."
+    ;;
+  review-ready)
+    grep -Eq '"candidateProposalReviewState"[[:space:]]*:[[:space:]]*"reviewReady"' "$RESULT_FILE" || fail "Review-ready fixture did not reach the confirmation handoff."
+    grep -Eq '"candidateProposalStatusEntryTitle"[[:space:]]*:[[:space:]]*"查看待确认内容"' "$RESULT_FILE" || fail "Review-ready entry title drifted."
+    grep -Eq '"candidateProposalConfirmationInboxPresented"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Review-ready handoff did not open the focused inbox."
+    grep -Eq '"candidateProposalFocusedReviewBatchMatches"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Focused inbox did not receive the current review batch."
+    grep -Eq '"candidateProposalFocusedInboxVisibleItemCount"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Focused inbox must show only the current batch."
+    grep -Eq '"candidateProposalOtherReviewBatchHidden"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Another review-ready batch leaked into the focused inbox."
+    grep -Eq '"candidateProposalConfirmationInboxReadCount"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "Focused inbox should perform one content-free read."
+    grep -Eq '"candidateProposalConfirmationDetailPresented"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Review-ready handoff must not auto-open a confirmation detail."
+    grep -Eq '"candidateProposalConfirmationActionTriggered"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Review-ready handoff must not auto-confirm a candidate."
+    grep -Eq '"DJRunOwnerTruthInterviewCandidateProposalReviewReadySmoke"' "$RESULT_FILE" || fail "Review-ready launch scenario drifted."
+    ;;
+  *)
+    fail "Unsupported SMOKE_VARIANT: $SMOKE_VARIANT"
+    ;;
+esac
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
 
-printf '[owner-truth-interview-natural-input-product-surface-smoke] Build log: %s\n' "$BUILD_LOG"
-printf '[owner-truth-interview-natural-input-product-surface-smoke] Runtime log: %s\n' "$RUNTIME_LOG"
-printf '[owner-truth-interview-natural-input-product-surface-smoke] OS log: %s\n' "$OS_LOG"
-printf '[owner-truth-interview-natural-input-product-surface-smoke] Result: %s\n' "$RESULT_COPY_PATH"
-printf '[owner-truth-interview-natural-input-product-surface-smoke] Screenshot: %s\n' "$SCREENSHOT_PATH"
+printf '[%s] Build log: %s\n' "$SMOKE_ID" "$BUILD_LOG"
+printf '[%s] Runtime log: %s\n' "$SMOKE_ID" "$RUNTIME_LOG"
+printf '[%s] OS log: %s\n' "$SMOKE_ID" "$OS_LOG"
+printf '[%s] Result: %s\n' "$SMOKE_ID" "$RESULT_COPY_PATH"
+printf '[%s] Screenshot: %s\n' "$SMOKE_ID" "$SCREENSHOT_PATH"
