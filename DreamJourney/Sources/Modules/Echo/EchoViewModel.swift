@@ -1335,14 +1335,17 @@ final class EchoApplicationCoordinator {
                 case .success(let comparison):
                     guard comparison.requestCorrelation.intent == "echo_chat",
                           comparison.requestCorrelationMatches else {
+                        _ = self.invalidateOwnerTruthContextShadowCompare()
                         completion(
                             lease,
                             .failure(EchoOwnerTruthContextShadowCorrelationError.queryMismatch)
                         )
                         return
                     }
+                    _ = self.invalidateOwnerTruthContextShadowCompare()
                     completion(lease, .success(comparison))
                 case .failure(let error):
+                    _ = self.invalidateOwnerTruthContextShadowCompare()
                     completion(lease, .failure(error))
                 }
             }

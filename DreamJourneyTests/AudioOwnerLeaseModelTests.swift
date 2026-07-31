@@ -1159,8 +1159,10 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
             digitalHumanId: "digital-human-1"
         )
         let currentDelivered = expectation(description: "only the current compare callback is delivered")
-        currentDelivered.assertForOverFulfill = true
+        let duplicateNotDelivered = expectation(description: "completed compare lease rejects a duplicate callback")
+        duplicateNotDelivered.isInverted = true
         var deliveredLeases: [EchoOwnerTruthContextShadowCompareLease] = []
+        var completionCount = 0
 
         let first = coordinator.requestOwnerTruthContextShadowCompare(
             turnID: "turn-1",
@@ -1176,12 +1178,17 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
             accountLease: accountLease,
             expectedIdentity: identity
         ) { lease, delivery in
+            completionCount += 1
             deliveredLeases.append(lease)
             guard case .success(let comparison) = delivery else {
                 return XCTFail("current comparison must remain a typed success")
             }
             XCTAssertEqual(comparison.disposition, .observed)
-            currentDelivered.fulfill()
+            if completionCount == 1 {
+                currentDelivered.fulfill()
+            } else {
+                duplicateNotDelivered.fulfill()
+            }
         }
 
         XCTAssertNotNil(first)
@@ -1197,6 +1204,14 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
 
         wait(for: [currentDelivered], timeout: 1)
         XCTAssertEqual(deliveredLeases, [second].compactMap { $0 })
+        XCTAssertNil(coordinator.activeOwnerTruthContextShadowCompareLease)
+
+        compareTransport.complete(
+            at: 1,
+            result: .success(try makeOwnerTruthContextShadowCompare(query: "second compare query"))
+        )
+        wait(for: [duplicateNotDelivered], timeout: 0.1)
+        XCTAssertEqual(completionCount, 1)
     }
 
     func testContextBuildInvalidationDropsOwnerTruthContextShadowCompareCallback() throws {

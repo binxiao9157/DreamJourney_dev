@@ -19,7 +19,9 @@ authority, persistence, or product UI.
   account lease is allowed, the selected identity is the current self-owner,
   and the query has a non-empty normalized fingerprint.
 - Fences every compare callback by generation and runtime account lease. A
-  superseded request or Context invalidation drops its late callback.
+  superseded request or Context invalidation drops its late callback. A
+  completed compare also invalidates its own lease before delivery, so a
+  duplicate provider callback cannot write the QA evidence twice.
 - Exports only a re-hashed request correlation, V1/V4 counts, state,
   fallback counts, authority/checkpoint presence, and typed-citation
   completeness through the existing QA panel and evidence bundle.
@@ -35,7 +37,8 @@ authority, persistence, or product UI.
 - `RUN_ID=20260731-0925-context-compare Scripts/QA/prd-stitch-ui/run-echo-qa-evidence-bundle-export-smoke.sh`: passed using local QA bundle ID `com.yxj.dreamjourney.app`. The exported bundle contains the compare readout schema, an `observed` disposition, a matching request correlation, and no raw fixture query. Local report and screenshot: `tmp/visual-qa/prd-stitch-ui/echo-qa-evidence-bundle-export-smoke/20260731-0925-context-compare/report.md` and `01-echo-qa-evidence-bundle-export-smoke.png`.
 
 The focused lifecycle tests cover self-owner and dual-gate admission,
-superseded request rejection, and cancellation of a late callback.
+superseded request rejection, cancellation of a late callback, and duplicate
+completion rejection after a successful delivery.
 
 ## Explicit Non-Claims
 
