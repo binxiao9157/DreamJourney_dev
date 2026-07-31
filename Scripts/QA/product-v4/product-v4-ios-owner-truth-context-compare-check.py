@@ -8,6 +8,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[3]
 CONTRACTS = ROOT / "DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift"
 CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
+VIEW_MODEL = ROOT / "DreamJourney/Sources/Modules/Echo/EchoViewModel.swift"
+VIEW_CONTROLLER = ROOT / "DreamJourney/Sources/Modules/Echo/EchoViewController.swift"
 
 
 def require(contents: str, fragments: list[str], *, label: str) -> None:
@@ -19,6 +21,8 @@ def require(contents: str, fragments: list[str], *, label: str) -> None:
 def main() -> int:
     contracts = CONTRACTS.read_text(encoding="utf-8")
     client = CLIENT.read_text(encoding="utf-8")
+    view_model = VIEW_MODEL.read_text(encoding="utf-8")
+    view_controller = VIEW_CONTROLLER.read_text(encoding="utf-8")
 
     require(
         contracts,
@@ -53,6 +57,31 @@ def main() -> int:
     compare_block = client[compare_start:compare_end]
     if "/context/build" in compare_block or "generationContext" in compare_block:
         raise AssertionError("QA comparison client must not call public Context or consume generation text")
+
+    require(
+        view_model,
+        [
+            "protocol EchoOwnerTruthContextShadowCompareTransport",
+            "struct EchoOwnerTruthContextShadowCompareLease",
+            "struct EchoOwnerTruthContextShadowCompareQAEvidenceReadout",
+            "func requestOwnerTruthContextShadowCompare(",
+            "ownerTruthContextCitationQAEnabled()",
+            "ownerTruthMigrationParityQAEnabled()",
+            "intent: \"echo_chat\"",
+        ],
+        label="Owner Truth Context compare Echo coordinator",
+    )
+    require(
+        view_controller,
+        [
+            "lastOwnerTruthContextCompareEvidence",
+            "observeOwnerTruthContextShadowCompareForEchoTurn",
+            "recordOwnerTruthContextCompareQAEvidence",
+            "ownerTruthContextCompareEvidence",
+            "ctxCompare schema",
+        ],
+        label="Owner Truth Context compare QA evidence",
+    )
 
     print("Product V4 iOS Owner Truth Context compare static check passed")
     return 0

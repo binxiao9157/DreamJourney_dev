@@ -1077,6 +1077,168 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
         wait(for: [expectation], timeout: 1)
     }
 
+    func testOwnerTruthContextShadowCompareStartsOnlyForCurrentSelfOwnerAndBothQAGates() {
+        let compareTransport = DeferredOwnerTruthContextShadowCompareTransport()
+        let coordinator = EchoApplicationCoordinator(
+            ownerTruthContextShadowCompareTransport: compareTransport,
+            accountLeaseValidator: allowedAccountLeaseValidation,
+            ownerTruthContextCitationQAEnabled: { true },
+            ownerTruthMigrationParityQAEnabled: { true }
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 12)
+        let selfIdentity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let familyIdentity = EchoKnowledgeContextIdentity(
+            userId: "family-1",
+            personaScope: "family",
+            digitalHumanId: "digital-human-2"
+        )
+
+        XCTAssertNotNil(
+            coordinator.requestOwnerTruthContextShadowCompare(
+                turnID: "turn-self",
+                query: "只比较当前本人的上下文",
+                accountLease: accountLease,
+                expectedIdentity: selfIdentity
+            ) { _, _ in
+                XCTFail("comparison completion is not expected before the transport resolves")
+            }
+        )
+        XCTAssertEqual(compareTransport.requests.count, 1)
+        XCTAssertEqual(compareTransport.requests.first?.vaultID, "vault-owner-1")
+        XCTAssertEqual(compareTransport.requests.first?.ownerSubjectID, "owner-1")
+        XCTAssertEqual(compareTransport.requests.first?.intent, "echo_chat")
+
+        XCTAssertNil(
+            coordinator.requestOwnerTruthContextShadowCompare(
+                turnID: "turn-family",
+                query: "家人上下文不得加入本轮 QA 对照",
+                accountLease: accountLease,
+                expectedIdentity: familyIdentity
+            ) { _, _ in
+                XCTFail("family comparison must not invoke completion")
+            }
+        )
+        XCTAssertEqual(compareTransport.requests.count, 1)
+
+        let gateDisabledTransport = DeferredOwnerTruthContextShadowCompareTransport()
+        let gateDisabledCoordinator = EchoApplicationCoordinator(
+            ownerTruthContextShadowCompareTransport: gateDisabledTransport,
+            accountLeaseValidator: allowedAccountLeaseValidation,
+            ownerTruthContextCitationQAEnabled: { true },
+            ownerTruthMigrationParityQAEnabled: { false }
+        )
+        XCTAssertNil(
+            gateDisabledCoordinator.requestOwnerTruthContextShadowCompare(
+                turnID: "turn-disabled",
+                query: "迁移 QA 关闭时不得发起对照",
+                accountLease: accountLease,
+                expectedIdentity: selfIdentity
+            ) { _, _ in
+                XCTFail("disabled comparison must not invoke completion")
+            }
+        )
+        XCTAssertTrue(gateDisabledTransport.requests.isEmpty)
+    }
+
+    func testOwnerTruthContextShadowCompareDropsSupersededCallbacks() throws {
+        let compareTransport = DeferredOwnerTruthContextShadowCompareTransport()
+        let coordinator = EchoApplicationCoordinator(
+            ownerTruthContextShadowCompareTransport: compareTransport,
+            accountLeaseValidator: allowedAccountLeaseValidation,
+            ownerTruthContextCitationQAEnabled: { true },
+            ownerTruthMigrationParityQAEnabled: { true }
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 13)
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let currentDelivered = expectation(description: "only the current compare callback is delivered")
+        currentDelivered.assertForOverFulfill = true
+        var deliveredLeases: [EchoOwnerTruthContextShadowCompareLease] = []
+
+        let first = coordinator.requestOwnerTruthContextShadowCompare(
+            turnID: "turn-1",
+            query: "first compare query",
+            accountLease: accountLease,
+            expectedIdentity: identity
+        ) { lease, _ in
+            deliveredLeases.append(lease)
+        }
+        let second = coordinator.requestOwnerTruthContextShadowCompare(
+            turnID: "turn-2",
+            query: "second compare query",
+            accountLease: accountLease,
+            expectedIdentity: identity
+        ) { lease, delivery in
+            deliveredLeases.append(lease)
+            guard case .success(let comparison) = delivery else {
+                return XCTFail("current comparison must remain a typed success")
+            }
+            XCTAssertEqual(comparison.disposition, .observed)
+            currentDelivered.fulfill()
+        }
+
+        XCTAssertNotNil(first)
+        XCTAssertNotNil(second)
+        compareTransport.complete(
+            at: 0,
+            result: .success(try makeOwnerTruthContextShadowCompare(query: "first compare query"))
+        )
+        compareTransport.complete(
+            at: 1,
+            result: .success(try makeOwnerTruthContextShadowCompare(query: "second compare query"))
+        )
+
+        wait(for: [currentDelivered], timeout: 1)
+        XCTAssertEqual(deliveredLeases, [second].compactMap { $0 })
+    }
+
+    func testContextBuildInvalidationDropsOwnerTruthContextShadowCompareCallback() throws {
+        let compareTransport = DeferredOwnerTruthContextShadowCompareTransport()
+        let coordinator = EchoApplicationCoordinator(
+            ownerTruthContextShadowCompareTransport: compareTransport,
+            accountLeaseValidator: allowedAccountLeaseValidation,
+            ownerTruthContextCitationQAEnabled: { true },
+            ownerTruthMigrationParityQAEnabled: { true }
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 14)
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let notDelivered = expectation(description: "invalidated compare callback is not delivered")
+        notDelivered.isInverted = true
+
+        XCTAssertNotNil(
+            coordinator.requestOwnerTruthContextShadowCompare(
+                turnID: "turn-invalidated",
+                query: "context cancellation must fence same request comparison",
+                accountLease: accountLease,
+                expectedIdentity: identity
+            ) { _, _ in
+                notDelivered.fulfill()
+            }
+        )
+        XCTAssertNil(coordinator.invalidateContextBuild())
+        compareTransport.complete(
+            at: 0,
+            result: .success(
+                try makeOwnerTruthContextShadowCompare(
+                    query: "context cancellation must fence same request comparison"
+                )
+            )
+        )
+        wait(for: [notDelivered], timeout: 0.1)
+        XCTAssertNil(coordinator.activeOwnerTruthContextShadowCompareLease)
+    }
+
     func testOwnerTruthContextParityRequiresBothQAGates() {
         let identity = EchoKnowledgeContextIdentity(
             userId: "owner-1",
@@ -1317,6 +1479,57 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
             answerCitationCount: 0,
             selectedContextSourceCounts: ["owner-truth-memory-projection": 1],
             fallbacks: []
+        )
+    }
+
+    private func makeOwnerTruthContextShadowCompare(
+        query: String
+    ) throws -> OwnerTruthContextShadowCompare {
+        let fingerprint = OwnerTruthContextCitationTraceSummary.queryFingerprint(for: query)
+        guard let queryHash = fingerprint.hash else {
+            XCTFail("comparison test query must produce a hash")
+            throw DeferredOwnerTruthContextShadowCompareTransport.TestError.failed
+        }
+        return try OwnerTruthContextShadowCompare(
+            backendJSONObject: [
+                "schemaVersion": "owner-truth-context-shadow-compare-response-v1",
+                "contextComparison": [
+                    "schemaVersion": "owner-truth-context-shadow-compare-v1",
+                    "policyVersion": "owner-truth-context-shadow-compare-policy-v1",
+                    "shadowOnly": true,
+                    "legacyContextUnchanged": true,
+                    "legacyContextRead": true,
+                    "requestCorrelation": [
+                        "schemaVersion": "echo-context-request-correlation-v1",
+                        "intent": "echo_chat",
+                        "queryHash": queryHash,
+                        "queryLength": fingerprint.length,
+                    ],
+                    "requestCorrelationMatches": true,
+                    "disposition": "observed",
+                    "legacy": [
+                        "schemaVersion": 1,
+                        "contextVersion": "echo-context-v1",
+                        "selectedContextCount": 2,
+                        "filteredContextCount": 1,
+                        "fallbackCount": 0,
+                    ],
+                    "v4": [
+                        "schemaVersion": "owner-truth-context-shadow-build-v1",
+                        "contextVersion": "echo-context-v4-shadow",
+                        "policyVersion": "owner-truth-context-shadow-build-policy-v1",
+                        "state": "ready",
+                        "selectedContextCount": 2,
+                        "filteredContextCount": 1,
+                        "fallbackCount": 0,
+                        "allSelectedItemsHaveTypedCitation": true,
+                        "authorityEpochPresent": true,
+                        "projectionCheckpointPresent": true,
+                    ],
+                ],
+            ],
+            expectedIntent: "echo_chat",
+            expectedQuery: query
         )
     }
 
@@ -1985,6 +2198,45 @@ private final class DeferredOwnerTruthContextShadowTransport: EchoOwnerTruthCont
     }
 
     func complete(at index: Int, result: Result<OwnerTruthContextCitationTraceSummary, Error>) {
+        completions[index](result)
+    }
+}
+
+private final class DeferredOwnerTruthContextShadowCompareTransport: EchoOwnerTruthContextShadowCompareTransport {
+    enum TestError: Error {
+        case failed
+    }
+
+    struct Request: Equatable {
+        let vaultID: String
+        let ownerSubjectID: String
+        let intent: String
+        let query: String
+    }
+
+    var isOwnerTruthContextCitationQAConfigured = true
+    private(set) var requests: [Request] = []
+    private var completions: [(Result<OwnerTruthContextShadowCompare, Error>) -> Void] = []
+
+    func compareOwnerTruthContextShadow(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        intent: String,
+        query: String,
+        completion: @escaping (Result<OwnerTruthContextShadowCompare, Error>) -> Void
+    ) {
+        requests.append(
+            Request(
+                vaultID: vaultID.rawValue,
+                ownerSubjectID: expectedOwnerSubjectID,
+                intent: intent,
+                query: query
+            )
+        )
+        completions.append(completion)
+    }
+
+    func complete(at index: Int, result: Result<OwnerTruthContextShadowCompare, Error>) {
         completions[index](result)
     }
 }

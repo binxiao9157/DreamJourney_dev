@@ -435,6 +435,21 @@ protocol EchoOwnerTruthContextShadowTransport: AnyObject {
     )
 }
 
+/// QA-only transport for the server-side same-request V1/V4 comparison. It
+/// returns value-free metadata and is separate from both public Context and
+/// the ordinary Owner Truth shadow transport.
+protocol EchoOwnerTruthContextShadowCompareTransport: AnyObject {
+    var isOwnerTruthContextCitationQAConfigured: Bool { get }
+
+    func compareOwnerTruthContextShadow(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        intent: String,
+        query: String,
+        completion: @escaping (Result<OwnerTruthContextShadowCompare, Error>) -> Void
+    )
+}
+
 /// Provider-independent ownership for one backend context-build request.
 /// The controller still owns rendering and DialogEngine submission; this lease
 /// only prevents an older asynchronous response from mutating a newer Echo turn.
@@ -473,6 +488,16 @@ struct EchoOwnerTruthContextShadowLease: Equatable {
     let vaultID: OwnerTruthVaultID
 }
 
+/// A distinct request fence for the backend's same-request comparison. It
+/// cannot share a lease with the public Context request because its callback
+/// must never delay or influence a user-visible Echo response.
+struct EchoOwnerTruthContextShadowCompareLease: Equatable {
+    let generation: UInt64
+    let turnID: String
+    let expectedIdentity: EchoKnowledgeContextIdentity
+    let vaultID: OwnerTruthVaultID
+}
+
 enum EchoContextBuildDelivery {
     case success(EchoContextPacket)
     case identityMismatch(EchoContextBuildIdentityMismatch)
@@ -482,6 +507,11 @@ enum EchoContextBuildDelivery {
 
 enum EchoOwnerTruthContextShadowDelivery {
     case success(OwnerTruthContextCitationTraceSummary)
+    case failure(Error)
+}
+
+enum EchoOwnerTruthContextShadowCompareDelivery {
+    case success(OwnerTruthContextShadowCompare)
     case failure(Error)
 }
 
@@ -669,6 +699,65 @@ struct EchoOwnerTruthContextParityQAEvidenceReadout: Codable, Equatable, Sendabl
     }
 }
 
+/// The server has already compared both Context plans from one normalized
+/// request. This readout remains value-free and non-promoting before it reaches
+/// an Echo QA panel or evidence bundle.
+struct EchoOwnerTruthContextShadowCompareQAEvidenceReadout: Codable, Equatable, Sendable {
+    static let schemaVersion = "echo-owner-truth-context-shadow-compare-readout-v1"
+
+    let schemaVersion: String
+    let disposition: String
+    let requestCorrelationMatches: Bool
+    let queryHashDigest: String
+    let queryLength: Int
+    let legacySchemaVersion: Int
+    let legacyContextVersion: String
+    let legacySelectedContextCount: Int
+    let legacyFilteredContextCount: Int
+    let legacyFallbackCount: Int
+    let ownerTruthContextVersion: String
+    let ownerTruthState: String
+    let ownerTruthSelectedContextCount: Int
+    let ownerTruthFilteredContextCount: Int
+    let ownerTruthFallbackCount: Int
+    let allSelectedItemsHaveTypedCitation: Bool
+    let authorityEpochPresent: Bool
+    let projectionCheckpointPresent: Bool
+
+    init(comparison: OwnerTruthContextShadowCompare) {
+        schemaVersion = Self.schemaVersion
+        disposition = comparison.disposition.rawValue
+        requestCorrelationMatches = comparison.requestCorrelationMatches
+        queryHashDigest = OwnerTruthMigrationParityDigest.make(
+            "echo-owner-truth-context-shadow-compare-query-v1|\(comparison.requestCorrelation.queryHash ?? "absent")"
+        ).rawValue
+        queryLength = comparison.requestCorrelation.queryLength
+        legacySchemaVersion = comparison.legacy.schemaVersion
+        legacyContextVersion = comparison.legacy.contextVersion
+        legacySelectedContextCount = comparison.legacy.selectedContextCount
+        legacyFilteredContextCount = comparison.legacy.filteredContextCount
+        legacyFallbackCount = comparison.legacy.fallbackCount
+        ownerTruthContextVersion = comparison.v4.contextVersion
+        ownerTruthState = comparison.v4.state.rawValue
+        ownerTruthSelectedContextCount = comparison.v4.selectedContextCount
+        ownerTruthFilteredContextCount = comparison.v4.filteredContextCount
+        ownerTruthFallbackCount = comparison.v4.fallbackCount
+        allSelectedItemsHaveTypedCitation = comparison.v4.allSelectedItemsHaveTypedCitation
+        authorityEpochPresent = comparison.v4.authorityEpochPresent
+        projectionCheckpointPresent = comparison.v4.projectionCheckpointPresent
+    }
+
+    func panelLines(prefix: String = "ctxCompare") -> [String] {
+        [
+            "\(prefix) schema: \(schemaVersion) disposition=\(disposition)",
+            "\(prefix) query: match=\(requestCorrelationMatches) length=\(queryLength) hash=\(queryHashDigest)",
+            "\(prefix) legacy: schema=\(legacySchemaVersion) version=\(legacyContextVersion) selected/filtered/fallback=\(legacySelectedContextCount)/\(legacyFilteredContextCount)/\(legacyFallbackCount)",
+            "\(prefix) v4: state=\(ownerTruthState) version=\(ownerTruthContextVersion) selected/filtered/fallback=\(ownerTruthSelectedContextCount)/\(ownerTruthFilteredContextCount)/\(ownerTruthFallbackCount)",
+            "\(prefix) typedCitation=\(allSelectedItemsHaveTypedCitation) authorityEpoch=\(authorityEpochPresent) checkpoint=\(projectionCheckpointPresent)"
+        ]
+    }
+}
+
 enum EchoOwnerTruthContextParityObservationError: Error, Equatable {
     case qaDisabled
     case legacyIdentityMismatch
@@ -838,20 +927,24 @@ final class EchoApplicationCoordinator {
 
     private var nextContextBuildGeneration: UInt64 = 0
     private var nextOwnerTruthContextShadowGeneration: UInt64 = 0
+    private var nextOwnerTruthContextShadowCompareGeneration: UInt64 = 0
     private var nextOwnerTruthContextParityGeneration: UInt64 = 0
     private let contextBuildTransport: EchoContextBuildTransport
     private let ownerTruthContextShadowTransport: EchoOwnerTruthContextShadowTransport
+    private let ownerTruthContextShadowCompareTransport: EchoOwnerTruthContextShadowCompareTransport
     private let accountLeaseValidator: (AccountLease, AccountLeaseCheckpoint) -> AccountLeaseValidationDecision
     private let ownerTruthContextCitationQAEnabled: () -> Bool
     private let ownerTruthMigrationParityQAEnabled: () -> Bool
     private(set) var activeContextBuildLease: EchoContextBuildLease?
     private(set) var activeOwnerTruthContextShadowLease: EchoOwnerTruthContextShadowLease?
+    private(set) var activeOwnerTruthContextShadowCompareLease: EchoOwnerTruthContextShadowCompareLease?
     private(set) var activeOwnerTruthContextParityLease: EchoOwnerTruthContextParityLease?
     private var ownerTruthContextParityPendingObservation: OwnerTruthContextParityPendingObservation?
 
     init(
         contextBuildTransport: EchoContextBuildTransport = DreamJourneyBackendClient.shared,
         ownerTruthContextShadowTransport: EchoOwnerTruthContextShadowTransport = DreamJourneyBackendClient.shared,
+        ownerTruthContextShadowCompareTransport: EchoOwnerTruthContextShadowCompareTransport = DreamJourneyBackendClient.shared,
         accountLeaseValidator: @escaping (AccountLease, AccountLeaseCheckpoint) -> AccountLeaseValidationDecision = { lease, checkpoint in
             AccountLeaseRuntime.shared.validate(lease, at: checkpoint)
         },
@@ -864,6 +957,7 @@ final class EchoApplicationCoordinator {
     ) {
         self.contextBuildTransport = contextBuildTransport
         self.ownerTruthContextShadowTransport = ownerTruthContextShadowTransport
+        self.ownerTruthContextShadowCompareTransport = ownerTruthContextShadowCompareTransport
         self.accountLeaseValidator = accountLeaseValidator
         self.ownerTruthContextCitationQAEnabled = ownerTruthContextCitationQAEnabled
         self.ownerTruthMigrationParityQAEnabled = ownerTruthMigrationParityQAEnabled
@@ -891,6 +985,7 @@ final class EchoApplicationCoordinator {
         let invalidatedLease = activeContextBuildLease
         activeContextBuildLease = nil
         invalidateOwnerTruthContextShadow()
+        invalidateOwnerTruthContextShadowCompare()
         invalidateOwnerTruthContextParity()
         return invalidatedLease
     }
@@ -908,6 +1003,17 @@ final class EchoApplicationCoordinator {
 
     func isCurrent(_ lease: EchoOwnerTruthContextShadowLease) -> Bool {
         activeOwnerTruthContextShadowLease == lease
+    }
+
+    @discardableResult
+    func invalidateOwnerTruthContextShadowCompare() -> EchoOwnerTruthContextShadowCompareLease? {
+        let invalidatedLease = activeOwnerTruthContextShadowCompareLease
+        activeOwnerTruthContextShadowCompareLease = nil
+        return invalidatedLease
+    }
+
+    func isCurrent(_ lease: EchoOwnerTruthContextShadowCompareLease) -> Bool {
+        activeOwnerTruthContextShadowCompareLease == lease
     }
 
     /// Starts a second, independent QA-only fence for a live legacy/V4 Context
@@ -1170,6 +1276,72 @@ final class EchoApplicationCoordinator {
                         return
                     }
                     completion(lease, .success(summary))
+                case .failure(let error):
+                    completion(lease, .failure(error))
+                }
+            }
+        }
+        return lease
+    }
+
+    /// Requests the server-side same-request comparison as a third QA-only
+    /// observation. It is independently fenced, so a late compare callback can
+    /// never block, retry, or replace the public Context packet or shadow trace.
+    @discardableResult
+    func requestOwnerTruthContextShadowCompare(
+        turnID: String,
+        query: String,
+        accountLease: AccountLease,
+        expectedIdentity: EchoKnowledgeContextIdentity,
+        completion: @escaping (EchoOwnerTruthContextShadowCompareLease, EchoOwnerTruthContextShadowCompareDelivery) -> Void
+    ) -> EchoOwnerTruthContextShadowCompareLease? {
+        let fingerprint = OwnerTruthContextCitationTraceSummary.queryFingerprint(for: query)
+        guard ownerTruthContextCitationQAEnabled(),
+              ownerTruthMigrationParityQAEnabled(),
+              ownerTruthContextShadowCompareTransport.isOwnerTruthContextCitationQAConfigured,
+              accountLeaseValidator(accountLease, .request).allowed,
+              expectedIdentity.userId == accountLease.subjectId,
+              expectedIdentity.isPersonal,
+              let vaultID = OwnerTruthVaultID(accountLease.vaultId),
+              fingerprint.hash != nil,
+              fingerprint.length > 0 else {
+            return nil
+        }
+
+        invalidateOwnerTruthContextShadowCompare()
+        nextOwnerTruthContextShadowCompareGeneration &+= 1
+        let lease = EchoOwnerTruthContextShadowCompareLease(
+            generation: nextOwnerTruthContextShadowCompareGeneration,
+            turnID: turnID,
+            expectedIdentity: expectedIdentity,
+            vaultID: vaultID
+        )
+        activeOwnerTruthContextShadowCompareLease = lease
+        ownerTruthContextShadowCompareTransport.compareOwnerTruthContextShadow(
+            vaultID: vaultID,
+            expectedOwnerSubjectID: accountLease.subjectId,
+            intent: "echo_chat",
+            query: query
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self, self.isCurrent(lease) else {
+                    return
+                }
+                guard self.accountLeaseValidator(accountLease, .runtime).allowed else {
+                    _ = self.invalidateOwnerTruthContextShadowCompare()
+                    return
+                }
+                switch result {
+                case .success(let comparison):
+                    guard comparison.requestCorrelation.intent == "echo_chat",
+                          comparison.requestCorrelationMatches else {
+                        completion(
+                            lease,
+                            .failure(EchoOwnerTruthContextShadowCorrelationError.queryMismatch)
+                        )
+                        return
+                    }
+                    completion(lease, .success(comparison))
                 case .failure(let error):
                     completion(lease, .failure(error))
                 }

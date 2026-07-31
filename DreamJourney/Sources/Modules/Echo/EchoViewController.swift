@@ -296,6 +296,7 @@ final class EchoViewController: UIViewController {
     private var lastVoiceSynthesisEvidenceSummary: EchoVoiceSynthesisEvidenceSummary?
     private var lastOwnerTruthContextCitationEvidence: OwnerTruthContextCitationQAEvidenceReadout?
     private var lastOwnerTruthContextParityEvidence: EchoOwnerTruthContextParityQAEvidenceReadout?
+    private var lastOwnerTruthContextCompareEvidence: EchoOwnerTruthContextShadowCompareQAEvidenceReadout?
     private var trueDeviceBackendPCMDriveTrace = TencentBackendPCMDriveTrueDeviceTrace()
     private var digitalHumanRuntimeContextKey: String?
     private var digitalHumanRuntimeLifecycleGeneration: UInt64?
@@ -1390,6 +1391,7 @@ final class EchoViewController: UIViewController {
         lastVoiceSynthesisEvidenceSummary = nil
         lastOwnerTruthContextCitationEvidence = nil
         lastOwnerTruthContextParityEvidence = nil
+        lastOwnerTruthContextCompareEvidence = nil
         lastVoiceCloneProviderLogId = nil
         lastVoiceCloneProviderRequestId = nil
         lastVoiceCloneProviderMode = nil
@@ -3526,7 +3528,8 @@ final class EchoViewController: UIViewController {
         return EchoQAEvidenceBundle(
             evidencePackage: package,
             ownerTruthContextCitationEvidence: lastOwnerTruthContextCitationEvidence,
-            ownerTruthContextParityEvidence: lastOwnerTruthContextParityEvidence
+            ownerTruthContextParityEvidence: lastOwnerTruthContextParityEvidence,
+            ownerTruthContextCompareEvidence: lastOwnerTruthContextCompareEvidence
         )
     }
 
@@ -3552,6 +3555,19 @@ final class EchoViewController: UIViewController {
             return false
         }
         lastOwnerTruthContextParityEvidence = evidence
+        return true
+    }
+
+    @discardableResult
+    private func recordOwnerTruthContextCompareQAEvidence(
+        _ evidence: EchoOwnerTruthContextShadowCompareQAEvidenceReadout
+    ) -> Bool {
+        guard OwnerTruthContextCitationQAGate.isEnabled,
+              OwnerTruthMigrationParityQAGate.isEnabled else {
+            lastOwnerTruthContextCompareEvidence = nil
+            return false
+        }
+        lastOwnerTruthContextCompareEvidence = evidence
         return true
     }
 
@@ -3603,6 +3619,7 @@ final class EchoViewController: UIViewController {
         }
         let ownerTruthContextLines = lastOwnerTruthContextCitationEvidence?.panelLines() ?? []
         let ownerTruthContextParityLines = lastOwnerTruthContextParityEvidence?.panelLines() ?? []
+        let ownerTruthContextCompareLines = lastOwnerTruthContextCompareEvidence?.panelLines() ?? []
         let baseLines = [
             "Echo QA clues",
             "turnHash: \(PrivacySafeDiagnostics.correlationHash(snapshot.turnID))",
@@ -3625,6 +3642,7 @@ final class EchoViewController: UIViewController {
             [baseLines[0]]
                 + ownerTruthContextLines
                 + ownerTruthContextParityLines
+                + ownerTruthContextCompareLines
                 + Array(baseLines.dropFirst())
                 + capabilityLines
                 + policyLines
@@ -4789,6 +4807,7 @@ final class EchoViewController: UIViewController {
         // cancellation, account/context switch, or a later turn.
         lastOwnerTruthContextCitationEvidence = nil
         lastOwnerTruthContextParityEvidence = nil
+        lastOwnerTruthContextCompareEvidence = nil
         guard let lease = echoApplicationCoordinator.invalidateContextBuild() else {
             return
         }
@@ -5067,6 +5086,7 @@ final class EchoViewController: UIViewController {
         guard OwnerTruthContextCitationQAGate.isEnabled else {
             lastOwnerTruthContextCitationEvidence = nil
             lastOwnerTruthContextParityEvidence = nil
+            lastOwnerTruthContextCompareEvidence = nil
             return
         }
         guard context.isSelfAssistant,
@@ -5090,6 +5110,14 @@ final class EchoViewController: UIViewController {
             }
             return
         }
+
+        observeOwnerTruthContextShadowCompareForEchoTurn(
+            text: text,
+            turnID: turnID,
+            lifecycleToken: lifecycleToken,
+            expectedIdentity: expectedIdentity,
+            accountLease: accountLease
+        )
 
         let shadowLease = echoApplicationCoordinator.requestOwnerTruthContextShadow(
             turnID: turnID,
@@ -5167,6 +5195,84 @@ final class EchoViewController: UIViewController {
             PrivacySafeDiagnostics.log(
                 subsystem: "CFLite",
                 event: "ownerTruthContextShadowSkipped",
+                states: ["reason": "notConfiguredOrIneligible"],
+                correlations: ["turn": turnID]
+            )
+            return
+        }
+    }
+
+    /// Captures the server-side same-request V1/V4 comparison as QA evidence.
+    /// It has no completion dependency with the public Context Packet, typed
+    /// shadow observation, or DialogEngine, so compare failures stay diagnostic.
+    private func observeOwnerTruthContextShadowCompareForEchoTurn(
+        text: String,
+        turnID: String,
+        lifecycleToken: DigitalHumanLifecycleToken,
+        expectedIdentity: EchoKnowledgeContextIdentity,
+        accountLease: AccountLease
+    ) {
+        guard OwnerTruthContextCitationQAGate.isEnabled,
+              OwnerTruthMigrationParityQAGate.isEnabled else {
+            lastOwnerTruthContextCompareEvidence = nil
+            return
+        }
+        let compareLease = echoApplicationCoordinator.requestOwnerTruthContextShadowCompare(
+            turnID: turnID,
+            query: text,
+            accountLease: accountLease,
+            expectedIdentity: expectedIdentity
+        ) { [weak self] _, delivery in
+            guard let self,
+                  self.isCurrentDigitalHumanLifecycleToken(
+                      lifecycleToken,
+                      reason: "ownerTruthContextShadowCompareResponse"
+                  ),
+                  self.validateEchoAccountLease(
+                      at: .runtime,
+                      expected: accountLease,
+                      reason: "ownerTruthContextShadowCompareResponse"
+                  ) else {
+                return
+            }
+            switch delivery {
+            case .success(let comparison):
+                let evidence = EchoOwnerTruthContextShadowCompareQAEvidenceReadout(
+                    comparison: comparison
+                )
+                guard self.recordOwnerTruthContextCompareQAEvidence(evidence) else {
+                    return
+                }
+                self.recordEchoRuntimeDiagnosticsSnapshot(reason: "ownerTruthContextShadowCompareObserved")
+                PrivacySafeDiagnostics.log(
+                    subsystem: "CFLite",
+                    event: "ownerTruthContextShadowCompareObserved",
+                    states: [
+                        "disposition": comparison.disposition.rawValue,
+                        "v4State": comparison.v4.state.rawValue,
+                    ],
+                    counts: [
+                        "legacySelected": comparison.legacy.selectedContextCount,
+                        "v4Selected": comparison.v4.selectedContextCount,
+                        "v4Fallback": comparison.v4.fallbackCount,
+                    ],
+                    correlations: ["turn": turnID]
+                )
+            case .failure:
+                self.lastOwnerTruthContextCompareEvidence = nil
+                PrivacySafeDiagnostics.log(
+                    subsystem: "CFLite",
+                    event: "ownerTruthContextShadowCompareUnavailable",
+                    states: ["reason": "compareRequestFailed"],
+                    correlations: ["turn": turnID]
+                )
+            }
+        }
+        guard compareLease != nil else {
+            lastOwnerTruthContextCompareEvidence = nil
+            PrivacySafeDiagnostics.log(
+                subsystem: "CFLite",
+                event: "ownerTruthContextShadowCompareSkipped",
                 states: ["reason": "notConfiguredOrIneligible"],
                 correlations: ["turn": turnID]
             )
@@ -8975,9 +9081,11 @@ extension EchoViewController {
         let ownerUserId = ownerContext.ownerUserId
         let previousOwnerTruthContextCitationEvidence = lastOwnerTruthContextCitationEvidence
         let previousOwnerTruthContextParityEvidence = lastOwnerTruthContextParityEvidence
+        let previousOwnerTruthContextCompareEvidence = lastOwnerTruthContextCompareEvidence
         defer {
             lastOwnerTruthContextCitationEvidence = previousOwnerTruthContextCitationEvidence
             lastOwnerTruthContextParityEvidence = previousOwnerTruthContextParityEvidence
+            lastOwnerTruthContextCompareEvidence = previousOwnerTruthContextCompareEvidence
             restoreEchoTraceUIQAOwner(ownerContext)
         }
         EchoTraceStore.shared.clear(ownerUserId: ownerUserId)
@@ -9175,6 +9283,63 @@ extension EchoViewController {
             return
         }
 
+        let ownerTruthContextCompareQuery = "uiqa same request context compare evidence"
+        let ownerTruthContextCompareFingerprint = OwnerTruthContextCitationTraceSummary
+            .queryFingerprint(for: ownerTruthContextCompareQuery)
+        guard let ownerTruthContextCompareQueryHash = ownerTruthContextCompareFingerprint.hash,
+              let ownerTruthContextCompare = try? OwnerTruthContextShadowCompare(
+                backendJSONObject: [
+                    "schemaVersion": "owner-truth-context-shadow-compare-response-v1",
+                    "contextComparison": [
+                        "schemaVersion": "owner-truth-context-shadow-compare-v1",
+                        "policyVersion": "owner-truth-context-shadow-compare-policy-v1",
+                        "shadowOnly": true,
+                        "legacyContextUnchanged": true,
+                        "legacyContextRead": true,
+                        "requestCorrelation": [
+                            "schemaVersion": "echo-context-request-correlation-v1",
+                            "intent": "echo_chat",
+                            "queryHash": ownerTruthContextCompareQueryHash,
+                            "queryLength": ownerTruthContextCompareFingerprint.length,
+                        ],
+                        "requestCorrelationMatches": true,
+                        "disposition": "observed",
+                        "legacy": [
+                            "schemaVersion": 1,
+                            "contextVersion": "echo-context-v1",
+                            "selectedContextCount": 2,
+                            "filteredContextCount": 1,
+                            "fallbackCount": 0,
+                        ],
+                        "v4": [
+                            "schemaVersion": "owner-truth-context-shadow-build-v1",
+                            "contextVersion": "echo-context-v4-shadow",
+                            "policyVersion": "owner-truth-context-shadow-build-policy-v1",
+                            "state": "ready",
+                            "selectedContextCount": 2,
+                            "filteredContextCount": 1,
+                            "fallbackCount": 0,
+                            "allSelectedItemsHaveTypedCitation": true,
+                            "authorityEpochPresent": true,
+                            "projectionCheckpointPresent": true,
+                        ],
+                    ],
+                ],
+                expectedIntent: "echo_chat",
+                expectedQuery: ownerTruthContextCompareQuery
+              ), recordOwnerTruthContextCompareQAEvidence(
+                EchoOwnerTruthContextShadowCompareQAEvidenceReadout(
+                    comparison: ownerTruthContextCompare
+                )
+              ) else {
+            completion([
+                "completed": false,
+                "failureReason": "ownerTruthContextCompareQADisabled",
+                "error": "redacted",
+            ])
+            return
+        }
+
         do {
             let scopedExportURL = try exportEchoQAEvidenceBundleForQA(source: "uiqaQAEvidenceBundleExport")
             let exportURL = try preserveTemporaryEchoTraceUIQAExport(
@@ -9198,6 +9363,7 @@ extension EchoViewController {
             let clueSummary = bundle["contextClues"] as? [String: Any]
             let ownerTruthContextEvidence = bundle["ownerTruthContextCitationEvidence"] as? [String: Any]
             let ownerTruthContextParityEvidence = bundle["ownerTruthContextParityEvidence"] as? [String: Any]
+            let ownerTruthContextCompareEvidence = bundle["ownerTruthContextCompareEvidence"] as? [String: Any]
             let voiceSynthesis = bundle["voiceSynthesis"] as? [String: Any]
             let fallbackSummary = bundle["fallbackSummary"] as? [String: Any]
             let latestTurnIDHash = redactedEchoExportString(bundle, key: "turnIDHash")
@@ -9277,6 +9443,14 @@ extension EchoViewController {
                     && ownerTruthContextParityMismatchCodes.contains("M04")
                     && echoRuntimeDiagnosticsPanelLabel.text?.contains("ctxParity schema") == true
                     && !serialized.contains(ownerTruthContextParityQuery)
+                    && ownerTruthContextCompareEvidence?["schemaVersion"] as? String
+                        == EchoOwnerTruthContextShadowCompareQAEvidenceReadout.schemaVersion
+                    && ownerTruthContextCompareEvidence?["disposition"] as? String == "observed"
+                    && ownerTruthContextCompareEvidence?["requestCorrelationMatches"] as? Bool == true
+                    && ownerTruthContextCompareEvidence?["legacySchemaVersion"] as? Int == 1
+                    && ownerTruthContextCompareEvidence?["allSelectedItemsHaveTypedCitation"] as? Bool == true
+                    && echoRuntimeDiagnosticsPanelLabel.text?.contains("ctxCompare schema") == true
+                    && !serialized.contains(ownerTruthContextCompareQuery)
                     && (bundle["digitalHumanSession"] as? [String: Any])?["status"] as? String == "unavailable"
                     && latestProviderLogIdHash
                         == PrivacySafeDiagnostics.correlationHash("uiqa-bundle-provider-log")
@@ -9330,6 +9504,9 @@ extension EchoViewController {
                 "ownerTruthContextParityMismatchCodes": ownerTruthContextParityMismatchCodes.joined(separator: ","),
                 "ownerTruthContextParityPromotionDecision": ownerTruthContextParityEvidence?["promotionDecision"] as? String ?? "",
                 "ownerTruthContextParityPanelVisible": echoRuntimeDiagnosticsPanelLabel.text?.contains("ctxParity schema") == true,
+                "ownerTruthContextCompareEvidenceSchemaVersion": ownerTruthContextCompareEvidence?["schemaVersion"] as? String ?? "",
+                "ownerTruthContextCompareDisposition": ownerTruthContextCompareEvidence?["disposition"] as? String ?? "",
+                "ownerTruthContextComparePanelVisible": echoRuntimeDiagnosticsPanelLabel.text?.contains("ctxCompare schema") == true,
                 "latestFilteredReasons": redactedEchoExportStrings(
                     clueSummary,
                     key: "filteredContextReasons"
