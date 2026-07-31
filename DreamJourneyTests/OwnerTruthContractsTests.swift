@@ -5783,6 +5783,106 @@ final class OwnerTruthContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testNaturalInputProductPendingConfirmationEntryUsesDedicatedPolicyAndInbox() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let naturalInputClient = InterviewNaturalInputClientSpy()
+        naturalInputClient.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        naturalInputClient.continuationHandler = { _ in
+            Result {
+                try self.interviewNaturalInputContinuation(
+                    vaultID: vaultID,
+                    state: .reviewPending,
+                    canContinue: true,
+                    canContinueLater: true
+                )
+            }
+        }
+        let inboxClient = InterviewCandidateConfirmationInboxClientSpy()
+        inboxClient.readResult = .success(try interviewCandidateConfirmationInbox(
+            vaultID: lease.vaultId,
+            reviewBatchIDs: [recordID("00000000-0000-0000-0000-000000000074")]
+        ))
+        let controller = OwnerTruthInterviewNaturalInputViewController(
+            accountLease: lease,
+            client: naturalInputClient,
+            accountLeaseRuntime: runtime,
+            presentation: .product,
+            guidedRecommendationPolicyAvailable: { false },
+            lifeMapPolicyAvailable: { false },
+            memorySearchPolicyAvailable: { false },
+            interviewOutcomePolicyAvailable: { false },
+            candidateConfirmationInboxClient: inboxClient,
+            candidateConfirmationPolicyAvailable: { true },
+            qaGateEnabled: { true }
+        )
+        let navigationController = UINavigationController(rootViewController: controller)
+
+        controller.loadViewIfNeeded()
+
+        let entry = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-interview-pending-confirmation-entry"
+        ) as? UIButton)
+        XCTAssertFalse(entry.isHidden)
+        XCTAssertTrue(entry.isEnabled)
+        XCTAssertEqual(controller.renderedStatusTextForUIQA, "有内容等待你确认")
+        XCTAssertEqual(controller.renderedDetailTextForUIQA, "确认后才会进入你的记忆。")
+
+        entry.sendActions(for: .touchUpInside)
+
+        XCTAssertTrue(
+            navigationController.topViewController is OwnerTruthInterviewCandidateConfirmationInboxViewController
+        )
+        XCTAssertEqual(inboxClient.requestCount, 0)
+    }
+
+    @MainActor
+    func testNaturalInputProductPendingConfirmationEntryStaysHiddenWithoutPolicy() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let naturalInputClient = InterviewNaturalInputClientSpy()
+        naturalInputClient.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        naturalInputClient.continuationHandler = { _ in
+            Result {
+                try self.interviewNaturalInputContinuation(
+                    vaultID: vaultID,
+                    state: .reviewPending,
+                    canContinue: true,
+                    canContinueLater: true
+                )
+            }
+        }
+        let controller = OwnerTruthInterviewNaturalInputViewController(
+            accountLease: lease,
+            client: naturalInputClient,
+            accountLeaseRuntime: runtime,
+            presentation: .product,
+            guidedRecommendationPolicyAvailable: { false },
+            lifeMapPolicyAvailable: { false },
+            memorySearchPolicyAvailable: { false },
+            interviewOutcomePolicyAvailable: { false },
+            candidateConfirmationPolicyAvailable: { false },
+            qaGateEnabled: { true }
+        )
+
+        controller.loadViewIfNeeded()
+
+        let entry = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-interview-pending-confirmation-entry"
+        ) as? UIButton)
+        XCTAssertTrue(entry.isHidden)
+        XCTAssertFalse(entry.isEnabled)
+        XCTAssertEqual(controller.renderedStatusTextForUIQA, "这段分享已经留好")
+        XCTAssertEqual(controller.renderedDetailTextForUIQA, "这段分享已经留好。")
+    }
+
+    @MainActor
     func testMemorySearchProductEntryStaysHiddenWithoutItsPolicy() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let controller = OwnerTruthInterviewNaturalInputViewController(

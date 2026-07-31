@@ -8237,7 +8237,9 @@ extension EchoViewController {
 
             let controller = OwnerTruthInterviewNaturalInputUIQASmoke.makePreviewViewController(
                 accountLease: accountLease,
-                presentation: .product
+                presentation: .product,
+                postNarrativeContinuationState: .reviewPending,
+                candidateConfirmationPolicyAvailable: { true }
             )
             let navigationController = UINavigationController(rootViewController: controller)
             navigationController.modalPresentationStyle = .pageSheet
@@ -8278,16 +8280,19 @@ extension EchoViewController {
                             .areProductBoundaryActionsVisibleForUIQA
                         let qaOnlyBoundaryControlsHidden = controller
                             .areQAOnlyBoundaryActionsHiddenForProductUIQA
-                        let summaryRendered = summaryState == "narrativeRecorded"
-                            && summaryStatus == "这段分享已经留好"
-                            && summaryDetail == "这段分享已经留好。想起来时，可以继续补充。"
+                        let pendingConfirmationEntryVisible = controller
+                            .isCandidateConfirmationEntryVisibleForUIQA
+                        let summaryRendered = summaryState == "reviewPending"
+                            && summaryStatus == "有内容等待你确认"
+                            && summaryDetail == "确认后才会进入你的记忆。"
                         var result: [String: Any] = [
                             "completed": controller.title == "今天想聊点什么？"
                                 && inputRecorded
                                 && summaryRendered
                                 && controller.isTranscriptClearForQA
                                 && productBoundaryControlsVisible
-                                && qaOnlyBoundaryControlsHidden,
+                                && qaOnlyBoundaryControlsHidden
+                                && pendingConfirmationEntryVisible,
                             "productEntryVisible": productEntryVisible,
                             "qaEntryVisible": qaEntryVisible,
                             "sheetPresented": true,
@@ -8300,6 +8305,7 @@ extension EchoViewController {
                             "transcriptCleared": controller.isTranscriptClearForQA,
                             "productBoundaryControlsVisible": productBoundaryControlsVisible,
                             "qaOnlyBoundaryControlsHidden": qaOnlyBoundaryControlsHidden,
+                            "pendingConfirmationEntryVisible": pendingConfirmationEntryVisible,
                             "inMemoryPreview": true,
                             "releasePolicyBypassedForPreview": true,
                             "voiceTurnStarted": false,

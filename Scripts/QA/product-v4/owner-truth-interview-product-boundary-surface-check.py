@@ -117,6 +117,9 @@ def main() -> None:
         '"productBoundaryControlsVisible"',
         '"qaOnlyBoundaryControlsHidden"',
         '"releasePolicyBypassedForPreview"',
+        'LOCAL_BUNDLE_ID="${LOCAL_BUNDLE_ID:-com.yxj.dreamjourney.app}"',
+        'DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER="$LOCAL_BUNDLE_ID"',
+        'Built app is using the shared default bundle id.',
     ):
         require(snippet in smoke, f"product UIQA smoke missing assertion: {snippet}")
     require(

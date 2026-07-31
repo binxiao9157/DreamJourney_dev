@@ -8,6 +8,8 @@ SCHEME="${SCHEME:-DreamJourney}"
 CONFIGURATION="${CONFIGURATION:-Debug}"
 SIMULATOR_NAME="${SIMULATOR_NAME:-iPhone 17}"
 SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG UI_QA_SIMULATOR'
+LOCAL_BUNDLE_ID="${LOCAL_BUNDLE_ID:-com.yxj.dreamjourney.app}"
+LOCAL_DEVELOPMENT_TEAM="${LOCAL_DEVELOPMENT_TEAM:-2BTR77V3R8}"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/tmp/visual-qa/product-v4/DerivedDataOwnerTruthInterviewNaturalInputProductSurfaceSmoke}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/product-v4/owner-truth-interview-natural-input-product-surface-smoke}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
@@ -42,6 +44,8 @@ fi
 [[ -n "$SIMULATOR_UDID" ]] || fail "No booted simulator. Set SIMULATOR_UDID or SIMULATOR_NAME."
 
 printf '[owner-truth-interview-natural-input-product-surface-smoke] Building UIQA app...\n'
+printf '[owner-truth-interview-natural-input-product-surface-smoke] Local QA bundle id: %s\n' "$LOCAL_BUNDLE_ID"
+printf '[owner-truth-interview-natural-input-product-surface-smoke] Local QA team id: %s\n' "$LOCAL_DEVELOPMENT_TEAM"
 xcodebuild \
   -workspace DreamJourney.xcworkspace \
   -scheme "$SCHEME" \
@@ -51,6 +55,8 @@ xcodebuild \
   -derivedDataPath "$DERIVED_DATA_PATH" \
   CODE_SIGNING_ALLOWED=NO \
   SWIFT_ACTIVE_COMPILATION_CONDITIONS="$SWIFT_ACTIVE_COMPILATION_CONDITIONS" \
+  DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER="$LOCAL_BUNDLE_ID" \
+  DREAMJOURNEY_DEVELOPMENT_TEAM="$LOCAL_DEVELOPMENT_TEAM" \
   EXCLUDED_ARCHS='' \
   ARCHS=arm64 \
   ONLY_ACTIVE_ARCH=NO \
@@ -60,6 +66,8 @@ APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/Dream
 [[ -d "$APP_PATH" ]] || fail "Built app not found: $APP_PATH"
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
 [[ -n "$BUNDLE_ID" ]] || fail "Unable to read bundle id from $APP_PATH"
+[[ "$BUNDLE_ID" == "$LOCAL_BUNDLE_ID" ]] || fail "Built app bundle id is $BUNDLE_ID, expected $LOCAL_BUNDLE_ID"
+[[ "$BUNDLE_ID" != "com.gaominge.dreamjourney.app" ]] || fail "Built app is using the shared default bundle id."
 
 printf '[owner-truth-interview-natural-input-product-surface-smoke] Installing %s on %s...\n' "$BUNDLE_ID" "$SIMULATOR_UDID"
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
@@ -109,9 +117,10 @@ grep -Eq '"qaEntryVisible"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail
 grep -Eq '"sheetPresented"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Product natural-input sheet should be presented."
 grep -Eq '"sheetTitle"[[:space:]]*:[[:space:]]*"今天想聊点什么？"' "$RESULT_FILE" || fail "Product presentation title drifted."
 grep -Eq '"inputRecorded"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "In-memory product input should be recorded."
-grep -Eq '"summaryState"[[:space:]]*:[[:space:]]*"narrativeRecorded"' "$RESULT_FILE" || fail "Product continuation summary state drifted."
-grep -Eq '"summaryStatus"[[:space:]]*:[[:space:]]*"这段分享已经留好"' "$RESULT_FILE" || fail "Product summary status drifted."
-grep -Eq '"summaryDetail"[[:space:]]*:[[:space:]]*"这段分享已经留好。想起来时，可以继续补充。"' "$RESULT_FILE" || fail "Product summary detail drifted."
+grep -Eq '"summaryState"[[:space:]]*:[[:space:]]*"reviewPending"' "$RESULT_FILE" || fail "Product continuation summary state drifted."
+grep -Eq '"summaryStatus"[[:space:]]*:[[:space:]]*"有内容等待你确认"' "$RESULT_FILE" || fail "Product summary status drifted."
+grep -Eq '"summaryDetail"[[:space:]]*:[[:space:]]*"确认后才会进入你的记忆。"' "$RESULT_FILE" || fail "Product summary detail drifted."
+grep -Eq '"pendingConfirmationEntryVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Pending-confirmation entry should be visible in the approved product preview."
 grep -Eq '"transcriptCleared"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Product preview must clear submitted text."
 grep -Eq '"productBoundaryControlsVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Product boundary controls should be visible."
 grep -Eq '"qaOnlyBoundaryControlsHidden"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "QA-only boundary controls must remain hidden."

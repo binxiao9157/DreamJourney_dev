@@ -9116,12 +9116,15 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let guidedRecommendationUseCase: OwnerTruthGuidedRecommendationPresentationUseCase?
     private let presentation: OwnerTruthInterviewNaturalInputPresentation
     private let accountLease: AccountLease
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let lifeMapClient: OwnerTruthLifeMapPresentationClient
     private let lifeMapPolicyAvailable: () -> Bool
     private let memorySearchClient: OwnerTruthMemorySearchPresentationClient
     private let memorySearchPolicyAvailable: () -> Bool
     private let interviewOutcomeClient: OwnerTruthInterviewOutcomePresentationClient
     private let interviewOutcomePolicyAvailable: () -> Bool
+    private let candidateConfirmationInboxClient: OwnerTruthInterviewCandidateConfirmationInboxClient
+    private let candidateConfirmationPolicyAvailable: () -> Bool
     private let stackView = UIStackView()
     private let subtitleLabel = UILabel()
     private let guidedRecommendationStack = UIStackView()
@@ -9131,6 +9134,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let lifeMapButton = UIButton(type: .system)
     private let memorySearchButton = UIButton(type: .system)
     private let interviewOutcomeButton = UIButton(type: .system)
+    private let candidateConfirmationEntryButton = UIButton(type: .system)
     private let statusLabel = UILabel()
     private let detailLabel = UILabel()
     private let inputTextView = UITextView()
@@ -9193,6 +9197,13 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
                 summaryCompletedButton,
                 restoreCooldownButton,
             ].allSatisfy { $0.superview == nil || $0.isHidden }
+    }
+
+    var isCandidateConfirmationEntryVisibleForUIQA: Bool {
+        presentation == .product
+            && candidateConfirmationEntryButton.superview != nil
+            && !candidateConfirmationEntryButton.isHidden
+            && candidateConfirmationEntryButton.isEnabled
     }
 
     var isDoNotAskRestoreActionVisibleForQA: Bool {
@@ -9265,16 +9276,26 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
                 .requestDecision(for: .ownerTruthInterviewOutcome)
                 .allowed
         },
+        candidateConfirmationInboxClient: OwnerTruthInterviewCandidateConfirmationInboxClient = DreamJourneyBackendClient.shared,
+        candidateConfirmationPolicyAvailable: @escaping () -> Bool = {
+            FeatureGateService.shared.isRouteAllowed(
+                .ownerTruthCandidateReview,
+                localEnabled: FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview)
+            )
+        },
         qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
     ) {
         self.presentation = presentation
         self.accountLease = accountLease
+        self.accountLeaseRuntime = accountLeaseRuntime
         self.lifeMapClient = lifeMapClient
         self.lifeMapPolicyAvailable = lifeMapPolicyAvailable
         self.memorySearchClient = memorySearchClient
         self.memorySearchPolicyAvailable = memorySearchPolicyAvailable
         self.interviewOutcomeClient = interviewOutcomeClient
         self.interviewOutcomePolicyAvailable = interviewOutcomePolicyAvailable
+        self.candidateConfirmationInboxClient = candidateConfirmationInboxClient
+        self.candidateConfirmationPolicyAvailable = candidateConfirmationPolicyAvailable
         self.useCase = OwnerTruthInterviewNaturalInputUseCase(
             accountLease: accountLease,
             client: client,
@@ -9344,6 +9365,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         configureLifeMapEntry()
         configureMemorySearchEntry()
         configureInterviewOutcomeEntry()
+        configureCandidateConfirmationEntry()
 
         statusLabel.font = DJDesignTokens.Font.title(20)
         statusLabel.textColor = DJDesignTokens.Color.textPrimary
@@ -9379,6 +9401,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             stackView.addArrangedSubview(lifeMapButton)
             stackView.addArrangedSubview(memorySearchButton)
             stackView.addArrangedSubview(interviewOutcomeButton)
+            stackView.addArrangedSubview(candidateConfirmationEntryButton)
         }
         [statusLabel, detailLabel, inputTextView, submitButton].forEach(stackView.addArrangedSubview)
         if presentation == .qa || presentation == .product {
@@ -9516,6 +9539,33 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         interviewOutcomeButton.isHidden = presentation != .product || !interviewOutcomePolicyAvailable()
         interviewOutcomeButton.isEnabled = false
         interviewOutcomeButton.alpha = 0.45
+    }
+
+    private func configureCandidateConfirmationEntry() {
+        var configuration = UIButton.Configuration.tinted()
+        configuration.title = "查看待确认记忆"
+        configuration.image = UIImage(systemName: "checkmark.circle")
+        configuration.imagePadding = 8
+        configuration.baseForegroundColor = DJDesignTokens.Color.textPrimary
+        configuration.baseBackgroundColor = DJDesignTokens.Color.surface
+        configuration.contentInsets = NSDirectionalEdgeInsets(
+            top: 12,
+            leading: 14,
+            bottom: 12,
+            trailing: 14
+        )
+        candidateConfirmationEntryButton.configuration = configuration
+        candidateConfirmationEntryButton.contentHorizontalAlignment = .leading
+        candidateConfirmationEntryButton.layer.cornerRadius = 10
+        candidateConfirmationEntryButton.accessibilityIdentifier =
+            "owner-truth-interview-pending-confirmation-entry"
+        candidateConfirmationEntryButton.accessibilityLabel = "查看待确认记忆"
+        candidateConfirmationEntryButton.isHidden = true
+        candidateConfirmationEntryButton.addTarget(
+            self,
+            action: #selector(candidateConfirmationEntryTapped),
+            for: .touchUpInside
+        )
     }
 
     private func renderGuidedRecommendations(
@@ -9731,6 +9781,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         interviewOutcomeButton.isHidden = presentation != .product || !interviewOutcomePolicyAvailable()
         interviewOutcomeButton.isEnabled = canReadInterviewOutcome
         interviewOutcomeButton.alpha = canReadInterviewOutcome ? 1 : 0.45
+        updateCandidateConfirmationEntry(for: state)
         statusLabel.text = statusText(for: state)
         detailLabel.text = detailText(for: state)
         onViewStateRendered?(state)
@@ -9852,6 +9903,33 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             sessionID: sessionID,
             client: interviewOutcomeClient,
             releasePolicyAvailable: interviewOutcomePolicyAvailable
+        )
+        navigationController?.pushViewController(controller, animated: true)
+    }
+
+    private func updateCandidateConfirmationEntry(for state: OwnerTruthInterviewNaturalInputViewState) {
+        let isVisible = presentation == .product
+            && state.phase == .ready
+            && state.continuation?.state == .reviewPending
+            && candidateConfirmationPolicyAvailable()
+        candidateConfirmationEntryButton.isHidden = !isVisible
+        candidateConfirmationEntryButton.isEnabled = isVisible
+        candidateConfirmationEntryButton.alpha = isVisible ? 1 : 0
+    }
+
+    @objc private func candidateConfirmationEntryTapped() {
+        guard presentation == .product,
+              renderedState.phase == .ready,
+              renderedState.continuation?.state == .reviewPending,
+              candidateConfirmationPolicyAvailable(),
+              accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
+            return
+        }
+        let controller = OwnerTruthInterviewCandidateConfirmationInboxViewController(
+            accountLease: accountLease,
+            client: candidateConfirmationInboxClient,
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyAvailable: candidateConfirmationPolicyAvailable
         )
         navigationController?.pushViewController(controller, animated: true)
     }
@@ -10160,7 +10238,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         case .narrativeRecorded:
             return "这段分享已经留好"
         case .reviewPending:
-            return "有内容等待你确认"
+            return candidateConfirmationPolicyAvailable() ? "有内容等待你确认" : "这段分享已经留好"
         case .paused:
             return "这次先到这里"
         case .ended:
@@ -10177,7 +10255,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         case .narrativeRecorded:
             return "这段分享已经留好。想起来时，可以继续补充。"
         case .reviewPending:
-            return "确认后才会进入你的记忆。"
+            return candidateConfirmationPolicyAvailable()
+                ? "确认后才会进入你的记忆。"
+                : "这段分享已经留好。"
         case .paused:
             return continuation.canContinueLater
                 ? "想继续时，可以再回来。"
@@ -10260,10 +10340,13 @@ enum OwnerTruthInterviewNaturalInputUIQASmoke {
     static func makePreviewViewController(
         accountLease: AccountLease,
         presentation: OwnerTruthInterviewNaturalInputPresentation = .qa,
-        client: OwnerTruthInterviewNaturalInputClient? = nil
+        client: OwnerTruthInterviewNaturalInputClient? = nil,
+        postNarrativeContinuationState: OwnerTruthInterviewNaturalInputContinuationState = .narrativeRecorded,
+        candidateConfirmationPolicyAvailable: @escaping () -> Bool = { false }
     ) -> OwnerTruthInterviewNaturalInputViewController {
         let client = client ?? InterviewNaturalInputUIQAClient(
-            vaultID: OwnerTruthVaultID(accountLease.vaultId)
+            vaultID: OwnerTruthVaultID(accountLease.vaultId),
+            postNarrativeContinuationState: postNarrativeContinuationState
         )
         let previewGateEnabled: () -> Bool
         switch presentation {
@@ -10278,6 +10361,7 @@ enum OwnerTruthInterviewNaturalInputUIQASmoke {
             accountLease: accountLease,
             client: client,
             presentation: presentation,
+            candidateConfirmationPolicyAvailable: candidateConfirmationPolicyAvailable,
             qaGateEnabled: previewGateEnabled
         )
     }
@@ -11150,6 +11234,7 @@ private final class InterviewNaturalInputBoundaryUIQAScenario {
 
 private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalInputClient {
     private let vaultID: OwnerTruthVaultID?
+    private let postNarrativeContinuationState: OwnerTruthInterviewNaturalInputContinuationState
     private var sessionsWithNarrative = Set<UUID>()
     private var boundariesBySessionID: [UUID: OwnerTruthInterviewSessionBoundary] = [:]
     private var currentSessionReceipt: OwnerTruthInterviewNaturalInputReceipt?
@@ -11158,8 +11243,12 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
     private(set) var pacingEvents: [OwnerTruthInterviewPacingEvent] = []
     private(set) var pacingDeepeningTurnCount = 0
 
-    init(vaultID: OwnerTruthVaultID?) {
+    init(
+        vaultID: OwnerTruthVaultID?,
+        postNarrativeContinuationState: OwnerTruthInterviewNaturalInputContinuationState = .narrativeRecorded
+    ) {
         self.vaultID = vaultID
+        self.postNarrativeContinuationState = postNarrativeContinuationState
     }
 
     func fetchOwnerTruthInterviewNaturalInputCurrentSession(
@@ -11481,7 +11570,7 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
         switch boundary {
         case .open, .skipOnce:
             presentation = sessionsWithNarrative.contains(sessionID.rawValue)
-                ? (.narrativeRecorded, true, true)
+                ? (postNarrativeContinuationState, true, true)
                 : (.readyForNarrative, true, true)
         case .cooldown:
             presentation = (.paused, false, true)
