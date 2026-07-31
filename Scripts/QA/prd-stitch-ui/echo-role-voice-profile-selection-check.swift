@@ -86,8 +86,7 @@ for required in [
     "case selfAssistantDefault",
     "case personalOwner",
     "case personalOwnerVoiceProfileMissing",
-    "case familyMember",
-    "case familyVoiceProfileMissing",
+    "case familyVoiceNotPermitted",
     "private func resolveEchoRoleVoiceProfileSelection",
     "private func isCurrentUserPersonaContext",
     "private func currentDigitalHumanRuntimeContextKey",
@@ -97,25 +96,24 @@ for required in [
     "pendingDigitalHumanSessionRequestID",
     "pendingDigitalHumanSessionContextKey",
     "digitalHumanRuntimeContextKey",
-    "ignored stale session response",
-    "invalidated stale session request",
+    "sessionResponseIgnored",
+    "staleSessionRequestInvalidated",
     "contextChanged",
     "DigitalHumanContextStore.shared.current",
     "VoiceCloneService.shared.currentUsableSpeakerId",
     "本人暂未启用复刻音色",
-    "FamilyRepository.shared.acceptedMember(by: context.ownerId)",
-    "member.isVoiceProfileReadyForEcho",
-    "member.normalizedVoiceProfileId",
-    "该家人暂未配置复刻音色",
-    "voiceSource=\\(voiceSelection.source.rawValue)",
+    "家人复刻音色当前不可用于回响",
+    "source: .familyVoiceNotPermitted",
+    "\"voiceSource\": voiceSelection.source.rawValue",
     "roleVoiceSource: voiceSelection.source.rawValue",
     "roleVoiceDisplayName: voiceSelection.displayName",
     "roleVoiceContextOwnerId: voiceSelection.contextOwnerId",
-    "roleVoiceSource: \\(snapshot.roleVoiceSource ?? \"unknown\")",
-    "roleVoiceDisplayName: \\(snapshot.roleVoiceDisplayName ?? \"unknown\")",
-    "roleVoiceContextOwnerId: \\(snapshot.roleVoiceContextOwnerId ?? \"unknown\")",
+    "roleVoiceSource: \\(PrivacySafeDiagnostics.safeCode(snapshot.roleVoiceSource, fallback: \"unknown\"))",
+    "roleVoiceDisplayNameHash: \\(PrivacySafeDiagnostics.correlationHash(snapshot.roleVoiceDisplayName))",
+    "roleVoiceContextOwnerHash: \\(PrivacySafeDiagnostics.correlationHash(snapshot.roleVoiceContextOwnerId))",
     "uiqa_family_voice_panel_member",
-    "S_uiqa_family_panel_voice",
+    "S_uiqa_family_profile_must_not_route",
+    "familyVoiceProfileBlocked",
     "setEchoAudioOwner(.tencentDigitalHuman, reason: \"uiqaPanelFamilyVoiceSelection\")",
     "latestRuntimeRoleVoiceSource",
     "latestRuntimeVoiceProfileId",
@@ -152,6 +150,16 @@ require(voiceClonePCMDriveBody.contains("let contextKey = currentDigitalHumanRun
 require(voiceClonePCMDriveBody.contains("self.currentDigitalHumanRuntimeContextKey() == contextKey"), "PCM-drive responses should be dropped after persona switches")
 require(!voiceClonePCMDriveBody.contains("VoiceCloneService.shared.currentUsableSpeakerId"), "PCM-drive should consume resolved role voice profile, not directly use the current user's voice clone for every role")
 
+let roleVoiceSelectionBody = functionBody(named: "resolveEchoRoleVoiceProfileSelection", in: echo)
+require(roleVoiceSelectionBody.contains("source: .familyVoiceNotPermitted"), "family roles must resolve to a default-deny voice source")
+require(roleVoiceSelectionBody.contains("voiceProfileId: nil"), "family roles must clear any selected cloned voice profile")
+require(!roleVoiceSelectionBody.contains("FamilyRepository.shared.acceptedMember"), "family relationship lookup must not authorize Echo voice synthesis")
+require(!roleVoiceSelectionBody.contains("normalizedVoiceProfileId"), "family voice profile IDs must not enter Echo role selection")
+require(
+    echo.contains("case .selfAssistantDefault, .personalOwner, .familyVoiceNotPermitted:\n            return false"),
+    "family voice denial should remain QA-only and not add a public missing-voice notice"
+)
+
 let startPCMDriveBody = functionBody(named: "startPCMDriveSignalToDigitalHumanRuntime", in: echo)
 require(startPCMDriveBody.contains("contextKey: contextKey"), "PCM-drive chunk scheduling should carry the persona context")
 
@@ -161,7 +169,7 @@ require(schedulePCMDriveBody.contains("self.currentDigitalHumanRuntimeContextKey
 let notEnabledBody = functionBody(named: "showVoiceCloneNotEnabledStatusIfNeeded", in: echo)
 require(notEnabledBody.contains("let voiceSelection = resolveEchoRoleVoiceProfileSelection()"), "voice status should resolve active role")
 require(notEnabledBody.contains("voiceSelection.shouldShowMissingStatus"), "AI assistant should not show missing cloned voice status")
-require(notEnabledBody.contains("voiceSelection.statusText"), "family missing voice should show role-specific status")
+require(notEnabledBody.contains("voiceSelection.statusText"), "personal missing voice should show a role-specific fallback status")
 require(!notEnabledBody.contains("VoiceCloneService.shared.currentUsableSpeakerId"), "missing voice status must not be based on current user's voice clone")
 
 let onErrorBody = functionBody(named: "onError", in: echo)
@@ -173,8 +181,9 @@ for required in [
     "latestRuntimeRoleVoiceSource",
     "latestRuntimeVoiceProfileId",
     "latestRuntimeAudioOwner",
-    "familyMember",
-    "S_uiqa_family_panel_voice",
+    "familyVoiceNotPermitted",
+    "familyVoiceProfileBlocked",
+    "voiceProfileIdHash\" not in runtime_diagnostics",
     "tencentDigitalHuman"
 ] {
     require(panelSmoke.contains(required), "panel export smoke should assert role voice diagnostics \(required)")

@@ -17,10 +17,7 @@ private struct EchoRoleVoiceProfileSelection {
         case selfAssistantDefault
         case personalOwner
         case personalOwnerVoiceProfileMissing
-        case familyMember
-        case familyVoiceProfileMissing
-        case familyMemberUnavailable
-        case familyMemberMissing
+        case familyVoiceNotPermitted
     }
 
     let voiceProfileId: String?
@@ -30,9 +27,9 @@ private struct EchoRoleVoiceProfileSelection {
 
     var shouldShowMissingStatus: Bool {
         switch source {
-        case .selfAssistantDefault, .personalOwner, .familyMember:
+        case .selfAssistantDefault, .personalOwner, .familyVoiceNotPermitted:
             return false
-        case .personalOwnerVoiceProfileMissing, .familyVoiceProfileMissing, .familyMemberUnavailable, .familyMemberMissing:
+        case .personalOwnerVoiceProfileMissing:
             return true
         }
     }
@@ -45,14 +42,8 @@ private struct EchoRoleVoiceProfileSelection {
             return "本人复刻音色正在回响"
         case .personalOwnerVoiceProfileMissing:
             return "本人暂未启用复刻音色"
-        case .familyMember:
-            return "复刻音色正在回响"
-        case .familyVoiceProfileMissing:
-            return "该家人暂未配置复刻音色"
-        case .familyMemberUnavailable:
-            return "该家人暂未启用复刻音色"
-        case .familyMemberMissing:
-            return "家人资料未同步，暂未启用复刻音色"
+        case .familyVoiceNotPermitted:
+            return "家人复刻音色当前不可用于回响"
         }
     }
 }
@@ -3064,30 +3055,14 @@ final class EchoViewController: UIViewController {
             )
         }
 
-        guard let member = FamilyRepository.shared.acceptedMember(by: context.ownerId) else {
-            return EchoRoleVoiceProfileSelection(
-                voiceProfileId: nil,
-                source: .familyMemberMissing,
-                contextOwnerId: context.ownerId,
-                displayName: context.resolvedDisplayName
-            )
-        }
-
-        guard member.isVoiceProfileReadyForEcho,
-              let voiceProfileId = member.normalizedVoiceProfileId else {
-            return EchoRoleVoiceProfileSelection(
-                voiceProfileId: nil,
-                source: .familyVoiceProfileMissing,
-                contextOwnerId: member.id,
-                displayName: member.name
-            )
-        }
-
+        // A family relationship does not grant authority to synthesize with a
+        // family member's cloned voice. Preserve the role context for ordinary
+        // Echo, but force the voice path to the neutral provider fallback.
         return EchoRoleVoiceProfileSelection(
-            voiceProfileId: voiceProfileId,
-            source: .familyMember,
-            contextOwnerId: member.id,
-            displayName: member.name
+            voiceProfileId: nil,
+            source: .familyVoiceNotPermitted,
+            contextOwnerId: context.ownerId,
+            displayName: context.resolvedDisplayName
         )
     }
 
@@ -8915,7 +8890,7 @@ extension EchoViewController {
         let previousAudioOwner = currentEchoAudioOwner
         let qaFamilyMember = FamilyMember(
             id: "uiqa_family_voice_panel_member",
-            name: "UIQA 家人音色",
+            name: "UIQA 家人角色",
             relation: "家人",
             isOnline: true,
             lastUpdated: "刚刚",
@@ -8923,7 +8898,7 @@ extension EchoViewController {
             relationshipAuthoritySource: .qaFixture,
             accessStatus: "active",
             invitationStatus: "accepted",
-            voiceProfileId: "S_uiqa_family_panel_voice",
+            voiceProfileId: "S_uiqa_family_profile_must_not_route",
             voiceSampleStatus: "ready",
             voiceEnabled: true
         )
@@ -8939,6 +8914,7 @@ extension EchoViewController {
         updatePersonaBadge()
         setEchoAudioOwner(.tencentDigitalHuman, reason: "uiqaPanelFamilyVoiceSelection")
         lastEchoRuntimeFallbackReason = nil
+        let familyVoiceProfileBlocked = resolveEchoRoleVoiceProfileSelection().source == .familyVoiceNotPermitted
         defer {
             DigitalHumanContextStore.shared.current = previousContext
             updatePersonaBadge()
@@ -8976,15 +8952,15 @@ extension EchoViewController {
                 "care": 1
             ],
             kbFactCount: 3,
-            voiceProfileId: "S_uiqa_family_panel_voice",
-            voiceCloneReady: true,
-            voiceOutputMode: "tencentAudioDrive",
+            voiceProfileId: nil,
+            voiceCloneReady: false,
+            voiceOutputMode: "tencentText",
             digitalHumanSessionReady: true,
             digitalHumanProviderMode: "tencent-cloud-digital-human",
             privacyScopeLabel: "family:uiqa_family_voice_panel_member",
             canUseFamilyData: true,
             crossScopeArchiveIncluded: false,
-            fallbacks: [],
+            fallbacks: ["familyVoiceNotPermitted"],
             latencyMs: 18
         )
         lastEchoTraceRecord = record
@@ -8993,17 +8969,12 @@ extension EchoViewController {
             ownerUserId: ownerUserId,
             reason: "uiqaPanelSessionSummary"
         )
-        lastVoiceCloneProviderLogId = "uiqa-panel-provider-log"
-        lastVoiceCloneProviderRequestId = "uiqa-panel-provider-request"
-        lastVoiceCloneProviderMode = "volcengineVoiceCloneV3"
-        lastVoiceSynthesisEvidenceSummary = .failed(
+        lastVoiceCloneProviderLogId = nil
+        lastVoiceCloneProviderRequestId = nil
+        lastVoiceCloneProviderMode = nil
+        lastVoiceSynthesisEvidenceSummary = .unavailable(
             ownerUserId: ownerUserId,
-            voiceProfileId: "S_uiqa_family_panel_voice",
-            outputMode: "tencentAudioDrive",
-            providerLogId: "uiqa-panel-provider-log",
-            providerRequestId: "uiqa-panel-provider-request",
-            reason: "uiqaPanelSynthesisSummary",
-            detail: "UIQA panel export stores provider metadata only"
+            reason: "familyVoiceNotPermitted"
         )
 
         do {
@@ -9072,17 +9043,16 @@ extension EchoViewController {
                 "completed": echoTraceEvidenceExportButton.superview === echoRuntimeDiagnosticsPanelView
                     && echoTraceEvidenceExportButton.title(for: .normal) == "导出证据包"
                     && personaBadgeMatchesFamily
+                    && familyVoiceProfileBlocked
                     && latestTurnIDHash
                         == PrivacySafeDiagnostics.correlationHash("uiqa-panel-evidence-turn")
-                    && latestProviderLogIdHash
-                        == PrivacySafeDiagnostics.correlationHash("uiqa-panel-provider-log")
-                    && latestRoleVoiceSource == "familyMember"
+                    && latestProviderLogIdHash == "missing"
+                    && latestRoleVoiceSource == "familyVoiceNotPermitted"
                     && latestRoleVoiceDisplayNameHash
-                        == PrivacySafeDiagnostics.correlationHash("UIQA 家人音色")
+                        == PrivacySafeDiagnostics.correlationHash("UIQA 家人角色")
                     && latestRoleVoiceContextOwnerIdHash
                         == PrivacySafeDiagnostics.correlationHash("uiqa_family_voice_panel_member")
-                    && latestRuntimeVoiceProfileIdHash
-                        == PrivacySafeDiagnostics.correlationHash("S_uiqa_family_panel_voice")
+                    && latestRuntimeVoiceProfileIdHash == "missing"
                     && latestRuntimeAudioOwner == "tencentDigitalHuman"
                     && archiveClueHashes == [PrivacySafeDiagnostics.correlationHash("archive_panel_evidence")]
                     && kbFactClueHashes == [PrivacySafeDiagnostics.correlationHash("fact_panel_evidence")]
@@ -9102,6 +9072,7 @@ extension EchoViewController {
                 "buttonTitle": echoTraceEvidenceExportButton.title(for: .normal) ?? "",
                 "personaBadgeName": personaBadgeName,
                 "personaBadgeMatchesFamily": personaBadgeMatchesFamily,
+                "familyVoiceProfileBlocked": familyVoiceProfileBlocked,
                 "packageCount": packages.count,
                 "latestTurnIDHash": latestTurnIDHash,
                 "latestProviderLogIdHash": latestProviderLogIdHash,
