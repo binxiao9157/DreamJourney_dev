@@ -2187,7 +2187,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                     vaultID: vaultID,
                     state: ended ? .reviewPending : .narrativeRecorded,
                     canContinue: !ended,
-                    canContinueLater: !ended
+                    canContinueLater: true
                 )
             }
         }
@@ -2214,7 +2214,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.latestReceipt?.messageSequence, nil)
         XCTAssertEqual(useCase.viewState.continuation?.state, .reviewPending)
         XCTAssertEqual(useCase.viewState.continuation?.canContinue, false)
-        XCTAssertEqual(useCase.viewState.continuation?.canContinueLater, false)
+        XCTAssertEqual(useCase.viewState.continuation?.canContinueLater, true)
         XCTAssertFalse(String(describing: useCase.viewState).contains("这段叙述"))
     }
 
@@ -5879,7 +5879,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                     vaultID: vaultID,
                     state: ended ? .reviewPending : .readyForNarrative,
                     canContinue: !ended,
-                    canContinueLater: !ended
+                    canContinueLater: true
                 )
             }
         }
@@ -5917,6 +5917,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(controller.renderedStateForUIQA.latestReceipt?.lifecycle, .ended)
         XCTAssertEqual(controller.renderedStateForUIQA.continuation?.state, .reviewPending)
         XCTAssertFalse(controller.renderedStateForUIQA.continuation?.canContinue ?? true)
+        XCTAssertTrue(controller.renderedStateForUIQA.continuation?.canContinueLater ?? false)
         XCTAssertTrue(controller.isCandidateConfirmationEntryVisibleForUIQA)
     }
 
@@ -5933,7 +5934,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                 try self.interviewNaturalInputContinuation(
                     vaultID: vaultID,
                     state: .reviewPending,
-                    canContinue: true,
+                    canContinue: false,
                     canContinueLater: true
                 )
             }
@@ -5990,7 +5991,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                 try self.interviewNaturalInputContinuation(
                     vaultID: vaultID,
                     state: .reviewPending,
-                    canContinue: true,
+                    canContinue: false,
                     canContinueLater: true
                 )
             }

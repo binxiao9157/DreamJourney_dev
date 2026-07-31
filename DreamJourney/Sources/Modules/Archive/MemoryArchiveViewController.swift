@@ -11659,7 +11659,7 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
                         "presentation": [
                             "state": OwnerTruthInterviewNaturalInputContinuationState.reviewPending.rawValue,
                             "canContinue": false,
-                            "canContinueLater": false,
+                            "canContinueLater": true,
                         ],
                     ],
                     expectedVaultID: vaultID
