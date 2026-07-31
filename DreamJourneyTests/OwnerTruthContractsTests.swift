@@ -2167,6 +2167,57 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertFalse(String(describing: useCase.viewState).contains(text))
     }
 
+    func testInterviewNaturalInputUseCaseEndsPersistedSessionAndRefreshesContinuation() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        client.appendHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, append: command) }
+        }
+        client.endHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, end: command) }
+        }
+        client.continuationHandler = { _ in
+            Result {
+                let ended = client.endCommand != nil
+                return try self.interviewNaturalInputContinuation(
+                    vaultID: vaultID,
+                    state: ended ? .reviewPending : .narrativeRecorded,
+                    canContinue: !ended,
+                    canContinueLater: !ended
+                )
+            }
+        }
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.start)
+        useCase.send(.submit(text: "这段叙述在结束后只进入待确认批次。"))
+        let appendReceipt = try XCTUnwrap(useCase.viewState.latestReceipt)
+
+        useCase.send(.end)
+
+        let command = try XCTUnwrap(client.endCommand)
+        XCTAssertEqual(command.threadID, appendReceipt.threadID)
+        XCTAssertEqual(command.sessionID, appendReceipt.sessionID)
+        XCTAssertEqual(command.expectedThreadVersion, appendReceipt.threadVersion)
+        XCTAssertEqual(command.expectedSessionVersion, appendReceipt.sessionVersion)
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.latestReceipt?.lifecycle, .ended)
+        XCTAssertEqual(useCase.viewState.latestReceipt?.messageSequence, nil)
+        XCTAssertEqual(useCase.viewState.continuation?.state, .reviewPending)
+        XCTAssertEqual(useCase.viewState.continuation?.canContinue, false)
+        XCTAssertEqual(useCase.viewState.continuation?.canContinueLater, false)
+        XCTAssertFalse(String(describing: useCase.viewState).contains("这段叙述"))
+    }
+
     func testInterviewNaturalInputUseCasePausesOldThreadAndStartsNewSession() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
@@ -4751,6 +4802,31 @@ final class OwnerTruthContractsTests: XCTestCase {
 
     private func interviewNaturalInputReceipt(
         vaultID: OwnerTruthVaultID,
+        end: OwnerTruthInterviewEndCommand
+    ) throws -> OwnerTruthInterviewNaturalInputReceipt {
+        try OwnerTruthInterviewNaturalInputReceipt(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "receipt": [
+                    "status": OwnerTruthCommandOutcome.created.rawValue,
+                    "threadId": end.threadID.rawValue.uuidString,
+                    "sessionId": end.sessionID.rawValue.uuidString,
+                    "threadVersion": end.expectedThreadVersion + 1,
+                    // The server may create the hidden session-exit batch in
+                    // the same unit of work, so clients must accept the
+                    // current post-batch version rather than assume +1.
+                    "sessionVersion": end.expectedSessionVersion + 2,
+                    "state": OwnerTruthInterviewSessionLifecycle.ended.rawValue,
+                    "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+    }
+
+    private func interviewNaturalInputReceipt(
+        vaultID: OwnerTruthVaultID,
         boundary: OwnerTruthInterviewBoundaryCommand
     ) throws -> OwnerTruthInterviewNaturalInputReceipt {
         let lifecycle: OwnerTruthInterviewSessionLifecycle =
@@ -5780,6 +5856,68 @@ final class OwnerTruthContractsTests: XCTestCase {
         ) as? UIButton)
         XCTAssertFalse(restore.isHidden)
         XCTAssertNil(client.restoreDoNotAskCommand)
+    }
+
+    @MainActor
+    func testNaturalInputProductSheetEndsOnlyPersistedNarrative() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        client.appendHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, append: command) }
+        }
+        client.endHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, end: command) }
+        }
+        client.continuationHandler = { _ in
+            Result {
+                let ended = client.endCommand != nil
+                return try self.interviewNaturalInputContinuation(
+                    vaultID: vaultID,
+                    state: ended ? .reviewPending : .readyForNarrative,
+                    canContinue: !ended,
+                    canContinueLater: !ended
+                )
+            }
+        }
+        let controller = OwnerTruthInterviewNaturalInputViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            presentation: .product,
+            guidedRecommendationPolicyAvailable: { false },
+            lifeMapPolicyAvailable: { false },
+            memorySearchPolicyAvailable: { false },
+            interviewOutcomePolicyAvailable: { false },
+            candidateConfirmationPolicyAvailable: { true },
+            qaGateEnabled: { true }
+        )
+
+        controller.loadViewIfNeeded()
+
+        let endButton = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-interview-natural-input-end"
+        ) as? UIButton)
+        XCTAssertTrue(endButton.isHidden)
+        endButton.sendActions(for: .touchUpInside)
+        XCTAssertNil(client.endCommand)
+
+        controller.submitQAFixture("这段分享会在结束后进入待确认批次。")
+
+        XCTAssertFalse(endButton.isHidden)
+        XCTAssertTrue(endButton.isEnabled)
+        endButton.sendActions(for: .touchUpInside)
+
+        XCTAssertNotNil(client.endCommand)
+        XCTAssertTrue(endButton.isHidden)
+        XCTAssertEqual(controller.renderedStateForUIQA.latestReceipt?.lifecycle, .ended)
+        XCTAssertEqual(controller.renderedStateForUIQA.continuation?.state, .reviewPending)
+        XCTAssertFalse(controller.renderedStateForUIQA.continuation?.canContinue ?? true)
+        XCTAssertTrue(controller.isCandidateConfirmationEntryVisibleForUIQA)
     }
 
     @MainActor
@@ -6845,6 +6983,7 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
     var currentSessionHandler: ((OwnerTruthVaultID) -> Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>)?
     var startHandler: ((OwnerTruthInterviewNaturalInputStartCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var appendHandler: ((OwnerTruthInterviewNaturalInputAppendCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
+    var endHandler: ((OwnerTruthInterviewEndCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var boundaryHandler: ((OwnerTruthInterviewBoundaryCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var pacingHandler: ((OwnerTruthInterviewPacingCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var topicSwitchHandler: ((OwnerTruthInterviewPauseForTopicSwitchCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
@@ -6865,6 +7004,7 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
     private(set) var startCommand: OwnerTruthInterviewNaturalInputStartCommand?
     private(set) var startCommands: [OwnerTruthInterviewNaturalInputStartCommand] = []
     private(set) var appendCommand: OwnerTruthInterviewNaturalInputAppendCommand?
+    private(set) var endCommand: OwnerTruthInterviewEndCommand?
     private(set) var boundaryCommand: OwnerTruthInterviewBoundaryCommand?
     private(set) var pacingCommand: OwnerTruthInterviewPacingCommand?
     private(set) var topicSwitchCommand: OwnerTruthInterviewPauseForTopicSwitchCommand?
@@ -6914,6 +7054,15 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
             return
         }
         completion(appendHandler?(command) ?? .failure(InterviewNaturalInputClientSpyError.missingAppendResult))
+    }
+
+    func endOwnerTruthInterviewNaturalInput(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewEndCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        endCommand = command
+        completion(endHandler?(command) ?? .failure(InterviewNaturalInputClientSpyError.missingEndResult))
     }
 
     func setOwnerTruthInterviewBoundary(
@@ -7031,6 +7180,7 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
 private enum InterviewNaturalInputClientSpyError: Error {
     case missingStartResult
     case missingAppendResult
+    case missingEndResult
     case missingBoundaryResult
     case missingPacingResult
     case missingTopicSwitchResult

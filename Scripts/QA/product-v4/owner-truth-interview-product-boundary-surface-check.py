@@ -8,6 +8,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 SURFACE = ROOT / "DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift"
+CONTRACTS = ROOT / "DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift"
+BACKEND_CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 PRODUCT_SMOKE = ROOT / (
     "Scripts/QA/prd-stitch-ui/"
     "run-owner-truth-interview-natural-input-product-surface-smoke.sh"
@@ -36,10 +38,12 @@ def body(source: str, marker: str) -> str:
 
 
 def main() -> None:
-    for path in (SURFACE, PRODUCT_SMOKE):
+    for path in (SURFACE, CONTRACTS, BACKEND_CLIENT, PRODUCT_SMOKE):
         require(path.is_file(), f"missing product boundary artifact: {path}")
 
     surface = SURFACE.read_text(encoding="utf-8")
+    contracts = CONTRACTS.read_text(encoding="utf-8")
+    backend_client = BACKEND_CLIENT.read_text(encoding="utf-8")
     smoke = PRODUCT_SMOKE.read_text(encoding="utf-8")
     natural_input_start = surface.find("final class OwnerTruthInterviewNaturalInputViewController")
     require(natural_input_start >= 0, "missing natural-input product surface")
@@ -51,6 +55,7 @@ def main() -> None:
     restore_cooldown = body(natural_input_surface, "@objc private func restoreCooldownTapped()")
     topic_switch = body(natural_input_surface, "@objc private func topicSwitchTapped()")
     pacing = body(natural_input_surface, "private func submitPacing(")
+    end_session = body(natural_input_surface, "@objc private func endSessionTapped()")
 
     for snippet in (
         "private let productBoundaryActionsRow",
@@ -114,8 +119,41 @@ def main() -> None:
         "product surface must not reopen a topic through the generic boundary command",
     )
     for snippet in (
+        "private let endSessionButton",
+        'endSessionButton.setTitle("结束这次分享", for: .normal)',
+        'endSessionButton.accessibilityIdentifier = "owner-truth-interview-natural-input-end"',
+        "stackView.addArrangedSubview(endSessionButton)",
+    ):
+        require(snippet in natural_input_surface, f"missing product end action: {snippet}")
+    require(
+        "presentation == .product" in end_session
+        and "messageSequence != nil" in end_session
+        and "useCase.send(.end)" in end_session,
+        "product end action must only close a persisted product interview through the typed contract",
+    )
+    require(
+        "struct OwnerTruthInterviewEndCommand" in contracts
+        and '"commandId": commandID' in contracts
+        and '"threadId": threadID.rawValue.uuidString.lowercased()' in contracts
+        and '"expectedThreadVersion": expectedThreadVersion' in contracts
+        and '"expectedSessionVersion": expectedSessionVersion' in contracts
+        and "func matches(_ command: OwnerTruthInterviewEndCommand)" in contracts,
+        "typed end command must remain value-minimized and receipt-fenced",
+    )
+    require(
+        "func endOwnerTruthInterviewNaturalInput(" in backend_client
+        and "/end\"" in backend_client
+        and "ownerTruthInterviewNaturalInputTransport()" in backend_client
+        and "featureDecision: featureDecision" in backend_client,
+        "product end transport must reuse the captured natural-input policy boundary",
+    )
+    for snippet in (
         '"productBoundaryControlsVisible"',
         '"qaOnlyBoundaryControlsHidden"',
+        '"endActionHiddenBeforeNarrative"',
+        '"endActionVisibleAfterNarrative"',
+        '"endedSession"',
+        '"endActionHiddenAfterEnd"',
         '"releasePolicyBypassedForPreview"',
         'LOCAL_BUNDLE_ID="${LOCAL_BUNDLE_ID:-com.yxj.dreamjourney.app}"',
         'DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER="$LOCAL_BUNDLE_ID"',
@@ -129,7 +167,7 @@ def main() -> None:
 
     print(
         "Owner Truth interview product-boundary surface check passed: "
-        "released controls stay lease-fenced and QA-only controls stay hidden"
+        "released controls stay lease-fenced, explicit end stays value-minimized, and QA-only controls stay hidden"
     )
 
 

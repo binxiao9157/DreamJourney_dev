@@ -9139,6 +9139,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let detailLabel = UILabel()
     private let inputTextView = UITextView()
     private let submitButton = UIButton(type: .system)
+    private let endSessionButton = UIButton(type: .system)
     private let boundaryActionsStack = UIStackView()
     private let productBoundaryActionsRow = UIStackView()
     private let skipOnceButton = UIButton(type: .system)
@@ -9204,6 +9205,13 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             && candidateConfirmationEntryButton.superview != nil
             && !candidateConfirmationEntryButton.isHidden
             && candidateConfirmationEntryButton.isEnabled
+    }
+
+    var isEndSessionActionVisibleForUIQA: Bool {
+        presentation == .product
+            && endSessionButton.superview != nil
+            && !endSessionButton.isHidden
+            && endSessionButton.isEnabled
     }
 
     var isDoNotAskRestoreActionVisibleForQA: Bool {
@@ -9344,6 +9352,11 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         submitInput()
     }
 
+    func endQAFixture() {
+        guard isEndSessionActionVisibleForUIQA else { return }
+        endSessionTapped()
+    }
+
     private func configureView() {
         stackView.axis = .vertical
         stackView.alignment = .fill
@@ -9394,6 +9407,15 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         submitButton.addTarget(self, action: #selector(submitTapped), for: .touchUpInside)
         submitButton.accessibilityIdentifier = "owner-truth-interview-natural-input-submit"
 
+        endSessionButton.setTitle("结束这次分享", for: .normal)
+        endSessionButton.titleLabel?.font = DJDesignTokens.Font.body(14)
+        endSessionButton.setTitleColor(DJDesignTokens.Color.textSecondary, for: .normal)
+        endSessionButton.backgroundColor = .clear
+        endSessionButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        endSessionButton.addTarget(self, action: #selector(endSessionTapped), for: .touchUpInside)
+        endSessionButton.accessibilityIdentifier = "owner-truth-interview-natural-input-end"
+        endSessionButton.isHidden = true
+
         configureBoundaryControls()
         stackView.addArrangedSubview(subtitleLabel)
         if presentation == .product {
@@ -9404,6 +9426,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             stackView.addArrangedSubview(candidateConfirmationEntryButton)
         }
         [statusLabel, detailLabel, inputTextView, submitButton].forEach(stackView.addArrangedSubview)
+        if presentation == .product {
+            stackView.addArrangedSubview(endSessionButton)
+        }
         if presentation == .qa || presentation == .product {
             stackView.addArrangedSubview(boundaryActionsStack)
         }
@@ -9756,9 +9781,18 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             && state.latestReceipt?.lifecycle == .active
             && state.latestReceipt?.boundary == .open
             && canContinue
+        let canEnd = presentation == .product
+            && state.phase == .ready
+            && state.latestReceipt?.lifecycle == .active
+            && state.latestReceipt?.boundary == .open
+            && state.latestReceipt?.messageSequence != nil
+            && canContinue
         inputTextView.isEditable = canSubmit
         submitButton.isEnabled = canSubmit
         submitButton.alpha = canSubmit ? 1 : 0.45
+        endSessionButton.isHidden = !canEnd
+        endSessionButton.isEnabled = canEnd
+        endSessionButton.alpha = canEnd ? 1 : 0
         [skipOnceButton, cooldownButton, doNotAskButton].forEach { button in
             button.isEnabled = canSetBoundary
             button.alpha = canSetBoundary ? 1 : 0.45
@@ -9789,6 +9823,18 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
     @objc private func submitTapped() {
         submitInput()
+    }
+
+    @objc private func endSessionTapped() {
+        guard presentation == .product,
+              renderedState.phase == .ready,
+              renderedState.latestReceipt?.lifecycle == .active,
+              renderedState.latestReceipt?.boundary == .open,
+              renderedState.latestReceipt?.messageSequence != nil,
+              renderedState.continuation?.canContinue ?? true else {
+            return
+        }
+        useCase.send(.end)
     }
 
     @objc private func guidedRecommendationTapped(_ sender: UIButton) {
@@ -11236,6 +11282,7 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
     private let vaultID: OwnerTruthVaultID?
     private let postNarrativeContinuationState: OwnerTruthInterviewNaturalInputContinuationState
     private var sessionsWithNarrative = Set<UUID>()
+    private var endedSessions = Set<UUID>()
     private var boundariesBySessionID: [UUID: OwnerTruthInterviewSessionBoundary] = [:]
     private var currentSessionReceipt: OwnerTruthInterviewNaturalInputReceipt?
     private(set) var startRequestCount = 0
@@ -11351,6 +11398,48 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
                 expectedVaultID: vaultID
             )
             currentSessionReceipt = receipt
+            completion(.success(receipt))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func endOwnerTruthInterviewNaturalInput(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewEndCommand,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID,
+              let current = currentSessionReceipt,
+              current.threadID == command.threadID,
+              current.sessionID == command.sessionID,
+              current.lifecycle == .active,
+              current.boundary == .open,
+              current.threadVersion == command.expectedThreadVersion,
+              current.sessionVersion == command.expectedSessionVersion,
+              sessionsWithNarrative.contains(command.sessionID.rawValue) else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        do {
+            let receipt = try OwnerTruthInterviewNaturalInputReceipt(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "receipt": [
+                        "status": OwnerTruthCommandOutcome.created.rawValue,
+                        "threadId": command.threadID.rawValue.uuidString,
+                        "sessionId": command.sessionID.rawValue.uuidString,
+                        "threadVersion": command.expectedThreadVersion + 1,
+                        "sessionVersion": command.expectedSessionVersion + 2,
+                        "state": OwnerTruthInterviewSessionLifecycle.ended.rawValue,
+                        "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
+                    ],
+                ],
+                expectedVaultID: vaultID
+            )
+            endedSessions.insert(command.sessionID.rawValue)
+            currentSessionReceipt = nil
             completion(.success(receipt))
         } catch {
             completion(.failure(error))
@@ -11559,6 +11648,25 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
     ) {
         guard self.vaultID == vaultID else {
             completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        if endedSessions.contains(sessionID.rawValue) {
+            do {
+                completion(.success(try OwnerTruthInterviewNaturalInputContinuation(
+                    backendJSONObject: [
+                        "schemaVersion": OwnerTruthInterviewNaturalInputContinuation.schemaVersion,
+                        "vaultId": vaultID.rawValue,
+                        "presentation": [
+                            "state": OwnerTruthInterviewNaturalInputContinuationState.reviewPending.rawValue,
+                            "canContinue": false,
+                            "canContinueLater": false,
+                        ],
+                    ],
+                    expectedVaultID: vaultID
+                )))
+            } catch {
+                completion(.failure(error))
+            }
             return
         }
         let boundary = boundariesBySessionID[sessionID.rawValue] ?? .open

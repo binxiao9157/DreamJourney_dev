@@ -8262,64 +8262,84 @@ extension EchoViewController {
                 }
 
                 // The in-memory client lets the product-only UIQA surface
-                // verify the user-facing summary after an accepted input while
-                // preserving the invariant that no network, voice, Digital
-                // Human, or persistent interview write is started.
+                // exercise a complete private-interview exit while preserving
+                // the invariant that no network, voice, Digital Human, or
+                // persistent interview write is started.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    let endActionHiddenBeforeNarrative = !controller
+                        .isEndSessionActionVisibleForUIQA
                     controller.submitQAFixture(
                         OwnerTruthInterviewNaturalInputUIQASmoke.fixtureText
                     )
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                        let continuation = controller.renderedStateForUIQA.continuation
-                        let summaryState = continuation?.state.rawValue ?? ""
-                        let summaryStatus = controller.renderedStatusTextForUIQA
-                        let summaryDetail = controller.renderedDetailTextForUIQA
                         let inputRecorded = controller.renderedStateForUIQA
                             .latestReceipt?.messageSequence == 1
+                        let endActionVisibleAfterNarrative = controller
+                            .isEndSessionActionVisibleForUIQA
                         let productBoundaryControlsVisible = controller
                             .areProductBoundaryActionsVisibleForUIQA
                         let qaOnlyBoundaryControlsHidden = controller
                             .areQAOnlyBoundaryActionsHiddenForProductUIQA
-                        let pendingConfirmationEntryVisible = controller
-                            .isCandidateConfirmationEntryVisibleForUIQA
-                        let summaryRendered = summaryState == "reviewPending"
-                            && summaryStatus == "有内容等待你确认"
-                            && summaryDetail == "确认后才会进入你的记忆。"
-                        var result: [String: Any] = [
-                            "completed": controller.title == "今天想聊点什么？"
-                                && inputRecorded
-                                && summaryRendered
-                                && controller.isTranscriptClearForQA
-                                && productBoundaryControlsVisible
-                                && qaOnlyBoundaryControlsHidden
-                                && pendingConfirmationEntryVisible,
-                            "productEntryVisible": productEntryVisible,
-                            "qaEntryVisible": qaEntryVisible,
-                            "sheetPresented": true,
-                            "entryAccessibilityIdentifier": self.ownerTruthInterviewNaturalInputProductEntryButton.accessibilityIdentifier ?? "",
-                            "sheetTitle": controller.title ?? "",
-                            "inputRecorded": inputRecorded,
-                            "summaryState": summaryState,
-                            "summaryStatus": summaryStatus,
-                            "summaryDetail": summaryDetail,
-                            "transcriptCleared": controller.isTranscriptClearForQA,
-                            "productBoundaryControlsVisible": productBoundaryControlsVisible,
-                            "qaOnlyBoundaryControlsHidden": qaOnlyBoundaryControlsHidden,
-                            "pendingConfirmationEntryVisible": pendingConfirmationEntryVisible,
-                            "inMemoryPreview": true,
-                            "releasePolicyBypassedForPreview": true,
-                            "voiceTurnStarted": false,
-                            "digitalHumanSessionStarted": false,
-                            "backendNetworkStarted": false,
-                            "persistentInterviewWriteStarted": false,
-                            "launchArguments": [
-                                QALaunchScenario.ownerTruthInterviewNaturalInputProductSurfaceSmoke.rawValue
+                        controller.endQAFixture()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                            let finalState = controller.renderedStateForUIQA
+                            let continuation = finalState.continuation
+                            let summaryState = continuation?.state.rawValue ?? ""
+                            let summaryStatus = controller.renderedStatusTextForUIQA
+                            let summaryDetail = controller.renderedDetailTextForUIQA
+                            let pendingConfirmationEntryVisible = controller
+                                .isCandidateConfirmationEntryVisibleForUIQA
+                            let endActionHiddenAfterEnd = !controller
+                                .isEndSessionActionVisibleForUIQA
+                            let endedSession = finalState.latestReceipt?.lifecycle == .ended
+                                && finalState.latestReceipt?.messageSequence == nil
+                            let summaryRendered = summaryState == "reviewPending"
+                                && summaryStatus == "有内容等待你确认"
+                                && summaryDetail == "确认后才会进入你的记忆。"
+                            var result: [String: Any] = [
+                                "completed": controller.title == "今天想聊点什么？"
+                                    && endActionHiddenBeforeNarrative
+                                    && inputRecorded
+                                    && endActionVisibleAfterNarrative
+                                    && endedSession
+                                    && endActionHiddenAfterEnd
+                                    && summaryRendered
+                                    && controller.isTranscriptClearForQA
+                                    && productBoundaryControlsVisible
+                                    && qaOnlyBoundaryControlsHidden
+                                    && pendingConfirmationEntryVisible,
+                                "productEntryVisible": productEntryVisible,
+                                "qaEntryVisible": qaEntryVisible,
+                                "sheetPresented": true,
+                                "entryAccessibilityIdentifier": self.ownerTruthInterviewNaturalInputProductEntryButton.accessibilityIdentifier ?? "",
+                                "sheetTitle": controller.title ?? "",
+                                "inputRecorded": inputRecorded,
+                                "endActionHiddenBeforeNarrative": endActionHiddenBeforeNarrative,
+                                "endActionVisibleAfterNarrative": endActionVisibleAfterNarrative,
+                                "endedSession": endedSession,
+                                "endActionHiddenAfterEnd": endActionHiddenAfterEnd,
+                                "summaryState": summaryState,
+                                "summaryStatus": summaryStatus,
+                                "summaryDetail": summaryDetail,
+                                "transcriptCleared": controller.isTranscriptClearForQA,
+                                "productBoundaryControlsVisible": productBoundaryControlsVisible,
+                                "qaOnlyBoundaryControlsHidden": qaOnlyBoundaryControlsHidden,
+                                "pendingConfirmationEntryVisible": pendingConfirmationEntryVisible,
+                                "inMemoryPreview": true,
+                                "releasePolicyBypassedForPreview": true,
+                                "voiceTurnStarted": false,
+                                "digitalHumanSessionStarted": false,
+                                "backendNetworkStarted": false,
+                                "persistentInterviewWriteStarted": false,
+                                "launchArguments": [
+                                    QALaunchScenario.ownerTruthInterviewNaturalInputProductSurfaceSmoke.rawValue
+                                ]
                             ]
-                        ]
-                        if !(result["completed"] as? Bool ?? false) {
-                            result["failureReason"] = "productSummaryNotRendered"
+                            if !(result["completed"] as? Bool ?? false) {
+                                result["failureReason"] = "productEndFlowNotRendered"
+                            }
+                            completion(result)
                         }
-                        completion(result)
                     }
                 }
             }
