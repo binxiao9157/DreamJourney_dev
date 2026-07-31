@@ -71,6 +71,7 @@ def main() -> None:
     account_lease_custom_route = {
         "archiveMediaEchoContextSmoke",
         "notificationRuntimeRouteSmoke",
+        "ownerTruthInterviewCandidateConfirmationFailClosedSmoke",
     }
     seed_only = {
         "seedEchoArchiveContext",

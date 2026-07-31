@@ -44,6 +44,9 @@ let appDelegate = try read("\(root)/DreamJourney/Sources/AppDelegate.swift")
 let reviewReadySmoke = try read(
     "\(root)/Scripts/QA/prd-stitch-ui/run-owner-truth-interview-candidate-proposal-review-ready-smoke.sh"
 )
+let confirmationFailClosedSmoke = try read(
+    "\(root)/Scripts/QA/prd-stitch-ui/run-owner-truth-interview-candidate-confirmation-fail-closed-smoke.sh"
+)
 
 require(
     releaseRegression.contains("owner-truth-candidate-proposal-status-handoff-check.swift"),
@@ -164,6 +167,8 @@ for required in [
     "isCandidateInteractionAllowed",
     "isCandidateActionInFlight",
     "actionConfigurationGeneration",
+    "candidateActionReloadStatusText",
+    "statusLabel.text = candidateActionReloadStatusText ?? statusText(for: state)",
     "beginCandidateActionSubmission",
     "submitBatchConfirmation",
     "submitSingleConfirmation",
@@ -256,6 +261,45 @@ require(
     ) && appDelegate.contains("case .ownerTruthInterviewCandidateProposalReviewReadySmoke:"),
     "review-ready UIQA launch scenario must remain explicitly simulator-routable"
 )
+
+for required in [
+    "OwnerTruthInterviewCandidateConfirmationFailClosedUIQASmoke",
+    "OwnerTruthInterviewCandidateConfirmationFailClosedUIQAScenario",
+    "OwnerTruthInterviewCandidateConfirmationFailClosedUIQAFixture",
+    "confirmationClient: fixture",
+    "batchActionClient: fixture",
+    "singleActionClient: fixture",
+    "failureDisposition\": \"responseMismatch\"",
+    "candidateRouteNetworkRequests\": 0",
+    "persistentCandidateWrites\": 0",
+    "oldCandidateClearedDuringReload",
+    "refreshDisabledDuringReload",
+    "staleActionStatusVisibleDuringReload",
+] {
+    require(
+        archive.contains(required),
+        "confirmation detail fail-closed UIQA is missing: \(required)"
+    )
+}
+require(
+    featureFlags.contains(
+        "case ownerTruthInterviewCandidateConfirmationFailClosedSmoke = \"DJRunOwnerTruthInterviewCandidateConfirmationFailClosedSmoke\""
+    ) && appDelegate.contains("case .ownerTruthInterviewCandidateConfirmationFailClosedSmoke:"),
+    "confirmation detail fail-closed UIQA launch scenario must remain explicitly simulator-routable"
+)
+for required in [
+    "DJRunOwnerTruthInterviewCandidateConfirmationFailClosedSmoke",
+    "owner-truth-interview-candidate-confirmation-fail-closed-smoke-result.json",
+    "candidateRouteNetworkRequests",
+    "persistentCandidateWrites",
+    "oldCandidateClearedDuringReload",
+    "finalPhase",
+] {
+    require(
+        confirmationFailClosedSmoke.contains(required),
+        "confirmation detail fail-closed UIQA wrapper is missing: \(required)"
+    )
+}
 
 for required in [
     "SMOKE_VARIANT=review-ready",

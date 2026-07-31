@@ -385,6 +385,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewNaturalInputProductSurfaceSmoke() }
         case .ownerTruthInterviewCandidateProposalReviewReadySmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewCandidateProposalReviewReadySmoke() }
+        case .ownerTruthInterviewCandidateConfirmationFailClosedSmoke:
+            scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewCandidateConfirmationFailClosedSmoke() }
         case .ownerTruthLifeMapPresentationSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthLifeMapPresentationSmoke() }
         case .ownerTruthMemorySearchPresentationSmoke:
@@ -2413,6 +2415,76 @@ private extension AppDelegate {
                 )
             }
         )
+    }
+
+    func runOwnerTruthInterviewCandidateConfirmationFailClosedSmoke(retryCount: Int = 0) {
+        guard let userID = UserManager.shared.currentUser?.id,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userID),
+              accountLease.subjectId == userID,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            guard retryCount < 20 else {
+                QAScenarioResultWriter.writeAndLog(
+                    [
+                        "completed": false,
+                        "failureReason": "accountLeaseUnavailable",
+                    ],
+                    fileName: "owner-truth-interview-candidate-confirmation-fail-closed-smoke-result.json",
+                    smokeName: "OwnerTruthInterviewCandidateConfirmationFailClosedSmoke"
+                )
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerTruthInterviewCandidateConfirmationFailClosedSmoke(
+                    retryCount: retryCount + 1
+                )
+            }
+            return
+        }
+        guard let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }),
+              keyWindow.rootViewController is WarmTabBarController else {
+            guard retryCount < 20 else {
+                QAScenarioResultWriter.writeAndLog(
+                    [
+                        "completed": false,
+                        "failureReason": "mainRootUnavailable",
+                    ],
+                    fileName: "owner-truth-interview-candidate-confirmation-fail-closed-smoke-result.json",
+                    smokeName: "OwnerTruthInterviewCandidateConfirmationFailClosedSmoke"
+                )
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerTruthInterviewCandidateConfirmationFailClosedSmoke(
+                    retryCount: retryCount + 1
+                )
+            }
+            return
+        }
+
+        let navigationController = UINavigationController()
+        keyWindow.rootViewController = navigationController
+        keyWindow.makeKeyAndVisible()
+        OwnerTruthInterviewCandidateConfirmationFailClosedUIQASmoke.start(
+            accountLease: accountLease,
+            navigationController: navigationController
+        ) { result in
+            QAScenarioResultWriter.writeAndLog(
+                result,
+                fileName: "owner-truth-interview-candidate-confirmation-fail-closed-smoke-result.json",
+                smokeName: "OwnerTruthInterviewCandidateConfirmationFailClosedSmoke"
+            )
+            let completed = result["completed"] as? Bool == true
+            let actionRequestCount = result["actionRequestCount"] as? Int ?? -1
+            print(
+                "[UI_QA] OwnerTruthInterviewCandidateConfirmationFailClosedSmoke completed " +
+                    "completed=\(completed) " +
+                    "actionRequests=\(actionRequestCount)"
+            )
+        }
+        print("[UI_QA] OwnerTruthInterviewCandidateConfirmationFailClosedSmoke started")
     }
 
     func runOwnerTruthLifeMapPresentationSmoke(retryCount: Int = 0) {
