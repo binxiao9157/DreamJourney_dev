@@ -38,11 +38,13 @@ def main() -> None:
         "enum EchoContextBuildDelivery",
         "final class EchoApplicationCoordinator",
         "private(set) var activeContextBuildLease: EchoContextBuildLease?",
+        "private var deliveredContextBuildLease: EchoContextBuildLease?",
         "private let accountLeaseValidator: (AccountLease, AccountLeaseCheckpoint) -> AccountLeaseValidationDecision",
         "func beginContextBuild(",
         "func requestContextBuild(",
         "func invalidateContextBuild() -> EchoContextBuildLease?",
         "func isCurrent(_ lease: EchoContextBuildLease) -> Bool",
+        "private func claimContextBuildDelivery(_ lease: EchoContextBuildLease) -> Bool",
     ):
         require(required in view_model, f"Echo application coordinator contract missing: {required}")
 
@@ -63,6 +65,11 @@ def main() -> None:
         view_controller,
         "    private func recordEchoContextPacketForUserTurn(",
         "    private func submitLocalEchoTurnKnowledgeContext(",
+    )
+    coordinator_context_request = source_slice(
+        view_model,
+        "    func requestContextBuild(",
+        "    /// Starts a value-free Owner Truth Context observation",
     )
     require(
         "echoApplicationCoordinator.requestContextBuild(" in context_build,
@@ -89,6 +96,10 @@ def main() -> None:
         "context build requests must bind the caller's AccountLease",
     )
     require(
+        "guard let self, self.claimContextBuildDelivery(lease) else {" in coordinator_context_request,
+        "a current Context lease must deliver only once even if its transport repeats a callback",
+    )
+    require(
         "case .authorityInvalidated(let invalidation):" in context_build,
         "the controller must cancel a context turn after authority invalidation",
     )
@@ -102,6 +113,7 @@ def main() -> None:
         "func testInvalidatingContextBuildRejectsLateCallback()",
         "func testSameTurnNewGenerationRejectsOldCallback()",
         "func testCoordinatorDropsSupersededTransportCallbackBeforeDelivery()",
+        "func testCoordinatorDeliversCurrentContextCallbackOnlyOnce()",
         "func testCoordinatorDoesNotStartWhenContextTransportIsUnavailable()",
         "func testCoordinatorClassifiesIdentityMismatchedPacketBeforeControllerDelivery()",
         "func testCoordinatorRejectsLateContextPacketAfterAuthorityEpochChanges()",

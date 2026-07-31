@@ -710,6 +710,62 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
         XCTAssertEqual(deliveredLeases, [second].compactMap { $0 })
     }
 
+    func testCoordinatorDeliversCurrentContextCallbackOnlyOnce() {
+        let transport = DeferredEchoContextBuildTransport()
+        let coordinator = EchoApplicationCoordinator(
+            contextBuildTransport: transport,
+            accountLeaseValidator: allowedAccountLeaseValidation
+        )
+        let accountLease = makeAccountLease(subjectId: "owner-1", generation: 1)
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "self",
+            digitalHumanId: "digital-human-1"
+        )
+        let firstDelivery = expectation(description: "current context callback is delivered once")
+        let duplicateDelivery = expectation(description: "duplicate context callback is dropped")
+        duplicateDelivery.isInverted = true
+        var completionCount = 0
+
+        let lease = coordinator.requestContextBuild(
+            turnID: "turn-1",
+            query: "one provider completion must produce one context delivery",
+            expectedIdentity: identity,
+            accountLease: accountLease,
+            lifecycleMode: .sunlight,
+            viewerFamilyMemberID: nil
+        ) { _, delivery in
+            completionCount += 1
+            guard case .success = delivery else {
+                return XCTFail("first current delivery must retain the context packet")
+            }
+            if completionCount == 1 {
+                firstDelivery.fulfill()
+            } else {
+                duplicateDelivery.fulfill()
+            }
+        }
+
+        XCTAssertNotNil(lease)
+        transport.complete(
+            at: 0,
+            result: .success(
+                makeEchoContextPacket(
+                    userId: "owner-1",
+                    personaScope: "self",
+                    digitalHumanId: "digital-human-1"
+                )
+            )
+        )
+
+        wait(for: [firstDelivery], timeout: 1)
+        XCTAssertEqual(coordinator.activeContextBuildLease, lease)
+
+        transport.complete(at: 0, result: .failure(DeferredEchoContextBuildTransport.TestError.failed))
+        wait(for: [duplicateDelivery], timeout: 0.1)
+        XCTAssertEqual(completionCount, 1)
+    }
+
     func testCoordinatorDoesNotStartWhenContextTransportIsUnavailable() {
         let transport = DeferredEchoContextBuildTransport()
         transport.isContextBuildConfigured = false

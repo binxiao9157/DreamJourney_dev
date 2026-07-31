@@ -936,6 +936,7 @@ final class EchoApplicationCoordinator {
     private let ownerTruthContextCitationQAEnabled: () -> Bool
     private let ownerTruthMigrationParityQAEnabled: () -> Bool
     private(set) var activeContextBuildLease: EchoContextBuildLease?
+    private var deliveredContextBuildLease: EchoContextBuildLease?
     private(set) var activeOwnerTruthContextShadowLease: EchoOwnerTruthContextShadowLease?
     private(set) var activeOwnerTruthContextShadowCompareLease: EchoOwnerTruthContextShadowCompareLease?
     private(set) var activeOwnerTruthContextParityLease: EchoOwnerTruthContextParityLease?
@@ -977,6 +978,7 @@ final class EchoApplicationCoordinator {
             accountLease: accountLease
         )
         activeContextBuildLease = lease
+        deliveredContextBuildLease = nil
         return lease
     }
 
@@ -984,6 +986,7 @@ final class EchoApplicationCoordinator {
     func invalidateContextBuild() -> EchoContextBuildLease? {
         let invalidatedLease = activeContextBuildLease
         activeContextBuildLease = nil
+        deliveredContextBuildLease = nil
         invalidateOwnerTruthContextShadow()
         invalidateOwnerTruthContextShadowCompare()
         invalidateOwnerTruthContextParity()
@@ -992,6 +995,17 @@ final class EchoApplicationCoordinator {
 
     func isCurrent(_ lease: EchoContextBuildLease) -> Bool {
         activeContextBuildLease == lease
+    }
+
+    /// A provider may incorrectly invoke one request completion more than once.
+    /// Keep the active lease available to the controller's paired QA observers,
+    /// but permit only its first terminal Context delivery.
+    private func claimContextBuildDelivery(_ lease: EchoContextBuildLease) -> Bool {
+        guard isCurrent(lease), deliveredContextBuildLease != lease else {
+            return false
+        }
+        deliveredContextBuildLease = lease
+        return true
     }
 
     @discardableResult
@@ -1182,7 +1196,7 @@ final class EchoApplicationCoordinator {
             viewerFamilyMemberID: viewerFamilyMemberID
         ) { [weak self] result in
             DispatchQueue.main.async {
-                guard let self, self.isCurrent(lease) else {
+                guard let self, self.claimContextBuildDelivery(lease) else {
                     return
                 }
                 let authorityDecision = self.accountLeaseValidator(accountLease, .runtime)

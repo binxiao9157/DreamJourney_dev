@@ -211,3 +211,36 @@ xcodebuild build -workspace DreamJourney.xcworkspace -scheme DreamJourney \
 
 结果：静态 gate、`EchoApplicationCoordinatorTests` 和 generic simulator Debug build 均通过。
 这是本地 G0 证据，不包含后端部署、Postgres、真实 Provider、公开 UI 或真机声明。
+
+### 2026-07-31 G0 Context Completion 一次性交付栅栏
+
+`EchoApplicationCoordinator` 现在为当前 `/context/build` lease 记录第一条已交付 completion。该
+lease 在第一条 callback 后仍保持 active，因此同回合的已存在 QA parity observer 可以配对合法的
+Context packet；但重复 success/failure callback 不会第二次进入 Controller。
+
+这收敛了第三方 transport 异常重复回调的边界：不会重复写 Echo trace、诊断或后续 context handling，
+也不会让一条已成功的 Context 之后被迟到失败改写。新回合或显式 invalidation 会清空一次性交付标记，
+旧 generation 仍由既有 lease 栅栏拒绝。
+
+新增 XCTest 使用会重复调用同一 completion 的 deferred transport，先交付 success，再交付 failure；
+断言 completion 只执行一次且原 Context lease 仍可用于当前回合的 observation。静态 gate 同时要求
+一次性交付 claim 存在。
+
+执行：
+
+```bash
+DJ_IOS_TEST_DESTINATION='platform=iOS Simulator,name=iPhone 17' \
+  bash Scripts/QA/product-v4/run-ios-echo-application-coordinator-gate.sh
+xcodebuild test -workspace DreamJourney.xcworkspace -scheme DreamJourney \
+  -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -only-testing:DreamJourneyTests/EchoApplicationCoordinatorTests \
+  -only-testing:DreamJourneyTests/OwnerTruthContractsTests CODE_SIGNING_ALLOWED=NO
+xcodebuild build -workspace DreamJourney.xcworkspace -scheme DreamJourney \
+  -configuration Debug -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
+```
+
+结果：coordinator gate 的 `20/20` XCTest、与 Owner Truth 合并的 `157/157` XCTest、静态 gate、
+`git diff --check` 和 generic unsigned iPhoneOS Debug build 均通过。
+
+该变化只涉及 iOS application composition，不修改 `/context/build` payload、后端、Echo 视觉、数字人、
+音频 owner 或公开发布策略。

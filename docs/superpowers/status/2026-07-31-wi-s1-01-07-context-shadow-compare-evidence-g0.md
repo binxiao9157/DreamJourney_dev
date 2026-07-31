@@ -31,7 +31,7 @@ authority, persistence, or product UI.
 ## Validation
 
 - `python3 Scripts/QA/product-v4/product-v4-ios-owner-truth-context-compare-check.py`: passed.
-- `xcodebuild test ... -only-testing:DreamJourneyTests/AudioOwnerLeaseModelTests -only-testing:DreamJourneyTests/OwnerTruthContractsTests`: `142/142` passed on iPhone 17 Simulator.
+- `xcodebuild test ... -only-testing:DreamJourneyTests/EchoApplicationCoordinatorTests -only-testing:DreamJourneyTests/OwnerTruthContractsTests`: `157/157` passed on iPhone 17 Simulator. This explicitly executes the same-request compare lifecycle tests rather than relying on the source filename.
 - Generic unsigned iPhoneOS Debug build: passed.
 - `git diff --check`: passed.
 - `RUN_ID=20260731-0925-context-compare Scripts/QA/prd-stitch-ui/run-echo-qa-evidence-bundle-export-smoke.sh`: passed using local QA bundle ID `com.yxj.dreamjourney.app`. The exported bundle contains the compare readout schema, an `observed` disposition, a matching request correlation, and no raw fixture query. Local report and screenshot: `tmp/visual-qa/prd-stitch-ui/echo-qa-evidence-bundle-export-smoke/20260731-0925-context-compare/report.md` and `01-echo-qa-evidence-bundle-export-smoke.png`.
