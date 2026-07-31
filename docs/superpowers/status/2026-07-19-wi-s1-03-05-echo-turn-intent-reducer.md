@@ -274,3 +274,31 @@ git diff --check
 结果：`PASS`。模拟器 scoped XCTest 为 `26/26`；静态 reducer/handoff checks 与 diff check 均通过。此前
 同一源码修订已完成 `generic/platform=iOS`、Debug、无签名 build。本条仍仅是本地 G0 防重入证据，不包含
 后端、Provider、数字人音频、公开 UI、部署或真机结论。
+
+### 2026-07-31 G0 重复 Final 的采集 Audio Lease 栅栏
+
+上一条 final-ASR admission 栅栏继续收紧到音频副作用：`onASRResult(...)` 不再在调用
+`finishUserVoice(...)` 前释放 `.echoCapture` audio lease。普通回合只有在 reducer admission 成功后才释放
+当前 capture lease；重复或迟到的 final 因此不能打断仍在运行的合法采集回合。
+
+危机安全分支保留显式释放，使用独立 reason `asrFinalNeutralSafety` 后进入既有中性安全模式。这保证安全
+stop 语义不依赖普通回合 admission，也不把一个已拒绝的普通 final 当作安全事件。
+
+`product-v4-ios-echo-turn-reducer-check.py` 现在匹配完整的 capture-release 调用，并断言
+`guard acceptedUserTurn else` 必须在其之前。该断言与 `EchoViewModelTurnAdmissionTests` 一起覆盖
+“二次 final 不写 transcript，也不派发运行时回合”的关键边界。
+
+执行：
+
+```bash
+DJ_IOS_TEST_DESTINATION='platform=iOS Simulator,name=iPhone 17' \
+  bash Scripts/QA/product-v4/run-ios-echo-application-coordinator-gate.sh
+python3 Scripts/QA/product-v4/product-v4-ios-echo-turn-reducer-check.py
+python3 Scripts/QA/product-v4/product-v4-current-handoff-check.py
+xcodebuild build -workspace DreamJourney.xcworkspace -scheme DreamJourney \
+  -configuration Debug -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
+git diff --check
+```
+
+结果：`PASS`。scoped XCTest `26/26`、两类 static/handoff checks、无签名 iPhoneOS Debug build 和
+diff check 均通过。本条不改变公开 UI、Context payload、腾讯/火山 Provider、后端、部署或真机范围。

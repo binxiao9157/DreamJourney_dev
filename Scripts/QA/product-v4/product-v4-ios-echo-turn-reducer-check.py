@@ -98,6 +98,19 @@ def main() -> None:
         < asr_final.find("self.recordEchoContextPacketForUserTurn("),
         "a rejected ASR final must not build Context",
     )
+    capture_audio_release = """self.releaseEchoAudioOwnerLease(
+                expectedOwner: .echoCapture,
+                reason: \"asrFinal\"
+            )"""
+    require(
+        capture_audio_release in asr_final,
+        "the accepted ASR final must release its capture audio lease",
+    )
+    require(
+        asr_final.find("guard acceptedUserTurn else")
+        < asr_final.find(capture_audio_release),
+        "a rejected ASR final must not release the current capture audio lease",
+    )
 
     receive_reply = source_slice(
         view_model,

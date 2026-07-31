@@ -7309,10 +7309,6 @@ extension EchoViewController: DialogEngineDelegate {
                   self.validateEchoAccountLease(at: .ui, reason: "asrFinal"),
                   let lifecycleToken = self.activeVoiceInteractionToken(reason: "asrFinal"),
                   let accountLease = self.echoAccountLease else { return }
-            self.releaseEchoAudioOwnerLease(
-                expectedOwner: .echoCapture,
-                reason: "asrFinal"
-            )
             let acceptedUserTurn = self.viewModel.finishUserVoice(
                 text: text,
                 accountLease: accountLease,
@@ -7322,6 +7318,10 @@ extension EchoViewController: DialogEngineDelegate {
                 )
             )
             if let safetyDecision = self.viewModel.neutralSafetyDecision {
+                self.releaseEchoAudioOwnerLease(
+                    expectedOwner: .echoCapture,
+                    reason: "asrFinalNeutralSafety"
+                )
                 self.enterNeutralSafetyMode(safetyDecision)
                 return
             }
@@ -7333,6 +7333,10 @@ extension EchoViewController: DialogEngineDelegate {
                 )
                 return
             }
+            self.releaseEchoAudioOwnerLease(
+                expectedOwner: .echoCapture,
+                reason: "asrFinal"
+            )
             if self.routeEchoAudioThroughDigitalHuman,
                self.hasTencentDigitalHumanProviderSpeechInFlight {
                 self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "userSpeechFinal")
