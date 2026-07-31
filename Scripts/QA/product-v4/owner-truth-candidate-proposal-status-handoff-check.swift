@@ -151,13 +151,48 @@ require(
     "focused confirmation inbox must remain on the product policy path"
 )
 
+let confirmationDetail = requireSlice(
+    archive,
+    from: "final class OwnerTruthInterviewCandidateConfirmationViewController",
+    to: "extension OwnerTruthInterviewCandidateConfirmationViewController: UITableViewDataSource, UITableViewDelegate",
+    "candidate confirmation detail controller is missing"
+)
+for required in [
+    "refreshAfterCandidateAction",
+    "invalidateActionConfiguration",
+    "canManuallyRefresh",
+    "isCandidateInteractionAllowed",
+    "isCandidateActionInFlight",
+    "actionConfigurationGeneration",
+    "beginCandidateActionSubmission",
+    "submitBatchConfirmation",
+    "submitSingleConfirmation",
+    "requiresCandidateConfirmationReload",
+    "guard self.actionConfigurationGeneration == configurationGeneration else { return }",
+    "guard !isCandidateActionInFlight else { return false }",
+    "本次待确认内容已失效，无法继续确认。",
+    "待确认内容已更新，请重新载入。",
+    "readUseCase.send(.refresh)",
+    "case .unavailable:",
+    "case .failed:",
+] {
+    require(
+        confirmationDetail.contains(required),
+        "candidate confirmation detail must clear stale actions safely: \(required)"
+    )
+}
+
 for required in [
     "OwnerTruthInterviewCandidateProposalStatusUseCase",
+    "OwnerTruthInterviewCandidateConfirmationUseCase",
+    "OwnerTruthInterviewCandidateConfirmationActionUseCase",
+    "OwnerTruthInterviewCandidateConfirmationSingleActionUseCase",
     "candidateReviewState",
     "effectExecutionState == .disabled",
     "var isTerminallyUnavailable",
     "case contentUnavailable",
     "case contextChanged",
+    "ownerTruthCandidateSourceInactive",
     "status.isTerminallyUnavailable",
 ] {
     require(contracts.contains(required), "typed value-minimized status contract is missing: \(required)")
@@ -171,6 +206,12 @@ for testName in [
     "func testFocusedCandidateConfirmationInboxKeepsManualRefreshForContextChange()",
     "func testInterviewCandidateProposalStatusUseCaseFailsClosedForInvalidatedInactiveStatus()",
     "func testInterviewCandidateProposalStatusUseCasePrioritizesStaleLeaseOverFailureMapping()",
+    "func testInterviewCandidateConfirmationUseCaseFailsClosedForTerminalReadFailuresAndSourceInactiveConflict()",
+    "func testInterviewCandidateConfirmationBatchActionFailsClosedWhenSourceBecomesInactive()",
+    "func testInterviewCandidateConfirmationSingleActionFailsClosedWhenSourceBecomesInactive()",
+    "func testCandidateConfirmationDetailClearsTerminalContentAndOnlyAllowsRefreshForContextChange()",
+    "func testCandidateConfirmationDetailLocksRefreshAndFailsClosedAfterBatchResponseMismatch()",
+    "func testCandidateConfirmationDetailFailsClosedAfterSingleReconciliationFailure()",
 ] {
     require(tests.contains(testName), "status handoff test is missing: \(testName)")
 }

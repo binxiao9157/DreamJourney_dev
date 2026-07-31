@@ -1111,6 +1111,76 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(useCase.viewState.confirmation).isBound(to: lease))
     }
 
+    func testInterviewCandidateConfirmationUseCaseFailsClosedForTerminalReadFailuresAndSourceInactiveConflict() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let cases: [(name: String, error: Error, notice: OwnerTruthInterviewCandidateConfirmationNotice)] = [
+            (
+                "403",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 403,
+                    context: .init(detail: "forbidden")
+                ),
+                .contentUnavailable
+            ),
+            (
+                "404",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 404,
+                    context: .init(detail: "not found")
+                ),
+                .contentUnavailable
+            ),
+            (
+                "410",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 410,
+                    context: .init(detail: "gone")
+                ),
+                .contentUnavailable
+            ),
+            (
+                "source inactive conflict",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 409,
+                    context: .init(
+                        code: "ownerTruthCandidateSourceInactive",
+                        detail: "candidate source is inactive"
+                    )
+                ),
+                .contentUnavailable
+            ),
+            (
+                "generic conflict",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 409,
+                    context: .init(detail: "review composition changed")
+                ),
+                .contextChanged
+            ),
+        ]
+
+        for (index, testCase) in cases.enumerated() {
+            let client = InterviewCandidateConfirmationClientSpy()
+            client.readResult = .failure(testCase.error)
+            let useCase = OwnerTruthInterviewCandidateConfirmationUseCase(
+                accountLease: lease,
+                reviewBatchID: recordID(String(
+                    format: "00000000-0000-0000-0000-%012d",
+                    180 + index
+                )),
+                client: client,
+                accountLeaseRuntime: runtime,
+                releasePolicyAvailable: { true }
+            )
+
+            useCase.send(.refresh)
+
+            XCTAssertEqual(useCase.viewState.phase, .unavailable, testCase.name)
+            XCTAssertEqual(useCase.viewState.notice, testCase.notice, testCase.name)
+            XCTAssertNil(useCase.viewState.confirmation, testCase.name)
+        }
+    }
+
     func testInterviewCandidateProposalStatusDecodesOnlyCoherentValueFreeContract() throws {
         let vaultID = "vault-owner-a"
         let reviewBatchID = recordID("00000000-0000-0000-0000-000000000118")
@@ -1678,6 +1748,84 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.latestResult?.acceptedCandidateIDs, [batchCandidateID])
     }
 
+    func testInterviewCandidateConfirmationBatchActionFailsClosedWhenSourceBecomesInactive() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000181")
+        let batchCandidateID = recordID("00000000-0000-0000-0000-000000000182")
+        let confirmation = try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: recordID("00000000-0000-0000-0000-000000000183")
+        ).bound(to: lease)
+        let client = InterviewCandidateConfirmationActionClientSpy()
+        client.result = .failure(DreamJourneyBackendClient.ClientError.backendError(
+            statusCode: 409,
+            context: .init(
+                code: "ownerTruthCandidateSourceInactive",
+                detail: "candidate source is inactive"
+            )
+        ))
+        let reader = InterviewCandidateConfirmationClientSpy()
+        let useCase = OwnerTruthInterviewCandidateConfirmationActionUseCase(
+            accountLease: lease,
+            confirmation: confirmation,
+            client: client,
+            confirmationReader: reader,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.confirmBatch(candidateIDs: [batchCandidateID]))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .contentUnavailable)
+        XCTAssertNil(useCase.viewState.latestResult)
+        XCTAssertEqual(reader.requestCount, 0)
+    }
+
+    func testInterviewCandidateConfirmationBatchActionReconciliationFailsClosedWhenSourceBecomesInactive() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000184")
+        let batchCandidateID = recordID("00000000-0000-0000-0000-000000000185")
+        let confirmation = try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: recordID("00000000-0000-0000-0000-000000000186")
+        ).bound(to: lease)
+        let client = InterviewCandidateConfirmationActionClientSpy()
+        client.result = .success(try interviewCandidateConfirmationActionResult(
+            reviewBatchID: reviewBatchID,
+            candidateIDs: [batchCandidateID],
+            commandID: "confirmation-source-inactive-batch-reconciliation"
+        ))
+        let reader = InterviewCandidateConfirmationClientSpy()
+        reader.readResult = .failure(DreamJourneyBackendClient.ClientError.backendError(
+            statusCode: 409,
+            context: .init(
+                code: "ownerTruthCandidateSourceInactive",
+                detail: "candidate source is inactive"
+            )
+        ))
+        let useCase = OwnerTruthInterviewCandidateConfirmationActionUseCase(
+            accountLease: lease,
+            confirmation: confirmation,
+            client: client,
+            confirmationReader: reader,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true },
+            commandIDFactory: { "confirmation-source-inactive-batch-reconciliation" }
+        )
+
+        useCase.send(.confirmBatch(candidateIDs: [batchCandidateID]))
+
+        XCTAssertEqual(reader.requestCount, 1)
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .contentUnavailable)
+        XCTAssertNil(useCase.viewState.latestResult)
+    }
+
     func testInterviewCandidateConfirmationSingleActionDecodesValueMinimizedResult() throws {
         let reviewBatchID = recordID("00000000-0000-0000-0000-000000000099")
         let candidateID = recordID("00000000-0000-0000-0000-000000000100")
@@ -1828,6 +1976,102 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.phase, .confirmed)
         XCTAssertEqual(useCase.viewState.notice, .singleAccepted)
         XCTAssertEqual(useCase.viewState.latestResult?.candidateID, singleCandidateID)
+    }
+
+    func testInterviewCandidateConfirmationSingleActionFailsClosedWhenSourceBecomesInactive() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000187")
+        let singleCandidateID = recordID("00000000-0000-0000-0000-000000000188")
+        let confirmation = try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: recordID("00000000-0000-0000-0000-000000000189"),
+            singleCandidateID: singleCandidateID
+        ).bound(to: lease)
+        let client = InterviewCandidateConfirmationSingleActionClientSpy()
+        client.result = .failure(DreamJourneyBackendClient.ClientError.backendError(
+            statusCode: 409,
+            context: .init(
+                code: "ownerTruthCandidateSourceInactive",
+                detail: "candidate source is inactive"
+            )
+        ))
+        let reader = InterviewCandidateConfirmationClientSpy()
+        let useCase = OwnerTruthInterviewCandidateConfirmationSingleActionUseCase(
+            accountLease: lease,
+            confirmation: confirmation,
+            client: client,
+            confirmationReader: reader,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.accept(candidateID: singleCandidateID))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .contentUnavailable)
+        XCTAssertNil(useCase.viewState.latestResult)
+        XCTAssertEqual(reader.requestCount, 0)
+    }
+
+    func testInterviewCandidateConfirmationSingleActionReconciliationFailsClosedWhenSourceBecomesInactive() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000190")
+        let singleCandidateID = recordID("00000000-0000-0000-0000-000000000191")
+        let confirmation = try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: recordID("00000000-0000-0000-0000-000000000192"),
+            singleCandidateID: singleCandidateID
+        ).bound(to: lease)
+        let commandID = "confirmation-source-inactive-single-reconciliation"
+        let expectedCommand = try OwnerTruthInterviewCandidateConfirmationSingleCommand(
+            commandID: commandID,
+            reviewBatchID: reviewBatchID,
+            candidateID: singleCandidateID,
+            expectedCandidateVersion: 1,
+            action: .accept
+        )
+        let client = InterviewCandidateConfirmationSingleActionClientSpy()
+        client.result = .success(try OwnerTruthInterviewCandidateConfirmationSingleResult(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewCandidateConfirmationSingleResult.schemaVersion,
+                "status": OwnerTruthCommandOutcome.created.rawValue,
+                "batchDecisionId": "00000000-0000-0000-0000-000000000193",
+                "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                "candidateId": singleCandidateID.rawValue.uuidString,
+                "decision": OwnerTruthCandidateDecision.accepted.rawValue,
+                "memoryActivation": [
+                    "status": OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+                    "memoryVersionCreated": false,
+                ],
+            ],
+            expectedCommand: expectedCommand
+        ))
+        let reader = InterviewCandidateConfirmationClientSpy()
+        reader.readResult = .failure(DreamJourneyBackendClient.ClientError.backendError(
+            statusCode: 409,
+            context: .init(
+                code: "ownerTruthCandidateSourceInactive",
+                detail: "candidate source is inactive"
+            )
+        ))
+        let useCase = OwnerTruthInterviewCandidateConfirmationSingleActionUseCase(
+            accountLease: lease,
+            confirmation: confirmation,
+            client: client,
+            confirmationReader: reader,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true },
+            commandIDFactory: { commandID }
+        )
+
+        useCase.send(.accept(candidateID: singleCandidateID))
+
+        XCTAssertEqual(reader.requestCount, 1)
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .contentUnavailable)
+        XCTAssertNil(useCase.viewState.latestResult)
     }
 
     func testInterviewCandidateMemoryActivationDecodesValueMinimizedResult() throws {
@@ -6959,6 +7203,219 @@ final class OwnerTruthContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testCandidateConfirmationDetailClearsTerminalContentAndOnlyAllowsRefreshForContextChange() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000194")
+        let batchCandidateID = recordID("00000000-0000-0000-0000-000000000195")
+        let confirmationClient = InterviewCandidateConfirmationClientSpy()
+        confirmationClient.deferRead = true
+        let controller = OwnerTruthInterviewCandidateConfirmationViewController(
+            accountLease: lease,
+            reviewBatchID: reviewBatchID,
+            confirmationClient: confirmationClient,
+            batchActionClient: InterviewCandidateConfirmationActionClientSpy(),
+            singleActionClient: InterviewCandidateConfirmationSingleActionClientSpy(),
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        controller.loadViewIfNeeded()
+        confirmationClient.completeDeferredRead(.success(try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: recordID("00000000-0000-0000-0000-000000000196")
+        )))
+
+        let tableView = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-confirmation-list"
+        ) as? UITableView)
+        let batchSubmitButton = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-confirmation-batch-submit"
+        ) as? UIButton)
+        let refreshButton = try XCTUnwrap(controller.navigationItem.rightBarButtonItem)
+        XCTAssertEqual(tableView.numberOfSections, 2)
+        XCTAssertFalse(batchSubmitButton.isHidden)
+        XCTAssertTrue(refreshButton.isEnabled)
+
+        confirmationClient.deferRead = false
+        confirmationClient.readResult = .failure(DreamJourneyBackendClient.ClientError.backendError(
+            statusCode: 409,
+            context: .init(
+                code: "ownerTruthCandidateSourceInactive",
+                detail: "candidate source is inactive"
+            )
+        ))
+        let refreshTarget = try XCTUnwrap(refreshButton.target as? NSObject)
+        let refreshAction = try XCTUnwrap(refreshButton.action)
+        _ = refreshTarget.perform(refreshAction)
+
+        XCTAssertEqual(tableView.numberOfSections, 0)
+        XCTAssertTrue(batchSubmitButton.isHidden)
+        XCTAssertFalse(refreshButton.isEnabled)
+
+        let contextChangedClient = InterviewCandidateConfirmationClientSpy()
+        contextChangedClient.readResult = .failure(DreamJourneyBackendClient.ClientError.backendError(
+            statusCode: 409,
+            context: .init(detail: "review composition changed")
+        ))
+        let contextChangedController = OwnerTruthInterviewCandidateConfirmationViewController(
+            accountLease: lease,
+            reviewBatchID: recordID("00000000-0000-0000-0000-000000000197"),
+            confirmationClient: contextChangedClient,
+            batchActionClient: InterviewCandidateConfirmationActionClientSpy(),
+            singleActionClient: InterviewCandidateConfirmationSingleActionClientSpy(),
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        contextChangedController.loadViewIfNeeded()
+
+        let contextChangedTable = try XCTUnwrap(findView(
+            in: contextChangedController.view,
+            accessibilityIdentifier: "owner-truth-candidate-confirmation-list"
+        ) as? UITableView)
+        XCTAssertEqual(contextChangedTable.numberOfSections, 0)
+        XCTAssertTrue(try XCTUnwrap(contextChangedController.navigationItem.rightBarButtonItem).isEnabled)
+    }
+
+    @MainActor
+    func testCandidateConfirmationDetailLocksRefreshAndFailsClosedAfterBatchResponseMismatch() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000198")
+        let batchCandidateID = recordID("00000000-0000-0000-0000-000000000199")
+        let unexpectedCandidateID = recordID("00000000-0000-0000-0000-000000000200")
+        let confirmationClient = InterviewCandidateConfirmationClientSpy()
+        confirmationClient.readResult = .success(try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: recordID("00000000-0000-0000-0000-000000000201")
+        ))
+        let batchActionClient = InterviewCandidateConfirmationActionClientSpy()
+        batchActionClient.deferResult = true
+        let controller = OwnerTruthInterviewCandidateConfirmationViewController(
+            accountLease: lease,
+            reviewBatchID: reviewBatchID,
+            confirmationClient: confirmationClient,
+            batchActionClient: batchActionClient,
+            singleActionClient: InterviewCandidateConfirmationSingleActionClientSpy(),
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        controller.loadViewIfNeeded()
+
+        let tableView = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-confirmation-list"
+        ) as? UITableView)
+        let batchSubmitButton = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-confirmation-batch-submit"
+        ) as? UIButton)
+        let refreshButton = try XCTUnwrap(controller.navigationItem.rightBarButtonItem)
+        let readCountBeforeAction = confirmationClient.requestCount
+
+        controller.submitBatchConfirmation(candidateIDs: [batchCandidateID])
+
+        XCTAssertEqual(batchActionClient.requestedCommands.count, 1)
+        XCTAssertFalse(refreshButton.isEnabled)
+        XCTAssertFalse(tableView.isUserInteractionEnabled)
+        XCTAssertFalse(batchSubmitButton.isEnabled)
+
+        let refreshTarget = try XCTUnwrap(refreshButton.target as? NSObject)
+        let refreshAction = try XCTUnwrap(refreshButton.action)
+        _ = refreshTarget.perform(refreshAction)
+        XCTAssertEqual(confirmationClient.requestCount, readCountBeforeAction)
+
+        confirmationClient.deferRead = true
+        let command = try XCTUnwrap(batchActionClient.requestedCommands.first)
+        batchActionClient.completeDeferredResult(.success(try interviewCandidateConfirmationActionResult(
+            reviewBatchID: reviewBatchID,
+            candidateIDs: [unexpectedCandidateID],
+            commandID: command.commandID
+        )))
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
+            confirmationClient.requestCount == readCountBeforeAction + 1
+                && tableView.numberOfSections == 0
+        })
+        XCTAssertTrue(batchSubmitButton.isHidden)
+        XCTAssertFalse(refreshButton.isEnabled)
+        XCTAssertFalse(tableView.isUserInteractionEnabled)
+    }
+
+    @MainActor
+    func testCandidateConfirmationDetailFailsClosedAfterSingleReconciliationFailure() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000202")
+        let batchCandidateID = recordID("00000000-0000-0000-0000-000000000203")
+        let singleCandidateID = recordID("00000000-0000-0000-0000-000000000204")
+        let confirmation = try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: batchCandidateID,
+            singleCandidateID: singleCandidateID
+        )
+        let confirmationClient = InterviewCandidateConfirmationClientSpy()
+        confirmationClient.readResult = .success(confirmation)
+        let singleActionClient = InterviewCandidateConfirmationSingleActionClientSpy()
+        singleActionClient.deferResult = true
+        let controller = OwnerTruthInterviewCandidateConfirmationViewController(
+            accountLease: lease,
+            reviewBatchID: reviewBatchID,
+            confirmationClient: confirmationClient,
+            batchActionClient: InterviewCandidateConfirmationActionClientSpy(),
+            singleActionClient: singleActionClient,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        controller.loadViewIfNeeded()
+
+        let tableView = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-confirmation-list"
+        ) as? UITableView)
+        let refreshButton = try XCTUnwrap(controller.navigationItem.rightBarButtonItem)
+        let readCountBeforeAction = confirmationClient.requestCount
+
+        controller.submitSingleConfirmation(.accept(candidateID: singleCandidateID))
+
+        XCTAssertEqual(singleActionClient.requestedCommands.count, 1)
+        XCTAssertFalse(refreshButton.isEnabled)
+        XCTAssertFalse(tableView.isUserInteractionEnabled)
+
+        let singleCommand = try XCTUnwrap(singleActionClient.requestedCommands.first)
+        singleActionClient.completeDeferredResult(.success(try OwnerTruthInterviewCandidateConfirmationSingleResult(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewCandidateConfirmationSingleResult.schemaVersion,
+                "status": OwnerTruthCommandOutcome.created.rawValue,
+                "batchDecisionId": "00000000-0000-0000-0000-000000000205",
+                "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                "candidateId": singleCandidateID.rawValue.uuidString,
+                "decision": OwnerTruthCandidateDecision.accepted.rawValue,
+                "memoryActivation": [
+                    "status": OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+                    "memoryVersionCreated": false,
+                ],
+            ],
+            expectedCommand: singleCommand
+        )))
+        confirmationClient.deferRead = true
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
+            confirmationClient.requestCount == readCountBeforeAction + 2
+                && tableView.numberOfSections == 0
+        })
+        XCTAssertFalse(refreshButton.isEnabled)
+        XCTAssertFalse(tableView.isUserInteractionEnabled)
+    }
+
+    @MainActor
     func testRealHTTPClientRoutesReviewReadyStatusToFocusedConfirmationInboxWithoutMutation() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
@@ -8222,6 +8679,8 @@ private enum InterviewCandidateConfirmationActionClientSpyError: Error {
 
 private final class InterviewCandidateConfirmationSingleActionClientSpy: OwnerTruthInterviewCandidateConfirmationSingleActionClient {
     var result: Result<OwnerTruthInterviewCandidateConfirmationSingleResult, Error>?
+    var deferResult = false
+    private var deferredCompletion: ((Result<OwnerTruthInterviewCandidateConfirmationSingleResult, Error>) -> Void)?
     private(set) var requestedCommands: [OwnerTruthInterviewCandidateConfirmationSingleCommand] = []
 
     func confirmOwnerTruthInterviewCandidateSingle(
@@ -8230,7 +8689,17 @@ private final class InterviewCandidateConfirmationSingleActionClientSpy: OwnerTr
         completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmationSingleResult, Error>) -> Void
     ) {
         requestedCommands.append(command)
+        if deferResult {
+            deferredCompletion = completion
+            return
+        }
         completion(result ?? .failure(InterviewCandidateConfirmationSingleActionClientSpyError.missingActionResult))
+    }
+
+    func completeDeferredResult(_ result: Result<OwnerTruthInterviewCandidateConfirmationSingleResult, Error>) {
+        let completion = deferredCompletion
+        deferredCompletion = nil
+        completion?(result)
     }
 }
 

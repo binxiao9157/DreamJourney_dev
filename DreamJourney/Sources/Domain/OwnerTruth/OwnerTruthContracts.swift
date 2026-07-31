@@ -3083,6 +3083,8 @@ enum OwnerTruthInterviewCandidateConfirmationNotice: Equatable, Sendable {
     case invalidVault
     case accountUnavailable
     case staleAccountLease
+    case contentUnavailable
+    case contextChanged
     case requestFailed
 }
 
@@ -3200,8 +3202,8 @@ final class OwnerTruthInterviewCandidateConfirmationUseCase {
                 confirmation: boundConfirmation,
                 notice: nil
             )
-        case .failure:
-            transitionFailure()
+        case .failure(let error):
+            transitionFailure(for: error)
         }
     }
 
@@ -3220,6 +3222,19 @@ final class OwnerTruthInterviewCandidateConfirmationUseCase {
             confirmation: nil,
             notice: .requestFailed
         )
+    }
+
+    private func transitionFailure(for error: Error) {
+        switch OwnerTruthInterviewCandidateReviewReadFailureDisposition(error: error) {
+        case .releasePolicyDisabled:
+            resetForUnavailable(.releasePolicyDisabled)
+        case .contentUnavailable:
+            resetForUnavailable(.contentUnavailable)
+        case .contextChanged:
+            resetForUnavailable(.contextChanged)
+        case .retryable:
+            transitionFailure()
+        }
     }
 }
 
@@ -3418,6 +3433,8 @@ private enum OwnerTruthInterviewCandidateReviewReadFailureDisposition {
             if context.code == "release_policy_denied"
                 || context.code == "ownerTruthCandidateReviewUnavailable" {
                 self = .releasePolicyDisabled
+            } else if context.code == "ownerTruthCandidateSourceInactive" {
+                self = .contentUnavailable
             } else if statusCode == 409 {
                 self = .contextChanged
             } else if statusCode == 403 || statusCode == 404 || statusCode == 410 {
@@ -3459,6 +3476,8 @@ enum OwnerTruthInterviewCandidateConfirmationActionNotice: Equatable, Sendable {
     case invalidVault
     case accountUnavailable
     case staleAccountLease
+    case contentUnavailable
+    case contextChanged
     case invalidSelection
     case responseMismatch
     case reconciliationFailed
@@ -3650,8 +3669,8 @@ final class OwnerTruthInterviewCandidateConfirmationActionUseCase {
                     generation: generation
                 )
             }
-        case .failure:
-            transitionFailure(.requestFailed)
+        case .failure(let error):
+            transitionFailure(for: error)
         }
     }
 
@@ -3690,8 +3709,8 @@ final class OwnerTruthInterviewCandidateConfirmationActionUseCase {
                 latestResult: actionResult,
                 notice: .batchConfirmed
             )
-        case .failure:
-            transitionFailure(.reconciliationFailed, latestResult: actionResult)
+        case .failure(let error):
+            transitionFailure(for: error, latestResult: actionResult)
         }
     }
 
@@ -3702,6 +3721,22 @@ final class OwnerTruthInterviewCandidateConfirmationActionUseCase {
             latestResult: nil,
             notice: notice
         )
+    }
+
+    private func transitionFailure(
+        for error: Error,
+        latestResult: OwnerTruthInterviewCandidateConfirmationBatchResult? = nil
+    ) {
+        switch OwnerTruthInterviewCandidateReviewReadFailureDisposition(error: error) {
+        case .releasePolicyDisabled:
+            resetForUnavailable(.releasePolicyDisabled)
+        case .contentUnavailable:
+            resetForUnavailable(.contentUnavailable)
+        case .contextChanged:
+            resetForUnavailable(.contextChanged)
+        case .retryable:
+            transitionFailure(.requestFailed, latestResult: latestResult)
+        }
     }
 
     private func transitionFailure(
@@ -3738,6 +3773,8 @@ enum OwnerTruthInterviewCandidateConfirmationSingleActionNotice: Equatable, Send
     case invalidVault
     case accountUnavailable
     case staleAccountLease
+    case contentUnavailable
+    case contextChanged
     case invalidSelection
     case correctionRequired
     case responseMismatch
@@ -3957,8 +3994,8 @@ final class OwnerTruthInterviewCandidateConfirmationSingleActionUseCase {
                     generation: generation
                 )
             }
-        case .failure:
-            transitionFailure(.requestFailed)
+        case .failure(let error):
+            transitionFailure(for: error)
         }
     }
 
@@ -4004,8 +4041,8 @@ final class OwnerTruthInterviewCandidateConfirmationSingleActionUseCase {
                 latestResult: actionResult,
                 notice: notice
             )
-        case .failure:
-            transitionFailure(.reconciliationFailed, latestResult: actionResult)
+        case .failure(let error):
+            transitionFailure(for: error, latestResult: actionResult)
         }
     }
 
@@ -4018,6 +4055,22 @@ final class OwnerTruthInterviewCandidateConfirmationSingleActionUseCase {
             latestResult: nil,
             notice: notice
         )
+    }
+
+    private func transitionFailure(
+        for error: Error,
+        latestResult: OwnerTruthInterviewCandidateConfirmationSingleResult? = nil
+    ) {
+        switch OwnerTruthInterviewCandidateReviewReadFailureDisposition(error: error) {
+        case .releasePolicyDisabled:
+            resetForUnavailable(.releasePolicyDisabled)
+        case .contentUnavailable:
+            resetForUnavailable(.contentUnavailable)
+        case .contextChanged:
+            resetForUnavailable(.contextChanged)
+        case .retryable:
+            transitionFailure(.requestFailed, latestResult: latestResult)
+        }
     }
 
     private func transitionFailure(

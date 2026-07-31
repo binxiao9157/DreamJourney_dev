@@ -4522,6 +4522,9 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
     private var selectedBatchCandidateIDs = Set<OwnerTruthRecordID>()
     private var batchActionUseCase: OwnerTruthInterviewCandidateConfirmationActionUseCase?
     private var singleActionUseCase: OwnerTruthInterviewCandidateConfirmationSingleActionUseCase?
+    private var isRefreshingAfterCandidateAction = false
+    private var isCandidateActionInFlight = false
+    private var actionConfigurationGeneration: UInt = 0
 
     init(
         accountLease: AccountLease,
@@ -4638,16 +4641,19 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
 
     private func render(_ state: OwnerTruthInterviewCandidateConfirmationViewState) {
         renderedState = state
-        refreshButton.isEnabled = state.phase != .loading
+        if state.phase != .loading {
+            isRefreshingAfterCandidateAction = false
+        }
+        refreshButton.isEnabled = canManuallyRefresh(state)
         if let confirmation = state.confirmation {
             let validBatchIDs = Set(confirmation.batchCandidates.map(\.id))
             selectedBatchCandidateIDs.formIntersection(validBatchIDs)
             configureActionUseCases(confirmation)
         } else {
             selectedBatchCandidateIDs.removeAll()
-            batchActionUseCase = nil
-            singleActionUseCase = nil
+            invalidateActionConfiguration()
         }
+        tableView.isUserInteractionEnabled = isCandidateInteractionAllowed
         statusLabel.text = statusText(for: state)
         emptyStateLabel.text = emptyText(for: state)
         emptyStateLabel.isHidden = emptyStateLabel.text == nil
@@ -4656,6 +4662,8 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
     }
 
     private func configureActionUseCases(_ confirmation: OwnerTruthInterviewCandidateConfirmation) {
+        actionConfigurationGeneration &+= 1
+        let configurationGeneration = actionConfigurationGeneration
         batchActionUseCase = OwnerTruthInterviewCandidateConfirmationActionUseCase(
             accountLease: accountLease,
             confirmation: confirmation,
@@ -4665,7 +4673,7 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
             releasePolicyAvailable: releasePolicyAvailable
         )
         batchActionUseCase?.onViewStateChange = { [weak self] state in
-            self?.handleBatchActionState(state)
+            self?.handleBatchActionState(state, configurationGeneration: configurationGeneration)
         }
         singleActionUseCase = OwnerTruthInterviewCandidateConfirmationSingleActionUseCase(
             accountLease: accountLease,
@@ -4676,25 +4684,44 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
             releasePolicyAvailable: releasePolicyAvailable
         )
         singleActionUseCase?.onViewStateChange = { [weak self] state in
-            self?.handleSingleActionState(state)
+            self?.handleSingleActionState(state, configurationGeneration: configurationGeneration)
         }
     }
 
     private func handleBatchActionState(
-        _ state: OwnerTruthInterviewCandidateConfirmationActionViewState
+        _ state: OwnerTruthInterviewCandidateConfirmationActionViewState,
+        configurationGeneration: UInt
     ) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            guard self.actionConfigurationGeneration == configurationGeneration else { return }
             switch state.phase {
             case .submitting, .reconciling:
+                self.isCandidateActionInFlight = true
+                self.refreshButton.isEnabled = false
                 confirmSelectionButton.isEnabled = false
+                tableView.isUserInteractionEnabled = false
                 statusLabel.text = "正在确认所选普通线索。"
             case .confirmed:
-                statusLabel.text = "已记录确认结果，正在刷新待确认线索。"
-                readUseCase.send(.refresh)
-            case .failed, .unavailable:
-                statusLabel.text = batchActionText(for: state.notice)
-                updateBatchButton()
+                self.refreshAfterCandidateAction(
+                    statusText: "已记录确认结果，正在刷新待确认线索。"
+                )
+            case .unavailable:
+                self.refreshAfterCandidateAction(
+                    statusText: batchActionText(for: state.notice)
+                )
+            case .failed:
+                if self.requiresCandidateConfirmationReload(for: state.notice) {
+                    self.refreshAfterCandidateAction(
+                        statusText: batchActionText(for: state.notice)
+                    )
+                } else {
+                    self.isCandidateActionInFlight = false
+                    statusLabel.text = batchActionText(for: state.notice)
+                    tableView.isUserInteractionEnabled = self.isCandidateInteractionAllowed
+                    self.updateBatchButton()
+                    self.refreshButton.isEnabled = self.canManuallyRefresh(self.renderedState)
+                }
             case .idle:
                 break
             }
@@ -4702,25 +4729,104 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
     }
 
     private func handleSingleActionState(
-        _ state: OwnerTruthInterviewCandidateConfirmationSingleActionViewState
+        _ state: OwnerTruthInterviewCandidateConfirmationSingleActionViewState,
+        configurationGeneration: UInt
     ) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            guard self.actionConfigurationGeneration == configurationGeneration else { return }
             switch state.phase {
             case .submitting, .reconciling:
+                self.isCandidateActionInFlight = true
+                self.refreshButton.isEnabled = false
                 tableView.isUserInteractionEnabled = false
+                confirmSelectionButton.isEnabled = false
                 statusLabel.text = "正在记录逐条确认结果。"
             case .confirmed:
-                tableView.isUserInteractionEnabled = true
-                statusLabel.text = singleActionText(for: state.notice)
-                readUseCase.send(.refresh)
-            case .failed, .unavailable:
-                tableView.isUserInteractionEnabled = true
-                statusLabel.text = singleActionText(for: state.notice)
+                self.refreshAfterCandidateAction(
+                    statusText: singleActionText(for: state.notice)
+                )
+            case .unavailable:
+                self.refreshAfterCandidateAction(
+                    statusText: singleActionText(for: state.notice)
+                )
+            case .failed:
+                if self.requiresCandidateConfirmationReload(for: state.notice) {
+                    self.refreshAfterCandidateAction(
+                        statusText: singleActionText(for: state.notice)
+                    )
+                } else {
+                    self.isCandidateActionInFlight = false
+                    tableView.isUserInteractionEnabled = self.isCandidateInteractionAllowed
+                    statusLabel.text = singleActionText(for: state.notice)
+                    self.updateBatchButton()
+                    self.refreshButton.isEnabled = self.canManuallyRefresh(self.renderedState)
+                }
             case .idle:
                 break
             }
         }
+    }
+
+    private func refreshAfterCandidateAction(statusText: String) {
+        guard !isRefreshingAfterCandidateAction else { return }
+        isRefreshingAfterCandidateAction = true
+        invalidateActionConfiguration()
+        render(
+            OwnerTruthInterviewCandidateConfirmationViewState(
+                phase: .loading,
+                confirmation: nil,
+                notice: nil
+            )
+        )
+        self.statusLabel.text = statusText
+        readUseCase.send(.refresh)
+    }
+
+    private func invalidateActionConfiguration() {
+        actionConfigurationGeneration &+= 1
+        isCandidateActionInFlight = false
+        batchActionUseCase?.onViewStateChange = nil
+        singleActionUseCase?.onViewStateChange = nil
+        batchActionUseCase = nil
+        singleActionUseCase = nil
+    }
+
+    private func requiresCandidateConfirmationReload(
+        for notice: OwnerTruthInterviewCandidateConfirmationActionNotice?
+    ) -> Bool {
+        switch notice {
+        case .responseMismatch, .reconciliationFailed:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func requiresCandidateConfirmationReload(
+        for notice: OwnerTruthInterviewCandidateConfirmationSingleActionNotice?
+    ) -> Bool {
+        switch notice {
+        case .responseMismatch, .reconciliationFailed:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func canManuallyRefresh(
+        _ state: OwnerTruthInterviewCandidateConfirmationViewState
+    ) -> Bool {
+        guard !isCandidateActionInFlight else { return false }
+        guard state.phase != .loading else { return false }
+        guard state.phase == .unavailable else { return true }
+        return state.notice == .contextChanged
+    }
+
+    private var isCandidateInteractionAllowed: Bool {
+        !isCandidateActionInFlight
+            && renderedState.phase == .ready
+            && renderedState.confirmation != nil
     }
 
     private func statusText(for state: OwnerTruthInterviewCandidateConfirmationViewState) -> String {
@@ -4728,7 +4834,16 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         case .idle:
             return "正在准备确认线索。"
         case .unavailable:
-            return "当前无法确认这些线索。"
+            switch state.notice {
+            case .contentUnavailable:
+                return "本次待确认内容已失效，无法继续确认。"
+            case .contextChanged:
+                return "待确认内容已更新，请重新载入。"
+            case .releasePolicyDisabled:
+                return "待确认记忆当前未开放。"
+            case .invalidVault, .accountUnavailable, .staleAccountLease, .requestFailed, nil:
+                return "当前无法确认这些线索。"
+            }
         case .loading:
             return "正在读取确认线索。"
         case .ready:
@@ -4745,7 +4860,16 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         case .empty:
             return "当前没有需要确认的线索。"
         case .unavailable:
-            return "该功能仅会在获准的发布策略下开放。"
+            switch state.notice {
+            case .contentUnavailable:
+                return "本次待确认内容已失效，旧线索已清除。"
+            case .contextChanged:
+                return "旧线索已清除，请点右上角重新载入。"
+            case .releasePolicyDisabled:
+                return "该功能仅会在获准的发布策略下开放。"
+            case .invalidVault, .accountUnavailable, .staleAccountLease, .requestFailed, nil:
+                return "当前无法继续确认这些线索。"
+            }
         case .failed:
             return "请点右上角重新载入。"
         default:
@@ -4755,9 +4879,10 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
 
     private func updateBatchButton() {
         let batchCount = renderedState.confirmation?.batchCandidates.count ?? 0
-        let isSubmitting = batchActionUseCase?.viewState.phase == .submitting
+        let isSubmitting = isCandidateActionInFlight
+            || batchActionUseCase?.viewState.phase == .submitting
             || batchActionUseCase?.viewState.phase == .reconciling
-        guard batchCount > 0 else {
+        guard isCandidateInteractionAllowed, batchCount > 0 else {
             confirmSelectionButton.isHidden = true
             return
         }
@@ -4800,10 +4925,12 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
     }
 
     @objc private func refreshTapped() {
+        guard canManuallyRefresh(renderedState) else { return }
         readUseCase.send(.refresh)
     }
 
     @objc private func confirmSelectionTapped() {
+        guard isCandidateInteractionAllowed, !isCandidateActionInFlight else { return }
         let candidateIDs = selectedBatchCandidateIDs.sorted {
             $0.rawValue.uuidString < $1.rawValue.uuidString
         }
@@ -4815,9 +4942,35 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         )
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.addAction(UIAlertAction(title: "确认", style: .default) { [weak self] _ in
-            self?.batchActionUseCase?.send(.confirmBatch(candidateIDs: candidateIDs))
+            self?.submitBatchConfirmation(candidateIDs: candidateIDs)
         })
         present(alert, animated: true)
+    }
+
+    func submitBatchConfirmation(candidateIDs: [OwnerTruthRecordID]) {
+        guard let batchActionUseCase,
+              beginCandidateActionSubmission() else {
+            return
+        }
+        batchActionUseCase.send(.confirmBatch(candidateIDs: candidateIDs))
+    }
+
+    func submitSingleConfirmation(_ intent: OwnerTruthInterviewCandidateConfirmationSingleActionIntent) {
+        guard let singleActionUseCase,
+              beginCandidateActionSubmission() else {
+            return
+        }
+        singleActionUseCase.send(intent)
+    }
+
+    @discardableResult
+    private func beginCandidateActionSubmission() -> Bool {
+        guard isCandidateInteractionAllowed else { return false }
+        isCandidateActionInFlight = true
+        refreshButton.isEnabled = false
+        tableView.isUserInteractionEnabled = false
+        confirmSelectionButton.isEnabled = false
+        return true
     }
 
     private func showSingleActions(
@@ -4830,13 +4983,14 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
             preferredStyle: .actionSheet
         )
         alert.addAction(UIAlertAction(title: "确认", style: .default) { [weak self] _ in
-            self?.singleActionUseCase?.send(.accept(candidateID: item.id))
+            self?.submitSingleConfirmation(.accept(candidateID: item.id))
         })
         alert.addAction(UIAlertAction(title: "更正后确认", style: .default) { [weak self] _ in
-            self?.presentCorrectionAlert(for: item)
+            guard let self, self.isCandidateInteractionAllowed else { return }
+            self.presentCorrectionAlert(for: item)
         })
         alert.addAction(UIAlertAction(title: "拒绝", style: .destructive) { [weak self] _ in
-            self?.singleActionUseCase?.send(.reject(candidateID: item.id))
+            self?.submitSingleConfirmation(.reject(candidateID: item.id))
         })
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         if let popover = alert.popoverPresentationController {
@@ -4859,7 +5013,7 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         }
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.addAction(UIAlertAction(title: "提交更正", style: .default) { [weak self, weak alert] _ in
-            self?.singleActionUseCase?.send(.correct(
+            self?.submitSingleConfirmation(.correct(
                 candidateID: item.id,
                 correctedSummary: alert?.textFields?.first?.text ?? ""
             ))
@@ -4871,6 +5025,8 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         for notice: OwnerTruthInterviewCandidateConfirmationActionNotice?
     ) -> String {
         switch notice {
+        case .contentUnavailable: return "本次待确认内容已失效，正在重新读取。"
+        case .contextChanged: return "待确认内容已更新，正在重新读取。"
         case .releasePolicyDisabled: return "待确认记忆当前未开放。"
         case .invalidVault, .accountUnavailable, .staleAccountLease: return "账号状态已变化，请重新进入。"
         case .invalidSelection: return "所选线索已变化，请重新选择。"
@@ -4885,6 +5041,8 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         for notice: OwnerTruthInterviewCandidateConfirmationSingleActionNotice?
     ) -> String {
         switch notice {
+        case .contentUnavailable: return "本次待确认内容已失效，正在重新读取。"
+        case .contextChanged: return "待确认内容已更新，正在重新读取。"
         case .releasePolicyDisabled: return "待确认记忆当前未开放。"
         case .invalidVault, .accountUnavailable, .staleAccountLease: return "账号状态已变化，请重新进入。"
         case .invalidSelection: return "该线索已变化，请重新载入。"
@@ -4951,7 +5109,8 @@ extension OwnerTruthInterviewCandidateConfirmationViewController: UITableViewDat
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        guard let candidate = candidate(at: indexPath),
+        guard isCandidateInteractionAllowed,
+              let candidate = candidate(at: indexPath),
               let cell = tableView.cellForRow(at: indexPath) else {
             return
         }
