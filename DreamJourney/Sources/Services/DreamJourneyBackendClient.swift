@@ -4764,9 +4764,14 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
     private static let placeholderBaseURL = "$(DREAMJOURNEY_BACKEND_BASE_URL)"
     private let baseURL: String
     private let hasExplicitBaseURL: Bool
+    private let transportSession: Session
+    private let qaAuthenticatedSessionProvider: (() -> BackendAuthSessionContract?)?
+    private let qaCurrentUserIDProvider: (() -> String?)?
+    private let qaPrivateAccessAllowedProvider: (() -> Bool)?
+    private let qaFeatureDecisionProvider: ((DJFeature) -> FeatureDecision)?
     private let authSessionStore = BackendAuthSessionStore.shared
     private let accountSessionActor = AccountSessionActor.shared
-    private let accountLeaseRuntime = AccountLeaseRuntime.shared
+    private let accountLeaseRuntime: AccountLeaseRuntime
     private let releasePolicyStore = ReleasePolicyStore.shared
     private let recoveryRuntimePolicyStore = RecoveryRuntimePolicyStore.shared
     private let authRefreshQueue = DispatchQueue(label: "com.dreamjourney.backend-auth-refresh")
@@ -4906,14 +4911,84 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         hasExplicitBaseURL && OwnerTruthCorrectionRequestQAGate.isEnabled
     }
 
+    private var currentAuthenticatedSession: BackendAuthSessionContract? {
+        qaAuthenticatedSessionProvider?() ?? authSessionStore.currentSession
+    }
+
+    private var currentUserID: String? {
+        qaCurrentUserIDProvider?() ?? UserManager.shared.currentUser?.id
+    }
+
+    private var canEnterPrivateUI: Bool {
+        qaPrivateAccessAllowedProvider?() ?? UserManager.shared.canEnterPrivateUI
+    }
+
+    private func requestFeatureDecision(for feature: DJFeature) -> FeatureDecision {
+        qaFeatureDecisionProvider?(feature) ?? FeatureGateService.shared.requestDecision(for: feature)
+    }
+
+    private func revalidatedRequestFeatureDecision(_ decision: FeatureDecision) -> FeatureDecision {
+        qaFeatureDecisionProvider == nil
+            ? FeatureGateService.shared.revalidateRequest(decision)
+            : decision
+    }
+
     private init() {
         let configured = Bundle.main.object(forInfoDictionaryKey: "DreamJourneyBackendBaseURL") as? String
         let raw = configured?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolved = raw?.isEmpty == false && raw != Self.placeholderBaseURL ? raw! : Self.defaultBaseURL
         self.baseURL = resolved.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         self.hasExplicitBaseURL = raw?.isEmpty == false && raw != Self.placeholderBaseURL
-
+        transportSession = AF
+        qaAuthenticatedSessionProvider = nil
+        qaCurrentUserIDProvider = nil
+        qaPrivateAccessAllowedProvider = nil
+        qaFeatureDecisionProvider = nil
+        accountLeaseRuntime = .shared
     }
+
+    #if DEBUG || UI_QA_SIMULATOR
+    /// Test-only transport seam. Production callers continue to use `shared`,
+    /// the bundle-configured base URL, and Alamofire's default session.
+    static func makeQATestClient(
+        baseURL: URL,
+        session: Session,
+        authenticatedSession: @escaping () -> BackendAuthSessionContract?,
+        currentUserID: @escaping () -> String?,
+        privateAccessAllowed: @escaping () -> Bool,
+        featureDecision: @escaping (DJFeature) -> FeatureDecision,
+        accountLeaseRuntime: AccountLeaseRuntime
+    ) -> DreamJourneyBackendClient {
+        DreamJourneyBackendClient(
+            qaBaseURL: baseURL,
+            transportSession: session,
+            authenticatedSession: authenticatedSession,
+            currentUserID: currentUserID,
+            privateAccessAllowed: privateAccessAllowed,
+            featureDecision: featureDecision,
+            accountLeaseRuntime: accountLeaseRuntime
+        )
+    }
+
+    private init(
+        qaBaseURL: URL,
+        transportSession: Session,
+        authenticatedSession: @escaping () -> BackendAuthSessionContract?,
+        currentUserID: @escaping () -> String?,
+        privateAccessAllowed: @escaping () -> Bool,
+        featureDecision: @escaping (DJFeature) -> FeatureDecision,
+        accountLeaseRuntime: AccountLeaseRuntime
+    ) {
+        baseURL = qaBaseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        hasExplicitBaseURL = true
+        self.transportSession = transportSession
+        qaAuthenticatedSessionProvider = authenticatedSession
+        qaCurrentUserIDProvider = currentUserID
+        qaPrivateAccessAllowedProvider = privateAccessAllowed
+        qaFeatureDecisionProvider = featureDecision
+        self.accountLeaseRuntime = accountLeaseRuntime
+    }
+    #endif
 
     func postArchiveItem(_ payload: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {
         requestJSON(
@@ -5547,7 +5622,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         vaultID: OwnerTruthVaultID,
         completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmationInbox, Error>) -> Void
     ) {
-        let decision = FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)
+        let decision = requestFeatureDecision(for: .ownerTruthCandidateReview)
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
@@ -5588,7 +5663,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         vaultID: OwnerTruthVaultID,
         completion: @escaping (Result<OwnerTruthInterviewCandidateMemoryActivationInbox, Error>) -> Void
     ) {
-        let decision = FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)
+        let decision = requestFeatureDecision(for: .ownerTruthCandidateReview)
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
@@ -5629,7 +5704,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         vaultID: OwnerTruthVaultID,
         completion: @escaping (Result<OwnerTruthInterviewCandidateMemoryProjectionRecoveryInbox, Error>) -> Void
     ) {
-        let decision = FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)
+        let decision = requestFeatureDecision(for: .ownerTruthCandidateReview)
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
@@ -5671,7 +5746,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         reviewBatchID: OwnerTruthRecordID,
         completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmation, Error>) -> Void
     ) {
-        let decision = FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)
+        let decision = requestFeatureDecision(for: .ownerTruthCandidateReview)
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
@@ -5714,7 +5789,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         reviewBatchID: OwnerTruthRecordID,
         completion: @escaping (Result<OwnerTruthInterviewCandidateProposalStatus, Error>) -> Void
     ) {
-        let decision = FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)
+        let decision = requestFeatureDecision(for: .ownerTruthCandidateReview)
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
@@ -5756,7 +5831,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         command: OwnerTruthInterviewCandidateConfirmationBatchCommand,
         completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmationBatchResult, Error>) -> Void
     ) {
-        let decision = FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)
+        let decision = requestFeatureDecision(for: .ownerTruthCandidateReview)
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
@@ -5798,7 +5873,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         command: OwnerTruthInterviewCandidateConfirmationSingleCommand,
         completion: @escaping (Result<OwnerTruthInterviewCandidateConfirmationSingleResult, Error>) -> Void
     ) {
-        let decision = FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)
+        let decision = requestFeatureDecision(for: .ownerTruthCandidateReview)
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
@@ -5840,7 +5915,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         command: OwnerTruthInterviewCandidateMemoryActivationCommand,
         completion: @escaping (Result<OwnerTruthInterviewCandidateMemoryActivationResult, Error>) -> Void
     ) {
-        let decision = FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)
+        let decision = requestFeatureDecision(for: .ownerTruthCandidateReview)
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
@@ -6828,7 +6903,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
         completion: @escaping (Result<OwnerTruthInterviewCandidateProposalAdmissionReceipt, Error>) -> Void
     ) {
-        let decision = FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)
+        let decision = requestFeatureDecision(for: .ownerTruthCandidateReview)
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
@@ -8219,13 +8294,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         let requestApplicationLease: AccountLease?
         switch endpoint.authPolicy {
         case .userRequired:
-            guard UserManager.shared.canEnterPrivateUI else {
+            guard canEnterPrivateUI else {
                 DispatchQueue.main.async {
                     completion(.failure(ClientError.userAuthenticationRequired))
                 }
                 return
             }
-            let currentSession = authSessionStore.currentSession
+            let currentSession = currentAuthenticatedSession
             guard let authenticatedSession = currentSession else {
                 DispatchQueue.main.async {
                     completion(.failure(ClientError.userAuthenticationRequired))
@@ -8259,7 +8334,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
             let capturedLease = accountLease ?? BackendAccountLease(session: selectedSession)
             guard capturedLease.permits(
                 session: requestAuthSession,
-                currentUserId: UserManager.shared.currentUser?.id
+                currentUserId: currentUserID
             ) else {
                 DispatchQueue.main.async {
                     completion(.failure(ClientError.accountScopeChanged))
@@ -8350,7 +8425,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         )
         let preparedFeatureDecision: FeatureDecision?
         if let featureDecision {
-            preparedFeatureDecision = FeatureGateService.shared.revalidateRequest(featureDecision)
+            preparedFeatureDecision = revalidatedRequestFeatureDecision(featureDecision)
         } else if let gatedFeature {
             preparedFeatureDecision = FeatureGateService.shared.requestDecision(for: gatedFeature)
         } else {
@@ -8393,7 +8468,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
             }
             requestHeaders = headers
         }
-        AF.request(
+        transportSession.request(
             url,
             method: endpoint.method,
             parameters: payload,
@@ -8494,7 +8569,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
                        allowsRefresh,
                        authPolicy == .userRequired,
                        let requestAuthSession,
-                       let currentSession = self.authSessionStore.currentSession {
+                       let currentSession = self.currentAuthenticatedSession {
                         if currentSession.isValidRefreshSuccessor(of: requestAuthSession) {
                             self.requestJSON(
                                 path: path,
@@ -8615,8 +8690,8 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
     ) -> Bool {
         if let lease,
            !lease.permits(
-               session: authSessionStore.currentSession,
-               currentUserId: UserManager.shared.currentUser?.id
+               session: currentAuthenticatedSession,
+               currentUserId: currentUserID
            ) {
             return false
         }

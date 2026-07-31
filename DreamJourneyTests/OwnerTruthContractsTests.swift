@@ -1,4 +1,5 @@
 import CryptoKit
+import Alamofire
 import UIKit
 import XCTest
 #if canImport(DreamJourney)
@@ -6648,6 +6649,169 @@ final class OwnerTruthContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testRealHTTPClientRoutesReviewReadyStatusToFocusedConfirmationInboxWithoutMutation() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000082")
+        let otherReviewBatchID = recordID("00000000-0000-0000-0000-000000000083")
+        let statusPayload = try JSONSerialization.data(withJSONObject: interviewCandidateProposalStatusPayload(
+            vaultID: vaultID.rawValue,
+            reviewBatchID: reviewBatchID,
+            candidateExtractionState: .succeeded,
+            candidateReviewState: .reviewReady
+        ))
+        let inboxPayload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthInterviewCandidateConfirmationInbox.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "confirmations": [
+                [
+                    "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                    "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
+                    "batchCandidateCount": 1,
+                    "singleCandidateCount": 0,
+                ],
+                [
+                    "reviewBatchId": otherReviewBatchID.rawValue.uuidString,
+                    "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
+                    "batchCandidateCount": 0,
+                    "singleCandidateCount": 1,
+                ],
+            ],
+        ])
+        let session = try makeOwnerTruthHTTPTestSession()
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: session,
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            switch request.url?.path {
+            case "/v2/vaults/\(vaultID.rawValue)/interview-review-batches/\(reviewBatchID.rawValue.uuidString)/candidate-proposal/status":
+                loader.respond(statusCode: 200, body: statusPayload)
+            case "/v2/vaults/\(vaultID.rawValue)/interview-candidate-confirmations":
+                loader.respond(statusCode: 200, body: inboxPayload)
+            default:
+                loader.respond(statusCode: 404, body: Data("{\"detail\":\"unexpected route\"}".utf8))
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let statusUseCase = OwnerTruthInterviewCandidateProposalStatusUseCase(
+            accountLease: lease,
+            reviewBatchID: reviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+        statusUseCase.send(.refresh)
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            statusUseCase.viewState.phase == .ready
+        })
+        XCTAssertEqual(statusUseCase.viewState.status?.candidateReviewState, .reviewReady)
+
+        let inboxController = OwnerTruthInterviewCandidateConfirmationInboxViewController(
+            accountLease: lease,
+            focusedReviewBatchID: reviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+        let navigationController = UINavigationController(rootViewController: inboxController)
+        inboxController.loadViewIfNeeded()
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            inboxController.visibleReviewBatchIDsForUIQA == [reviewBatchID]
+        })
+        XCTAssertEqual(inboxController.focusedReviewBatchIDForUIQA, reviewBatchID)
+        XCTAssertEqual(inboxController.visibleReviewBatchIDsForUIQA, [reviewBatchID])
+        XCTAssertNil(inboxController.presentedViewController)
+        XCTAssertTrue(navigationController.topViewController === inboxController)
+
+        let requests = OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertTrue(requests.allSatisfy { $0.httpMethod == "GET" })
+        XCTAssertEqual(Set(requests.compactMap(\.url?.path)), [
+            "/v2/vaults/\(vaultID.rawValue)/interview-review-batches/\(reviewBatchID.rawValue.uuidString)/candidate-proposal/status",
+            "/v2/vaults/\(vaultID.rawValue)/interview-candidate-confirmations",
+        ])
+        XCTAssertTrue(requests.allSatisfy { $0.value(forHTTPHeaderField: "X-DreamJourney-QA-Owner-Truth") == nil })
+        XCTAssertTrue(requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == "Bearer \(authSession.accessToken)" })
+    }
+
+    @MainActor
+    func testRealHTTPClientDropsDelayedFocusedInboxResponseAfterAccountLeaseSwitch() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000084")
+        let inboxPayload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthInterviewCandidateConfirmationInbox.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "confirmations": [[
+                "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                "readiness": OwnerTruthInterviewCandidateReviewReadiness.reviewReady.rawValue,
+                "batchCandidateCount": 1,
+                "singleCandidateCount": 0,
+            ]],
+        ])
+        let session = try makeOwnerTruthHTTPTestSession()
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: session,
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        var deferredLoader: OwnerTruthReviewReadyHTTPURLProtocol?
+        OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
+            deferredLoader = loader
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let inboxController = OwnerTruthInterviewCandidateConfirmationInboxViewController(
+            accountLease: lease,
+            focusedReviewBatchID: reviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+        let navigationController = UINavigationController(rootViewController: inboxController)
+        inboxController.loadViewIfNeeded()
+        let statusLabel = try XCTUnwrap(findView(
+            in: inboxController.view,
+            accessibilityIdentifier: "owner-truth-candidate-confirmation-inbox-status"
+        ) as? UILabel)
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { deferredLoader != nil })
+
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        deferredLoader?.respond(statusCode: 200, body: inboxPayload)
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            statusLabel.text == "待确认记忆暂未开放。"
+        })
+        XCTAssertEqual(inboxController.visibleReviewBatchIDsForUIQA, [])
+        XCTAssertNil(inboxController.presentedViewController)
+        XCTAssertTrue(navigationController.topViewController === inboxController)
+
+        let requests = OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.first?.httpMethod, "GET")
+        XCTAssertEqual(requests.first?.url?.path, "/v2/vaults/\(vaultID.rawValue)/interview-candidate-confirmations")
+    }
+
+    @MainActor
     func testNaturalInputProductReviewBatchAcknowledgementStaysHiddenWithoutPolicy() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
@@ -7129,6 +7293,133 @@ final class OwnerTruthContractsTests: XCTestCase {
             }
         }
         return nil
+    }
+
+    private func makeOwnerTruthHTTPTestSession() throws -> Session {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [OwnerTruthReviewReadyHTTPURLProtocol.self]
+        return Session(configuration: configuration, startRequestsImmediately: true)
+    }
+
+    private func makeOwnerTruthHTTPTestAuthSession(
+        userID: String
+    ) throws -> BackendAuthSessionContract {
+        let formatter = ISO8601DateFormatter()
+        let now = Date()
+        let payload: [String: Any] = [
+            "sessionId": "owner-truth-http-session-\(userID)",
+            "userId": userID,
+            "subjectId": userID,
+            "tokenType": "Bearer",
+            "accessToken": "dja_owner_truth_http_access_token",
+            "refreshToken": "djr_owner_truth_http_refresh_token",
+            "accessExpiresInSeconds": 3_600,
+            "refreshExpiresInSeconds": 86_400,
+            "accessExpiresAt": formatter.string(from: now.addingTimeInterval(3_600)),
+            "refreshExpiresAt": formatter.string(from: now.addingTimeInterval(86_400)),
+            "contractVersion": 2,
+            "tokenFamilyId": "owner-truth-http-family-\(userID)",
+            "sessionVersion": 1,
+        ]
+        return try XCTUnwrap(BackendAuthSessionContract(json: payload))
+    }
+
+    private static func ownerTruthHTTPTestFeatureDecision(
+        _ feature: DJFeature
+    ) -> FeatureDecision {
+        FeatureDecision(
+            decisionId: "owner-truth-http-qa-decision",
+            feature: feature,
+            purpose: .request,
+            policyVersion: "qa-controlled-transport",
+            policyRevision: 1,
+            emergencyRevision: 0,
+            validatedPolicyRevision: 1,
+            validatedEmergencyRevision: 0,
+            accountGeneration: "owner-truth-http-qa",
+            allowed: true,
+            reason: "qaControlledTransport",
+            expiresAt: Date().addingTimeInterval(300)
+        )
+    }
+
+    private func waitForOwnerTruthHTTPUI(
+        timeout: TimeInterval,
+        until condition: @escaping () -> Bool
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition(), Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        }
+        return condition()
+    }
+}
+
+private final class OwnerTruthReviewReadyHTTPURLProtocol: URLProtocol {
+    typealias RequestHandler = (URLRequest, OwnerTruthReviewReadyHTTPURLProtocol) -> Void
+
+    private static let lock = NSLock()
+    private static var handler: RequestHandler?
+    private static var requests: [URLRequest] = []
+
+    static var recordedRequests: [URLRequest] {
+        lock.lock()
+        defer { lock.unlock() }
+        return requests
+    }
+
+    static func install(handler: @escaping RequestHandler) {
+        lock.lock()
+        requests = []
+        self.handler = handler
+        lock.unlock()
+    }
+
+    static func reset() {
+        lock.lock()
+        handler = nil
+        requests = []
+        lock.unlock()
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        request.url?.host == "owner-truth.qa.invalid"
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        let handler: RequestHandler?
+        Self.lock.lock()
+        Self.requests.append(request)
+        handler = Self.handler
+        Self.lock.unlock()
+
+        guard let handler else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        handler(request, self)
+    }
+
+    override func stopLoading() {}
+
+    func respond(statusCode: Int, body: Data) {
+        guard let url = request.url,
+              let response = HTTPURLResponse(
+                url: url,
+                statusCode: statusCode,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+              ) else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: body)
+        client?.urlProtocolDidFinishLoading(self)
     }
 }
 
