@@ -6430,6 +6430,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         let inboxClient = InterviewPendingReviewBatchInboxClientSpy()
         let acknowledgementClient = InterviewReviewBatchAcknowledgementClientSpy()
         let admissionClient = InterviewCandidateProposalAdmissionClientSpy()
+        let statusClient = InterviewCandidateProposalStatusClientSpy()
         let controller = OwnerTruthInterviewNaturalInputViewController(
             accountLease: lease,
             client: naturalInputClient,
@@ -6444,6 +6445,8 @@ final class OwnerTruthContractsTests: XCTestCase {
             reviewBatchAcknowledgementPolicyAvailable: { true },
             candidateProposalAdmissionClient: admissionClient,
             candidateProposalAdmissionPolicyAvailable: { true },
+            candidateProposalStatusClient: statusClient,
+            candidateProposalStatusPolicyAvailable: { true },
             qaGateEnabled: { true }
         )
 
@@ -6472,6 +6475,10 @@ final class OwnerTruthContractsTests: XCTestCase {
             vaultID: lease.vaultId,
             reviewBatchID: reviewBatchID
         ))
+        statusClient.readResult = .success(try interviewCandidateProposalStatus(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID
+        ))
 
         XCTAssertFalse(controller.isCandidateProposalAdmissionEntryVisibleForUIQA)
         controller.acknowledgeReviewBatchForUIQA()
@@ -6485,12 +6492,159 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(command.reviewBatchID, reviewBatchID)
         XCTAssertEqual(command.expectedReviewBatchVersion, 2)
         XCTAssertEqual(controller.candidateProposalAdmissionStateForUIQA.phase, .admitted)
+        XCTAssertEqual(statusClient.requestCount, 1)
+        XCTAssertEqual(controller.candidateProposalStatusStateForUIQA.phase, .ready)
+        XCTAssertEqual(
+            controller.candidateProposalStatusStateForUIQA.status?.candidateReviewState,
+            .notReady
+        )
         XCTAssertFalse(controller.isCandidateProposalAdmissionEntryVisibleForUIQA)
-        XCTAssertEqual(controller.renderedStatusTextForUIQA, "这段分享已进入整理队列")
+        XCTAssertTrue(controller.isCandidateProposalStatusEntryVisibleForUIQA)
+        XCTAssertEqual(controller.renderedStatusTextForUIQA, "这段分享正在整理")
         XCTAssertEqual(
             controller.renderedDetailTextForUIQA,
-            "后续整理结果仍会等待你确认是否保存为记忆。"
+            "整理完成后，仍会等待你确认是否保存为记忆。"
         )
+    }
+
+    @MainActor
+    func testNaturalInputProductOpensFocusedConfirmationInboxOnlyWhenProposalReviewIsReady() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let naturalInputClient = InterviewNaturalInputClientSpy()
+        naturalInputClient.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        naturalInputClient.appendHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, append: command) }
+        }
+        naturalInputClient.endHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, end: command) }
+        }
+        naturalInputClient.continuationHandler = { _ in
+            Result {
+                let ended = naturalInputClient.endCommand != nil
+                return try self.interviewNaturalInputContinuation(
+                    vaultID: vaultID,
+                    state: ended ? .reviewPending : .readyForNarrative,
+                    canContinue: !ended,
+                    canContinueLater: true
+                )
+            }
+        }
+        let inboxClient = InterviewPendingReviewBatchInboxClientSpy()
+        let acknowledgementClient = InterviewReviewBatchAcknowledgementClientSpy()
+        let admissionClient = InterviewCandidateProposalAdmissionClientSpy()
+        let statusClient = InterviewCandidateProposalStatusClientSpy()
+        statusClient.deferRead = true
+        let focusedInbox = UIViewController()
+        var focusedReviewBatchID: OwnerTruthRecordID?
+        let controller = OwnerTruthInterviewNaturalInputViewController(
+            accountLease: lease,
+            client: naturalInputClient,
+            accountLeaseRuntime: runtime,
+            presentation: .product,
+            guidedRecommendationPolicyAvailable: { false },
+            lifeMapPolicyAvailable: { false },
+            memorySearchPolicyAvailable: { false },
+            interviewOutcomePolicyAvailable: { false },
+            reviewBatchInboxClient: inboxClient,
+            reviewBatchAcknowledgementClient: acknowledgementClient,
+            reviewBatchAcknowledgementPolicyAvailable: { true },
+            candidateProposalAdmissionClient: admissionClient,
+            candidateProposalAdmissionPolicyAvailable: { true },
+            candidateProposalStatusClient: statusClient,
+            candidateProposalStatusPolicyAvailable: { true },
+            candidateProposalConfirmationInboxControllerProvider: { _, reviewBatchID in
+                focusedReviewBatchID = reviewBatchID
+                return focusedInbox
+            },
+            qaGateEnabled: { true }
+        )
+        let navigationController = UINavigationController(rootViewController: controller)
+
+        controller.loadViewIfNeeded()
+        controller.submitQAFixture("仅在本次整理完成后再查看待确认内容。")
+        let endButton = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-interview-natural-input-end"
+        ) as? UIButton)
+        endButton.sendActions(for: .touchUpInside)
+        let endedReceipt = try XCTUnwrap(controller.renderedStateForUIQA.latestReceipt)
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000079")
+        inboxClient.result = .success(try pendingReviewBatchInbox(
+            vaultID: lease.vaultId,
+            batches: [(reviewBatchID, endedReceipt.threadID, endedReceipt.sessionID, 1, endedReceipt.sessionVersion)]
+        ))
+        acknowledgementClient.result = .success(try pendingReviewBatchAcknowledgementReceipt(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            threadID: endedReceipt.threadID,
+            sessionID: endedReceipt.sessionID,
+            reviewBatchVersion: 2,
+            sessionVersion: endedReceipt.sessionVersion + 1
+        ))
+        admissionClient.result = .success(try candidateProposalAdmissionReceipt(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID
+        ))
+
+        controller.acknowledgeReviewBatchForUIQA()
+        controller.startCandidateProposalAdmissionForUIQA()
+
+        XCTAssertEqual(statusClient.requestCount, 1)
+        XCTAssertEqual(controller.candidateProposalStatusStateForUIQA.phase, .loading)
+        XCTAssertFalse(controller.isCandidateProposalStatusEntryVisibleForUIQA)
+        controller.checkCandidateProposalStatusForUIQA()
+        XCTAssertTrue(navigationController.topViewController === controller)
+        XCTAssertNil(focusedReviewBatchID)
+
+        statusClient.completeDeferredRead(.success(try interviewCandidateProposalStatus(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            candidateExtractionState: .succeeded,
+            candidateReviewState: .reviewReady
+        )))
+
+        XCTAssertEqual(controller.candidateProposalStatusStateForUIQA.phase, .ready)
+        XCTAssertEqual(
+            controller.candidateProposalStatusStateForUIQA.status?.candidateReviewState,
+            .reviewReady
+        )
+        XCTAssertTrue(controller.isCandidateProposalStatusEntryVisibleForUIQA)
+        XCTAssertEqual(controller.renderedStatusTextForUIQA, "整理完成，等待你确认")
+        controller.checkCandidateProposalStatusForUIQA()
+        XCTAssertEqual(focusedReviewBatchID, reviewBatchID)
+        XCTAssertTrue(navigationController.topViewController === focusedInbox)
+    }
+
+    @MainActor
+    func testFocusedCandidateConfirmationInboxFiltersOtherReviewBatches() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let focusedReviewBatchID = recordID("00000000-0000-0000-0000-000000000080")
+        let otherReviewBatchID = recordID("00000000-0000-0000-0000-000000000081")
+        let client = InterviewCandidateConfirmationInboxClientSpy()
+        client.readResult = .success(try interviewCandidateConfirmationInbox(
+            vaultID: lease.vaultId,
+            reviewBatchIDs: [focusedReviewBatchID, otherReviewBatchID]
+        ))
+        let controller = OwnerTruthInterviewCandidateConfirmationInboxViewController(
+            accountLease: lease,
+            focusedReviewBatchID: focusedReviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        controller.loadViewIfNeeded()
+
+        let tableView = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-confirmation-inbox-list"
+        ) as? UITableView)
+        XCTAssertEqual(tableView.numberOfRows(inSection: 0), 1)
+        XCTAssertEqual(controller.title, "本次待确认记忆")
+        XCTAssertEqual(client.requestCount, 1)
     }
 
     @MainActor

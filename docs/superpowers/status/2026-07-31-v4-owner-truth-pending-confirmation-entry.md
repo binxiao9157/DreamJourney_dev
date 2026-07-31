@@ -7,19 +7,20 @@
 本文件记录的是早期实现尝试，已由
 `2026-07-31-v4-owner-truth-pending-review-batch-acknowledgement.md` 替代。
 
-现在的正式流程为：访谈正常结束后先“确认本次分享”，再由用户明确选择“开始整理”。第二步仅在独立的 `ownerTruthCandidateReview` 策略允许时，把已确认的 review batch 准入私有 Source / effect 整理队列；它不返回候选内容、不创建 Candidate 或 Memory。服务端后续形成正式候选确认 inbox 后，才由 Archive 中独立的候选确认入口读取该 inbox。自然输入 Sheet 的 `reviewPending` 状态不再直接展示或跳转“查看待确认记忆”。
+现在的正式流程为：访谈正常结束后先“确认本次分享”，再由用户明确选择“开始整理”。第二步仅在独立的 `ownerTruthCandidateReview` 策略允许时，把已确认的 review batch 准入私有 Source / effect 整理队列；它不返回候选内容、不创建 Candidate 或 Memory。admission 后自然输入 Sheet 只读取本批次的值最小化状态；只有服务端状态为 `reviewReady`、当前租约与批次仍匹配且用户再次明确点击时，才进入聚焦该批次的候选确认 inbox。自然输入 Sheet 不会从 `reviewPending` 或 admission action 直接进入候选确认。
 
 ## 默认关闭与授权边界
 
 - 自然输入 Sheet 只在 `.product`、当前 `AccountLease` 有效、自然输入策略允许、会话结束且 continuation 为 `reviewPending` 时提供“确认进入整理”。
 - “开始整理”与候选确认均受 `ownerTruthCandidateReview` 的独立 feature flag 与发布策略控制，默认发布态不开放；确认分享不继承这项权限。
-- 候选确认入口继续传递同一份 `AccountLease`、runtime 和正式 client 给 `OwnerTruthInterviewCandidateConfirmationInboxViewController`；该页面自行读取服务端确认 inbox 并执行请求/提交阶段的租约与策略校验。
+- 候选确认入口继续传递同一份 `AccountLease`、runtime 和正式 client 给 `OwnerTruthInterviewCandidateConfirmationInboxViewController`；从本次访谈进入时额外携带精确 `focusedReviewBatchID`，该页面只显示该批次且 `reviewReady` 的条目，并自行读取服务端确认 inbox、执行请求/提交阶段的租约与策略校验。
 - 两段流程均不使用 `OwnerTruthCandidateReviewQAGate`，不把候选原文带回自然输入 Sheet，也不由整理确认直接触发 MemoryVersion 激活。
 
 ## 验证
 
 - 静态守卫：`Scripts/QA/product-v4/owner-truth-candidate-confirmation-presentation-check.swift`，确认自然输入 Sheet 不会在 `reviewPending` 直接进入候选确认。
 - 整理准入守卫：`Scripts/QA/product-v4/owner-truth-candidate-proposal-admission-check.swift`，确认独立策略、最小化 payload/receipt 与确认后的显式操作顺序。
+- 整理状态交接守卫：`Scripts/QA/product-v4/owner-truth-candidate-proposal-status-handoff-check.swift`，确认只有当前批次的 `reviewReady` 状态才可进入聚焦 confirmation inbox。
 - 默认关闭合同：`Scripts/QA/product-v4/owner-truth-candidate-confirmation-default-off-check.swift`
 - UIKit 单测：
   - `testNaturalInputProductPendingConfirmationEntryUsesDedicatedPolicyAndInbox`

@@ -14,7 +14,7 @@
 2. 用户先执行“确认本次分享”，只冻结一个当前、精确且不透明的 review batch/version 边界。
 3. 只有在单独的 `ownerTruthCandidateReview` feature flag 与 release policy 都允许时，才显示“开始整理”。
 4. 用户显式点击后，客户端只发送 `commandId` 与 `expectedReviewBatchVersion`；服务端回传值最小化 receipt，表示私有 Source / effect 已进入整理队列。
-5. 后续 Candidate 的查看、接受、修正和 MemoryVersion 激活仍在独立 Archive 确认流程中完成。
+5. admission 后，Sheet 只读取当前批次的值最小化整理状态；只有 `reviewReady` 且用户再次明确点击时，才进入聚焦本批次的独立 Archive 确认流程。查看、接受、修正和 MemoryVersion 激活仍在该流程中完成。
 
 因此，确认分享不会自动开始整理；开始整理不会直接生成或展示 Candidate，也不会写入 Memory。
 

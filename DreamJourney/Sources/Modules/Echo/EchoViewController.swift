@@ -8249,7 +8249,8 @@ extension EchoViewController {
                 presentation: .product,
                 postNarrativeContinuationState: .reviewPending,
                 reviewBatchAcknowledgementPolicyAvailable: { true },
-                candidateProposalAdmissionPolicyAvailable: { true }
+                candidateProposalAdmissionPolicyAvailable: { true },
+                candidateProposalStatusPolicyAvailable: { true }
             )
             let navigationController = UINavigationController(rootViewController: controller)
             navigationController.modalPresentationStyle = .pageSheet
@@ -8321,11 +8322,18 @@ extension EchoViewController {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
                                     let admissionState = controller
                                         .candidateProposalAdmissionStateForUIQA
+                                    let candidateProposalStatusState = controller
+                                        .candidateProposalStatusStateForUIQA
+                                    let candidateProposalStatusEntryVisible = controller
+                                        .isCandidateProposalStatusEntryVisibleForUIQA
                                     let admissionRendered = admissionState.phase == .admitted
-                                        && controller.renderedStatusTextForUIQA == "这段分享已进入整理队列"
+                                        && candidateProposalStatusState.phase == .ready
+                                        && candidateProposalStatusState.status?.candidateReviewState == .notReady
+                                        && controller.renderedStatusTextForUIQA == "这段分享正在整理"
                                         && controller.renderedDetailTextForUIQA
-                                            == "后续整理结果仍会等待你确认是否保存为记忆。"
+                                            == "整理完成后，仍会等待你确认是否保存为记忆。"
                                         && !controller.isCandidateProposalAdmissionEntryVisibleForUIQA
+                                        && candidateProposalStatusEntryVisible
                                     var result: [String: Any] = [
                                         "completed": controller.title == "今天想聊点什么？"
                                             && endActionHiddenBeforeNarrative
@@ -8363,6 +8371,9 @@ extension EchoViewController {
                                         "candidateProposalAdmissionEntryVisible": candidateProposalAdmissionEntryVisible,
                                         "candidateProposalAdmissionPhase": String(describing: admissionState.phase),
                                         "candidateProposalAdmissionRendered": admissionRendered,
+                                        "candidateProposalStatusPhase": String(describing: candidateProposalStatusState.phase),
+                                        "candidateProposalReviewState": candidateProposalStatusState.status?.candidateReviewState.rawValue ?? "",
+                                        "candidateProposalStatusEntryVisible": candidateProposalStatusEntryVisible,
                                         "inMemoryPreview": true,
                                         "releasePolicyBypassedForPreview": true,
                                         "voiceTurnStarted": false,

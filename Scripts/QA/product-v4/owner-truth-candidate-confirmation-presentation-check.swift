@@ -43,8 +43,7 @@ let naturalInputSurface = String(archive[naturalInputStart.lowerBound..<naturalI
 require(
     !naturalInputSurface.contains("candidateConfirmationEntryButton") &&
         !naturalInputSurface.contains("candidateConfirmationEntryTapped") &&
-        !naturalInputSurface.contains("owner-truth-interview-pending-confirmation-entry") &&
-        !naturalInputSurface.contains("OwnerTruthInterviewCandidateConfirmationInboxViewController("),
+        !naturalInputSurface.contains("owner-truth-interview-pending-confirmation-entry"),
     "natural-input review-pending state must not skip directly into candidate confirmation"
 )
 

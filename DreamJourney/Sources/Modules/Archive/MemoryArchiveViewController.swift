@@ -4206,6 +4206,7 @@ private final class OwnerTruthCandidateMemoryActivationInboxCell: UITableViewCel
 
 final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewController {
     private let accountLease: AccountLease
+    private let focusedReviewBatchID: OwnerTruthRecordID?
     private let useCase: OwnerTruthInterviewCandidateConfirmationInboxUseCase
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
     private let statusLabel = UILabel()
@@ -4217,9 +4218,11 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
     )
 
     private var renderedState = OwnerTruthInterviewCandidateConfirmationInboxViewState.idle
+    private var visibleItems: [OwnerTruthInterviewCandidateConfirmationInboxItem] = []
 
     init(
         accountLease: AccountLease,
+        focusedReviewBatchID: OwnerTruthRecordID? = nil,
         client: OwnerTruthInterviewCandidateConfirmationInboxClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = {
@@ -4227,6 +4230,7 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
         }
     ) {
         self.accountLease = accountLease
+        self.focusedReviewBatchID = focusedReviewBatchID
         useCase = OwnerTruthInterviewCandidateConfirmationInboxUseCase(
             accountLease: accountLease,
             client: client,
@@ -4243,7 +4247,7 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "待确认记忆"
+        title = focusedReviewBatchID == nil ? "待确认记忆" : "本次待确认记忆"
         view.backgroundColor = DJDesignTokens.Color.background
         navigationItem.rightBarButtonItem = refreshButton
         configureHeader()
@@ -4314,6 +4318,7 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
 
     private func render(_ state: OwnerTruthInterviewCandidateConfirmationInboxViewState) {
         renderedState = state
+        visibleItems = visibleItems(for: state)
         refreshButton.isEnabled = state.phase != .loading
         statusLabel.text = statusText(for: state)
         emptyStateLabel.text = emptyText(for: state)
@@ -4330,7 +4335,9 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
         case .loading:
             return "正在读取待确认记忆。"
         case .ready:
-            return "确认后只记录审核结果，暂不会写入正式记忆。"
+            return focusedReviewBatchID == nil || !visibleItems.isEmpty
+                ? "确认后只记录审核结果，暂不会写入正式记忆。"
+                : "本次整理尚未准备好待确认内容。"
         case .empty:
             return "当前没有需要你确认的记忆。"
         case .failed:
@@ -4341,13 +4348,28 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
     private func emptyText(for state: OwnerTruthInterviewCandidateConfirmationInboxViewState) -> String? {
         switch state.phase {
         case .empty:
-            return "你的访谈线索确认完成后，会在这里等待你确认。"
+            return focusedReviewBatchID == nil
+                ? "你的访谈线索确认完成后，会在这里等待你确认。"
+                : "本次整理完成后，待确认内容会出现在这里。"
+        case .ready where focusedReviewBatchID != nil && visibleItems.isEmpty:
+            return "本次整理尚未准备好待确认内容。"
         case .unavailable:
             return "该功能仅会在获准的发布策略下开放。"
         case .failed:
             return "请点右上角重新载入。"
         default:
             return nil
+        }
+    }
+
+    private func visibleItems(
+        for state: OwnerTruthInterviewCandidateConfirmationInboxViewState
+    ) -> [OwnerTruthInterviewCandidateConfirmationInboxItem] {
+        guard let focusedReviewBatchID else {
+            return state.inbox?.items ?? []
+        }
+        return (state.inbox?.items ?? []).filter {
+            $0.reviewBatchID == focusedReviewBatchID && $0.readiness == .reviewReady
         }
     }
 
@@ -4358,7 +4380,7 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
 
 extension OwnerTruthInterviewCandidateConfirmationInboxViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        renderedState.inbox?.items.count ?? 0
+        visibleItems.count
     }
 
     func tableView(
@@ -4369,7 +4391,8 @@ extension OwnerTruthInterviewCandidateConfirmationInboxViewController: UITableVi
             withIdentifier: OwnerTruthCandidateConfirmationInboxCell.reuseIdentifier,
             for: indexPath
         ) as! OwnerTruthCandidateConfirmationInboxCell
-        if let item = renderedState.inbox?.items[indexPath.row] {
+        if visibleItems.indices.contains(indexPath.row) {
+            let item = visibleItems[indexPath.row]
             cell.configure(item)
         }
         return cell
@@ -4378,14 +4401,14 @@ extension OwnerTruthInterviewCandidateConfirmationInboxViewController: UITableVi
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         guard let inbox = renderedState.inbox,
               inbox.isBound(to: accountLease),
-              inbox.items.indices.contains(indexPath.row) else {
+              visibleItems.indices.contains(indexPath.row) else {
             return
         }
         tableView.deselectRow(at: indexPath, animated: true)
         navigationController?.pushViewController(
             OwnerTruthInterviewCandidateConfirmationViewController(
                 accountLease: accountLease,
-                reviewBatchID: inbox.items[indexPath.row].reviewBatchID
+                reviewBatchID: visibleItems[indexPath.row].reviewBatchID
             ),
             animated: true
         )
@@ -9128,6 +9151,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let reviewBatchAcknowledgementPolicyAvailable: () -> Bool
     private let candidateProposalAdmissionClient: OwnerTruthInterviewCandidateProposalAdmissionClient
     private let candidateProposalAdmissionPolicyAvailable: () -> Bool
+    private let candidateProposalStatusClient: OwnerTruthInterviewCandidateProposalStatusClient
+    private let candidateProposalStatusPolicyAvailable: () -> Bool
+    private let candidateProposalConfirmationInboxControllerProvider: (AccountLease, OwnerTruthRecordID) -> UIViewController
     private let stackView = UIStackView()
     private let subtitleLabel = UILabel()
     private let guidedRecommendationStack = UIStackView()
@@ -9139,6 +9165,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let interviewOutcomeButton = UIButton(type: .system)
     private let reviewBatchAcknowledgementEntryButton = UIButton(type: .system)
     private let candidateProposalAdmissionEntryButton = UIButton(type: .system)
+    private let candidateProposalStatusEntryButton = UIButton(type: .system)
     private let statusLabel = UILabel()
     private let detailLabel = UILabel()
     private let inputTextView = UITextView()
@@ -9168,6 +9195,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private var candidateProposalAdmissionUseCase: OwnerTruthInterviewCandidateProposalAdmissionUseCase?
     private var candidateProposalAdmissionReviewBatchID: OwnerTruthRecordID?
     private var candidateProposalAdmissionState: OwnerTruthInterviewCandidateProposalAdmissionViewState = .idle
+    private var candidateProposalStatusUseCase: OwnerTruthInterviewCandidateProposalStatusUseCase?
+    private var candidateProposalStatusReviewBatchID: OwnerTruthRecordID?
+    private var candidateProposalStatusState: OwnerTruthInterviewCandidateProposalStatusViewState = .idle
     var onViewStateRendered: ((OwnerTruthInterviewNaturalInputViewState) -> Void)?
 
     var isTranscriptClearForQA: Bool {
@@ -9192,6 +9222,10 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
     var candidateProposalAdmissionStateForUIQA: OwnerTruthInterviewCandidateProposalAdmissionViewState {
         candidateProposalAdmissionState
+    }
+
+    var candidateProposalStatusStateForUIQA: OwnerTruthInterviewCandidateProposalStatusViewState {
+        candidateProposalStatusState
     }
 
     var areBoundaryActionsVisibleForQA: Bool {
@@ -9231,6 +9265,13 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             && candidateProposalAdmissionEntryButton.superview != nil
             && !candidateProposalAdmissionEntryButton.isHidden
             && candidateProposalAdmissionEntryButton.isEnabled
+    }
+
+    var isCandidateProposalStatusEntryVisibleForUIQA: Bool {
+        presentation == .product
+            && candidateProposalStatusEntryButton.superview != nil
+            && !candidateProposalStatusEntryButton.isHidden
+            && candidateProposalStatusEntryButton.isEnabled
     }
 
     var isEndSessionActionVisibleForUIQA: Bool {
@@ -9327,6 +9368,23 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
                 .requestDecision(for: .ownerTruthCandidateReview)
                 .allowed
         },
+        candidateProposalStatusClient: OwnerTruthInterviewCandidateProposalStatusClient = DreamJourneyBackendClient.shared,
+        candidateProposalStatusPolicyAvailable: @escaping () -> Bool = {
+            guard FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview) else {
+                return false
+            }
+            return FeatureGateService.shared
+                .requestDecision(for: .ownerTruthCandidateReview)
+                .allowed
+        },
+        candidateProposalConfirmationInboxControllerProvider: @escaping (AccountLease, OwnerTruthRecordID) -> UIViewController = {
+            accountLease,
+            reviewBatchID in
+            OwnerTruthInterviewCandidateConfirmationInboxViewController(
+                accountLease: accountLease,
+                focusedReviewBatchID: reviewBatchID
+            )
+        },
         qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
     ) {
         self.presentation = presentation
@@ -9343,6 +9401,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         self.reviewBatchAcknowledgementPolicyAvailable = reviewBatchAcknowledgementPolicyAvailable
         self.candidateProposalAdmissionClient = candidateProposalAdmissionClient
         self.candidateProposalAdmissionPolicyAvailable = candidateProposalAdmissionPolicyAvailable
+        self.candidateProposalStatusClient = candidateProposalStatusClient
+        self.candidateProposalStatusPolicyAvailable = candidateProposalStatusPolicyAvailable
+        self.candidateProposalConfirmationInboxControllerProvider = candidateProposalConfirmationInboxControllerProvider
         self.useCase = OwnerTruthInterviewNaturalInputUseCase(
             accountLease: accountLease,
             client: client,
@@ -9419,6 +9480,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         configureInterviewOutcomeEntry()
         configureReviewBatchAcknowledgementEntry()
         configureCandidateProposalAdmissionEntry()
+        configureCandidateProposalStatusEntry()
 
         statusLabel.font = DJDesignTokens.Font.title(20)
         statusLabel.textColor = DJDesignTokens.Color.textPrimary
@@ -9465,6 +9527,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             stackView.addArrangedSubview(interviewOutcomeButton)
             stackView.addArrangedSubview(reviewBatchAcknowledgementEntryButton)
             stackView.addArrangedSubview(candidateProposalAdmissionEntryButton)
+            stackView.addArrangedSubview(candidateProposalStatusEntryButton)
         }
         [statusLabel, detailLabel, inputTextView, submitButton].forEach(stackView.addArrangedSubview)
         if presentation == .product {
@@ -9657,6 +9720,33 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         candidateProposalAdmissionEntryButton.addTarget(
             self,
             action: #selector(candidateProposalAdmissionEntryTapped),
+            for: .touchUpInside
+        )
+    }
+
+    private func configureCandidateProposalStatusEntry() {
+        var configuration = UIButton.Configuration.tinted()
+        configuration.title = "查看整理进度"
+        configuration.image = UIImage(systemName: "clock.arrow.circlepath")
+        configuration.imagePadding = 8
+        configuration.baseForegroundColor = DJDesignTokens.Color.textPrimary
+        configuration.baseBackgroundColor = DJDesignTokens.Color.surface
+        configuration.contentInsets = NSDirectionalEdgeInsets(
+            top: 12,
+            leading: 14,
+            bottom: 12,
+            trailing: 14
+        )
+        candidateProposalStatusEntryButton.configuration = configuration
+        candidateProposalStatusEntryButton.contentHorizontalAlignment = .leading
+        candidateProposalStatusEntryButton.layer.cornerRadius = 10
+        candidateProposalStatusEntryButton.accessibilityIdentifier =
+            "owner-truth-interview-candidate-proposal-status-entry"
+        candidateProposalStatusEntryButton.accessibilityLabel = "查看整理进度"
+        candidateProposalStatusEntryButton.isHidden = true
+        candidateProposalStatusEntryButton.addTarget(
+            self,
+            action: #selector(candidateProposalStatusEntryTapped),
             for: .touchUpInside
         )
     }
@@ -9887,6 +9977,8 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         updateReviewBatchAcknowledgementEntry(for: state)
         resetCandidateProposalAdmissionIfNeeded()
         updateCandidateProposalAdmissionEntry(for: state)
+        resetCandidateProposalStatusIfNeeded()
+        updateCandidateProposalStatusEntry(for: state)
         statusLabel.text = statusText(for: state)
         detailLabel.text = detailText(for: state)
         onViewStateRendered?(state)
@@ -10054,6 +10146,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             candidateProposalAdmissionUseCase = nil
             candidateProposalAdmissionReviewBatchID = nil
             candidateProposalAdmissionState = .idle
+            resetCandidateProposalStatus()
             return
         }
 
@@ -10064,6 +10157,26 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         candidateProposalAdmissionUseCase = nil
         candidateProposalAdmissionReviewBatchID = nil
         candidateProposalAdmissionState = .idle
+        resetCandidateProposalStatus()
+    }
+
+    private func resetCandidateProposalStatusIfNeeded() {
+        guard candidateProposalAdmissionState.phase == .admitted,
+              let reviewBatchID = candidateProposalAdmissionState.receipt?.reviewBatchID else {
+            resetCandidateProposalStatus()
+            return
+        }
+        guard let observedReviewBatchID = candidateProposalStatusReviewBatchID,
+              observedReviewBatchID != reviewBatchID else {
+            return
+        }
+        resetCandidateProposalStatus()
+    }
+
+    private func resetCandidateProposalStatus() {
+        candidateProposalStatusUseCase = nil
+        candidateProposalStatusReviewBatchID = nil
+        candidateProposalStatusState = .idle
     }
 
     private func updateReviewBatchAcknowledgementEntry(
@@ -10125,6 +10238,43 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             && accountLeaseRuntime.validate(accountLease, at: .ui).allowed
     }
 
+    private func canOfferCandidateProposalStatus(
+        for state: OwnerTruthInterviewNaturalInputViewState
+    ) -> Bool {
+        presentation == .product
+            && state.phase == .ready
+            && state.continuation?.state == .reviewPending
+            && state.latestReceipt?.lifecycle == .ended
+            && candidateProposalAdmissionState.phase == .admitted
+            && candidateProposalAdmissionState.receipt != nil
+            && candidateProposalStatusPolicyAvailable()
+            && accountLeaseRuntime.validate(accountLease, at: .ui).allowed
+    }
+
+    private func updateCandidateProposalStatusEntry(
+        for state: OwnerTruthInterviewNaturalInputViewState
+    ) {
+        let canOffer = canOfferCandidateProposalStatus(for: state)
+        let isLoading = candidateProposalStatusState.phase == .loading
+        let isReviewReady = candidateProposalStatusState.status?.candidateReviewState == .reviewReady
+            && candidateProposalStatusState.status?.isBound(to: accountLease) == true
+        candidateProposalStatusEntryButton.isHidden = !canOffer
+        candidateProposalStatusEntryButton.isEnabled = canOffer && !isLoading
+        candidateProposalStatusEntryButton.alpha = canOffer ? (isLoading ? 0.45 : 1) : 0
+        var configuration = candidateProposalStatusEntryButton.configuration
+        if isReviewReady {
+            configuration?.title = "查看待确认内容"
+            candidateProposalStatusEntryButton.accessibilityLabel = "查看待确认内容"
+        } else if candidateProposalStatusState.phase == .failed {
+            configuration?.title = "重新查看整理状态"
+            candidateProposalStatusEntryButton.accessibilityLabel = "重新查看整理状态"
+        } else {
+            configuration?.title = "查看整理进度"
+            candidateProposalStatusEntryButton.accessibilityLabel = "查看整理进度"
+        }
+        candidateProposalStatusEntryButton.configuration = configuration
+    }
+
     @objc private func reviewBatchAcknowledgementEntryTapped() {
         guard canOfferReviewBatchAcknowledgement(for: renderedState),
               reviewBatchAcknowledgementState.phase != .discovering,
@@ -10160,6 +10310,24 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             self?.startCandidateProposalAdmission()
         })
         present(alert, animated: true)
+    }
+
+    @objc private func candidateProposalStatusEntryTapped() {
+        guard canOfferCandidateProposalStatus(for: renderedState),
+              let reviewBatchID = candidateProposalAdmissionState.receipt?.reviewBatchID else {
+            return
+        }
+        if candidateProposalStatusState.phase == .ready,
+           candidateProposalStatusState.status?.candidateReviewState == .reviewReady,
+           candidateProposalStatusState.status?.reviewBatchID == reviewBatchID,
+           candidateProposalStatusState.status?.isBound(to: accountLease) == true {
+            navigationController?.pushViewController(
+                candidateProposalConfirmationInboxControllerProvider(accountLease, reviewBatchID),
+                animated: true
+            )
+            return
+        }
+        refreshCandidateProposalStatus()
     }
 
     private func acknowledgeCurrentReviewBatch() {
@@ -10234,6 +10402,40 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         useCase.send(.admit)
     }
 
+    private func refreshCandidateProposalStatus() {
+        guard canOfferCandidateProposalStatus(for: renderedState),
+              let reviewBatchID = candidateProposalAdmissionState.receipt?.reviewBatchID else {
+            return
+        }
+
+        let useCase: OwnerTruthInterviewCandidateProposalStatusUseCase
+        if let existingUseCase = candidateProposalStatusUseCase,
+           candidateProposalStatusReviewBatchID == reviewBatchID {
+            useCase = existingUseCase
+        } else {
+            let createdUseCase = OwnerTruthInterviewCandidateProposalStatusUseCase(
+                accountLease: accountLease,
+                reviewBatchID: reviewBatchID,
+                client: candidateProposalStatusClient,
+                accountLeaseRuntime: accountLeaseRuntime,
+                releasePolicyAvailable: candidateProposalStatusPolicyAvailable
+            )
+            createdUseCase.onViewStateChange = { [weak self] statusState in
+                if Thread.isMainThread {
+                    self?.renderCandidateProposalStatus(statusState)
+                } else {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.renderCandidateProposalStatus(statusState)
+                    }
+                }
+            }
+            candidateProposalStatusUseCase = createdUseCase
+            candidateProposalStatusReviewBatchID = reviewBatchID
+            useCase = createdUseCase
+        }
+        useCase.send(.refresh)
+    }
+
     private func renderReviewBatchAcknowledgement(
         _ state: OwnerTruthInterviewReviewBatchAcknowledgementViewState
     ) {
@@ -10245,6 +10447,16 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         _ state: OwnerTruthInterviewCandidateProposalAdmissionViewState
     ) {
         candidateProposalAdmissionState = state
+        if state.phase == .admitted {
+            refreshCandidateProposalStatus()
+        }
+        render(renderedState)
+    }
+
+    private func renderCandidateProposalStatus(
+        _ state: OwnerTruthInterviewCandidateProposalStatusViewState
+    ) {
+        candidateProposalStatusState = state
         render(renderedState)
     }
 
@@ -10489,6 +10701,11 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         startCandidateProposalAdmission()
     }
 
+    func checkCandidateProposalStatusForUIQA() {
+        guard presentation == .product else { return }
+        candidateProposalStatusEntryTapped()
+    }
+
     private func statusText(for state: OwnerTruthInterviewNaturalInputViewState) -> String {
         switch state.phase {
         case .idle:
@@ -10596,7 +10813,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         case .admitting:
             return "正在开始整理"
         case .admitted:
-            return "这段分享已进入整理队列"
+            return candidateProposalStatusText()
         case .failed, .unavailable:
             return "暂时无法开始整理"
         case .idle:
@@ -10619,7 +10836,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         case .admitting:
             return "正在建立本次分享的整理边界。"
         case .admitted:
-            return "后续整理结果仍会等待你确认是否保存为记忆。"
+            return candidateProposalStatusDetailText()
         case .failed, .unavailable:
             return candidateProposalAdmissionFailureDetailText()
         case .idle:
@@ -10651,6 +10868,56 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             return "当前暂不能开始整理，请稍后再试。"
         case .invalidVault, .requestFailed, nil:
             return "暂时无法开始整理，请稍后重试。"
+        }
+    }
+
+    private func candidateProposalStatusText() -> String {
+        switch candidateProposalStatusState.phase {
+        case .idle, .loading:
+            return "正在查看整理进度"
+        case .unavailable, .failed:
+            return "暂时无法查看整理进度"
+        case .ready:
+            switch candidateProposalStatusState.status?.candidateReviewState {
+            case .notReady:
+                return "这段分享正在整理"
+            case .reviewReady:
+                return "整理完成，等待你确认"
+            case .noCandidates:
+                return "本次暂未形成记忆建议"
+            case .extractionFailed:
+                return "整理暂未完成"
+            case .extractionQuarantined:
+                return "本次整理需要进一步核验"
+            case nil:
+                return "正在查看整理进度"
+            }
+        }
+    }
+
+    private func candidateProposalStatusDetailText() -> String {
+        switch candidateProposalStatusState.phase {
+        case .idle:
+            return "后续整理结果仍会等待你确认是否保存为记忆。"
+        case .loading:
+            return "正在确认本次分享的整理进度。"
+        case .unavailable, .failed:
+            return "当前没有写入任何正式记忆，可稍后再次查看。"
+        case .ready:
+            switch candidateProposalStatusState.status?.candidateReviewState {
+            case .notReady:
+                return "整理完成后，仍会等待你确认是否保存为记忆。"
+            case .reviewReady:
+                return "候选记忆仍需由你逐项确认，未确认不会写入正式记忆。"
+            case .noCandidates:
+                return "本次分享仍已保留；你可以继续补充新的内容。"
+            case .extractionFailed:
+                return "当前没有写入任何正式记忆，可稍后再次查看。"
+            case .extractionQuarantined:
+                return "当前没有写入任何正式记忆，待进一步核验后再决定。"
+            case nil:
+                return "后续整理结果仍会等待你确认是否保存为记忆。"
+            }
         }
     }
 
@@ -10746,7 +11013,17 @@ enum OwnerTruthInterviewNaturalInputUIQASmoke {
         reviewBatchAcknowledgementClient: OwnerTruthInterviewReviewBatchAcknowledgementClient? = nil,
         reviewBatchAcknowledgementPolicyAvailable: @escaping () -> Bool = { false },
         candidateProposalAdmissionClient: OwnerTruthInterviewCandidateProposalAdmissionClient? = nil,
-        candidateProposalAdmissionPolicyAvailable: @escaping () -> Bool = { false }
+        candidateProposalAdmissionPolicyAvailable: @escaping () -> Bool = { false },
+        candidateProposalStatusClient: OwnerTruthInterviewCandidateProposalStatusClient? = nil,
+        candidateProposalStatusPolicyAvailable: @escaping () -> Bool = { false },
+        candidateProposalConfirmationInboxControllerProvider: @escaping (AccountLease, OwnerTruthRecordID) -> UIViewController = {
+            accountLease,
+            reviewBatchID in
+            OwnerTruthInterviewCandidateConfirmationInboxViewController(
+                accountLease: accountLease,
+                focusedReviewBatchID: reviewBatchID
+            )
+        }
     ) -> OwnerTruthInterviewNaturalInputViewController {
         let client = client ?? InterviewNaturalInputUIQAClient(
             vaultID: OwnerTruthVaultID(accountLease.vaultId),
@@ -10770,6 +11047,9 @@ enum OwnerTruthInterviewNaturalInputUIQASmoke {
         let resolvedCandidateProposalAdmissionClient = candidateProposalAdmissionClient
             ?? (client as? OwnerTruthInterviewCandidateProposalAdmissionClient)
             ?? DreamJourneyBackendClient.shared
+        let resolvedCandidateProposalStatusClient = candidateProposalStatusClient
+            ?? (client as? OwnerTruthInterviewCandidateProposalStatusClient)
+            ?? DreamJourneyBackendClient.shared
         return OwnerTruthInterviewNaturalInputViewController(
             accountLease: accountLease,
             client: client,
@@ -10779,6 +11059,9 @@ enum OwnerTruthInterviewNaturalInputUIQASmoke {
             reviewBatchAcknowledgementPolicyAvailable: reviewBatchAcknowledgementPolicyAvailable,
             candidateProposalAdmissionClient: resolvedCandidateProposalAdmissionClient,
             candidateProposalAdmissionPolicyAvailable: candidateProposalAdmissionPolicyAvailable,
+            candidateProposalStatusClient: resolvedCandidateProposalStatusClient,
+            candidateProposalStatusPolicyAvailable: candidateProposalStatusPolicyAvailable,
+            candidateProposalConfirmationInboxControllerProvider: candidateProposalConfirmationInboxControllerProvider,
             qaGateEnabled: previewGateEnabled
         )
     }
@@ -11652,7 +11935,8 @@ private final class InterviewNaturalInputBoundaryUIQAScenario {
 private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalInputClient,
     OwnerTruthInterviewPendingReviewBatchInboxClient,
     OwnerTruthInterviewReviewBatchAcknowledgementClient,
-    OwnerTruthInterviewCandidateProposalAdmissionClient {
+    OwnerTruthInterviewCandidateProposalAdmissionClient,
+    OwnerTruthInterviewCandidateProposalStatusClient {
     private let vaultID: OwnerTruthVaultID?
     private let postNarrativeContinuationState: OwnerTruthInterviewNaturalInputContinuationState
     private var sessionsWithNarrative = Set<UUID>()
@@ -11939,6 +12223,50 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
                     ],
                     "candidate": ["status": "notCreated"],
                     "memoryActivation": ["status": "notApplicable"],
+                ],
+                expectedVaultID: vaultID,
+                expectedReviewBatchID: reviewBatchID
+            )))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func fetchOwnerTruthInterviewCandidateProposalStatus(
+        vaultID: OwnerTruthVaultID,
+        reviewBatchID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateProposalStatus, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID,
+              candidateProposalAdmitted,
+              reviewBatchID == self.reviewBatchID else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        do {
+            completion(.success(try OwnerTruthInterviewCandidateProposalStatus(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewCandidateProposalStatus.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "reviewBatch": [
+                        "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                        "state": OwnerTruthInterviewCandidateProposalReviewBatchState.acknowledged.rawValue,
+                    ],
+                    "candidateProposal": [
+                        "status": OwnerTruthInterviewCandidateProposalAdmissionState.admitted.rawValue,
+                    ],
+                    "source": [
+                        "status": OwnerTruthInterviewCandidateProposalSourceState.admitted.rawValue,
+                    ],
+                    "candidateExtraction": [
+                        "status": OwnerTruthInterviewCandidateProposalExtractionState.requested.rawValue,
+                    ],
+                    "effectExecution": [
+                        "status": OwnerTruthInterviewCandidateProposalEffectState.disabled.rawValue,
+                    ],
+                    "candidateReview": [
+                        "status": OwnerTruthInterviewCandidateProposalReviewState.notReady.rawValue,
+                    ],
                 ],
                 expectedVaultID: vaultID,
                 expectedReviewBatchID: reviewBatchID
