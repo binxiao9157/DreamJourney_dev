@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Keep the remaining UIQA AppDelegate dispatch boundary intentionally classified.
 
-WI-S1-03-10 is moving test orchestration out of production composition one
-bounded scenario at a time. This guard records the current non-Echo dispatch
-inventory so a later extraction cannot silently treat authenticated, seeded,
-or account-lease-sensitive flows as ordinary scheduled UI actions.
+This guard records the current non-Echo dispatch inventory so a later
+extraction cannot silently treat authenticated, seeded, or
+account-lease-sensitive flows as ordinary scheduled UI actions.
 """
 
 from pathlib import Path
@@ -81,6 +80,7 @@ def main() -> None:
     standard_scheduled = {
         "voiceCloneProfileSelectionSmoke",
         "voiceCloneSynthesisRuntimeSmoke",
+        "voiceCloneOwnerScopeSmoke",
         "profileCareBackendFailureRetrySmoke",
         "profileCareBackendStateSmoke",
         "profileCareStateSmoke",
@@ -93,10 +93,19 @@ def main() -> None:
         "ownerTruthCandidateInboxSmoke",
         "ownerTruthInterviewCandidateReviewSmoke",
         "ownerTruthInterviewSessionStateSmoke",
+        "ownerTruthInterviewOrchestrationSmoke",
+        "ownerTruthInterviewTopicSwitchSmoke",
+        "ownerTruthInterviewPacingSmoke",
         "ownerTruthInterviewNaturalInputSmoke",
+        "ownerTruthKnowledgeDimensionConfirmationSmoke",
+        "ownerTruthKnowledgeRecommendationPlanSmoke",
         "ownerTruthInterviewBoundarySmoke",
         "ownerTruthInterviewNaturalInputEchoSurfaceSmoke",
         "ownerTruthInterviewNaturalInputProductSurfaceSmoke",
+        "ownerTruthInterviewCandidateProposalReviewReadySmoke",
+        "ownerTruthLifeMapPresentationSmoke",
+        "ownerTruthMemorySearchPresentationSmoke",
+        "ownerTruthInterviewOutcomePresentationSmoke",
         "echoDelayedReplyNotificationSmoke",
         "timeLetterDispatchReminderSmoke",
         "echoListeningStatePreview",
@@ -143,7 +152,7 @@ def main() -> None:
     )
 
     print(
-        "PASS: WI-S1-03-10 non-Echo dispatch inventory "
+        "PASS: QA non-Echo dispatch inventory "
         f"scenarios={len(cases)} sharedEcho={len(shared_echo_route)} "
         f"authenticatedEcho={len(authenticated_echo_route)} seeded={len(seed_then_schedule) + len(seed_only)} "
         f"leaseSensitive={len(account_lease_custom_route)} standardScheduled={len(standard_scheduled)} "

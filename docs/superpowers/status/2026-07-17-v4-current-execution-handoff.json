@@ -85,9 +85,10 @@
       "WI-S1-01-06_G1_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_REVIEW_READY_FOCUSED_CONFIRMATION_INBOX_UIQA_VERIFIED_LOCAL",
       "WI-S1-01-06_G1_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_REVIEW_READY_REAL_HTTP_FOCUSED_CONFIRMATION_HANDOFF_VERIFIED_LOCAL",
       "WI-S1-01-06_G1_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_LIFECYCLE_FAIL_CLOSED_VERIFIED_LOCAL",
-      "WI-S1-01-06_G1_FORMAL_INTERVIEW_CANDIDATE_CONFIRMATION_DETAIL_STALE_ACTION_FAIL_CLOSED_VERIFIED_LOCAL"
+      "WI-S1-01-06_G1_FORMAL_INTERVIEW_CANDIDATE_CONFIRMATION_DETAIL_STALE_ACTION_FAIL_CLOSED_VERIFIED_LOCAL",
+      "WI-S1-01-06_G0_QA_GUARD_BASELINE_ALIGNMENT_VERIFIED_LOCAL"
     ],
-    "currentSubSlice": "WI-S1-01-06_G1_FORMAL_INTERVIEW_CANDIDATE_CONFIRMATION_DETAIL_STALE_ACTION_FAIL_CLOSED_VERIFIED_LOCAL / Confirmation detail now binds each action callback to its current confirmation generation, locks refresh and candidate interactions while an action or reconciliation is in flight, and clears/re-reads candidate content after source unavailability, response mismatch or reconciliation failure. Old callbacks are ignored after a refresh/rebind. XCTest, static guard, existing positive simulator UIQA and unsigned generic iPhoneOS Debug build passed. Local iOS verification only; no backend source change, deployment, public Echo change, Provider or true-device claim.",
+    "currentSubSlice": "WI-S1-01-06_G0_QA_GUARD_BASELINE_ALIGNMENT_VERIFIED_LOCAL / The current simulator QA launch guard, scenario inventory and Echo Trace export guard now match the centralized QAScenarioResultWriter path and all 54 registered scenarios. This is verification-infrastructure alignment only: no Owner Truth writer, backend route, public Echo/UI, release-policy, Provider, deployment or true-device behavior changed. The active formal candidate-confirmation fail-closed evidence remains intact.",
   "m0BGuidedRecommendationPresentationEvidence": {
     "status": "VERIFIED_LOCAL / DEFAULT_OFF / NOT_DEPLOYED",
     "evidence": "docs/superpowers/status/2026-07-30-m0b-guided-recommendation-presentation-g0.md",

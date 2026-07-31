@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static boundary guard for WI-S1-03-10 QA launch configuration extraction."""
+"""Static boundary guard for centralized QA launch configuration."""
 
 from pathlib import Path
 
@@ -14,6 +14,13 @@ def require(condition: bool, message: str) -> None:
 
 def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
+
+
+def method_body(source: str, signature: str) -> str:
+    start = source.find(signature)
+    require(start >= 0, f"AppDelegate method is missing: {signature}")
+    end = source.find("\n    func ", start + len(signature))
+    return source[start:] if end < 0 else source[start:end]
 
 
 def main() -> None:
@@ -91,12 +98,18 @@ def main() -> None:
         "AppDelegate must not retain the pre-runner session-preparation helper",
     )
     require(
-        "func writeEchoQAExportSmokeResult(" in app_delegate,
-        "AppDelegate must retain one stable Echo QA export adapter",
+        "QAScenarioResultWriter.writeAndLog(" in method_body(
+            app_delegate,
+            "func runEchoTraceExportSmoke(",
+        ),
+        "Echo QA exports must use the compile-isolated result writer",
     )
     require(
-        "QAScenarioResultWriter.write(result, fileName: fileName)" in app_delegate,
-        "Echo QA export adapter must use the compile-isolated result writer",
+        "echo-trace-export-smoke-result.json" in method_body(
+            app_delegate,
+            "func runEchoTraceExportSmoke(",
+        ),
+        "Echo trace export must retain its stable result file",
     )
     require(
         app_delegate.count("QAEchoScenarioRunner.run(") >= 8,
@@ -170,7 +183,7 @@ def main() -> None:
             f"Echo must retain the existing QA switch: {argument}",
         )
 
-    print("PASS: WI-S1-03-10 QA launch configuration static boundary")
+    print("PASS: QA launch configuration static boundary")
 
 
 if __name__ == "__main__":

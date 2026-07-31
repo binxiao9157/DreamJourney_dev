@@ -17,6 +17,17 @@ func require(_ condition: Bool, _ message: String) {
     }
 }
 
+func methodBody(_ source: String, signature: String) -> String {
+    guard let start = source.range(of: signature) else {
+        fatalError("Unable to find AppDelegate method: \(signature)")
+    }
+    let tail = source[start.lowerBound...]
+    guard let next = tail.dropFirst().range(of: "\n    func ") else {
+        return String(tail)
+    }
+    return String(tail[..<next.lowerBound])
+}
+
 let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
@@ -24,6 +35,10 @@ let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 let uiqaSmoke = read("Scripts/QA/prd-stitch-ui/run-echo-trace-export-uiqa-smoke.sh")
+let echoTraceExportMethod = methodBody(
+    appDelegate,
+    signature: "func runEchoTraceExportSmoke("
+)
 
 require(
     backendClient.contains("final class EchoTraceStore") &&
@@ -52,9 +67,8 @@ require(
 require(
     featureFlags.contains("DJRunEchoTraceExportSmoke") &&
         appDelegate.contains("case .echoTraceExportSmoke") &&
-        appDelegate.contains("runEchoTraceExportSmoke") &&
-        appDelegate.contains("writeEchoTraceExportSmokeResult") &&
-        appDelegate.contains("echo-trace-export-smoke-result.json"),
+        echoTraceExportMethod.contains("QAScenarioResultWriter.writeAndLog") &&
+        echoTraceExportMethod.contains("echo-trace-export-smoke-result.json"),
     "AppDelegate should expose Echo trace export UIQA launch arg and result file"
 )
 

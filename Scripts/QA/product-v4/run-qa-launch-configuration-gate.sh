@@ -9,6 +9,7 @@ cd "$ROOT_DIR"
 
 python3 Scripts/QA/product-v4/qa-launch-configuration-static-check.py
 python3 Scripts/QA/product-v4/qa-non-echo-dispatch-inventory-check.py
+swift Scripts/QA/prd-stitch-ui/echo-trace-export-check.swift
 
 swiftc -D DEBUG \
   DreamJourney/Sources/App/FeatureFlagService.swift \
@@ -41,6 +42,7 @@ git diff --check -- \
   Scripts/QA/product-v4/qa-launch-configuration-static-check.py \
   Scripts/QA/product-v4/qa-non-echo-dispatch-inventory-check.py \
   Scripts/QA/product-v4/qa-launch-configuration-model-smoke.swift \
+  Scripts/QA/prd-stitch-ui/echo-trace-export-check.swift \
   Scripts/QA/product-v4/run-qa-launch-configuration-gate.sh
 
-echo "PASS: WI-S1-03-10 QA launch configuration gate"
+echo "PASS: QA launch configuration gate"
