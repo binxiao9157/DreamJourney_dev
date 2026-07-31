@@ -3018,6 +3018,61 @@ final class OwnerTruthContractsTests: XCTestCase {
         }
     }
 
+    func testContextShadowCompareAcceptsValueFreeBoundRequestCorrelation() throws {
+        let query = "只允许同一请求的 V1/V4 上下文对照进入 QA 证据"
+        let comparison = try OwnerTruthContextShadowCompare(
+            backendJSONObject: contextShadowCompareResponse(query: query),
+            expectedIntent: "echo_chat",
+            expectedQuery: query
+        )
+
+        XCTAssertEqual(comparison.disposition, .observed)
+        XCTAssertTrue(comparison.requestCorrelationMatches)
+        XCTAssertEqual(comparison.requestCorrelation.intent, "echo_chat")
+        XCTAssertEqual(comparison.v4.state, .ready)
+        XCTAssertTrue(comparison.v4.allSelectedItemsHaveTypedCitation)
+        XCTAssertEqual(comparison.legacy.schemaVersion, 1)
+        XCTAssertEqual(comparison.legacy.selectedContextCount, 2)
+        XCTAssertFalse(String(decoding: try JSONEncoder().encode(comparison), as: UTF8.self).contains(query))
+    }
+
+    func testContextShadowCompareRejectsRawContentAndInconsistentDisposition() throws {
+        let query = "对照响应不得带回正文"
+        var response = contextShadowCompareResponse(query: query)
+        var comparison = try XCTUnwrap(response["contextComparison"] as? [String: Any])
+        comparison["summary"] = "不得进入移动端的私密正文"
+        response["contextComparison"] = comparison
+
+        XCTAssertThrowsError(
+            try OwnerTruthContextShadowCompare(
+                backendJSONObject: response,
+                expectedIntent: "echo_chat",
+                expectedQuery: query
+            )
+        ) { error in
+            guard case .invalidContextCitationShadowCompare = error as? OwnerTruthRemoteContractError else {
+                return XCTFail("expected raw comparison rejection, got \(error)")
+            }
+        }
+
+        response = contextShadowCompareResponse(query: query)
+        comparison = try XCTUnwrap(response["contextComparison"] as? [String: Any])
+        comparison["requestCorrelationMatches"] = false
+        response["contextComparison"] = comparison
+
+        XCTAssertThrowsError(
+            try OwnerTruthContextShadowCompare(
+                backendJSONObject: response,
+                expectedIntent: "echo_chat",
+                expectedQuery: query
+            )
+        ) { error in
+            guard case .invalidContextCitationShadowCompare = error as? OwnerTruthRemoteContractError else {
+                return XCTFail("expected comparison disposition rejection, got \(error)")
+            }
+        }
+    }
+
     func testAnswerCitationReceiptBindsExactContextWithoutStoringAnswerText() throws {
         let (_, lease) = try makeActiveRuntime()
         let query = "请只依据已确认记忆回答"
@@ -4037,6 +4092,46 @@ final class OwnerTruthContractsTests: XCTestCase {
         return [
             "schemaVersion": "owner-truth-context-shadow-build-response-v1",
             "contextShadow": shadow,
+        ]
+    }
+
+    private func contextShadowCompareResponse(query: String) -> [String: Any] {
+        [
+            "schemaVersion": "owner-truth-context-shadow-compare-response-v1",
+            "contextComparison": [
+                "schemaVersion": "owner-truth-context-shadow-compare-v1",
+                "policyVersion": "owner-truth-context-shadow-compare-policy-v1",
+                "shadowOnly": true,
+                "legacyContextUnchanged": true,
+                "legacyContextRead": true,
+                "requestCorrelation": [
+                    "schemaVersion": "echo-context-request-correlation-v1",
+                    "intent": "echo_chat",
+                    "queryHash": digest(query),
+                    "queryLength": query.unicodeScalars.count,
+                ],
+                "requestCorrelationMatches": true,
+                "disposition": "observed",
+                "legacy": [
+                    "schemaVersion": 1,
+                    "contextVersion": "echo-context-v2",
+                    "selectedContextCount": 2,
+                    "filteredContextCount": 1,
+                    "fallbackCount": 0,
+                ],
+                "v4": [
+                    "schemaVersion": "owner-truth-context-shadow-build-v1",
+                    "contextVersion": "echo-context-v4-shadow",
+                    "policyVersion": "owner-truth-context-shadow-build-policy-v1",
+                    "state": "ready",
+                    "selectedContextCount": 1,
+                    "filteredContextCount": 1,
+                    "fallbackCount": 0,
+                    "allSelectedItemsHaveTypedCitation": true,
+                    "authorityEpochPresent": true,
+                    "projectionCheckpointPresent": true,
+                ],
+            ],
         ]
     }
 

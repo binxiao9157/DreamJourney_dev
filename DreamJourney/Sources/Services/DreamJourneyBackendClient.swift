@@ -6802,6 +6802,53 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    /// Builds a value-free same-request comparison for QA evidence. Neither
+    /// Context body reaches iOS, and this result never changes the public Echo
+    /// request, its Authority, or its generation input.
+    func compareOwnerTruthContextShadow(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        intent: String,
+        query: String,
+        completion: @escaping (Result<OwnerTruthContextShadowCompare, Error>) -> Void
+    ) {
+        guard OwnerTruthContextCitationQAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthContextCitation",
+                    reason: "qaOnlyDisabled"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/context-shadow/compare",
+            method: .post,
+            payload: [
+                "intent": intent,
+                "query": query,
+            ],
+            authPolicy: .userRequired,
+            sessionUserId: expectedOwnerSubjectID,
+            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthContextShadowCompare(
+                        backendJSONObject: object,
+                        expectedIntent: intent,
+                        expectedQuery: query
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     /// Narrows the hidden Owner Truth request to the value-free shape consumed
     /// by Echo QA evidence.  The public Echo path never receives this result as
     /// generation text.
@@ -8797,6 +8844,7 @@ extension DreamJourneyBackendClient: OwnerTruthInterviewOutcomePresentationClien
 extension DreamJourneyBackendClient: OwnerTruthKnowledgeDimensionConfirmationClient {}
 extension DreamJourneyBackendClient: OwnerTruthKBLiteCompatibilityClient {}
 extension DreamJourneyBackendClient: OwnerTruthContextCitationClient {}
+extension DreamJourneyBackendClient: OwnerTruthContextShadowCompareClient {}
 extension DreamJourneyBackendClient: EchoOwnerTruthContextShadowTransport {}
 extension DreamJourneyBackendClient: OwnerTruthCorrectionRequestClient {}
 extension DreamJourneyBackendClient: OwnerTruthCorrectionResolutionClient {}

@@ -151,6 +151,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidInterviewOutcomePresentation(String)
     case invalidKBLiteCompatibilityReadEnvelope(String)
     case invalidContextCitationShadowBuild(String)
+    case invalidContextCitationShadowCompare(String)
     case invalidAnswerCitationReceipt(String)
     case invalidCorrectionRequestCommand(String)
     case invalidCorrectionRequestReceipt(String)
@@ -205,6 +206,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "兼容读取合同无效：\(detail)"
         case .invalidContextCitationShadowBuild(let detail):
             return "上下文引用合同无效：\(detail)"
+        case .invalidContextCitationShadowCompare(let detail):
+            return "上下文对照合同无效：\(detail)"
         case .invalidAnswerCitationReceipt(let detail):
             return "回答引用回执合同无效：\(detail)"
         case .invalidCorrectionRequestCommand(let detail):
@@ -10094,6 +10097,10 @@ private enum OwnerTruthContextCitationContract {
     static let projectionSource = "owner-truth-memory-projection"
     static let contextBuildResponseSchemaVersion = "owner-truth-context-shadow-build-response-v1"
     static let contextBuildSchemaVersion = "owner-truth-context-shadow-build-v1"
+    static let contextCompareResponseSchemaVersion = "owner-truth-context-shadow-compare-response-v1"
+    static let contextCompareSchemaVersion = "owner-truth-context-shadow-compare-v1"
+    static let contextComparePolicyVersion = "owner-truth-context-shadow-compare-policy-v1"
+    static let contextRequestCorrelationSchemaVersion = "echo-context-request-correlation-v1"
     static let contextVersion = "echo-context-v4-shadow"
     static let policyVersion = "owner-truth-context-shadow-build-policy-v1"
     static let answerCitationResponseSchemaVersion = "owner-truth-answer-citation-receipt-response-v1"
@@ -10129,6 +10136,10 @@ private enum OwnerTruthContextCitationContract {
 
     static func contextError(_ detail: String) -> OwnerTruthRemoteContractError {
         .invalidContextCitationShadowBuild(detail)
+    }
+
+    static func contextCompareError(_ detail: String) -> OwnerTruthRemoteContractError {
+        .invalidContextCitationShadowCompare(detail)
     }
 
     static func receiptError(_ detail: String) -> OwnerTruthRemoteContractError {
@@ -11175,6 +11186,332 @@ struct OwnerTruthContextShadowBuild: Codable, Equatable, Sendable {
                 error: error
             ) == expected else {
                 throw error("contextShadow.trace.\(field) does not match typed Context")
+            }
+        }
+    }
+}
+
+/// The QA-only compare endpoint never exposes either Context body.  This
+/// enum records whether the server observed a safe comparison, rather than
+/// giving a client permission to switch Context authority.
+enum OwnerTruthContextShadowCompareDisposition: String, Codable, Equatable, Sendable {
+    case observed
+    case requestMismatch = "request_mismatch"
+    case v4TypedCitationIncomplete = "v4_typed_citation_incomplete"
+    case v4NoPersonalMemory = "v4_no_personal_memory"
+}
+
+struct OwnerTruthContextShadowCompareRequestCorrelation: Codable, Equatable, Sendable {
+    let intent: String
+    let queryHash: String?
+    let queryLength: Int
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedIntent: String,
+        expectedQuery: String
+    ) throws {
+        let error = OwnerTruthContextCitationContract.contextCompareError
+        try OwnerTruthContextCitationContract.ensureNoRawContentRecursively(
+            object,
+            field: "contextComparison.requestCorrelation",
+            error: error
+        )
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            object["schemaVersion"],
+            field: "contextComparison.requestCorrelation.schemaVersion",
+            error: error
+        ) == OwnerTruthContextCitationContract.contextRequestCorrelationSchemaVersion else {
+            throw error("request correlation schemaVersion is not approved")
+        }
+        intent = try OwnerTruthContextCitationContract.nonEmptyString(
+            object["intent"],
+            field: "contextComparison.requestCorrelation.intent",
+            error: error
+        )
+        let normalizedExpectedIntent = OwnerTruthContextCitationContract.normalizedText(expectedIntent)
+        guard intent == normalizedExpectedIntent else {
+            throw error("request correlation intent does not match submitted request")
+        }
+        queryHash = try OwnerTruthContextCitationContract.optionalSHA256(
+            object["queryHash"],
+            field: "contextComparison.requestCorrelation.queryHash",
+            error: error
+        )
+        queryLength = try OwnerTruthContextCitationContract.nonnegativeInt(
+            object["queryLength"],
+            field: "contextComparison.requestCorrelation.queryLength",
+            error: error
+        )
+        let normalizedExpectedQuery = OwnerTruthContextCitationContract.normalizedText(expectedQuery)
+        let expectedHash = normalizedExpectedQuery.isEmpty
+            ? nil
+            : OwnerTruthContextCitationContract.digest(normalizedExpectedQuery)
+        guard queryHash == expectedHash,
+              queryLength == OwnerTruthContextCitationContract.scalarCount(normalizedExpectedQuery) else {
+            throw error("request correlation does not match submitted query")
+        }
+    }
+}
+
+struct OwnerTruthContextShadowCompareLegacySummary: Codable, Equatable, Sendable {
+    let schemaVersion: Int
+    let contextVersion: String
+    let selectedContextCount: Int
+    let filteredContextCount: Int
+    let fallbackCount: Int
+
+    init(backendJSONObject object: [String: Any]) throws {
+        let error = OwnerTruthContextCitationContract.contextCompareError
+        try OwnerTruthContextCitationContract.ensureNoRawContentRecursively(
+            object,
+            field: "contextComparison.legacy",
+            error: error
+        )
+        schemaVersion = try OwnerTruthContextCitationContract.positiveInt(
+            object["schemaVersion"],
+            field: "contextComparison.legacy.schemaVersion",
+            error: error
+        )
+        contextVersion = try OwnerTruthContextCitationContract.safeCode(
+            object["contextVersion"],
+            field: "contextComparison.legacy.contextVersion",
+            error: error
+        )
+        selectedContextCount = try OwnerTruthContextCitationContract.nonnegativeInt(
+            object["selectedContextCount"],
+            field: "contextComparison.legacy.selectedContextCount",
+            error: error
+        )
+        filteredContextCount = try OwnerTruthContextCitationContract.nonnegativeInt(
+            object["filteredContextCount"],
+            field: "contextComparison.legacy.filteredContextCount",
+            error: error
+        )
+        fallbackCount = try OwnerTruthContextCitationContract.nonnegativeInt(
+            object["fallbackCount"],
+            field: "contextComparison.legacy.fallbackCount",
+            error: error
+        )
+    }
+}
+
+struct OwnerTruthContextShadowCompareV4Summary: Codable, Equatable, Sendable {
+    let schemaVersion: String
+    let contextVersion: String
+    let policyVersion: String
+    let state: OwnerTruthContextShadowState
+    let selectedContextCount: Int
+    let filteredContextCount: Int
+    let fallbackCount: Int
+    let allSelectedItemsHaveTypedCitation: Bool
+    let authorityEpochPresent: Bool
+    let projectionCheckpointPresent: Bool
+
+    init(backendJSONObject object: [String: Any]) throws {
+        let error = OwnerTruthContextCitationContract.contextCompareError
+        try OwnerTruthContextCitationContract.ensureNoRawContentRecursively(
+            object,
+            field: "contextComparison.v4",
+            error: error
+        )
+        let parsedSchemaVersion = try OwnerTruthContextCitationContract.safeCode(
+            object["schemaVersion"],
+            field: "contextComparison.v4.schemaVersion",
+            error: error
+        )
+        let parsedContextVersion = try OwnerTruthContextCitationContract.safeCode(
+            object["contextVersion"],
+            field: "contextComparison.v4.contextVersion",
+            error: error
+        )
+        let parsedPolicyVersion = try OwnerTruthContextCitationContract.safeCode(
+            object["policyVersion"],
+            field: "contextComparison.v4.policyVersion",
+            error: error
+        )
+        guard parsedSchemaVersion == OwnerTruthContextCitationContract.contextBuildSchemaVersion,
+              parsedContextVersion == OwnerTruthContextCitationContract.contextVersion,
+              parsedPolicyVersion == OwnerTruthContextCitationContract.policyVersion else {
+            throw error("V4 Context schema or policy version is not approved")
+        }
+        schemaVersion = parsedSchemaVersion
+        contextVersion = parsedContextVersion
+        policyVersion = parsedPolicyVersion
+        guard let parsedState = OwnerTruthContextShadowState(rawValue: try OwnerTruthContextCitationContract.nonEmptyString(
+            object["state"],
+            field: "contextComparison.v4.state",
+            error: error
+        )) else {
+            throw error("V4 Context state is not approved")
+        }
+        state = parsedState
+        selectedContextCount = try OwnerTruthContextCitationContract.nonnegativeInt(
+            object["selectedContextCount"],
+            field: "contextComparison.v4.selectedContextCount",
+            error: error
+        )
+        filteredContextCount = try OwnerTruthContextCitationContract.nonnegativeInt(
+            object["filteredContextCount"],
+            field: "contextComparison.v4.filteredContextCount",
+            error: error
+        )
+        fallbackCount = try OwnerTruthContextCitationContract.nonnegativeInt(
+            object["fallbackCount"],
+            field: "contextComparison.v4.fallbackCount",
+            error: error
+        )
+        allSelectedItemsHaveTypedCitation = try OwnerTruthContextCitationContract.bool(
+            object["allSelectedItemsHaveTypedCitation"],
+            field: "contextComparison.v4.allSelectedItemsHaveTypedCitation",
+            error: error
+        )
+        authorityEpochPresent = try OwnerTruthContextCitationContract.bool(
+            object["authorityEpochPresent"],
+            field: "contextComparison.v4.authorityEpochPresent",
+            error: error
+        )
+        projectionCheckpointPresent = try OwnerTruthContextCitationContract.bool(
+            object["projectionCheckpointPresent"],
+            field: "contextComparison.v4.projectionCheckpointPresent",
+            error: error
+        )
+    }
+}
+
+/// A typed, value-free V1/V4 comparison. It is diagnostic evidence only;
+/// neither this result nor any disposition may select a public Context writer.
+struct OwnerTruthContextShadowCompare: Codable, Equatable, Sendable {
+    let disposition: OwnerTruthContextShadowCompareDisposition
+    let requestCorrelation: OwnerTruthContextShadowCompareRequestCorrelation
+    let requestCorrelationMatches: Bool
+    let legacy: OwnerTruthContextShadowCompareLegacySummary
+    let v4: OwnerTruthContextShadowCompareV4Summary
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedIntent: String,
+        expectedQuery: String
+    ) throws {
+        let error = OwnerTruthContextCitationContract.contextCompareError
+        try OwnerTruthContextCitationContract.ensureNoRawContentRecursively(
+            object,
+            field: "context comparison response",
+            error: error
+        )
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            object["schemaVersion"],
+            field: "schemaVersion",
+            error: error
+        ) == OwnerTruthContextCitationContract.contextCompareResponseSchemaVersion else {
+            throw error("unexpected context comparison response schemaVersion")
+        }
+        let comparison = try OwnerTruthContextCitationContract.object(
+            object["contextComparison"],
+            field: "contextComparison",
+            error: error
+        )
+        try OwnerTruthContextCitationContract.ensureNoRawContentRecursively(
+            comparison,
+            field: "contextComparison",
+            error: error
+        )
+        guard try OwnerTruthContextCitationContract.nonEmptyString(
+            comparison["schemaVersion"],
+            field: "contextComparison.schemaVersion",
+            error: error
+        ) == OwnerTruthContextCitationContract.contextCompareSchemaVersion,
+        try OwnerTruthContextCitationContract.nonEmptyString(
+            comparison["policyVersion"],
+            field: "contextComparison.policyVersion",
+            error: error
+        ) == OwnerTruthContextCitationContract.contextComparePolicyVersion else {
+            throw error("context comparison schema or policy version is not approved")
+        }
+        guard try OwnerTruthContextCitationContract.bool(
+            comparison["shadowOnly"],
+            field: "contextComparison.shadowOnly",
+            error: error
+        ),
+        try OwnerTruthContextCitationContract.bool(
+            comparison["legacyContextUnchanged"],
+            field: "contextComparison.legacyContextUnchanged",
+            error: error
+        ),
+        try OwnerTruthContextCitationContract.bool(
+            comparison["legacyContextRead"],
+            field: "contextComparison.legacyContextRead",
+            error: error
+        ) else {
+            throw error("context comparison must remain QA-only and legacy read-only")
+        }
+        guard let parsedDisposition = OwnerTruthContextShadowCompareDisposition(rawValue: try OwnerTruthContextCitationContract.nonEmptyString(
+            comparison["disposition"],
+            field: "contextComparison.disposition",
+            error: error
+        )) else {
+            throw error("context comparison disposition is not approved")
+        }
+        disposition = parsedDisposition
+        requestCorrelation = try OwnerTruthContextShadowCompareRequestCorrelation(
+            backendJSONObject: OwnerTruthContextCitationContract.object(
+                comparison["requestCorrelation"],
+                field: "contextComparison.requestCorrelation",
+                error: error
+            ),
+            expectedIntent: expectedIntent,
+            expectedQuery: expectedQuery
+        )
+        requestCorrelationMatches = try OwnerTruthContextCitationContract.bool(
+            comparison["requestCorrelationMatches"],
+            field: "contextComparison.requestCorrelationMatches",
+            error: error
+        )
+        legacy = try OwnerTruthContextShadowCompareLegacySummary(
+            backendJSONObject: OwnerTruthContextCitationContract.object(
+                comparison["legacy"],
+                field: "contextComparison.legacy",
+                error: error
+            )
+        )
+        v4 = try OwnerTruthContextShadowCompareV4Summary(
+            backendJSONObject: OwnerTruthContextCitationContract.object(
+                comparison["v4"],
+                field: "contextComparison.v4",
+                error: error
+            )
+        )
+        try Self.validate(disposition: disposition, requestCorrelationMatches: requestCorrelationMatches, v4: v4, error: error)
+    }
+
+    private static func validate(
+        disposition: OwnerTruthContextShadowCompareDisposition,
+        requestCorrelationMatches: Bool,
+        v4: OwnerTruthContextShadowCompareV4Summary,
+        error: (String) -> OwnerTruthRemoteContractError
+    ) throws {
+        guard requestCorrelationMatches == (disposition != .requestMismatch) else {
+            throw error("request correlation flag and disposition disagree")
+        }
+        switch disposition {
+        case .observed:
+            guard v4.state == .ready,
+                  v4.selectedContextCount > 0,
+                  v4.allSelectedItemsHaveTypedCitation,
+                  v4.authorityEpochPresent,
+                  v4.projectionCheckpointPresent,
+                  v4.fallbackCount == 0 else {
+                throw error("observed comparison must have ready current V4 citations")
+            }
+        case .requestMismatch:
+            break
+        case .v4TypedCitationIncomplete:
+            guard !v4.allSelectedItemsHaveTypedCitation else {
+                throw error("typed citation disposition requires incomplete V4 citation")
+            }
+        case .v4NoPersonalMemory:
+            guard v4.state != .ready || v4.selectedContextCount == 0 || v4.fallbackCount > 0 else {
+                throw error("no-personal-memory disposition must not report ready selected Context")
             }
         }
     }
@@ -12809,6 +13146,19 @@ protocol OwnerTruthContextCitationClient: AnyObject {
         query: String,
         answerText: String,
         completion: @escaping (Result<OwnerTruthAnswerCitationReceipt, Error>) -> Void
+    )
+}
+
+/// Read-only QA transport for the server-side same-request V1/V4 comparison.
+/// It cannot return either Context body and is intentionally separate from the
+/// public Context client and writer contracts.
+protocol OwnerTruthContextShadowCompareClient: AnyObject {
+    func compareOwnerTruthContextShadow(
+        vaultID: OwnerTruthVaultID,
+        expectedOwnerSubjectID: String,
+        intent: String,
+        query: String,
+        completion: @escaping (Result<OwnerTruthContextShadowCompare, Error>) -> Void
     )
 }
 
