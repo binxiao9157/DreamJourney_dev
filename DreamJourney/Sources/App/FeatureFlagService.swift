@@ -122,6 +122,7 @@ enum QALaunchScenario: String, CaseIterable {
     case ownerTruthInterviewNaturalInputProductSurfaceSmoke = "DJRunOwnerTruthInterviewNaturalInputProductSurfaceSmoke"
     case ownerTruthInterviewCandidateProposalReviewReadySmoke = "DJRunOwnerTruthInterviewCandidateProposalReviewReadySmoke"
     case ownerTruthInterviewCandidateConfirmationFailClosedSmoke = "DJRunOwnerTruthInterviewCandidateConfirmationFailClosedSmoke"
+    case ownerTruthInterviewCandidateConfirmationSourceInactiveSmoke = "DJRunOwnerTruthInterviewCandidateConfirmationSourceInactiveSmoke"
     case ownerTruthLifeMapPresentationSmoke = "DJRunOwnerTruthLifeMapPresentationSmoke"
     case ownerTruthMemorySearchPresentationSmoke = "DJRunOwnerTruthMemorySearchPresentationSmoke"
     case ownerTruthInterviewOutcomePresentationSmoke = "DJRunOwnerTruthInterviewOutcomePresentationSmoke"
@@ -179,6 +180,7 @@ enum QALaunchScenario: String, CaseIterable {
         .ownerTruthInterviewNaturalInputProductSurfaceSmoke,
         .ownerTruthInterviewCandidateProposalReviewReadySmoke,
         .ownerTruthInterviewCandidateConfirmationFailClosedSmoke,
+        .ownerTruthInterviewCandidateConfirmationSourceInactiveSmoke,
         .ownerTruthLifeMapPresentationSmoke,
         .ownerTruthMemorySearchPresentationSmoke,
         .ownerTruthInterviewOutcomePresentationSmoke,

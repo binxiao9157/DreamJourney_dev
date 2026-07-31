@@ -11202,6 +11202,7 @@ private struct OwnerTruthInterviewCandidateConfirmationFailClosedUIQAState {
     let listInteractionEnabled: Bool
     let refreshEnabled: Bool
     let statusText: String
+    let emptyStateText: String?
 }
 
 private extension OwnerTruthInterviewCandidateConfirmationViewController {
@@ -11224,8 +11225,23 @@ private extension OwnerTruthInterviewCandidateConfirmationViewController {
             batchSubmitEnabled: confirmSelectionButton.isEnabled,
             listInteractionEnabled: tableView.isUserInteractionEnabled,
             refreshEnabled: refreshButton.isEnabled,
-            statusText: statusLabel.text ?? ""
+            statusText: statusLabel.text ?? "",
+            emptyStateText: emptyStateLabel.text
         )
+    }
+}
+
+private enum OwnerTruthInterviewCandidateConfirmationFailClosedUIQAMode: String {
+    case responseMismatch
+    case sourceInactive
+
+    var reloadStatusText: String {
+        switch self {
+        case .responseMismatch:
+            return "确认结果尚未核对完成，请重新载入。"
+        case .sourceInactive:
+            return "本次待确认内容已失效，正在重新读取。"
+        }
     }
 }
 
@@ -11233,14 +11249,46 @@ private extension OwnerTruthInterviewCandidateConfirmationViewController {
 /// fixture returns a typed-but-mismatched batch receipt, so the product detail
 /// must clear old Candidate content before its fresh read completes.
 enum OwnerTruthInterviewCandidateConfirmationFailClosedUIQASmoke {
-    private static var activeScenario: OwnerTruthInterviewCandidateConfirmationFailClosedUIQAScenario?
-
     static func start(
         accountLease: AccountLease,
         navigationController: UINavigationController,
         completion: @escaping ([String: Any]) -> Void
     ) {
-        let scenario = OwnerTruthInterviewCandidateConfirmationFailClosedUIQAScenario(
+        OwnerTruthInterviewCandidateConfirmationActionFailClosedUIQASmoke.start(
+            mode: .responseMismatch,
+            accountLease: accountLease,
+            navigationController: navigationController,
+            completion: completion
+        )
+    }
+}
+
+enum OwnerTruthInterviewCandidateConfirmationSourceInactiveUIQASmoke {
+    static func start(
+        accountLease: AccountLease,
+        navigationController: UINavigationController,
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        OwnerTruthInterviewCandidateConfirmationActionFailClosedUIQASmoke.start(
+            mode: .sourceInactive,
+            accountLease: accountLease,
+            navigationController: navigationController,
+            completion: completion
+        )
+    }
+}
+
+private enum OwnerTruthInterviewCandidateConfirmationActionFailClosedUIQASmoke {
+    private static var activeScenario: OwnerTruthInterviewCandidateConfirmationActionFailClosedUIQAScenario?
+
+    static func start(
+        mode: OwnerTruthInterviewCandidateConfirmationFailClosedUIQAMode,
+        accountLease: AccountLease,
+        navigationController: UINavigationController,
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        let scenario = OwnerTruthInterviewCandidateConfirmationActionFailClosedUIQAScenario(
+            mode: mode,
             accountLease: accountLease
         )
         activeScenario = scenario
@@ -11251,7 +11299,8 @@ enum OwnerTruthInterviewCandidateConfirmationFailClosedUIQASmoke {
     }
 }
 
-private final class OwnerTruthInterviewCandidateConfirmationFailClosedUIQAScenario {
+private final class OwnerTruthInterviewCandidateConfirmationActionFailClosedUIQAScenario {
+    private let mode: OwnerTruthInterviewCandidateConfirmationFailClosedUIQAMode
     private let accountLease: AccountLease
     private let fixture: OwnerTruthInterviewCandidateConfirmationFailClosedUIQAFixture
     private weak var confirmationController: OwnerTruthInterviewCandidateConfirmationViewController?
@@ -11259,10 +11308,15 @@ private final class OwnerTruthInterviewCandidateConfirmationFailClosedUIQAScenar
     private var reloadState: OwnerTruthInterviewCandidateConfirmationFailClosedUIQAState?
     private var didFinish = false
 
-    init(accountLease: AccountLease) {
+    init(
+        mode: OwnerTruthInterviewCandidateConfirmationFailClosedUIQAMode,
+        accountLease: AccountLease
+    ) {
+        self.mode = mode
         self.accountLease = accountLease
         fixture = OwnerTruthInterviewCandidateConfirmationFailClosedUIQAFixture(
-            vaultID: OwnerTruthVaultID(accountLease.vaultId)
+            vaultID: OwnerTruthVaultID(accountLease.vaultId),
+            mode: mode
         )
     }
 
@@ -11327,6 +11381,23 @@ private final class OwnerTruthInterviewCandidateConfirmationFailClosedUIQAScenar
         let finalState = confirmationController?.failClosedUIQAState()
         let initialState = initialState
         let reloadState = reloadState
+        let finalListInteractionEnabled = finalState?.listInteractionEnabled ?? false
+        let finalRefreshEnabled = finalState?.refreshEnabled ?? false
+        let finalStatusText = finalState?.statusText ?? ""
+        let finalEmptyStateText = finalState?.emptyStateText ?? ""
+        let finalStateMatches: Bool
+        switch mode {
+        case .responseMismatch:
+            finalStateMatches = finalState?.phase == "empty"
+                && finalState?.candidateCount == 0
+        case .sourceInactive:
+            finalStateMatches = finalState?.phase == "unavailable"
+                && finalState?.candidateCount == 0
+                && finalState?.listInteractionEnabled == false
+                && finalState?.refreshEnabled == false
+                && finalState?.statusText == "本次待确认内容已失效，无法继续确认。"
+                && finalState?.emptyStateText == "本次待确认内容已失效，旧线索已清除。"
+        }
         let completed = failureReason == nil
             && initialState?.phase == "ready"
             && initialState?.candidateCount == 1
@@ -11337,16 +11408,15 @@ private final class OwnerTruthInterviewCandidateConfirmationFailClosedUIQAScenar
             && reloadState?.batchSubmitHidden == true
             && reloadState?.listInteractionEnabled == false
             && reloadState?.refreshEnabled == false
-            && reloadState?.statusText == "确认结果尚未核对完成，请重新载入。"
-            && finalState?.phase == "empty"
-            && finalState?.candidateCount == 0
+            && reloadState?.statusText == mode.reloadStatusText
+            && finalStateMatches
 
         completion([
             "completed": completed,
             "inMemoryFixture": true,
             "candidateRouteNetworkRequests": 0,
             "persistentCandidateWrites": 0,
-            "failureDisposition": "responseMismatch",
+            "failureDisposition": mode.rawValue,
             "initialCandidateVisible": initialState?.candidateCount == 1,
             "actionRequestCount": fixture.actionRequestCount,
             "confirmationReadCount": fixture.confirmationReadCount,
@@ -11356,11 +11426,18 @@ private final class OwnerTruthInterviewCandidateConfirmationFailClosedUIQAScenar
             "batchSubmitDisabledDuringReload": reloadState?.batchSubmitEnabled == false,
             "listInteractionDisabledDuringReload": reloadState?.listInteractionEnabled == false,
             "refreshDisabledDuringReload": reloadState?.refreshEnabled == false,
-            "staleActionStatusVisibleDuringReload": reloadState?.statusText == "确认结果尚未核对完成，请重新载入。",
+            "staleActionStatusVisibleDuringReload": reloadState?.statusText == mode.reloadStatusText,
             "finalPhase": finalState?.phase ?? "unavailable",
             "finalCandidateCount": finalState?.candidateCount ?? -1,
+            "finalListInteractionEnabled": finalListInteractionEnabled,
+            "finalRefreshEnabled": finalRefreshEnabled,
+            "finalStatusText": finalStatusText,
+            "finalEmptyStateText": finalEmptyStateText,
+            "terminalSourceInactiveState": mode == .sourceInactive && finalStateMatches,
             "launchArguments": [
-                QALaunchScenario.ownerTruthInterviewCandidateConfirmationFailClosedSmoke.rawValue,
+                mode == .responseMismatch
+                    ? QALaunchScenario.ownerTruthInterviewCandidateConfirmationFailClosedSmoke.rawValue
+                    : QALaunchScenario.ownerTruthInterviewCandidateConfirmationSourceInactiveSmoke.rawValue,
             ],
             "failureReason": failureReason as Any,
         ])
@@ -11371,6 +11448,7 @@ private final class OwnerTruthInterviewCandidateConfirmationFailClosedUIQAFixtur
     OwnerTruthInterviewCandidateConfirmationClient,
     OwnerTruthInterviewCandidateConfirmationActionClient,
     OwnerTruthInterviewCandidateConfirmationSingleActionClient {
+    private let mode: OwnerTruthInterviewCandidateConfirmationFailClosedUIQAMode
     private let vaultID: OwnerTruthVaultID?
     let reviewBatchID = OwnerTruthRecordID(
         rawValue: UUID(uuidString: "00000000-0000-0000-0000-0000000000c1")!
@@ -11386,8 +11464,12 @@ private final class OwnerTruthInterviewCandidateConfirmationFailClosedUIQAFixtur
     var onReloadReadStarted: (() -> Void)?
     var onReloadReadFinished: (() -> Void)?
 
-    init(vaultID: OwnerTruthVaultID?) {
+    init(
+        vaultID: OwnerTruthVaultID?,
+        mode: OwnerTruthInterviewCandidateConfirmationFailClosedUIQAMode
+    ) {
         self.vaultID = vaultID
+        self.mode = mode
     }
 
     func fetchOwnerTruthInterviewCandidateConfirmation(
@@ -11408,10 +11490,15 @@ private final class OwnerTruthInterviewCandidateConfirmationFailClosedUIQAFixtur
                 onReloadReadStarted?()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
                     guard let self else { return }
-                    do {
-                        completion(.success(try self.makeEmptyConfirmation(vaultID: vaultID)))
-                    } catch {
-                        completion(.failure(error))
+                    switch self.mode {
+                    case .responseMismatch:
+                        do {
+                            completion(.success(try self.makeEmptyConfirmation(vaultID: vaultID)))
+                        } catch {
+                            completion(.failure(error))
+                        }
+                    case .sourceInactive:
+                        completion(.failure(self.makeSourceInactiveError()))
                     }
                     self.onReloadReadFinished?()
                 }
@@ -11434,34 +11521,39 @@ private final class OwnerTruthInterviewCandidateConfirmationFailClosedUIQAFixtur
             return
         }
         actionRequestCount += 1
-        do {
-            let mismatchedCommand = try OwnerTruthInterviewCandidateConfirmationBatchCommand(
-                commandID: "uiqa-mismatched-candidate-confirmation",
-                reviewBatchID: reviewBatchID,
-                selections: [
-                    try OwnerTruthInterviewCandidateBatchSelection(
-                        candidateID: mismatchedCandidateID,
-                        expectedCandidateVersion: 1
-                    ),
-                ]
-            )
-            completion(.success(try OwnerTruthInterviewCandidateConfirmationBatchResult(
-                backendJSONObject: [
-                    "schemaVersion": OwnerTruthInterviewCandidateConfirmationBatchResult.schemaVersion,
-                    "status": OwnerTruthCommandOutcome.created.rawValue,
-                    "batchDecisionId": "00000000-0000-0000-0000-0000000000c4",
-                    "reviewBatchId": reviewBatchID.rawValue.uuidString,
-                    "acceptedCandidateCount": 1,
-                    "acceptedCandidateIds": [mismatchedCandidateID.rawValue.uuidString],
-                    "memoryActivation": [
-                        "status": OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
-                        "memoryVersionCreated": false,
+        switch mode {
+        case .responseMismatch:
+            do {
+                let mismatchedCommand = try OwnerTruthInterviewCandidateConfirmationBatchCommand(
+                    commandID: "uiqa-mismatched-candidate-confirmation",
+                    reviewBatchID: reviewBatchID,
+                    selections: [
+                        try OwnerTruthInterviewCandidateBatchSelection(
+                            candidateID: mismatchedCandidateID,
+                            expectedCandidateVersion: 1
+                        ),
+                    ]
+                )
+                completion(.success(try OwnerTruthInterviewCandidateConfirmationBatchResult(
+                    backendJSONObject: [
+                        "schemaVersion": OwnerTruthInterviewCandidateConfirmationBatchResult.schemaVersion,
+                        "status": OwnerTruthCommandOutcome.created.rawValue,
+                        "batchDecisionId": "00000000-0000-0000-0000-0000000000c4",
+                        "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                        "acceptedCandidateCount": 1,
+                        "acceptedCandidateIds": [mismatchedCandidateID.rawValue.uuidString],
+                        "memoryActivation": [
+                            "status": OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+                            "memoryVersionCreated": false,
+                        ],
                     ],
-                ],
-                expectedCommand: mismatchedCommand
-            )))
-        } catch {
-            completion(.failure(error))
+                    expectedCommand: mismatchedCommand
+                )))
+            } catch {
+                completion(.failure(error))
+            }
+        case .sourceInactive:
+            completion(.failure(makeSourceInactiveError()))
         }
     }
 
@@ -11506,6 +11598,16 @@ private final class OwnerTruthInterviewCandidateConfirmationFailClosedUIQAFixtur
             readiness: .noCandidates,
             batchCandidates: [],
             singleCandidates: []
+        )
+    }
+
+    private func makeSourceInactiveError() -> DreamJourneyBackendClient.ClientError {
+        .backendError(
+            statusCode: 409,
+            context: .init(
+                code: "ownerTruthCandidateSourceInactive",
+                detail: "uiqa fixture source inactive"
+            )
         )
     }
 

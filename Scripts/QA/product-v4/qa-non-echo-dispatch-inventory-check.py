@@ -72,6 +72,7 @@ def main() -> None:
         "archiveMediaEchoContextSmoke",
         "notificationRuntimeRouteSmoke",
         "ownerTruthInterviewCandidateConfirmationFailClosedSmoke",
+        "ownerTruthInterviewCandidateConfirmationSourceInactiveSmoke",
     }
     seed_only = {
         "seedEchoArchiveContext",

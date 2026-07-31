@@ -47,6 +47,9 @@ let reviewReadySmoke = try read(
 let confirmationFailClosedSmoke = try read(
     "\(root)/Scripts/QA/prd-stitch-ui/run-owner-truth-interview-candidate-confirmation-fail-closed-smoke.sh"
 )
+let confirmationSourceInactiveSmoke = try read(
+    "\(root)/Scripts/QA/prd-stitch-ui/run-owner-truth-interview-candidate-confirmation-source-inactive-smoke.sh"
+)
 
 require(
     releaseRegression.contains("owner-truth-candidate-proposal-status-handoff-check.swift"),
@@ -264,17 +267,22 @@ require(
 
 for required in [
     "OwnerTruthInterviewCandidateConfirmationFailClosedUIQASmoke",
-    "OwnerTruthInterviewCandidateConfirmationFailClosedUIQAScenario",
+    "OwnerTruthInterviewCandidateConfirmationSourceInactiveUIQASmoke",
+    "OwnerTruthInterviewCandidateConfirmationActionFailClosedUIQAScenario",
     "OwnerTruthInterviewCandidateConfirmationFailClosedUIQAFixture",
+    "OwnerTruthInterviewCandidateConfirmationFailClosedUIQAMode",
     "confirmationClient: fixture",
     "batchActionClient: fixture",
     "singleActionClient: fixture",
-    "failureDisposition\": \"responseMismatch\"",
+    "case sourceInactive",
+    "ownerTruthCandidateSourceInactive",
+    "failureDisposition\": mode.rawValue",
     "candidateRouteNetworkRequests\": 0",
     "persistentCandidateWrites\": 0",
     "oldCandidateClearedDuringReload",
     "refreshDisabledDuringReload",
     "staleActionStatusVisibleDuringReload",
+    "terminalSourceInactiveState",
 ] {
     require(
         archive.contains(required),
@@ -287,17 +295,35 @@ require(
     ) && appDelegate.contains("case .ownerTruthInterviewCandidateConfirmationFailClosedSmoke:"),
     "confirmation detail fail-closed UIQA launch scenario must remain explicitly simulator-routable"
 )
+require(
+    featureFlags.contains(
+        "case ownerTruthInterviewCandidateConfirmationSourceInactiveSmoke = \"DJRunOwnerTruthInterviewCandidateConfirmationSourceInactiveSmoke\""
+    ) && appDelegate.contains("case .ownerTruthInterviewCandidateConfirmationSourceInactiveSmoke:"),
+    "source-inactive confirmation UIQA launch scenario must remain explicitly simulator-routable"
+)
 for required in [
     "DJRunOwnerTruthInterviewCandidateConfirmationFailClosedSmoke",
     "owner-truth-interview-candidate-confirmation-fail-closed-smoke-result.json",
+    "DJRunOwnerTruthInterviewCandidateConfirmationSourceInactiveSmoke",
+    "owner-truth-interview-candidate-confirmation-source-inactive-smoke-result.json",
     "candidateRouteNetworkRequests",
     "persistentCandidateWrites",
     "oldCandidateClearedDuringReload",
     "finalPhase",
+    "terminalSourceInactiveState",
 ] {
     require(
         confirmationFailClosedSmoke.contains(required),
         "confirmation detail fail-closed UIQA wrapper is missing: \(required)"
+    )
+}
+for required in [
+    "SMOKE_VARIANT=source-inactive",
+    "run-owner-truth-interview-candidate-confirmation-fail-closed-smoke.sh",
+] {
+    require(
+        confirmationSourceInactiveSmoke.contains(required),
+        "source-inactive UIQA wrapper must retain its isolated launch contract: \(required)"
     )
 }
 

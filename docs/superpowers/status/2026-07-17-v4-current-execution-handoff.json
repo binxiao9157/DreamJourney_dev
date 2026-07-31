@@ -87,9 +87,10 @@
       "WI-S1-01-06_G1_FORMAL_INTERVIEW_CANDIDATE_PROPOSAL_LIFECYCLE_FAIL_CLOSED_VERIFIED_LOCAL",
       "WI-S1-01-06_G1_FORMAL_INTERVIEW_CANDIDATE_CONFIRMATION_DETAIL_STALE_ACTION_FAIL_CLOSED_VERIFIED_LOCAL",
       "WI-S1-01-06_G0_QA_GUARD_BASELINE_ALIGNMENT_VERIFIED_LOCAL",
-      "WI-S1-01-06_G1_FORMAL_INTERVIEW_CANDIDATE_CONFIRMATION_DETAIL_RESPONSE_MISMATCH_UIQA_VERIFIED_LOCAL"
+      "WI-S1-01-06_G1_FORMAL_INTERVIEW_CANDIDATE_CONFIRMATION_DETAIL_RESPONSE_MISMATCH_UIQA_VERIFIED_LOCAL",
+      "WI-S1-01-06_G1_FORMAL_INTERVIEW_CANDIDATE_CONFIRMATION_DETAIL_SOURCE_INACTIVE_UIQA_VERIFIED_LOCAL"
     ],
-    "currentSubSlice": "WI-S1-01-06_G1_FORMAL_INTERVIEW_CANDIDATE_CONFIRMATION_DETAIL_RESPONSE_MISMATCH_UIQA_VERIFIED_LOCAL / A default-off simulator detail fixture now submits one typed-but-mismatched Candidate confirmation result, confirms old Candidate content is cleared and interaction locked during the fresh read, then resolves an empty detail without restoring stale content. The Candidate route uses only injected in-memory ports and emits value-free evidence. No Owner Truth writer, backend route, public Echo/UI, release-policy, Provider, deployment or true-device behavior changed.",
+    "currentSubSlice": "WI-S1-01-06_G1_FORMAL_INTERVIEW_CANDIDATE_CONFIRMATION_DETAIL_SOURCE_INACTIVE_UIQA_VERIFIED_LOCAL / A default-off simulator detail fixture now displays one Candidate, returns the typed ownerTruthCandidateSourceInactive failure from the confirmation action and the ensuing read, then proves the detail clears all old Candidate content and reaches a terminal unavailable state with candidate interaction and refresh disabled. The Candidate route uses only injected in-memory ports and emits value-free evidence. No Owner Truth writer, backend route, public Echo/UI, release-policy, Provider, deployment or true-device behavior changed.",
   "m0BGuidedRecommendationPresentationEvidence": {
     "status": "VERIFIED_LOCAL / DEFAULT_OFF / NOT_DEPLOYED",
     "evidence": "docs/superpowers/status/2026-07-30-m0b-guided-recommendation-presentation-g0.md",
@@ -976,5 +977,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-08-01T00:14:56+08:00"
+  "updatedAt": "2026-08-01T00:41:35+08:00"
 }

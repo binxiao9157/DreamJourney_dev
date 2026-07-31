@@ -387,6 +387,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewCandidateProposalReviewReadySmoke() }
         case .ownerTruthInterviewCandidateConfirmationFailClosedSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewCandidateConfirmationFailClosedSmoke() }
+        case .ownerTruthInterviewCandidateConfirmationSourceInactiveSmoke:
+            scheduleUIQAScenario(scenario) { $0.runOwnerTruthInterviewCandidateConfirmationSourceInactiveSmoke() }
         case .ownerTruthLifeMapPresentationSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthLifeMapPresentationSmoke() }
         case .ownerTruthMemorySearchPresentationSmoke:
@@ -2418,6 +2420,56 @@ private extension AppDelegate {
     }
 
     func runOwnerTruthInterviewCandidateConfirmationFailClosedSmoke(retryCount: Int = 0) {
+        runOwnerTruthInterviewCandidateConfirmationActionFailClosedSmoke(
+            retryCount: retryCount,
+            smokeName: "OwnerTruthInterviewCandidateConfirmationFailClosedSmoke",
+            resultFileName: "owner-truth-interview-candidate-confirmation-fail-closed-smoke-result.json",
+            startScenario: { accountLease, navigationController, completion in
+                OwnerTruthInterviewCandidateConfirmationFailClosedUIQASmoke.start(
+                    accountLease: accountLease,
+                    navigationController: navigationController,
+                    completion: completion
+                )
+            },
+            retry: { [weak self] nextRetryCount in
+                self?.runOwnerTruthInterviewCandidateConfirmationFailClosedSmoke(
+                    retryCount: nextRetryCount
+                )
+            }
+        )
+    }
+
+    func runOwnerTruthInterviewCandidateConfirmationSourceInactiveSmoke(retryCount: Int = 0) {
+        runOwnerTruthInterviewCandidateConfirmationActionFailClosedSmoke(
+            retryCount: retryCount,
+            smokeName: "OwnerTruthInterviewCandidateConfirmationSourceInactiveSmoke",
+            resultFileName: "owner-truth-interview-candidate-confirmation-source-inactive-smoke-result.json",
+            startScenario: { accountLease, navigationController, completion in
+                OwnerTruthInterviewCandidateConfirmationSourceInactiveUIQASmoke.start(
+                    accountLease: accountLease,
+                    navigationController: navigationController,
+                    completion: completion
+                )
+            },
+            retry: { [weak self] nextRetryCount in
+                self?.runOwnerTruthInterviewCandidateConfirmationSourceInactiveSmoke(
+                    retryCount: nextRetryCount
+                )
+            }
+        )
+    }
+
+    private func runOwnerTruthInterviewCandidateConfirmationActionFailClosedSmoke(
+        retryCount: Int,
+        smokeName: String,
+        resultFileName: String,
+        startScenario: (
+            AccountLease,
+            UINavigationController,
+            @escaping ([String: Any]) -> Void
+        ) -> Void,
+        retry: @escaping (Int) -> Void
+    ) {
         guard let userID = UserManager.shared.currentUser?.id,
               let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userID),
               accountLease.subjectId == userID,
@@ -2428,15 +2480,13 @@ private extension AppDelegate {
                         "completed": false,
                         "failureReason": "accountLeaseUnavailable",
                     ],
-                    fileName: "owner-truth-interview-candidate-confirmation-fail-closed-smoke-result.json",
-                    smokeName: "OwnerTruthInterviewCandidateConfirmationFailClosedSmoke"
+                    fileName: resultFileName,
+                    smokeName: smokeName
                 )
                 return
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-                self?.runOwnerTruthInterviewCandidateConfirmationFailClosedSmoke(
-                    retryCount: retryCount + 1
-                )
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                retry(retryCount + 1)
             }
             return
         }
@@ -2451,15 +2501,13 @@ private extension AppDelegate {
                         "completed": false,
                         "failureReason": "mainRootUnavailable",
                     ],
-                    fileName: "owner-truth-interview-candidate-confirmation-fail-closed-smoke-result.json",
-                    smokeName: "OwnerTruthInterviewCandidateConfirmationFailClosedSmoke"
+                    fileName: resultFileName,
+                    smokeName: smokeName
                 )
                 return
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-                self?.runOwnerTruthInterviewCandidateConfirmationFailClosedSmoke(
-                    retryCount: retryCount + 1
-                )
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                retry(retryCount + 1)
             }
             return
         }
@@ -2467,24 +2515,23 @@ private extension AppDelegate {
         let navigationController = UINavigationController()
         keyWindow.rootViewController = navigationController
         keyWindow.makeKeyAndVisible()
-        OwnerTruthInterviewCandidateConfirmationFailClosedUIQASmoke.start(
-            accountLease: accountLease,
-            navigationController: navigationController
-        ) { result in
+        startScenario(accountLease, navigationController) { result in
             QAScenarioResultWriter.writeAndLog(
                 result,
-                fileName: "owner-truth-interview-candidate-confirmation-fail-closed-smoke-result.json",
-                smokeName: "OwnerTruthInterviewCandidateConfirmationFailClosedSmoke"
+                fileName: resultFileName,
+                smokeName: smokeName
             )
             let completed = result["completed"] as? Bool == true
             let actionRequestCount = result["actionRequestCount"] as? Int ?? -1
+            let failureDisposition = result["failureDisposition"] as? String ?? "unknown"
             print(
-                "[UI_QA] OwnerTruthInterviewCandidateConfirmationFailClosedSmoke completed " +
+                "[UI_QA] \(smokeName) completed " +
                     "completed=\(completed) " +
-                    "actionRequests=\(actionRequestCount)"
+                    "actionRequests=\(actionRequestCount) " +
+                    "failureDisposition=\(failureDisposition)"
             )
         }
-        print("[UI_QA] OwnerTruthInterviewCandidateConfirmationFailClosedSmoke started")
+        print("[UI_QA] \(smokeName) started")
     }
 
     func runOwnerTruthLifeMapPresentationSmoke(retryCount: Int = 0) {
