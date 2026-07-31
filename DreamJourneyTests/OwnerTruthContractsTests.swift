@@ -4026,6 +4026,221 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(correctionClient.requestedCommands.isEmpty)
     }
 
+    func testInterviewPendingReviewBatchInboxRejectsAdditionalEnvelopeOrItemFields() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000801")
+        let threadID = recordID("00000000-0000-0000-0000-000000000802")
+        let sessionID = recordID("00000000-0000-0000-0000-000000000803")
+        let item: [String: Any] = [
+            "reviewBatchId": reviewBatchID.rawValue.uuidString,
+            "threadId": threadID.rawValue.uuidString,
+            "sessionId": sessionID.rawValue.uuidString,
+            "reviewBatchVersion": 1,
+            "sessionVersion": 1,
+            "trigger": OwnerTruthInterviewReviewBatchTrigger.turnThreshold.rawValue,
+            "capturedCandidateBatchTurnCount": 1,
+        ]
+
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewPendingReviewBatchInbox(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewPendingReviewBatchInbox.schemaVersion,
+                    "vaultId": lease.vaultId,
+                    "reviewBatches": [item],
+                    "candidateProposal": ["status": "must-not-be-discovered"],
+                ],
+                expectedVaultID: vaultID
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? OwnerTruthRemoteContractError,
+                .invalidInterviewPendingReviewBatchInbox(
+                    "pending review batch inbox does not match the value-minimized envelope"
+                )
+            )
+        }
+
+        var itemWithExtraField = item
+        itemWithExtraField["sourceId"] = "must-not-be-in-an-opaque-handle"
+        XCTAssertThrowsError(
+            try OwnerTruthInterviewPendingReviewBatchInbox(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewPendingReviewBatchInbox.schemaVersion,
+                    "vaultId": lease.vaultId,
+                    "reviewBatches": [itemWithExtraField],
+                ],
+                expectedVaultID: vaultID
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? OwnerTruthRemoteContractError,
+                .invalidInterviewPendingReviewBatchInbox(
+                    "pending review batch must contain only a valid opaque acknowledgement handle"
+                )
+            )
+        }
+    }
+
+    func testInterviewReviewBatchAcknowledgementSelectsOnlyCurrentThreadAndSession() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let threadID = recordID("00000000-0000-0000-0000-000000000811")
+        let sessionID = recordID("00000000-0000-0000-0000-000000000812")
+        let matchingBatchID = recordID("00000000-0000-0000-0000-000000000813")
+        let inboxClient = InterviewPendingReviewBatchInboxClientSpy()
+        inboxClient.result = .success(try pendingReviewBatchInbox(
+            vaultID: lease.vaultId,
+            batches: [
+                (matchingBatchID, threadID, sessionID, 7, 4),
+                (recordID("00000000-0000-0000-0000-000000000814"), recordID("00000000-0000-0000-0000-000000000815"), sessionID, 3, 2),
+                (recordID("00000000-0000-0000-0000-000000000816"), threadID, recordID("00000000-0000-0000-0000-000000000817"), 5, 3),
+            ]
+        ))
+        let acknowledgementClient = InterviewReviewBatchAcknowledgementClientSpy()
+        acknowledgementClient.result = .success(try pendingReviewBatchAcknowledgementReceipt(
+            vaultID: lease.vaultId,
+            reviewBatchID: matchingBatchID,
+            threadID: threadID,
+            sessionID: sessionID,
+            reviewBatchVersion: 8,
+            sessionVersion: 5
+        ))
+        let useCase = OwnerTruthInterviewReviewBatchAcknowledgementUseCase(
+            accountLease: lease,
+            threadID: threadID,
+            sessionID: sessionID,
+            inboxClient: inboxClient,
+            acknowledgementClient: acknowledgementClient,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true },
+            identifierFactory: { UUID(uuidString: "00000000-0000-0000-0000-000000000818")! }
+        )
+
+        useCase.send(.acknowledge)
+
+        let command = try XCTUnwrap(acknowledgementClient.requestedCommands.first)
+        XCTAssertEqual(inboxClient.requestCount, 1)
+        XCTAssertEqual(command.reviewBatchID, matchingBatchID)
+        XCTAssertEqual(command.threadID, threadID)
+        XCTAssertEqual(command.sessionID, sessionID)
+        XCTAssertEqual(command.expectedReviewBatchVersion, 7)
+        XCTAssertEqual(command.expectedSessionVersion, 4)
+        XCTAssertEqual(useCase.viewState.phase, .acknowledged)
+        XCTAssertNil(useCase.viewState.notice)
+        XCTAssertEqual(useCase.viewState.receipt?.reviewBatchID, matchingBatchID)
+    }
+
+    func testInterviewReviewBatchAcknowledgementDoesNotRequestWhenMatchIsMissingOrAmbiguous() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let threadID = recordID("00000000-0000-0000-0000-000000000821")
+        let sessionID = recordID("00000000-0000-0000-0000-000000000822")
+        let inboxClient = InterviewPendingReviewBatchInboxClientSpy()
+        let acknowledgementClient = InterviewReviewBatchAcknowledgementClientSpy()
+        inboxClient.result = .success(try pendingReviewBatchInbox(
+            vaultID: lease.vaultId,
+            batches: [
+                (recordID("00000000-0000-0000-0000-000000000823"), recordID("00000000-0000-0000-0000-000000000824"), sessionID, 1, 1),
+            ]
+        ))
+        let missingMatch = OwnerTruthInterviewReviewBatchAcknowledgementUseCase(
+            accountLease: lease,
+            threadID: threadID,
+            sessionID: sessionID,
+            inboxClient: inboxClient,
+            acknowledgementClient: acknowledgementClient,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        missingMatch.send(.acknowledge)
+
+        XCTAssertEqual(missingMatch.viewState.phase, .failed)
+        XCTAssertEqual(missingMatch.viewState.notice, .matchingBatchUnavailable)
+        XCTAssertTrue(acknowledgementClient.requestedCommands.isEmpty)
+
+        inboxClient.result = .success(try pendingReviewBatchInbox(
+            vaultID: lease.vaultId,
+            batches: [
+                (recordID("00000000-0000-0000-0000-000000000825"), threadID, sessionID, 1, 1),
+                (recordID("00000000-0000-0000-0000-000000000826"), threadID, sessionID, 2, 2),
+            ]
+        ))
+        let ambiguousMatch = OwnerTruthInterviewReviewBatchAcknowledgementUseCase(
+            accountLease: lease,
+            threadID: threadID,
+            sessionID: sessionID,
+            inboxClient: inboxClient,
+            acknowledgementClient: acknowledgementClient,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        ambiguousMatch.send(.acknowledge)
+
+        XCTAssertEqual(ambiguousMatch.viewState.phase, .failed)
+        XCTAssertEqual(ambiguousMatch.viewState.notice, .matchingBatchUnavailable)
+        XCTAssertTrue(acknowledgementClient.requestedCommands.isEmpty)
+    }
+
+    func testInterviewReviewBatchAcknowledgementDoesNotRequestWhenReleasePolicyIsDisabled() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let inboxClient = InterviewPendingReviewBatchInboxClientSpy()
+        let acknowledgementClient = InterviewReviewBatchAcknowledgementClientSpy()
+        let useCase = OwnerTruthInterviewReviewBatchAcknowledgementUseCase(
+            accountLease: lease,
+            threadID: recordID("00000000-0000-0000-0000-000000000831"),
+            sessionID: recordID("00000000-0000-0000-0000-000000000832"),
+            inboxClient: inboxClient,
+            acknowledgementClient: acknowledgementClient,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { false }
+        )
+
+        useCase.send(.acknowledge)
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .releasePolicyDisabled)
+        XCTAssertEqual(inboxClient.requestCount, 0)
+        XCTAssertTrue(acknowledgementClient.requestedCommands.isEmpty)
+    }
+
+    func testInterviewReviewBatchAcknowledgementRejectsReceiptThatDoesNotMatchCommand() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let threadID = recordID("00000000-0000-0000-0000-000000000841")
+        let sessionID = recordID("00000000-0000-0000-0000-000000000842")
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000843")
+        let inboxClient = InterviewPendingReviewBatchInboxClientSpy()
+        inboxClient.result = .success(try pendingReviewBatchInbox(
+            vaultID: lease.vaultId,
+            batches: [(reviewBatchID, threadID, sessionID, 1, 1)]
+        ))
+        let acknowledgementClient = InterviewReviewBatchAcknowledgementClientSpy()
+        acknowledgementClient.result = .success(try pendingReviewBatchAcknowledgementReceipt(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            threadID: recordID("00000000-0000-0000-0000-000000000844"),
+            sessionID: sessionID,
+            reviewBatchVersion: 2,
+            sessionVersion: 2
+        ))
+        let useCase = OwnerTruthInterviewReviewBatchAcknowledgementUseCase(
+            accountLease: lease,
+            threadID: threadID,
+            sessionID: sessionID,
+            inboxClient: inboxClient,
+            acknowledgementClient: acknowledgementClient,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.acknowledge)
+
+        XCTAssertEqual(acknowledgementClient.requestedCommands.count, 1)
+        XCTAssertEqual(useCase.viewState.phase, .failed)
+        XCTAssertEqual(useCase.viewState.notice, .contractMismatch)
+        XCTAssertNil(useCase.viewState.receipt)
+    }
+
     private func contextShadowBuildResponse(
         for lease: AccountLease,
         query: String
@@ -4397,6 +4612,69 @@ final class OwnerTruthContractsTests: XCTestCase {
 
     private func recordID(_ rawValue: String) -> OwnerTruthRecordID {
         OwnerTruthRecordID(rawValue: UUID(uuidString: rawValue)!)
+    }
+
+    private func pendingReviewBatchInbox(
+        vaultID: String,
+        batches: [(
+            reviewBatchID: OwnerTruthRecordID,
+            threadID: OwnerTruthRecordID,
+            sessionID: OwnerTruthRecordID,
+            reviewBatchVersion: Int,
+            sessionVersion: Int
+        )]
+    ) throws -> OwnerTruthInterviewPendingReviewBatchInbox {
+        try OwnerTruthInterviewPendingReviewBatchInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewPendingReviewBatchInbox.schemaVersion,
+                "vaultId": vaultID,
+                "reviewBatches": batches.map { batch -> [String: Any] in
+                    [
+                        "reviewBatchId": batch.reviewBatchID.rawValue.uuidString,
+                        "threadId": batch.threadID.rawValue.uuidString,
+                        "sessionId": batch.sessionID.rawValue.uuidString,
+                        "reviewBatchVersion": batch.reviewBatchVersion,
+                        "sessionVersion": batch.sessionVersion,
+                        "trigger": OwnerTruthInterviewReviewBatchTrigger.turnThreshold.rawValue,
+                        "capturedCandidateBatchTurnCount": 1,
+                    ]
+                },
+            ],
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID))
+        )
+    }
+
+    private func pendingReviewBatchAcknowledgementReceipt(
+        vaultID: String,
+        reviewBatchID: OwnerTruthRecordID,
+        threadID: OwnerTruthRecordID,
+        sessionID: OwnerTruthRecordID,
+        reviewBatchVersion: Int,
+        sessionVersion: Int
+    ) throws -> OwnerTruthInterviewReviewBatchAcknowledgementReceipt {
+        try OwnerTruthInterviewReviewBatchAcknowledgementReceipt(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewReviewBatchAcknowledgementReceipt.schemaVersion,
+                "vaultId": vaultID,
+                "status": OwnerTruthInterviewReviewBatchAcknowledgementOutcome.acknowledged.rawValue,
+                "session": [
+                    "threadId": threadID.rawValue.uuidString,
+                    "sessionId": sessionID.rawValue.uuidString,
+                    "sessionVersion": sessionVersion,
+                ],
+                "reviewBatch": [
+                    "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                    "trigger": OwnerTruthInterviewReviewBatchTrigger.turnThreshold.rawValue,
+                    "state": "acknowledged",
+                    "capturedCandidateBatchTurnCount": 1,
+                    "rowVersion": reviewBatchVersion,
+                ],
+                "candidateProposal": ["status": "notStarted"],
+                "memoryActivation": ["status": "notApplicable"],
+            ],
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID)),
+            expectedReviewBatchID: reviewBatchID
+        )
     }
 
     private func interviewCandidateReviewBatch(
@@ -5892,7 +6170,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             lifeMapPolicyAvailable: { false },
             memorySearchPolicyAvailable: { false },
             interviewOutcomePolicyAvailable: { false },
-            candidateConfirmationPolicyAvailable: { true },
+            reviewBatchAcknowledgementPolicyAvailable: { true },
             qaGateEnabled: { true }
         )
 
@@ -5918,32 +6196,38 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(controller.renderedStateForUIQA.continuation?.state, .reviewPending)
         XCTAssertFalse(controller.renderedStateForUIQA.continuation?.canContinue ?? true)
         XCTAssertTrue(controller.renderedStateForUIQA.continuation?.canContinueLater ?? false)
-        XCTAssertTrue(controller.isCandidateConfirmationEntryVisibleForUIQA)
+        XCTAssertTrue(controller.isReviewBatchAcknowledgementEntryVisibleForUIQA)
+        XCTAssertEqual(controller.renderedStatusTextForUIQA, "这段分享等待整理")
+        XCTAssertEqual(controller.renderedDetailTextForUIQA, "确认整理后，会开始整理本次内容。")
     }
 
     @MainActor
-    func testNaturalInputProductPendingConfirmationEntryUsesDedicatedPolicyAndInbox() throws {
+    func testNaturalInputProductAcknowledgesOnlyTheCurrentEndedReviewBatch() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
         let naturalInputClient = InterviewNaturalInputClientSpy()
         naturalInputClient.startHandler = { command in
             Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
         }
+        naturalInputClient.appendHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, append: command) }
+        }
+        naturalInputClient.endHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, end: command) }
+        }
         naturalInputClient.continuationHandler = { _ in
             Result {
-                try self.interviewNaturalInputContinuation(
+                let ended = naturalInputClient.endCommand != nil
+                return try self.interviewNaturalInputContinuation(
                     vaultID: vaultID,
-                    state: .reviewPending,
-                    canContinue: false,
+                    state: ended ? .reviewPending : .readyForNarrative,
+                    canContinue: !ended,
                     canContinueLater: true
                 )
             }
         }
-        let inboxClient = InterviewCandidateConfirmationInboxClientSpy()
-        inboxClient.readResult = .success(try interviewCandidateConfirmationInbox(
-            vaultID: lease.vaultId,
-            reviewBatchIDs: [recordID("00000000-0000-0000-0000-000000000074")]
-        ))
+        let inboxClient = InterviewPendingReviewBatchInboxClientSpy()
+        let acknowledgementClient = InterviewReviewBatchAcknowledgementClientSpy()
         let controller = OwnerTruthInterviewNaturalInputViewController(
             accountLease: lease,
             client: naturalInputClient,
@@ -5953,45 +6237,81 @@ final class OwnerTruthContractsTests: XCTestCase {
             lifeMapPolicyAvailable: { false },
             memorySearchPolicyAvailable: { false },
             interviewOutcomePolicyAvailable: { false },
-            candidateConfirmationInboxClient: inboxClient,
-            candidateConfirmationPolicyAvailable: { true },
+            reviewBatchInboxClient: inboxClient,
+            reviewBatchAcknowledgementClient: acknowledgementClient,
+            reviewBatchAcknowledgementPolicyAvailable: { true },
             qaGateEnabled: { true }
         )
-        let navigationController = UINavigationController(rootViewController: controller)
 
         controller.loadViewIfNeeded()
+        controller.submitQAFixture("确认整理前，内容只在本次访谈会话里。")
+        let endButton = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-interview-natural-input-end"
+        ) as? UIButton)
+        endButton.sendActions(for: .touchUpInside)
+        let endedReceipt = try XCTUnwrap(controller.renderedStateForUIQA.latestReceipt)
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000074")
+        inboxClient.result = .success(try pendingReviewBatchInbox(
+            vaultID: lease.vaultId,
+            batches: [
+                (reviewBatchID, endedReceipt.threadID, endedReceipt.sessionID, 1, endedReceipt.sessionVersion),
+                (recordID("00000000-0000-0000-0000-000000000075"), endedReceipt.threadID, recordID("00000000-0000-0000-0000-000000000076"), 1, endedReceipt.sessionVersion),
+            ]
+        ))
+        acknowledgementClient.result = .success(try pendingReviewBatchAcknowledgementReceipt(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            threadID: endedReceipt.threadID,
+            sessionID: endedReceipt.sessionID,
+            reviewBatchVersion: 2,
+            sessionVersion: endedReceipt.sessionVersion + 1
+        ))
 
         let entry = try XCTUnwrap(findView(
             in: controller.view,
-            accessibilityIdentifier: "owner-truth-interview-pending-confirmation-entry"
+            accessibilityIdentifier: "owner-truth-interview-review-batch-acknowledgement-entry"
         ) as? UIButton)
         XCTAssertFalse(entry.isHidden)
         XCTAssertTrue(entry.isEnabled)
-        XCTAssertEqual(controller.renderedStatusTextForUIQA, "有内容等待你确认")
-        XCTAssertEqual(controller.renderedDetailTextForUIQA, "确认后才会进入你的记忆。")
 
-        entry.sendActions(for: .touchUpInside)
+        controller.acknowledgeReviewBatchForUIQA()
 
-        XCTAssertTrue(
-            navigationController.topViewController is OwnerTruthInterviewCandidateConfirmationInboxViewController
+        let command = try XCTUnwrap(acknowledgementClient.requestedCommands.first)
+        XCTAssertEqual(inboxClient.requestCount, 1)
+        XCTAssertEqual(command.reviewBatchID, reviewBatchID)
+        XCTAssertEqual(command.threadID, endedReceipt.threadID)
+        XCTAssertEqual(command.sessionID, endedReceipt.sessionID)
+        XCTAssertEqual(controller.reviewBatchAcknowledgementStateForUIQA.phase, .acknowledged)
+        XCTAssertFalse(controller.isReviewBatchAcknowledgementEntryVisibleForUIQA)
+        XCTAssertEqual(controller.renderedStatusTextForUIQA, "这段分享正在整理")
+        XCTAssertEqual(
+            controller.renderedDetailTextForUIQA,
+            "整理完成后，会等待你确认要不要保存为记忆。"
         )
-        XCTAssertEqual(inboxClient.requestCount, 0)
     }
 
     @MainActor
-    func testNaturalInputProductPendingConfirmationEntryStaysHiddenWithoutPolicy() throws {
+    func testNaturalInputProductReviewBatchAcknowledgementStaysHiddenWithoutPolicy() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
         let naturalInputClient = InterviewNaturalInputClientSpy()
         naturalInputClient.startHandler = { command in
             Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
         }
+        naturalInputClient.appendHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, append: command) }
+        }
+        naturalInputClient.endHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, end: command) }
+        }
         naturalInputClient.continuationHandler = { _ in
             Result {
-                try self.interviewNaturalInputContinuation(
+                let ended = naturalInputClient.endCommand != nil
+                return try self.interviewNaturalInputContinuation(
                     vaultID: vaultID,
-                    state: .reviewPending,
-                    canContinue: false,
+                    state: ended ? .reviewPending : .readyForNarrative,
+                    canContinue: !ended,
                     canContinueLater: true
                 )
             }
@@ -6005,19 +6325,25 @@ final class OwnerTruthContractsTests: XCTestCase {
             lifeMapPolicyAvailable: { false },
             memorySearchPolicyAvailable: { false },
             interviewOutcomePolicyAvailable: { false },
-            candidateConfirmationPolicyAvailable: { false },
+            reviewBatchAcknowledgementPolicyAvailable: { false },
             qaGateEnabled: { true }
         )
 
         controller.loadViewIfNeeded()
+        controller.submitQAFixture("没有发布权限时，不能开始整理。")
+        let endButton = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-interview-natural-input-end"
+        ) as? UIButton)
+        endButton.sendActions(for: .touchUpInside)
 
         let entry = try XCTUnwrap(findView(
             in: controller.view,
-            accessibilityIdentifier: "owner-truth-interview-pending-confirmation-entry"
+            accessibilityIdentifier: "owner-truth-interview-review-batch-acknowledgement-entry"
         ) as? UIButton)
         XCTAssertTrue(entry.isHidden)
         XCTAssertFalse(entry.isEnabled)
-        XCTAssertEqual(controller.renderedStatusTextForUIQA, "这段分享已经留好")
+        XCTAssertEqual(controller.renderedStatusTextForUIQA, "这段分享等待整理")
         XCTAssertEqual(controller.renderedDetailTextForUIQA, "这段分享已经留好。")
     }
 
@@ -6803,6 +7129,43 @@ private final class InterviewCandidateConfirmationInboxClientSpy: OwnerTruthInte
 
 private enum InterviewCandidateConfirmationInboxClientSpyError: Error {
     case missingReadResult
+}
+
+private final class InterviewPendingReviewBatchInboxClientSpy:
+    OwnerTruthInterviewPendingReviewBatchInboxClient {
+    var result: Result<OwnerTruthInterviewPendingReviewBatchInbox, Error>?
+    private(set) var requestCount = 0
+
+    func fetchOwnerTruthInterviewPendingReviewBatchInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewPendingReviewBatchInbox, Error>) -> Void
+    ) {
+        requestCount += 1
+        completion(result ?? .failure(InterviewPendingReviewBatchInboxClientSpyError.missingResult))
+    }
+}
+
+private enum InterviewPendingReviewBatchInboxClientSpyError: Error {
+    case missingResult
+}
+
+private final class InterviewReviewBatchAcknowledgementClientSpy:
+    OwnerTruthInterviewReviewBatchAcknowledgementClient {
+    var result: Result<OwnerTruthInterviewReviewBatchAcknowledgementReceipt, Error>?
+    private(set) var requestedCommands: [OwnerTruthInterviewReviewBatchAcknowledgementCommand] = []
+
+    func acknowledgeOwnerTruthInterviewReviewBatch(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
+        completion: @escaping (Result<OwnerTruthInterviewReviewBatchAcknowledgementReceipt, Error>) -> Void
+    ) {
+        requestedCommands.append(command)
+        completion(result ?? .failure(InterviewReviewBatchAcknowledgementClientSpyError.missingResult))
+    }
+}
+
+private enum InterviewReviewBatchAcknowledgementClientSpyError: Error {
+    case missingResult
 }
 
 private final class InterviewCandidateMemoryActivationInboxClientSpy: OwnerTruthInterviewCandidateMemoryActivationInboxClient {

@@ -40,41 +40,12 @@ guard let naturalInputStart = archive.range(of: "final class OwnerTruthInterview
 }
 let naturalInputSurface = String(archive[naturalInputStart.lowerBound..<naturalInputEnd.lowerBound])
 
-for required in [
-    "private let candidateConfirmationEntryButton",
-    "private let candidateConfirmationPolicyAvailable",
-    "configureCandidateConfirmationEntry()",
-    "updateCandidateConfirmationEntry(for: state)",
-    "@objc private func candidateConfirmationEntryTapped()",
-    "owner-truth-interview-pending-confirmation-entry",
-] {
-    require(
-        naturalInputSurface.contains(required),
-        "natural-input pending-confirmation entry missing: \(required)"
-    )
-}
 require(
-    naturalInputSurface.contains("presentation == .product") &&
-        naturalInputSurface.contains("state.continuation?.state == .reviewPending") &&
-        naturalInputSurface.contains("candidateConfirmationPolicyAvailable()"),
-    "natural-input pending-confirmation entry must remain product-only, review-pending-only, and policy-gated"
-)
-require(
-    naturalInputSurface.contains("OwnerTruthInterviewCandidateConfirmationInboxViewController(") &&
-        naturalInputSurface.contains("candidateConfirmationInboxClient") &&
-        naturalInputSurface.contains("accountLeaseRuntime: accountLeaseRuntime"),
-    "natural-input pending-confirmation entry must reuse the formal lease-fenced confirmation inbox"
-)
-guard let pendingEntrySection = slice(
-    naturalInputSurface,
-    from: "private func configureCandidateConfirmationEntry()",
-    to: "private func configureBoundaryControls()"
-) else {
-    fatalError("owner-truth candidate confirmation presentation check failed: natural-input pending entry section is missing")
-}
-require(
-    !pendingEntrySection.contains("OwnerTruthCandidateReviewQAGate"),
-    "natural-input product confirmation entry must not use the QA-only review gate"
+    !naturalInputSurface.contains("candidateConfirmationEntryButton") &&
+        !naturalInputSurface.contains("candidateConfirmationEntryTapped") &&
+        !naturalInputSurface.contains("owner-truth-interview-pending-confirmation-entry") &&
+        !naturalInputSurface.contains("OwnerTruthInterviewCandidateConfirmationInboxViewController("),
+    "natural-input review-pending state must not skip directly into candidate confirmation"
 )
 
 for required in [
@@ -176,8 +147,6 @@ for testName in [
     "func testInterviewCandidateConfirmationSingleActionDecodesValueMinimizedResult()",
     "func testInterviewCandidateConfirmationSingleActionUseCaseFailsClosedAndRejectsBatchCandidate()",
     "func testInterviewCandidateConfirmationSingleActionUseCaseReconcilesTerminalDecision()",
-    "func testNaturalInputProductPendingConfirmationEntryUsesDedicatedPolicyAndInbox()",
-    "func testNaturalInputProductPendingConfirmationEntryStaysHiddenWithoutPolicy()",
 ] {
     require(tests.contains(testName), "formal single-candidate action test missing: \(testName)")
 }

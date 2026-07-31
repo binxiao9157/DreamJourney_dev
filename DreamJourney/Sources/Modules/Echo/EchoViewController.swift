@@ -5991,6 +5991,15 @@ final class EchoViewController: UIViewController {
         let controller = OwnerTruthInterviewNaturalInputViewController(
             accountLease: accountLease,
             presentation: presentation,
+            reviewBatchAcknowledgementPolicyAvailable: { [weak self] in
+                guard let self else { return false }
+                switch presentation {
+                case .qa:
+                    return self.shouldShowOwnerTruthInterviewNaturalInputEntry
+                case .product:
+                    return self.isOwnerTruthInterviewNaturalInputProductEntryVisible
+                }
+            },
             qaGateEnabled: { [weak self] in
                 guard let self else { return false }
                 switch presentation {
@@ -8239,7 +8248,7 @@ extension EchoViewController {
                 accountLease: accountLease,
                 presentation: .product,
                 postNarrativeContinuationState: .reviewPending,
-                candidateConfirmationPolicyAvailable: { true }
+                reviewBatchAcknowledgementPolicyAvailable: { true }
             )
             let navigationController = UINavigationController(rootViewController: controller)
             navigationController.modalPresentationStyle = .pageSheet
@@ -8287,58 +8296,71 @@ extension EchoViewController {
                             let summaryState = continuation?.state.rawValue ?? ""
                             let summaryStatus = controller.renderedStatusTextForUIQA
                             let summaryDetail = controller.renderedDetailTextForUIQA
-                            let pendingConfirmationEntryVisible = controller
-                                .isCandidateConfirmationEntryVisibleForUIQA
+                            let reviewBatchAcknowledgementEntryVisible = controller
+                                .isReviewBatchAcknowledgementEntryVisibleForUIQA
                             let endActionHiddenAfterEnd = !controller
                                 .isEndSessionActionVisibleForUIQA
                             let endedSession = finalState.latestReceipt?.lifecycle == .ended
                                 && finalState.latestReceipt?.messageSequence == nil
                             let summaryRendered = summaryState == "reviewPending"
-                                && summaryStatus == "有内容等待你确认"
-                                && summaryDetail == "确认后才会进入你的记忆。"
-                            var result: [String: Any] = [
-                                "completed": controller.title == "今天想聊点什么？"
-                                    && endActionHiddenBeforeNarrative
-                                    && inputRecorded
-                                    && endActionVisibleAfterNarrative
-                                    && endedSession
-                                    && endActionHiddenAfterEnd
-                                    && summaryRendered
-                                    && controller.isTranscriptClearForQA
-                                    && productBoundaryControlsVisible
-                                    && qaOnlyBoundaryControlsHidden
-                                    && pendingConfirmationEntryVisible,
-                                "productEntryVisible": productEntryVisible,
-                                "qaEntryVisible": qaEntryVisible,
-                                "sheetPresented": true,
-                                "entryAccessibilityIdentifier": self.ownerTruthInterviewNaturalInputProductEntryButton.accessibilityIdentifier ?? "",
-                                "sheetTitle": controller.title ?? "",
-                                "inputRecorded": inputRecorded,
-                                "endActionHiddenBeforeNarrative": endActionHiddenBeforeNarrative,
-                                "endActionVisibleAfterNarrative": endActionVisibleAfterNarrative,
-                                "endedSession": endedSession,
-                                "endActionHiddenAfterEnd": endActionHiddenAfterEnd,
-                                "summaryState": summaryState,
-                                "summaryStatus": summaryStatus,
-                                "summaryDetail": summaryDetail,
-                                "transcriptCleared": controller.isTranscriptClearForQA,
-                                "productBoundaryControlsVisible": productBoundaryControlsVisible,
-                                "qaOnlyBoundaryControlsHidden": qaOnlyBoundaryControlsHidden,
-                                "pendingConfirmationEntryVisible": pendingConfirmationEntryVisible,
-                                "inMemoryPreview": true,
-                                "releasePolicyBypassedForPreview": true,
-                                "voiceTurnStarted": false,
-                                "digitalHumanSessionStarted": false,
-                                "backendNetworkStarted": false,
-                                "persistentInterviewWriteStarted": false,
-                                "launchArguments": [
-                                    QALaunchScenario.ownerTruthInterviewNaturalInputProductSurfaceSmoke.rawValue
+                                && summaryStatus == "这段分享等待整理"
+                                && summaryDetail == "确认整理后，会开始整理本次内容。"
+                            controller.acknowledgeReviewBatchForUIQA()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                                let acknowledgementState = controller
+                                    .reviewBatchAcknowledgementStateForUIQA
+                                let acknowledgementRendered = acknowledgementState.phase == .acknowledged
+                                    && controller.renderedStatusTextForUIQA == "这段分享正在整理"
+                                    && controller.renderedDetailTextForUIQA
+                                        == "整理完成后，会等待你确认要不要保存为记忆。"
+                                    && !controller.isReviewBatchAcknowledgementEntryVisibleForUIQA
+                                var result: [String: Any] = [
+                                    "completed": controller.title == "今天想聊点什么？"
+                                        && endActionHiddenBeforeNarrative
+                                        && inputRecorded
+                                        && endActionVisibleAfterNarrative
+                                        && endedSession
+                                        && endActionHiddenAfterEnd
+                                        && summaryRendered
+                                        && controller.isTranscriptClearForQA
+                                        && productBoundaryControlsVisible
+                                        && qaOnlyBoundaryControlsHidden
+                                        && reviewBatchAcknowledgementEntryVisible
+                                        && acknowledgementRendered,
+                                    "productEntryVisible": productEntryVisible,
+                                    "qaEntryVisible": qaEntryVisible,
+                                    "sheetPresented": true,
+                                    "entryAccessibilityIdentifier": self.ownerTruthInterviewNaturalInputProductEntryButton.accessibilityIdentifier ?? "",
+                                    "sheetTitle": controller.title ?? "",
+                                    "inputRecorded": inputRecorded,
+                                    "endActionHiddenBeforeNarrative": endActionHiddenBeforeNarrative,
+                                    "endActionVisibleAfterNarrative": endActionVisibleAfterNarrative,
+                                    "endedSession": endedSession,
+                                    "endActionHiddenAfterEnd": endActionHiddenAfterEnd,
+                                    "summaryState": summaryState,
+                                    "summaryStatus": summaryStatus,
+                                    "summaryDetail": summaryDetail,
+                                    "transcriptCleared": controller.isTranscriptClearForQA,
+                                    "productBoundaryControlsVisible": productBoundaryControlsVisible,
+                                    "qaOnlyBoundaryControlsHidden": qaOnlyBoundaryControlsHidden,
+                                    "reviewBatchAcknowledgementEntryVisible": reviewBatchAcknowledgementEntryVisible,
+                                    "reviewBatchAcknowledgementPhase": String(describing: acknowledgementState.phase),
+                                    "reviewBatchAcknowledgementRendered": acknowledgementRendered,
+                                    "inMemoryPreview": true,
+                                    "releasePolicyBypassedForPreview": true,
+                                    "voiceTurnStarted": false,
+                                    "digitalHumanSessionStarted": false,
+                                    "backendNetworkStarted": false,
+                                    "persistentInterviewWriteStarted": false,
+                                    "launchArguments": [
+                                        QALaunchScenario.ownerTruthInterviewNaturalInputProductSurfaceSmoke.rawValue
+                                    ]
                                 ]
-                            ]
-                            if !(result["completed"] as? Bool ?? false) {
-                                result["failureReason"] = "productEndFlowNotRendered"
+                                if !(result["completed"] as? Bool ?? false) {
+                                    result["failureReason"] = "productEndFlowNotRendered"
+                                }
+                                completion(result)
                             }
-                            completion(result)
                         }
                     }
                 }

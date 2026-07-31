@@ -498,6 +498,23 @@ final class FeatureGateService {
             || normalizedPath.hasPrefix("/echo/delayed-replies") {
             return .echoTextInput
         }
+        let pathComponents = normalizedPath.split(separator: "/")
+        if method == .get,
+           pathComponents.count == 5,
+           pathComponents[0] == "v2",
+           pathComponents[1] == "vaults",
+           pathComponents[3] == "interview-review-batches",
+           pathComponents[4] == "pending" {
+            return .echoTextInput
+        }
+        if method == .post,
+           pathComponents.count == 6,
+           pathComponents[0] == "v2",
+           pathComponents[1] == "vaults",
+           pathComponents[3] == "interview-review-batches",
+           pathComponents[5] == "acknowledgement" {
+            return .echoTextInput
+        }
         if method == .get,
            normalizedPath.hasPrefix("/v2/vaults/"),
            normalizedPath.hasSuffix("/interview-candidate-confirmations") {
@@ -6686,6 +6703,118 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    func fetchOwnerTruthInterviewPendingReviewBatchInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewPendingReviewBatchInbox, Error>) -> Void
+    ) {
+        let transport = ownerTruthInterviewNaturalInputTransport()
+        switch transport {
+        case .unavailable(let reason):
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthInterviewNaturalInput",
+                    reason: reason
+                )))
+            }
+            return
+        case .qa, .releasePolicy:
+            break
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-review-batches/pending"
+        let additionalHeaders: [String: String]
+        let featureDecision: FeatureDecision?
+        switch transport {
+        case .qa:
+            additionalHeaders = ["X-DreamJourney-QA-Owner-Truth": "1"]
+            featureDecision = nil
+        case .releasePolicy(let capturedDecision):
+            additionalHeaders = [:]
+            featureDecision = capturedDecision
+        case .unavailable:
+            return
+        }
+        requestJSON(
+            path: path,
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            featureDecision: featureDecision,
+            additionalHeaders: additionalHeaders
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewPendingReviewBatchInbox(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func acknowledgeOwnerTruthInterviewReviewBatch(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
+        completion: @escaping (Result<OwnerTruthInterviewReviewBatchAcknowledgementReceipt, Error>) -> Void
+    ) {
+        let transport = ownerTruthInterviewNaturalInputTransport()
+        switch transport {
+        case .unavailable(let reason):
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthInterviewNaturalInput",
+                    reason: reason
+                )))
+            }
+            return
+        case .qa, .releasePolicy:
+            break
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-review-batches/\(pathComponent(command.reviewBatchID.rawValue.uuidString))/acknowledgement"
+        let additionalHeaders: [String: String]
+        let featureDecision: FeatureDecision?
+        switch transport {
+        case .qa:
+            additionalHeaders = ["X-DreamJourney-QA-Owner-Truth": "1"]
+            featureDecision = nil
+        case .releasePolicy(let capturedDecision):
+            additionalHeaders = [:]
+            featureDecision = capturedDecision
+        case .unavailable:
+            return
+        }
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            featureDecision: featureDecision,
+            additionalHeaders: additionalHeaders
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthInterviewReviewBatchAcknowledgementReceipt(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID,
+                        expectedReviewBatchID: command.reviewBatchID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     private enum OwnerTruthInterviewNaturalInputTransport {
         case qa
         case releasePolicy(FeatureDecision)
@@ -8899,6 +9028,8 @@ extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateMemoryActivatio
 extension DreamJourneyBackendClient: OwnerTruthInterviewSessionStateClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewOrchestrationClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewNaturalInputClient {}
+extension DreamJourneyBackendClient: OwnerTruthInterviewPendingReviewBatchInboxClient {}
+extension DreamJourneyBackendClient: OwnerTruthInterviewReviewBatchAcknowledgementClient {}
 extension DreamJourneyBackendClient: OwnerTruthKnowledgeRecommendationPlanClient {}
 extension DreamJourneyBackendClient: OwnerTruthGuidedRecommendationPresentationClient {}
 extension DreamJourneyBackendClient: OwnerTruthLifeMapPresentationClient {}

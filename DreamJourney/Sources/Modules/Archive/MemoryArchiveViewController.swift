@@ -9123,8 +9123,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let memorySearchPolicyAvailable: () -> Bool
     private let interviewOutcomeClient: OwnerTruthInterviewOutcomePresentationClient
     private let interviewOutcomePolicyAvailable: () -> Bool
-    private let candidateConfirmationInboxClient: OwnerTruthInterviewCandidateConfirmationInboxClient
-    private let candidateConfirmationPolicyAvailable: () -> Bool
+    private let reviewBatchInboxClient: OwnerTruthInterviewPendingReviewBatchInboxClient
+    private let reviewBatchAcknowledgementClient: OwnerTruthInterviewReviewBatchAcknowledgementClient
+    private let reviewBatchAcknowledgementPolicyAvailable: () -> Bool
     private let stackView = UIStackView()
     private let subtitleLabel = UILabel()
     private let guidedRecommendationStack = UIStackView()
@@ -9134,7 +9135,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let lifeMapButton = UIButton(type: .system)
     private let memorySearchButton = UIButton(type: .system)
     private let interviewOutcomeButton = UIButton(type: .system)
-    private let candidateConfirmationEntryButton = UIButton(type: .system)
+    private let reviewBatchAcknowledgementEntryButton = UIButton(type: .system)
     private let statusLabel = UILabel()
     private let detailLabel = UILabel()
     private let inputTextView = UITextView()
@@ -9157,6 +9158,10 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private var lastGuidedRecommendationFeedbackNotice: OwnerTruthGuidedRecommendationPresentationNotice?
     private var isActivatingGuidedRecommendation = false
     private var lastGuidedRecommendationActivationNotice: OwnerTruthGuidedRecommendationPresentationNotice?
+    private var reviewBatchAcknowledgementUseCase: OwnerTruthInterviewReviewBatchAcknowledgementUseCase?
+    private var reviewBatchAcknowledgementThreadID: OwnerTruthRecordID?
+    private var reviewBatchAcknowledgementSessionID: OwnerTruthRecordID?
+    private var reviewBatchAcknowledgementState: OwnerTruthInterviewReviewBatchAcknowledgementViewState = .idle
     var onViewStateRendered: ((OwnerTruthInterviewNaturalInputViewState) -> Void)?
 
     var isTranscriptClearForQA: Bool {
@@ -9173,6 +9178,10 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
     var renderedStateForUIQA: OwnerTruthInterviewNaturalInputViewState {
         renderedState
+    }
+
+    var reviewBatchAcknowledgementStateForUIQA: OwnerTruthInterviewReviewBatchAcknowledgementViewState {
+        reviewBatchAcknowledgementState
     }
 
     var areBoundaryActionsVisibleForQA: Bool {
@@ -9200,11 +9209,11 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             ].allSatisfy { $0.superview == nil || $0.isHidden }
     }
 
-    var isCandidateConfirmationEntryVisibleForUIQA: Bool {
+    var isReviewBatchAcknowledgementEntryVisibleForUIQA: Bool {
         presentation == .product
-            && candidateConfirmationEntryButton.superview != nil
-            && !candidateConfirmationEntryButton.isHidden
-            && candidateConfirmationEntryButton.isEnabled
+            && reviewBatchAcknowledgementEntryButton.superview != nil
+            && !reviewBatchAcknowledgementEntryButton.isHidden
+            && reviewBatchAcknowledgementEntryButton.isEnabled
     }
 
     var isEndSessionActionVisibleForUIQA: Bool {
@@ -9284,12 +9293,13 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
                 .requestDecision(for: .ownerTruthInterviewOutcome)
                 .allowed
         },
-        candidateConfirmationInboxClient: OwnerTruthInterviewCandidateConfirmationInboxClient = DreamJourneyBackendClient.shared,
-        candidateConfirmationPolicyAvailable: @escaping () -> Bool = {
-            FeatureGateService.shared.isRouteAllowed(
-                .ownerTruthCandidateReview,
-                localEnabled: FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview)
-            )
+        reviewBatchInboxClient: OwnerTruthInterviewPendingReviewBatchInboxClient = DreamJourneyBackendClient.shared,
+        reviewBatchAcknowledgementClient: OwnerTruthInterviewReviewBatchAcknowledgementClient = DreamJourneyBackendClient.shared,
+        reviewBatchAcknowledgementPolicyAvailable: @escaping () -> Bool = {
+            guard FeatureFlagService.shared.isEnabled(.echoTextInput) else {
+                return false
+            }
+            return FeatureGateService.shared.requestDecision(for: .echoTextInput).allowed
         },
         qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
     ) {
@@ -9302,8 +9312,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         self.memorySearchPolicyAvailable = memorySearchPolicyAvailable
         self.interviewOutcomeClient = interviewOutcomeClient
         self.interviewOutcomePolicyAvailable = interviewOutcomePolicyAvailable
-        self.candidateConfirmationInboxClient = candidateConfirmationInboxClient
-        self.candidateConfirmationPolicyAvailable = candidateConfirmationPolicyAvailable
+        self.reviewBatchInboxClient = reviewBatchInboxClient
+        self.reviewBatchAcknowledgementClient = reviewBatchAcknowledgementClient
+        self.reviewBatchAcknowledgementPolicyAvailable = reviewBatchAcknowledgementPolicyAvailable
         self.useCase = OwnerTruthInterviewNaturalInputUseCase(
             accountLease: accountLease,
             client: client,
@@ -9378,7 +9389,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         configureLifeMapEntry()
         configureMemorySearchEntry()
         configureInterviewOutcomeEntry()
-        configureCandidateConfirmationEntry()
+        configureReviewBatchAcknowledgementEntry()
 
         statusLabel.font = DJDesignTokens.Font.title(20)
         statusLabel.textColor = DJDesignTokens.Color.textPrimary
@@ -9423,7 +9434,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             stackView.addArrangedSubview(lifeMapButton)
             stackView.addArrangedSubview(memorySearchButton)
             stackView.addArrangedSubview(interviewOutcomeButton)
-            stackView.addArrangedSubview(candidateConfirmationEntryButton)
+            stackView.addArrangedSubview(reviewBatchAcknowledgementEntryButton)
         }
         [statusLabel, detailLabel, inputTextView, submitButton].forEach(stackView.addArrangedSubview)
         if presentation == .product {
@@ -9566,10 +9577,10 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         interviewOutcomeButton.alpha = 0.45
     }
 
-    private func configureCandidateConfirmationEntry() {
+    private func configureReviewBatchAcknowledgementEntry() {
         var configuration = UIButton.Configuration.tinted()
-        configuration.title = "查看待确认记忆"
-        configuration.image = UIImage(systemName: "checkmark.circle")
+        configuration.title = "确认进入整理"
+        configuration.image = UIImage(systemName: "tray.and.arrow.down")
         configuration.imagePadding = 8
         configuration.baseForegroundColor = DJDesignTokens.Color.textPrimary
         configuration.baseBackgroundColor = DJDesignTokens.Color.surface
@@ -9579,16 +9590,16 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             bottom: 12,
             trailing: 14
         )
-        candidateConfirmationEntryButton.configuration = configuration
-        candidateConfirmationEntryButton.contentHorizontalAlignment = .leading
-        candidateConfirmationEntryButton.layer.cornerRadius = 10
-        candidateConfirmationEntryButton.accessibilityIdentifier =
-            "owner-truth-interview-pending-confirmation-entry"
-        candidateConfirmationEntryButton.accessibilityLabel = "查看待确认记忆"
-        candidateConfirmationEntryButton.isHidden = true
-        candidateConfirmationEntryButton.addTarget(
+        reviewBatchAcknowledgementEntryButton.configuration = configuration
+        reviewBatchAcknowledgementEntryButton.contentHorizontalAlignment = .leading
+        reviewBatchAcknowledgementEntryButton.layer.cornerRadius = 10
+        reviewBatchAcknowledgementEntryButton.accessibilityIdentifier =
+            "owner-truth-interview-review-batch-acknowledgement-entry"
+        reviewBatchAcknowledgementEntryButton.accessibilityLabel = "确认进入整理"
+        reviewBatchAcknowledgementEntryButton.isHidden = true
+        reviewBatchAcknowledgementEntryButton.addTarget(
             self,
-            action: #selector(candidateConfirmationEntryTapped),
+            action: #selector(reviewBatchAcknowledgementEntryTapped),
             for: .touchUpInside
         )
     }
@@ -9815,7 +9826,8 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         interviewOutcomeButton.isHidden = presentation != .product || !interviewOutcomePolicyAvailable()
         interviewOutcomeButton.isEnabled = canReadInterviewOutcome
         interviewOutcomeButton.alpha = canReadInterviewOutcome ? 1 : 0.45
-        updateCandidateConfirmationEntry(for: state)
+        resetReviewBatchAcknowledgementIfNeeded(for: state)
+        updateReviewBatchAcknowledgementEntry(for: state)
         statusLabel.text = statusText(for: state)
         detailLabel.text = detailText(for: state)
         onViewStateRendered?(state)
@@ -9953,31 +9965,121 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         navigationController?.pushViewController(controller, animated: true)
     }
 
-    private func updateCandidateConfirmationEntry(for state: OwnerTruthInterviewNaturalInputViewState) {
-        let isVisible = presentation == .product
-            && state.phase == .ready
-            && state.continuation?.state == .reviewPending
-            && candidateConfirmationPolicyAvailable()
-        candidateConfirmationEntryButton.isHidden = !isVisible
-        candidateConfirmationEntryButton.isEnabled = isVisible
-        candidateConfirmationEntryButton.alpha = isVisible ? 1 : 0
-    }
-
-    @objc private func candidateConfirmationEntryTapped() {
-        guard presentation == .product,
-              renderedState.phase == .ready,
-              renderedState.continuation?.state == .reviewPending,
-              candidateConfirmationPolicyAvailable(),
-              accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
+    private func resetReviewBatchAcknowledgementIfNeeded(
+        for state: OwnerTruthInterviewNaturalInputViewState
+    ) {
+        guard state.continuation?.state == .reviewPending,
+              let receipt = state.latestReceipt else {
+            reviewBatchAcknowledgementUseCase = nil
+            reviewBatchAcknowledgementThreadID = nil
+            reviewBatchAcknowledgementSessionID = nil
+            reviewBatchAcknowledgementState = .idle
             return
         }
-        let controller = OwnerTruthInterviewCandidateConfirmationInboxViewController(
-            accountLease: accountLease,
-            client: candidateConfirmationInboxClient,
-            accountLeaseRuntime: accountLeaseRuntime,
-            releasePolicyAvailable: candidateConfirmationPolicyAvailable
+
+        guard let acknowledgedThreadID = reviewBatchAcknowledgementThreadID,
+              let acknowledgedSessionID = reviewBatchAcknowledgementSessionID,
+              acknowledgedThreadID != receipt.threadID
+                || acknowledgedSessionID != receipt.sessionID else {
+            return
+        }
+        reviewBatchAcknowledgementUseCase = nil
+        reviewBatchAcknowledgementThreadID = nil
+        reviewBatchAcknowledgementSessionID = nil
+        reviewBatchAcknowledgementState = .idle
+    }
+
+    private func updateReviewBatchAcknowledgementEntry(
+        for state: OwnerTruthInterviewNaturalInputViewState
+    ) {
+        let canOffer = canOfferReviewBatchAcknowledgement(for: state)
+        let isInFlight = reviewBatchAcknowledgementState.phase == .discovering
+            || reviewBatchAcknowledgementState.phase == .acknowledging
+        let isAcknowledged = reviewBatchAcknowledgementState.phase == .acknowledged
+        let isVisible = canOffer && !isAcknowledged
+        reviewBatchAcknowledgementEntryButton.isHidden = !isVisible
+        reviewBatchAcknowledgementEntryButton.isEnabled = isVisible && !isInFlight
+        reviewBatchAcknowledgementEntryButton.alpha = isVisible ? (isInFlight ? 0.45 : 1) : 0
+        var configuration = reviewBatchAcknowledgementEntryButton.configuration
+        configuration?.title = reviewBatchAcknowledgementState.phase == .failed
+            ? "重新确认整理"
+            : "确认进入整理"
+        reviewBatchAcknowledgementEntryButton.configuration = configuration
+    }
+
+    private func canOfferReviewBatchAcknowledgement(
+        for state: OwnerTruthInterviewNaturalInputViewState
+    ) -> Bool {
+        presentation == .product
+            && state.phase == .ready
+            && state.continuation?.state == .reviewPending
+            && state.latestReceipt?.lifecycle == .ended
+            && reviewBatchAcknowledgementPolicyAvailable()
+            && accountLeaseRuntime.validate(accountLease, at: .ui).allowed
+    }
+
+    @objc private func reviewBatchAcknowledgementEntryTapped() {
+        guard canOfferReviewBatchAcknowledgement(for: renderedState),
+              reviewBatchAcknowledgementState.phase != .discovering,
+              reviewBatchAcknowledgementState.phase != .acknowledging,
+              reviewBatchAcknowledgementState.phase != .acknowledged else {
+            return
+        }
+        let alert = UIAlertController(
+            title: "整理本次分享",
+            message: "确认后会开始整理本次内容。整理完成后，仍由你决定哪些内容保存为记忆。",
+            preferredStyle: .alert
         )
-        navigationController?.pushViewController(controller, animated: true)
+        alert.addAction(UIAlertAction(title: "暂不整理", style: .cancel))
+        alert.addAction(UIAlertAction(title: "确认整理", style: .default) { [weak self] _ in
+            self?.acknowledgeCurrentReviewBatch()
+        })
+        present(alert, animated: true)
+    }
+
+    private func acknowledgeCurrentReviewBatch() {
+        guard canOfferReviewBatchAcknowledgement(for: renderedState),
+              let receipt = renderedState.latestReceipt else {
+            return
+        }
+
+        let useCase: OwnerTruthInterviewReviewBatchAcknowledgementUseCase
+        if let existingUseCase = reviewBatchAcknowledgementUseCase,
+           reviewBatchAcknowledgementThreadID == receipt.threadID,
+           reviewBatchAcknowledgementSessionID == receipt.sessionID {
+            useCase = existingUseCase
+        } else {
+            let createdUseCase = OwnerTruthInterviewReviewBatchAcknowledgementUseCase(
+                accountLease: accountLease,
+                threadID: receipt.threadID,
+                sessionID: receipt.sessionID,
+                inboxClient: reviewBatchInboxClient,
+                acknowledgementClient: reviewBatchAcknowledgementClient,
+                accountLeaseRuntime: accountLeaseRuntime,
+                releasePolicyAvailable: reviewBatchAcknowledgementPolicyAvailable
+            )
+            createdUseCase.onViewStateChange = { [weak self] acknowledgementState in
+                if Thread.isMainThread {
+                    self?.renderReviewBatchAcknowledgement(acknowledgementState)
+                } else {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.renderReviewBatchAcknowledgement(acknowledgementState)
+                    }
+                }
+            }
+            reviewBatchAcknowledgementUseCase = createdUseCase
+            reviewBatchAcknowledgementThreadID = receipt.threadID
+            reviewBatchAcknowledgementSessionID = receipt.sessionID
+            useCase = createdUseCase
+        }
+        useCase.send(.acknowledge)
+    }
+
+    private func renderReviewBatchAcknowledgement(
+        _ state: OwnerTruthInterviewReviewBatchAcknowledgementViewState
+    ) {
+        reviewBatchAcknowledgementState = state
+        render(renderedState)
     }
 
     private func configureBoundaryControls() {
@@ -10211,6 +10313,11 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         useCase.send(.restoreCooldown)
     }
 
+    func acknowledgeReviewBatchForUIQA() {
+        guard presentation == .product else { return }
+        acknowledgeCurrentReviewBatch()
+    }
+
     private func statusText(for state: OwnerTruthInterviewNaturalInputViewState) -> String {
         switch state.phase {
         case .idle:
@@ -10284,7 +10391,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         case .narrativeRecorded:
             return "这段分享已经留好"
         case .reviewPending:
-            return candidateConfirmationPolicyAvailable() ? "有内容等待你确认" : "这段分享已经留好"
+            return reviewBatchAcknowledgementStatusText()
         case .paused:
             return "这次先到这里"
         case .ended:
@@ -10301,9 +10408,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         case .narrativeRecorded:
             return "这段分享已经留好。想起来时，可以继续补充。"
         case .reviewPending:
-            return candidateConfirmationPolicyAvailable()
-                ? "确认后才会进入你的记忆。"
-                : "这段分享已经留好。"
+            return reviewBatchAcknowledgementDetailText()
         case .paused:
             return continuation.canContinueLater
                 ? "想继续时，可以再回来。"
@@ -10312,6 +10417,51 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             return continuation.canContinueLater
                 ? "以后还可以开启新的故事。"
                 : "这段分享已留好。"
+        }
+    }
+
+    private func reviewBatchAcknowledgementStatusText() -> String {
+        switch reviewBatchAcknowledgementState.phase {
+        case .discovering, .acknowledging:
+            return "正在确认整理"
+        case .acknowledged:
+            return "这段分享正在整理"
+        case .failed, .unavailable:
+            return "暂时无法确认整理"
+        case .idle:
+            return "这段分享等待整理"
+        }
+    }
+
+    private func reviewBatchAcknowledgementDetailText() -> String {
+        switch reviewBatchAcknowledgementState.phase {
+        case .discovering:
+            return "正在确认本次分享的整理边界。"
+        case .acknowledging:
+            return "正在开始整理本次内容。"
+        case .acknowledged:
+            return "整理完成后，会等待你确认要不要保存为记忆。"
+        case .failed, .unavailable:
+            return reviewBatchAcknowledgementFailureDetailText()
+        case .idle:
+            return reviewBatchAcknowledgementPolicyAvailable()
+                ? "确认整理后，会开始整理本次内容。"
+                : "这段分享已经留好。"
+        }
+    }
+
+    private func reviewBatchAcknowledgementFailureDetailText() -> String {
+        switch reviewBatchAcknowledgementState.notice {
+        case .matchingBatchUnavailable:
+            return "暂时未找到本次待整理内容，请稍后再试。"
+        case .contractMismatch:
+            return "本次分享的状态已更新，请重新进入查看。"
+        case .accountUnavailable, .staleAccountLease:
+            return "账号已变化，请重新进入。"
+        case .releasePolicyDisabled:
+            return "当前暂不能开始整理，请稍后再试。"
+        case .invalidVault, .requestFailed, nil:
+            return "暂时无法确认整理，请稍后重试。"
         }
     }
 
@@ -10388,7 +10538,9 @@ enum OwnerTruthInterviewNaturalInputUIQASmoke {
         presentation: OwnerTruthInterviewNaturalInputPresentation = .qa,
         client: OwnerTruthInterviewNaturalInputClient? = nil,
         postNarrativeContinuationState: OwnerTruthInterviewNaturalInputContinuationState = .narrativeRecorded,
-        candidateConfirmationPolicyAvailable: @escaping () -> Bool = { false }
+        reviewBatchInboxClient: OwnerTruthInterviewPendingReviewBatchInboxClient? = nil,
+        reviewBatchAcknowledgementClient: OwnerTruthInterviewReviewBatchAcknowledgementClient? = nil,
+        reviewBatchAcknowledgementPolicyAvailable: @escaping () -> Bool = { false }
     ) -> OwnerTruthInterviewNaturalInputViewController {
         let client = client ?? InterviewNaturalInputUIQAClient(
             vaultID: OwnerTruthVaultID(accountLease.vaultId),
@@ -10403,11 +10555,19 @@ enum OwnerTruthInterviewNaturalInputUIQASmoke {
             // Production still receives its gate from Echo's fresh policy decision.
             previewGateEnabled = { true }
         }
+        let resolvedReviewBatchInboxClient = reviewBatchInboxClient
+            ?? (client as? OwnerTruthInterviewPendingReviewBatchInboxClient)
+            ?? DreamJourneyBackendClient.shared
+        let resolvedReviewBatchAcknowledgementClient = reviewBatchAcknowledgementClient
+            ?? (client as? OwnerTruthInterviewReviewBatchAcknowledgementClient)
+            ?? DreamJourneyBackendClient.shared
         return OwnerTruthInterviewNaturalInputViewController(
             accountLease: accountLease,
             client: client,
             presentation: presentation,
-            candidateConfirmationPolicyAvailable: candidateConfirmationPolicyAvailable,
+            reviewBatchInboxClient: resolvedReviewBatchInboxClient,
+            reviewBatchAcknowledgementClient: resolvedReviewBatchAcknowledgementClient,
+            reviewBatchAcknowledgementPolicyAvailable: reviewBatchAcknowledgementPolicyAvailable,
             qaGateEnabled: previewGateEnabled
         )
     }
@@ -11278,7 +11438,9 @@ private final class InterviewNaturalInputBoundaryUIQAScenario {
     }
 }
 
-private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalInputClient {
+private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalInputClient,
+    OwnerTruthInterviewPendingReviewBatchInboxClient,
+    OwnerTruthInterviewReviewBatchAcknowledgementClient {
     private let vaultID: OwnerTruthVaultID?
     private let postNarrativeContinuationState: OwnerTruthInterviewNaturalInputContinuationState
     private var sessionsWithNarrative = Set<UUID>()
@@ -11289,6 +11451,11 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
     private(set) var lastTopicSwitchPauseReceipt: OwnerTruthInterviewNaturalInputReceipt?
     private(set) var pacingEvents: [OwnerTruthInterviewPacingEvent] = []
     private(set) var pacingDeepeningTurnCount = 0
+    private(set) var lastEndedReceipt: OwnerTruthInterviewNaturalInputReceipt?
+    private let reviewBatchID = OwnerTruthRecordID(
+        rawValue: UUID(uuidString: "00000000-0000-0000-0000-0000000000b7")!
+    )
+    private var acknowledgedReviewBatch = false
 
     init(
         vaultID: OwnerTruthVaultID?,
@@ -11439,8 +11606,87 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
                 expectedVaultID: vaultID
             )
             endedSessions.insert(command.sessionID.rawValue)
+            lastEndedReceipt = receipt
             currentSessionReceipt = nil
             completion(.success(receipt))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func fetchOwnerTruthInterviewPendingReviewBatchInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewPendingReviewBatchInbox, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID, let receipt = lastEndedReceipt else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        do {
+            completion(.success(try OwnerTruthInterviewPendingReviewBatchInbox(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewPendingReviewBatchInbox.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "reviewBatches": acknowledgedReviewBatch ? [] : [[
+                        "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                        "threadId": receipt.threadID.rawValue.uuidString,
+                        "sessionId": receipt.sessionID.rawValue.uuidString,
+                        "reviewBatchVersion": 1,
+                        "sessionVersion": receipt.sessionVersion,
+                        "trigger": OwnerTruthInterviewReviewBatchTrigger.sessionExit.rawValue,
+                        "capturedCandidateBatchTurnCount": 1,
+                    ]],
+                ],
+                expectedVaultID: vaultID
+            )))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func acknowledgeOwnerTruthInterviewReviewBatch(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
+        completion: @escaping (Result<OwnerTruthInterviewReviewBatchAcknowledgementReceipt, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID,
+              let receipt = lastEndedReceipt,
+              command.reviewBatchID == reviewBatchID,
+              command.threadID == receipt.threadID,
+              command.sessionID == receipt.sessionID,
+              command.expectedSessionVersion == receipt.sessionVersion,
+              command.expectedReviewBatchVersion == 1 else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        do {
+            let outcome: OwnerTruthInterviewReviewBatchAcknowledgementOutcome = acknowledgedReviewBatch
+                ? .deduplicated
+                : .acknowledged
+            acknowledgedReviewBatch = true
+            completion(.success(try OwnerTruthInterviewReviewBatchAcknowledgementReceipt(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthInterviewReviewBatchAcknowledgementReceipt.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "status": outcome.rawValue,
+                    "session": [
+                        "threadId": receipt.threadID.rawValue.uuidString,
+                        "sessionId": receipt.sessionID.rawValue.uuidString,
+                        "sessionVersion": receipt.sessionVersion + 1,
+                    ],
+                    "reviewBatch": [
+                        "reviewBatchId": reviewBatchID.rawValue.uuidString,
+                        "trigger": OwnerTruthInterviewReviewBatchTrigger.sessionExit.rawValue,
+                        "state": "acknowledged",
+                        "capturedCandidateBatchTurnCount": 1,
+                        "rowVersion": 2,
+                    ],
+                    "candidateProposal": ["status": "notStarted"],
+                    "memoryActivation": ["status": "notApplicable"],
+                ],
+                expectedVaultID: vaultID,
+                expectedReviewBatchID: reviewBatchID
+            )))
         } catch {
             completion(.failure(error))
         }

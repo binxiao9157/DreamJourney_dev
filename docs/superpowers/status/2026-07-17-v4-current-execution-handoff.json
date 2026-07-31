@@ -33,6 +33,7 @@
       "WI-S1-01-07_G0_CITATION_CURRENTNESS_READ_AND_VALUE_FREE_FEEDBACK_VERIFIED_LOCAL",
       "WI-S1-01-06_G0_INTERVIEW_SESSION_EXPLICIT_END_VERIFIED_LOCAL",
       "WI-S1-01-06_G0_FORMAL_INTERVIEW_SESSION_EXIT_REVIEW_BATCH_VERIFIED_LOCAL",
+      "WI-S1-01-06_G1_FORMAL_INTERVIEW_PENDING_REVIEW_BATCH_ACKNOWLEDGEMENT_IOS_PRODUCT_SURFACE_VERIFIED_LOCAL",
       "WI-S1-01-06_G2_FORMAL_INTERVIEW_SESSION_EXIT_REVIEW_BATCH_DEPLOYED_POSTGRES_VERIFIED_cab554e",
       "WI-S1-01-06_G2_FORMAL_INTERVIEW_SESSION_EXIT_OUTCOME_PRESENTATION_DEPLOYED_POSTGRES_VERIFIED_e7dccd6",
       "WI-S1-01-06_G0_SOURCE_CANDIDATE_EXTRACTION_WORKER_VERIFIED_LOCAL",
@@ -80,7 +81,7 @@
       "WI-S1-03-05_G0_AI_REPLY_RUNTIME_PLAYBACK_ADMISSION_FENCE_VERIFIED_LOCAL",
       "WI-S1-03-05_G0_REPLY_DELIVERY_CAPTURE_RESUME_FENCE_VERIFIED_LOCAL"
     ],
-    "currentSubSlice": "WI-S1-01-06_G2_FORMAL_INTERVIEW_SESSION_EXIT_OUTCOME_PRESENTATION_DEPLOYED_POSTGRES_VERIFIED_e7dccd6 / A formally ended Owner interview with no materialized Owner Truth vault now returns only rebuilding, zero confirmed/eligible counts and the current pending review-batch count after independent outcome-policy admission. Existing-vault projection denial remains fail-closed. This is default-off backend G2 plus existing iOS UIQA evidence only; no public Echo change, Candidate/Memory activation, provider, production-row mutation or true-device claim.",
+    "currentSubSlice": "WI-S1-01-06_G1_FORMAL_INTERVIEW_PENDING_REVIEW_BATCH_ACKNOWLEDGEMENT_IOS_PRODUCT_SURFACE_VERIFIED_LOCAL / The existing deployed formal pending-review-batch contract is now consumed by the policy-gated iOS natural-input product Sheet. A normally ended current Owner session may acknowledge only one exact opaque thread/session batch before organization begins. The UI does not bridge directly to Candidate confirmation or Memory activation, fails closed for missing or ambiguous batches, and remains default-off outside its existing policy boundary. Local iOS verification only; no backend change, deployment, public Echo change, Provider or true-device claim.",
   "m0BGuidedRecommendationPresentationEvidence": {
     "status": "VERIFIED_LOCAL / DEFAULT_OFF / NOT_DEPLOYED",
     "evidence": "docs/superpowers/status/2026-07-30-m0b-guided-recommendation-presentation-g0.md",
@@ -128,6 +129,12 @@
     "evidence": "docs/superpowers/status/2026-07-31-v4-owner-truth-formal-exit-outcome-presentation.md",
     "scope": "A formally ended Owner session with no materialized Owner Truth vault may return only rebuilding plus the current scoped pending-review count after its independent ownerTruthInterviewOutcome policy is admitted. Natural-input policy does not inherit outcome access; existing-vault denial remains fail-closed. No conversation, Candidate, Source, MemoryVersion, session/thread/review-batch/provider/policy identifiers or public UI are exposed.",
     "validation": "Backend outcome/input suites passed 37/37; Owner Truth interview end G0 gate passed 98 tests; Python compile and diff check passed; existing iOS default-off outcome UIQA smoke passed with no backend request or persistent write. Backend main@e7dccd6 deployed; isolated container/Postgres smoke passed with productionBusinessDataMutated=false."
+  },
+  "formalInterviewPendingReviewBatchAcknowledgementIOSProductEvidence": {
+    "status": "VERIFIED_LOCAL / DEFAULT_OFF / BACKEND_CONTRACT_ALREADY_DEPLOYED",
+    "evidence": "docs/superpowers/status/2026-07-31-v4-owner-truth-pending-review-batch-acknowledgement.md",
+    "scope": "The iOS natural-input product Sheet reads and acknowledges only one exact current pending review batch after normal session end and current AccountLease/policy admission. It exposes no Source, Candidate, Memory, Provider or narrative data, and cannot open Candidate confirmation directly. Archive Candidate confirmation remains a separate flow.",
+    "validation": "OwnerTruthContractsTests passed 146/146; static acknowledgement and candidate-presentation guards passed; the simulator natural-input product-surface smoke completed ended -> acknowledged rendering with no network or persistent write; related iOS build and diff checks passed. No backend source change, redeploy, public promotion or true-device claim."
   },
   "gateEvidence": {
     "G0": "VERIFIED_LOCAL / LEGACY_KBLITE_GAP_PROMPT_FENCE / QUERY_RANKED_CONTEXT_SHADOW / LIVE_ECHO_OWNER_TRUTH_CONTEXT_SHADOW_OBSERVER / LIVE_ECHO_OWNER_TRUTH_CONTEXT_QUERY_CORRELATION / LIVE_ECHO_CONTEXT_V1_V4_PARITY_OBSERVATION / CONTEXT_V1_RESPONSE_REQUEST_CORRELATION / CONFIRMED_PROJECTION_CONTEXT_MATERIALIZATION / INTERVIEW_TURN_CONFIRMED_PROJECTION_CONTEXT_BINDING / INTERVIEW_REVIEW_BATCH_AUTOMATION / INTERVIEW_REVIEW_BATCH_ACKNOWLEDGEMENT_API / INTERVIEW_CANDIDATE_PROPOSAL_ADMISSION_API / INTERVIEW_CANDIDATE_PROPOSAL_STATUS_API / FORMAL_INTERVIEW_CONFIRMATION_MEMORY_ACTIVATION / FORMAL_INTERVIEW_SINGLE_CONFIRMATION_MEMORY_ACTIVATION / FORMAL_CONFIRMATION_PROJECTION_WORKER_CHAIN / FORMAL_CONFIRMATION_CONTEXT_MATERIALIZATION_CHAIN / FORMAL_INTERVIEW_CANDIDATE_CONFIRMATION_INBOX / INTERVIEW_CANDIDATE_PROPOSAL_SOURCE_LIVENESS_STATUS / INTERVIEW_CANDIDATE_PROPOSAL_RESULT_STATUS / CONTEXT_CITATION_CURRENTNESS_GUARD / CORRECTION_RESOLUTION_SOURCE_CURRENTNESS / PROJECTION_RIGHTS_REVISION_FENCE / PROJECTION_RIGHTS_REBUILD_INTENT / PROJECTION_RIGHTS_POSTGRES_ADMISSION_ADAPTER / PROJECTION_RIGHTS_POSTGRES_SMOKE_PATH_PREPARED_NOT_EXECUTED / CITATION_RIGHTS_CURRENTNESS_REASON / CITATION_STALE_REASON_PRESERVATION / OWNER_QA_CITATION_CURRENTNESS_READ_AND_VALUE_FREE_FEEDBACK / INTERVIEW_SESSION_EXPLICIT_END / SOURCE_CANDIDATE_EXTRACTION_WORKER / SOURCE_CANDIDATE_EXTRACTION_POSTGRES_SMOKE_PREPARED_NOT_EXECUTED / WORKER_FORMAL_PROVENANCE_FENCE_STATIC_VERIFIED_LOCAL / INTERVIEW_TOPIC_SWITCH_QA_CONTRACT_VERIFIED_LOCAL / INTERVIEW_ORCHESTRATION_QA_READ_VERIFIED_LOCAL / CONTEXT_CITATION_OFFLINE_NEGATIVE_CORPUS_VERIFIED_LOCAL_BACKEND_f4f1182 / AUTHORITY_EPOCH_CROSS_CHAIN_NEGATIVE_CORPUS_VERIFIED_LOCAL_BACKEND_8f84567 / BACKEND_LOCAL_COMMITTED_f3c476d_10c8cf0_defb350_44046ae_eb2b085_96e05ff_3a4ae63_7c86649_86196eb_6cb4a4d_d1887f3_3c21462_17d7060_41d3731_8a4423f_d7ef8f3_8d21a42_333a506_7a88fcb_d793865_76f0b4b_d3c0c4e_9af7fd4_ad154ff_dc36306_714c592 / IOS_LOCAL_COMMITTED_31f4fc8_PLUS_INTERVIEW_ORCHESTRATION_READ",
@@ -945,5 +952,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-31T19:34:00+08:00"
+  "updatedAt": "2026-07-31T20:35:13+08:00"
 }
