@@ -302,3 +302,33 @@ git diff --check
 
 结果：`PASS`。scoped XCTest `26/26`、两类 static/handoff checks、无签名 iPhoneOS Debug build 和
 diff check 均通过。本条不改变公开 UI、Context payload、腾讯/火山 Provider、后端、部署或真机范围。
+
+### 2026-07-31 G0 AI 回信 Runtime Playback Admission 栅栏
+
+`EchoViewModel.receiveAIReply(...)` 现在返回 `Bool`。只有 reducer 接受 `replyStarted` 时，才会写入
+AI transcript 并进入 speaking 状态；空文本、中性安全模式、重复回信或当前回合已经结束时均返回
+`false`。
+
+`EchoViewController.onTTSStarted(...)` 在任何腾讯数智人文本派发、PCM audio-drive 派发或本地 Echo
+播放 audio owner 获取之前检查该返回值。被拒绝的迟到或重复 provider callback 只记录
+`aiReplyRejectedBeforeRuntimePlayback`，不能在已停止或新回合中再次播出旧回信。QA-only 腾讯 text-drive、
+PCM-drive 和异步后端 PCM 合成回调也使用同一接纳栅栏。
+
+新增 `EchoViewModelTurnAdmissionTests.testDuplicateAIReplyIsRejectedBeforeTranscriptSideEffects`：首条回信
+被接受，重复回信被拒绝，AI transcript 只保留一条且状态保持 `speaking`。正式
+`run-ios-echo-application-coordinator-gate.sh` 现在同时运行 coordinator 和 turn-reducer 的静态检查，避免
+该防线只依赖手工命令。
+
+执行：
+
+```bash
+DJ_IOS_TEST_DESTINATION='platform=iOS Simulator,name=iPhone 17' \\
+  bash Scripts/QA/product-v4/run-ios-echo-application-coordinator-gate.sh
+python3 Scripts/QA/product-v4/product-v4-ios-echo-turn-reducer-check.py
+python3 Scripts/QA/product-v4/product-v4-current-handoff-check.py
+git diff --check
+```
+
+预期验证范围：coordinator、turn reducer 和 view-model turn admission 共 `27/27` 项 scoped XCTest；此前相同
+Swift 源码已经通过 generic unsigned iPhoneOS Debug build。该栅栏仅收紧本地 G0 生命周期，不变更 Echo
+视觉、Context payload、后端、Provider、部署或真机结论。

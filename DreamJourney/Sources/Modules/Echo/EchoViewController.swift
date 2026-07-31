@@ -6385,7 +6385,14 @@ final class EchoViewController: UIViewController {
         hasRunTencentDigitalHumanTextDriveSmoke = true
         let text = "真机数字人文本驱动测试。请用腾讯数智人说出这句话。"
         viewModel.prepareVoiceInteraction()
-        viewModel.receiveAIReply(text)
+        guard viewModel.receiveAIReply(text) else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "textDriveSmokeReplyRejected",
+                states: ["reason": "turnIntentRejected"]
+            )
+            return
+        }
         sendEchoReplyToDigitalHumanRuntimeIfReady(text, source: "trueDeviceTextDriveSmoke")
         PrivacySafeDiagnostics.log(
             subsystem: "TencentDigitalHuman",
@@ -6406,7 +6413,14 @@ final class EchoViewController: UIViewController {
         hasRunTencentDigitalHumanPCMDriveSmoke = true
         let text = "腾讯音频驱动 POC：正在用本地标准 PCM 测试声音和口型。"
         viewModel.prepareVoiceInteraction()
-        viewModel.receiveAIReply(text)
+        guard viewModel.receiveAIReply(text) else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "pcmDriveSmokeReplyRejected",
+                states: ["reason": "turnIntentRejected"]
+            )
+            return
+        }
         sendPCMDriveTestSignalToDigitalHumanRuntime(
             source: "trueDevicePCMDriveSmoke",
             replyText: text
@@ -6504,7 +6518,19 @@ final class EchoViewController: UIViewController {
                         return
                     }
                     self.renderVoiceStatus(text: nil, isVisible: false)
-                    self.viewModel.receiveAIReply(text)
+                    guard self.viewModel.receiveAIReply(text) else {
+                        self.trueDeviceBackendPCMDriveTrace.markFailure(
+                            reason: "turnIntentRejected",
+                            detail: "Echo reducer rejected the asynchronous synthesis reply"
+                        )
+                        self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "turnIntentRejected")
+                        PrivacySafeDiagnostics.log(
+                            subsystem: "TencentDigitalHuman",
+                            event: "backendPCMDriveReplyRejected",
+                            states: ["reason": "turnIntentRejected"]
+                        )
+                        return
+                    }
                     let sent = self.sendTencentAudioDriveSynthesisToDigitalHumanRuntime(
                         synthesis,
                         source: "trueDeviceBackendPCMDriveSmoke",
@@ -7370,7 +7396,14 @@ extension EchoViewController: DialogEngineDelegate {
                   !self.viewModel.isWaitingForDelayedReply else { return }
             self.pendingAIText = nil
             self.cancelDigitalHumanReplyPrewarm()
-            self.viewModel.receiveAIReply(text)
+            guard self.viewModel.receiveAIReply(text) else {
+                PrivacySafeDiagnostics.log(
+                    subsystem: "Echo",
+                    event: "aiReplyRejectedBeforeRuntimePlayback",
+                    states: ["reason": "turnIntentRejected"]
+                )
+                return
+            }
             if self.shouldDispatchEchoReplyToTencentProvider {
                 self.sendEchoReplyToDigitalHumanRuntimeIfReady(text, source: "ttsStartedFallback")
             }

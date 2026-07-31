@@ -122,6 +122,35 @@ def main() -> None:
         < receive_reply.find("memoryManager.recordAITurn"),
         "stale AI replies must be reducer-fenced before transcript writes",
     )
+    require(
+        ") -> Bool {" in receive_reply,
+        "receiveAIReply must return whether the reducer accepted runtime playback",
+    )
+    require(
+        "return true" in receive_reply,
+        "accepted AI replies must report admission to their caller",
+    )
+
+    tts_started = source_slice(
+        view_controller,
+        "    func onTTSStarted(text: String)",
+        "    func onTTSFinished()",
+    )
+    for snippet in (
+        "guard self.viewModel.receiveAIReply(text) else",
+        "aiReplyRejectedBeforeRuntimePlayback",
+    ):
+        require(snippet in tts_started, f"TTS playback admission fence missing: {snippet}")
+    require(
+        tts_started.find("guard self.viewModel.receiveAIReply(text) else")
+        < tts_started.find("self.sendEchoReplyToDigitalHumanRuntimeIfReady"),
+        "a rejected AI reply must not dispatch Tencent provider playback",
+    )
+    require(
+        tts_started.find("guard self.viewModel.receiveAIReply(text) else")
+        < tts_started.find("self.acquireEchoRuntimeAudioOwner("),
+        "a rejected AI reply must not acquire local playback audio ownership",
+    )
 
     require(
         view_model.count("updateState(") == 3,
@@ -134,6 +163,7 @@ def main() -> None:
         "func testStoredDueReplyAwaitsServerResultAfterAppRelaunchWithoutAcceptingStaleReply()",
         "func testFailureOnlyRetriesFromFailureState()",
         "func testDuplicateFinalUserVoiceIsRejectedBeforeTranscriptSideEffects()",
+        "func testDuplicateAIReplyIsRejectedBeforeTranscriptSideEffects()",
     ):
         require(test_name in tests, f"Echo turn reducer test missing: {test_name}")
 

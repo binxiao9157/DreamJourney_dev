@@ -659,6 +659,60 @@ final class EchoViewModelTurnAdmissionTests: XCTestCase {
             return XCTFail("the accepted first turn must remain the sole thinking turn")
         }
     }
+
+    func testDuplicateAIReplyIsRejectedBeforeTranscriptSideEffects() throws {
+        let suiteName = "EchoViewModelTurnAdmissionTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
+        runtime.publish(session: AccountSession(
+            subjectId: "owner-1",
+            vaultId: "vault-1",
+            sessionId: "session-1",
+            tokenFamilyId: "token-family-1",
+            sessionVersion: 1,
+            generation: 1,
+            generationId: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+            state: .active,
+            activatedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        ))
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-1"))
+        let viewModel = EchoViewModel(
+            archiveContextStatusProvider: { .empty },
+            accountLeaseRuntime: runtime,
+            delayedReplyStore: EchoDelayedReplyStore(
+                defaults: defaults,
+                accountLeaseRuntime: runtime
+            ),
+            delayedReplyCallsiteScopeStore: EchoDelayedReplyCallsiteScopeStore(
+                defaults: defaults,
+                accountLeaseRuntime: runtime
+            )
+        )
+        var appendedAIReplies: [String] = []
+        viewModel.onTranscriptAppend = { text, isUser in
+            if !isUser {
+                appendedAIReplies.append(text)
+            }
+        }
+
+        viewModel.prepareVoiceInteraction()
+        viewModel.beginVoiceInteraction()
+        XCTAssertTrue(viewModel.finishUserVoice(
+            text: "我想讲讲小时候散步的事",
+            accountLease: lease,
+            resourceOwnerId: lease.subjectId,
+            roleContextKey: "owner-1|self"
+        ))
+        XCTAssertTrue(viewModel.receiveAIReply("我在听，慢慢说。"))
+        XCTAssertFalse(viewModel.receiveAIReply("这是一条重复旧回信。"))
+        XCTAssertEqual(appendedAIReplies, ["我在听，慢慢说。"])
+        guard case .speaking = viewModel.state else {
+            return XCTFail("the accepted first reply must remain the sole speaking turn")
+        }
+    }
 }
 
 final class EchoApplicationCoordinatorTests: XCTestCase {

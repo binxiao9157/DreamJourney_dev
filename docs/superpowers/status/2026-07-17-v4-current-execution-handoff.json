@@ -72,10 +72,11 @@
     "WI-S1-01-07_G0_SAME_REQUEST_V1_V4_CONTEXT_COMPARE_IOS_QA_EVIDENCE_VERIFIED_LOCAL",
     "WI-S1-01-07_G0_SAME_REQUEST_V1_V4_CONTEXT_COMPARE_IOS_DUPLICATE_CALLBACK_FENCE_VERIFIED_LOCAL",
     "WI-S1-03-05_G0_CONTEXT_BUILD_DELIVERY_ONCE_FENCE_VERIFIED_LOCAL",
-    "WI-S1-03-05_G0_FINAL_ASR_TURN_ADMISSION_FENCE_VERIFIED_LOCAL",
-    "WI-S1-03-05_G0_DUPLICATE_FINAL_ASR_AUDIO_LEASE_FENCE_VERIFIED_LOCAL"
-  ],
-  "currentSubSlice": "WI-S1-03-05_G0_DUPLICATE_FINAL_ASR_AUDIO_LEASE_FENCE_VERIFIED_LOCAL / EchoViewModel returns reducer admission for a final user voice, and EchoViewController rejects a duplicate or stale final before it can release the active capture audio lease, dispatch Tencent, build Context, persist trace or schedule a delayed reply. The crisis safety branch retains an explicit separate capture-release path. This is local G0 lifecycle evidence only; Echo UI, Context payload, fallback, Authority, providers, deployment and true-device claims remain unchanged.",
+      "WI-S1-03-05_G0_FINAL_ASR_TURN_ADMISSION_FENCE_VERIFIED_LOCAL",
+      "WI-S1-03-05_G0_DUPLICATE_FINAL_ASR_AUDIO_LEASE_FENCE_VERIFIED_LOCAL",
+      "WI-S1-03-05_G0_AI_REPLY_RUNTIME_PLAYBACK_ADMISSION_FENCE_VERIFIED_LOCAL"
+    ],
+    "currentSubSlice": "WI-S1-03-05_G0_AI_REPLY_RUNTIME_PLAYBACK_ADMISSION_FENCE_VERIFIED_LOCAL / EchoViewModel returns reducer admission for AI replies, and EchoViewController rejects a stale or duplicate provider callback before Tencent text/PCM dispatch or local playback audio ownership. QA-only text/PCM drive helpers apply the same fence. This is local G0 lifecycle evidence only; Echo UI, Context payload, fallback, Authority, providers, deployment and true-device claims remain unchanged.",
   "m0BGuidedRecommendationPresentationEvidence": {
     "status": "VERIFIED_LOCAL / DEFAULT_OFF / NOT_DEPLOYED",
     "evidence": "docs/superpowers/status/2026-07-30-m0b-guided-recommendation-presentation-g0.md",
@@ -226,7 +227,7 @@
   },
   "baselines": {
     "backend": "main@d7ef8f3 / The default-disabled Source Candidate worker is locally verified: it reads only a current active text/conversation Source inside its UoW, writes a restricted pending Candidate plus immutable extraction/consumer state, and keeps raw Source text out of worker output. The disposable async-effect smoke now executes this worker path when an isolated Postgres runner is reachable; its static contract is verified, but this host cannot resolve its container-only database hostname. It does not call a Provider or model and cannot promote MemoryVersion. Owner Truth Projection rights revisions remain locally verified: active revision changes require a rebuild and revoked rights fail closed across Projection, Context Shadow, KBLite compatibility and derived SearchDocument reads. Migration 0061 and real rights ingress remain default off pending deployed Postgres smoke. Formal interview confirmation MemoryVersion activation, typed Projection Worker and fail-closed-to-ready Context materialization chain remain local evidence; candidate-proposal status invalidates stale admitted Source staging and accurately reflects any already-persisted synthetic result; Answer/Citation rejects Projection drift; Correction Resolution direct-write protection still needs deployment and PostgreSQL smoke; additive migration 0060 remains a default-off read-only legacy identity inbox bridge; Time Letter recipient admission remains a separate default-off no-write exact-grant shadow. Recovery owner-orphan quarantine now adds a local read-only HMAC-redacted inventory over an isolated recovery target only; it neither mutates data nor removes the existing recovery NO_GO.",
-    "ios": "feature/prd-stitch-ui-adaptation@3ce1a77 / same-turn QA-only Context V1/V4 parity now requires legacy response request correlation behind two gates; no public UI change or real Provider/device claim",
+    "ios": "feature/prd-stitch-ui-adaptation@7356e4a plus local AI-reply runtime-playback admission fence / stale or duplicate AI callbacks cannot dispatch Tencent text/PCM or acquire local Echo playback ownership; no public UI change or real Provider/device claim",
     "requirements": "DreamJourney V4 final requirement delta 2026-07-16"
   },
   "evidenceItems": [
@@ -934,5 +935,5 @@
     "sourceRoadmapSha256": "6ff7fe6ee835eaaeb7444fa45f756f01a13deaaabe8af254e09405e078401663"
   },
   "schemaVersion": "dreamjourney.current-execution-handoff.v1",
-  "updatedAt": "2026-07-31T10:53:00+08:00"
+  "updatedAt": "2026-07-31T11:05:00+08:00"
 }

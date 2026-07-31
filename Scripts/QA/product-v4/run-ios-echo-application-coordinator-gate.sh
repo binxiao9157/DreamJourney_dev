@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOSTED_BUILD_DESTINATION="${DJ_IOS_TEST_BUILD_DESTINATION:-generic/platform=iOS}"
 
 python3 "$ROOT/Scripts/QA/product-v4/product-v4-ios-echo-application-coordinator-check.py"
+python3 "$ROOT/Scripts/QA/product-v4/product-v4-ios-echo-turn-reducer-check.py"
 
 # The hosted test bundle links provider SDKs unavailable to SwiftPM. CI may pass
 # a runnable simulator destination to execute the isolated coordinator and

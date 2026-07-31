@@ -1560,15 +1560,17 @@ final class EchoViewModel {
         return applyTurnIntent(.userTurnAccepted, state: .thinking)
     }
 
-    func receiveAIReply(_ text: String) {
-        guard !isNeutralSafetyMode else { return }
+    @discardableResult
+    func receiveAIReply(_ text: String) -> Bool {
+        guard !isNeutralSafetyMode else { return false }
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty,
-              applyTurnIntent(.replyStarted, state: .speaking) else { return }
+              applyTurnIntent(.replyStarted, state: .speaking) else { return false }
 
         memoryManager.refreshForCurrentContext()
         memoryManager.recordAITurn(text: normalizedText)
         onTranscriptAppend?(normalizedText, false)
+        return true
     }
 
     @discardableResult
