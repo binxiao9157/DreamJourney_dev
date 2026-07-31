@@ -4240,6 +4240,7 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
         self.focusedReviewBatchID = focusedReviewBatchID
         useCase = OwnerTruthInterviewCandidateConfirmationInboxUseCase(
             accountLease: accountLease,
+            focusedReviewBatchID: focusedReviewBatchID,
             client: client,
             accountLeaseRuntime: accountLeaseRuntime,
             releasePolicyAvailable: releasePolicyAvailable
@@ -4327,6 +4328,7 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
         renderedState = state
         visibleItems = visibleItems(for: state)
         refreshButton.isEnabled = state.phase != .loading
+            && (state.phase != .unavailable || state.notice == .contextChanged)
         statusLabel.text = statusText(for: state)
         emptyStateLabel.text = emptyText(for: state)
         emptyStateLabel.isHidden = emptyStateLabel.text == nil
@@ -4338,7 +4340,18 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
         case .idle:
             return "正在准备待确认记忆。"
         case .unavailable:
-            return "待确认记忆暂未开放。"
+            switch state.notice {
+            case .contentUnavailable:
+                return focusedReviewBatchID == nil
+                    ? "待确认内容已更新，当前不可用。"
+                    : "本次待确认内容已失效，无法继续确认。"
+            case .contextChanged:
+                return "待确认内容已更新，请重新载入。"
+            case .releasePolicyDisabled:
+                return "待确认记忆暂未开放。"
+            case .invalidVault, .accountUnavailable, .staleAccountLease, .requestFailed, nil:
+                return "待确认记忆暂未开放。"
+            }
         case .loading:
             return "正在读取待确认记忆。"
         case .ready:
@@ -4361,7 +4374,13 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
         case .ready where focusedReviewBatchID != nil && visibleItems.isEmpty:
             return "本次整理尚未准备好待确认内容。"
         case .unavailable:
-            return "该功能仅会在获准的发布策略下开放。"
+            switch state.notice {
+            case .contentUnavailable, .contextChanged:
+                return nil
+            case .releasePolicyDisabled, .invalidVault, .accountUnavailable, .staleAccountLease,
+                 .requestFailed, nil:
+                return "该功能仅会在获准的发布策略下开放。"
+            }
         case .failed:
             return "请点右上角重新载入。"
         default:
@@ -10262,6 +10281,12 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             && candidateProposalAdmissionState.receipt != nil
             && candidateProposalStatusPolicyAvailable()
             && accountLeaseRuntime.validate(accountLease, at: .ui).allowed
+            && !isCandidateProposalStatusContentUnavailable
+    }
+
+    private var isCandidateProposalStatusContentUnavailable: Bool {
+        candidateProposalStatusState.phase == .unavailable
+            && candidateProposalStatusState.notice == .contentUnavailable
     }
 
     private func updateCandidateProposalStatusEntry(
@@ -10278,7 +10303,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         if isReviewReady {
             configuration?.title = "查看待确认内容"
             candidateProposalStatusEntryButton.accessibilityLabel = "查看待确认内容"
-        } else if candidateProposalStatusState.phase == .failed {
+        } else if candidateProposalStatusState.phase == .failed
+                    || (candidateProposalStatusState.phase == .unavailable
+                        && candidateProposalStatusState.notice == .contextChanged) {
             configuration?.title = "重新查看整理状态"
             candidateProposalStatusEntryButton.accessibilityLabel = "重新查看整理状态"
         } else {
@@ -10891,7 +10918,17 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         switch candidateProposalStatusState.phase {
         case .idle, .loading:
             return "正在查看整理进度"
-        case .unavailable, .failed:
+        case .unavailable:
+            switch candidateProposalStatusState.notice {
+            case .contentUnavailable:
+                return "本次整理内容已失效"
+            case .contextChanged:
+                return "本次整理状态已更新"
+            case .releasePolicyDisabled, .invalidVault, .accountUnavailable, .staleAccountLease,
+                 .requestFailed, nil:
+                return "暂时无法查看整理进度"
+            }
+        case .failed:
             return "暂时无法查看整理进度"
         case .ready:
             switch candidateProposalStatusState.status?.candidateReviewState {
@@ -10917,7 +10954,17 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             return "后续整理结果仍会等待你确认是否保存为记忆。"
         case .loading:
             return "正在确认本次分享的整理进度。"
-        case .unavailable, .failed:
+        case .unavailable:
+            switch candidateProposalStatusState.notice {
+            case .contentUnavailable:
+                return "当前没有写入任何正式记忆。请返回后重新进入本次分享。"
+            case .contextChanged:
+                return "本次分享的状态已更新，请重新查看整理进度。"
+            case .releasePolicyDisabled, .invalidVault, .accountUnavailable, .staleAccountLease,
+                 .requestFailed, nil:
+                return "当前没有写入任何正式记忆，可稍后再次查看。"
+            }
+        case .failed:
             return "当前没有写入任何正式记忆，可稍后再次查看。"
         case .ready:
             switch candidateProposalStatusState.status?.candidateReviewState {

@@ -754,6 +754,96 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertNil(useCase.viewState.inbox)
     }
 
+    func testInterviewCandidateConfirmationInboxUseCaseMapsTerminalReadFailures() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let cases: [(
+            name: String,
+            error: Error,
+            phase: OwnerTruthInterviewCandidateConfirmationInboxPhase,
+            notice: OwnerTruthInterviewCandidateConfirmationInboxNotice
+        )] = [
+            (
+                "403",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 403,
+                    context: .init(detail: "forbidden")
+                ),
+                .unavailable,
+                .contentUnavailable
+            ),
+            (
+                "409",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 409,
+                    context: .init(detail: "context changed")
+                ),
+                .unavailable,
+                .contextChanged
+            ),
+        ]
+
+        for testCase in cases {
+            let client = InterviewCandidateConfirmationInboxClientSpy()
+            client.readResult = .failure(testCase.error)
+            let useCase = OwnerTruthInterviewCandidateConfirmationInboxUseCase(
+                accountLease: lease,
+                client: client,
+                accountLeaseRuntime: runtime,
+                releasePolicyAvailable: { true }
+            )
+
+            useCase.send(.refresh)
+
+            XCTAssertEqual(useCase.viewState.phase, testCase.phase, testCase.name)
+            XCTAssertEqual(useCase.viewState.notice, testCase.notice, testCase.name)
+            XCTAssertNil(useCase.viewState.inbox, testCase.name)
+        }
+    }
+
+    func testFocusedInterviewCandidateConfirmationInboxUseCaseFailsClosedWhenBatchIsMissing() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let focusedReviewBatchID = recordID("00000000-0000-0000-0000-000000000123")
+        let client = InterviewCandidateConfirmationInboxClientSpy()
+        client.readResult = .success(try interviewCandidateConfirmationInbox(
+            vaultID: lease.vaultId,
+            reviewBatchIDs: [recordID("00000000-0000-0000-0000-000000000124")]
+        ))
+        let useCase = OwnerTruthInterviewCandidateConfirmationInboxUseCase(
+            accountLease: lease,
+            focusedReviewBatchID: focusedReviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .contentUnavailable)
+        XCTAssertNil(useCase.viewState.inbox)
+    }
+
+    func testUnfocusedInterviewCandidateConfirmationInboxUseCaseKeepsEmptyInboxEmpty() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = InterviewCandidateConfirmationInboxClientSpy()
+        client.readResult = .success(try interviewCandidateConfirmationInbox(
+            vaultID: lease.vaultId,
+            reviewBatchIDs: []
+        ))
+        let useCase = OwnerTruthInterviewCandidateConfirmationInboxUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.viewState.phase, .empty)
+        XCTAssertNil(useCase.viewState.notice)
+        XCTAssertTrue(try XCTUnwrap(useCase.viewState.inbox).items.isEmpty)
+    }
+
     func testInterviewCandidateMemoryActivationInboxDecodesOnlyOpaqueHandles() throws {
         let (_, lease) = try makeActiveRuntime()
         let reviewBatchID = recordID("00000000-0000-0000-0000-000000000075")
@@ -1133,6 +1223,164 @@ final class OwnerTruthContractsTests: XCTestCase {
 
         XCTAssertEqual(useCase.viewState.phase, .ready)
         XCTAssertTrue(try XCTUnwrap(useCase.viewState.status).isBound(to: lease))
+    }
+
+    func testInterviewCandidateProposalStatusUseCaseFailsClosedForInvalidatedInactiveStatus() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000125")
+        let client = InterviewCandidateProposalStatusClientSpy()
+        client.readResult = .success(try interviewCandidateProposalStatus(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            candidateProposalState: .invalidated,
+            sourceState: .inactive,
+            candidateExtractionState: .blocked
+        ))
+        let useCase = OwnerTruthInterviewCandidateProposalStatusUseCase(
+            accountLease: lease,
+            reviewBatchID: reviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .contentUnavailable)
+        XCTAssertNil(useCase.viewState.status)
+    }
+
+    func testInterviewCandidateProposalStatusUseCaseMapsReadFailures() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let cases: [(
+            name: String,
+            error: Error,
+            phase: OwnerTruthInterviewCandidateProposalStatusPhase,
+            notice: OwnerTruthInterviewCandidateProposalStatusNotice
+        )] = [
+            (
+                "403",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 403,
+                    context: .init(detail: "forbidden")
+                ),
+                .unavailable,
+                .contentUnavailable
+            ),
+            (
+                "404",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 404,
+                    context: .init(detail: "not found")
+                ),
+                .unavailable,
+                .contentUnavailable
+            ),
+            (
+                "410",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 410,
+                    context: .init(detail: "gone")
+                ),
+                .unavailable,
+                .contentUnavailable
+            ),
+            (
+                "409",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 409,
+                    context: .init(detail: "context changed")
+                ),
+                .unavailable,
+                .contextChanged
+            ),
+            (
+                "release policy",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 500,
+                    context: .init(code: "release_policy_denied", detail: "disabled")
+                ),
+                .unavailable,
+                .releasePolicyDisabled
+            ),
+            (
+                "candidate review unavailable",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 500,
+                    context: .init(code: "ownerTruthCandidateReviewUnavailable", detail: "unavailable")
+                ),
+                .unavailable,
+                .releasePolicyDisabled
+            ),
+            (
+                "5xx",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 500,
+                    context: .init(detail: "server error")
+                ),
+                .failed,
+                .requestFailed
+            ),
+            (
+                "ordinary error",
+                InterviewCandidateProposalStatusClientSpyError.missingReadResult,
+                .failed,
+                .requestFailed
+            ),
+        ]
+
+        for (index, testCase) in cases.enumerated() {
+            let reviewBatchID = recordID(String(
+                format: "00000000-0000-0000-0000-%012d",
+                126 + index
+            ))
+            let client = InterviewCandidateProposalStatusClientSpy()
+            client.readResult = .failure(testCase.error)
+            let useCase = OwnerTruthInterviewCandidateProposalStatusUseCase(
+                accountLease: lease,
+                reviewBatchID: reviewBatchID,
+                client: client,
+                accountLeaseRuntime: runtime,
+                releasePolicyAvailable: { true }
+            )
+
+            useCase.send(.refresh)
+
+            XCTAssertEqual(useCase.viewState.phase, testCase.phase, testCase.name)
+            XCTAssertEqual(useCase.viewState.notice, testCase.notice, testCase.name)
+            XCTAssertNil(useCase.viewState.status, testCase.name)
+        }
+    }
+
+    func testInterviewCandidateProposalStatusUseCasePrioritizesStaleLeaseOverFailureMapping() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000134")
+        let client = InterviewCandidateProposalStatusClientSpy()
+        client.deferRead = true
+        let useCase = OwnerTruthInterviewCandidateProposalStatusUseCase(
+            accountLease: lease,
+            reviewBatchID: reviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.refresh)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferredRead(.failure(DreamJourneyBackendClient.ClientError.backendError(
+            statusCode: 409,
+            context: .init(detail: "context changed")
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        XCTAssertNil(useCase.viewState.status)
     }
 
     func testInterviewCandidateConfirmationActionDecodesValueMinimizedResult() throws {
@@ -6646,6 +6894,68 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(tableView.numberOfRows(inSection: 0), 1)
         XCTAssertEqual(controller.title, "本次待确认记忆")
         XCTAssertEqual(client.requestCount, 1)
+    }
+
+    @MainActor
+    func testFocusedCandidateConfirmationInboxRendersMissingBatchAsTerminalUnavailable() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let focusedReviewBatchID = recordID("00000000-0000-0000-0000-000000000085")
+        let client = InterviewCandidateConfirmationInboxClientSpy()
+        client.readResult = .success(try interviewCandidateConfirmationInbox(
+            vaultID: lease.vaultId,
+            reviewBatchIDs: [recordID("00000000-0000-0000-0000-000000000086")]
+        ))
+        let controller = OwnerTruthInterviewCandidateConfirmationInboxViewController(
+            accountLease: lease,
+            focusedReviewBatchID: focusedReviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+        let navigationController = UINavigationController(rootViewController: controller)
+
+        controller.loadViewIfNeeded()
+
+        let statusLabel = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-confirmation-inbox-status"
+        ) as? UILabel)
+        let tableView = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-confirmation-inbox-list"
+        ) as? UITableView)
+        XCTAssertEqual(statusLabel.text, "本次待确认内容已失效，无法继续确认。")
+        XCTAssertEqual(tableView.numberOfRows(inSection: 0), 0)
+        XCTAssertFalse(try XCTUnwrap(controller.navigationItem.rightBarButtonItem).isEnabled)
+        XCTAssertNil(controller.presentedViewController)
+        XCTAssertTrue(navigationController.topViewController === controller)
+    }
+
+    @MainActor
+    func testFocusedCandidateConfirmationInboxKeepsManualRefreshForContextChange() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let focusedReviewBatchID = recordID("00000000-0000-0000-0000-000000000087")
+        let client = InterviewCandidateConfirmationInboxClientSpy()
+        client.readResult = .failure(DreamJourneyBackendClient.ClientError.backendError(
+            statusCode: 409,
+            context: .init(detail: "context changed")
+        ))
+        let controller = OwnerTruthInterviewCandidateConfirmationInboxViewController(
+            accountLease: lease,
+            focusedReviewBatchID: focusedReviewBatchID,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        controller.loadViewIfNeeded()
+
+        let statusLabel = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-confirmation-inbox-status"
+        ) as? UILabel)
+        XCTAssertEqual(statusLabel.text, "待确认内容已更新，请重新载入。")
+        XCTAssertTrue(try XCTUnwrap(controller.navigationItem.rightBarButtonItem).isEnabled)
     }
 
     @MainActor

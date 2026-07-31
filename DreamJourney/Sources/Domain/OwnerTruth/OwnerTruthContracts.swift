@@ -1517,6 +1517,10 @@ struct OwnerTruthInterviewCandidateProposalStatus: Equatable, Sendable {
         leaseBinding?.matches(accountLease) == true
     }
 
+    var isTerminallyUnavailable: Bool {
+        candidateProposalState == .invalidated || sourceState == .inactive
+    }
+
     private static func isCoherent(
         reviewBatchState: OwnerTruthInterviewCandidateProposalReviewBatchState,
         candidateProposalState: OwnerTruthInterviewCandidateProposalAdmissionState,
@@ -2594,6 +2598,8 @@ enum OwnerTruthInterviewCandidateConfirmationInboxNotice: Equatable, Sendable {
     case invalidVault
     case accountUnavailable
     case staleAccountLease
+    case contentUnavailable
+    case contextChanged
     case requestFailed
 }
 
@@ -2616,6 +2622,7 @@ struct OwnerTruthInterviewCandidateConfirmationInboxViewState: Equatable, Sendab
 final class OwnerTruthInterviewCandidateConfirmationInboxUseCase {
     private let accountLease: AccountLease
     private let vaultID: OwnerTruthVaultID?
+    private let focusedReviewBatchID: OwnerTruthRecordID?
     private let client: OwnerTruthInterviewCandidateConfirmationInboxClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let releasePolicyAvailable: () -> Bool
@@ -2629,12 +2636,14 @@ final class OwnerTruthInterviewCandidateConfirmationInboxUseCase {
 
     init(
         accountLease: AccountLease,
+        focusedReviewBatchID: OwnerTruthRecordID? = nil,
         client: OwnerTruthInterviewCandidateConfirmationInboxClient,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = { false }
     ) {
         self.accountLease = accountLease
         vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.focusedReviewBatchID = focusedReviewBatchID
         self.client = client
         self.accountLeaseRuntime = accountLeaseRuntime
         self.releasePolicyAvailable = releasePolicyAvailable
@@ -2699,13 +2708,20 @@ final class OwnerTruthInterviewCandidateConfirmationInboxUseCase {
                 return
             }
             let boundInbox = inbox.bound(to: accountLease)
+            if let focusedReviewBatchID,
+               !boundInbox.items.contains(where: {
+                   $0.reviewBatchID == focusedReviewBatchID && $0.readiness == .reviewReady
+               }) {
+                resetForUnavailable(.contentUnavailable)
+                return
+            }
             viewState = OwnerTruthInterviewCandidateConfirmationInboxViewState(
                 phase: boundInbox.items.isEmpty ? .empty : .ready,
                 inbox: boundInbox,
                 notice: nil
             )
-        case .failure:
-            transitionFailure()
+        case .failure(let error):
+            transitionFailure(for: error)
         }
     }
 
@@ -2724,6 +2740,19 @@ final class OwnerTruthInterviewCandidateConfirmationInboxUseCase {
             inbox: nil,
             notice: .requestFailed
         )
+    }
+
+    private func transitionFailure(for error: Error) {
+        switch OwnerTruthInterviewCandidateReviewReadFailureDisposition(error: error) {
+        case .releasePolicyDisabled:
+            resetForUnavailable(.releasePolicyDisabled)
+        case .contentUnavailable:
+            resetForUnavailable(.contentUnavailable)
+        case .contextChanged:
+            resetForUnavailable(.contextChanged)
+        case .retryable:
+            transitionFailure()
+        }
     }
 }
 
@@ -3213,6 +3242,8 @@ enum OwnerTruthInterviewCandidateProposalStatusNotice: Equatable, Sendable {
     case invalidVault
     case accountUnavailable
     case staleAccountLease
+    case contentUnavailable
+    case contextChanged
     case requestFailed
 }
 
@@ -3323,13 +3354,17 @@ final class OwnerTruthInterviewCandidateProposalStatusUseCase {
                 transitionFailure()
                 return
             }
+            guard !status.isTerminallyUnavailable else {
+                resetForUnavailable(.contentUnavailable)
+                return
+            }
             viewState = OwnerTruthInterviewCandidateProposalStatusViewState(
                 phase: .ready,
                 status: status.bound(to: accountLease),
                 notice: nil
             )
-        case .failure:
-            transitionFailure()
+        case .failure(let error):
+            transitionFailure(for: error)
         }
     }
 
@@ -3348,6 +3383,59 @@ final class OwnerTruthInterviewCandidateProposalStatusUseCase {
             status: nil,
             notice: .requestFailed
         )
+    }
+
+    private func transitionFailure(for error: Error) {
+        switch OwnerTruthInterviewCandidateReviewReadFailureDisposition(error: error) {
+        case .releasePolicyDisabled:
+            resetForUnavailable(.releasePolicyDisabled)
+        case .contentUnavailable:
+            resetForUnavailable(.contentUnavailable)
+        case .contextChanged:
+            resetForUnavailable(.contextChanged)
+        case .retryable:
+            transitionFailure()
+        }
+    }
+}
+
+private enum OwnerTruthInterviewCandidateReviewReadFailureDisposition {
+    case releasePolicyDisabled
+    case contentUnavailable
+    case contextChanged
+    case retryable
+
+    init(error: Error) {
+        guard let clientError = error as? DreamJourneyBackendClient.ClientError else {
+            self = .retryable
+            return
+        }
+
+        switch clientError {
+        case .featurePolicyDenied:
+            self = .releasePolicyDisabled
+        case .backendError(let statusCode, let context):
+            if context.code == "release_policy_denied"
+                || context.code == "ownerTruthCandidateReviewUnavailable" {
+                self = .releasePolicyDisabled
+            } else if statusCode == 409 {
+                self = .contextChanged
+            } else if statusCode == 403 || statusCode == 404 || statusCode == 410 {
+                // The current backend normally expresses a stale proposal as
+                // a typed success state, 403, 409, or a missing focused
+                // inbox item. Treat future 404/410 responses conservatively.
+                self = .contentUnavailable
+            } else {
+                self = .retryable
+            }
+        case .invalidJSONResponse,
+             .unsupportedJSONRoot,
+             .userAuthenticationRequired,
+             .sessionUpgradeRequired,
+             .accountScopeChanged,
+             .recoveryAccessDenied:
+            self = .retryable
+        }
     }
 }
 

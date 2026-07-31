@@ -84,6 +84,7 @@ for required in [
     "candidateProposalAdmissionState.receipt != nil",
     "candidateProposalStatusPolicyAvailable()",
     "accountLeaseRuntime.validate(accountLease, at: .ui).allowed",
+    "!isCandidateProposalStatusContentUnavailable",
 ] {
     require(statusGate.contains(required), "status handoff must remain owner-, lease-, and policy-fenced: \(required)")
 }
@@ -136,6 +137,15 @@ for required in [
 ] {
     require(focusedInbox.contains(required), "focused confirmation inbox is missing: \(required)")
 }
+for required in [
+    "focusedReviewBatchID: focusedReviewBatchID",
+    "OwnerTruthInterviewCandidateConfirmationInboxUseCase",
+    "本次待确认内容已失效，无法继续确认。",
+    "待确认内容已更新，请重新载入。",
+    "case .contextChanged:",
+] {
+    require(focusedInbox.contains(required), "focused confirmation inbox must fail closed: \(required)")
+}
 require(
     !focusedInbox.contains("OwnerTruthCandidateReviewQAGate"),
     "focused confirmation inbox must remain on the product policy path"
@@ -145,6 +155,10 @@ for required in [
     "OwnerTruthInterviewCandidateProposalStatusUseCase",
     "candidateReviewState",
     "effectExecutionState == .disabled",
+    "var isTerminallyUnavailable",
+    "case contentUnavailable",
+    "case contextChanged",
+    "status.isTerminallyUnavailable",
 ] {
     require(contracts.contains(required), "typed value-minimized status contract is missing: \(required)")
 }
@@ -153,6 +167,10 @@ for testName in [
     "func testNaturalInputProductStartsCandidateProposalOnlyAfterAcknowledgement()",
     "func testNaturalInputProductOpensFocusedConfirmationInboxOnlyWhenProposalReviewIsReady()",
     "func testFocusedCandidateConfirmationInboxFiltersOtherReviewBatches()",
+    "func testFocusedCandidateConfirmationInboxRendersMissingBatchAsTerminalUnavailable()",
+    "func testFocusedCandidateConfirmationInboxKeepsManualRefreshForContextChange()",
+    "func testInterviewCandidateProposalStatusUseCaseFailsClosedForInvalidatedInactiveStatus()",
+    "func testInterviewCandidateProposalStatusUseCasePrioritizesStaleLeaseOverFailureMapping()",
 ] {
     require(tests.contains(testName), "status handoff test is missing: \(testName)")
 }
