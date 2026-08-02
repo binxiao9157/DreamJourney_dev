@@ -2,7 +2,7 @@
 
 日期：2026-08-02
 计划：`docs/superpowers/plans/2026-08-02-dreamjourney-v4-remaining-functional-closure-plan.md`
-状态：`WAVE_0_IN_PROGRESS`
+状态：`WAVE_1_IN_PROGRESS`
 
 ## 1. 本计划的完成口径
 
@@ -45,8 +45,8 @@
 
 | Wave | 目标 | 当前状态 | 当前事实 / 下一步 |
 | --- | --- | --- | --- |
-| 0 | 基线与提交隔离 | `IN_PROGRESS` | 本文件已建立；下一步提交这份基线与计划状态。 |
-| 1 | Owner Truth 真实闭环 | `IN_PROGRESS` | Source、Candidate、Confirmation、MemoryVersion、Projection 和 Context 模型已存在，但关键路径仍由 QA/default-off/captured-policy 分段阻断；需建立服务端 closed-pilot 授权和真实 E2E。 |
+| 0 | 基线与提交隔离 | `FUNCTIONAL_VERIFIED` | 计划与本文件已由 iOS 提交 `afa51ba` 建立；后续继续严格使用精确暂存，不处理并行工作区。 |
+| 1 | Owner Truth 真实闭环 | `IN_PROGRESS` | 后端提交 `2dd20f2` 已把 closed-pilot 资格改为服务端 allowlist，客户端 header/query 不再能自行授权；Extraction/Projection worker、真实 Context 读路径和部署 E2E 仍未完成。 |
 | 2 | 引导式访谈 | `NOT_STARTED` | 已有会话、节奏、换题等局部合同；尚未作为正式 closed-pilot 自然输入闭环验收。 |
 | 3 | 双推荐与知识地图 | `NOT_STARTED` | 已有 QA/shadow 资产；未形成普通 closed-pilot 用户可用能力。 |
 | 4 | 数据权利、家庭与安全 | `NOT_STARTED` | 有局部 API、合同和 smoke；尚未完成全路由 owner-bound 验收。 |
@@ -72,11 +72,28 @@
 
 Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、媒体、Voice 或 Publication 新功能。
 
-## 5. 本轮提交白名单
+## 5. Wave 1 已完成 Slice：服务端 closed-pilot 授权
 
-Wave 0 只允许提交：
+- 后端提交：`2dd20f2 feat(release-policy): grant closed pilot server-side`。
+- 新增部署配置：`RELEASE_POLICY_CLOSED_PILOT_OWNER_IDS` 与
+  `RELEASE_POLICY_CLOSED_PILOT_FEATURES=ownerTruthCandidateReview`。
+- 资格只根据认证后的服务端用户 ID 判断；客户端声明
+  `X-DreamJourney-Policy-Cohort` 或 `cohort=closedPilotAdultSelf` 无效。
+- 默认值为空，普通 release 与未列入 allowlist 的用户保持拒绝。
+- 本 Slice 本地验证：
+  - `scripts/verify_backend.sh` 全量通过：`1683` 个单测、全部既有 Gate、
+    FastAPI smoke、编译和 `git diff --check`；
+  - Owner Truth 访谈、确认、结果、推荐、地图、检索与 client-compatibility
+    测试夹具均改为显式模拟服务端入组，覆盖了新的信任边界。
+- 尚未声明为 Wave 1 功能完成：没有部署、没有真实 closed-pilot 用户入组，
+  也没有启动 candidate/projection worker 或将 `/context/build` 切换为
+  confirmed Projection 权威读取。
 
-- `docs/superpowers/plans/2026-08-02-dreamjourney-v4-remaining-functional-closure-plan.md`
+## 6. 本轮提交白名单
+
+Wave 0 已提交。当前 Wave 1 的 iOS 侧只允许提交本状态文件；后端改动必须
+独立提交在 Backend 仓库。
+
 - `docs/superpowers/status/2026-08-02-v4-functional-closure-baseline.md`
 
 后续每个 Slice 在开始前更新本文件的状态、提交和验证证据；不使用全仓 `git add`。
