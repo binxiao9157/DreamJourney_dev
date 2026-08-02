@@ -11251,6 +11251,7 @@ final class OwnerTruthKBLiteCompatibilityProjectionRuntime {
 enum OwnerTruthCandidateReviewIntent: Equatable, Sendable {
     case refresh
     case accept(candidateID: OwnerTruthRecordID)
+    case acceptBatch(candidateIDs: [OwnerTruthRecordID])
     case correct(candidateID: OwnerTruthRecordID, correctedSummary: String)
     case reject(candidateID: OwnerTruthRecordID)
 }
@@ -11262,6 +11263,7 @@ enum OwnerTruthCandidateInboxPhase: Equatable, Sendable {
     case ready
     case empty
     case submitting(OwnerTruthRecordID)
+    case submittingBatch(completedCount: Int, totalCount: Int)
     case failed
 }
 
@@ -11271,12 +11273,18 @@ enum OwnerTruthCandidateInboxNotice: Equatable, Sendable {
     case staleAccountLease
     case invalidVault
     case candidateUnavailable
+    case batchSelectionRequired
+    case batchSelectionInvalid
     case correctionRequired
+    case candidateSourceInactive
+    case candidateVersionChanged
     case reviewResultMismatch
     case requestFailed
     case candidateAccepted
     case candidateCorrected
     case candidateRejected
+    case batchAccepted(count: Int)
+    case batchInterrupted(acceptedCount: Int)
 }
 
 struct OwnerTruthCandidateInboxItemViewState: Equatable, Sendable, Identifiable {
@@ -11290,6 +11298,7 @@ struct OwnerTruthCandidateInboxItemViewState: Equatable, Sendable, Identifiable 
     let reviewMode: String
     let candidateVersion: Int
     let supportsCorrection: Bool
+    let supportsBatchAcceptance: Bool
 }
 
 struct OwnerTruthCandidateReviewReceiptViewState: Equatable, Sendable {
@@ -11299,21 +11308,42 @@ struct OwnerTruthCandidateReviewReceiptViewState: Equatable, Sendable {
     let createdMemoryVersion: Bool
 }
 
+/// A batch is intentionally a sequence of per-Candidate server decisions.
+/// It never claims that several Candidate receipts were committed atomically.
+/// The remaining IDs are the only items the UI may offer for retry after a
+/// network error, source invalidation, or version conflict.
+struct OwnerTruthCandidateBatchReviewSummary: Equatable, Sendable {
+    let requestedCandidateIDs: [OwnerTruthRecordID]
+    let acceptedCandidateIDs: [OwnerTruthRecordID]
+    let pendingCandidateIDs: [OwnerTruthRecordID]
+    let failedCandidateID: OwnerTruthRecordID?
+
+    var requestedCount: Int {
+        requestedCandidateIDs.count
+    }
+
+    var acceptedCount: Int {
+        acceptedCandidateIDs.count
+    }
+}
+
 struct OwnerTruthCandidateInboxViewState: Equatable, Sendable {
     let phase: OwnerTruthCandidateInboxPhase
     let items: [OwnerTruthCandidateInboxItemViewState]
     let notice: OwnerTruthCandidateInboxNotice?
     let latestReceipt: OwnerTruthCandidateReviewReceiptViewState?
+    let latestBatchSummary: OwnerTruthCandidateBatchReviewSummary?
 
     static let idle = OwnerTruthCandidateInboxViewState(
         phase: .idle,
         items: [],
         notice: nil,
-        latestReceipt: nil
+        latestReceipt: nil,
+        latestBatchSummary: nil
     )
 }
 
-/// QA-only application boundary for Candidate review. It never accepts an
+/// Closed-pilot application boundary for Candidate review. It never accepts an
 /// owner identifier from the UI, does not write legacy Archive/KBLite state,
 /// and rejects stale account or stale async completion paths before ViewState
 /// is updated.
@@ -11329,6 +11359,10 @@ final class OwnerTruthCandidateReviewUseCase {
 
     private var candidatesByID: [OwnerTruthRecordID: OwnerTruthCandidateInboxItem] = [:]
     private var orderedCandidateIDs: [OwnerTruthRecordID] = []
+    // Commands remain stable for a pending batch retry in the same app
+    // lifetime. They are never persisted; after a restart the server inbox is
+    // authoritative and a 409 is explicitly surfaced instead of hidden.
+    private var batchCommandIDsByCandidateID: [OwnerTruthRecordID: String] = [:]
     private var operationGeneration: UInt = 0
 
     private(set) var viewState: OwnerTruthCandidateInboxViewState = .idle {
@@ -11360,6 +11394,8 @@ final class OwnerTruthCandidateReviewUseCase {
             refresh()
         case .accept(let candidateID):
             submit(candidateID: candidateID, action: .accept, correctedSummary: nil)
+        case .acceptBatch(let candidateIDs):
+            submitBatch(candidateIDs: candidateIDs)
         case .correct(let candidateID, let correctedSummary):
             submit(candidateID: candidateID, action: .correct, correctedSummary: correctedSummary)
         case .reject(let candidateID):
@@ -11375,7 +11411,8 @@ final class OwnerTruthCandidateReviewUseCase {
             phase: .loading,
             items: currentItems,
             notice: nil,
-            latestReceipt: nil
+            latestReceipt: nil,
+            latestBatchSummary: nil
         )
         client.fetchOwnerTruthCandidateInbox(vaultID: vaultID) { [weak self] result in
             self?.receiveInbox(result, vaultID: vaultID, generation: generation)
@@ -11406,7 +11443,8 @@ final class OwnerTruthCandidateReviewUseCase {
             phase: .submitting(candidateID),
             items: currentItems,
             notice: nil,
-            latestReceipt: nil
+            latestReceipt: nil,
+            latestBatchSummary: nil
         )
         client.reviewOwnerTruthCandidate(
             vaultID: vaultID,
@@ -11418,6 +11456,163 @@ final class OwnerTruthCandidateReviewUseCase {
                 candidate: candidate,
                 expectedAction: action,
                 generation: generation
+            )
+        }
+    }
+
+    private func submitBatch(candidateIDs: [OwnerTruthRecordID]) {
+        guard let vaultID = beginRequestOrFail() else { return }
+
+        let requestedIDs = orderedBatchCandidateIDs(from: candidateIDs)
+        guard !requestedIDs.isEmpty else {
+            transitionFailure(.batchSelectionRequired)
+            return
+        }
+        guard requestedIDs.count == Set(candidateIDs).count,
+              requestedIDs.allSatisfy({
+                  guard let candidate = candidatesByID[$0] else { return false }
+                  return Self.supportsBatchAcceptance(candidate)
+              }) else {
+            transitionFailure(.batchSelectionInvalid)
+            return
+        }
+
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        submitNextBatchCandidate(
+            requestedCandidateIDs: requestedIDs,
+            nextIndex: 0,
+            acceptedCandidateIDs: [],
+            latestReceipt: nil,
+            vaultID: vaultID,
+            generation: generation
+        )
+    }
+
+    private func submitNextBatchCandidate(
+        requestedCandidateIDs: [OwnerTruthRecordID],
+        nextIndex: Int,
+        acceptedCandidateIDs: [OwnerTruthRecordID],
+        latestReceipt: OwnerTruthCandidateReviewReceiptViewState?,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard nextIndex < requestedCandidateIDs.count else {
+            finishBatchSuccess(
+                requestedCandidateIDs: requestedCandidateIDs,
+                acceptedCandidateIDs: acceptedCandidateIDs,
+                latestReceipt: latestReceipt
+            )
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            resetForUnavailable(.accountUnavailable)
+            return
+        }
+
+        let candidateID = requestedCandidateIDs[nextIndex]
+        guard let candidate = candidatesByID[candidateID],
+              Self.supportsBatchAcceptance(candidate) else {
+            finishBatchFailure(
+                notice: .batchSelectionInvalid,
+                requestedCandidateIDs: requestedCandidateIDs,
+                acceptedCandidateIDs: acceptedCandidateIDs,
+                failedCandidateID: candidateID,
+                latestReceipt: latestReceipt
+            )
+            return
+        }
+        let commandID = batchCommandIDsByCandidateID[candidateID] ?? commandIDFactory()
+        batchCommandIDsByCandidateID[candidateID] = commandID
+        guard let command = makeCommand(
+            candidate: candidate,
+            action: .accept,
+            correctedSummary: nil,
+            commandID: commandID
+        ) else {
+            return
+        }
+
+        viewState = OwnerTruthCandidateInboxViewState(
+            phase: .submittingBatch(
+                completedCount: acceptedCandidateIDs.count,
+                totalCount: requestedCandidateIDs.count
+            ),
+            items: currentItems,
+            notice: nil,
+            latestReceipt: latestReceipt,
+            latestBatchSummary: batchSummary(
+                requestedCandidateIDs: requestedCandidateIDs,
+                acceptedCandidateIDs: acceptedCandidateIDs,
+                failedCandidateID: nil
+            )
+        )
+        client.reviewOwnerTruthCandidate(
+            vaultID: vaultID,
+            candidateID: candidateID,
+            command: command
+        ) { [weak self] result in
+            self?.receiveBatchDecision(
+                result,
+                candidate: candidate,
+                requestedCandidateIDs: requestedCandidateIDs,
+                nextIndex: nextIndex,
+                acceptedCandidateIDs: acceptedCandidateIDs,
+                latestReceipt: latestReceipt,
+                vaultID: vaultID,
+                generation: generation
+            )
+        }
+    }
+
+    private func receiveBatchDecision(
+        _ result: Result<OwnerTruthCandidateDecisionResult, Error>,
+        candidate: OwnerTruthCandidateInboxItem,
+        requestedCandidateIDs: [OwnerTruthRecordID],
+        nextIndex: Int,
+        acceptedCandidateIDs: [OwnerTruthRecordID],
+        latestReceipt: OwnerTruthCandidateReviewReceiptViewState?,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        switch result {
+        case .success(let decision):
+            guard decision.receipt.candidateID == candidate.id,
+                  decision.receipt.decision == OwnerTruthCandidateDecision.accepted else {
+                finishBatchFailure(
+                    notice: .reviewResultMismatch,
+                    requestedCandidateIDs: requestedCandidateIDs,
+                    acceptedCandidateIDs: acceptedCandidateIDs,
+                    failedCandidateID: candidate.id,
+                    latestReceipt: latestReceipt
+                )
+                return
+            }
+            candidatesByID.removeValue(forKey: candidate.id)
+            orderedCandidateIDs.removeAll { $0 == candidate.id }
+            batchCommandIDsByCandidateID.removeValue(forKey: candidate.id)
+            let receipt = Self.receiptViewState(from: decision)
+            submitNextBatchCandidate(
+                requestedCandidateIDs: requestedCandidateIDs,
+                nextIndex: nextIndex + 1,
+                acceptedCandidateIDs: acceptedCandidateIDs + [candidate.id],
+                latestReceipt: receipt,
+                vaultID: vaultID,
+                generation: generation
+            )
+        case .failure(let error):
+            finishBatchFailure(
+                notice: Self.failureNotice(for: error),
+                requestedCandidateIDs: requestedCandidateIDs,
+                acceptedCandidateIDs: acceptedCandidateIDs,
+                failedCandidateID: candidate.id,
+                latestReceipt: latestReceipt
             )
         }
     }
@@ -11441,20 +11636,22 @@ final class OwnerTruthCandidateReviewUseCase {
     private func makeCommand(
         candidate: OwnerTruthCandidateInboxItem,
         action: OwnerTruthCandidateReviewAction,
-        correctedSummary: String?
+        correctedSummary: String?,
+        commandID: String? = nil
     ) -> OwnerTruthCandidateReviewCommand? {
         do {
+            let stableCommandID = commandID ?? commandIDFactory()
             switch action {
             case .accept:
                 return try OwnerTruthCandidateReviewCommand(
-                    commandID: commandIDFactory(),
+                    commandID: stableCommandID,
                     expectedCandidateVersion: candidate.candidateVersion,
                     action: .accept,
                     reasonCode: "ownerReviewed"
                 )
             case .reject:
                 return try OwnerTruthCandidateReviewCommand(
-                    commandID: commandIDFactory(),
+                    commandID: stableCommandID,
                     expectedCandidateVersion: candidate.candidateVersion,
                     action: .reject,
                     reasonCode: "ownerReviewed"
@@ -11468,7 +11665,7 @@ final class OwnerTruthCandidateReviewUseCase {
                 var correctedValue = candidate.content
                 correctedValue[Self.correctionTextKey(for: candidate)] = .string(normalizedSummary)
                 return try OwnerTruthCandidateReviewCommand(
-                    commandID: commandIDFactory(),
+                    commandID: stableCommandID,
                     expectedCandidateVersion: candidate.candidateVersion,
                     action: .correct,
                     correctedValue: correctedValue,
@@ -11511,16 +11708,25 @@ final class OwnerTruthCandidateReviewUseCase {
                 }
                 nextCandidates[candidate.id] = candidate
             }
+            let retainedBatchCommandIDs = batchCommandIDsByCandidateID.filter { candidateID, _ in
+                guard let nextCandidate = nextCandidates[candidateID],
+                      let previousCandidate = candidatesByID[candidateID] else {
+                    return false
+                }
+                return nextCandidate.candidateVersion == previousCandidate.candidateVersion
+            }
             candidatesByID = nextCandidates
             orderedCandidateIDs = inbox.candidates.map(\.id)
+            batchCommandIDsByCandidateID = retainedBatchCommandIDs
             viewState = OwnerTruthCandidateInboxViewState(
                 phase: inbox.candidates.isEmpty ? .empty : .ready,
                 items: currentItems,
                 notice: nil,
-                latestReceipt: nil
+                latestReceipt: nil,
+                latestBatchSummary: nil
             )
-        case .failure:
-            transitionFailure(.requestFailed)
+        case .failure(let error):
+            transitionFailure(Self.failureNotice(for: error))
         }
     }
 
@@ -11544,20 +11750,16 @@ final class OwnerTruthCandidateReviewUseCase {
             }
             candidatesByID.removeValue(forKey: candidate.id)
             orderedCandidateIDs.removeAll { $0 == candidate.id }
-            let receipt = OwnerTruthCandidateReviewReceiptViewState(
-                candidateID: candidate.id,
-                decision: decision.receipt.decision,
-                outcome: decision.outcome,
-                createdMemoryVersion: decision.memoryActivation.memoryVersionID != nil
-            )
+            let receipt = Self.receiptViewState(from: decision)
             viewState = OwnerTruthCandidateInboxViewState(
                 phase: orderedCandidateIDs.isEmpty ? .empty : .ready,
                 items: currentItems,
                 notice: Self.successNotice(for: expectedAction),
-                latestReceipt: receipt
+                latestReceipt: receipt,
+                latestBatchSummary: nil
             )
-        case .failure:
-            transitionFailure(.requestFailed)
+        case .failure(let error):
+            transitionFailure(Self.failureNotice(for: error))
         }
     }
 
@@ -11574,7 +11776,8 @@ final class OwnerTruthCandidateReviewUseCase {
                 evidenceCount: candidate.sourceReferences.count,
                 reviewMode: candidate.reviewMode,
                 candidateVersion: candidate.candidateVersion,
-                supportsCorrection: true
+                supportsCorrection: true,
+                supportsBatchAcceptance: Self.supportsBatchAcceptance(candidate)
             )
         }
     }
@@ -11583,21 +11786,123 @@ final class OwnerTruthCandidateReviewUseCase {
         operationGeneration &+= 1
         candidatesByID.removeAll()
         orderedCandidateIDs.removeAll()
+        batchCommandIDsByCandidateID.removeAll()
         viewState = OwnerTruthCandidateInboxViewState(
             phase: .unavailable,
             items: [],
             notice: notice,
-            latestReceipt: nil
+            latestReceipt: nil,
+            latestBatchSummary: nil
         )
     }
 
-    private func transitionFailure(_ notice: OwnerTruthCandidateInboxNotice) {
+    private func transitionFailure(
+        _ notice: OwnerTruthCandidateInboxNotice,
+        latestReceipt: OwnerTruthCandidateReviewReceiptViewState? = nil,
+        latestBatchSummary: OwnerTruthCandidateBatchReviewSummary? = nil
+    ) {
         viewState = OwnerTruthCandidateInboxViewState(
             phase: .failed,
             items: currentItems,
             notice: notice,
-            latestReceipt: nil
+            latestReceipt: latestReceipt,
+            latestBatchSummary: latestBatchSummary
         )
+    }
+
+    private func finishBatchSuccess(
+        requestedCandidateIDs: [OwnerTruthRecordID],
+        acceptedCandidateIDs: [OwnerTruthRecordID],
+        latestReceipt: OwnerTruthCandidateReviewReceiptViewState?
+    ) {
+        let summary = batchSummary(
+            requestedCandidateIDs: requestedCandidateIDs,
+            acceptedCandidateIDs: acceptedCandidateIDs,
+            failedCandidateID: nil
+        )
+        viewState = OwnerTruthCandidateInboxViewState(
+            phase: orderedCandidateIDs.isEmpty ? .empty : .ready,
+            items: currentItems,
+            notice: .batchAccepted(count: acceptedCandidateIDs.count),
+            latestReceipt: latestReceipt,
+            latestBatchSummary: summary
+        )
+    }
+
+    private func finishBatchFailure(
+        notice: OwnerTruthCandidateInboxNotice,
+        requestedCandidateIDs: [OwnerTruthRecordID],
+        acceptedCandidateIDs: [OwnerTruthRecordID],
+        failedCandidateID: OwnerTruthRecordID?,
+        latestReceipt: OwnerTruthCandidateReviewReceiptViewState?
+    ) {
+        let normalizedNotice: OwnerTruthCandidateInboxNotice
+        switch notice {
+        case .requestFailed:
+            normalizedNotice = .batchInterrupted(acceptedCount: acceptedCandidateIDs.count)
+        default:
+            normalizedNotice = notice
+        }
+        transitionFailure(
+            normalizedNotice,
+            latestReceipt: latestReceipt,
+            latestBatchSummary: batchSummary(
+                requestedCandidateIDs: requestedCandidateIDs,
+                acceptedCandidateIDs: acceptedCandidateIDs,
+                failedCandidateID: failedCandidateID
+            )
+        )
+    }
+
+    private func orderedBatchCandidateIDs(
+        from candidateIDs: [OwnerTruthRecordID]
+    ) -> [OwnerTruthRecordID] {
+        let requestedIDs = Set(candidateIDs)
+        return orderedCandidateIDs.filter { requestedIDs.contains($0) }
+    }
+
+    private func batchSummary(
+        requestedCandidateIDs: [OwnerTruthRecordID],
+        acceptedCandidateIDs: [OwnerTruthRecordID],
+        failedCandidateID: OwnerTruthRecordID?
+    ) -> OwnerTruthCandidateBatchReviewSummary {
+        let acceptedIDs = Set(acceptedCandidateIDs)
+        return OwnerTruthCandidateBatchReviewSummary(
+            requestedCandidateIDs: requestedCandidateIDs,
+            acceptedCandidateIDs: acceptedCandidateIDs,
+            pendingCandidateIDs: requestedCandidateIDs.filter { !acceptedIDs.contains($0) },
+            failedCandidateID: failedCandidateID
+        )
+    }
+
+    private static func supportsBatchAcceptance(
+        _ candidate: OwnerTruthCandidateInboxItem
+    ) -> Bool {
+        candidate.sensitivity == .standard && candidate.reviewMode == "batch"
+    }
+
+    private static func receiptViewState(
+        from decision: OwnerTruthCandidateDecisionResult
+    ) -> OwnerTruthCandidateReviewReceiptViewState {
+        OwnerTruthCandidateReviewReceiptViewState(
+            candidateID: decision.receipt.candidateID,
+            decision: decision.receipt.decision,
+            outcome: decision.outcome,
+            createdMemoryVersion: decision.memoryActivation.memoryVersionID != nil
+        )
+    }
+
+    private static func failureNotice(for error: Error) -> OwnerTruthCandidateInboxNotice {
+        switch OwnerTruthCandidateReviewFailureDisposition(error: error) {
+        case .releasePolicyDisabled:
+            return .qaOnlyDisabled
+        case .sourceInactive:
+            return .candidateSourceInactive
+        case .candidateVersionChanged:
+            return .candidateVersionChanged
+        case .retryable:
+            return .requestFailed
+        }
     }
 
     private static func proposalPreview(for candidate: OwnerTruthCandidateInboxItem) -> String {
@@ -11630,6 +11935,43 @@ final class OwnerTruthCandidateReviewUseCase {
             return .candidateCorrected
         case .reject:
             return .candidateRejected
+        }
+    }
+}
+
+private enum OwnerTruthCandidateReviewFailureDisposition {
+    case releasePolicyDisabled
+    case sourceInactive
+    case candidateVersionChanged
+    case retryable
+
+    init(error: Error) {
+        guard let clientError = error as? DreamJourneyBackendClient.ClientError else {
+            self = .retryable
+            return
+        }
+
+        switch clientError {
+        case .featurePolicyDenied:
+            self = .releasePolicyDisabled
+        case .backendError(let statusCode, let context):
+            if context.code == "release_policy_denied"
+                || context.code == "ownerTruthCandidateReviewUnavailable" {
+                self = .releasePolicyDisabled
+            } else if context.code == "ownerTruthCandidateSourceInactive" {
+                self = .sourceInactive
+            } else if context.code == "ownerTruthCandidateVersionConflict" || statusCode == 409 {
+                self = .candidateVersionChanged
+            } else {
+                self = .retryable
+            }
+        case .invalidJSONResponse,
+             .unsupportedJSONRoot,
+             .userAuthenticationRequired,
+             .sessionUpgradeRequired,
+             .accountScopeChanged,
+             .recoveryAccessDenied:
+            self = .retryable
         }
     }
 }
@@ -14533,7 +14875,7 @@ final class OwnerTruthCorrectionCandidateInboxHandoffUseCase {
     private func receiveCandidateInbox(_ state: OwnerTruthCandidateInboxViewState) {
         guard let candidateID = awaitingCandidateID else { return }
         switch state.phase {
-        case .idle, .loading, .submitting:
+        case .idle, .loading, .submitting, .submittingBatch:
             return
         case .unavailable:
             switch state.notice {

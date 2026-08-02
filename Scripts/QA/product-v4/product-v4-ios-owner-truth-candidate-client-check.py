@@ -143,6 +143,9 @@ def main() -> None:
         "func testCandidateReviewUseCasePreservesCandidateContentForCorrection()",
         "func testCandidateReviewUseCaseRejectsStaleCompletionAfterAccountSwitch()",
         "func testCandidateReviewUseCaseRejectsMismatchedTerminalDecision()",
+        "func testCandidateReviewUseCaseAcceptsOnlySelectedBatchCandidatesIndividually()",
+        "func testCandidateReviewUseCaseStopsPartialBatchOnConflictAndRetainsStableRetryCommand()",
+        "func testCandidateReviewUseCaseRejectsSingleCandidateBatchSelectionAndClassifiesInactiveSource()",
     ):
         require(test_name in tests, f"Candidate review use-case test missing: {test_name}")
 
@@ -158,23 +161,46 @@ def main() -> None:
         "owner-truth-candidate-inbox-item",
         "OwnerTruthCandidateInboxUIQASmoke",
         "runUIQAAcceptFirstCandidate",
+        "runUIQAAcceptAllBatchCandidates",
         "CandidateInboxUIQAScenario",
         "reviewSubmitted",
         "candidateRemovedAfterReview",
+        "supportsBatchAcceptance",
+        "batchSequenceCompleted",
     ):
         require(required in archive, f"Candidate Inbox QA UI missing: {required}")
     require(
-        "let isVisible = isSelfAutobiographyMode && OwnerTruthCandidateReviewQAGate.isEnabled" in archive,
-        "Candidate Inbox must stay hidden outside self-mode QA",
+        "let isVisible = isSelfAutobiographyMode && (" in archive
+        and "isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)" in archive,
+        "Candidate Inbox must require self mode plus QA or server-granted closed-pilot policy",
     )
     require(
         "candidateReviewQAButton.isHidden = !isVisible" in archive,
         "Candidate Inbox must remain default-hidden",
     )
     require(
-        "guard OwnerTruthCandidateReviewQAGate.isEnabled," in archive,
-        "Candidate Inbox route must enforce the QA gate at the tap boundary",
+        "OwnerTruthCandidateReviewQAGate.isEnabled\n                    || FeatureGateService.shared" in archive,
+        "Candidate Inbox route must enforce QA or server-granted closed-pilot policy at the tap boundary",
     )
+    for required in (
+        "case acceptBatch(candidateIDs: [OwnerTruthRecordID])",
+        "case submittingBatch(completedCount: Int, totalCount: Int)",
+        "struct OwnerTruthCandidateBatchReviewSummary",
+        "candidate.sensitivity == .standard && candidate.reviewMode == \"batch\"",
+        "ownerTruthCandidateSourceInactive",
+        "ownerTruthCandidateVersionConflict",
+    ):
+        require(required in contracts, f"Candidate batch safety contract missing: {required}")
+    for required in (
+        "private lazy var batchSelectionButton",
+        "private lazy var batchConfirmButton",
+        "@objc private func batchSelectionTapped()",
+        "@objc private func batchConfirmTapped()",
+        "每条候选会分别提交并生成可追溯的正式记忆版本",
+        "owner-truth-candidate-inbox-batch-select",
+        "owner-truth-candidate-inbox-batch-confirm",
+    ):
+        require(required in archive, f"Candidate Inbox batch UI missing: {required}")
     require(
         '"DJRunOwnerTruthCandidateInboxSmoke"' in feature_flags,
         "Candidate Inbox UIQA smoke launch route must stay in the QA scenario registry",
@@ -271,7 +297,7 @@ def main() -> None:
     print(
         "Product V4 iOS Owner Truth candidate client check passed: typed inbox/decision "
         "contracts plus the hidden lease-fenced Archive Inbox and non-activating interview review remain "
-        "QA-only, owner-authenticated, and default-off"
+        "owner-authenticated, server-policy-gated, and default-off"
     )
 
 

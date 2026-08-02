@@ -177,9 +177,10 @@ Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、�
   - 本机仍无 `DATABASE_URL`、Docker 或 `psql`，因此 disposable Postgres 脚本没有作为
     已执行证据；部署后必须跑真实 Postgres 和线上 smoke。
 
-## 10. Wave 1 进行中 Slice：iOS 文字 Source 创建入口
+## 10. Wave 1 已完成 Slice：iOS 文字 Source 创建入口
 
-- 当前改动尚未提交；仅限 closed-pilot 的本人档案页。
+- iOS 提交：`53a13e6 feat(owner-truth): add closed pilot source entry`；仅限
+  closed-pilot 的本人档案页。
 - Archive 创建菜单默认不展示“提交待确认记忆”。只有服务端同时批准
   `ownerTextCaptureV1` 与 `ownerTruthCandidateReview` 时，才显示该入口；本地 flag 不能
   自行开启。
@@ -199,17 +200,42 @@ Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、�
   的模拟器 UIQA，以及强杀重开和线上 Postgres E2E。这些完成前，Wave 1 仍为
   `IN_PROGRESS`。
 
-## 11. 本轮提交白名单
+## 11. Wave 1 进行中 Slice：iOS Candidate 批量/部分确认
 
-Wave 0 已提交。本 Slice 只允许精确暂存以下 iOS 文件；后端改动必须独立提交在 Backend
-仓库。
+- 本 Slice 将同一轮中可批量确认的标准敏感度 Candidate 收敛为一个明确的 closed-pilot
+  操作：用户先选择 Candidate，客户端再依次调用既有的单条正式确认路由。服务端仍以
+  `DecisionReceipt + MemoryVersion` 的单条原子事务作为唯一写入权威，未新增会绕开
+  Receipt 的批量写接口。
+- 仅 `sensitivity=standard` 且 `reviewMode=batch` 的 Candidate 可以进入选择集；单条或
+  敏感 Candidate 继续走逐条确认、纠正或拒绝，不能被误批量确认。
+- 一轮批量请求在首个失败、`409` 版本冲突、Source 已失效或响应终态不匹配时停止；已成功
+  的条目从 inbox 移除，未处理条目保留。相同运行期内的待处理 Candidate 保留稳定 command
+  ID；强杀重开后以服务端 inbox 为准，不把旧的本地选择或成功结果当成事实。
+- iOS 在 closed-pilot 候选页提供选择、确认、取消和进度反馈；普通发布态不因本 Slice
+  新增入口，服务端 closed-pilot 策略仍是可见性的必要条件。
+- 本 Slice 本地验证：
+  - `OwnerTruthContractsTests` 共 `182` 项通过，覆盖选择性批量确认、首项成功后第二项
+    `409` 的部分成功、重启后重新读取 pending inbox、稳定重试 command ID、非法选择和
+    Source inactive 分类；
+  - `product-v4-ios-owner-truth-candidate-client-check.py` 通过，覆盖类型合同、批量资格、
+    失败分类、UI 控件和 QA 路由；
+  - `run-owner-truth-candidate-inbox-smoke.sh` 通过，模拟器完成两条 Candidate 的逐条正式
+    确认，并生成 `batchAcceptedCount=2`、`batchSequenceCompleted=true` 的结果；
+  - 完整 iOS closed-pilot Candidate review Gate、iPhoneOS generic build 与
+    `git diff --check` 在本提交前执行。
+- 仍缺：真实 closed-pilot 账号、已部署 worker/profile 与 Postgres 上的 Source -> Candidate
+  -> 部分确认 -> Projection -> Context -> Correction E2E；没有该证据，批量 UI 不能标记为
+  已发布或 Wave 1 完成。
+
+## 12. 本轮提交白名单
+
+本 Slice 只允许精确暂存以下 iOS 文件；后端改动必须独立提交在 Backend 仓库。
 
 - `DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift`
-- `DreamJourney/Sources/Modules/Archive/MemoryArchiveCreationOption.swift`
-- `DreamJourney/Sources/Modules/Archive/MemoryArchiveTextEntryViewController.swift`
 - `DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift`
 - `DreamJourneyTests/OwnerTruthContractsTests.swift`
-- `Scripts/QA/product-v4/product-v4-ios-owner-truth-text-source-capture-check.py`
+- `Scripts/QA/product-v4/product-v4-ios-owner-truth-candidate-client-check.py`
+- `Scripts/QA/prd-stitch-ui/run-owner-truth-candidate-inbox-smoke.sh`
 - `docs/superpowers/status/2026-08-02-v4-functional-closure-baseline.md`
 
 后续每个 Slice 在开始前更新本文件的状态、提交和验证证据；不使用全仓 `git add`。

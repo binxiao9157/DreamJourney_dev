@@ -614,6 +614,163 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.items.map(\.id), [candidateID])
     }
 
+    func testCandidateReviewUseCaseAcceptsOnlySelectedBatchCandidatesIndividually() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstBatchID = recordID("00000000-0000-0000-0000-000000000201")
+        let singleID = recordID("00000000-0000-0000-0000-000000000202")
+        let secondBatchID = recordID("00000000-0000-0000-0000-000000000203")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try candidateInbox(
+            vaultID: lease.vaultId,
+            candidateSpecifications: [
+                (id: firstBatchID, reviewMode: "batch", sensitivity: .standard),
+                (id: singleID, reviewMode: "single", sensitivity: .standard),
+                (id: secondBatchID, reviewMode: "batch", sensitivity: .standard),
+            ]
+        ))
+        client.reviewResults = [
+            .success(try decisionResult(candidateID: firstBatchID, decision: .accepted)),
+            .success(try decisionResult(candidateID: secondBatchID, decision: .accepted)),
+        ]
+        var commandIndex = 0
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: {
+                defer { commandIndex += 1 }
+                return "candidate-review-batch-\(commandIndex)"
+            }
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(
+            useCase.viewState.items.filter(\.supportsBatchAcceptance).map(\.id),
+            [firstBatchID, secondBatchID]
+        )
+        XCTAssertFalse(useCase.viewState.items.first(where: { $0.id == singleID })?.supportsBatchAcceptance ?? true)
+
+        useCase.send(.acceptBatch(candidateIDs: [secondBatchID, firstBatchID]))
+
+        XCTAssertEqual(client.reviewedCommands.map(\.action), [.accept, .accept])
+        XCTAssertEqual(client.reviewedCommands.map(\.expectedCandidateVersion), [1, 1])
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.items.map(\.id), [singleID])
+        XCTAssertEqual(useCase.viewState.notice, .batchAccepted(count: 2))
+        XCTAssertEqual(useCase.viewState.latestBatchSummary?.requestedCandidateIDs, [firstBatchID, secondBatchID])
+        XCTAssertEqual(useCase.viewState.latestBatchSummary?.acceptedCandidateIDs, [firstBatchID, secondBatchID])
+        XCTAssertTrue(useCase.viewState.latestBatchSummary?.pendingCandidateIDs.isEmpty == true)
+        XCTAssertTrue(useCase.viewState.latestReceipt?.createdMemoryVersion == true)
+    }
+
+    func testCandidateReviewUseCaseStopsPartialBatchOnConflictAndRetainsStableRetryCommand() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstBatchID = recordID("00000000-0000-0000-0000-000000000204")
+        let secondBatchID = recordID("00000000-0000-0000-0000-000000000205")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try candidateInbox(
+            vaultID: lease.vaultId,
+            candidateSpecifications: [
+                (id: firstBatchID, reviewMode: "batch", sensitivity: .standard),
+                (id: secondBatchID, reviewMode: "batch", sensitivity: .standard),
+            ]
+        ))
+        client.reviewResults = [
+            .success(try decisionResult(candidateID: firstBatchID, decision: .accepted)),
+            .failure(DreamJourneyBackendClient.ClientError.backendError(
+                statusCode: 409,
+                context: .init(
+                    code: "ownerTruthCandidateVersionConflict",
+                    detail: "candidate changed"
+                )
+            )),
+        ]
+        var commandIndex = 0
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: {
+                defer { commandIndex += 1 }
+                return "candidate-review-partial-\(commandIndex)"
+            }
+        )
+
+        useCase.send(.refresh)
+        useCase.send(.acceptBatch(candidateIDs: [firstBatchID, secondBatchID]))
+
+        XCTAssertEqual(useCase.viewState.phase, .failed)
+        XCTAssertEqual(useCase.viewState.notice, .candidateVersionChanged)
+        XCTAssertEqual(useCase.viewState.items.map(\.id), [secondBatchID])
+        XCTAssertEqual(useCase.viewState.latestBatchSummary?.acceptedCandidateIDs, [firstBatchID])
+        XCTAssertEqual(useCase.viewState.latestBatchSummary?.pendingCandidateIDs, [secondBatchID])
+        XCTAssertEqual(useCase.viewState.latestBatchSummary?.failedCandidateID, secondBatchID)
+        XCTAssertEqual(client.reviewedCommands.count, 2)
+
+        let resumedClient = CandidateReviewClientSpy()
+        resumedClient.inboxResult = .success(try candidateInbox(
+            vaultID: lease.vaultId,
+            candidateSpecifications: [
+                (id: secondBatchID, reviewMode: "batch", sensitivity: .standard),
+            ]
+        ))
+        let resumedUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: resumedClient,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        resumedUseCase.send(.refresh)
+        XCTAssertEqual(resumedUseCase.viewState.items.map(\.id), [secondBatchID])
+
+        client.reviewResults = [
+            .success(try decisionResult(candidateID: secondBatchID, decision: .accepted)),
+        ]
+        useCase.send(.acceptBatch(candidateIDs: [secondBatchID]))
+
+        XCTAssertEqual(client.reviewedCommands.count, 3)
+        XCTAssertEqual(client.reviewedCommands[1].commandID, client.reviewedCommands[2].commandID)
+        XCTAssertEqual(useCase.viewState.phase, .empty)
+        XCTAssertEqual(useCase.viewState.notice, .batchAccepted(count: 1))
+        XCTAssertEqual(useCase.viewState.latestBatchSummary?.acceptedCandidateIDs, [secondBatchID])
+    }
+
+    func testCandidateReviewUseCaseRejectsSingleCandidateBatchSelectionAndClassifiesInactiveSource() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let singleID = recordID("00000000-0000-0000-0000-000000000206")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try candidateInbox(vaultID: lease.vaultId, candidateID: singleID))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.refresh)
+        useCase.send(.acceptBatch(candidateIDs: [singleID]))
+
+        XCTAssertEqual(useCase.viewState.phase, .failed)
+        XCTAssertEqual(useCase.viewState.notice, .batchSelectionInvalid)
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+
+        client.reviewResult = .failure(DreamJourneyBackendClient.ClientError.backendError(
+            statusCode: 409,
+            context: .init(
+                code: "ownerTruthCandidateSourceInactive",
+                detail: "source inactive"
+            )
+        ))
+        useCase.send(.accept(candidateID: singleID))
+
+        XCTAssertEqual(useCase.viewState.phase, .failed)
+        XCTAssertEqual(useCase.viewState.notice, .candidateSourceInactive)
+        XCTAssertEqual(useCase.viewState.items.map(\.id), [singleID])
+    }
+
     func testInterviewCandidateReviewDecodesSeparatedPathsAndNonActivationReceipt() throws {
         let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-owner-a"))
         let reviewBatchID = recordID("00000000-0000-0000-0000-000000000045")
@@ -6260,21 +6417,39 @@ final class OwnerTruthContractsTests: XCTestCase {
 
     private func candidateInbox(
         vaultID: String,
-        candidateID: OwnerTruthRecordID
+        candidateID: OwnerTruthRecordID,
+        reviewMode: String = "single"
     ) throws -> OwnerTruthCandidateInbox {
         let sourceID = "00000000-0000-0000-0000-000000000045"
+        return try candidateInbox(
+            vaultID: vaultID,
+            candidateSpecifications: [
+                (id: candidateID, reviewMode: reviewMode, sensitivity: .standard),
+            ],
+            sourceID: sourceID
+        )
+    }
+
+    private func candidateInbox(
+        vaultID: String,
+        candidateSpecifications: [
+            (id: OwnerTruthRecordID, reviewMode: String, sensitivity: OwnerTruthSensitivityLevel)
+        ],
+        sourceID: String = "00000000-0000-0000-0000-000000000045"
+    ) throws -> OwnerTruthCandidateInbox {
         let expectedVaultID = try XCTUnwrap(OwnerTruthVaultID(vaultID))
         return try OwnerTruthCandidateInbox(
             backendJSONObject: [
                 "schemaVersion": "owner-truth-candidate-inbox-v1",
                 "vaultId": vaultID,
-                "candidates": [[
-                    "candidateId": candidateID.rawValue.uuidString.lowercased(),
+                "candidates": candidateSpecifications.map { specification in
+                    [
+                    "candidateId": specification.id.rawValue.uuidString.lowercased(),
                     "sourceId": sourceID,
                     "memoryKind": "experience",
                     "perspectiveType": "firstPerson",
                     "epistemicStatus": "recalled",
-                    "sensitivity": "standard",
+                    "sensitivity": specification.sensitivity.rawValue,
                     "contentSchemaVersion": "owner-truth-candidate-content-v1",
                     "content": [
                         "summary": "小时候在院子里听父亲讲故事",
@@ -6285,9 +6460,10 @@ final class OwnerTruthContractsTests: XCTestCase {
                         "sourceId": sourceID,
                         "sourceVersion": 1,
                     ]],
-                    "reviewMode": "single",
+                    "reviewMode": specification.reviewMode,
                     "candidateVersion": 1,
-                ]],
+                ]
+                },
             ],
             expectedVaultID: expectedVaultID
         )
@@ -8540,6 +8716,7 @@ private final class KBLiteCompatibilityClientSpy: OwnerTruthKBLiteCompatibilityC
 private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
     var inboxResult: Result<OwnerTruthCandidateInbox, Error>?
     var reviewResult: Result<OwnerTruthCandidateDecisionResult, Error>?
+    var reviewResults: [Result<OwnerTruthCandidateDecisionResult, Error>] = []
     var deferInbox = false
     private var deferredInboxCompletion: ((Result<OwnerTruthCandidateInbox, Error>) -> Void)?
     private(set) var reviewedCommands: [OwnerTruthCandidateReviewCommand] = []
@@ -8562,7 +8739,11 @@ private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
         completion: @escaping (Result<OwnerTruthCandidateDecisionResult, Error>) -> Void
     ) {
         reviewedCommands.append(command)
-        completion(reviewResult ?? .failure(CandidateReviewClientSpyError.missingReviewResult))
+        if !reviewResults.isEmpty {
+            completion(reviewResults.removeFirst())
+        } else {
+            completion(reviewResult ?? .failure(CandidateReviewClientSpyError.missingReviewResult))
+        }
     }
 
     func completeDeferredInbox(_ result: Result<OwnerTruthCandidateInbox, Error>) {

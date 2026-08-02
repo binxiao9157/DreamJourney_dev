@@ -5251,8 +5251,28 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         target: self,
         action: #selector(refreshTapped)
     )
+    private lazy var batchSelectionButton = UIBarButtonItem(
+        title: "批量确认",
+        style: .plain,
+        target: self,
+        action: #selector(batchSelectionTapped)
+    )
+    private lazy var batchConfirmButton = UIBarButtonItem(
+        title: "确认 0 条",
+        style: .done,
+        target: self,
+        action: #selector(batchConfirmTapped)
+    )
+    private lazy var cancelBatchSelectionButton = UIBarButtonItem(
+        title: "取消",
+        style: .plain,
+        target: self,
+        action: #selector(cancelBatchSelectionTapped)
+    )
 
     private var renderedState: OwnerTruthCandidateInboxViewState = .idle
+    private var isSelectingBatch = false
+    private var selectedBatchCandidateIDs = Set<OwnerTruthRecordID>()
     var onViewStateRendered: ((OwnerTruthCandidateInboxViewState) -> Void)?
 
     init(
@@ -5284,8 +5304,10 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         super.viewDidLoad()
         title = "候选记忆审核"
         view.backgroundColor = DJDesignTokens.Color.background
-        navigationItem.rightBarButtonItem = refreshButton
         refreshButton.accessibilityIdentifier = "owner-truth-candidate-inbox-refresh"
+        batchSelectionButton.accessibilityIdentifier = "owner-truth-candidate-inbox-batch-select"
+        batchConfirmButton.accessibilityIdentifier = "owner-truth-candidate-inbox-batch-confirm"
+        cancelBatchSelectionButton.accessibilityIdentifier = "owner-truth-candidate-inbox-batch-cancel"
         configureHeader()
         configureTableView()
         configureUseCase()
@@ -5339,6 +5361,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         tableView.separatorStyle = .none
         tableView.alwaysBounceVertical = true
         tableView.showsVerticalScrollIndicator = false
+        tableView.allowsMultipleSelectionDuringEditing = true
         tableView.dataSource = self
         tableView.delegate = self
         tableView.register(
@@ -5386,18 +5409,26 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
     private func render(_ state: OwnerTruthCandidateInboxViewState) {
         renderedState = state
         let isSubmitting: Bool
-        if case .submitting = state.phase {
+        switch state.phase {
+        case .submitting, .submittingBatch:
             isSubmitting = true
-        } else {
+        default:
             isSubmitting = false
         }
         tableView.isUserInteractionEnabled = !isSubmitting
-        refreshButton.isEnabled = !isSubmitting
+        pruneBatchSelection()
+        if isSelectingBatch,
+           state.latestBatchSummary?.pendingCandidateIDs.isEmpty == true,
+           state.latestBatchSummary?.acceptedCount ?? 0 > 0 {
+            endBatchSelection()
+        }
+        updateBatchNavigation(isSubmitting: isSubmitting)
         statusLabel.text = statusText(for: state)
         statusLabel.accessibilityLabel = statusLabel.text
         emptyStateLabel.text = emptyText(for: state)
         emptyStateLabel.isHidden = emptyStateLabel.text == nil
         tableView.reloadData()
+        restoreBatchSelection()
         onViewStateRendered?(state)
     }
 
@@ -5415,6 +5446,8 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
             return noticeText(state.notice) ?? "没有待确认候选记忆"
         case .submitting:
             return "正在提交审核结果"
+        case .submittingBatch(let completedCount, let totalCount):
+            return "正在逐条确认候选记忆（\(completedCount + 1)/\(totalCount)）"
         case .failed:
             return noticeText(state.notice) ?? "读取失败，可重新载入"
         }
@@ -5445,8 +5478,16 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
             return "当前档案空间不可用于候选审核"
         case .candidateUnavailable:
             return "该候选记忆已不可用，请重新载入"
+        case .batchSelectionRequired:
+            return "请先选择可批量确认的候选记忆"
+        case .batchSelectionInvalid:
+            return "仅标准候选记忆可批量确认，请逐条审核其余内容"
         case .correctionRequired:
             return "请填写更正后的记忆描述"
+        case .candidateSourceInactive:
+            return "候选来源已失效，请重新载入后继续审核"
+        case .candidateVersionChanged:
+            return "候选记忆已更新，请重新载入后继续审核"
         case .reviewResultMismatch:
             return "审核回执不匹配，未更新候选状态"
         case .requestFailed:
@@ -5457,11 +5498,113 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
             return "已按更正内容生成记忆版本"
         case .candidateRejected:
             return "已拒绝该候选记忆"
+        case .batchAccepted(let count):
+            return "已逐条确认 \(count) 条候选记忆"
+        case .batchInterrupted(let acceptedCount):
+            return acceptedCount > 0
+                ? "已确认 \(acceptedCount) 条，其余候选可重新载入后重试"
+                : "批量确认未完成，请重新载入后重试"
         }
     }
 
     @objc private func refreshTapped() {
         useCase.send(.refresh)
+    }
+
+    @objc private func batchSelectionTapped() {
+        guard renderedState.items.contains(where: \.supportsBatchAcceptance) else { return }
+        isSelectingBatch = true
+        selectedBatchCandidateIDs.removeAll()
+        tableView.setEditing(true, animated: true)
+        updateBatchNavigation(isSubmitting: false)
+    }
+
+    @objc private func batchConfirmTapped() {
+        let selectedCandidateIDs = orderedSelectedBatchCandidateIDs
+        guard !selectedCandidateIDs.isEmpty else {
+            showBatchSelectionRequiredAlert()
+            return
+        }
+        let alert = UIAlertController(
+            title: "确认 \(selectedCandidateIDs.count) 条候选记忆",
+            message: "每条候选会分别提交并生成可追溯的正式记忆版本；若中途失败，未完成的内容会保留供你重新载入后重试。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "逐条确认", style: .default) { [weak self] _ in
+            self?.useCase.send(.acceptBatch(candidateIDs: selectedCandidateIDs))
+        })
+        present(alert, animated: true)
+    }
+
+    @objc private func cancelBatchSelectionTapped() {
+        endBatchSelection()
+    }
+
+    private var orderedSelectedBatchCandidateIDs: [OwnerTruthRecordID] {
+        renderedState.items.compactMap { item in
+            guard item.supportsBatchAcceptance,
+                  selectedBatchCandidateIDs.contains(item.id) else {
+                return nil
+            }
+            return item.id
+        }
+    }
+
+    private func pruneBatchSelection() {
+        let visibleBatchCandidateIDs = Set(
+            renderedState.items
+                .filter(\.supportsBatchAcceptance)
+                .map(\.id)
+        )
+        selectedBatchCandidateIDs.formIntersection(visibleBatchCandidateIDs)
+    }
+
+    private func restoreBatchSelection() {
+        guard isSelectingBatch else { return }
+        for (index, item) in renderedState.items.enumerated()
+        where selectedBatchCandidateIDs.contains(item.id) {
+            tableView.selectRow(
+                at: IndexPath(row: index, section: 0),
+                animated: false,
+                scrollPosition: .none
+            )
+        }
+    }
+
+    private func updateBatchNavigation(isSubmitting: Bool) {
+        refreshButton.isEnabled = !isSubmitting
+        if isSelectingBatch {
+            tableView.setEditing(true, animated: false)
+            navigationItem.leftBarButtonItem = cancelBatchSelectionButton
+            navigationItem.rightBarButtonItems = [batchConfirmButton]
+            batchConfirmButton.title = "确认 \(orderedSelectedBatchCandidateIDs.count) 条"
+            batchConfirmButton.isEnabled = !isSubmitting && !orderedSelectedBatchCandidateIDs.isEmpty
+            cancelBatchSelectionButton.isEnabled = !isSubmitting
+        } else {
+            tableView.setEditing(false, animated: false)
+            navigationItem.leftBarButtonItem = nil
+            navigationItem.rightBarButtonItems = [refreshButton, batchSelectionButton]
+            batchSelectionButton.isEnabled = !isSubmitting
+                && renderedState.items.contains(where: \.supportsBatchAcceptance)
+        }
+    }
+
+    private func endBatchSelection() {
+        isSelectingBatch = false
+        selectedBatchCandidateIDs.removeAll()
+        tableView.setEditing(false, animated: true)
+        updateBatchNavigation(isSubmitting: false)
+    }
+
+    private func showBatchSelectionRequiredAlert() {
+        let alert = UIAlertController(
+            title: "请选择候选记忆",
+            message: "只有标准候选记忆可以批量确认；需要更正或敏感内容请逐条审核。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "知道了", style: .default))
+        present(alert, animated: true)
     }
 
     private func showActions(for item: OwnerTruthCandidateInboxItemViewState, sourceView: UIView) {
@@ -5518,6 +5661,15 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         }
         useCase.send(.accept(candidateID: candidateID))
     }
+
+    func runUIQAAcceptAllBatchCandidates() {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else { return }
+        let candidateIDs = renderedState.items
+            .filter(\.supportsBatchAcceptance)
+            .map(\.id)
+        guard !candidateIDs.isEmpty else { return }
+        useCase.send(.acceptBatch(candidateIDs: candidateIDs))
+    }
     #endif
 }
 
@@ -5539,12 +5691,47 @@ extension OwnerTruthCandidateInboxViewController: UITableViewDataSource, UITable
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        guard renderedState.items.indices.contains(indexPath.row),
-              let cell = tableView.cellForRow(at: indexPath) else {
+        guard renderedState.items.indices.contains(indexPath.row) else {
             return
         }
+        let item = renderedState.items[indexPath.row]
+        if isSelectingBatch {
+            guard item.supportsBatchAcceptance else {
+                tableView.deselectRow(at: indexPath, animated: false)
+                showBatchSelectionRequiredAlert()
+                return
+            }
+            selectedBatchCandidateIDs.insert(item.id)
+            updateBatchNavigation(isSubmitting: false)
+            return
+        }
+        guard let cell = tableView.cellForRow(at: indexPath) else { return }
         tableView.deselectRow(at: indexPath, animated: true)
-        showActions(for: renderedState.items[indexPath.row], sourceView: cell)
+        showActions(for: item, sourceView: cell)
+    }
+
+    func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
+        guard isSelectingBatch,
+              renderedState.items.indices.contains(indexPath.row) else {
+            return
+        }
+        selectedBatchCandidateIDs.remove(renderedState.items[indexPath.row].id)
+        updateBatchNavigation(isSubmitting: false)
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        willSelectRowAt indexPath: IndexPath
+    ) -> IndexPath? {
+        guard isSelectingBatch,
+              renderedState.items.indices.contains(indexPath.row) else {
+            return indexPath
+        }
+        guard renderedState.items[indexPath.row].supportsBatchAcceptance else {
+            showBatchSelectionRequiredAlert()
+            return nil
+        }
+        return indexPath
     }
 }
 
@@ -5632,9 +5819,11 @@ private final class OwnerTruthCandidateInboxCell: UITableViewCell {
         summaryLabel.text = item.proposalPreview
         metadataLabel.text = "\(memoryKindText(item.memoryKind)) · \(perspectiveText(item.perspective)) · \(epistemicText(item.epistemicStatus))"
         evidenceLabel.text = "\(item.evidenceCount) 条证据 · \(sensitivityText(item.sensitivity))"
-        reviewBadgeLabel.text = item.reviewMode == "single" ? "待本人确认" : "待确认"
+        reviewBadgeLabel.text = item.supportsBatchAcceptance
+            ? "可批量确认"
+            : (item.reviewMode == "single" ? "待本人确认" : "待确认")
         accessibilityIdentifier = "owner-truth-candidate-inbox-item"
-        accessibilityLabel = "候选记忆，\(item.proposalPreview)，\(item.evidenceCount) 条证据"
+        accessibilityLabel = "候选记忆，\(item.proposalPreview)，\(item.evidenceCount) 条证据，\(reviewBadgeLabel.text ?? "待确认")"
     }
 
     private func memoryKindText(_ value: OwnerTruthMemoryKind) -> String {
@@ -6355,6 +6544,9 @@ struct OwnerTruthCandidateInboxUIQASmokeResult: Codable {
     let receiptConsumed: Bool
     let memoryVersionCreated: Bool
     let candidateRemovedAfterReview: Bool
+    let batchCandidateCount: Int
+    let batchAcceptedCount: Int
+    let batchSequenceCompleted: Bool
     let launchArgument: String
     let failureReason: String?
 
@@ -6401,6 +6593,9 @@ enum OwnerTruthCandidateInboxUIQASmoke {
             receiptConsumed: false,
             memoryVersionCreated: false,
             candidateRemovedAfterReview: false,
+            batchCandidateCount: 0,
+            batchAcceptedCount: 0,
+            batchSequenceCompleted: false,
             launchArgument: OwnerTruthCandidateReviewQAGate.launchArgument,
             failureReason: reason
         )
@@ -6419,6 +6614,7 @@ private final class CandidateInboxUIQAScenario {
     private var candidateVisible = false
     private var candidatePreviewVisible = false
     private var reviewActionsAvailable = false
+    private var batchCandidateCount = 0
 
     func consume(
         _ state: OwnerTruthCandidateInboxViewState,
@@ -6427,12 +6623,19 @@ private final class CandidateInboxUIQAScenario {
         if case .ready = state.phase,
            let firstItem = state.items.first,
            !didSubmit {
+            let batchItems = state.items.filter(\.supportsBatchAcceptance)
             candidateVisible = true
             candidatePreviewVisible = !firstItem.proposalPreview.isEmpty
             reviewActionsAvailable = firstItem.supportsCorrection
+            batchCandidateCount = batchItems.count
+            guard batchCandidateCount > 0 else {
+                OwnerTruthCandidateInboxUIQASmoke.writeFailure("batchCandidateUnavailable")
+                didWrite = true
+                return
+            }
             didSubmit = true
             DispatchQueue.main.async { [weak controller] in
-                controller?.runUIQAAcceptFirstCandidate()
+                controller?.runUIQAAcceptAllBatchCandidates()
             }
             return
         }
@@ -6440,8 +6643,11 @@ private final class CandidateInboxUIQAScenario {
         guard !didWrite else { return }
         guard case .empty = state.phase,
               let receipt = state.latestReceipt,
+              let batchSummary = state.latestBatchSummary,
               receipt.decision == .accepted,
               receipt.createdMemoryVersion,
+              batchSummary.acceptedCount == batchCandidateCount,
+              batchSummary.pendingCandidateIDs.isEmpty,
               state.items.isEmpty else {
             return
         }
@@ -6452,17 +6658,21 @@ private final class CandidateInboxUIQAScenario {
                 && didSubmit
                 && candidateVisible
                 && candidatePreviewVisible
-                && reviewActionsAvailable,
+                && reviewActionsAvailable
+                && batchSummary.acceptedCount == batchCandidateCount,
             qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
             candidateVisible: candidateVisible,
             candidatePreviewVisible: candidatePreviewVisible,
             reviewActionsAvailable: reviewActionsAvailable,
             reviewSubmitted: didSubmit,
-            reviewAction: OwnerTruthCandidateReviewAction.accept.rawValue,
+            reviewAction: "acceptBatch",
             terminalDecision: receipt.decision.rawValue,
             receiptConsumed: true,
             memoryVersionCreated: receipt.createdMemoryVersion,
             candidateRemovedAfterReview: state.items.isEmpty,
+            batchCandidateCount: batchCandidateCount,
+            batchAcceptedCount: batchSummary.acceptedCount,
+            batchSequenceCompleted: batchSummary.pendingCandidateIDs.isEmpty,
             launchArgument: OwnerTruthCandidateReviewQAGate.launchArgument,
             failureReason: nil
         )
@@ -6477,7 +6687,10 @@ private final class CandidateInboxUIQAScenario {
 
 private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
     private let vaultID: OwnerTruthVaultID?
-    private var candidateIsPending = true
+    private var pendingCandidateIDs = [
+        "00000000-0000-0000-0000-000000000151",
+        "00000000-0000-0000-0000-000000000156",
+    ]
 
     init(vaultID: OwnerTruthVaultID?) {
         self.vaultID = vaultID
@@ -6496,26 +6709,30 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
                 backendJSONObject: [
                     "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
                     "vaultId": vaultID.rawValue,
-                    "candidates": candidateIsPending ? [[
-                        "candidateId": "00000000-0000-0000-0000-000000000151",
-                        "sourceId": "00000000-0000-0000-0000-000000000152",
-                        "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
-                        "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
-                        "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
-                        "sensitivity": OwnerTruthSensitivityLevel.standard.rawValue,
-                        "contentSchemaVersion": "owner-truth-candidate-content-v1",
-                        "content": [
-                            "summary": "小时候在院子里听家人讲故事",
-                            "confidence": 0.92,
-                        ],
-                        "contentHash": "uiqa-owner-truth-candidate-hash",
-                        "sourceRefs": [[
+                    "candidates": pendingCandidateIDs.enumerated().map { index, candidateID in
+                        [
+                            "candidateId": candidateID,
                             "sourceId": "00000000-0000-0000-0000-000000000152",
-                            "sourceVersion": 1,
-                        ]],
-                        "reviewMode": "single",
-                        "candidateVersion": 1,
-                    ]] : [],
+                            "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
+                            "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+                            "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
+                            "sensitivity": OwnerTruthSensitivityLevel.standard.rawValue,
+                            "contentSchemaVersion": "owner-truth-candidate-content-v1",
+                            "content": [
+                                "summary": index == 0
+                                    ? "小时候在院子里听家人讲故事"
+                                    : "夏天在院子里一起乘凉",
+                                "confidence": 0.92,
+                            ],
+                            "contentHash": "uiqa-owner-truth-candidate-hash-\(index)",
+                            "sourceRefs": [[
+                                "sourceId": "00000000-0000-0000-0000-000000000152",
+                                "sourceVersion": 1,
+                            ]],
+                            "reviewMode": "batch",
+                            "candidateVersion": 1,
+                        ]
+                    },
                 ],
                 expectedVaultID: vaultID
             )
@@ -6532,33 +6749,45 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
         completion: @escaping (Result<OwnerTruthCandidateDecisionResult, Error>) -> Void
     ) {
         guard self.vaultID == vaultID,
-              candidateIsPending,
-              candidateID.rawValue.uuidString.lowercased() == "00000000-0000-0000-0000-000000000151",
+              let pendingIndex = pendingCandidateIDs.firstIndex(
+                  of: candidateID.rawValue.uuidString.lowercased()
+              ),
               command.action == .accept,
               command.expectedCandidateVersion == 1 else {
             completion(.failure(CandidateInboxUIQAClientError.invalidReview))
             return
         }
 
-        candidateIsPending = false
+        pendingCandidateIDs.remove(at: pendingIndex)
+        let isFirstCandidate = candidateID.rawValue.uuidString.lowercased()
+            == "00000000-0000-0000-0000-000000000151"
+        let receiptID = isFirstCandidate
+            ? "00000000-0000-0000-0000-000000000153"
+            : "00000000-0000-0000-0000-000000000157"
+        let memoryID = isFirstCandidate
+            ? "00000000-0000-0000-0000-000000000154"
+            : "00000000-0000-0000-0000-000000000158"
+        let memoryVersionID = isFirstCandidate
+            ? "00000000-0000-0000-0000-000000000155"
+            : "00000000-0000-0000-0000-000000000159"
         do {
             let result = try OwnerTruthCandidateDecisionResult(
                 backendJSONObject: [
                     "schemaVersion": OwnerTruthCandidateDecisionResult.schemaVersion,
                     "status": OwnerTruthCommandOutcome.created.rawValue,
                     "receipt": [
-                        "receiptId": "00000000-0000-0000-0000-000000000153",
+                        "receiptId": receiptID,
                         "candidateId": candidateID.rawValue.uuidString,
                         "decision": OwnerTruthCandidateDecision.accepted.rawValue,
                         "candidateVersion": 2,
-                        "candidateBeforeHash": "uiqa-owner-truth-candidate-hash",
-                        "candidateAfterHash": "uiqa-owner-truth-candidate-reviewed-hash",
+                        "candidateBeforeHash": "uiqa-owner-truth-candidate-before-hash",
+                        "candidateAfterHash": "uiqa-owner-truth-candidate-after-hash",
                         "correctedValueId": NSNull(),
                     ],
                     "memoryActivation": [
                         "status": OwnerTruthMemoryActivationOutcome.created.rawValue,
-                        "memoryId": "00000000-0000-0000-0000-000000000154",
-                        "memoryVersionId": "00000000-0000-0000-0000-000000000155",
+                        "memoryId": memoryID,
+                        "memoryVersionId": memoryVersionID,
                         "contentHash": "uiqa-owner-truth-memory-version-hash",
                     ],
                 ],
