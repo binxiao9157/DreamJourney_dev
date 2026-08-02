@@ -10,6 +10,9 @@ ROOT = Path(__file__).resolve().parents[3]
 CONTRACTS = ROOT / "DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift"
 CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 FEATURE_FLAGS = ROOT / "DreamJourney/Sources/App/FeatureFlagService.swift"
+ARCHIVE = ROOT / "DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift"
+CREATION_OPTIONS = ROOT / "DreamJourney/Sources/Modules/Archive/MemoryArchiveCreationOption.swift"
+TEXT_ENTRY = ROOT / "DreamJourney/Sources/Modules/Archive/MemoryArchiveTextEntryViewController.swift"
 TESTS = ROOT / "DreamJourneyTests/OwnerTruthContractsTests.swift"
 
 
@@ -39,6 +42,9 @@ def main() -> None:
     contracts = CONTRACTS.read_text(encoding="utf-8")
     client = CLIENT.read_text(encoding="utf-8")
     feature_flags = FEATURE_FLAGS.read_text(encoding="utf-8")
+    archive = ARCHIVE.read_text(encoding="utf-8")
+    creation_options = CREATION_OPTIONS.read_text(encoding="utf-8")
+    text_entry = TEXT_ENTRY.read_text(encoding="utf-8")
     tests = TESTS.read_text(encoding="utf-8")
 
     for required in (
@@ -100,11 +106,53 @@ def main() -> None:
         "text Source feature must remain nonpersistent/default-off",
     )
 
+    require(
+        "isOwnerTruthTextCaptureEnabled: Bool = false" in creation_options
+        and "submitsOwnerTruthSource: false" in creation_options,
+        "text Source creation option must remain hidden by default",
+    )
+    require(
+        "submitsOwnerTruthSource: true" in creation_options
+        and 'title: "提交待确认记忆"' in creation_options,
+        "closed-pilot text Source option is missing product wording",
+    )
+    require(
+        "isOwnerTruthTextCaptureClosedPilotEnabled" in archive
+        and "isServerPolicyManagedClosedPilotRouteAllowed(.ownerTextCaptureV1)" in archive
+        and "isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)" in archive,
+        "Archive entry must require both server-authorized closed-pilot capabilities",
+    )
+    source_entry = function_body(archive, "presentOwnerTruthTextCaptureEntry")
+    require(
+        "entryMode: .ownerTruthSource" in source_entry
+        and "OwnerTruthTextSourceCaptureUseCase" in source_entry
+        and "onSubmitOwnerTruthSource" in source_entry
+        and "onOwnerTruthSourceAccepted" in source_entry,
+        "Archive must use the typed Source workflow rather than a legacy Archive write",
+    )
+    require(
+        "if option.submitsOwnerTruthSource" in archive
+        and "presentOwnerTruthTextCaptureEntry()" in archive,
+        "Archive selection must route the closed-pilot option to Source capture",
+    )
+    require(
+        "enum MemoryArchiveTextEntryMode" in text_entry
+        and "case ownerTruthSource" in text_entry
+        and "onSubmitOwnerTruthSource" in text_entry
+        and "提交待确认" in text_entry,
+        "typed closed-pilot text entry surface is missing",
+    )
+
     for test_name in (
         "func testTextSourceCaptureCommandProducesExactClosedPilotPayload()",
         "func testTextSourceCaptureCommandRejectsInvalidAuthorityTextAndPurpose()",
         "func testTextSourceCaptureStateIsValueMinimizedAndRejectsLeakedFields()",
         "func testTextSourceCaptureReceiptIsValueMinimizedAndRejectsLeakedContent()",
+        "func testTextSourceCaptureUseCaseReadsAuthorityAndCapturesClosedPilotSource()",
+        "func testTextSourceCaptureUseCaseRetriesTransientFailureWithSameCommand()",
+        "func testTextSourceCaptureUseCaseDropsStaleAuthorityReadAfterAccountSwitch()",
+        "func testTextSourceCaptureUseCaseDoesNotExposeWhenClosedPilotPolicyIsUnavailable()",
+        "func testArchiveCreationOptionsKeepOwnerTruthSourceHiddenByDefault()",
     ):
         require(test_name in tests, f"text Source test missing: {test_name}")
 

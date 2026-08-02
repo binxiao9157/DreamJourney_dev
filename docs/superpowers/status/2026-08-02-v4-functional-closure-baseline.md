@@ -177,11 +177,39 @@ Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、�
   - 本机仍无 `DATABASE_URL`、Docker 或 `psql`，因此 disposable Postgres 脚本没有作为
     已执行证据；部署后必须跑真实 Postgres 和线上 smoke。
 
-## 10. 本轮提交白名单
+## 10. Wave 1 进行中 Slice：iOS 文字 Source 创建入口
 
-Wave 0 已提交。当前 Wave 1 的 iOS 侧只允许提交本状态文件；后端改动必须
-独立提交在 Backend 仓库。
+- 当前改动尚未提交；仅限 closed-pilot 的本人档案页。
+- Archive 创建菜单默认不展示“提交待确认记忆”。只有服务端同时批准
+  `ownerTextCaptureV1` 与 `ownerTruthCandidateReview` 时，才显示该入口；本地 flag 不能
+  自行开启。
+- 该入口不会复用旧的“添加文字描述”本地档案写入。它先读取 Source authority epoch，使用
+  AccountLease 和稳定 command ID 调用正式 Source capture；网络失败时仅在当前输入页内以
+  相同命令重试，账户/策略变化时失效并清除。
+- 成功后只提示用户前往“待确认记忆”，不把 Candidate、MemoryVersion 或 Projection 伪造为
+  本地成功；普通发布态的既有文字档案流程不变。
+- 本 Slice 本地验证：
+  - `OwnerTruthContractsTests` 共 `179` 项通过，新增提交、同命令重试、账户切换、策略关闭和
+    默认隐藏覆盖；
+  - `product-v4-ios-owner-truth-text-source-capture-check.py` 通过，现已覆盖传输、默认隐藏、
+    双服务端策略、typed entry 和选择路由；
+  - 既有文字 Source / Candidate closed-pilot gate 通过；
+  - iPhoneOS generic build 通过，`git diff --check` 通过。
+- 仍缺：服务端部署后由真实 closed-pilot 账号运行 `Source -> worker -> Candidate -> Confirm`
+  的模拟器 UIQA，以及强杀重开和线上 Postgres E2E。这些完成前，Wave 1 仍为
+  `IN_PROGRESS`。
 
+## 11. 本轮提交白名单
+
+Wave 0 已提交。本 Slice 只允许精确暂存以下 iOS 文件；后端改动必须独立提交在 Backend
+仓库。
+
+- `DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift`
+- `DreamJourney/Sources/Modules/Archive/MemoryArchiveCreationOption.swift`
+- `DreamJourney/Sources/Modules/Archive/MemoryArchiveTextEntryViewController.swift`
+- `DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift`
+- `DreamJourneyTests/OwnerTruthContractsTests.swift`
+- `Scripts/QA/product-v4/product-v4-ios-owner-truth-text-source-capture-check.py`
 - `docs/superpowers/status/2026-08-02-v4-functional-closure-baseline.md`
 
 后续每个 Slice 在开始前更新本文件的状态、提交和验证证据；不使用全仓 `git add`。

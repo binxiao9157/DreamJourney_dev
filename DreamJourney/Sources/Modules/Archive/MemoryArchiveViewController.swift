@@ -623,7 +623,8 @@ final class MemoryArchiveViewController: UIViewController {
         return MemoryArchiveCreationOption.availableOptions(
             isAudioUploadEnabled: false,
             isVideoUploadEnabled: false,
-            isTimeLettersEnabled: false
+            isTimeLettersEnabled: false,
+            isOwnerTruthTextCaptureEnabled: isOwnerTruthTextCaptureClosedPilotEnabled
         )
     }
 
@@ -633,6 +634,13 @@ final class MemoryArchiveViewController: UIViewController {
 
     private var isSelfAutobiographyMode: Bool {
         currentArchiveContext.isSelfAssistant
+    }
+
+    private var isOwnerTruthTextCaptureClosedPilotEnabled: Bool {
+        FeatureGateService.shared
+            .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTextCaptureV1)
+            && FeatureGateService.shared
+                .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
     }
 
     private var archivePersonaName: String {
@@ -3257,6 +3265,41 @@ final class MemoryArchiveViewController: UIViewController {
                 self.refreshContent()
                 self.showToast("已封存", type: .success)
             }
+        }
+        present(entryViewController, animated: true)
+    }
+
+    private func presentOwnerTruthTextCaptureEntry() {
+        guard isSelfAutobiographyMode,
+              isOwnerTruthTextCaptureClosedPilotEnabled,
+              let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
+            return
+        }
+
+        let entryViewController = MemoryArchiveTextEntryViewController(
+            kind: .text,
+            entryMode: .ownerTruthSource,
+            accountLease: accountLease
+        )
+        let useCase = OwnerTruthTextSourceCaptureUseCase(
+            accountLease: accountLease,
+            client: DreamJourneyBackendClient.shared,
+            releasePolicyAvailable: { [weak self] in
+                self?.isOwnerTruthTextCaptureClosedPilotEnabled == true
+            }
+        )
+        entryViewController.onSubmitOwnerTruthSource = { text, completion in
+            useCase.submit(text) { result in
+                completion(result.mapError { $0 as Error })
+            }
+        }
+        entryViewController.onOwnerTruthSourceAccepted = { [weak self] _ in
+            guard let self,
+                  self.accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
+                return
+            }
+            self.refreshContent()
+            self.showToast("已提交，整理完成后可在待确认记忆中确认", type: .success)
         }
         present(entryViewController, animated: true)
     }
@@ -8389,6 +8432,11 @@ extension MemoryArchiveViewController: MemoryArchiveCreationSheetViewControllerD
             viewController.dismiss(animated: true) { [weak self] in
                 self?.showReadOnlyArchiveToast()
             }
+            return
+        }
+
+        if option.submitsOwnerTruthSource {
+            presentOwnerTruthTextCaptureEntry()
             return
         }
 

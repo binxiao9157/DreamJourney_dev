@@ -22,13 +22,21 @@ struct TimeLetterEntryPayload {
     }
 }
 
+enum MemoryArchiveTextEntryMode: Equatable {
+    case archive
+    case ownerTruthSource
+}
+
 final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     var onSave: ((String) -> Void)?
     var onSaveDraft: ((String) -> Void)?
     var onSaveTimeLetter: ((TimeLetterEntryPayload) -> Void)?
     var onSaveDraftTimeLetter: ((TimeLetterEntryPayload) -> Void)?
+    var onSubmitOwnerTruthSource: ((String, @escaping (Result<OwnerTruthTextSourceCaptureReceipt, Error>) -> Void) -> Void)?
+    var onOwnerTruthSourceAccepted: ((OwnerTruthTextSourceCaptureReceipt) -> Void)?
 
     private let kind: MemoryArchiveItemKind
+    private let entryMode: MemoryArchiveTextEntryMode
     private let initialText: String?
     private let textEntryTitle: String?
     private let textEntrySubtitle: String?
@@ -50,8 +58,11 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
     private var entryAccountLease: AccountLease?
     private var selectedImageCreatedByEntry = false
     private var shouldKeepSelectedImage = false
+    private var isSubmittingOwnerTruthSource = false
     private lazy var saveButton = DJComponentFactory.primaryButton(
-        title: isTimeLetter ? "封存时间信件" : (textSaveButtonTitle ?? "保存到档案馆"),
+        title: isTimeLetter
+            ? "封存时间信件"
+            : (isOwnerTruthSourceEntry ? "提交待确认" : (textSaveButtonTitle ?? "保存到档案馆")),
         target: self,
         action: #selector(saveTapped)
     )
@@ -71,6 +82,10 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
         kind == .timeLetter
     }
 
+    private var isOwnerTruthSourceEntry: Bool {
+        entryMode == .ownerTruthSource
+    }
+
     init(
         kind: MemoryArchiveItemKind,
         initialText: String? = nil,
@@ -78,9 +93,11 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
         textEntrySubtitle: String? = nil,
         textSaveButtonTitle: String? = nil,
         initialTimeLetterPayload: TimeLetterEntryPayload? = nil,
+        entryMode: MemoryArchiveTextEntryMode = .archive,
         accountLease: AccountLease? = nil
     ) {
         self.kind = kind
+        self.entryMode = entryMode
         self.initialText = initialText
         self.textEntryTitle = textEntryTitle
         self.textEntrySubtitle = textEntrySubtitle
@@ -153,7 +170,9 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
 
     private func buildLayout() {
         let titleLabel = UILabel()
-        titleLabel.text = isTimeLetter ? "录入时间信件" : (textEntryTitle ?? "添加文字描述")
+        titleLabel.text = isTimeLetter
+            ? "录入时间信件"
+            : (isOwnerTruthSourceEntry ? "提交待确认记忆" : (textEntryTitle ?? "添加文字描述"))
         titleLabel.font = DJDesignTokens.Font.display(32)
         titleLabel.textColor = DJDesignTokens.Color.textPrimary
         titleLabel.numberOfLines = 0
@@ -161,7 +180,9 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
         let subtitleLabel = UILabel()
         subtitleLabel.text = isTimeLetter
             ? "写给未来某一天的自己或家人；支持文字和图片，封存后不可删除或修改。"
-            : (textEntrySubtitle ?? "写下一段想封存的片段，人物、地点、称呼和生活细节都可以。")
+            : (isOwnerTruthSourceEntry
+                ? "内容会先整理为候选记忆，只有你确认后才会成为回响可使用的正式记忆。"
+                : (textEntrySubtitle ?? "写下一段想封存的片段，人物、地点、称呼和生活细节都可以。"))
         subtitleLabel.font = DJDesignTokens.Font.body(15)
         subtitleLabel.textColor = DJDesignTokens.Color.textSecondary
         subtitleLabel.numberOfLines = 0
@@ -192,7 +213,9 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
         textView.textContainerInset = UIEdgeInsets(top: 18, left: 14, bottom: 18, right: 14)
         textView.textContainer.lineFragmentPadding = 0
 
-        placeholderLabel.text = isTimeLetter ? "这封信想说什么？" : "这段记忆是什么？"
+        placeholderLabel.text = isTimeLetter
+            ? "这封信想说什么？"
+            : (isOwnerTruthSourceEntry ? "写下想提交确认的一段记忆" : "这段记忆是什么？")
         placeholderLabel.font = DJDesignTokens.Font.body(16)
         placeholderLabel.textColor = DJDesignTokens.Color.textTertiary.withAlphaComponent(0.56)
 
@@ -203,7 +226,9 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
         let helperLabel = UILabel()
         helperLabel.text = isTimeLetter
             ? "封存后会按打开时间提醒本人和收件人。"
-            : "仅保存你主动录入的内容，不会展示聊天原文。"
+            : (isOwnerTruthSourceEntry
+                ? "仅提交你主动写下的内容；提交后可在“待确认记忆”中确认、更正或拒绝。"
+                : "仅保存你主动录入的内容，不会展示聊天原文。")
         helperLabel.font = DJDesignTokens.Font.label(12)
         helperLabel.textColor = DJDesignTokens.Color.textTertiary
         helperLabel.numberOfLines = 0
@@ -264,14 +289,24 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
 
     private func updateSaveButton() {
         let hasText = !textView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let canSave = hasText && (!isTimeLetter || !selectedRecipientIds.isEmpty)
+        let canSave = !isSubmittingOwnerTruthSource
+            && hasText
+            && (!isTimeLetter || !selectedRecipientIds.isEmpty)
         saveButton.isEnabled = canSave
         saveButton.alpha = canSave ? 1 : 0.55
+        if isOwnerTruthSourceEntry {
+            saveButton.setTitle(
+                isSubmittingOwnerTruthSource ? "正在提交..." : "提交待确认",
+                for: .normal
+            )
+            textView.isEditable = !isSubmittingOwnerTruthSource
+        }
         draftButton.isEnabled = canSave
         draftButton.alpha = canSave ? 1 : 0.55
     }
 
     @objc private func cancelTapped() {
+        guard !isSubmittingOwnerTruthSource else { return }
         removeEntryCreatedImageIfNeeded()
         dismiss(animated: true)
     }
@@ -279,6 +314,8 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
     @objc private func saveTapped() {
         if isTimeLetter {
             saveTimeLetter(with: onSaveTimeLetter)
+        } else if isOwnerTruthSourceEntry {
+            submitOwnerTruthSource()
         } else {
             save(with: onSave)
         }
@@ -300,6 +337,48 @@ final class MemoryArchiveTextEntryViewController: UIViewController, UITextViewDe
             guard let self,
                   self.validateImagePickerAccountLease(accountLease, at: .ui) else { return }
             handler?(rawText)
+        }
+    }
+
+    private func submitOwnerTruthSource() {
+        let rawText = textView.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawText.isEmpty,
+              let accountLease = entryAccountLease,
+              validateImagePickerAccountLease(accountLease, at: .commit),
+              let handler = onSubmitOwnerTruthSource else {
+            updateSaveButton()
+            return
+        }
+
+        isSubmittingOwnerTruthSource = true
+        updateSaveButton()
+        handler(rawText) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                guard self.validateImagePickerAccountLease(accountLease, at: .ui) else {
+                    self.isSubmittingOwnerTruthSource = false
+                    self.updateSaveButton()
+                    return
+                }
+                self.isSubmittingOwnerTruthSource = false
+                self.updateSaveButton()
+                switch result {
+                case .success(let receipt):
+                    self.dismiss(animated: true) { [weak self] in
+                        self?.onOwnerTruthSourceAccepted?(receipt)
+                    }
+                case .failure(let error):
+                    let alert = UIAlertController(
+                        title: "提交未完成",
+                        message: error.localizedDescription.isEmpty
+                            ? "暂时无法提交待确认记忆，请保持内容后重试。"
+                            : error.localizedDescription,
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "继续编辑", style: .cancel))
+                    self.present(alert, animated: true)
+                }
+            }
         }
     }
 

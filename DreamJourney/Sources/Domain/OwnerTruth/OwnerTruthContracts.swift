@@ -938,6 +938,326 @@ protocol OwnerTruthTextSourceCaptureClient: AnyObject {
     )
 }
 
+enum OwnerTruthTextSourceCapturePhase: Equatable, Sendable {
+    case idle
+    case readingAuthority
+    case submitting
+    case accepted
+    case unavailable
+    case failed
+}
+
+enum OwnerTruthTextSourceCaptureNotice: Equatable, Sendable {
+    case releasePolicyUnavailable
+    case accountUnavailable
+    case staleAccountLease
+    case invalidVault
+    case invalidText
+    case authorityReadFailed
+    case receiptMismatch
+    case captureFailed
+    case submissionInProgress
+}
+
+enum OwnerTruthTextSourceCaptureUseCaseError: LocalizedError, Equatable, Sendable {
+    case unavailable(OwnerTruthTextSourceCaptureNotice)
+    case failed(OwnerTruthTextSourceCaptureNotice)
+
+    var errorDescription: String? {
+        switch self {
+        case .unavailable(.releasePolicyUnavailable):
+            return "当前账号暂未开通待确认记忆"
+        case .unavailable(.accountUnavailable), .unavailable(.staleAccountLease):
+            return "账号已变化，请重新进入后再提交"
+        case .unavailable(.invalidVault):
+            return "当前档案空间暂不可提交待确认记忆"
+        case .failed(.invalidText):
+            return "请先写下一段记忆"
+        case .failed(.authorityReadFailed):
+            return "暂时无法确认记忆提交状态，请稍后重试"
+        case .failed(.receiptMismatch):
+            return "提交结果不完整，请稍后重试"
+        case .failed(.captureFailed):
+            return "暂时无法提交待确认记忆，请保持内容后重试"
+        case .failed(.submissionInProgress):
+            return "正在提交待确认记忆"
+        case .unavailable, .failed:
+            return "待确认记忆暂不可提交"
+        }
+    }
+}
+
+struct OwnerTruthTextSourceCaptureViewState: Equatable, Sendable {
+    let phase: OwnerTruthTextSourceCapturePhase
+    let notice: OwnerTruthTextSourceCaptureNotice?
+    let receipt: OwnerTruthTextSourceCaptureReceipt?
+
+    static let idle = OwnerTruthTextSourceCaptureViewState(
+        phase: .idle,
+        notice: nil,
+        receipt: nil
+    )
+}
+
+/// Lease-fenced client workflow for the closed-pilot text Source entry.
+///
+/// The pending command stays in memory only while the entry sheet is open. A
+/// retry reuses the exact same command ID and payload, so a lost response
+/// cannot create a second Source. A transient delivery failure keeps the raw
+/// text only in this live sheet so the user can retry; acceptance, policy or
+/// account changes clear it. It is never written to a local retry queue.
+final class OwnerTruthTextSourceCaptureUseCase {
+    typealias CommandIDFactory = () -> UUID
+    typealias Completion = (Result<OwnerTruthTextSourceCaptureReceipt, OwnerTruthTextSourceCaptureUseCaseError>) -> Void
+
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let client: OwnerTruthTextSourceCaptureClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let releasePolicyAvailable: () -> Bool
+    private let commandIDFactory: CommandIDFactory
+
+    private var pendingText: String?
+    private var pendingCommandID: UUID?
+    private var preparedCommand: OwnerTruthTextSourceCaptureCommand?
+    private var pendingCompletion: Completion?
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState: OwnerTruthTextSourceCaptureViewState = .idle {
+        didSet {
+            onViewStateChange?(viewState)
+        }
+    }
+
+    var onViewStateChange: ((OwnerTruthTextSourceCaptureViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthTextSourceCaptureClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        releasePolicyAvailable: @escaping () -> Bool,
+        commandIDFactory: @escaping CommandIDFactory = UUID.init
+    ) {
+        self.accountLease = accountLease
+        self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyAvailable = releasePolicyAvailable
+        self.commandIDFactory = commandIDFactory
+    }
+
+    func submit(_ text: String, completion: @escaping Completion) {
+        guard !isInFlight else {
+            completion(.failure(.failed(.submissionInProgress)))
+            return
+        }
+
+        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedText.isEmpty else {
+            transitionFailure(.invalidText, completion: completion)
+            return
+        }
+
+        pendingCompletion = completion
+        if pendingText != normalizedText {
+            clearPendingCommand()
+            pendingText = normalizedText
+            pendingCommandID = commandIDFactory()
+        }
+
+        if preparedCommand != nil {
+            submitPreparedCommand()
+        } else {
+            readAuthorityState()
+        }
+    }
+
+    private var isInFlight: Bool {
+        switch viewState.phase {
+        case .readingAuthority, .submitting:
+            return true
+        case .idle, .accepted, .unavailable, .failed:
+            return false
+        }
+    }
+
+    private func readAuthorityState() {
+        guard validateRequestBoundary() else { return }
+        guard let vaultID else {
+            transitionUnavailable(.invalidVault)
+            return
+        }
+
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthTextSourceCaptureViewState(
+            phase: .readingAuthority,
+            notice: nil,
+            receipt: nil
+        )
+        client.fetchOwnerTruthTextSourceCaptureState(vaultID: vaultID) { [weak self] result in
+            self?.receiveAuthorityState(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func receiveAuthorityState(
+        _ result: Result<OwnerTruthTextSourceCaptureState, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard validateCommitBoundary() else { return }
+
+        switch result {
+        case .success(let state):
+            guard state.vaultID == vaultID,
+                  state.vaultID.rawValue == accountLease.vaultId,
+                  let text = pendingText,
+                  let commandID = pendingCommandID else {
+                transitionFailure(.receiptMismatch)
+                return
+            }
+            do {
+                preparedCommand = try OwnerTruthTextSourceCaptureCommand(
+                    commandID: commandID,
+                    expectedAuthorityEpoch: state.authorityEpoch,
+                    text: text
+                )
+            } catch {
+                clearPendingCommand()
+                transitionFailure(.invalidText)
+                return
+            }
+            submitPreparedCommand()
+        case .failure:
+            transitionFailure(.authorityReadFailed)
+        }
+    }
+
+    private func submitPreparedCommand() {
+        guard validateRequestBoundary() else { return }
+        guard let vaultID,
+              let command = preparedCommand else {
+            transitionFailure(.captureFailed)
+            return
+        }
+
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthTextSourceCaptureViewState(
+            phase: .submitting,
+            notice: nil,
+            receipt: nil
+        )
+        client.captureOwnerTruthTextSource(vaultID: vaultID, command: command) { [weak self] result in
+            self?.receiveCaptureReceipt(
+                result,
+                vaultID: vaultID,
+                command: command,
+                generation: generation
+            )
+        }
+    }
+
+    private func receiveCaptureReceipt(
+        _ result: Result<OwnerTruthTextSourceCaptureReceipt, Error>,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthTextSourceCaptureCommand,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard validateCommitBoundary() else { return }
+
+        switch result {
+        case .success(let receipt):
+            guard receipt.vaultID == vaultID,
+                  receipt.authorityEpoch == command.expectedAuthorityEpoch else {
+                transitionFailure(.receiptMismatch)
+                return
+            }
+            viewState = OwnerTruthTextSourceCaptureViewState(
+                phase: .accepted,
+                notice: nil,
+                receipt: receipt
+            )
+            clearPendingCommand()
+            finish(.success(receipt))
+        case .failure:
+            // Keep the exact command in memory for an idempotent retry.
+            transitionFailure(.captureFailed)
+        }
+    }
+
+    @discardableResult
+    private func validateRequestBoundary() -> Bool {
+        guard releasePolicyAvailable() else {
+            transitionUnavailable(.releasePolicyUnavailable)
+            return false
+        }
+        guard vaultID != nil else {
+            transitionUnavailable(.invalidVault)
+            return false
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            transitionUnavailable(.accountUnavailable)
+            return false
+        }
+        return true
+    }
+
+    @discardableResult
+    private func validateCommitBoundary() -> Bool {
+        guard releasePolicyAvailable() else {
+            transitionUnavailable(.releasePolicyUnavailable)
+            return false
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            transitionUnavailable(.staleAccountLease)
+            return false
+        }
+        return true
+    }
+
+    private func transitionUnavailable(_ notice: OwnerTruthTextSourceCaptureNotice) {
+        operationGeneration &+= 1
+        clearPendingCommand()
+        viewState = OwnerTruthTextSourceCaptureViewState(
+            phase: .unavailable,
+            notice: notice,
+            receipt: nil
+        )
+        finish(.failure(.unavailable(notice)))
+    }
+
+    private func transitionFailure(
+        _ notice: OwnerTruthTextSourceCaptureNotice,
+        completion: Completion? = nil
+    ) {
+        viewState = OwnerTruthTextSourceCaptureViewState(
+            phase: .failed,
+            notice: notice,
+            receipt: nil
+        )
+        if let completion {
+            completion(.failure(.failed(notice)))
+        } else {
+            finish(.failure(.failed(notice)))
+        }
+    }
+
+    private func clearPendingCommand() {
+        pendingText = nil
+        pendingCommandID = nil
+        preparedCommand = nil
+    }
+
+    private func finish(_ result: Result<OwnerTruthTextSourceCaptureReceipt, OwnerTruthTextSourceCaptureUseCaseError>) {
+        let completion = pendingCompletion
+        pendingCompletion = nil
+        completion?(result)
+    }
+}
+
 private enum OwnerTruthTextSourceCaptureContract {
     static func requiredString(_ value: Any?) -> String? {
         guard let value = value as? String else { return nil }

@@ -191,6 +191,147 @@ final class OwnerTruthContractsTests: XCTestCase {
         }
     }
 
+    func testTextSourceCaptureUseCaseReadsAuthorityAndCapturesClosedPilotSource() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = TextSourceCaptureClientSpy()
+        client.stateResult = .success(try textSourceCaptureState(vaultID: vaultID, authorityEpoch: 4))
+        let receipt = try textSourceCaptureReceipt(vaultID: vaultID, authorityEpoch: 4)
+        client.captureResults = [.success(receipt)]
+        let commandID = UUID(uuidString: "00000000-0000-0000-0000-000000000104")!
+        let useCase = OwnerTruthTextSourceCaptureUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true },
+            commandIDFactory: { commandID }
+        )
+
+        var completion: Result<OwnerTruthTextSourceCaptureReceipt, OwnerTruthTextSourceCaptureUseCaseError>?
+        useCase.submit("  爷爷总会在傍晚带我去河边散步。  ") { completion = $0 }
+
+        XCTAssertEqual(client.requestedVaultIDs, [vaultID])
+        let command = try XCTUnwrap(client.capturedCommands.first)
+        XCTAssertEqual(command.commandID, commandID)
+        XCTAssertEqual(command.expectedAuthorityEpoch, 4)
+        XCTAssertEqual(command.text, "爷爷总会在傍晚带我去河边散步。")
+        XCTAssertEqual(useCase.viewState.phase, .accepted)
+        XCTAssertEqual(useCase.viewState.receipt, receipt)
+        guard case .success(let capturedReceipt)? = completion else {
+            return XCTFail("expected a successful Source capture")
+        }
+        XCTAssertEqual(capturedReceipt, receipt)
+    }
+
+    func testTextSourceCaptureUseCaseRetriesTransientFailureWithSameCommand() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = TextSourceCaptureClientSpy()
+        client.stateResult = .success(try textSourceCaptureState(vaultID: vaultID, authorityEpoch: 5))
+        let receipt = try textSourceCaptureReceipt(vaultID: vaultID, authorityEpoch: 5)
+        client.captureResults = [.failure(TextSourceCaptureClientSpyError.captureFailed), .success(receipt)]
+        let commandID = UUID(uuidString: "00000000-0000-0000-0000-000000000105")!
+        let useCase = OwnerTruthTextSourceCaptureUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true },
+            commandIDFactory: { commandID }
+        )
+
+        var firstCompletion: Result<OwnerTruthTextSourceCaptureReceipt, OwnerTruthTextSourceCaptureUseCaseError>?
+        useCase.submit("同一段待确认记忆") { firstCompletion = $0 }
+        guard case .failure(.failed(.captureFailed))? = firstCompletion else {
+            return XCTFail("expected a transient capture failure")
+        }
+        XCTAssertEqual(useCase.viewState.phase, .failed)
+
+        var retryCompletion: Result<OwnerTruthTextSourceCaptureReceipt, OwnerTruthTextSourceCaptureUseCaseError>?
+        useCase.submit("同一段待确认记忆") { retryCompletion = $0 }
+
+        XCTAssertEqual(client.requestedVaultIDs.count, 1)
+        XCTAssertEqual(client.capturedCommands.count, 2)
+        XCTAssertEqual(client.capturedCommands[0].commandID, commandID)
+        XCTAssertEqual(client.capturedCommands[1].commandID, commandID)
+        XCTAssertEqual(client.capturedCommands[0].expectedAuthorityEpoch, 5)
+        XCTAssertEqual(client.capturedCommands[1].expectedAuthorityEpoch, 5)
+        guard case .success(let retriedReceipt)? = retryCompletion else {
+            return XCTFail("expected the retry to accept the same Source command")
+        }
+        XCTAssertEqual(retriedReceipt, receipt)
+    }
+
+    func testTextSourceCaptureUseCaseDropsStaleAuthorityReadAfterAccountSwitch() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = TextSourceCaptureClientSpy()
+        client.deferState = true
+        let useCase = OwnerTruthTextSourceCaptureUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        var completion: Result<OwnerTruthTextSourceCaptureReceipt, OwnerTruthTextSourceCaptureUseCaseError>?
+        useCase.submit("账户切换前的记忆") { completion = $0 }
+        XCTAssertEqual(useCase.viewState.phase, .readingAuthority)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        client.completeDeferredState(.success(try textSourceCaptureState(vaultID: vaultID, authorityEpoch: 4)))
+
+        XCTAssertTrue(client.capturedCommands.isEmpty)
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .staleAccountLease)
+        guard case .failure(.unavailable(.staleAccountLease))? = completion else {
+            return XCTFail("expected stale account capture to be rejected")
+        }
+    }
+
+    func testTextSourceCaptureUseCaseDoesNotExposeWhenClosedPilotPolicyIsUnavailable() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = TextSourceCaptureClientSpy()
+        let useCase = OwnerTruthTextSourceCaptureUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { false }
+        )
+
+        var completion: Result<OwnerTruthTextSourceCaptureReceipt, OwnerTruthTextSourceCaptureUseCaseError>?
+        useCase.submit("这条内容不能在未开放策略下提交") { completion = $0 }
+
+        XCTAssertTrue(client.requestedVaultIDs.isEmpty)
+        XCTAssertTrue(client.capturedCommands.isEmpty)
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .releasePolicyUnavailable)
+        guard case .failure(.unavailable(.releasePolicyUnavailable))? = completion else {
+            return XCTFail("expected unavailable closed-pilot policy")
+        }
+    }
+
+    func testArchiveCreationOptionsKeepOwnerTruthSourceHiddenByDefault() {
+        let defaultOptions = MemoryArchiveCreationOption.availableOptions(
+            isAudioUploadEnabled: false,
+            isVideoUploadEnabled: false,
+            isTimeLettersEnabled: false
+        )
+        let closedPilotOptions = MemoryArchiveCreationOption.availableOptions(
+            isAudioUploadEnabled: false,
+            isVideoUploadEnabled: false,
+            isTimeLettersEnabled: false,
+            isOwnerTruthTextCaptureEnabled: true
+        )
+
+        XCTAssertFalse(defaultOptions.contains(where: \.submitsOwnerTruthSource))
+        XCTAssertEqual(closedPilotOptions.filter(\.submitsOwnerTruthSource).count, 1)
+        XCTAssertEqual(closedPilotOptions[1].title, "提交待确认记忆")
+    }
+
     func testCandidateInboxDecodesTypedProposalAndEvidence() throws {
         let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-owner-a"))
         let candidateID = "00000000-0000-0000-0000-000000000010"
@@ -5314,6 +5455,43 @@ final class OwnerTruthContractsTests: XCTestCase {
         OwnerTruthRecordID(rawValue: UUID(uuidString: rawValue)!)
     }
 
+    private func textSourceCaptureState(
+        vaultID: OwnerTruthVaultID,
+        authorityEpoch: Int
+    ) throws -> OwnerTruthTextSourceCaptureState {
+        try OwnerTruthTextSourceCaptureState(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthTextSourceCaptureState.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "authorityEpoch": authorityEpoch,
+            ],
+            expectedVaultID: vaultID
+        )
+    }
+
+    private func textSourceCaptureReceipt(
+        vaultID: OwnerTruthVaultID,
+        authorityEpoch: Int
+    ) throws -> OwnerTruthTextSourceCaptureReceipt {
+        try OwnerTruthTextSourceCaptureReceipt(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthTextSourceCaptureReceipt.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "source": [
+                    "schemaVersion": OwnerTruthTextSourceCaptureReceipt.sourceReceiptSchemaVersion,
+                    "status": OwnerTruthTextSourceCaptureOutcome.created.rawValue,
+                    "receiptId": "00000000-0000-0000-0000-000000000106",
+                    "sourceId": "00000000-0000-0000-0000-000000000107",
+                    "sourceVersion": 1,
+                    "authorityEpoch": authorityEpoch,
+                ],
+                "candidateExtraction": ["status": "requested"],
+                "acceptedAt": "2026-08-02T12:00:00Z",
+            ],
+            expectedVaultID: vaultID
+        )
+    }
+
     private func pendingReviewBatchInbox(
         vaultID: String,
         batches: [(
@@ -8397,6 +8575,52 @@ private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
 private enum CandidateReviewClientSpyError: Error {
     case missingInboxResult
     case missingReviewResult
+}
+
+private final class TextSourceCaptureClientSpy: OwnerTruthTextSourceCaptureClient {
+    var stateResult: Result<OwnerTruthTextSourceCaptureState, Error>?
+    var captureResults: [Result<OwnerTruthTextSourceCaptureReceipt, Error>] = []
+    var deferState = false
+    private var deferredStateCompletion: ((Result<OwnerTruthTextSourceCaptureState, Error>) -> Void)?
+    private(set) var requestedVaultIDs: [OwnerTruthVaultID] = []
+    private(set) var capturedCommands: [OwnerTruthTextSourceCaptureCommand] = []
+
+    func fetchOwnerTruthTextSourceCaptureState(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthTextSourceCaptureState, Error>) -> Void
+    ) {
+        requestedVaultIDs.append(vaultID)
+        if deferState {
+            deferredStateCompletion = completion
+            return
+        }
+        completion(stateResult ?? .failure(TextSourceCaptureClientSpyError.missingStateResult))
+    }
+
+    func captureOwnerTruthTextSource(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthTextSourceCaptureCommand,
+        completion: @escaping (Result<OwnerTruthTextSourceCaptureReceipt, Error>) -> Void
+    ) {
+        capturedCommands.append(command)
+        if captureResults.isEmpty {
+            completion(.failure(TextSourceCaptureClientSpyError.missingCaptureResult))
+        } else {
+            completion(captureResults.removeFirst())
+        }
+    }
+
+    func completeDeferredState(_ result: Result<OwnerTruthTextSourceCaptureState, Error>) {
+        let completion = deferredStateCompletion
+        deferredStateCompletion = nil
+        completion?(result)
+    }
+}
+
+private enum TextSourceCaptureClientSpyError: Error {
+    case missingStateResult
+    case missingCaptureResult
+    case captureFailed
 }
 
 private final class GuidedRecommendationPresentationClientSpy:
