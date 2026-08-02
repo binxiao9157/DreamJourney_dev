@@ -46,7 +46,7 @@
 | Wave | 目标 | 当前状态 | 当前事实 / 下一步 |
 | --- | --- | --- | --- |
 | 0 | 基线与提交隔离 | `FUNCTIONAL_VERIFIED` | 计划与本文件已由 iOS 提交 `afa51ba` 建立；后续继续严格使用精确暂存，不处理并行工作区。 |
-| 1 | Owner Truth 真实闭环 | `IN_PROGRESS` | 后端 `8112e0f` 已在隔离 Postgres 串联正式 `Source -> Candidate -> Confirm -> Projection -> Context`，无 QA header、无内存 fixture。仍缺 closed-pilot 纠错、部署 worker/profile、线上 smoke 与 iOS 真实数据 UIQA。 |
+| 1 | Owner Truth 真实闭环 | `IN_PROGRESS` | 后端 `8112e0f`、`18b222c` 已在可执行的隔离 Postgres smoke 中串联正式 `Source -> Candidate -> Confirm -> Projection -> Context -> Citation -> Correction`，无 QA header、无内存 fixture。仍缺实际 Postgres 执行、部署 worker/profile、线上 smoke 与 iOS 真实数据 UIQA。 |
 | 2 | 引导式访谈 | `NOT_STARTED` | 已有会话、节奏、换题等局部合同；尚未作为正式 closed-pilot 自然输入闭环验收。 |
 | 3 | 双推荐与知识地图 | `NOT_STARTED` | 已有 QA/shadow 资产；未形成普通 closed-pilot 用户可用能力。 |
 | 4 | 数据权利、家庭与安全 | `NOT_STARTED` | 有局部 API、合同和 smoke；尚未完成全路由 owner-bound 验收。 |
@@ -68,7 +68,7 @@
 1. `candidate-proposal/admit` 仍是访谈专用入口；closed-pilot 的文字 Source 已可由独立 extraction worker 生成 Candidate，但实际 worker profile 尚未部署运行。
 2. Candidate confirmation 的 generic route 已有服务端 closed-pilot 授权；iOS 的真实后端 Candidate/Source UIQA 和批量/部分确认仍未验收。
 3. `/context/build` 已能在隔离 Postgres 中读取确认后的 Projection；服务器开关、worker 与 allowlist 尚未同时部署，线上仍没有真实 closed-pilot 数据可供消费。
-4. Correction 路由仍为 QA-only。因此尚无部署态、无 QA header 的完整 E2E：`Source -> Candidate -> Confirm -> MemoryVersion -> Projection -> Context -> Correction`。
+4. Citation 与 Correction 已新增服务器授权的 closed-pilot 路径：正式 Owner 必须具备 `ownerTruthCandidateReview` 的服务端 allowlist 与发布策略 capture；QA header 仍只是兼容路径。尚无部署态、无 QA header 的完整 E2E 证据。
 
 Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、媒体、Voice 或 Publication 新功能。
 
@@ -152,10 +152,32 @@ Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、�
     Context authority 相关单测共 `14` 项通过；
   - smoke 脚本 `py_compile` 与 `git diff --check` 通过；
   - 本机没有 Docker、`psql` 或 `DATABASE_URL`，因此隔离 Postgres 脚本本次未实际执行。
-- 尚未声明为 Wave 1 功能完成：纠错仍是 QA-only，且本地 smoke 只能证明可执行路径；
-  服务器部署 worker profile、开关和 allowlist 后仍必须跑线上 Postgres E2E。
+- 尚未声明为 Wave 1 功能完成：该路径本地仅完成脚本和单测证明，实际隔离
+  Postgres 脚本尚未执行；服务器部署 worker profile、开关和 allowlist 后仍必须跑线上
+  Postgres E2E。
 
-## 9. 本轮提交白名单
+## 9. Wave 1 已完成 Slice：closed-pilot Citation / Correction 正式授权
+
+- 后端提交：`18b222c feat(owner-truth): authorize closed-pilot corrections`。
+- `POST /v2/vaults/{vaultId}/answer-citation-receipts` 与
+  `GET /v2/vaults/{vaultId}/answers/{answerId}/citations` 现在可由满足服务端
+  `ownerTruthCandidateReview` 发布策略的 Owner 调用；显式 QA header 继续走原有兼容
+  shadow 路径。
+- 正式 Citation 复用 confirmed Projection 的 materialization，不允许客户端选择该分支；
+  只保存 hash 与 typed citation，不回显问题、回答或 Source 正文。
+- Correction request 与 resolve 同样要求服务端发布策略。纠错创建私有 Source 和待确认
+  Candidate；确认后只替换被引用的 MemoryVersion，并把 release-policy capture 写入既有
+  DecisionReceipt 的 `authorization_evidence`。
+- `answer feedback` 仍为 QA-only，未随 Citation / Correction 放宽。
+- 扩展 disposable Postgres smoke，覆盖：正式 Citation、非 allowlist 的纠错拒绝、正式
+  Correction、Projection 重建后的 replacement citation，以及 DecisionReceipt 授权证据。
+- 本 Slice 本地验证：
+  - `21` 项 Citation、Correction、Candidate review 与 smoke 静态测试通过；
+  - Python 编译和 `git diff --check` 通过；
+  - 本机仍无 `DATABASE_URL`、Docker 或 `psql`，因此 disposable Postgres 脚本没有作为
+    已执行证据；部署后必须跑真实 Postgres 和线上 smoke。
+
+## 10. 本轮提交白名单
 
 Wave 0 已提交。当前 Wave 1 的 iOS 侧只允许提交本状态文件；后端改动必须
 独立提交在 Backend 仓库。
