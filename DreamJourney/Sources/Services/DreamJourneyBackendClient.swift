@@ -9335,3 +9335,20 @@ extension DreamJourneyBackendClient: EchoOwnerTruthContextShadowTransport {}
 extension DreamJourneyBackendClient: EchoOwnerTruthContextShadowCompareTransport {}
 extension DreamJourneyBackendClient: OwnerTruthCorrectionRequestClient {}
 extension DreamJourneyBackendClient: OwnerTruthCorrectionResolutionClient {}
+
+extension DreamJourneyBackendClient.ClientError: OwnerTruthBackendFailureClassifying {
+    var ownerTruthBackendStatusCode: Int? {
+        guard case .backendError(let statusCode, _) = self else { return nil }
+        return statusCode
+    }
+
+    var ownerTruthBackendErrorCode: String? {
+        guard case .backendError(_, let context) = self else { return nil }
+        return context.code
+    }
+
+    var ownerTruthFeaturePolicyDenied: Bool {
+        guard case .featurePolicyDenied = self else { return false }
+        return true
+    }
+}

@@ -234,6 +234,15 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     }
 }
 
+/// Minimal transport error information consumed by the pure Owner Truth domain.
+/// The app client conforms in its own target, so this domain remains portable
+/// for Mac-based contract tests without losing typed failure behavior in iOS.
+protocol OwnerTruthBackendFailureClassifying: Error {
+    var ownerTruthBackendStatusCode: Int? { get }
+    var ownerTruthBackendErrorCode: String? { get }
+    var ownerTruthFeaturePolicyDenied: Bool { get }
+}
+
 func advanceOwnerTruthCandidateDecision(
     current: OwnerTruthCandidateDecision,
     requested: OwnerTruthCandidateDecision
@@ -3969,36 +3978,28 @@ private enum OwnerTruthInterviewCandidateReviewReadFailureDisposition {
     case retryable
 
     init(error: Error) {
-        guard let clientError = error as? DreamJourneyBackendClient.ClientError else {
+        guard let clientError = error as? any OwnerTruthBackendFailureClassifying else {
             self = .retryable
             return
         }
 
-        switch clientError {
-        case .featurePolicyDenied:
+        if clientError.ownerTruthFeaturePolicyDenied {
             self = .releasePolicyDisabled
-        case .backendError(let statusCode, let context):
-            if context.code == "release_policy_denied"
-                || context.code == "ownerTruthCandidateReviewUnavailable" {
-                self = .releasePolicyDisabled
-            } else if context.code == "ownerTruthCandidateSourceInactive" {
-                self = .contentUnavailable
-            } else if statusCode == 409 {
-                self = .contextChanged
-            } else if statusCode == 403 || statusCode == 404 || statusCode == 410 {
-                // The current backend normally expresses a stale proposal as
-                // a typed success state, 403, 409, or a missing focused
-                // inbox item. Treat future 404/410 responses conservatively.
-                self = .contentUnavailable
-            } else {
-                self = .retryable
-            }
-        case .invalidJSONResponse,
-             .unsupportedJSONRoot,
-             .userAuthenticationRequired,
-             .sessionUpgradeRequired,
-             .accountScopeChanged,
-             .recoveryAccessDenied:
+        } else if clientError.ownerTruthBackendErrorCode == "release_policy_denied"
+                    || clientError.ownerTruthBackendErrorCode == "ownerTruthCandidateReviewUnavailable" {
+            self = .releasePolicyDisabled
+        } else if clientError.ownerTruthBackendErrorCode == "ownerTruthCandidateSourceInactive" {
+            self = .contentUnavailable
+        } else if clientError.ownerTruthBackendStatusCode == 409 {
+            self = .contextChanged
+        } else if clientError.ownerTruthBackendStatusCode == 403
+                    || clientError.ownerTruthBackendStatusCode == 404
+                    || clientError.ownerTruthBackendStatusCode == 410 {
+            // The current backend normally expresses a stale proposal as a
+            // typed success state, 403, 409, or a missing focused inbox item.
+            // Treat future 404/410 responses conservatively.
+            self = .contentUnavailable
+        } else {
             self = .retryable
         }
     }
@@ -11184,7 +11185,7 @@ final class OwnerTruthKBLiteCompatibilityProjectionRuntime {
     private var useCase: OwnerTruthKBLiteCompatibilityProjectionUseCase?
 
     init(
-        client: OwnerTruthKBLiteCompatibilityClient = DreamJourneyBackendClient.shared,
+        client: OwnerTruthKBLiteCompatibilityClient,
         directoryURL: URL? = nil,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         qaGateEnabled: @escaping () -> Bool = { OwnerTruthKBLiteCompatibilityQAGate.isEnabled }
@@ -11194,6 +11195,21 @@ final class OwnerTruthKBLiteCompatibilityProjectionRuntime {
         self.accountLeaseRuntime = accountLeaseRuntime
         self.qaGateEnabled = qaGateEnabled
     }
+
+    #if !SWIFT_PACKAGE
+    convenience init(
+        directoryURL: URL? = nil,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthKBLiteCompatibilityQAGate.isEnabled }
+    ) {
+        self.init(
+            client: DreamJourneyBackendClient.shared,
+            directoryURL: directoryURL,
+            accountLeaseRuntime: accountLeaseRuntime,
+            qaGateEnabled: qaGateEnabled
+        )
+    }
+    #endif
 
     var viewState: OwnerTruthKBLiteCompatibilityProjectionViewState {
         useCase?.viewState ?? .idle
@@ -11946,31 +11962,22 @@ private enum OwnerTruthCandidateReviewFailureDisposition {
     case retryable
 
     init(error: Error) {
-        guard let clientError = error as? DreamJourneyBackendClient.ClientError else {
+        guard let clientError = error as? any OwnerTruthBackendFailureClassifying else {
             self = .retryable
             return
         }
 
-        switch clientError {
-        case .featurePolicyDenied:
+        if clientError.ownerTruthFeaturePolicyDenied {
             self = .releasePolicyDisabled
-        case .backendError(let statusCode, let context):
-            if context.code == "release_policy_denied"
-                || context.code == "ownerTruthCandidateReviewUnavailable" {
-                self = .releasePolicyDisabled
-            } else if context.code == "ownerTruthCandidateSourceInactive" {
-                self = .sourceInactive
-            } else if context.code == "ownerTruthCandidateVersionConflict" || statusCode == 409 {
-                self = .candidateVersionChanged
-            } else {
-                self = .retryable
-            }
-        case .invalidJSONResponse,
-             .unsupportedJSONRoot,
-             .userAuthenticationRequired,
-             .sessionUpgradeRequired,
-             .accountScopeChanged,
-             .recoveryAccessDenied:
+        } else if clientError.ownerTruthBackendErrorCode == "release_policy_denied"
+                    || clientError.ownerTruthBackendErrorCode == "ownerTruthCandidateReviewUnavailable" {
+            self = .releasePolicyDisabled
+        } else if clientError.ownerTruthBackendErrorCode == "ownerTruthCandidateSourceInactive" {
+            self = .sourceInactive
+        } else if clientError.ownerTruthBackendErrorCode == "ownerTruthCandidateVersionConflict"
+                    || clientError.ownerTruthBackendStatusCode == 409 {
+            self = .candidateVersionChanged
+        } else {
             self = .retryable
         }
     }

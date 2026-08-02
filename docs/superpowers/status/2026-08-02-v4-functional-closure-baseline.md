@@ -37,16 +37,15 @@
 - 分支：`main`
 - 启动提交：`ffa1f4ecfc09ad8469ede38464db46e22bd1b1c1`
 - 上游基线：`e7dccd6f18077aa7c30bd50e10a5d65284d5a94c`
-- 相对上游：本地领先 `5` 个提交。
-- 启动时工作区：干净。
-- 部署版本：`UNVERIFIED`，Wave 1 的部署 smoke 前不假定服务器已包含本地代码。
+- 当前远端与运行代码：`bc1dfd7 fix(owner-truth): preserve owner-authored memory semantics`，已部署至服务器。
+- 本地工作区：干净；服务器工作区只保留未纳入 Git 的历史 `.env.backup*` 私密备份。
 
 ## 3. Wave 状态
 
 | Wave | 目标 | 当前状态 | 当前事实 / 下一步 |
 | --- | --- | --- | --- |
 | 0 | 基线与提交隔离 | `FUNCTIONAL_VERIFIED` | 计划与本文件已由 iOS 提交 `afa51ba` 建立；后续继续严格使用精确暂存，不处理并行工作区。 |
-| 1 | Owner Truth 真实闭环 | `IN_PROGRESS` | 后端 `8112e0f`、`18b222c` 已在可执行的隔离 Postgres smoke 中串联正式 `Source -> Candidate -> Confirm -> Projection -> Context -> Citation -> Correction`，无 QA header、无内存 fixture。仍缺实际 Postgres 执行、部署 worker/profile、线上 smoke 与 iOS 真实数据 UIQA。 |
+| 1 | Owner Truth 真实闭环 | `IN_PROGRESS` | 后端 `bc1dfd7` 已部署；服务器 API 容器已实际跑通 disposable Postgres 的 `Source -> Candidate -> Confirm -> Projection -> Context -> Citation -> Correction`。全局开关、真实 closed-pilot allowlist 与常驻 Worker 仍默认关闭，尚缺真实入组账号与 iOS 重启回归。 |
 | 2 | 引导式访谈 | `NOT_STARTED` | 已有会话、节奏、换题等局部合同；尚未作为正式 closed-pilot 自然输入闭环验收。 |
 | 3 | 双推荐与知识地图 | `NOT_STARTED` | 已有 QA/shadow 资产；未形成普通 closed-pilot 用户可用能力。 |
 | 4 | 数据权利、家庭与安全 | `NOT_STARTED` | 有局部 API、合同和 smoke；尚未完成全路由 owner-bound 验收。 |
@@ -67,8 +66,8 @@
 
 1. `candidate-proposal/admit` 仍是访谈专用入口；closed-pilot 的文字 Source 已可由独立 extraction worker 生成 Candidate，但实际 worker profile 尚未部署运行。
 2. Candidate confirmation 的 generic route 已有服务端 closed-pilot 授权；iOS 的真实后端 Candidate/Source UIQA 和批量/部分确认仍未验收。
-3. `/context/build` 已能在隔离 Postgres 中读取确认后的 Projection；服务器开关、worker 与 allowlist 尚未同时部署，线上仍没有真实 closed-pilot 数据可供消费。
-4. Citation 与 Correction 已新增服务器授权的 closed-pilot 路径：正式 Owner 必须具备 `ownerTruthCandidateReview` 的服务端 allowlist 与发布策略 capture；QA header 仍只是兼容路径。尚无部署态、无 QA header 的完整 E2E 证据。
+3. `/context/build` 已在服务器 API 容器内的隔离 Postgres 中读取确认后的 Projection；生产全局开关、常驻 worker 与真实 allowlist 仍未启用，线上普通数据不会消费该路径。
+4. Citation 与 Correction 已新增服务器授权的 closed-pilot 路径：正式 Owner 必须具备 `ownerTruthCandidateReview` 的服务端 allowlist 与发布策略 capture；QA header 仍只是兼容路径。服务器容器内已通过无 QA header 的隔离 Postgres E2E；真实 allowlist 账号尚未入组验收。
 
 Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、媒体、Voice 或 Publication 新功能。
 
@@ -85,7 +84,7 @@ Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、�
     FastAPI smoke、编译和 `git diff --check`；
   - Owner Truth 访谈、确认、结果、推荐、地图、检索与 client-compatibility
     测试夹具均改为显式模拟服务端入组，覆盖了新的信任边界。
-- 尚未声明为 Wave 1 功能完成：没有部署、没有真实 closed-pilot 用户入组，
+- 尚未声明为 Wave 1 功能完成：代码虽已部署，但没有真实 closed-pilot 用户入组，
   也没有启动 candidate/projection worker 或将 `/context/build` 切换为
   confirmed Projection 权威读取。
 
@@ -107,7 +106,7 @@ Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、�
     参数、轮询去重日志、资源关闭、Compose profile 与启动命令；
   - 本机没有 Docker CLI，未把 Compose 容器实际启动当作验证证据。服务器部署后
     必须显式启动 profile 并运行真实 Postgres Worker smoke。
-- 尚未声明为 Wave 1 功能完成：Worker 尚未部署、未对真实 closed-pilot 用户运行；
+- 尚未声明为 Wave 1 功能完成：Worker Compose profile 尚未启动、未对真实 closed-pilot 用户运行；
   `/context/build` 的 confirmed Projection 读取仍仅限随后新增的默认关闭
   closed-pilot Context Authority，尚无真实数据 E2E 证据。
 
@@ -130,9 +129,8 @@ Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、�
     `git diff --check`；
   - iOS 当前 `EchoContextPacket` 只要求稳定的基础字段并接受任意
     `contextVersion`，已静态复核可解析新增 V4 packet；本 Slice 不改动 iOS 工作区。
-- 尚未声明为 Wave 1 功能完成：开关仍默认关闭、后端尚未部署、Worker profile 尚未
-  在 Postgres 运行，且 closed-pilot 的 Source -> Candidate -> Confirmation ->
-  Projection -> Context -> Correction 真实 E2E 尚未跑通。
+- 尚未声明为 Wave 1 功能完成：全局开关仍默认关闭、常驻 Worker profile 未启用，且尚未由真实
+  closed-pilot 账号运行完整 iOS 流程；但服务器 API 容器内的隔离 Postgres E2E 已实际跑通。
 
 ## 8. Wave 1 已完成 Slice：closed-pilot Source 到 confirmed Context 隔离 Postgres smoke
 
@@ -174,10 +172,32 @@ Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、�
 - 本 Slice 本地验证：
   - `21` 项 Citation、Correction、Candidate review 与 smoke 静态测试通过；
   - Python 编译和 `git diff --check` 通过；
-  - 本机仍无 `DATABASE_URL`、Docker 或 `psql`，因此 disposable Postgres 脚本没有作为
-    已执行证据；部署后必须跑真实 Postgres 和线上 smoke。
+  - 服务器 API 容器已于 `bc1dfd7` 部署后实际执行该 disposable Postgres 脚本，完整
+    `closedPilotSourceCandidate / closedPilotProjectionContext / closedPilotCitationCorrection`
+    均为 `true`；该脚本使用临时数据库，不写入生产业务数据。
 
-## 10. Wave 1 已完成 Slice：iOS 文字 Source 创建入口
+## 10. Wave 1 已完成 Slice：后端部署与隔离 Postgres E2E（默认关闭）
+
+- 后端 runtime 提交：`bc1dfd7 fix(owner-truth): preserve owner-authored memory semantics`；
+  包含 route-authentication、正式文字 Source fixture 与 owner-authored metadata 的后续收敛。
+- 服务器已显式应用并验证 migration `0071`；`/ready` 返回 `200`，数据库、schema、auth 与
+  incident 均为 `ready`。
+- 已在服务器 API 容器内运行 route-authentication Postgres smoke：`status=passed`，
+  `routeCount=150`，并覆盖匿名用户拒绝、用户业务路由允许、机器业务路由拒绝和机器系统路由允许。
+- 已在同一已部署 API 容器运行
+  `backend-owner-truth-candidate-route-postgres-smoke.py`：`status=passed`，并实际验证无
+  QA header 的 Source 创建、Candidate pending、接受、Projection、Context citation 与
+  Correction；烟测在 disposable Postgres 数据库执行，结束后清理。
+- 本次修复把仅限 closed-pilot 本人手写文字 Source 的确定性 Candidate 元数据固定为
+  `firstPerson / recalled / standard`，但它仍必须先经 Owner 接受才可投影或进入 Context；
+  这不放宽模型推断、未确认 Candidate 或受限内容的 Context 读取。
+- `OWNER_TRUTH_CANDIDATE_REVIEW_QA_ENABLED`、Candidate/Projection Worker 与 Context
+  Authority 均保持 `false`；本部署没有写入 closed-pilot 用户 allowlist，也没有启动
+  `owner-truth-worker` profile。
+- 该 Slice 证明部署基础设施、默认拒绝边界和服务器内真实持久化 E2E；不能替代真实
+  closed-pilot 用户、常驻 Worker profile、iOS 重启恢复与发布前用户流程验收。
+
+## 11. Wave 1 已完成 Slice：iOS 文字 Source 创建入口
 
 - iOS 提交：`53a13e6 feat(owner-truth): add closed pilot source entry`；仅限
   closed-pilot 的本人档案页。
@@ -200,7 +220,7 @@ Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、�
   的模拟器 UIQA，以及强杀重开和线上 Postgres E2E。这些完成前，Wave 1 仍为
   `IN_PROGRESS`。
 
-## 11. Wave 1 进行中 Slice：iOS Candidate 批量/部分确认
+## 12. Wave 1 进行中 Slice：iOS Candidate 批量/部分确认
 
 - 本 Slice 将同一轮中可批量确认的标准敏感度 Candidate 收敛为一个明确的 closed-pilot
   操作：用户先选择 Candidate，客户端再依次调用既有的单条正式确认路由。服务端仍以
@@ -220,18 +240,26 @@ Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、�
   - `product-v4-ios-owner-truth-candidate-client-check.py` 通过，覆盖类型合同、批量资格、
     失败分类、UI 控件和 QA 路由；
   - `run-owner-truth-candidate-inbox-smoke.sh` 通过，模拟器完成两条 Candidate 的逐条正式
-    确认，并生成 `batchAcceptedCount=2`、`batchSequenceCompleted=true` 的结果；
-  - 完整 iOS closed-pilot Candidate review Gate、iPhoneOS generic build 与
-    `git diff --check` 在本提交前执行。
-- 仍缺：真实 closed-pilot 账号、已部署 worker/profile 与 Postgres 上的 Source -> Candidate
-  -> 部分确认 -> Projection -> Context -> Correction E2E；没有该证据，批量 UI 不能标记为
-  已发布或 Wave 1 完成。
+    确认，并生成 `batchAcceptedCount=2`、`batchSequenceCompleted=true` 的结果；最近截图：
+    `tmp/visual-qa/product-v4/owner-truth-candidate-inbox-smoke/20260802-122856/01-owner-truth-candidate-inbox.png`。
+  - 本轮重新执行 `xcodebuild test -only-testing:DreamJourneyTests/OwnerTruthContractsTests`，
+    `182` 项通过；`swift test` 的跨平台纯域目标 `3` 项通过；iPhoneOS generic
+    `build-for-testing` 和 `git diff --check` 通过。
+  - 跨平台 Package 不再直接编译 iOS App client、UIKit 或 App composition 测试；纯域层通过
+    `OwnerTruthBackendFailureClassifying` 接收必要的错误分类，完整网络/UI 测试仍在 Xcode
+    `DreamJourneyTests` target 中执行，避免把测试隔离误当作业务降级。
+- 仍缺：真实 closed-pilot 账号、已启用的常驻 worker/profile、真实 iOS 后端数据流与强杀重开。
+  服务器 disposable Postgres 已验证 Source -> Candidate -> Confirm -> Projection -> Context ->
+  Correction，但这不能替代真实用户入组，因此批量 UI 不能标记为已发布或 Wave 1 完成。
 
-## 12. 本轮提交白名单
+## 13. 本轮提交白名单
 
 本 Slice 只允许精确暂存以下 iOS 文件；后端改动必须独立提交在 Backend 仓库。
 
+- `Package.swift`
 - `DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift`
+- `DreamJourney/Sources/Services/DreamJourneyBackendClient.swift`
+- `DreamJourneyTests/OwnerTruthCoreContractTests.swift`
 - `DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift`
 - `DreamJourneyTests/OwnerTruthContractsTests.swift`
 - `Scripts/QA/product-v4/product-v4-ios-owner-truth-candidate-client-check.py`

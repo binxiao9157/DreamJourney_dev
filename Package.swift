@@ -51,11 +51,12 @@ let package = Package(
             path: "DreamJourneyTests",
             exclude: [
                 "AudioOwnerLeaseModelTests.swift",
-            ],
-            sources: [
                 "AccountLeaseRuntimeTests.swift",
                 "OwnerTruthContractsTests.swift",
                 "TestDoubles.swift",
+            ],
+            sources: [
+                "OwnerTruthCoreContractTests.swift",
             ]
         ),
     ]
