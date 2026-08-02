@@ -213,8 +213,10 @@ final class UserManager {
         privateAccessState = .suspended
         accountStateLock.unlock()
 
-        guard notify && stateChanged else { return }
+        // Fence stale callbacks before the asynchronous lifecycle teardown starts.
         let oldAccountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userId)
+        AccountLeaseRuntime.shared.publish(session: nil)
+        guard notify && stateChanged else { return }
         accountStateLock.lock()
         guard lifecycleTransitionOwnerUserId == nil else {
             accountStateLock.unlock()
@@ -391,6 +393,7 @@ final class UserManager {
         }
         guard ownerUserId != nil else {
             accountStateLock.unlock()
+            AccountLeaseRuntime.shared.publish(session: nil)
             DreamJourneyBackendClient.shared.logoutAuthSession()
             return
         }
@@ -398,6 +401,7 @@ final class UserManager {
         accountStateLock.unlock()
 
         let oldAccountLease = AccountLeaseRuntime.shared.capture(forSubjectId: ownerUserId)
+        AccountLeaseRuntime.shared.publish(session: nil)
         DreamJourneyBackendClient.shared.logoutAuthSession()
         Task {
             let actorSnapshot = await AccountSessionActor.shared.snapshot()
@@ -439,6 +443,7 @@ final class UserManager {
         accountStateLock.unlock()
 
         let oldAccountLease = AccountLeaseRuntime.shared.capture(forSubjectId: ownerUserId)
+        AccountLeaseRuntime.shared.publish(session: nil)
         DreamJourneyBackendClient.shared.logoutAuthSession()
         Task {
             let actorSnapshot = await AccountSessionActor.shared.snapshot()

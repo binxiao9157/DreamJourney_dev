@@ -181,12 +181,14 @@ final class AppCoordinator: Coordinator {
 
     @objc private func handleLogout() {
         accountSessionTask?.cancel()
+        AccountLeaseRuntime.shared.publish(session: nil)
         accountSessionReceipt = nil
         transitionToAuth()
     }
 
     @objc private func handlePrivateAccessSuspended() {
         accountSessionTask?.cancel()
+        AccountLeaseRuntime.shared.publish(session: nil)
         accountSessionReceipt = nil
         transitionToAuth()
     }
