@@ -6480,6 +6480,25 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    func testGenericCandidateReviewPathsUseClosedPilotFeatureGate() {
+        XCTAssertEqual(
+            FeatureGateService.shared.featureForRequest(
+                path: "/v2/vaults/vault-a/candidates",
+                method: .get,
+                payload: nil
+            ),
+            .ownerTruthCandidateReview
+        )
+        XCTAssertEqual(
+            FeatureGateService.shared.featureForRequest(
+                path: "/v2/vaults/vault-a/candidates/00000000-0000-0000-0000-000000000101/decisions",
+                method: .post,
+                payload: ["action": "accept"]
+            ),
+            .ownerTruthCandidateReview
+        )
+    }
+
     func testGuidedRecommendationFeedbackContractKeepsOnlyValueFreeStatus() throws {
         let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-a"))
         let receipt = try OwnerTruthGuidedRecommendationFeedbackReceipt(

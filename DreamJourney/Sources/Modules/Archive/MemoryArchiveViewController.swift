@@ -1009,8 +1009,8 @@ final class MemoryArchiveViewController: UIViewController {
         candidateReviewQAButton.layer.cornerRadius = 14
         candidateReviewQAButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
         candidateReviewQAButton.contentHorizontalAlignment = .leading
-        candidateReviewQAButton.accessibilityIdentifier = "archive-owner-truth-candidate-inbox-qa"
-        candidateReviewQAButton.accessibilityLabel = "审核候选记忆，仅 QA"
+        candidateReviewQAButton.accessibilityIdentifier = "archive-owner-truth-candidate-inbox"
+        candidateReviewQAButton.accessibilityLabel = "待确认记忆"
         candidateReviewQAButton.isHidden = true
         candidateReviewQAButton.addTarget(
             self,
@@ -1127,8 +1127,15 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func updateCandidateReviewQAButton() {
-        let isVisible = isSelfAutobiographyMode && OwnerTruthCandidateReviewQAGate.isEnabled
-        candidateReviewQAButton.setTitle(isVisible ? "审核候选记忆（QA）" : nil, for: .normal)
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let isVisible = isSelfAutobiographyMode && (
+            isQALane
+                || FeatureGateService.shared
+                    .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
+        )
+        let title = isQALane ? "审核候选记忆（QA）" : "待确认记忆"
+        candidateReviewQAButton.setTitle(isVisible ? title : nil, for: .normal)
+        candidateReviewQAButton.accessibilityLabel = isVisible ? title : nil
         candidateReviewQAButton.isHidden = !isVisible
         candidateReviewQAButton.isUserInteractionEnabled = isVisible
     }
@@ -2837,7 +2844,11 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func ownerTruthCandidateReviewQATapped() {
-        guard OwnerTruthCandidateReviewQAGate.isEnabled,
+        guard (
+                  OwnerTruthCandidateReviewQAGate.isEnabled
+                    || FeatureGateService.shared
+                        .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
+              ),
               isSelfAutobiographyMode,
               let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
             return
@@ -5205,7 +5216,11 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         accountLease: AccountLease,
         client: OwnerTruthCandidateReviewClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
-        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
+        qaGateEnabled: @escaping () -> Bool = {
+            OwnerTruthCandidateReviewQAGate.isEnabled
+                || FeatureGateService.shared
+                    .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
+        }
     ) {
         self.accountLease = accountLease
         self.useCase = OwnerTruthCandidateReviewUseCase(
@@ -5261,7 +5276,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         titleLabel.font = DJDesignTokens.Font.title(24)
         titleLabel.textColor = DJDesignTokens.Color.textPrimary
 
-        subtitleLabel.text = "仅用于 QA 审核；候选内容不会直接写入档案。"
+        subtitleLabel.text = "确认后才会形成正式记忆，你可确认、更正或拒绝。"
         subtitleLabel.font = DJDesignTokens.Font.body(14)
         subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
         subtitleLabel.numberOfLines = 0
@@ -5368,7 +5383,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         case .empty:
             return "当前没有需要你确认的候选记忆。"
         case .unavailable:
-            return "审核入口仅在受控 QA 环境可用。"
+            return "当前账号暂未开通候选记忆审核。"
         case .failed:
             return "暂时无法读取候选记忆，请点右上角重新载入。"
         default:
@@ -5380,7 +5395,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         guard let notice else { return nil }
         switch notice {
         case .qaOnlyDisabled:
-            return "审核入口仅在受控 QA 环境可用"
+            return "当前账号暂未开通候选记忆审核"
         case .accountUnavailable, .staleAccountLease:
             return "账号已变化，请重新进入审核入口"
         case .invalidVault:
@@ -5409,7 +5424,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
     private func showActions(for item: OwnerTruthCandidateInboxItemViewState, sourceView: UIView) {
         let alert = UIAlertController(
             title: "审核候选记忆",
-            message: "操作会通过受控 QA 合同提交；不会直接写入旧档案链路。",
+            message: "你的确认会生成可追溯的正式记忆版本。",
             preferredStyle: .actionSheet
         )
         alert.addAction(UIAlertAction(title: "确认", style: .default) { [weak self] _ in

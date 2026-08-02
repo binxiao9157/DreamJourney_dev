@@ -359,6 +359,15 @@ extension BackendCachedReleasePolicyEvaluation {
 final class FeatureGateService {
     static let shared = FeatureGateService()
 
+    /// These M0 routes remain default-off, but their release authority comes
+    /// exclusively from the cached server policy. A local flag cannot enable
+    /// either route; this narrow allowlist only prevents a local default-off
+    /// flag from blocking an already server-authorized closed-pilot account.
+    private static let serverPolicyManagedClosedPilotFeatures: Set<DJFeature> = [
+        .ownerTextCaptureV1,
+        .ownerTruthCandidateReview,
+    ]
+
     private let evaluator = FeatureGateEvaluator()
     private let lock = NSLock()
     private var routeDecisions: [DJFeature: FeatureDecision] = [:]
@@ -422,10 +431,13 @@ final class FeatureGateService {
         ).allowed
     }
 
-    func requestDecision(for feature: DJFeature) -> FeatureDecision {
+    func requestDecision(
+        for feature: DJFeature,
+        localEnabled: Bool? = nil
+    ) -> FeatureDecision {
         let risk = riskClass(for: feature)
         let generation = accountGeneration
-        let localEnabled = FeatureFlagService.shared.isEnabled(feature)
+        let resolvedLocalEnabled = localEnabled ?? FeatureFlagService.shared.isEnabled(feature)
         let captured: FeatureDecision?
         lock.lock()
         captured = routeDecisions[feature]
@@ -435,7 +447,7 @@ final class FeatureGateService {
         if let captured, captured.accountGeneration == generation {
             decision = evaluator.revalidateForRequest(
                 captured: captured,
-                localEnabled: localEnabled,
+                localEnabled: resolvedLocalEnabled,
                 accountGeneration: generation,
                 currentPolicy: currentPolicy(for: feature, risk: risk)
             )
@@ -444,7 +456,7 @@ final class FeatureGateService {
                 feature: feature,
                 risk: risk,
                 purpose: .request,
-                localEnabled: localEnabled,
+                localEnabled: resolvedLocalEnabled,
                 qaSyntheticOverride: false,
                 accountGeneration: generation,
                 policy: currentPolicy(for: feature, risk: risk)
@@ -454,15 +466,43 @@ final class FeatureGateService {
         return decision
     }
 
-    func revalidateRequest(_ captured: FeatureDecision) -> FeatureDecision {
+    func revalidateRequest(
+        _ captured: FeatureDecision,
+        localEnabled: Bool? = nil
+    ) -> FeatureDecision {
         let decision = evaluator.revalidateForRequest(
             captured: captured,
-            localEnabled: FeatureFlagService.shared.isEnabled(captured.feature),
+            localEnabled: localEnabled ?? FeatureFlagService.shared.isEnabled(captured.feature),
             accountGeneration: accountGeneration,
             currentPolicy: currentPolicy(for: captured.feature, risk: riskClass(for: captured.feature))
         )
         storeLatest(decision)
         return decision
+    }
+
+    func requestServerPolicyManagedClosedPilotDecision(
+        for feature: DJFeature
+    ) -> FeatureDecision {
+        requestDecision(
+            for: feature,
+            localEnabled: Self.serverPolicyManagedClosedPilotFeatures.contains(feature) ? true : nil
+        )
+    }
+
+    func revalidateServerPolicyManagedClosedPilotRequest(
+        _ captured: FeatureDecision
+    ) -> FeatureDecision {
+        revalidateRequest(
+            captured,
+            localEnabled: Self.serverPolicyManagedClosedPilotFeatures.contains(captured.feature) ? true : nil
+        )
+    }
+
+    func isServerPolicyManagedClosedPilotRouteAllowed(_ feature: DJFeature) -> Bool {
+        isRouteAllowed(
+            feature,
+            localEnabled: Self.serverPolicyManagedClosedPilotFeatures.contains(feature) ? true : nil
+        )
     }
 
     func qaEvidenceSnapshot(features: [DJFeature]) -> [FeatureDecisionEvidenceSummary] {
@@ -520,6 +560,21 @@ final class FeatureGateService {
            pathComponents[1] == "vaults",
            pathComponents[3] == "source-capture-state" {
             return .ownerTextCaptureV1
+        }
+        if method == .get,
+           pathComponents.count == 4,
+           pathComponents[0] == "v2",
+           pathComponents[1] == "vaults",
+           pathComponents[3] == "candidates" {
+            return .ownerTruthCandidateReview
+        }
+        if method == .post,
+           pathComponents.count == 6,
+           pathComponents[0] == "v2",
+           pathComponents[1] == "vaults",
+           pathComponents[3] == "candidates",
+           pathComponents[5] == "decisions" {
+            return .ownerTruthCandidateReview
         }
         if method == .post,
            pathComponents.count == 6,
@@ -4939,12 +4994,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
     }
 
     private func requestFeatureDecision(for feature: DJFeature) -> FeatureDecision {
-        qaFeatureDecisionProvider?(feature) ?? FeatureGateService.shared.requestDecision(for: feature)
+        qaFeatureDecisionProvider?(feature)
+            ?? FeatureGateService.shared.requestServerPolicyManagedClosedPilotDecision(for: feature)
     }
 
     private func revalidatedRequestFeatureDecision(_ decision: FeatureDecision) -> FeatureDecision {
         qaFeatureDecisionProvider == nil
-            ? FeatureGateService.shared.revalidateRequest(decision)
+            ? FeatureGateService.shared.revalidateServerPolicyManagedClosedPilotRequest(decision)
             : decision
     }
 
@@ -5521,11 +5577,15 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         vaultID: OwnerTruthVaultID,
         completion: @escaping (Result<OwnerTruthCandidateInbox, Error>) -> Void
     ) {
-        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane
+            ? nil
+            : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
                     feature: "ownerTruthCandidateReview",
-                    reason: "qaOnlyDisabled"
+                    reason: decision?.reason ?? "releasePolicyDisabled"
                 )))
             }
             return
@@ -5535,7 +5595,8 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
             method: .get,
             payload: nil,
             authPolicy: .userRequired,
-            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+            featureDecision: decision,
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
         ) { result in
             switch result {
             case .success(let object):
@@ -5559,11 +5620,15 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         command: OwnerTruthCandidateReviewCommand,
         completion: @escaping (Result<OwnerTruthCandidateDecisionResult, Error>) -> Void
     ) {
-        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane
+            ? nil
+            : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
                     feature: "ownerTruthCandidateReview",
-                    reason: "qaOnlyDisabled"
+                    reason: decision?.reason ?? "releasePolicyDisabled"
                 )))
             }
             return
@@ -5573,7 +5638,8 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
             method: .post,
             payload: command.backendPayload,
             authPolicy: .userRequired,
-            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+            featureDecision: decision,
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
         ) { result in
             switch result {
             case .success(let object):
@@ -8520,11 +8586,14 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
             method: method,
             payload: payload
         )
+        let isExplicitOwnerTruthQARequest =
+            additionalHeaders["X-DreamJourney-QA-Owner-Truth"] == "1"
+            && (OwnerTruthCandidateReviewQAGate.isEnabled || qaFeatureDecisionProvider != nil)
         let preparedFeatureDecision: FeatureDecision?
         if let featureDecision {
             preparedFeatureDecision = revalidatedRequestFeatureDecision(featureDecision)
-        } else if let gatedFeature {
-            preparedFeatureDecision = FeatureGateService.shared.requestDecision(for: gatedFeature)
+        } else if let gatedFeature, !isExplicitOwnerTruthQARequest {
+            preparedFeatureDecision = requestFeatureDecision(for: gatedFeature)
         } else {
             preparedFeatureDecision = nil
         }
