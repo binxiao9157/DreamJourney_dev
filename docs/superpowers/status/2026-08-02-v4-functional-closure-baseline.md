@@ -37,7 +37,7 @@
 - 分支：`main`
 - 启动提交：`ffa1f4ecfc09ad8469ede38464db46e22bd1b1c1`
 - 上游基线：`e7dccd6f18077aa7c30bd50e10a5d65284d5a94c`
-- 相对上游：本地领先 `4` 个提交。
+- 相对上游：本地领先 `5` 个提交。
 - 启动时工作区：干净。
 - 部署版本：`UNVERIFIED`，Wave 1 的部署 smoke 前不假定服务器已包含本地代码。
 
@@ -46,7 +46,7 @@
 | Wave | 目标 | 当前状态 | 当前事实 / 下一步 |
 | --- | --- | --- | --- |
 | 0 | 基线与提交隔离 | `FUNCTIONAL_VERIFIED` | 计划与本文件已由 iOS 提交 `afa51ba` 建立；后续继续严格使用精确暂存，不处理并行工作区。 |
-| 1 | Owner Truth 真实闭环 | `IN_PROGRESS` | 后端提交 `2dd20f2` 已把 closed-pilot 资格改为服务端 allowlist；提交 `f2a57f8` 已提供默认关闭的 Candidate/Projection 常驻 Worker profile。真实 Context 权威读路径、部署与 Postgres E2E 仍未完成。 |
+| 1 | Owner Truth 真实闭环 | `IN_PROGRESS` | 后端提交 `2dd20f2` 已把 closed-pilot 资格改为服务端 allowlist；`f2a57f8` 已提供默认关闭的 Candidate/Projection 常驻 Worker profile；`184317c` 已为白名单内本人个人回响增加 confirmed Projection Context authority。Source/Candidate 的正式入站路径、部署与 Postgres E2E 仍未完成。 |
 | 2 | 引导式访谈 | `NOT_STARTED` | 已有会话、节奏、换题等局部合同；尚未作为正式 closed-pilot 自然输入闭环验收。 |
 | 3 | 双推荐与知识地图 | `NOT_STARTED` | 已有 QA/shadow 资产；未形成普通 closed-pilot 用户可用能力。 |
 | 4 | 数据权利、家庭与安全 | `NOT_STARTED` | 有局部 API、合同和 smoke；尚未完成全路由 owner-bound 验收。 |
@@ -67,7 +67,7 @@
 
 1. `candidate-proposal/admit` 只创建 Source 与默认关闭的 extraction effect，实际 extraction 不会在 closed-pilot 流程中运行。
 2. Candidate confirmation 仍是 default-off，且目前的端到端证据使用 QA header、受控 HTTP 或合成数据库。
-3. `/context/build` 仍以旧 Context authority 为主；Owner Truth Projection 只在 shadow/compare 路径证明。
+3. `/context/build` 只在默认关闭、服务端 allowlist 的本人个人回响中可切到 confirmed Projection authority；尚未部署，且没有真实 closed-pilot Source/Candidate 数据可供消费。
 4. 尚无一个不使用 QA header、in-memory fixture 或本地假数据的部署 E2E：`Source -> Candidate -> Confirm -> MemoryVersion -> Projection -> Context -> Correction`。
 
 Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、媒体、Voice 或 Publication 新功能。
@@ -107,10 +107,34 @@ Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、�
     参数、轮询去重日志、资源关闭、Compose profile 与启动命令；
   - 本机没有 Docker CLI，未把 Compose 容器实际启动当作验证证据。服务器部署后
     必须显式启动 profile 并运行真实 Postgres Worker smoke。
-- 尚未声明为 Wave 1 功能完成：Worker 尚未部署、未对真实 closed-pilot 用户运行，
-  `/context/build` 仍未读取 active confirmed Projection。
+- 尚未声明为 Wave 1 功能完成：Worker 尚未部署、未对真实 closed-pilot 用户运行；
+  `/context/build` 的 confirmed Projection 读取仍仅限随后新增的默认关闭
+  closed-pilot Context Authority，尚无真实数据 E2E 证据。
 
-## 7. 本轮提交白名单
+## 7. Wave 1 已完成 Slice：closed-pilot Context Authority
+
+- 后端提交：`184317c feat(owner-truth): add closed pilot context authority`。
+- 新增默认关闭配置：`OWNER_TRUTH_CONTEXT_AUTHORITY_CLOSED_PILOT_ENABLED=false`。
+- 生效条件同时要求：认证后的服务端用户 ID 在
+  `RELEASE_POLICY_CLOSED_PILOT_OWNER_IDS` 内、
+  `RELEASE_POLICY_CLOSED_PILOT_FEATURES=ownerTruthCandidateReview` 已批准，且请求是
+  本人的 `personal` 回响。客户端 cohort、QA header、家庭角色或任意自定义
+  `digitalHumanId` 都不能获得资格。
+- 生效后 `/context/build` 只使用当前已确认的 V4 `MemoryProjection`；响应保留 typed
+  citation 与 `contextAuthority` 摘要。投影不存在、重建中或不可用时返回空 V4
+  Context，不回读旧 Archive/KBLite/Care。
+- 本 Slice 本地验证：
+  - `scripts/run-backend-owner-truth-context-authority-gate.sh` 通过，覆盖默认关闭、
+    服务端白名单、客户端伪造 cohort、无 QA header、投影缺失和旧记忆不回读；
+  - `scripts/verify_backend.sh` 全量通过，包含既有单测、Gate、FastAPI smoke、编译和
+    `git diff --check`；
+  - iOS 当前 `EchoContextPacket` 只要求稳定的基础字段并接受任意
+    `contextVersion`，已静态复核可解析新增 V4 packet；本 Slice 不改动 iOS 工作区。
+- 尚未声明为 Wave 1 功能完成：开关仍默认关闭、后端尚未部署、Worker profile 尚未
+  在 Postgres 运行，且 closed-pilot 的 Source -> Candidate -> Confirmation ->
+  Projection -> Context -> Correction 真实 E2E 尚未跑通。
+
+## 8. 本轮提交白名单
 
 Wave 0 已提交。当前 Wave 1 的 iOS 侧只允许提交本状态文件；后端改动必须
 独立提交在 Backend 仓库。
