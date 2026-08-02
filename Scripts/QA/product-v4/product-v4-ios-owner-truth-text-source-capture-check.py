@@ -43,11 +43,13 @@ def main() -> None:
 
     for required in (
         "struct OwnerTruthTextSourceCaptureCommand",
+        "struct OwnerTruthTextSourceCaptureState",
         "struct OwnerTruthTextSourceCaptureReceipt",
         "enum OwnerTruthTextSourceCaptureOutcome",
         "protocol OwnerTruthTextSourceCaptureClient",
         "private enum OwnerTruthTextSourceCaptureContract",
         'static let schemaVersion = "owner-truth-text-capture-response-v1"',
+        'static let schemaVersion = "owner-truth-text-capture-state-v1"',
         'static let sourceReceiptSchemaVersion = "owner-truth-create-source-v1"',
         "static let maximumCharacterCount = 20_000",
         '"expectedAuthorityEpoch"',
@@ -56,20 +58,26 @@ def main() -> None:
     ):
         require(required in contracts, f"text Source contract missing: {required}")
 
+    state_body = function_body(client, "fetchOwnerTruthTextSourceCaptureState")
     capture_body = function_body(client, "captureOwnerTruthTextSource")
+    for body, operation in ((state_body, "read"), (capture_body, "write")):
+        require(
+            "requestFeatureDecision(for: .ownerTextCaptureV1)" in body,
+            f"text Source {operation} must use the separately captured release policy",
+        )
+        require("authPolicy: .userRequired" in body, f"text Source {operation} must require an owner session")
+        require("featureDecision: decision" in body, f"captured policy must bind the {operation}")
+        require(
+            "X-DreamJourney-QA-Owner-Truth" not in body,
+            f"text Source {operation} must not gain a QA-header bypass",
+        )
     require(
-        "requestFeatureDecision(for: .ownerTextCaptureV1)" in capture_body,
-        "text Source write must use the separately captured release policy",
+        'path = "/v2/vaults/\\(pathComponent(vaultID.rawValue))/source-capture-state"' in state_body,
+        "text Source state route drifted",
     )
     require(
         'path = "/v2/vaults/\\(pathComponent(vaultID.rawValue))/sources"' in capture_body,
         "text Source route drifted",
-    )
-    require("authPolicy: .userRequired" in capture_body, "text Source must require an owner session")
-    require("featureDecision: decision" in capture_body, "captured policy must bind the request")
-    require(
-        "X-DreamJourney-QA-Owner-Truth" not in capture_body,
-        "text Source write must not gain a QA-header bypass",
     )
     require(
         "extension DreamJourneyBackendClient: OwnerTruthTextSourceCaptureClient {}" in client,
@@ -78,6 +86,7 @@ def main() -> None:
     require(
         "pathComponents.count == 4" in client
         and 'pathComponents[3] == "sources"' in client
+        and 'pathComponents[3] == "source-capture-state"' in client
         and "return .ownerTextCaptureV1" in client,
         "request feature mapping must classify only the exact vault Source route",
     )
@@ -94,6 +103,7 @@ def main() -> None:
     for test_name in (
         "func testTextSourceCaptureCommandProducesExactClosedPilotPayload()",
         "func testTextSourceCaptureCommandRejectsInvalidAuthorityTextAndPurpose()",
+        "func testTextSourceCaptureStateIsValueMinimizedAndRejectsLeakedFields()",
         "func testTextSourceCaptureReceiptIsValueMinimizedAndRejectsLeakedContent()",
     ):
         require(test_name in tests, f"text Source test missing: {test_name}")

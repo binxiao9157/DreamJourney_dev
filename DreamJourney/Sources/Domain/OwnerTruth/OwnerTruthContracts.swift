@@ -819,6 +819,42 @@ enum OwnerTruthTextSourceCaptureOutcome: String, Equatable, Sendable {
     case deduplicated
 }
 
+/// The only read needed before issuing the next owner-authored Source command.
+/// It is deliberately value-minimized: no owner, Source, Candidate or memory
+/// material crosses this boundary.
+struct OwnerTruthTextSourceCaptureState: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-text-capture-state-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let authorityEpoch: Int
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        let responseKeys: Set<String> = [
+            "schemaVersion",
+            "vaultId",
+            "authorityEpoch",
+        ]
+        guard Set(object.keys) == responseKeys,
+              OwnerTruthTextSourceCaptureContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthTextSourceCaptureContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let authorityEpoch = OwnerTruthTextSourceCaptureContract.nonNegativeInt(
+                object["authorityEpoch"]
+              ) else {
+            throw OwnerTruthRemoteContractError.invalidTextSourceCapture(
+                "response does not match the value-minimized Source capture state contract"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.authorityEpoch = authorityEpoch
+    }
+}
+
 /// Value-minimized receipt for an admitted owner-authored Source. It never
 /// retains the submitted text, Source payload or Candidate payload.
 struct OwnerTruthTextSourceCaptureReceipt: Equatable, Sendable {
@@ -890,6 +926,11 @@ struct OwnerTruthTextSourceCaptureReceipt: Equatable, Sendable {
 /// The transport keeps authentication, AccountLease and captured release-policy
 /// headers inside the backend client. It intentionally has no QA-header path.
 protocol OwnerTruthTextSourceCaptureClient: AnyObject {
+    func fetchOwnerTruthTextSourceCaptureState(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthTextSourceCaptureState, Error>) -> Void
+    )
+
     func captureOwnerTruthTextSource(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthTextSourceCaptureCommand,

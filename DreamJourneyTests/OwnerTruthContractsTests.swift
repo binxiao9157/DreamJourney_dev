@@ -122,6 +122,35 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    func testTextSourceCaptureStateIsValueMinimizedAndRejectsLeakedFields() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-owner-a"))
+        let response: [String: Any] = [
+            "schemaVersion": OwnerTruthTextSourceCaptureState.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "authorityEpoch": 4,
+        ]
+
+        let state = try OwnerTruthTextSourceCaptureState(
+            backendJSONObject: response,
+            expectedVaultID: vaultID
+        )
+        XCTAssertEqual(state.vaultID, vaultID)
+        XCTAssertEqual(state.authorityEpoch, 4)
+
+        var leakedResponse = response
+        leakedResponse["ownerSubjectId"] = "owner-must-not-cross-client-boundary"
+        XCTAssertThrowsError(
+            try OwnerTruthTextSourceCaptureState(
+                backendJSONObject: leakedResponse,
+                expectedVaultID: vaultID
+            )
+        ) { error in
+            guard case .invalidTextSourceCapture = error as? OwnerTruthRemoteContractError else {
+                return XCTFail("expected a text Source state contract failure")
+            }
+        }
+    }
+
     func testTextSourceCaptureReceiptIsValueMinimizedAndRejectsLeakedContent() throws {
         let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-owner-a"))
         let response: [String: Any] = [

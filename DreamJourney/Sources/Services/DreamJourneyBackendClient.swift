@@ -514,6 +514,13 @@ final class FeatureGateService {
            pathComponents[3] == "sources" {
             return .ownerTextCaptureV1
         }
+        if method == .get,
+           pathComponents.count == 4,
+           pathComponents[0] == "v2",
+           pathComponents[1] == "vaults",
+           pathComponents[3] == "source-capture-state" {
+            return .ownerTextCaptureV1
+        }
         if method == .post,
            pathComponents.count == 6,
            pathComponents[0] == "v2",
@@ -5587,6 +5594,45 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
     /// Captures one owner-authored text Source through the server-granted
     /// closed-pilot policy. Unlike legacy review QA routes, this endpoint has
     /// no launch-argument or QA-header bypass.
+    func fetchOwnerTruthTextSourceCaptureState(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthTextSourceCaptureState, Error>) -> Void
+    ) {
+        let decision = requestFeatureDecision(for: .ownerTextCaptureV1)
+        guard decision.allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTextCaptureV1.rawValue,
+                    reason: decision.reason
+                )))
+            }
+            return
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/source-capture-state"
+        requestJSON(
+            path: path,
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            featureDecision: decision
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthTextSourceCaptureState(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func captureOwnerTruthTextSource(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthTextSourceCaptureCommand,
