@@ -131,6 +131,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidInbox(String)
     case invalidDecision(String)
     case invalidCommand(String)
+    case invalidTextSourceCapture(String)
     case invalidInterviewCandidateReview(String)
     case invalidInterviewCandidateConfirmationInbox(String)
     case invalidInterviewCandidateMemoryActivationInbox(String)
@@ -169,6 +170,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "候选审核回执合同无效：\(detail)"
         case .invalidCommand(let detail):
             return "候选审核命令无效：\(detail)"
+        case .invalidTextSourceCapture(let detail):
+            return "文字记忆采集合同无效：\(detail)"
         case .invalidInterviewCandidateReview(let detail):
             return "访谈候选审核合同无效：\(detail)"
         case .invalidInterviewCandidateConfirmationInbox(let detail):
@@ -740,6 +743,190 @@ struct OwnerTruthCandidateDecisionResult: Codable, Equatable, Sendable {
             throw OwnerTruthRemoteContractError.invalidDecision("\(field) must be a UUID or null")
         }
         return value
+    }
+}
+
+// MARK: - Closed-pilot owner-authored text Source capture
+
+/// The only client-authored write admitted by the first Owner Truth pilot.
+/// The server derives the Source identifier from `commandID`; callers must
+/// retain the command for retry instead of creating another original.
+struct OwnerTruthTextSourceCaptureCommand: Equatable, Sendable {
+    static let maximumCharacterCount = 20_000
+    static let defaultPurpose = "memoryCapture"
+
+    let commandID: UUID
+    let expectedAuthorityEpoch: Int
+    let text: String
+    let purpose: String
+    let clientCreatedAt: Date
+
+    init(
+        commandID: UUID = UUID(),
+        expectedAuthorityEpoch: Int,
+        text: String,
+        purpose: String = Self.defaultPurpose,
+        clientCreatedAt: Date = Date()
+    ) throws {
+        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedPurpose = purpose.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard expectedAuthorityEpoch >= 0,
+              !normalizedText.isEmpty,
+              normalizedText.count <= Self.maximumCharacterCount,
+              Self.isValidPurpose(normalizedPurpose) else {
+            throw OwnerTruthRemoteContractError.invalidTextSourceCapture(
+                "command requires bounded text, a non-negative authority epoch and a valid purpose"
+            )
+        }
+
+        self.commandID = commandID
+        self.expectedAuthorityEpoch = expectedAuthorityEpoch
+        self.text = normalizedText
+        self.purpose = normalizedPurpose
+        self.clientCreatedAt = clientCreatedAt
+    }
+
+    /// Exactly mirrors the server's closed-pilot request schema. Owner,
+    /// vault, Source ID, receipt and extraction effect are all server-owned.
+    var backendPayload: [String: Any] {
+        [
+            "commandId": commandID.uuidString.lowercased(),
+            "expectedAuthorityEpoch": expectedAuthorityEpoch,
+            "kind": "text",
+            "content": text,
+            "purpose": purpose,
+            "clientCreatedAt": Self.iso8601String(clientCreatedAt),
+        ]
+    }
+
+    private static func isValidPurpose(_ purpose: String) -> Bool {
+        guard !purpose.isEmpty, purpose.utf8.count <= 80 else { return false }
+        return purpose.range(
+            of: "^[A-Za-z0-9._-]+$",
+            options: .regularExpression
+        ) != nil
+    }
+
+    private static func iso8601String(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+}
+
+enum OwnerTruthTextSourceCaptureOutcome: String, Equatable, Sendable {
+    case created
+    case deduplicated
+}
+
+/// Value-minimized receipt for an admitted owner-authored Source. It never
+/// retains the submitted text, Source payload or Candidate payload.
+struct OwnerTruthTextSourceCaptureReceipt: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-text-capture-response-v1"
+    static let sourceReceiptSchemaVersion = "owner-truth-create-source-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let outcome: OwnerTruthTextSourceCaptureOutcome
+    let receiptID: OwnerTruthRecordID
+    let sourceID: OwnerTruthRecordID
+    let sourceVersion: Int
+    let authorityEpoch: Int
+    let acceptedAt: Date
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        let responseKeys: Set<String> = [
+            "schemaVersion",
+            "vaultId",
+            "source",
+            "candidateExtraction",
+            "acceptedAt",
+        ]
+        let sourceKeys: Set<String> = [
+            "schemaVersion",
+            "status",
+            "receiptId",
+            "sourceId",
+            "sourceVersion",
+            "authorityEpoch",
+        ]
+        guard Set(object.keys) == responseKeys,
+              OwnerTruthTextSourceCaptureContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthTextSourceCaptureContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let source = object["source"] as? [String: Any],
+              Set(source.keys) == sourceKeys,
+              OwnerTruthTextSourceCaptureContract.requiredString(source["schemaVersion"])
+                == Self.sourceReceiptSchemaVersion,
+              let outcomeRaw = OwnerTruthTextSourceCaptureContract.requiredString(source["status"]),
+              let outcome = OwnerTruthTextSourceCaptureOutcome(rawValue: outcomeRaw),
+              let receiptID = OwnerTruthTextSourceCaptureContract.recordID(source["receiptId"]),
+              let sourceID = OwnerTruthTextSourceCaptureContract.recordID(source["sourceId"]),
+              let sourceVersion = OwnerTruthTextSourceCaptureContract.positiveInt(source["sourceVersion"]),
+              let authorityEpoch = OwnerTruthTextSourceCaptureContract.nonNegativeInt(source["authorityEpoch"]),
+              let candidateExtraction = object["candidateExtraction"] as? [String: Any],
+              Set(candidateExtraction.keys) == ["status"],
+              OwnerTruthTextSourceCaptureContract.requiredString(candidateExtraction["status"])
+                == "requested",
+              let acceptedAt = OwnerTruthTextSourceCaptureContract.iso8601Date(object["acceptedAt"]) else {
+            throw OwnerTruthRemoteContractError.invalidTextSourceCapture(
+                "response does not match the value-minimized Source receipt contract"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.outcome = outcome
+        self.receiptID = receiptID
+        self.sourceID = sourceID
+        self.sourceVersion = sourceVersion
+        self.authorityEpoch = authorityEpoch
+        self.acceptedAt = acceptedAt
+    }
+}
+
+/// The transport keeps authentication, AccountLease and captured release-policy
+/// headers inside the backend client. It intentionally has no QA-header path.
+protocol OwnerTruthTextSourceCaptureClient: AnyObject {
+    func captureOwnerTruthTextSource(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthTextSourceCaptureCommand,
+        completion: @escaping (Result<OwnerTruthTextSourceCaptureReceipt, Error>) -> Void
+    )
+}
+
+private enum OwnerTruthTextSourceCaptureContract {
+    static func requiredString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    static func recordID(_ value: Any?) -> OwnerTruthRecordID? {
+        guard let value = requiredString(value), let uuid = UUID(uuidString: value) else {
+            return nil
+        }
+        return OwnerTruthRecordID(rawValue: uuid)
+    }
+
+    static func positiveInt(_ value: Any?) -> Int? {
+        guard !(value is Bool), let value = value as? Int, value > 0 else { return nil }
+        return value
+    }
+
+    static func nonNegativeInt(_ value: Any?) -> Int? {
+        guard !(value is Bool), let value = value as? Int, value >= 0 else { return nil }
+        return value
+    }
+
+    static func iso8601Date(_ value: Any?) -> Date? {
+        guard let rawValue = requiredString(value) else { return nil }
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let standardFormatter = ISO8601DateFormatter()
+        return fractionalFormatter.date(from: rawValue) ?? standardFormatter.date(from: rawValue)
     }
 }
 

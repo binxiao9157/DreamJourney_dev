@@ -508,6 +508,13 @@ final class FeatureGateService {
             return .echoTextInput
         }
         if method == .post,
+           pathComponents.count == 4,
+           pathComponents[0] == "v2",
+           pathComponents[1] == "vaults",
+           pathComponents[3] == "sources" {
+            return .ownerTextCaptureV1
+        }
+        if method == .post,
            pathComponents.count == 6,
            pathComponents[0] == "v2",
            pathComponents[1] == "vaults",
@@ -661,6 +668,7 @@ final class FeatureGateService {
              .ownerTruthLifeMap,
              .ownerTruthMemorySearch,
              .ownerTruthCandidateReview,
+             .ownerTextCaptureV1,
              .profileSettings,
              .legalCenter,
              .accountDeletion:
@@ -5576,6 +5584,49 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    /// Captures one owner-authored text Source through the server-granted
+    /// closed-pilot policy. Unlike legacy review QA routes, this endpoint has
+    /// no launch-argument or QA-header bypass.
+    func captureOwnerTruthTextSource(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthTextSourceCaptureCommand,
+        completion: @escaping (Result<OwnerTruthTextSourceCaptureReceipt, Error>) -> Void
+    ) {
+        let decision = requestFeatureDecision(for: .ownerTextCaptureV1)
+        guard decision.allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTextCaptureV1.rawValue,
+                    reason: decision.reason
+                )))
+            }
+            return
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/sources"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            featureDecision: decision
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthTextSourceCaptureReceipt(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func fetchOwnerTruthInterviewCandidateReview(
         vaultID: OwnerTruthVaultID,
         reviewBatchID: OwnerTruthRecordID,
@@ -9140,6 +9191,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
 }
 
 extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}
+extension DreamJourneyBackendClient: OwnerTruthTextSourceCaptureClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationInboxClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateMemoryActivationInboxClient {}

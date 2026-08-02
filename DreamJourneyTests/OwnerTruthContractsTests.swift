@@ -68,6 +68,100 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    func testTextSourceCaptureCommandProducesExactClosedPilotPayload() throws {
+        let command = try OwnerTruthTextSourceCaptureCommand(
+            commandID: UUID(uuidString: "00000000-0000-0000-0000-000000000101")!,
+            expectedAuthorityEpoch: 4,
+            text: "  爷爷总会在傍晚带我去河边散步。  ",
+            purpose: "memoryCapture",
+            clientCreatedAt: Date(timeIntervalSince1970: 1_775_000_000)
+        )
+
+        let payload = command.backendPayload
+        XCTAssertEqual(
+            Set(payload.keys),
+            ["commandId", "expectedAuthorityEpoch", "kind", "content", "purpose", "clientCreatedAt"]
+        )
+        XCTAssertEqual(payload["commandId"] as? String, "00000000-0000-0000-0000-000000000101")
+        XCTAssertEqual(payload["expectedAuthorityEpoch"] as? Int, 4)
+        XCTAssertEqual(payload["kind"] as? String, "text")
+        XCTAssertEqual(payload["content"] as? String, "爷爷总会在傍晚带我去河边散步。")
+        XCTAssertEqual(payload["purpose"] as? String, "memoryCapture")
+        XCTAssertNotNil(payload["clientCreatedAt"] as? String)
+        XCTAssertNil(payload["ownerSubjectId"])
+        XCTAssertNil(payload["sourceId"])
+        XCTAssertNil(payload["receiptId"])
+        XCTAssertNil(payload["effect"])
+    }
+
+    func testTextSourceCaptureCommandRejectsInvalidAuthorityTextAndPurpose() {
+        XCTAssertThrowsError(
+            try OwnerTruthTextSourceCaptureCommand(
+                expectedAuthorityEpoch: -1,
+                text: "一段记忆"
+            )
+        )
+        XCTAssertThrowsError(
+            try OwnerTruthTextSourceCaptureCommand(
+                expectedAuthorityEpoch: 0,
+                text: " \n "
+            )
+        )
+        XCTAssertThrowsError(
+            try OwnerTruthTextSourceCaptureCommand(
+                expectedAuthorityEpoch: 0,
+                text: String(repeating: "x", count: OwnerTruthTextSourceCaptureCommand.maximumCharacterCount + 1)
+            )
+        )
+        XCTAssertThrowsError(
+            try OwnerTruthTextSourceCaptureCommand(
+                expectedAuthorityEpoch: 0,
+                text: "一段记忆",
+                purpose: "memory capture"
+            )
+        )
+    }
+
+    func testTextSourceCaptureReceiptIsValueMinimizedAndRejectsLeakedContent() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-owner-a"))
+        let response: [String: Any] = [
+            "schemaVersion": OwnerTruthTextSourceCaptureReceipt.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "source": [
+                "schemaVersion": OwnerTruthTextSourceCaptureReceipt.sourceReceiptSchemaVersion,
+                "status": "created",
+                "receiptId": "00000000-0000-0000-0000-000000000102",
+                "sourceId": "00000000-0000-0000-0000-000000000103",
+                "sourceVersion": 1,
+                "authorityEpoch": 4,
+            ],
+            "candidateExtraction": ["status": "requested"],
+            "acceptedAt": "2026-08-02T12:00:00Z",
+        ]
+
+        let receipt = try OwnerTruthTextSourceCaptureReceipt(
+            backendJSONObject: response,
+            expectedVaultID: vaultID
+        )
+        XCTAssertEqual(receipt.vaultID, vaultID)
+        XCTAssertEqual(receipt.outcome, .created)
+        XCTAssertEqual(receipt.sourceVersion, 1)
+        XCTAssertEqual(receipt.authorityEpoch, 4)
+
+        var leakedResponse = response
+        leakedResponse["content"] = "这段正文绝不能进入回执"
+        XCTAssertThrowsError(
+            try OwnerTruthTextSourceCaptureReceipt(
+                backendJSONObject: leakedResponse,
+                expectedVaultID: vaultID
+            )
+        ) { error in
+            guard case .invalidTextSourceCapture = error as? OwnerTruthRemoteContractError else {
+                return XCTFail("expected a text Source receipt contract failure")
+            }
+        }
+    }
+
     func testCandidateInboxDecodesTypedProposalAndEvidence() throws {
         let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-owner-a"))
         let candidateID = "00000000-0000-0000-0000-000000000010"
