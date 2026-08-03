@@ -227,6 +227,7 @@ if [[ "$RUN_DEVICE_BUILD" == "1" ]]; then
     -scheme DreamJourney \
     -configuration Debug \
     -destination "id=$DEVICE_ID" \
+    -allowProvisioningUpdates \
     "${BUILD_SETTINGS[@]}" \
     build > "$BUILD_LOG" 2>&1
   BUILD_STATUS=$?

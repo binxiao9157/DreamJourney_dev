@@ -51,7 +51,7 @@
 | 4 | 数据权利、家庭与安全 | `FUNCTIONAL_VERIFIED` | owner-bound session、路由隔离、导出/删除、家庭贡献授权与 deny-by-default 已由部署 Postgres smoke 覆盖。 |
 | 5 | M0 UI 与 release-like 集成 | `FUNCTIONAL_VERIFIED` | 维持三 Tab 与全屏 Echo；closed-pilot M0 产品面、失败收敛和隐藏能力公开范围均已完成 UIQA。 |
 | 6 | 非真机发布门 | `FUNCTIONAL_VERIFIED` | 统一后端/模拟器/XCTest/iPhoneOS Gate 已在 2026-08-03 完整通过，证据路径见第 14 节。 |
-| 7 | 真机与 M1 Voice | `DEVICE_REQUIRED` | Wave 2–6 已关闭；下一步只执行登录/权限/前后台/通知与 M1 声音专项的真实设备验收。 |
+| 7 | 真机与 M1 Voice | `EXTERNAL_BLOCKED` | Wave 2–6 已关闭。2026-08-03 已检测到已配对 iPhone，但本机 Xcode 未登录 Team `2BTR77V3R8` 的开发者账号，缺少 `com.yxj.dreamjourney.app` 与 Widget 的开发描述文件；登录并下载 profile 后执行登录/权限/前后台/通知与 M1 声音专项验收。 |
 
 ## 4. Wave 1 启动判定
 
@@ -276,3 +276,11 @@ Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、�
 - iOS 本机验证固定使用 `com.yxj.dreamjourney.app / 2BTR77V3R8`；统一 Gate 的 XCTest 也显式传入同一项目级覆盖，避免测试落回协作默认 Bundle ID。
 - 最新自然输入产品面截图：`/tmp/dreamjourney-v4-w6-ios/full-20260803-104300/uiqa/natural-input-product/full-20260803-104300/01-owner-truth-interview-natural-input-product-surface-smoke.png`。
 - 该门不声明真机完成。仍需 Wave 7 验收：真实身份 Provider、麦克风/相册权限、前后台恢复、通知跳转、设备性能，以及 M1 声音复刻/数字人专项。
+
+## 15. Wave 7 启动记录（2026-08-03）
+
+- 真机已检测：`iPhone 17`，设备标识 `B7887DD8-3561-5F2A-8D62-A3FEACDC80D9`，状态 `available (paired)`。
+- `run-true-device-voice-preflight.sh` 已生成证据目录：`tmp/visual-qa/prd-stitch-ui/true-device-acceptance/20260803-v4-wave7-voice-preflight/`。
+- 本机设备编译被 Xcode 签名环境阻断：没有可用的 `com.yxj.dreamjourney.app` / `.widget` development profile；尝试 `-allowProvisioningUpdates` 后，Xcode 返回 `No Accounts: Add a new account in Accounts settings`。
+- 真机 runner 现会在已登录账号的机器上请求刷新已有 provisioning profile；它们不会写入 Provider 密钥，也不会改动共享工程默认 Bundle ID。
+- 解阻条件：在 Xcode Settings > Accounts 登录有 Team `2BTR77V3R8` 权限的 Apple Developer 账号，并确保该 Team 为 `com.yxj.dreamjourney.app` 及 `com.yxj.dreamjourney.app.widget` 提供包含当前设备的开发描述文件。之后重跑 Wave 7 预检与 PCM-drive smoke。

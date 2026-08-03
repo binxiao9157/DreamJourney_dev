@@ -130,11 +130,9 @@ log ""
 log "Local configuration"
 
 BACKEND_CONFIG="$ROOT_DIR/DreamJourney/Config/Backend.local.xcconfig"
-VOICE_CONFIG="$ROOT_DIR/DreamJourney/Config/VoiceSDK.local.xcconfig"
 SIGNING_CONFIGS=("$ROOT_DIR"/DreamJourney/Config/*.local.xcconfig)
 
 check_file "DreamJourney/Config/Backend.local.xcconfig" "Backend local config"
-check_file "DreamJourney/Config/VoiceSDK.local.xcconfig" "VoiceSDK local config"
 
 DREAMJOURNEY_BACKEND_BASE_URL="${DREAMJOURNEY_BACKEND_BASE_URL:-$(xcconfig_value DREAMJOURNEY_BACKEND_BASE_URL "$BACKEND_CONFIG")}"
 DREAMJOURNEY_BACKEND_BASE_URL="$(normalize_xcconfig_url "$DREAMJOURNEY_BACKEND_BASE_URL")"
@@ -147,13 +145,7 @@ check_secret_value "DREAMJOURNEY_BACKEND_API_TOKEN" "$DREAMJOURNEY_BACKEND_API_T
 check_plain_value "DREAMJOURNEY_DEVELOPMENT_TEAM" "$DREAMJOURNEY_DEVELOPMENT_TEAM"
 check_plain_value "DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER" "$DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER"
 
-VOLCENGINE_APP_ID="${VOLCENGINE_APP_ID:-$(xcconfig_value VOLCENGINE_APP_ID "$VOICE_CONFIG")}"
-VOLCENGINE_APP_KEY="${VOLCENGINE_APP_KEY:-$(xcconfig_value VOLCENGINE_APP_KEY "$VOICE_CONFIG")}"
-VOLCENGINE_APP_TOKEN="${VOLCENGINE_APP_TOKEN:-$(xcconfig_value VOLCENGINE_APP_TOKEN "$VOICE_CONFIG")}"
-
-check_secret_value "VOLCENGINE_APP_ID" "$VOLCENGINE_APP_ID"
-check_secret_value "VOLCENGINE_APP_KEY" "$VOLCENGINE_APP_KEY"
-check_secret_value "VOLCENGINE_APP_TOKEN" "$VOLCENGINE_APP_TOKEN"
+pass "mobile Provider credentials: retired; runtime access stays behind the backend contract"
 
 log ""
 log "Backend reachability"

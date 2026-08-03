@@ -33,119 +33,126 @@ func assertNotContains(_ source: String, _ needle: String, _ message: String) {
 
 let plist = read("DreamJourney/Resources/Info.plist")
 let gitignore = read(".gitignore")
-let project = read("DreamJourney.xcodeproj/project.pbxproj")
-let projectYML = read("project.yml")
 let dialogEngine = read("DreamJourney/Sources/Services/DialogEngineManager.swift")
 let readinessDoc = read("docs/superpowers/status/2026-06-18-device-backend-acceptance-readiness.md")
 let coverage = read("docs/superpowers/status/2026-06-18-prd-coverage-matrix.md")
-
 let voiceExamplePath = "DreamJourney/Config/VoiceSDK.example.xcconfig"
 let preflightScriptPath = "Scripts/QA/prd-stitch-ui/run-true-device-voice-preflight.sh"
-assertFileExists(voiceExamplePath, "Voice SDK example xcconfig should exist")
+
+assertFileExists(voiceExamplePath, "Voice SDK boundary note should exist")
 assertFileExists(preflightScriptPath, "True-device voice preflight script should exist")
 
 let voiceExample = read(voiceExamplePath)
 let preflightScript = read(preflightScriptPath)
 
-for required in [
-    "<key>VolcEngineAppID</key>",
-    "<string>$(VOLCENGINE_APP_ID)</string>",
-    "<key>VolcEngineAppKey</key>",
-    "<string>$(VOLCENGINE_APP_KEY)</string>",
-    "<key>VolcEngineAppToken</key>",
-    "<string>$(VOLCENGINE_APP_TOKEN)</string>",
-] {
-    assertContains(plist, required, "Info.plist should inject production voice SDK config through build settings")
-}
-
-for forbidden in [
-    "<string>YOUR_VOLCENGINE_APP_ID</string>",
-    "<string>YOUR_VOLCENGINE_APP_KEY</string>",
-    "<string>YOUR_VOLCENGINE_APP_TOKEN</string>",
-] {
-    assertNotContains(plist, forbidden, "Info.plist should not hard-code voice SDK placeholders")
-}
-
 assertContains(
-    gitignore,
-    "DreamJourney/Config/VoiceSDK.local.xcconfig",
-    "Local voice SDK config should stay ignored"
+    plist,
+    "<key>DreamJourneyBackendBaseURL</key>",
+    "Info.plist should retain the non-secret backend base URL setting"
 )
+
+for retiredKey in [
+    "VolcEngineAppKey",
+    "VolcEngineAppToken",
+    "DREAMJOURNEY_BACKEND_API_TOKEN",
+    "VOLCENGINE_APP_KEY",
+    "VOLCENGINE_APP_TOKEN",
+] {
+    assertNotContains(plist, retiredKey, "Info.plist must not package mobile Provider credentials")
+}
+
 assertContains(
     gitignore,
     "DreamJourney/Config/*.local.xcconfig",
-    "All local xcconfig files, including signing overrides, should stay ignored"
+    "Local signing configuration should stay ignored"
 )
 
 for required in [
-    "DreamJourney/Config/YXJ.local.xcconfig",
-    "-xcconfig",
-    "DREAMJOURNEY_DEVELOPMENT_TEAM",
-    "DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER",
+    "Direct mobile Provider credential injection is retired.",
+    "scoped session broker contract",
 ] {
-    assertContains(preflightScript, required, "True-device voice preflight should apply local signing override \(required)")
+    assertContains(voiceExample, required, "Voice SDK example should document the current boundary")
 }
 
-for required in [
-    "VOLCENGINE_APP_ID = YOUR_VOLCENGINE_APP_ID",
-    "VOLCENGINE_APP_KEY = YOUR_VOLCENGINE_APP_KEY",
-    "VOLCENGINE_APP_TOKEN = YOUR_VOLCENGINE_APP_TOKEN",
+for retiredCredential in [
+    "VOLCENGINE_APP_ID",
+    "VOLCENGINE_APP_KEY",
+    "VOLCENGINE_APP_TOKEN",
 ] {
-    assertContains(voiceExample, required, "Voice SDK example should document \(required)")
-    assertContains(project, required + ";", "Xcode project should default \(required)")
-}
-
-for required in [
-    "VOLCENGINE_APP_ID: YOUR_VOLCENGINE_APP_ID",
-    "VOLCENGINE_APP_KEY: YOUR_VOLCENGINE_APP_KEY",
-    "VOLCENGINE_APP_TOKEN: YOUR_VOLCENGINE_APP_TOKEN",
-] {
-    assertContains(projectYML, required, "XcodeGen project should default \(required)")
-}
-
-for required in [
-    "var isProductionReady: Bool",
-    "productionConfigurationMissing",
-    "guard config.isProductionReady else",
-    "YOUR_VOLCENGINE_APP_ID",
-    "YOUR_VOLCENGINE_APP_KEY",
-    "YOUR_VOLCENGINE_APP_TOKEN",
-    "$(",
-] {
-    assertContains(dialogEngine, required, "DialogEngine should fail early when voice SDK config is not production-ready")
+    assertNotContains(
+        voiceExample,
+        retiredCredential,
+        "Voice SDK example must not instruct direct Provider credential injection"
+    )
 }
 
 for required in [
     "load_local_xcconfig",
     "DreamJourney/Config/Backend.local.xcconfig",
-    "DreamJourney/Config/VoiceSDK.local.xcconfig",
-    "[[ \"$line\" == //* || \"$line\" == \\#* ]] && continue",
-    "xcodebuild -showdestinations",
-    "xcrun xctrace list devices",
-    "No online physical iPhone/iPad detected",
-    "VOLCENGINE_APP_ID",
-    "VOLCENGINE_APP_KEY",
-    "VOLCENGINE_APP_TOKEN",
+    "DreamJourney/Config/YXJ.local.xcconfig",
+    "-xcconfig",
+    "DREAMJOURNEY_DEVELOPMENT_TEAM",
+    "DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER",
     "DREAMJOURNEY_BACKEND_BASE_URL",
-    "DREAMJOURNEY_BACKEND_API_TOKEN",
     "NSMicrophoneUsageDescription",
     "NSSpeechRecognitionUsageDescription",
     "NSPhotoLibraryUsageDescription",
-    "xcodebuild -workspace DreamJourney.xcworkspace",
+    "xcodebuild -showdestinations",
+    "xcrun devicectl list devices",
+    "xcrun xctrace list devices",
+    "No online physical iPhone/iPad detected",
+    "-allowProvisioningUpdates",
     "true-device-acceptance",
 ] {
     assertContains(preflightScript, required, "True-device preflight should check \(required)")
 }
 
-for required in [
-    "VoiceSDK.example.xcconfig",
+for retiredCredential in [
     "VoiceSDK.local.xcconfig",
+    "VOLCENGINE_APP_ID",
+    "VOLCENGINE_APP_KEY",
+    "VOLCENGINE_APP_TOKEN",
+    "DREAMJOURNEY_BACKEND_API_TOKEN",
+] {
+    assertNotContains(
+        preflightScript,
+        retiredCredential,
+        "True-device preflight must not accept a mobile credential build setting"
+    )
+}
+
+for required in [
+    "enum VoiceSDKReadinessState",
+    "case providerCredentialBlocked",
+    "productionConfigurationMissing",
+    "runtimeConfig.mobileDirectAllowed",
+    "runtimeConfig.accessPath == \"scopedSessionCredential\"",
+    "!runtimeConfig.isBlocked",
+] {
+    assertContains(dialogEngine, required, "DialogEngine should fail closed at the voice credential boundary")
+}
+
+for retiredAccessPath in [
+    "VolcEngineAppKey",
+    "VolcEngineAppToken",
+    "func configure(token: String)",
+] {
+    assertNotContains(
+        dialogEngine,
+        retiredAccessPath,
+        "DialogEngine must not restore direct Provider credential injection"
+    )
+}
+
+for required in [
+    "移动端不再注入火山 Provider 密钥",
+    "scoped session broker",
     "run-true-device-voice-preflight.sh",
     "生产语音 SDK",
     "真机验收",
     "APNs provider delivery",
 ] {
-    assertContains(readinessDoc, required, "Readiness doc should mention \(required)")
+    assertContains(readinessDoc, required, "Readiness doc should describe the current true-device boundary")
 }
 
 assertContains(

@@ -27,11 +27,17 @@ require(script.contains("VirtualmanStreamSDK.xcframework"), "doctor must check b
 require(script.contains("DreamJourney.xcworkspace"), "doctor must check workspace")
 require(script.contains("Podfile.lock"), "doctor must check CocoaPods install state")
 require(script.contains("Backend.local.xcconfig"), "doctor must check backend local config")
-require(script.contains("VoiceSDK.local.xcconfig"), "doctor must check voice local config")
 require(script.contains("DREAMJOURNEY_BACKEND_BASE_URL"), "doctor must parse backend base URL")
 require(script.contains("DREAMJOURNEY_BACKEND_API_TOKEN"), "doctor must parse backend API token")
 require(script.contains("DREAMJOURNEY_DEVELOPMENT_TEAM"), "doctor must check signing team override")
 require(script.contains("DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER"), "doctor must check bundle id override")
+require(
+    script.contains("mobile Provider credentials: retired"),
+    "doctor must document the backend-only Provider credential boundary"
+)
+for retiredCredential in ["VoiceSDK.local.xcconfig", "VOLCENGINE_APP_ID", "VOLCENGINE_APP_KEY", "VOLCENGINE_APP_TOKEN"] {
+    require(!script.contains(retiredCredential), "doctor must not require retired mobile Provider credentials")
+}
 require(script.contains("/health"), "doctor must optionally check backend health")
 require(script.contains("/config/runtime"), "doctor must optionally check runtime config")
 require(script.contains("value intentionally omitted"), "doctor must redact secret values")

@@ -130,6 +130,7 @@ xcodebuild \
   -configuration Debug \
   -destination "id=$DEVICE_ID" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
+  -allowProvisioningUpdates \
   build > "$BUILD_LOG" 2>&1
 BUILD_STATUS=$?
 set -e

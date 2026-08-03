@@ -51,25 +51,17 @@ Rules:
 - `run-true-device-voice-preflight.sh` 会自动读取 `DreamJourney/Config/Backend.local.xcconfig`；`DREAMJOURNEY_BACKEND_BASE_URL` 和 `DREAMJOURNEY_BACKEND_API_TOKEN` 也可以通过 smoke 脚本环境变量覆盖。
 - `DREAMJOURNEY_BACKEND_API_TOKEN` 为空时，`run-backend-env-smoke.sh` 必须失败，避免误用无鉴权环境。
 
-生产语音 SDK 配置同样只能通过本地配置、环境变量或 xcodebuild build setting 注入，不要把真实 key 提交。
+### Production Voice Credential Boundary
 
-Recommended local file:
-
-```xcconfig
-// DreamJourney/Config/VoiceSDK.local.xcconfig
-VOLCENGINE_APP_ID = your-real-volcengine-app-id
-VOLCENGINE_APP_KEY = YOUR_VOLCENGINE_APP_KEY
-VOLCENGINE_APP_TOKEN = YOUR_VOLCENGINE_APP_TOKEN
-```
+移动端不再注入火山 Provider 密钥。`VoiceSDK.example.xcconfig` 仅保留这一边界说明，`VoiceSDK.local.xcconfig` 不再是预检或真机构建的输入。
 
 Rules:
 
-- `DreamJourney/Config/VoiceSDK.example.xcconfig` 只保留示例占位值。
-- `DreamJourney/Config/VoiceSDK.local.xcconfig` 已在 `.gitignore` 中忽略。
-- `run-true-device-voice-preflight.sh` 会自动读取 `DreamJourney/Config/VoiceSDK.local.xcconfig`；`VOLCENGINE_APP_ID`、`VOLCENGINE_APP_KEY`、`VOLCENGINE_APP_TOKEN` 也可以通过环境变量覆盖。
-- `VolcEngineAppID`、`VolcEngineAppKey` 和 `VolcEngineAppToken` 在 `Info.plist` 中通过 `$(VOLCENGINE_APP_ID)`、`$(VOLCENGINE_APP_KEY)`、`$(VOLCENGINE_APP_TOKEN)` 解析。
-- `DialogEngineManager` 会在生产语音 SDK 配置缺失或仍为占位值时提前失败，不继续启动 `SpeechEngineToB`。
-- `VoiceSDKReadinessSummary` 明确区分 mock ASR/TTS、后端 token fallback、生产 SDK readiness 和已通过真机验收。未完成真机麦克风、ASR、TTS、播放路由、前后台和日志证据前，不允许把状态标为生产语音闭环完成。
+- `Info.plist`、本地 xcconfig 和 iOS 构建产物不得包含 Provider AppKey、AppToken 或共享后端 token。
+- `run-true-device-voice-preflight.sh` 只读取非敏感的后端地址及本机签名覆盖，并在已有开发者账号时请求 Xcode 刷新开发描述文件。
+- `/voice/realtime-token` 目前是 fail-closed 合同：在后端提供可撤销、短时、限范围的 scoped session broker 前，移动端实时语音保持关闭并明确回落文字回响。
+- `DialogEngineManager` 只接受 `scopedSessionCredential`；不能验证该合同就不启动 `SpeechEngineToB`。
+- `VoiceSDKReadinessSummary` 明确区分 mock ASR/TTS、后端能力阻断、待真机验收和已通过真机验收。未完成真机麦克风、ASR、TTS、播放路由、前后台和日志证据前，不允许把状态标为生产语音闭环完成。
 
 ## Backend Acceptance
 
@@ -121,17 +113,13 @@ Preflight command:
 ```bash
 cd /Users/yxj/Documents/Codex/Video/DreamJourney_dev
 DREAMJOURNEY_BACKEND_BASE_URL="https://your-backend.example.com" \
-DREAMJOURNEY_BACKEND_API_TOKEN=YOUR_BACKEND_API_TOKEN \
-VOLCENGINE_APP_ID="your-real-volcengine-app-id" \
-VOLCENGINE_APP_KEY=YOUR_VOLCENGINE_APP_KEY \
-VOLCENGINE_APP_TOKEN=YOUR_VOLCENGINE_APP_TOKEN \
 Scripts/QA/prd-stitch-ui/run-true-device-voice-preflight.sh
 ```
 
 Expected preflight behavior:
 
 - 在线物理 iPhone/iPad 可被 `xcodebuild -showdestinations` 发现；脚本同时保存 `devicectl` 和 `xctrace` 结果作为辅助诊断。
-- 后端 URL/token 和生产语音 SDK key 均已设置且不是占位值。
+- 后端 URL 与本机签名覆盖已设置且不是占位值；预检不会也不得接收移动端 Provider 密钥。
 - `NSMicrophoneUsageDescription`、`NSSpeechRecognitionUsageDescription`、`NSPhotoLibraryUsageDescription`、`NSCameraUsageDescription` 均存在。
 - 可选真机构建通过，并生成 `tmp/visual-qa/prd-stitch-ui/true-device-acceptance/<run-id>/report.md`。
 - 同一 run 目录必须生成 `evidence-manifest.md`、`manual-qa-notes.md` 和 `console-output.log`，用于记录截图、日志、播放路由与前后台恢复证据。
@@ -255,9 +243,9 @@ git diff --check
 
 These prove:
 
-- 本地真实 token 不会被提交。
-- 后端 URL/token 通过 build setting 或环境变量注入。
-- 生产语音 SDK key 通过 build setting 或环境变量注入。
+- 本地真实 token 不会被提交或打进 App。
+- 后端 URL 通过 build setting 或环境变量注入；QA host 如需访问受保护接口，可在自身环境持有测试 token，但不传给 iOS 构建。
+- 生产语音的 Provider 密钥只由后端持有；移动端仅消费经验证的后端能力合同。
 - 关键隐私权限声明仍在。
 - 后端 smoke 和档案到回响核心 smoke 仍可被发现。
 - PRD 验收状态不会被误写为“真机已完成”。
@@ -267,7 +255,7 @@ These prove:
 需要停下来找用户的情况：
 
 - 要切换新的真实 `DREAMJOURNEY_BACKEND_BASE_URL` / `DREAMJOURNEY_BACKEND_API_TOKEN`，或当前部署后端无法访问。
-- 要执行生产语音 SDK 验收但缺少 `VOLCENGINE_APP_ID` / `VOLCENGINE_APP_KEY` / `VOLCENGINE_APP_TOKEN`。
+- 要执行生产实时语音 SDK 验收但后端尚未提供经验证的 scoped session broker，或该能力合同处于 fail-closed 状态。
 - 用户提供真机、Apple 开发者签名、证书或设备操作之前，不能跑真机验收。
 - 如果后端契约需要改字段、迁移数据或删除数据，需要用户确认产品/兼容性取舍。
 - 如果要公开家庭管理、账号注销、医生联系、星辰/静默/阳光模式入口，需要用户确认发布边界。
