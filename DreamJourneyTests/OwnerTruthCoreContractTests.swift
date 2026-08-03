@@ -17,6 +17,112 @@ final class OwnerTruthCoreContractTests: XCTestCase {
         XCTAssertEqual(command.backendPayload["purpose"] as? String, "memoryCapture")
     }
 
+    func testMediaUploadIntentCommandKeepsOwnerAndStorageAuthorityOnServer() throws {
+        let body = Data("A private document".utf8)
+        let command = try OwnerTruthMediaUploadIntentCommand(
+            commandID: UUID(uuidString: "00000000-0000-0000-0000-000000000403")!,
+            expectedAuthorityEpoch: 3,
+            mediaKind: .document,
+            fileName: "memory.txt",
+            contentType: "text/plain",
+            content: body,
+            purpose: "memoryCapture",
+            clientCreatedAt: Date(timeIntervalSince1970: 1_775_000_000)
+        )
+
+        XCTAssertEqual(Set(command.backendPayload.keys), [
+            "commandId",
+            "expectedAuthorityEpoch",
+            "mediaKind",
+            "fileName",
+            "contentType",
+            "fileSizeBytes",
+            "contentSha256",
+            "purpose",
+            "clientCreatedAt",
+        ])
+        XCTAssertEqual(command.backendPayload["fileSizeBytes"] as? Int, body.count)
+        XCTAssertNil(command.backendPayload["ownerSubjectId"])
+        XCTAssertNil(command.backendPayload["vaultId"])
+        XCTAssertNil(command.backendPayload["storageKey"])
+        XCTAssertNil(command.backendPayload["objectURL"])
+    }
+
+    func testMediaUploadIntentReceiptRetainsOneTimeTokenWithoutPrivateStorageFields() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-media-a"))
+        let response: [String: Any] = [
+            "schemaVersion": OwnerTruthMediaUploadIntentReceipt.schemaVersion,
+            "status": "created",
+            "vaultId": vaultID.rawValue,
+            "sourceObject": mediaSourceObjectJSON(),
+            "uploadIntent": [
+                "uploadIntentId": "00000000-0000-0000-0000-000000000405",
+                "state": "pending",
+                "expiresAt": "2026-08-03T12:15:00Z",
+                "transport": "authenticatedDirectUpload",
+                "uploadMethod": "PUT",
+                "uploadTokenHeader": "X-DreamJourney-Upload-Token",
+                "requiresClientUpload": true,
+                "uploadToken": "one-time-upload-token-that-is-long-enough",
+            ],
+        ]
+
+        let receipt = try OwnerTruthMediaUploadIntentReceipt(
+            backendJSONObject: response,
+            expectedVaultID: vaultID
+        )
+
+        XCTAssertEqual(receipt.outcome, .created)
+        XCTAssertEqual(receipt.uploadIntent.state, .pending)
+        XCTAssertNotNil(receipt.uploadIntent.uploadToken)
+
+        var unsafe = response
+        unsafe["storageKey"] = "must-not-cross-client-boundary"
+        XCTAssertThrowsError(
+            try OwnerTruthMediaUploadIntentReceipt(
+                backendJSONObject: unsafe,
+                expectedVaultID: vaultID
+            )
+        )
+    }
+
+    func testMediaSourceObjectResponseParsesProcessingStateAndRejectsPrivateFields() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-media-a"))
+        let sourceObjectID = OwnerTruthRecordID(
+            rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000404")!
+        )
+        var sourceObject = mediaSourceObjectJSON()
+        sourceObject["state"] = "processed"
+        sourceObject["processingStatus"] = "succeeded"
+        sourceObject["derivedSourceId"] = "00000000-0000-0000-0000-000000000406"
+        let response: [String: Any] = [
+            "schemaVersion": OwnerTruthMediaSourceObjectResponse.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "sourceObject": sourceObject,
+        ]
+
+        let receipt = try OwnerTruthMediaSourceObjectResponse(
+            backendJSONObject: response,
+            expectedVaultID: vaultID,
+            expectedSourceObjectID: sourceObjectID
+        )
+
+        XCTAssertEqual(receipt.sourceObject.state, .processed)
+        XCTAssertEqual(receipt.sourceObject.processingStatus, .succeeded)
+        XCTAssertNotNil(receipt.sourceObject.derivedSourceID)
+
+        sourceObject["storageKey"] = "private/object/key"
+        var unsafe = response
+        unsafe["sourceObject"] = sourceObject
+        XCTAssertThrowsError(
+            try OwnerTruthMediaSourceObjectResponse(
+                backendJSONObject: unsafe,
+                expectedVaultID: vaultID,
+                expectedSourceObjectID: sourceObjectID
+            )
+        )
+    }
+
     func testCompatibilityRuntimeAcceptsAnInjectedCoreClient() {
         let runtime = OwnerTruthKBLiteCompatibilityProjectionRuntime(
             client: CoreKBLiteCompatibilityClient(),
@@ -39,6 +145,28 @@ final class OwnerTruthCoreContractTests: XCTestCase {
         XCTAssertEqual(lease.subjectId, "owner-a")
         XCTAssertEqual(lease.vaultId, "vault-a")
         XCTAssertEqual(lease.authorityEpoch, "authority-a")
+    }
+
+    private func mediaSourceObjectJSON() -> [String: Any] {
+        [
+            "sourceObjectId": "00000000-0000-0000-0000-000000000404",
+            "mediaKind": "document",
+            "state": "uploadPending",
+            "contentType": "text/plain",
+            "magicMime": NSNull(),
+            "fileName": "memory.txt",
+            "fileSizeBytes": 18,
+            "contentSha256": String(repeating: "a", count: 64),
+            "safetyStatus": "pending",
+            "safetyProvider": NSNull(),
+            "processingStatus": "notQueued",
+            "processingGeneration": 0,
+            "externalProcessingAllowed": false,
+            "retryable": false,
+            "failureCode": NSNull(),
+            "derivedSourceId": NSNull(),
+            "updatedAt": "2026-08-03T12:00:00Z",
+        ]
     }
 }
 

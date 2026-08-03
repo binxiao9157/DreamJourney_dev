@@ -368,6 +368,7 @@ final class FeatureGateService {
         .echoGuidedRecommendations,
         .ownerTruthLifeMap,
         .ownerTextCaptureV1,
+        .ownerMediaCaptureV1,
         .ownerTruthCandidateReview,
     ]
 
@@ -576,6 +577,12 @@ final class FeatureGateService {
            pathComponents[3] == "source-capture-state" {
             return .ownerTextCaptureV1
         }
+        if pathComponents.count >= 5,
+           pathComponents[0] == "v2",
+           pathComponents[1] == "vaults",
+           pathComponents[3] == "source-objects" {
+            return .ownerMediaCaptureV1
+        }
         if method == .get,
            pathComponents.count == 4,
            pathComponents[0] == "v2",
@@ -751,6 +758,8 @@ final class FeatureGateService {
              .accountDeletion:
             return .ownerTextCore
         case .voiceCloneShell, .digitalHumanLivePanel, .archiveRemoteFetch:
+            return .providerEffect
+        case .ownerMediaCaptureV1:
             return .providerEffect
         default:
             return .futureBeta
@@ -5754,6 +5763,213 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    /// Creates a server-owned private media receipt. The client receives only
+    /// a one-time upload token; object-store identity and Owner binding remain
+    /// inside the backend boundary.
+    func createOwnerTruthMediaUploadIntent(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMediaUploadIntentCommand,
+        completion: @escaping (Result<OwnerTruthMediaUploadIntentReceipt, Error>) -> Void
+    ) {
+        guard accountLease.vaultId == vaultID.rawValue else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.accountScopeChanged))
+            }
+            return
+        }
+        let decision = requestFeatureDecision(for: .ownerMediaCaptureV1)
+        guard decision.allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerMediaCaptureV1.rawValue,
+                    reason: decision.reason
+                )))
+            }
+            return
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/source-objects/upload-intents"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthMediaUploadIntentReceipt(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func uploadOwnerTruthMediaContent(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        uploadIntentID: OwnerTruthRecordID,
+        uploadToken: OwnerTruthMediaUploadToken,
+        contentType: String,
+        content: Data,
+        completion: @escaping (Result<OwnerTruthMediaSourceObjectResponse, Error>) -> Void
+    ) {
+        let normalizedContentType = contentType
+            .lowercased()
+            .split(separator: ";", maxSplits: 1)
+            .first
+            .map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard accountLease.vaultId == vaultID.rawValue else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.accountScopeChanged))
+            }
+            return
+        }
+        guard !normalizedContentType.isEmpty, !content.isEmpty else {
+            DispatchQueue.main.async {
+                completion(.failure(OwnerTruthRemoteContractError.invalidMediaCapture(
+                    "upload content and Content-Type are required"
+                )))
+            }
+            return
+        }
+        let decision = requestFeatureDecision(for: .ownerMediaCaptureV1)
+        guard decision.allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerMediaCaptureV1.rawValue,
+                    reason: decision.reason
+                )))
+            }
+            return
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/source-objects/upload-intents/\(pathComponent(uploadIntentID.rawValue.uuidString))/content"
+        requestJSON(
+            path: path,
+            method: .put,
+            payload: nil,
+            bodyData: content,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision,
+            additionalHeaders: [
+                "Content-Type": normalizedContentType,
+                "X-DreamJourney-Upload-Token": uploadToken.rawValue,
+            ]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthMediaSourceObjectResponse(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func fetchOwnerTruthMediaSourceObject(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sourceObjectID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthMediaSourceObjectResponse, Error>) -> Void
+    ) {
+        performOwnerTruthMediaSourceObjectRequest(
+            accountLease: accountLease,
+            vaultID: vaultID,
+            sourceObjectID: sourceObjectID,
+            pathSuffix: "",
+            method: .get,
+            completion: completion
+        )
+    }
+
+    func retryOwnerTruthMediaProcessing(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sourceObjectID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthMediaSourceObjectResponse, Error>) -> Void
+    ) {
+        performOwnerTruthMediaSourceObjectRequest(
+            accountLease: accountLease,
+            vaultID: vaultID,
+            sourceObjectID: sourceObjectID,
+            pathSuffix: "/processing-retries",
+            method: .post,
+            completion: completion
+        )
+    }
+
+    private func performOwnerTruthMediaSourceObjectRequest(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sourceObjectID: OwnerTruthRecordID,
+        pathSuffix: String,
+        method: HTTPMethod,
+        completion: @escaping (Result<OwnerTruthMediaSourceObjectResponse, Error>) -> Void
+    ) {
+        guard accountLease.vaultId == vaultID.rawValue else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.accountScopeChanged))
+            }
+            return
+        }
+        let decision = requestFeatureDecision(for: .ownerMediaCaptureV1)
+        guard decision.allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerMediaCaptureV1.rawValue,
+                    reason: decision.reason
+                )))
+            }
+            return
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/source-objects/\(pathComponent(sourceObjectID.rawValue.uuidString))\(pathSuffix)"
+        requestJSON(
+            path: path,
+            method: method,
+            payload: nil,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthMediaSourceObjectResponse(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID,
+                        expectedSourceObjectID: sourceObjectID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func fetchOwnerTruthInterviewCandidateReview(
         vaultID: OwnerTruthVaultID,
         reviewBatchID: OwnerTruthRecordID,
@@ -8448,6 +8664,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         path: String,
         method: HTTPMethod,
         payload: [String: Any]?,
+        bodyData: Data? = nil,
         authPolicy: RequestAuthPolicy,
         allowsRefresh: Bool = true,
         allowsRecoveryRefresh: Bool = true,
@@ -8558,6 +8775,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
                             path: path,
                             method: method,
                             payload: payload,
+                            bodyData: bodyData,
                             authPolicy: authPolicy,
                             allowsRefresh: allowsRefresh,
                             allowsRecoveryRefresh: false,
@@ -8650,13 +8868,31 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
             }
             requestHeaders = headers
         }
-        transportSession.request(
-            url,
-            method: endpoint.method,
-            parameters: payload,
-            encoding: JSONEncoding.default,
-            headers: requestHeaders
-        )
+        let dataRequest: DataRequest
+        if let bodyData {
+            guard let rawURL = URL(string: url) else {
+                DispatchQueue.main.async {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                }
+                return
+            }
+            var rawRequest = URLRequest(url: rawURL)
+            rawRequest.httpMethod = endpoint.method.rawValue
+            requestHeaders?.forEach { header in
+                rawRequest.setValue(header.value, forHTTPHeaderField: header.name)
+            }
+            rawRequest.httpBody = bodyData
+            dataRequest = transportSession.request(rawRequest)
+        } else {
+            dataRequest = transportSession.request(
+                url,
+                method: endpoint.method,
+                parameters: payload,
+                encoding: JSONEncoding.default,
+                headers: requestHeaders
+            )
+        }
+        dataRequest
             .validate(statusCode: 200..<300)
             .responseData(queue: .global(qos: .utility)) { response in
                 guard self.isCurrentAccountLease(
@@ -8757,6 +8993,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
                                 path: path,
                                 method: method,
                                 payload: payload,
+                                bodyData: bodyData,
                                 authPolicy: authPolicy,
                                 allowsRefresh: false,
                                 allowsRecoveryRefresh: allowsRecoveryRefresh,
@@ -8803,6 +9040,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
                                     path: path,
                                     method: method,
                                     payload: payload,
+                                    bodyData: bodyData,
                                     authPolicy: authPolicy,
                                     allowsRefresh: false,
                                     allowsRecoveryRefresh: allowsRecoveryRefresh,
@@ -9323,6 +9561,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
 
 extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthTextSourceCaptureClient {}
+extension DreamJourneyBackendClient: OwnerTruthMediaCaptureClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateConfirmationInboxClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateMemoryActivationInboxClient {}

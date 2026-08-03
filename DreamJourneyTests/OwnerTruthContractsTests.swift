@@ -8075,6 +8075,164 @@ final class OwnerTruthContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testRealHTTPMediaUploadUsesLeasePolicyAndOneTimeToken() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let uploadIntentID = recordID("00000000-0000-0000-0000-000000000091")
+        let sourceObjectID = recordID("00000000-0000-0000-0000-000000000092")
+        let content = Data("private owner memory".utf8)
+        let uploadToken = try XCTUnwrap(
+            OwnerTruthMediaUploadToken("one-time-owner-media-upload-token-000001")
+        )
+        let response = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthMediaSourceObjectResponse.schemaVersion,
+            "status": OwnerTruthMediaSourceObjectResponseStatus.uploaded.rawValue,
+            "vaultId": vaultID.rawValue,
+            "sourceObject": [
+                "sourceObjectId": sourceObjectID.rawValue.uuidString,
+                "mediaKind": OwnerTruthMediaKind.document.rawValue,
+                "state": OwnerTruthMediaSourceObjectState.verified.rawValue,
+                "contentType": "text/plain",
+                "magicMime": "text/plain",
+                "fileName": "memory.txt",
+                "fileSizeBytes": content.count,
+                "contentSha256": String(repeating: "a", count: 64),
+                "safetyStatus": OwnerTruthMediaSafetyStatus.clean.rawValue,
+                "safetyProvider": "local-signature",
+                "processingStatus": OwnerTruthMediaProcessingStatus.queued.rawValue,
+                "processingGeneration": 1,
+                "externalProcessingAllowed": false,
+                "retryable": false,
+                "failureCode": NSNull(),
+                "derivedSourceId": NSNull(),
+                "updatedAt": "2026-08-03T12:00:00Z",
+            ],
+        ])
+        let session = try makeOwnerTruthHTTPTestSession()
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: session,
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
+            loader.respond(statusCode: 200, body: response)
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        var result: Result<OwnerTruthMediaSourceObjectResponse, Error>?
+        client.uploadOwnerTruthMediaContent(
+            accountLease: lease,
+            vaultID: vaultID,
+            uploadIntentID: uploadIntentID,
+            uploadToken: uploadToken,
+            contentType: "text/plain; charset=utf-8",
+            content: content
+        ) { result = $0 }
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { result != nil })
+        let receipt = try XCTUnwrap(result).get()
+        XCTAssertEqual(receipt.status, .uploaded)
+        XCTAssertEqual(receipt.sourceObject.sourceObjectID, sourceObjectID)
+
+        let request = try XCTUnwrap(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.first)
+        XCTAssertEqual(request.httpMethod, "PUT")
+        XCTAssertEqual(
+            request.url?.path,
+            "/v2/vaults/\(vaultID.rawValue)/source-objects/upload-intents/\(uploadIntentID.rawValue.uuidString)/content"
+        )
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer \(authSession.accessToken)")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "text/plain")
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "X-DreamJourney-Upload-Token"),
+            uploadToken.rawValue
+        )
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "X-DreamJourney-Feature"),
+            DJFeature.ownerMediaCaptureV1.rawValue
+        )
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-DreamJourney-Request-Purpose"), "ownerTruth")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-DreamJourney-Owner-Binding"), "sessionActorAssertion")
+        XCTAssertNil(request.value(forHTTPHeaderField: "X-DreamJourney-QA-Owner-Truth"))
+        XCTAssertEqual(
+            OwnerTruthReviewReadyHTTPURLProtocol.recordedRequestBodies.first ?? nil,
+            content
+        )
+    }
+
+    @MainActor
+    func testRealHTTPMediaSourceObjectDropsResponseAfterAccountLeaseSwitch() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let sourceObjectID = recordID("00000000-0000-0000-0000-000000000093")
+        let response = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthMediaSourceObjectResponse.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "sourceObject": [
+                "sourceObjectId": sourceObjectID.rawValue.uuidString,
+                "mediaKind": OwnerTruthMediaKind.image.rawValue,
+                "state": OwnerTruthMediaSourceObjectState.verified.rawValue,
+                "contentType": "image/jpeg",
+                "magicMime": "image/jpeg",
+                "fileName": "memory.jpg",
+                "fileSizeBytes": 128,
+                "contentSha256": String(repeating: "b", count: 64),
+                "safetyStatus": OwnerTruthMediaSafetyStatus.clean.rawValue,
+                "safetyProvider": "local-signature",
+                "processingStatus": OwnerTruthMediaProcessingStatus.queued.rawValue,
+                "processingGeneration": 1,
+                "externalProcessingAllowed": false,
+                "retryable": false,
+                "failureCode": NSNull(),
+                "derivedSourceId": NSNull(),
+                "updatedAt": "2026-08-03T12:00:00Z",
+            ],
+        ])
+        let session = try makeOwnerTruthHTTPTestSession()
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: session,
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        var deferredLoader: OwnerTruthReviewReadyHTTPURLProtocol?
+        OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
+            deferredLoader = loader
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        var result: Result<OwnerTruthMediaSourceObjectResponse, Error>?
+        client.fetchOwnerTruthMediaSourceObject(
+            accountLease: lease,
+            vaultID: vaultID,
+            sourceObjectID: sourceObjectID
+        ) { result = $0 }
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { deferredLoader != nil })
+
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000202")!
+        ))
+        deferredLoader?.respond(statusCode: 200, body: response)
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { result != nil })
+        guard case .failure(let error) = try XCTUnwrap(result),
+              case DreamJourneyBackendClient.ClientError.accountScopeChanged = error else {
+            return XCTFail("stale media response must fail closed after account switch")
+        }
+    }
+
+    @MainActor
     func testNaturalInputProductReviewBatchAcknowledgementStaysHiddenWithoutPolicy() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
@@ -8624,6 +8782,7 @@ private final class OwnerTruthReviewReadyHTTPURLProtocol: URLProtocol {
     private static let lock = NSLock()
     private static var handler: RequestHandler?
     private static var requests: [URLRequest] = []
+    private static var requestBodies: [Data?] = []
 
     static var recordedRequests: [URLRequest] {
         lock.lock()
@@ -8631,9 +8790,16 @@ private final class OwnerTruthReviewReadyHTTPURLProtocol: URLProtocol {
         return requests
     }
 
+    static var recordedRequestBodies: [Data?] {
+        lock.lock()
+        defer { lock.unlock() }
+        return requestBodies
+    }
+
     static func install(handler: @escaping RequestHandler) {
         lock.lock()
         requests = []
+        requestBodies = []
         self.handler = handler
         lock.unlock()
     }
@@ -8642,6 +8808,7 @@ private final class OwnerTruthReviewReadyHTTPURLProtocol: URLProtocol {
         lock.lock()
         handler = nil
         requests = []
+        requestBodies = []
         lock.unlock()
     }
 
@@ -8655,8 +8822,10 @@ private final class OwnerTruthReviewReadyHTTPURLProtocol: URLProtocol {
 
     override func startLoading() {
         let handler: RequestHandler?
+        let body = Self.bodyData(from: request)
         Self.lock.lock()
         Self.requests.append(request)
+        Self.requestBodies.append(body)
         handler = Self.handler
         Self.lock.unlock()
 
@@ -8668,6 +8837,24 @@ private final class OwnerTruthReviewReadyHTTPURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
+
+    private static func bodyData(from request: URLRequest) -> Data? {
+        if let body = request.httpBody {
+            return body
+        }
+        guard let stream = request.httpBodyStream else { return nil }
+        stream.open()
+        defer { stream.close() }
+        var body = Data()
+        var buffer = [UInt8](repeating: 0, count: 4_096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            guard count >= 0 else { return nil }
+            if count == 0 { break }
+            body.append(buffer, count: count)
+        }
+        return body
+    }
 
     func respond(statusCode: Int, body: Data) {
         guard let url = request.url,

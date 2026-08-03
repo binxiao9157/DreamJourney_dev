@@ -132,6 +132,7 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
     case invalidDecision(String)
     case invalidCommand(String)
     case invalidTextSourceCapture(String)
+    case invalidMediaCapture(String)
     case invalidInterviewCandidateReview(String)
     case invalidInterviewCandidateConfirmationInbox(String)
     case invalidInterviewCandidateMemoryActivationInbox(String)
@@ -172,6 +173,8 @@ enum OwnerTruthRemoteContractError: LocalizedError, Equatable, Sendable {
             return "候选审核命令无效：\(detail)"
         case .invalidTextSourceCapture(let detail):
             return "文字记忆采集合同无效：\(detail)"
+        case .invalidMediaCapture(let detail):
+            return "媒体记忆采集合同无效：\(detail)"
         case .invalidInterviewCandidateReview(let detail):
             return "访谈候选审核合同无效：\(detail)"
         case .invalidInterviewCandidateConfirmationInbox(let detail):
@@ -945,6 +948,586 @@ protocol OwnerTruthTextSourceCaptureClient: AnyObject {
         command: OwnerTruthTextSourceCaptureCommand,
         completion: @escaping (Result<OwnerTruthTextSourceCaptureReceipt, Error>) -> Void
     )
+}
+
+// MARK: - Closed-pilot private media SourceObject capture
+
+enum OwnerTruthMediaKind: String, CaseIterable, Codable, Sendable {
+    case image
+    case audio
+    case video
+    case document
+
+    var allowsExternalProcessing: Bool {
+        self == .image || self == .audio
+    }
+
+    fileprivate var supportedContentTypes: Set<String> {
+        switch self {
+        case .image:
+            return ["image/jpeg", "image/png", "image/webp"]
+        case .audio:
+            return ["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4", "audio/m4a"]
+        case .video:
+            return ["video/mp4", "video/quicktime"]
+        case .document:
+            return [
+                "text/plain",
+                "application/pdf",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ]
+        }
+    }
+}
+
+enum OwnerTruthMediaSourceObjectState: String, CaseIterable, Codable, Sendable {
+    case uploadPending
+    case verified
+    case quarantined
+    case processing
+    case processed
+    case failed
+    case deleted
+}
+
+enum OwnerTruthMediaSafetyStatus: String, CaseIterable, Codable, Sendable {
+    case pending
+    case clean
+    case blocked
+    case unavailable
+}
+
+enum OwnerTruthMediaProcessingStatus: String, CaseIterable, Codable, Sendable {
+    case notQueued
+    case queued
+    case processing
+    case succeeded
+    case retryableFailed
+    case failed
+    case notApplicable
+    case blocked
+}
+
+enum OwnerTruthMediaUploadIntentOutcome: String, Equatable, Sendable {
+    case created
+    case deduplicated
+}
+
+enum OwnerTruthMediaUploadIntentState: String, Equatable, Sendable {
+    case pending
+    case uploaded
+    case rejected
+    case expired
+}
+
+enum OwnerTruthMediaSourceObjectResponseStatus: String, Equatable, Sendable {
+    case uploaded
+    case deduplicated
+    case quarantined
+    case processingRequested
+}
+
+/// One-time bearer secret returned only when an upload intent is first
+/// created. It deliberately is not Codable so a generic receipt cache cannot
+/// persist it accidentally.
+struct OwnerTruthMediaUploadToken: Equatable, Sendable {
+    let rawValue: String
+
+    init?(_ rawValue: String) {
+        let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.count >= 32, normalized.count <= 512 else { return nil }
+        self.rawValue = normalized
+    }
+}
+
+struct OwnerTruthMediaUploadIntentCommand: Equatable, Sendable {
+    static let defaultPurpose = "memoryCapture"
+
+    let commandID: UUID
+    let expectedAuthorityEpoch: Int
+    let mediaKind: OwnerTruthMediaKind
+    let fileName: String
+    let contentType: String
+    let fileSizeBytes: Int
+    let contentSHA256: String
+    let purpose: String
+    let clientCreatedAt: Date
+    let allowExternalProcessing: Bool
+
+    init(
+        commandID: UUID = UUID(),
+        expectedAuthorityEpoch: Int,
+        mediaKind: OwnerTruthMediaKind,
+        fileName: String,
+        contentType: String,
+        fileSizeBytes: Int,
+        contentSHA256: String,
+        purpose: String = Self.defaultPurpose,
+        clientCreatedAt: Date = Date(),
+        allowExternalProcessing: Bool = false
+    ) throws {
+        let normalizedFileName = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedContentType = contentType
+            .lowercased()
+            .split(separator: ";", maxSplits: 1)
+            .first
+            .map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let normalizedSHA256 = contentSHA256
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedPurpose = purpose.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard expectedAuthorityEpoch >= 0,
+              Self.isValidFileName(normalizedFileName),
+              mediaKind.supportedContentTypes.contains(normalizedContentType),
+              fileSizeBytes > 0,
+              Self.isSHA256(normalizedSHA256),
+              Self.isValidPurpose(normalizedPurpose),
+              !allowExternalProcessing || mediaKind.allowsExternalProcessing else {
+            throw OwnerTruthRemoteContractError.invalidMediaCapture(
+                "upload intent requires valid authority, media metadata and processing consent"
+            )
+        }
+
+        self.commandID = commandID
+        self.expectedAuthorityEpoch = expectedAuthorityEpoch
+        self.mediaKind = mediaKind
+        self.fileName = normalizedFileName
+        self.contentType = normalizedContentType
+        self.fileSizeBytes = fileSizeBytes
+        self.contentSHA256 = normalizedSHA256
+        self.purpose = normalizedPurpose
+        self.clientCreatedAt = clientCreatedAt
+        self.allowExternalProcessing = allowExternalProcessing
+    }
+
+    init(
+        commandID: UUID = UUID(),
+        expectedAuthorityEpoch: Int,
+        mediaKind: OwnerTruthMediaKind,
+        fileName: String,
+        contentType: String,
+        content: Data,
+        purpose: String = Self.defaultPurpose,
+        clientCreatedAt: Date = Date(),
+        allowExternalProcessing: Bool = false
+    ) throws {
+        try self.init(
+            commandID: commandID,
+            expectedAuthorityEpoch: expectedAuthorityEpoch,
+            mediaKind: mediaKind,
+            fileName: fileName,
+            contentType: contentType,
+            fileSizeBytes: content.count,
+            contentSHA256: SHA256.hash(data: content)
+                .map { String(format: "%02x", $0) }
+                .joined(),
+            purpose: purpose,
+            clientCreatedAt: clientCreatedAt,
+            allowExternalProcessing: allowExternalProcessing
+        )
+    }
+
+    var backendPayload: [String: Any] {
+        var payload: [String: Any] = [
+            "commandId": commandID.uuidString.lowercased(),
+            "expectedAuthorityEpoch": expectedAuthorityEpoch,
+            "mediaKind": mediaKind.rawValue,
+            "fileName": fileName,
+            "contentType": contentType,
+            "fileSizeBytes": fileSizeBytes,
+            "contentSha256": contentSHA256,
+            "purpose": purpose,
+            "clientCreatedAt": OwnerTruthMediaCaptureContract.iso8601String(clientCreatedAt),
+        ]
+        if allowExternalProcessing {
+            payload["allowExternalProcessing"] = true
+        }
+        return payload
+    }
+
+    private static func isValidFileName(_ value: String) -> Bool {
+        !value.isEmpty
+            && value.utf8.count <= 255
+            && value != "."
+            && value != ".."
+            && !value.contains("/")
+            && !value.contains("\\")
+            && !value.contains("\0")
+    }
+
+    private static func isSHA256(_ value: String) -> Bool {
+        value.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil
+    }
+
+    private static func isValidPurpose(_ value: String) -> Bool {
+        value.range(of: "^[A-Za-z][A-Za-z0-9._-]{0,79}$", options: .regularExpression) != nil
+    }
+}
+
+struct OwnerTruthMediaSourceObjectReceipt: Equatable, Sendable {
+    let sourceObjectID: OwnerTruthRecordID
+    let mediaKind: OwnerTruthMediaKind
+    let state: OwnerTruthMediaSourceObjectState
+    let contentType: String
+    let magicMime: String?
+    let fileName: String
+    let fileSizeBytes: Int
+    let contentSHA256: String
+    let safetyStatus: OwnerTruthMediaSafetyStatus
+    let safetyProvider: String?
+    let processingStatus: OwnerTruthMediaProcessingStatus
+    let processingGeneration: Int
+    let externalProcessingAllowed: Bool
+    let retryable: Bool
+    let failureCode: String?
+    let derivedSourceID: OwnerTruthRecordID?
+    let updatedAt: Date
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard Set(object.keys) == OwnerTruthMediaCaptureContract.sourceObjectKeys else {
+            throw OwnerTruthRemoteContractError.invalidMediaCapture(
+                "SourceObject response contains unexpected or private fields"
+            )
+        }
+        guard let sourceObjectID = OwnerTruthMediaCaptureContract.recordID(object["sourceObjectId"]),
+              let mediaKindRaw = OwnerTruthMediaCaptureContract.requiredString(object["mediaKind"]),
+              let mediaKind = OwnerTruthMediaKind(rawValue: mediaKindRaw),
+              let stateRaw = OwnerTruthMediaCaptureContract.requiredString(object["state"]),
+              let state = OwnerTruthMediaSourceObjectState(rawValue: stateRaw),
+              let contentType = OwnerTruthMediaCaptureContract.requiredString(object["contentType"]),
+              OwnerTruthMediaCaptureContract.optionalStringIsValid(object["magicMime"]),
+              let fileName = OwnerTruthMediaCaptureContract.requiredString(object["fileName"]),
+              let fileSizeBytes = OwnerTruthMediaCaptureContract.positiveInt(object["fileSizeBytes"]),
+              let contentSHA256 = OwnerTruthMediaCaptureContract.sha256(object["contentSha256"]),
+              let safetyRaw = OwnerTruthMediaCaptureContract.requiredString(object["safetyStatus"]),
+              let safetyStatus = OwnerTruthMediaSafetyStatus(rawValue: safetyRaw),
+              OwnerTruthMediaCaptureContract.optionalStringIsValid(object["safetyProvider"]),
+              let processingRaw = OwnerTruthMediaCaptureContract.requiredString(object["processingStatus"]),
+              let processingStatus = OwnerTruthMediaProcessingStatus(rawValue: processingRaw),
+              let processingGeneration = OwnerTruthMediaCaptureContract.nonNegativeInt(
+                  object["processingGeneration"]
+              ),
+              let externalProcessingAllowed = OwnerTruthMediaCaptureContract.strictBool(
+                  object["externalProcessingAllowed"]
+              ),
+              let retryable = OwnerTruthMediaCaptureContract.strictBool(object["retryable"]),
+              OwnerTruthMediaCaptureContract.optionalStringIsValid(object["failureCode"]),
+              OwnerTruthMediaCaptureContract.optionalRecordIDIsValid(object["derivedSourceId"]),
+              let updatedAt = OwnerTruthMediaCaptureContract.iso8601Date(object["updatedAt"]) else {
+            throw OwnerTruthRemoteContractError.invalidMediaCapture(
+                "SourceObject response contains invalid fields: "
+                    + OwnerTruthMediaCaptureContract.invalidSourceObjectFields(in: object).joined(separator: ",")
+            )
+        }
+        let magicMime = OwnerTruthMediaCaptureContract.optionalString(object["magicMime"])
+        let safetyProvider = OwnerTruthMediaCaptureContract.optionalString(object["safetyProvider"])
+        let failureCode = OwnerTruthMediaCaptureContract.optionalString(object["failureCode"])
+        let derivedSourceID = OwnerTruthMediaCaptureContract.optionalRecordID(
+            object["derivedSourceId"]
+        )
+        guard mediaKind.supportedContentTypes.contains(contentType),
+              processingStatus != .succeeded || state == .processed,
+              state != .processed || derivedSourceID != nil else {
+            throw OwnerTruthRemoteContractError.invalidMediaCapture(
+                "SourceObject response state is internally inconsistent"
+            )
+        }
+
+        self.sourceObjectID = sourceObjectID
+        self.mediaKind = mediaKind
+        self.state = state
+        self.contentType = contentType
+        self.magicMime = magicMime
+        self.fileName = fileName
+        self.fileSizeBytes = fileSizeBytes
+        self.contentSHA256 = contentSHA256
+        self.safetyStatus = safetyStatus
+        self.safetyProvider = safetyProvider
+        self.processingStatus = processingStatus
+        self.processingGeneration = processingGeneration
+        self.externalProcessingAllowed = externalProcessingAllowed
+        self.retryable = retryable
+        self.failureCode = failureCode
+        self.derivedSourceID = derivedSourceID
+        self.updatedAt = updatedAt
+    }
+}
+
+struct OwnerTruthMediaUploadIntentReceipt: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-media-upload-intent-v1"
+
+    struct UploadIntent: Equatable, Sendable {
+        let uploadIntentID: OwnerTruthRecordID
+        let state: OwnerTruthMediaUploadIntentState
+        let expiresAt: Date
+        let requiresClientUpload: Bool
+        let uploadToken: OwnerTruthMediaUploadToken?
+    }
+
+    let vaultID: OwnerTruthVaultID
+    let outcome: OwnerTruthMediaUploadIntentOutcome
+    let sourceObject: OwnerTruthMediaSourceObjectReceipt
+    let uploadIntent: UploadIntent
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID
+    ) throws {
+        guard Set(object.keys) == [
+            "schemaVersion", "status", "vaultId", "sourceObject", "uploadIntent",
+        ],
+        OwnerTruthMediaCaptureContract.requiredString(object["schemaVersion"]) == Self.schemaVersion,
+        OwnerTruthMediaCaptureContract.requiredString(object["vaultId"]) == expectedVaultID.rawValue,
+        let outcomeRaw = OwnerTruthMediaCaptureContract.requiredString(object["status"]),
+        let outcome = OwnerTruthMediaUploadIntentOutcome(rawValue: outcomeRaw),
+        let sourceObjectJSON = object["sourceObject"] as? [String: Any],
+        let uploadIntentJSON = object["uploadIntent"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidMediaCapture("upload intent envelope is invalid")
+        }
+        let expectedIntentKeys = OwnerTruthMediaCaptureContract.uploadIntentKeys.union(
+            uploadIntentJSON["uploadToken"] == nil ? [] : ["uploadToken"]
+        )
+        guard Set(uploadIntentJSON.keys) == expectedIntentKeys,
+              let uploadIntentID = OwnerTruthMediaCaptureContract.recordID(
+                uploadIntentJSON["uploadIntentId"]
+              ),
+              let stateRaw = OwnerTruthMediaCaptureContract.requiredString(uploadIntentJSON["state"]),
+              let state = OwnerTruthMediaUploadIntentState(rawValue: stateRaw),
+              let expiresAt = OwnerTruthMediaCaptureContract.iso8601Date(uploadIntentJSON["expiresAt"]),
+              OwnerTruthMediaCaptureContract.requiredString(uploadIntentJSON["transport"])
+                == "authenticatedDirectUpload",
+              OwnerTruthMediaCaptureContract.requiredString(uploadIntentJSON["uploadMethod"]) == "PUT",
+              OwnerTruthMediaCaptureContract.requiredString(uploadIntentJSON["uploadTokenHeader"])
+                == "X-DreamJourney-Upload-Token",
+              let requiresClientUpload = OwnerTruthMediaCaptureContract.strictBool(
+                  uploadIntentJSON["requiresClientUpload"]
+              ) else {
+            throw OwnerTruthRemoteContractError.invalidMediaCapture("upload intent receipt is invalid")
+        }
+        let token = (uploadIntentJSON["uploadToken"] as? String)
+            .flatMap(OwnerTruthMediaUploadToken.init)
+        guard (uploadIntentJSON["uploadToken"] == nil || token != nil),
+              (outcome != .created || !requiresClientUpload || token != nil),
+              (outcome != .deduplicated || token == nil),
+              (state == .pending) == requiresClientUpload else {
+            throw OwnerTruthRemoteContractError.invalidMediaCapture(
+                "upload token or upload state does not match the intent outcome"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.outcome = outcome
+        sourceObject = try OwnerTruthMediaSourceObjectReceipt(backendJSONObject: sourceObjectJSON)
+        uploadIntent = UploadIntent(
+            uploadIntentID: uploadIntentID,
+            state: state,
+            expiresAt: expiresAt,
+            requiresClientUpload: requiresClientUpload,
+            uploadToken: token
+        )
+    }
+}
+
+struct OwnerTruthMediaSourceObjectResponse: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-media-source-object-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let status: OwnerTruthMediaSourceObjectResponseStatus?
+    let sourceObject: OwnerTruthMediaSourceObjectReceipt
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID,
+        expectedSourceObjectID: OwnerTruthRecordID? = nil
+    ) throws {
+        let expectedKeys: Set<String> = object["status"] == nil
+            ? ["schemaVersion", "vaultId", "sourceObject"]
+            : ["schemaVersion", "vaultId", "sourceObject", "status"]
+        guard Set(object.keys) == expectedKeys,
+              OwnerTruthMediaCaptureContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthMediaCaptureContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let sourceObjectJSON = object["sourceObject"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidMediaCapture("SourceObject envelope is invalid")
+        }
+        let status: OwnerTruthMediaSourceObjectResponseStatus?
+        if object["status"] == nil {
+            status = nil
+        } else {
+            guard let rawStatus = OwnerTruthMediaCaptureContract.requiredString(object["status"]),
+                  let parsed = OwnerTruthMediaSourceObjectResponseStatus(rawValue: rawStatus) else {
+                throw OwnerTruthRemoteContractError.invalidMediaCapture("SourceObject outcome is invalid")
+            }
+            status = parsed
+        }
+        let sourceObject = try OwnerTruthMediaSourceObjectReceipt(
+            backendJSONObject: sourceObjectJSON
+        )
+        guard expectedSourceObjectID == nil || expectedSourceObjectID == sourceObject.sourceObjectID else {
+            throw OwnerTruthRemoteContractError.invalidMediaCapture("SourceObject identity changed")
+        }
+
+        vaultID = expectedVaultID
+        self.status = status
+        self.sourceObject = sourceObject
+    }
+}
+
+protocol OwnerTruthMediaCaptureClient: AnyObject {
+    func createOwnerTruthMediaUploadIntent(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMediaUploadIntentCommand,
+        completion: @escaping (Result<OwnerTruthMediaUploadIntentReceipt, Error>) -> Void
+    )
+
+    func uploadOwnerTruthMediaContent(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        uploadIntentID: OwnerTruthRecordID,
+        uploadToken: OwnerTruthMediaUploadToken,
+        contentType: String,
+        content: Data,
+        completion: @escaping (Result<OwnerTruthMediaSourceObjectResponse, Error>) -> Void
+    )
+
+    func fetchOwnerTruthMediaSourceObject(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sourceObjectID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthMediaSourceObjectResponse, Error>) -> Void
+    )
+
+    func retryOwnerTruthMediaProcessing(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sourceObjectID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthMediaSourceObjectResponse, Error>) -> Void
+    )
+}
+
+private enum OwnerTruthMediaCaptureContract {
+    static let sourceObjectKeys: Set<String> = [
+        "sourceObjectId", "mediaKind", "state", "contentType", "magicMime",
+        "fileName", "fileSizeBytes", "contentSha256", "safetyStatus", "safetyProvider",
+        "processingStatus", "processingGeneration", "externalProcessingAllowed", "retryable",
+        "failureCode", "derivedSourceId", "updatedAt",
+    ]
+    static let uploadIntentKeys: Set<String> = [
+        "uploadIntentId", "state", "expiresAt", "transport", "uploadMethod",
+        "uploadTokenHeader", "requiresClientUpload",
+    ]
+
+    static func requiredString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    static func optionalString(_ value: Any?) -> String? {
+        guard let value, !(value is NSNull) else { return nil }
+        return requiredString(value)
+    }
+
+    static func optionalStringIsValid(_ value: Any?) -> Bool {
+        guard let value, !(value is NSNull) else { return true }
+        return requiredString(value) != nil
+    }
+
+    static func recordID(_ value: Any?) -> OwnerTruthRecordID? {
+        guard let rawValue = requiredString(value), let uuid = UUID(uuidString: rawValue) else {
+            return nil
+        }
+        return OwnerTruthRecordID(rawValue: uuid)
+    }
+
+    static func optionalRecordID(_ value: Any?) -> OwnerTruthRecordID? {
+        guard let value, !(value is NSNull) else { return nil }
+        return recordID(value)
+    }
+
+    static func optionalRecordIDIsValid(_ value: Any?) -> Bool {
+        guard let value, !(value is NSNull) else { return true }
+        return recordID(value) != nil
+    }
+
+    static func positiveInt(_ value: Any?) -> Int? {
+        guard !isJSONBoolean(value), let value = value as? Int, value > 0 else { return nil }
+        return value
+    }
+
+    static func nonNegativeInt(_ value: Any?) -> Int? {
+        guard !isJSONBoolean(value), let value = value as? Int, value >= 0 else { return nil }
+        return value
+    }
+
+    static func strictBool(_ value: Any?) -> Bool? {
+        guard isJSONBoolean(value), let value = value as? Bool else { return nil }
+        return value
+    }
+
+    private static func isJSONBoolean(_ value: Any?) -> Bool {
+        guard let number = value as? NSNumber else { return false }
+        return CFGetTypeID(number) == CFBooleanGetTypeID()
+    }
+
+    static func sha256(_ value: Any?) -> String? {
+        guard let value = requiredString(value)?.lowercased(),
+              value.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+            return nil
+        }
+        return value
+    }
+
+    static func iso8601Date(_ value: Any?) -> Date? {
+        guard let rawValue = requiredString(value) else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: rawValue) ?? ISO8601DateFormatter().date(from: rawValue)
+    }
+
+    static func iso8601String(_ value: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: value)
+    }
+
+    static func invalidSourceObjectFields(in object: [String: Any]) -> [String] {
+        var invalid: [String] = []
+        if recordID(object["sourceObjectId"]) == nil { invalid.append("sourceObjectId") }
+        if requiredString(object["mediaKind"]).flatMap(OwnerTruthMediaKind.init(rawValue:)) == nil {
+            invalid.append("mediaKind")
+        }
+        if requiredString(object["state"]).flatMap(OwnerTruthMediaSourceObjectState.init(rawValue:)) == nil {
+            invalid.append("state")
+        }
+        if requiredString(object["contentType"]) == nil { invalid.append("contentType") }
+        if !optionalStringIsValid(object["magicMime"]) { invalid.append("magicMime") }
+        if requiredString(object["fileName"]) == nil { invalid.append("fileName") }
+        if positiveInt(object["fileSizeBytes"]) == nil { invalid.append("fileSizeBytes") }
+        if sha256(object["contentSha256"]) == nil { invalid.append("contentSha256") }
+        if requiredString(object["safetyStatus"]).flatMap(OwnerTruthMediaSafetyStatus.init(rawValue:)) == nil {
+            invalid.append("safetyStatus")
+        }
+        if !optionalStringIsValid(object["safetyProvider"]) { invalid.append("safetyProvider") }
+        if requiredString(object["processingStatus"])
+            .flatMap(OwnerTruthMediaProcessingStatus.init(rawValue:)) == nil {
+            invalid.append("processingStatus")
+        }
+        if nonNegativeInt(object["processingGeneration"]) == nil {
+            invalid.append("processingGeneration")
+        }
+        if strictBool(object["externalProcessingAllowed"]) == nil {
+            invalid.append("externalProcessingAllowed")
+        }
+        if strictBool(object["retryable"]) == nil { invalid.append("retryable") }
+        if !optionalStringIsValid(object["failureCode"]) { invalid.append("failureCode") }
+        if !optionalRecordIDIsValid(object["derivedSourceId"]) { invalid.append("derivedSourceId") }
+        if iso8601Date(object["updatedAt"]) == nil { invalid.append("updatedAt") }
+        return invalid.sorted()
+    }
 }
 
 enum OwnerTruthTextSourceCapturePhase: Equatable, Sendable {
