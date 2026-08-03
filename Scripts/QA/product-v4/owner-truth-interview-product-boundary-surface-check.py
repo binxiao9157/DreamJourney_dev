@@ -90,6 +90,22 @@ def main() -> None:
         "stackView.addArrangedSubview(boundaryActionsStack)" in configure_view,
         "product natural-input sheet must host the boundary control group",
     )
+    for snippet in (
+        "private let scrollView = UIScrollView()",
+        "scrollView.addSubview(stackView)",
+        "scrollView.contentLayoutGuide",
+        "scrollView.frameLayoutGuide",
+        "func revealProductBoundaryActionsForUIQA()",
+        "var areProductBoundaryActionsReachableForUIQA",
+        "UIFontMetrics(forTextStyle: textStyle).scaledFont(for: baseFont)",
+        "adjustsFontForContentSizeCategory = true",
+        "button.titleLabel?.numberOfLines = presentation == .product ? 2 : 1",
+        "heightAnchor.constraint(greaterThanOrEqualToConstant: presentation == .product ? 40 : 42)",
+    ):
+        require(
+            snippet in natural_input_surface,
+            f"product natural-input sheet must keep lower boundary controls reachable: {snippet}",
+        )
     require(
         "presentation == .qa || presentation == .product" in configure_view,
         "boundary control group must be available to the product presentation",
@@ -149,6 +165,7 @@ def main() -> None:
     )
     for snippet in (
         '"productBoundaryControlsVisible"',
+        '"productBoundaryActionsReachable"',
         '"qaOnlyBoundaryControlsHidden"',
         '"endActionHiddenBeforeNarrative"',
         '"endActionVisibleAfterNarrative"',

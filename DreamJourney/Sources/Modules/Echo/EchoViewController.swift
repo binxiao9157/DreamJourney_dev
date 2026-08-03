@@ -874,10 +874,9 @@ final class EchoViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        FeatureGateService.shared.captureRoute(
-            feature: .echoTextInput,
-            risk: .ownerTextCore,
-            localEnabled: FeatureFlagService.shared.isEnabled(.echoTextInput)
+        FeatureGateService.shared.captureServerPolicyManagedClosedPilotRoute(
+            .echoTextInput,
+            risk: .ownerTextCore
         )
         view.backgroundColor = DJDesignTokens.Color.background
         navigationController?.setNavigationBarHidden(true, animated: false)
@@ -6056,12 +6055,13 @@ final class EchoViewController: UIViewController {
                 }
                 switch result {
                 case .success:
-                    let surfaceDecision = FeatureGateService.shared.captureRoute(
-                        feature: .echoTextInput,
-                        risk: .ownerTextCore,
-                        localEnabled: FeatureFlagService.shared.isEnabled(.echoTextInput)
-                    )
-                    let writeDecision = FeatureGateService.shared.requestDecision(for: .echoTextInput)
+                    let surfaceDecision = FeatureGateService.shared
+                        .captureServerPolicyManagedClosedPilotRoute(
+                            .echoTextInput,
+                            risk: .ownerTextCore
+                        )
+                    let writeDecision = FeatureGateService.shared
+                        .requestServerPolicyManagedClosedPilotDecision(for: .echoTextInput)
                     self.isOwnerTruthInterviewNaturalInputProductPolicyPermitted = surfaceDecision.allowed
                         && writeDecision.allowed
                 case .failure:
@@ -8356,6 +8356,9 @@ extension EchoViewController {
                                         && candidateProposalStatusEntryVisible
                                     let candidateProposalStatusEntryTitle = controller
                                         .candidateProposalStatusEntryTitleForUIQA
+                                    controller.revealProductBoundaryActionsForUIQA()
+                                    let productBoundaryActionsReachable = controller
+                                        .areProductBoundaryActionsReachableForUIQA
 
                                     func complete(
                                         confirmationInboxPresented: Bool,
@@ -8385,6 +8388,7 @@ extension EchoViewController {
                                             && summaryRendered
                                             && controller.isTranscriptClearForQA
                                             && productBoundaryControlsVisible
+                                            && productBoundaryActionsReachable
                                             && qaOnlyBoundaryControlsHidden
                                             && reviewBatchAcknowledgementEntryVisible
                                             && acknowledgementRendered
@@ -8406,6 +8410,7 @@ extension EchoViewController {
                                         "summaryDetail": summaryDetail,
                                         "transcriptCleared": controller.isTranscriptClearForQA,
                                         "productBoundaryControlsVisible": productBoundaryControlsVisible,
+                                        "productBoundaryActionsReachable": productBoundaryActionsReachable,
                                         "qaOnlyBoundaryControlsHidden": qaOnlyBoundaryControlsHidden,
                                         "reviewBatchAcknowledgementEntryVisible": reviewBatchAcknowledgementEntryVisible,
                                         "reviewBatchAcknowledgementPhase": String(describing: acknowledgementState.phase),

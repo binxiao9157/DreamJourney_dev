@@ -138,6 +138,7 @@ grep -Eq '"candidateProposalStatusPhase"[[:space:]]*:[[:space:]]*"ready"' "$RESU
 grep -Eq '"candidateProposalStatusEntryVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Preview should expose an explicit status refresh entry after admission."
 grep -Eq '"transcriptCleared"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Product preview must clear submitted text."
 grep -Eq '"productBoundaryControlsVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Product boundary controls should be visible."
+grep -Eq '"productBoundaryActionsReachable"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Product boundary controls must remain reachable through the sheet scroll view."
 grep -Eq '"qaOnlyBoundaryControlsHidden"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "QA-only boundary controls must remain hidden."
 grep -Eq '"inMemoryPreview"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Smoke must remain an in-memory preview."
 grep -Eq '"releasePolicyBypassedForPreview"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Preview policy isolation marker missing."

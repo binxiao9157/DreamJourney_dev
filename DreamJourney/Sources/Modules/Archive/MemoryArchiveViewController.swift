@@ -1149,10 +1149,8 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func updateCandidateConfirmationButton() {
-        let isVisible = isSelfAutobiographyMode && FeatureGateService.shared.isRouteAllowed(
-            .ownerTruthCandidateReview,
-            localEnabled: FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview)
-        )
+        let isVisible = isSelfAutobiographyMode && FeatureGateService.shared
+            .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
         candidateConfirmationButton.setTitle(isVisible ? "待确认记忆" : nil, for: .normal)
         candidateConfirmationButton.accessibilityLabel = isVisible ? "待确认记忆" : nil
         candidateConfirmationButton.isHidden = !isVisible
@@ -1160,10 +1158,8 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func updateCandidateMemoryActivationButton() {
-        let isVisible = isSelfAutobiographyMode && FeatureGateService.shared.isRouteAllowed(
-            .ownerTruthCandidateReview,
-            localEnabled: FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview)
-        )
+        let isVisible = isSelfAutobiographyMode && FeatureGateService.shared
+            .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
         candidateMemoryActivationButton.setTitle(isVisible ? "待纳入正式记忆" : nil, for: .normal)
         candidateMemoryActivationButton.accessibilityLabel = isVisible ? "待纳入正式记忆" : nil
         candidateMemoryActivationButton.isHidden = !isVisible
@@ -2821,10 +2817,8 @@ final class MemoryArchiveViewController: UIViewController {
 
     @objc private func ownerTruthCandidateConfirmationTapped() {
         guard isSelfAutobiographyMode,
-              FeatureGateService.shared.isRouteAllowed(
-                  .ownerTruthCandidateReview,
-                  localEnabled: FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview)
-              ),
+              FeatureGateService.shared
+                .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview),
               let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
             return
         }
@@ -2836,10 +2830,8 @@ final class MemoryArchiveViewController: UIViewController {
 
     @objc private func ownerTruthCandidateMemoryActivationTapped() {
         guard isSelfAutobiographyMode,
-              FeatureGateService.shared.isRouteAllowed(
-                  .ownerTruthCandidateReview,
-                  localEnabled: FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview)
-              ),
+              FeatureGateService.shared
+                .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview),
               let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
             return
         }
@@ -3904,7 +3896,9 @@ final class OwnerTruthInterviewCandidateMemoryActivationInboxViewController: UIV
         activationClient: OwnerTruthInterviewCandidateMemoryActivationClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = {
-            FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview).allowed
+            FeatureGateService.shared
+                .requestServerPolicyManagedClosedPilotDecision(for: .ownerTruthCandidateReview)
+                .allowed
         }
     ) {
         self.accountLease = accountLease
@@ -4287,7 +4281,9 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
         client: OwnerTruthInterviewCandidateConfirmationInboxClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = {
-            FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview).allowed
+            FeatureGateService.shared
+                .requestServerPolicyManagedClosedPilotDecision(for: .ownerTruthCandidateReview)
+                .allowed
         }
     ) {
         self.accountLease = accountLease
@@ -4589,7 +4585,9 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         singleActionClient: OwnerTruthInterviewCandidateConfirmationSingleActionClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = {
-            FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview).allowed
+            FeatureGateService.shared
+                .requestServerPolicyManagedClosedPilotDecision(for: .ownerTruthCandidateReview)
+                .allowed
         }
     ) {
         self.accountLease = accountLease
@@ -9634,6 +9632,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let candidateProposalStatusClient: OwnerTruthInterviewCandidateProposalStatusClient
     private let candidateProposalStatusPolicyAvailable: () -> Bool
     private let candidateProposalConfirmationInboxControllerProvider: (AccountLease, OwnerTruthRecordID) -> UIViewController
+    private let scrollView = UIScrollView()
     private let stackView = UIStackView()
     private let subtitleLabel = UILabel()
     private let guidedRecommendationStack = UIStackView()
@@ -9723,6 +9722,24 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             }
     }
 
+    var areProductBoundaryActionsReachableForUIQA: Bool {
+        guard presentation == .product,
+              boundaryActionsStack.superview != nil,
+              !boundaryActionsStack.isHidden else {
+            return false
+        }
+        layoutProductBoundaryActionsForUIQA()
+        let boundaryRect = boundaryActionsStack.convert(boundaryActionsStack.bounds, to: scrollView)
+        let insets = scrollView.adjustedContentInset
+        let visibleBounds = CGRect(
+            x: scrollView.contentOffset.x + insets.left,
+            y: scrollView.contentOffset.y + insets.top,
+            width: scrollView.bounds.width - insets.left - insets.right,
+            height: scrollView.bounds.height - insets.top - insets.bottom
+        ).insetBy(dx: 0, dy: 4)
+        return visibleBounds.contains(boundaryRect)
+    }
+
     var areQAOnlyBoundaryActionsHiddenForProductUIQA: Bool {
         presentation == .product
             && [
@@ -9803,20 +9820,14 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         presentation: OwnerTruthInterviewNaturalInputPresentation = .qa,
         guidedRecommendationClient: OwnerTruthGuidedRecommendationPresentationClient = DreamJourneyBackendClient.shared,
         guidedRecommendationPolicyAvailable: @escaping () -> Bool = {
-            guard FeatureFlagService.shared.isEnabled(.echoGuidedRecommendations) else {
-                return false
-            }
             return FeatureGateService.shared
-                .requestDecision(for: .echoGuidedRecommendations)
+                .requestServerPolicyManagedClosedPilotDecision(for: .echoGuidedRecommendations)
                 .allowed
         },
         lifeMapClient: OwnerTruthLifeMapPresentationClient = DreamJourneyBackendClient.shared,
         lifeMapPolicyAvailable: @escaping () -> Bool = {
-            guard FeatureFlagService.shared.isEnabled(.ownerTruthLifeMap) else {
-                return false
-            }
             return FeatureGateService.shared
-                .requestDecision(for: .ownerTruthLifeMap)
+                .requestServerPolicyManagedClosedPilotDecision(for: .ownerTruthLifeMap)
                 .allowed
         },
         memorySearchClient: OwnerTruthMemorySearchPresentationClient = DreamJourneyBackendClient.shared,
@@ -9840,27 +9851,20 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         reviewBatchInboxClient: OwnerTruthInterviewPendingReviewBatchInboxClient = DreamJourneyBackendClient.shared,
         reviewBatchAcknowledgementClient: OwnerTruthInterviewReviewBatchAcknowledgementClient = DreamJourneyBackendClient.shared,
         reviewBatchAcknowledgementPolicyAvailable: @escaping () -> Bool = {
-            guard FeatureFlagService.shared.isEnabled(.echoTextInput) else {
-                return false
-            }
-            return FeatureGateService.shared.requestDecision(for: .echoTextInput).allowed
+            FeatureGateService.shared
+                .requestServerPolicyManagedClosedPilotDecision(for: .echoTextInput)
+                .allowed
         },
         candidateProposalAdmissionClient: OwnerTruthInterviewCandidateProposalAdmissionClient = DreamJourneyBackendClient.shared,
         candidateProposalAdmissionPolicyAvailable: @escaping () -> Bool = {
-            guard FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview) else {
-                return false
-            }
             return FeatureGateService.shared
-                .requestDecision(for: .ownerTruthCandidateReview)
+                .requestServerPolicyManagedClosedPilotDecision(for: .ownerTruthCandidateReview)
                 .allowed
         },
         candidateProposalStatusClient: OwnerTruthInterviewCandidateProposalStatusClient = DreamJourneyBackendClient.shared,
         candidateProposalStatusPolicyAvailable: @escaping () -> Bool = {
-            guard FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview) else {
-                return false
-            }
             return FeatureGateService.shared
-                .requestDecision(for: .ownerTruthCandidateReview)
+                .requestServerPolicyManagedClosedPilotDecision(for: .ownerTruthCandidateReview)
                 .allowed
         },
         candidateProposalConfirmationInboxControllerProvider: @escaping (AccountLease, OwnerTruthRecordID) -> UIViewController = {
@@ -9943,7 +9947,43 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         endSessionTapped()
     }
 
+    func revealProductBoundaryActionsForUIQA() {
+        guard presentation == .product else { return }
+        layoutProductBoundaryActionsForUIQA()
+        let boundaryRect = boundaryActionsStack.convert(boundaryActionsStack.bounds, to: scrollView)
+        let insets = scrollView.adjustedContentInset
+        let minimumOffsetY = -insets.top
+        let maximumOffsetY = max(
+            minimumOffsetY,
+            scrollView.contentSize.height - scrollView.bounds.height + insets.bottom
+        )
+        let targetOffsetY = min(
+            maximumOffsetY,
+            max(
+                minimumOffsetY,
+                boundaryRect.maxY - scrollView.bounds.height + insets.bottom + 16
+            )
+        )
+        scrollView.setContentOffset(
+            CGPoint(x: scrollView.contentOffset.x, y: targetOffsetY),
+            animated: false
+        )
+        layoutProductBoundaryActionsForUIQA()
+    }
+
+    private func layoutProductBoundaryActionsForUIQA() {
+        view.window?.layoutIfNeeded()
+        view.superview?.layoutIfNeeded()
+        view.layoutIfNeeded()
+        scrollView.layoutIfNeeded()
+    }
+
     private func configureView() {
+        scrollView.alwaysBounceVertical = true
+        scrollView.showsVerticalScrollIndicator = true
+        scrollView.keyboardDismissMode = .interactive
+        scrollView.accessibilityIdentifier = "owner-truth-interview-natural-input-scroll"
+
         stackView.axis = .vertical
         stackView.alignment = .fill
         stackView.spacing = 14
@@ -9956,7 +9996,11 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         )
 
         subtitleLabel.text = presentation.subtitle
-        subtitleLabel.font = DJDesignTokens.Font.body(14)
+        applyDynamicType(
+            to: subtitleLabel,
+            baseFont: DJDesignTokens.Font.body(14),
+            textStyle: .subheadline
+        )
         subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
         subtitleLabel.numberOfLines = 0
 
@@ -9968,38 +10012,55 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         configureCandidateProposalAdmissionEntry()
         configureCandidateProposalStatusEntry()
 
-        statusLabel.font = DJDesignTokens.Font.title(20)
+        applyDynamicType(
+            to: statusLabel,
+            baseFont: DJDesignTokens.Font.title(20),
+            textStyle: .title2
+        )
         statusLabel.textColor = DJDesignTokens.Color.textPrimary
         statusLabel.numberOfLines = 0
         statusLabel.accessibilityIdentifier = "owner-truth-interview-natural-input-status"
 
-        detailLabel.font = DJDesignTokens.Font.body(15)
+        applyDynamicType(
+            to: detailLabel,
+            baseFont: DJDesignTokens.Font.body(15),
+            textStyle: .body
+        )
         detailLabel.textColor = DJDesignTokens.Color.textSecondary
         detailLabel.numberOfLines = 0
         detailLabel.accessibilityIdentifier = "owner-truth-interview-natural-input-detail"
 
-        inputTextView.font = DJDesignTokens.Font.body(16)
+        inputTextView.font = dynamicFont(DJDesignTokens.Font.body(16), textStyle: .body)
+        inputTextView.adjustsFontForContentSizeCategory = true
         inputTextView.textColor = DJDesignTokens.Color.textPrimary
         inputTextView.backgroundColor = DJDesignTokens.Color.surface
         inputTextView.layer.cornerRadius = 12
         inputTextView.textContainerInset = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
         inputTextView.accessibilityIdentifier = "owner-truth-interview-natural-input-text"
-        inputTextView.heightAnchor.constraint(equalToConstant: 108).isActive = true
+        inputTextView.heightAnchor.constraint(greaterThanOrEqualToConstant: 108).isActive = true
 
         submitButton.setTitle(presentation.submitTitle, for: .normal)
-        submitButton.titleLabel?.font = DJDesignTokens.Font.body(16)
+        applyDynamicType(
+            to: submitButton,
+            baseFont: DJDesignTokens.Font.body(16),
+            textStyle: .body
+        )
         submitButton.setTitleColor(.white, for: .normal)
         submitButton.backgroundColor = DJDesignTokens.Color.accent
         submitButton.layer.cornerRadius = 10
-        submitButton.heightAnchor.constraint(equalToConstant: 46).isActive = true
+        submitButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 46).isActive = true
         submitButton.addTarget(self, action: #selector(submitTapped), for: .touchUpInside)
         submitButton.accessibilityIdentifier = "owner-truth-interview-natural-input-submit"
 
         endSessionButton.setTitle("结束这次分享", for: .normal)
-        endSessionButton.titleLabel?.font = DJDesignTokens.Font.body(14)
+        applyDynamicType(
+            to: endSessionButton,
+            baseFont: DJDesignTokens.Font.body(14),
+            textStyle: .subheadline
+        )
         endSessionButton.setTitleColor(DJDesignTokens.Color.textSecondary, for: .normal)
         endSessionButton.backgroundColor = .clear
-        endSessionButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        endSessionButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 36).isActive = true
         endSessionButton.addTarget(self, action: #selector(endSessionTapped), for: .touchUpInside)
         endSessionButton.accessibilityIdentifier = "owner-truth-interview-natural-input-end"
         endSessionButton.isHidden = true
@@ -10022,12 +10083,20 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         if presentation == .qa || presentation == .product {
             stackView.addArrangedSubview(boundaryActionsStack)
         }
-        view.addSubview(stackView)
+        view.addSubview(scrollView)
+        scrollView.addSubview(stackView)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
         stackView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            stackView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            stackView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            stackView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            stackView.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor),
+            stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            stackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
         ])
     }
 
@@ -10065,14 +10134,22 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         guidedRecommendationStack.accessibilityIdentifier = "owner-truth-guided-recommendations"
 
         guidedRecommendationTitleLabel.text = "可以从这里开始"
-        guidedRecommendationTitleLabel.font = DJDesignTokens.Font.label(13)
+        applyDynamicType(
+            to: guidedRecommendationTitleLabel,
+            baseFont: DJDesignTokens.Font.label(13),
+            textStyle: .caption1
+        )
         guidedRecommendationTitleLabel.textColor = DJDesignTokens.Color.textTertiary
 
         guidedRecommendationPromptStack.axis = .vertical
         guidedRecommendationPromptStack.alignment = .fill
         guidedRecommendationPromptStack.spacing = 8
 
-        guidedRecommendationActivePromptLabel.font = DJDesignTokens.Font.body(16)
+        applyDynamicType(
+            to: guidedRecommendationActivePromptLabel,
+            baseFont: DJDesignTokens.Font.body(16),
+            textStyle: .body
+        )
         guidedRecommendationActivePromptLabel.textColor = DJDesignTokens.Color.textPrimary
         guidedRecommendationActivePromptLabel.numberOfLines = 0
         guidedRecommendationActivePromptLabel.accessibilityIdentifier =
@@ -10282,7 +10359,11 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             button.tag = index
             button.contentHorizontalAlignment = .leading
             button.contentVerticalAlignment = .center
-            button.titleLabel?.font = DJDesignTokens.Font.body(15)
+            applyDynamicType(
+                to: button,
+                baseFont: DJDesignTokens.Font.body(15),
+                textStyle: .body
+            )
             button.titleLabel?.numberOfLines = 0
             button.titleLabel?.lineBreakMode = .byWordWrapping
             button.titleLabel?.textAlignment = .left
@@ -11051,15 +11132,42 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         action: Selector
     ) {
         button.setTitle(title, for: .normal)
-        button.titleLabel?.font = DJDesignTokens.Font.body(presentation == .product ? 13 : 15)
-        button.titleLabel?.adjustsFontSizeToFitWidth = presentation == .product
-        button.titleLabel?.minimumScaleFactor = 0.82
+        applyDynamicType(
+            to: button,
+            baseFont: DJDesignTokens.Font.body(presentation == .product ? 13 : 15),
+            textStyle: .body
+        )
+        button.titleLabel?.numberOfLines = presentation == .product ? 2 : 1
+        button.titleLabel?.lineBreakMode = .byWordWrapping
+        button.titleLabel?.textAlignment = .center
         button.setTitleColor(DJDesignTokens.Color.textPrimary, for: .normal)
         button.backgroundColor = DJDesignTokens.Color.surface
         button.layer.cornerRadius = 10
-        button.heightAnchor.constraint(equalToConstant: presentation == .product ? 40 : 42).isActive = true
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: presentation == .product ? 40 : 42).isActive = true
         button.addTarget(self, action: action, for: .touchUpInside)
         button.accessibilityIdentifier = accessibilityIdentifier
+    }
+
+    private func dynamicFont(_ baseFont: UIFont, textStyle: UIFont.TextStyle) -> UIFont {
+        UIFontMetrics(forTextStyle: textStyle).scaledFont(for: baseFont)
+    }
+
+    private func applyDynamicType(
+        to label: UILabel,
+        baseFont: UIFont,
+        textStyle: UIFont.TextStyle
+    ) {
+        label.font = dynamicFont(baseFont, textStyle: textStyle)
+        label.adjustsFontForContentSizeCategory = true
+    }
+
+    private func applyDynamicType(
+        to button: UIButton,
+        baseFont: UIFont,
+        textStyle: UIFont.TextStyle
+    ) {
+        button.titleLabel?.font = dynamicFont(baseFont, textStyle: textStyle)
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
     }
 
     @objc private func skipOnceTapped() {

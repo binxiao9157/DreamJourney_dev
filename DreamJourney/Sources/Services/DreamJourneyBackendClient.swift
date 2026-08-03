@@ -364,6 +364,9 @@ final class FeatureGateService {
     /// either route; this narrow allowlist only prevents a local default-off
     /// flag from blocking an already server-authorized closed-pilot account.
     private static let serverPolicyManagedClosedPilotFeatures: Set<DJFeature> = [
+        .echoTextInput,
+        .echoGuidedRecommendations,
+        .ownerTruthLifeMap,
         .ownerTextCaptureV1,
         .ownerTruthCandidateReview,
     ]
@@ -485,6 +488,18 @@ final class FeatureGateService {
     ) -> FeatureDecision {
         requestDecision(
             for: feature,
+            localEnabled: Self.serverPolicyManagedClosedPilotFeatures.contains(feature) ? true : nil
+        )
+    }
+
+    @discardableResult
+    func captureServerPolicyManagedClosedPilotRoute(
+        _ feature: DJFeature,
+        risk: ReleasePolicyRiskClass? = nil
+    ) -> FeatureDecision {
+        captureRoute(
+            feature: feature,
+            risk: risk,
             localEnabled: Self.serverPolicyManagedClosedPilotFeatures.contains(feature) ? true : nil
         )
     }
@@ -7112,7 +7127,8 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         if OwnerTruthCandidateReviewQAGate.isEnabled {
             return .qa
         }
-        let decision = FeatureGateService.shared.requestDecision(for: .echoTextInput)
+        let decision = FeatureGateService.shared
+            .requestServerPolicyManagedClosedPilotDecision(for: .echoTextInput)
         guard decision.allowed else {
             return .unavailable(decision.reason)
         }
