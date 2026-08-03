@@ -1,8 +1,8 @@
 # DreamJourney V4 剩余功能闭环执行基线
 
-日期：2026-08-02
+日期：2026-08-03
 计划：`docs/superpowers/plans/2026-08-02-dreamjourney-v4-remaining-functional-closure-plan.md`
-状态：`WAVE_1_IN_PROGRESS`
+状态：`WAVE_6_NON_DEVICE_GATE_PASSED`
 
 ## 1. 本计划的完成口径
 
@@ -45,13 +45,13 @@
 | Wave | 目标 | 当前状态 | 当前事实 / 下一步 |
 | --- | --- | --- | --- |
 | 0 | 基线与提交隔离 | `FUNCTIONAL_VERIFIED` | 计划与本文件已由 iOS 提交 `afa51ba` 建立；后续继续严格使用精确暂存，不处理并行工作区。 |
-| 1 | Owner Truth 真实闭环 | `IN_PROGRESS` | 后端 `bc1dfd7` 已部署；服务器 API 容器已实际跑通 disposable Postgres 的 `Source -> Candidate -> Confirm -> Projection -> Context -> Citation -> Correction`。全局开关、真实 closed-pilot allowlist 与常驻 Worker 仍默认关闭，尚缺真实入组账号与 iOS 重启回归。 |
-| 2 | 引导式访谈 | `NOT_STARTED` | 已有会话、节奏、换题等局部合同；尚未作为正式 closed-pilot 自然输入闭环验收。 |
-| 3 | 双推荐与知识地图 | `NOT_STARTED` | 已有 QA/shadow 资产；未形成普通 closed-pilot 用户可用能力。 |
-| 4 | 数据权利、家庭与安全 | `NOT_STARTED` | 有局部 API、合同和 smoke；尚未完成全路由 owner-bound 验收。 |
-| 5 | M0 UI 与 release-like 集成 | `NOT_STARTED` | 当前 UI 仍以现有公开 MVP 和 QA gate 为主。 |
-| 6 | 非真机发布门 | `NOT_STARTED` | 现有脚本分散，尚未形成一次真实 M0 E2E gate。 |
-| 7 | 真机与 M1 Voice | `NOT_STARTED` | 等 Wave 6 通过后再集中执行。 |
+| 1 | Owner Truth 真实闭环 | `FUNCTIONAL_VERIFIED` | 服务器 Postgres 已跑通 `Source -> Candidate -> Confirm -> Projection -> Context -> Citation -> Correction`；真实短信/身份 Provider 仍单列为 `EXTERNAL_BLOCKED`。 |
+| 2 | 引导式访谈 | `FUNCTIONAL_VERIFIED` | 自然输入、用户边界、结束会话和候选确认由真实后端合同、XCTest 与模拟器 UIQA 覆盖。 |
+| 3 | 双推荐与知识地图 | `FUNCTIONAL_VERIFIED` | 连续性/知识完整性推荐、激活和 life-map 已完成部署持久化 smoke；默认发布态仍受服务端 cohort 控制。 |
+| 4 | 数据权利、家庭与安全 | `FUNCTIONAL_VERIFIED` | owner-bound session、路由隔离、导出/删除、家庭贡献授权与 deny-by-default 已由部署 Postgres smoke 覆盖。 |
+| 5 | M0 UI 与 release-like 集成 | `FUNCTIONAL_VERIFIED` | 维持三 Tab 与全屏 Echo；closed-pilot M0 产品面、失败收敛和隐藏能力公开范围均已完成 UIQA。 |
+| 6 | 非真机发布门 | `FUNCTIONAL_VERIFIED` | 统一后端/模拟器/XCTest/iPhoneOS Gate 已在 2026-08-03 完整通过，证据路径见第 14 节。 |
+| 7 | 真机与 M1 Voice | `DEVICE_REQUIRED` | Wave 2–6 已关闭；下一步只执行登录/权限/前后台/通知与 M1 声音专项的真实设备验收。 |
 
 ## 4. Wave 1 启动判定
 
@@ -267,3 +267,12 @@ Wave 1 先解决以上四点；在真实 E2E 未通过前，不进入推荐、�
 - `docs/superpowers/status/2026-08-02-v4-functional-closure-baseline.md`
 
 后续每个 Slice 在开始前更新本文件的状态、提交和验证证据；不使用全仓 `git add`。
+
+## 14. Wave 2–6 非真机闭环证据（2026-08-03）
+
+- 后端最终提交：`dae7772 test(release): harden deployed public scope smoke`，已推送至 `main` 并部署到服务器。
+- 后端统一发布门：`/tmp/dreamjourney-v4-w6-backend/v4-m0-non-device-20260803-102543/manifest.json`，状态 `passed`。该证据覆盖 migration/replay、Owner Truth、引导式访谈、推荐、家庭贡献、数据权利、Context、公开范围和部署后 Postgres 合同。
+- iOS 统一发布门：`/tmp/dreamjourney-v4-w6-ios/full-20260803-104300/manifest.json`，状态 `passed`。该门覆盖：后端证据引用、`git diff --check`、6 条静态检查、AccountLease、`OwnerTruthContractsTests`、4 条模拟器 UIQA、公开 release scope regression 和 generic iPhoneOS build。
+- iOS 本机验证固定使用 `com.yxj.dreamjourney.app / 2BTR77V3R8`；统一 Gate 的 XCTest 也显式传入同一项目级覆盖，避免测试落回协作默认 Bundle ID。
+- 最新自然输入产品面截图：`/tmp/dreamjourney-v4-w6-ios/full-20260803-104300/uiqa/natural-input-product/full-20260803-104300/01-owner-truth-interview-natural-input-product-surface-smoke.png`。
+- 该门不声明真机完成。仍需 Wave 7 验收：真实身份 Provider、麦克风/相册权限、前后台恢复、通知跳转、设备性能，以及 M1 声音复刻/数字人专项。
