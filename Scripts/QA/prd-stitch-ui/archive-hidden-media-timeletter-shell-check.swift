@@ -24,6 +24,7 @@ func assertNotContains(_ haystack: String, _ needle: String, _ message: String) 
 }
 
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let archive = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift")
 let factory = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift")
 let textEntry = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveTextEntryViewController.swift")
@@ -108,8 +109,14 @@ assertContains(readiness, "persistence: \"local_mock_file\"", "video readiness s
 assertContains(mediaReadinessGuard, "local_mock_file", "release readiness guard should track video mock-file boundary")
 assertContains(mediaReadinessGuard, "生成测试视频档案", "release readiness guard should allow hidden mock video creation")
 
+assertContains(
+    featureFlags,
+    "case archiveHiddenShellSmoke = \"DJRunArchiveHiddenShellSmoke\"",
+    "UIQA hidden shell smoke should remain registered"
+)
+
 for required in [
-    "DJRunArchiveHiddenShellSmoke",
+    "case .archiveHiddenShellSmoke",
     "runArchiveHiddenShellSmoke",
     "makeUIQAArchiveMockVideoFile",
     "makeUIQAArchiveMockThumbnailFile",

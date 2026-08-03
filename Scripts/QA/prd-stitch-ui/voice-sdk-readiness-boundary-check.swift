@@ -17,6 +17,7 @@ func require(_ condition: @autoclosure () -> Bool, _ message: String) {
 let dialogEngine = read("DreamJourney/Sources/Services/DialogEngineManager.swift")
 let echoView = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 
@@ -33,8 +34,13 @@ for required in [
     require(dialogEngine.contains(required), "voice readiness boundary is missing \(required)")
 }
 
+require(
+    featureFlags.contains("DJShowVoiceSDKReadinessPreview")
+        && featureFlags.contains("#if DEBUG || UI_QA_SIMULATOR"),
+    "Voice SDK readiness preview must be registered as a compile-time QA flag"
+)
+
 for required in [
-    "DJShowVoiceSDKReadinessPreview",
     "runUIQAVoiceSDKReadinessPreview",
     "echoVoiceSDKReadinessStatus",
     "handleBlockedRealtimeVoice",

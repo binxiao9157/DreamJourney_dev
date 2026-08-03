@@ -32,6 +32,7 @@ let backend = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swif
 let generationPolicy = read("DreamJourney/Sources/Services/KnowledgeGenerationPolicy.swift")
 let echoPolicy = read("DreamJourney/Sources/Services/EchoKnowledgeContextPolicy.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
+let echoViewModel = read("DreamJourney/Sources/Modules/Echo/EchoViewModel.swift")
 let project = read("DreamJourney.xcodeproj/project.pbxproj")
 let regression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 
@@ -87,8 +88,13 @@ require(
         echo.contains("expectedUserID") &&
         echo.contains("expectedPersonaScope") &&
         echo.contains("expectedDigitalHumanID") &&
-        echo.contains("EchoKnowledgeContextPolicy.responseIdentityMatches("),
-    "Context Packet and turn gate must carry the complete expected identity"
+        echoViewModel.contains("EchoKnowledgeContextPolicy.responseIdentityMatches(") &&
+        echoViewModel.contains("expected: lease.expectedIdentity") &&
+        echoViewModel.contains("responseUserId: packet.userId") &&
+        echoViewModel.contains("responsePersonaScope: packet.personaScope") &&
+        echoViewModel.contains("responseDigitalHumanId: packet.digitalHumanId") &&
+        echo.contains("case .identityMismatch(let mismatch):"),
+    "Context Packet and turn gate must carry and validate the complete expected identity before the controller consumes it"
 )
 
 require(
@@ -99,8 +105,8 @@ require(
         manager.contains("FamilyRepository.shared.acceptedMember(by: normalizedOwner)") &&
         echo.contains("KBLiteManager.resolveAuthorizedPersonaIdentity(for: context)") &&
         echo.contains("familyRelationshipUnauthorized") &&
-        echo.contains("digitalHumanId: expectedIdentity.digitalHumanId") &&
-        echo.contains("family_local_fallback_forbidden") &&
+        echoViewModel.contains("digitalHumanId: expectedIdentity.digitalHumanId") &&
+        echo.contains("event: \"localFallbackForbidden\"") &&
         echo.contains("activeEchoTurnKnowledgeContextGate = nil"),
     "Echo must use canonical persona IDs and forbid family local fallback"
 )
@@ -111,9 +117,13 @@ requireOrdered(
     "persona fallback policy must run before any local KBLite read"
 )
 require(
-    echo.contains("turn knowledge finished without local context") &&
-        echo.contains("turn knowledge finished without backend context") &&
-        echo.contains("gate.finishWithoutContext()"),
+    echo.contains("func finishWithoutContext()") &&
+        echo.contains("didFinishWithoutContext = true") &&
+        echo.contains("timeoutWorkItem?.cancel()") &&
+        echo.contains("retryWorkItem?.cancel()") &&
+        echo.contains("event: \"localContextUnavailable\"") &&
+        echo.contains("event: \"contextUnavailable\"") &&
+        echo.contains("!gate.didFinishWithoutContext"),
     "empty backend/local knowledge must close the turn gate without retry leakage"
 )
 

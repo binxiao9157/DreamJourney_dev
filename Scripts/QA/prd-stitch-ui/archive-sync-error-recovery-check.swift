@@ -59,7 +59,7 @@ for phrase in [
     "updatingBackendSyncState(.synced",
     "updatingBackendSyncState(.failed",
     "item.isPublicBackendSyncEligible",
-    "save(items)",
+    "save(items, lease: lease)",
     "print(\"[Archive] backend sync failed",
 ] {
     assertContains(repository, phrase, "archive repository should persist and retry sync state \(phrase)")

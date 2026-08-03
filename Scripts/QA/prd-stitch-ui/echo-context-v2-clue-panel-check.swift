@@ -76,22 +76,23 @@ for required in [
     "persona:personal:uiqa_echo_panel_evidence_user",
     "care:latest",
     "archive_panel_filtered:analysis_failed_empty_context",
-    "latestArchiveClues",
-    "latestKbFactClues",
-    "latestPersonaClues",
-    "latestCareClues",
+    "latestArchiveClueHashes",
+    "latestKbFactClueHashes",
+    "latestPersonaClueHashes",
+    "latestCareClueHashes",
     "latestContextVersion",
     "latestFilteredReasons",
     "latestRankingTraceCount",
+    "redactedEchoExportStrings(",
 ] {
     require(echo.contains(required), "UIQA panel smoke data should include clue summary field \(required)")
 }
 
 for required in [
-    "latestArchiveClues",
-    "latestKbFactClues",
-    "latestPersonaClues",
-    "latestCareClues",
+    "latestArchiveClueHashes",
+    "latestKbFactClueHashes",
+    "latestPersonaClueHashes",
+    "latestCareClueHashes",
     "latestContextVersion",
     "latestFilteredReasons",
     "latestRankingTraceCount",

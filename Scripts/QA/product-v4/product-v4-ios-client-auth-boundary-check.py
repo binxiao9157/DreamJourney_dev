@@ -122,7 +122,7 @@ def main() -> None:
             require(route in body, f"legacy public route moved outside {signature}")
             require("authPolicy: .publicRequest" in body, f"{signature} must remain explicitly public")
 
-    refresh_span = function_span(client, "private func startNextAuthRefreshIfNeeded(")
+    refresh_span = function_span(client, "private func performAuthRefresh(")
     refresh = client[refresh_span[0] : refresh_span[1]]
     require('path: "/auth/refresh"' in refresh, "refresh exchange route is missing")
     require("authPolicy: .refreshExchange" in refresh, "refresh must use refreshExchange policy")

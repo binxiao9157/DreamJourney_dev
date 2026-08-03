@@ -22,6 +22,8 @@ let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh
 let installer = read("Scripts/QA/prd-stitch-ui/run-installable-simulator-uiqa.sh")
 let infoPlist = read("DreamJourney/Resources/Info.plist")
 let sceneDelegate = read("DreamJourney/Sources/SceneDelegate.swift")
+let appCoordinator = read("DreamJourney/Sources/App/AppCoordinator.swift")
+let accountLease = read("DreamJourney/Sources/App/AccountLease.swift")
 
 for required in [
     "run-public-release-scope-model-smoke.sh",
@@ -44,6 +46,19 @@ require(releaseRegression.contains("RUN_PUBLIC_RELEASE_SCOPE_GATE"), "release re
 require(releaseRegression.contains("RUN_PUBLIC_RELEASE_SCOPE_GATE=1"), "release handoff must force the combined gate")
 require(installer.contains("Release builds cannot enable DEBUG or UI_QA_SIMULATOR"), "installer must reject QA conditions in Release")
 require(!infoPlist.contains("CFBundleURLTypes"), "Closed Pilot must not register a custom URL scheme")
-require(!sceneDelegate.contains("openURLContexts"), "Closed Pilot must not add a deep-link handler")
+require(
+    sceneDelegate.contains("func scene(_ scene: UIScene, openURLContexts")
+        && sceneDelegate.contains("receiveNotificationRuntimeDeepLink(context.url)"),
+    "external URL ingress must only forward to the notification runtime router"
+)
+require(
+    appCoordinator.contains("notificationRuntimeRouteInbox.ingest(deepLinkURL: url)"),
+    "deep-link ingress must be validated by NotificationRuntimeRouteInbox"
+)
+require(
+    accountLease.contains("NotificationRuntimeRoutePayload(deepLinkURL: deepLinkURL)")
+        && accountLease.contains("payload.matches(accountLease)"),
+    "deep-link payloads must be account-lease scoped before routing"
+)
 
 print("Public Release Scope regression contract passed")

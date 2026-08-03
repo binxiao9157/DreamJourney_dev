@@ -45,6 +45,7 @@ let readinessDoc = read("docs/superpowers/status/2026-06-18-device-backend-accep
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let recorder = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveAudioRecorderViewController.swift")
 let detail = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift")
 
@@ -94,8 +95,14 @@ for retiredCredential in [
     )
 }
 
+assertContains(
+    featureFlags,
+    "case archiveAudioLifecycleSmoke = \"DJRunArchiveAudioLifecycleSmoke\"",
+    "simulator archive audio lifecycle launch argument should remain registered"
+)
+
 for required in [
-    "DJRunArchiveAudioLifecycleSmoke",
+    "case .archiveAudioLifecycleSmoke",
     "runArchiveAudioLifecycleSmoke",
     "archive-audio-lifecycle-smoke-result.json",
     "runUIQAPermissionDeniedRecoverySmoke",

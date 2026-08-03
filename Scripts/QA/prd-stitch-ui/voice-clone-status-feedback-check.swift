@@ -18,6 +18,7 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 
 let shell = read("DreamJourney/Sources/Modules/Profile/ProfileVoiceCloneShellViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 
@@ -44,6 +45,14 @@ for required in [
 
 for required in [
     "DJShowVoiceCloneStatusFeedbackPreview",
+    "case voiceCloneStatusFeedbackPreview",
+    ".voiceCloneStatusFeedbackPreview",
+] {
+    assertContains(featureFlags, required, "voice clone status preview should stay centrally registered \(required)")
+}
+
+for required in [
+    "case .voiceCloneStatusFeedbackPreview:",
     "showVoiceCloneStatusFeedbackPreview()",
     "ProfileVoiceCloneShellViewController(snapshot: snapshot)",
 ] {

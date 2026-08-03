@@ -105,7 +105,7 @@ require(
     echo.contains("KBLiteManager.resolveAuthorizedPersonaIdentity(for: context)") &&
         echo.contains("familyRelationshipUnauthorized") &&
         echo.contains("expectedIdentity: gate.expectedIdentity") &&
-        echo.contains("family_local_fallback_forbidden"),
+        echo.contains("event: \"localFallbackForbidden\""),
     "Echo must share an authorized canonical identity and keep family local fallback forbidden"
 )
 

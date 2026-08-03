@@ -4,9 +4,10 @@
 
 - **Goal:** 按照最新 PRD 持续推进 DreamJourney_dev 到可真实测试、可真机验收、可持续迭代状态
 - **Mode:** Review
-- **Phase:** Phase 21 knowledge operation receipt minimization complete
-- **Task:** none; Tasks 1-26 are closed
-- **Blockers:** none for the completed non-device knowledge-base scope
+- **Phase:** Phase 22 product architecture and executable roadmap V4 complete
+- **Task:** `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- **Task status:** done
+- **Blockers:** none for Task 27; artifact commit/clean-checkout remains a delivery follow-up
 
 ## Key Decisions
 
@@ -45,10 +46,11 @@
 - Task 24 is complete and delivered. It adds a durable change-feed retention watermark, an explicit compacted-history contract, one-shot iOS snapshot recovery, and a dry-run-first Postgres maintenance path without changing public UI. Backend `32607ec` is deployed and iOS `102b1ca` is pushed. Real Postgres knowledge smoke, structured 410/snapshot/retained-continuation acceptance, QA data cleanup and a zero-delete compaction dry-run passed. Ledger `L20260711-191536` is closed.
 - Task 25 is complete. It scopes all persisted Echo trace/evidence surfaces and export files to the active account, serializes account-side effects, rejects stale session/voice callbacks, clears old Echo runtime evidence on account changes, and preserves QA-only export behavior without public UI changes. Ledger `L20260711-200812` is closed.
 - Task 26 is complete and deployed. It retains receipt fingerprints for permanent idempotency, compacts old full-result graph/text copies, reconstructs compatible duplicate responses from the current authoritative snapshot, and passed dry-run-first production Postgres migration. Backend `4c0538b` is live; the final 18 online receipts are compact and a repeated maintenance run has zero candidates. Ledger `L20260711-205750` is closed.
+- Task 27 is complete. Five reviewed V4 artifacts, two independent review waves, a 36/41/22/12/13/115 trace baseline, an execution registry, a finalization checker with 10 negative fixtures, and the final static acceptance report are delivered in the working tree. The artifact state remains `REVIEWED_BASELINE_PENDING_COMMIT`; this does not claim that the 115 engineering work items or G2-G4 are complete.
 
 ## Scope
 
-Phase 2, Phase 3, and Tasks 1-26 are closed for the current non-device knowledge-base target. Production remains on global ownership `shadow`; historical sourceRef identity migration, public knowledge-governance UI and true-device acceptance remain separate future product/release slices and were not silently included in Task 26.
+Tasks 1-26 are closed. Task 27 owns product truth convergence and the next executable roadmap; it does not silently change production code or public UI. Production remains on global ownership `shadow`, and true-device/provider acceptance remains an explicit external gate.
 
 ## Recovery
 

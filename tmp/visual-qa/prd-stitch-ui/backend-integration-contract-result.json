@@ -1,1 +1,0 @@
-{"archiveItemCount": 1, "baseURL": "http://127.0.0.1:3100", "careRiskLevel": "watch", "careShape": "item.snapshot", "completed": true, "familyMemberCount": 1, "health": {"environment": "local", "service": "DreamJourney Backend", "status": "ok", "store": "memory"}, "kbPeopleCount": 1, "userId": "backend_contract_1781687974"}

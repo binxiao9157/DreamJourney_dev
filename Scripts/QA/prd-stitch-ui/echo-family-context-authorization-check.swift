@@ -25,7 +25,12 @@ require(manager.contains("resolveAuthorizedPersonaIdentity"), "KBLite must expos
 require(manager.contains("FamilyRepository.shared.acceptedMember"), "family identity must require an accepted repository member")
 require(contextStore.contains("validatedContext"), "persisted digital-human context must be revalidated")
 require(contextStore.contains("FamilyRepository.shared.acceptedMember"), "context restore must require accepted member")
-require(contextStore.contains("keyBase"), "digital-human context persistence must be owner scoped")
+require(
+    contextStore.contains("scopedKeyBase")
+        && contextStore.contains("scopedKey(for: accountLease)")
+        && contextStore.contains("DigitalHumanContextStorageEnvelope"),
+    "digital-human context persistence must be owner and account-generation scoped"
+)
 require(echo.contains("familyRelationshipUnauthorized"), "Echo must record an explicit unauthorized-family fallback")
 require(echo.contains("guard let expectedIdentity = echoKnowledgeContextIdentity"), "Echo must preflight identity before backend request")
 require(echo.contains("viewerFamilyMemberID: context.isSelfAssistant ? nil : context.ownerId"), "family context request must carry the accepted member ID")

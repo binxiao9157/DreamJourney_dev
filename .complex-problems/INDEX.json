@@ -1,5 +1,5 @@
 {
-  "active_ledger_id": "L20260711-205750",
+  "active_ledger_id": "L20260712-003917",
   "ledgers": [
     {
       "active_count": 0,
@@ -286,7 +286,18 @@
       "status": "done",
       "title": "Task 26：P0 Knowledge Operation Receipt 保留与最小化",
       "updated_at": "2026-07-11T14:43:26+00:00"
+    },
+    {
+      "active_count": 0,
+      "blocked_count": 0,
+      "ledger_id": "L20260712-003917",
+      "path": "L20260712-003917",
+      "root_id": "P000",
+      "schema_version": 6,
+      "status": "done",
+      "title": "Task 27：DreamJourney 产品成果物与可执行开发路线 V4",
+      "updated_at": "2026-07-12T11:12:14+00:00"
     }
   ],
-  "updated_at": "2026-07-11T14:43:38+00:00"
+  "updated_at": "2026-07-12T11:12:25+00:00"
 }

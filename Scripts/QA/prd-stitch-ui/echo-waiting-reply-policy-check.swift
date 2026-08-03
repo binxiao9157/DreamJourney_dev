@@ -34,7 +34,11 @@ assertContains(echoViewModel, "currentSessionUserTurnCount += 1", "Echo should i
 assertContains(echoViewModel, "EchoReplyPacingPolicy.shouldWaitForReply(", "Echo should use the pacing policy before entering waiting reply")
 assertContains(echoViewModel, "afterUserTurnCount: currentSessionUserTurnCount", "Echo waiting policy should receive the current turn count")
 assertContains(echoViewModel, "userText: normalizedText", "Echo waiting policy should receive the current user text")
-assertContains(echoViewModel, "updateState(.thinking)", "Echo should enter thinking state before the waiting threshold is reached")
+assertContains(
+    echoViewModel,
+    "_ = applyTurnIntent(.userTurnAccepted, state: .thinking)",
+    "Echo should enter thinking through the turn-intent reducer before the waiting threshold is reached"
+)
 assertContains(echoViewModel, "max(0, sessionCount) % 6", "Echo should distribute wait minutes across the 5-10 minute range")
 assertContains(echoViewModel, "currentSessionUserTurnCount = 0", "Echo should reset the session turn count when returning to idle")
 assertContains(echoViewModel, "var isWaitingForDelayedReply: Bool", "Echo should expose whether a delayed reply wait is active")
@@ -51,7 +55,11 @@ guard echoView.contains("guard !viewModel.isWaitingForDelayedReply else { return
         || echoView.contains("!self.viewModel.isWaitingForDelayedReply else { return }") else {
     fatalError("Echo controller should ignore immediate AI reply callbacks while waiting")
 }
-assertContains(echoView, "viewModel.markReplyDelivered()", "Echo controller should mark replies as delivered after TTS finishes")
+assertContains(
+    echoView,
+    "markEchoReplyDelivered()",
+    "Echo controller should mark replies as delivered through the lease-validating delivery wrapper after TTS finishes"
+)
 assertContains(echoView, "第十次想起这件事", "Echo waiting-reply UIQA preview should drive the ten-round waiting policy")
 
 assertContains(releasePackageCheck, "echo-waiting-reply-policy-check.swift", "release QA package should include Echo waiting reply policy guard")

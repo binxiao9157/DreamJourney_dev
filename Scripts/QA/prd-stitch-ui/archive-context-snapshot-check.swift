@@ -119,6 +119,15 @@ final class DigitalHumanContextStore {
     var current = DigitalHumanContext(ownerId: "", isSelfAssistant: true)
 }
 
+// The repository's message-center extension only needs the relationship owner
+// while this focused model check exercises archive-context behavior. The real
+// FamilyMember model is covered by its own module tests; keeping this minimal
+// test seam avoids pulling the entire family UI/client dependency graph into a
+// standalone Swift executable.
+struct FamilyMember {
+    let relationshipOwnerUserId: String?
+}
+
 func assertEqual(_ lhs: Int, _ rhs: Int, _ message: String) {
     guard lhs == rhs else {
         fatalError("\(message): expected \(rhs), got \(lhs)")
@@ -143,13 +152,47 @@ func assertNotContains(_ haystack: String, _ needle: String, _ message: String) 
     }
 }
 
+func assertTrue(_ condition: Bool, _ message: String) {
+    guard condition else {
+        fatalError(message)
+    }
+}
+
 @main
 enum ArchiveContextSnapshotCheck {
     static func main() {
-        UserManager.shared.currentUser = TestUser(id: "archive_context_test")
-        UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.items.archive_context_test")
+        let userId = "archive_context_test_\(UUID().uuidString)"
+        let session = AccountSession(
+            subjectId: userId,
+            vaultId: "archive_context_snapshot_vault",
+            sessionId: "archive_context_snapshot_session",
+            tokenFamilyId: "archive_context_snapshot_family",
+            sessionVersion: 1,
+            generation: 1,
+            generationId: UUID(),
+            state: .active,
+            activatedAt: Date()
+        )
+        UserManager.shared.currentUser = TestUser(id: userId)
+        DigitalHumanContextStore.shared.current = DigitalHumanContext(
+            ownerId: userId,
+            isSelfAssistant: true
+        )
+        AccountLeaseRuntime.shared.updateAuthorityEpoch("archive-context-snapshot-check")
+        AccountLeaseRuntime.shared.publish(session: session)
+        guard let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userId) else {
+            fatalError("archive context fixture must establish an active account lease")
+        }
         defer {
-            UserDefaults.standard.removeObject(forKey: "dj.memoryArchive.items.archive_context_test")
+            _ = MemoryArchiveRepository.shared.purgeLocalArchiveDataForAccountDeletion(
+                accountLease: accountLease
+            )
+            AccountLeaseRuntime.shared.publish(session: nil)
+            UserManager.shared.currentUser = nil
+            DigitalHumanContextStore.shared.current = DigitalHumanContext(
+                ownerId: "",
+                isSelfAssistant: true
+            )
         }
 
         var analyzedText = MemoryArchiveItemFactory.makeTextItem(note: "奶奶在老家的院子里晒太阳")
@@ -170,10 +213,22 @@ enum ArchiveContextSnapshotCheck {
         failedPhoto.metadata[MemoryArchiveItem.analysisSceneCluesMetadataKey] = "不应注入的场景"
         failedPhoto.markAnalysisFailed(reason: "provider_unavailable")
 
-        MemoryArchiveRepository.shared.add(pendingPhoto)
-        MemoryArchiveRepository.shared.add(failedPhoto, syncToBackend: false)
-        MemoryArchiveRepository.shared.add(manualAudio)
-        MemoryArchiveRepository.shared.add(analyzedText)
+        assertTrue(
+            MemoryArchiveRepository.shared.add(pendingPhoto),
+            "pending photo must be accepted under the active owner lease"
+        )
+        assertTrue(
+            MemoryArchiveRepository.shared.add(failedPhoto, syncToBackend: false),
+            "failed photo must be accepted under the active owner lease"
+        )
+        assertTrue(
+            MemoryArchiveRepository.shared.add(manualAudio),
+            "audio item must be accepted under the active owner lease"
+        )
+        assertTrue(
+            MemoryArchiveRepository.shared.add(analyzedText),
+            "text item must be accepted under the active owner lease"
+        )
 
         let snapshot = MemoryArchiveRepository.shared.contextSnapshot(limit: 10)
         assertEqual(snapshot.totalItemCount, 4, "snapshot total count")

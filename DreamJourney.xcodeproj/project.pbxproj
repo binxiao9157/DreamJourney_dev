@@ -16,9 +16,6 @@
 		1D6C68E038F68B262E1C025D /* MicrophonePermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CCF5FAEB2B1690C0FB7E56E /* MicrophonePermissionManager.swift */; };
 		27EE981CBDE11D52F4E65EFE /* WarmMemoryAnnotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE368D9CDFA77A1F03C66806 /* WarmMemoryAnnotationView.swift */; };
 		28D8501C781E7E8F03B1C87B /* FeatureFlagService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392F026F981C3221600209E7 /* FeatureFlagService.swift */; };
-		C7E190000000000000000001 /* ReleasePolicyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E190000000000000000101 /* ReleasePolicyStore.swift */; };
-		C7E190000000000000000002 /* RuntimeCapabilitySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E190000000000000000102 /* RuntimeCapabilitySnapshot.swift */; };
-		C7E1A0000000000000000001 /* OperationsEvidenceEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1A0000000000000000101 /* OperationsEvidenceEvent.swift */; };
 		328F094BD6DC27B02845187F /* MemoirAudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E34D9D2B8943EBBDECBC489 /* MemoirAudioPlayer.swift */; };
 		344DFB2063508315CC912EF7 /* KBExportPreviewViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66A439914BFCD681134DAF8A /* KBExportPreviewViewController.swift */; };
 		36CF52237589B0C4691394E6 /* DJComponentFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D8F3BB4380923E82E24664 /* DJComponentFactory.swift */; };
@@ -30,22 +27,11 @@
 		48673DEDB4E6A975B309C688 /* VoiceCloneService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33790F6FDDECF7ADE231C869 /* VoiceCloneService.swift */; };
 		4CF0BD2D4F968542C121945F /* KBGraphNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9888BE646AFE99C369C35772 /* KBGraphNode.swift */; };
 		502F2FC9318D2718A929EFD5 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 165FB245CE23B3EF2C90C799 /* AppCoordinator.swift */; };
-		C7E1B2000000000000000001 /* AccountSessionActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B2000000000000000101 /* AccountSessionActor.swift */; };
-		C7E1B3000000000000000001 /* AccountLease.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B3000000000000000101 /* AccountLease.swift */; };
-		C7E1B4000000000000000001 /* AccountLifecycleCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B4000000000000000101 /* AccountLifecycleCoordinator.swift */; };
-		C7E1B5000000000000000001 /* AccountLifecycleRuntimeRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B5000000000000000101 /* AccountLifecycleRuntimeRegistry.swift */; };
 		50F8EF0F3B0F4C70B9C80B7A /* MemoirService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFEC7EA9CB8D7181EFC70161 /* MemoirService.swift */; };
 		51E5260630E2B3EB0C6D96F1 /* TGLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4571331D3ED0551FB8C8DE7 /* TGLoadingView.swift */; };
 		52B3383F8F4517669DA70A7B /* MemoryDetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830FF3B188863CA5E93ACA26 /* MemoryDetailViewController.swift */; };
 		55D3EB0986C561C7F208E19A /* MemoirModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B6BA3BDEF61B3A339E10DD /* MemoirModel.swift */; };
 		56155288BF68EFE839397BB1 /* DreamJourneyBackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */; };
-		A9F000000000000000000001 /* BackendAuthSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F000000000000000000101 /* BackendAuthSessionStore.swift */; };
-		C7E1B0000000000000000001 /* BackendIdentityChallenge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B0000000000000000101 /* BackendIdentityChallenge.swift */; };
-		C7E1D0000000000000000001 /* ArchiveLocalStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1D0000000000000000101 /* ArchiveLocalStorage.swift */; };
-		C7E1E0000000000000000001 /* ArchiveMediaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1E0000000000000000101 /* ArchiveMediaStore.swift */; };
-		C7E1F0000000000000000001 /* ConversationLocalStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1F0000000000000000101 /* ConversationLocalStorage.swift */; };
-		C7E200000000000000000001 /* AccountPrivateMediaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E200000000000000000101 /* AccountPrivateMediaStore.swift */; };
-		C7E300000000000000000001 /* ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E300000000000000000101 /* ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift */; };
 		56272F68DA6D144F29C65952 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 41B3D2BD9BE7DFE0AABF34F1 /* Assets.xcassets */; };
 		596491B3EBC0F9D31FB1C2E1 /* MemoryAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89ABFCBCF51B9FD6CEB5799F /* MemoryAnnotation.swift */; };
 		5B5ABAB79A4B0C533DF4E21C /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = DEB0707389E5BC6A57EAB3BD /* LaunchScreen.storyboard */; };
@@ -55,21 +41,10 @@
 		70BCC3629F42D8E233158576 /* KBLiteTestHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C5B565061358529E1029413 /* KBLiteTestHelper.swift */; };
 		7BD7AD6BC3423E10E98379EF /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F000C9191CDE42D8FB0D946A /* SceneDelegate.swift */; };
 		7C9713B232CCED23B4CC329D /* KBLiteManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 576656BFF57471DCF9B231CB /* KBLiteManager.swift */; };
-		A7BE09165FC943F985E815EE /* KnowledgeSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E403D09145442D1B647F87B /* KnowledgeSyncCoordinator.swift */; };
-		C7E13A110000000000000002 /* KnowledgeThreeWayMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E13A110000000000000001 /* KnowledgeThreeWayMerge.swift */; };
-		C7E14A110000000000000001 /* KnowledgeGenerationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E14A110000000000000101 /* KnowledgeGenerationPolicy.swift */; };
-		C7E14A110000000000000002 /* EchoKnowledgeContextPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E14A110000000000000102 /* EchoKnowledgeContextPolicy.swift */; };
-		C7E150000000000000000001 /* KnowledgeWidgetPrivacyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E150000000000000000101 /* KnowledgeWidgetPrivacyPolicy.swift */; };
-		C7E150000000000000000002 /* KnowledgeWidgetSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E150000000000000000102 /* KnowledgeWidgetSnapshotStore.swift */; };
-		C7E150000000000000000003 /* WidgetKnowledgeSnapshotReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E150000000000000000103 /* WidgetKnowledgeSnapshotReader.swift */; };
-		C7E150000000000000000004 /* DreamJourneyWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C31B66E6C099EABF318FC693 /* DreamJourneyWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		C7E160000000000000000001 /* FamilyRelationshipAuthorizationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E160000000000000000101 /* FamilyRelationshipAuthorizationPolicy.swift */; };
 		7D543DD05A96F0944D9BA409 /* bs_texture_halfFace.png in Resources */ = {isa = PBXBuildFile; fileRef = C9115FEF531F2DA00EDE4969 /* bs_texture_halfFace.png */; };
 		7FE1A54F9280057AA970D224 /* DialogEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B3A23A2BA7FD3D92A7BC975 /* DialogEngineManager.swift */; };
 		813B7A93279A0D98C91B3276 /* DreamJourneyWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D151E9314D78EB40CF2EE48 /* DreamJourneyWidget.swift */; };
 		824FE84FF055277FD802AE21 /* KBLiteSemanticSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0616F4B34725AE4D0BCCA4D9 /* KBLiteSemanticSearch.swift */; };
-		C7E170000000000000000001 /* KBLiteSemanticCachePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E170000000000000000101 /* KBLiteSemanticCachePolicy.swift */; };
-		C7E180000000000000000001 /* KnowledgeLocalStoragePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E180000000000000000101 /* KnowledgeLocalStoragePolicy.swift */; };
 		84655D19F7C25DFB64698F6B /* KBGraphViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 939BB4DA6D4456E9F95F60DD /* KBGraphViewController.swift */; };
 		8525A06805EC0F2C59676EBE /* DJDesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9721373237BB9D8AB345E0CA /* DJDesignTokens.swift */; };
 		8635AA9D8CE8E081376A1C0C /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 04D035B5F78F66A15EB0C01A /* Main.storyboard */; };
@@ -89,10 +64,8 @@
 		A1A000000000000000000001 /* MemoryArchiveItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000001 /* MemoryArchiveItem.swift */; };
 		A1A000000000000000000002 /* MemoryArchiveRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000002 /* MemoryArchiveRepository.swift */; };
 		A1A000000000000000000003 /* MemoryArchiveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000003 /* MemoryArchiveViewController.swift */; };
-		A1A000000000000000000050 /* InAppMessageCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000050 /* InAppMessageCenter.swift */; };
 		A1A000000000000000000004 /* EchoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000004 /* EchoViewModel.swift */; };
 		A1A000000000000000000005 /* EchoViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000005 /* EchoViewController.swift */; };
-		A1A000000000000000000051 /* EchoSafetyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000051 /* EchoSafetyPolicy.swift */; };
 		A1A000000000000000000006 /* ProfileCareModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000006 /* ProfileCareModels.swift */; };
 		A1A000000000000000000007 /* ProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000007 /* ProfileViewController.swift */; };
 		A1A000000000000000000008 /* MemoryArchiveCreationOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000008 /* MemoryArchiveCreationOption.swift */; };
@@ -117,9 +90,14 @@
 		A1A000000000000000000047 /* DigitalHumanAudioLevelMeter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000047 /* DigitalHumanAudioLevelMeter.swift */; };
 		A1A000000000000000000048 /* DigitalHumanLipSyncTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000048 /* DigitalHumanLipSyncTimeline.swift */; };
 		A1A000000000000000000049 /* DigitalHumanConversationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000049 /* DigitalHumanConversationCoordinator.swift */; };
+		A1A000000000000000000050 /* InAppMessageCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000050 /* InAppMessageCenter.swift */; };
+		A1A000000000000000000051 /* EchoSafetyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000051 /* EchoSafetyPolicy.swift */; };
+		A33CD0C2C00B4D4844763CD8 /* Pods_DreamJourneyTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 38C3AF07FF62B21502A002E0 /* Pods_DreamJourneyTests.framework */; };
 		A45E9D7E5541F7288DD4141D /* ConversationMemoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */; };
 		A52FFB266D8D9FC320182A0A /* MemoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */; };
+		A7BE09165FC943F985E815EE /* KnowledgeSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E403D09145442D1B647F87B /* KnowledgeSyncCoordinator.swift */; };
 		A88DF4F43BC833D9433CEE7B /* MemoirTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00898E98E95E3808561BEB51 /* MemoirTTSService.swift */; };
+		A9F000000000000000000001 /* BackendAuthSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F000000000000000000101 /* BackendAuthSessionStore.swift */; };
 		B5FB43CD45DAE4D507651704 /* KBGraphEdge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C4A811788E64351DDF40A2 /* KBGraphEdge.swift */; };
 		B7687F4C0E97DB12562E6416 /* DHLiveMini.wasm in Resources */ = {isa = PBXBuildFile; fileRef = BD7318F07FAEE0966045F115 /* DHLiveMini.wasm */; };
 		B90C2E9CA47079EB38309125 /* TodayInHistoryEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82D71FC48ADC02F8BCBED835 /* TodayInHistoryEntry.swift */; };
@@ -131,6 +109,29 @@
 		C2C000000000000000000046 /* DigitalHumanLive.html in Resources */ = {isa = PBXBuildFile; fileRef = D2D000000000000000000046 /* DigitalHumanLive.html */; };
 		C4F36E09ECE184DE75C4D276 /* FamilyCircleViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1BA39C954DE93A9C6B92546 /* FamilyCircleViewController.swift */; };
 		C51AC41EC608CEC137B1340F /* AuthCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D7A1AAB6E1338AE2A2C4F75 /* AuthCoordinator.swift */; };
+		C7E13A110000000000000002 /* KnowledgeThreeWayMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E13A110000000000000001 /* KnowledgeThreeWayMerge.swift */; };
+		C7E14A110000000000000001 /* KnowledgeGenerationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E14A110000000000000101 /* KnowledgeGenerationPolicy.swift */; };
+		C7E14A110000000000000002 /* EchoKnowledgeContextPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E14A110000000000000102 /* EchoKnowledgeContextPolicy.swift */; };
+		C7E150000000000000000001 /* KnowledgeWidgetPrivacyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E150000000000000000101 /* KnowledgeWidgetPrivacyPolicy.swift */; };
+		C7E150000000000000000002 /* KnowledgeWidgetSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E150000000000000000102 /* KnowledgeWidgetSnapshotStore.swift */; };
+		C7E150000000000000000003 /* WidgetKnowledgeSnapshotReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E150000000000000000103 /* WidgetKnowledgeSnapshotReader.swift */; };
+		C7E150000000000000000004 /* DreamJourneyWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C31B66E6C099EABF318FC693 /* DreamJourneyWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C7E160000000000000000001 /* FamilyRelationshipAuthorizationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E160000000000000000101 /* FamilyRelationshipAuthorizationPolicy.swift */; };
+		C7E170000000000000000001 /* KBLiteSemanticCachePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E170000000000000000101 /* KBLiteSemanticCachePolicy.swift */; };
+		C7E180000000000000000001 /* KnowledgeLocalStoragePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E180000000000000000101 /* KnowledgeLocalStoragePolicy.swift */; };
+		C7E190000000000000000001 /* ReleasePolicyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E190000000000000000101 /* ReleasePolicyStore.swift */; };
+		C7E190000000000000000002 /* RuntimeCapabilitySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E190000000000000000102 /* RuntimeCapabilitySnapshot.swift */; };
+		C7E1A0000000000000000001 /* OperationsEvidenceEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1A0000000000000000101 /* OperationsEvidenceEvent.swift */; };
+		C7E1B0000000000000000001 /* BackendIdentityChallenge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B0000000000000000101 /* BackendIdentityChallenge.swift */; };
+		C7E1B2000000000000000001 /* AccountSessionActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B2000000000000000101 /* AccountSessionActor.swift */; };
+		C7E1B3000000000000000001 /* AccountLease.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B3000000000000000101 /* AccountLease.swift */; };
+		C7E1B4000000000000000001 /* AccountLifecycleCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B4000000000000000101 /* AccountLifecycleCoordinator.swift */; };
+		C7E1B5000000000000000001 /* AccountLifecycleRuntimeRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B5000000000000000101 /* AccountLifecycleRuntimeRegistry.swift */; };
+		C7E1D0000000000000000001 /* ArchiveLocalStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1D0000000000000000101 /* ArchiveLocalStorage.swift */; };
+		C7E1E0000000000000000001 /* ArchiveMediaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1E0000000000000000101 /* ArchiveMediaStore.swift */; };
+		C7E1F0000000000000000001 /* ConversationLocalStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1F0000000000000000101 /* ConversationLocalStorage.swift */; };
+		C7E200000000000000000001 /* AccountPrivateMediaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E200000000000000000101 /* AccountPrivateMediaStore.swift */; };
+		C7E300000000000000000001 /* ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E300000000000000000101 /* ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift */; };
 		D3A000000000000000000001 /* DigitalHumanRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A000000000000000000101 /* DigitalHumanRuntime.swift */; };
 		D3A000000000000000000002 /* AudioOnlyDigitalHumanRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A000000000000000000102 /* AudioOnlyDigitalHumanRuntime.swift */; };
 		D3A000000000000000000003 /* TencentDigitalHumanRuntimeStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A000000000000000000103 /* TencentDigitalHumanRuntimeStub.swift */; };
@@ -141,6 +142,15 @@
 		D3A000000000000000000008 /* VirtualmanStreamSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D3A000000000000000000108 /* VirtualmanStreamSDK.xcframework */; };
 		D3A000000000000000000009 /* VirtualmanStreamSDK.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = D3A000000000000000000108 /* VirtualmanStreamSDK.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		D3A000000000000000000010 /* TencentVirtualmanSDKBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A000000000000000000110 /* TencentVirtualmanSDKBridge.swift */; };
+		D4F000000000000000000001 /* TestDoubles.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000101 /* TestDoubles.swift */; };
+		D4F000000000000000000002 /* AccountLeaseRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000102 /* AccountLeaseRuntimeTests.swift */; };
+		D4F000000000000000000003 /* AudioOwnerLeaseModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000103 /* AudioOwnerLeaseModelTests.swift */; };
+		D4F000000000000000000004 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000105 /* XCTest.framework */; };
+		D4F000000000000000000005 /* AudioOwnerLeaseModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000106 /* AudioOwnerLeaseModel.swift */; };
+		D4F000000000000000000006 /* AudioOwnerLeaseCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000107 /* AudioOwnerLeaseCoordinator.swift */; };
+		D5F000000000000000000001 /* OwnerTruthContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000101 /* OwnerTruthContracts.swift */; };
+		D5F000000000000000000002 /* OwnerTruthRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000102 /* OwnerTruthRepository.swift */; };
+		D5F000000000000000000003 /* OwnerTruthContractsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000103 /* OwnerTruthContractsTests.swift */; };
 		E1AE33CE9FE403E3E6DC1BCF /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ABDBC7F0000C4386BB6B2C5 /* ViewController.swift */; };
 		E6D53A82564EE472B1164972 /* AIRecordingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B8C7B2C35F25BFE0EECF1DC /* AIRecordingViewController.swift */; };
 		E888BD0CCEFEF938A377A489 /* MessageCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = E42E6A033C32ECFE3C4F3D5B /* MessageCells.swift */; };
@@ -155,15 +165,6 @@
 		FE0FA33C09E4349B2A4D0028 /* TGToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7750B20E0FBEFB67B5664936 /* TGToast.swift */; };
 		FE8668AF8032B5ED0673C7D2 /* TGButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CA664A32F94C89A9CE536C1 /* TGButton.swift */; };
 		FEF405C138F6D1A6B57DD767 /* MemoryEditViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56ED8B99EE2B18AC4D06CC30 /* MemoryEditViewController.swift */; };
-		D4F000000000000000000001 /* TestDoubles.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000101 /* TestDoubles.swift */; };
-		D4F000000000000000000002 /* AccountLeaseRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000102 /* AccountLeaseRuntimeTests.swift */; };
-		D4F000000000000000000003 /* AudioOwnerLeaseModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000103 /* AudioOwnerLeaseModelTests.swift */; };
-		D4F000000000000000000004 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000105 /* XCTest.framework */; };
-		D4F000000000000000000005 /* AudioOwnerLeaseModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000106 /* AudioOwnerLeaseModel.swift */; };
-		D4F000000000000000000006 /* AudioOwnerLeaseCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000107 /* AudioOwnerLeaseCoordinator.swift */; };
-		D5F000000000000000000001 /* OwnerTruthContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000101 /* OwnerTruthContracts.swift */; };
-		D5F000000000000000000002 /* OwnerTruthRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000102 /* OwnerTruthRepository.swift */; };
-		D5F000000000000000000003 /* OwnerTruthContractsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000103 /* OwnerTruthContractsTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -212,26 +213,21 @@
 		00898E98E95E3808561BEB51 /* MemoirTTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirTTSService.swift; sourceTree = "<group>"; };
 		04D035B5F78F66A15EB0C01A /* Main.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Main.storyboard; sourceTree = "<group>"; };
 		0616F4B34725AE4D0BCCA4D9 /* KBLiteSemanticSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteSemanticSearch.swift; sourceTree = "<group>"; };
-		C7E170000000000000000101 /* KBLiteSemanticCachePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteSemanticCachePolicy.swift; sourceTree = "<group>"; };
-		C7E180000000000000000101 /* KnowledgeLocalStoragePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeLocalStoragePolicy.swift; sourceTree = "<group>"; };
 		06E17BD90B489ADAD5BB3B17 /* DreamJourney.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DreamJourney.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		07B6BA3BDEF61B3A339E10DD /* MemoirModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirModel.swift; sourceTree = "<group>"; };
+		094C9CCC8D3F397B945189BE /* Pods-DreamJourney.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourney.debug.xcconfig"; path = "Target Support Files/Pods-DreamJourney/Pods-DreamJourney.debug.xcconfig"; sourceTree = "<group>"; };
 		0E34D9D2B8943EBBDECBC489 /* MemoirAudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirAudioPlayer.swift; sourceTree = "<group>"; };
 		101D4CAEA6C25FCE0B7B8C8A /* BridgingHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BridgingHeader.h; sourceTree = "<group>"; };
 		165FB245CE23B3EF2C90C799 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
-		C7E1B2000000000000000101 /* AccountSessionActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSessionActor.swift; sourceTree = "<group>"; };
-		C7E1B3000000000000000101 /* AccountLease.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountLease.swift; sourceTree = "<group>"; };
-		C7E1B4000000000000000101 /* AccountLifecycleCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountLifecycleCoordinator.swift; sourceTree = "<group>"; };
-		C7E1B5000000000000000101 /* AccountLifecycleRuntimeRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountLifecycleRuntimeRegistry.swift; sourceTree = "<group>"; };
-		16DC1997EF2F7459C92D09EF /* Pods-DreamJourney.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourney.release.xcconfig"; path = "Target Support Files/Pods-DreamJourney/Pods-DreamJourney.release.xcconfig"; sourceTree = "<group>"; };
 		1EC2B6D3AE2C256785CCE388 /* MemoryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryModel.swift; sourceTree = "<group>"; };
 		2A0648C7E87957BF18381DE1 /* DHLiveMini.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = DHLiveMini.js; sourceTree = "<group>"; };
+		3246BCB463896E2DDA5F51E9 /* Pods-DreamJourney.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourney.release.xcconfig"; path = "Target Support Files/Pods-DreamJourney/Pods-DreamJourney.release.xcconfig"; sourceTree = "<group>"; };
 		33790F6FDDECF7ADE231C869 /* VoiceCloneService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCloneService.swift; sourceTree = "<group>"; };
+		36FE9228A5A9C6E02B66A12C /* Pods-DreamJourneyTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourneyTests.debug.xcconfig"; path = "Target Support Files/Pods-DreamJourneyTests/Pods-DreamJourneyTests.debug.xcconfig"; sourceTree = "<group>"; };
+		38C3AF07FF62B21502A002E0 /* Pods_DreamJourneyTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_DreamJourneyTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		392F026F981C3221600209E7 /* FeatureFlagService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlagService.swift; sourceTree = "<group>"; };
-		C7E190000000000000000101 /* ReleasePolicyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleasePolicyStore.swift; sourceTree = "<group>"; };
-		C7E190000000000000000102 /* RuntimeCapabilitySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeCapabilitySnapshot.swift; sourceTree = "<group>"; };
-		C7E1A0000000000000000101 /* OperationsEvidenceEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationsEvidenceEvent.swift; sourceTree = "<group>"; };
 		3CCF5FAEB2B1690C0FB7E56E /* MicrophonePermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophonePermissionManager.swift; sourceTree = "<group>"; };
+		3E403D09145442D1B647F87B /* KnowledgeSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeSyncCoordinator.swift; sourceTree = "<group>"; };
 		41B3D2BD9BE7DFE0AABF34F1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		47D8F3BB4380923E82E24664 /* DJComponentFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DJComponentFactory.swift; sourceTree = "<group>"; };
 		4B70B14E8FFEE31DDE6BAB7B /* pako.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = pako.min.js; sourceTree = "<group>"; };
@@ -239,15 +235,6 @@
 		5628E3908BA5F87F7FC6373B /* KBLiteGapDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteGapDetector.swift; sourceTree = "<group>"; };
 		56ED8B99EE2B18AC4D06CC30 /* MemoryEditViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryEditViewController.swift; sourceTree = "<group>"; };
 		576656BFF57471DCF9B231CB /* KBLiteManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteManager.swift; sourceTree = "<group>"; };
-		3E403D09145442D1B647F87B /* KnowledgeSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeSyncCoordinator.swift; sourceTree = "<group>"; };
-		C7E13A110000000000000001 /* KnowledgeThreeWayMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeThreeWayMerge.swift; sourceTree = "<group>"; };
-		C7E14A110000000000000101 /* KnowledgeGenerationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeGenerationPolicy.swift; sourceTree = "<group>"; };
-		C7E14A110000000000000102 /* EchoKnowledgeContextPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoKnowledgeContextPolicy.swift; sourceTree = "<group>"; };
-		C7E150000000000000000101 /* KnowledgeWidgetPrivacyPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeWidgetPrivacyPolicy.swift; sourceTree = "<group>"; };
-		C7E150000000000000000102 /* KnowledgeWidgetSnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeWidgetSnapshotStore.swift; sourceTree = "<group>"; };
-		C7E150000000000000000103 /* WidgetKnowledgeSnapshotReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetKnowledgeSnapshotReader.swift; sourceTree = "<group>"; };
-		C7E150000000000000000104 /* DreamJourneyWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DreamJourneyWidget.entitlements; sourceTree = "<group>"; };
-		C7E160000000000000000101 /* FamilyRelationshipAuthorizationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyRelationshipAuthorizationPolicy.swift; sourceTree = "<group>"; };
 		57FC3EFBF8FAC9ABFA05E1C8 /* 01.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = 01.mp4; sourceTree = "<group>"; };
 		5ABDBC7F0000C4386BB6B2C5 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		5B20338C4C40695560A52B81 /* FamilyRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyRepository.swift; sourceTree = "<group>"; };
@@ -284,21 +271,15 @@
 		9CA664A32F94C89A9CE536C1 /* TGButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TGButton.swift; sourceTree = "<group>"; };
 		9E6B98F4607CB693F12830D9 /* DeepSeekService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSeekService.swift; sourceTree = "<group>"; };
 		A99960BA8CC38BCA98CB98F8 /* KnowledgeBaseViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeBaseViewController.swift; sourceTree = "<group>"; };
+		A9F000000000000000000101 /* BackendAuthSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendAuthSessionStore.swift; sourceTree = "<group>"; };
 		AA3777B38C40C14928088B38 /* MiniMateLoader.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = MiniMateLoader.js; sourceTree = "<group>"; };
 		AB6F020939B8B3A55A3A9013 /* LoginViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewController.swift; sourceTree = "<group>"; };
 		AE23737BEAD63674ABA24223 /* MemoirGenerationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirGenerationCard.swift; sourceTree = "<group>"; };
 		B1B000000000000000000001 /* MemoryArchiveItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveItem.swift; sourceTree = "<group>"; };
-		C7E1D0000000000000000101 /* ArchiveLocalStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveLocalStorage.swift; sourceTree = "<group>"; };
-		C7E1E0000000000000000101 /* ArchiveMediaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveMediaStore.swift; sourceTree = "<group>"; };
-		C7E1F0000000000000000101 /* ConversationLocalStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLocalStorage.swift; sourceTree = "<group>"; };
-		C7E200000000000000000101 /* AccountPrivateMediaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountPrivateMediaStore.swift; sourceTree = "<group>"; };
-		C7E300000000000000000101 /* ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift; sourceTree = "<group>"; };
 		B1B000000000000000000002 /* MemoryArchiveRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveRepository.swift; sourceTree = "<group>"; };
 		B1B000000000000000000003 /* MemoryArchiveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveViewController.swift; sourceTree = "<group>"; };
-		B1B000000000000000000050 /* InAppMessageCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InAppMessageCenter.swift; sourceTree = "<group>"; };
 		B1B000000000000000000004 /* EchoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoViewModel.swift; sourceTree = "<group>"; };
 		B1B000000000000000000005 /* EchoViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoViewController.swift; sourceTree = "<group>"; };
-		B1B000000000000000000051 /* EchoSafetyPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoSafetyPolicy.swift; sourceTree = "<group>"; };
 		B1B000000000000000000006 /* ProfileCareModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCareModels.swift; sourceTree = "<group>"; };
 		B1B000000000000000000007 /* ProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewController.swift; sourceTree = "<group>"; };
 		B1B000000000000000000008 /* MemoryArchiveCreationOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveCreationOption.swift; sourceTree = "<group>"; };
@@ -323,6 +304,8 @@
 		B1B000000000000000000047 /* DigitalHumanAudioLevelMeter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanAudioLevelMeter.swift; sourceTree = "<group>"; };
 		B1B000000000000000000048 /* DigitalHumanLipSyncTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanLipSyncTimeline.swift; sourceTree = "<group>"; };
 		B1B000000000000000000049 /* DigitalHumanConversationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanConversationCoordinator.swift; sourceTree = "<group>"; };
+		B1B000000000000000000050 /* InAppMessageCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InAppMessageCenter.swift; sourceTree = "<group>"; };
+		B1B000000000000000000051 /* EchoSafetyPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoSafetyPolicy.swift; sourceTree = "<group>"; };
 		B1BA39C954DE93A9C6B92546 /* FamilyCircleViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyCircleViewController.swift; sourceTree = "<group>"; };
 		B274A4971D76C1D3BFEE4E9A /* WarmTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarmTabBarController.swift; sourceTree = "<group>"; };
 		B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryRepository.swift; sourceTree = "<group>"; };
@@ -332,8 +315,30 @@
 		BFEC7EA9CB8D7181EFC70161 /* MemoirService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirService.swift; sourceTree = "<group>"; };
 		C0BBE3B2755905EC665443B5 /* UIViewController+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIViewController+Extensions.swift"; sourceTree = "<group>"; };
 		C31B66E6C099EABF318FC693 /* DreamJourneyWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = DreamJourneyWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C7E13A110000000000000001 /* KnowledgeThreeWayMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeThreeWayMerge.swift; sourceTree = "<group>"; };
+		C7E14A110000000000000101 /* KnowledgeGenerationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeGenerationPolicy.swift; sourceTree = "<group>"; };
+		C7E14A110000000000000102 /* EchoKnowledgeContextPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoKnowledgeContextPolicy.swift; sourceTree = "<group>"; };
+		C7E150000000000000000101 /* KnowledgeWidgetPrivacyPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeWidgetPrivacyPolicy.swift; sourceTree = "<group>"; };
+		C7E150000000000000000102 /* KnowledgeWidgetSnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeWidgetSnapshotStore.swift; sourceTree = "<group>"; };
+		C7E150000000000000000103 /* WidgetKnowledgeSnapshotReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetKnowledgeSnapshotReader.swift; sourceTree = "<group>"; };
+		C7E150000000000000000104 /* DreamJourneyWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DreamJourneyWidget.entitlements; sourceTree = "<group>"; };
+		C7E160000000000000000101 /* FamilyRelationshipAuthorizationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyRelationshipAuthorizationPolicy.swift; sourceTree = "<group>"; };
+		C7E170000000000000000101 /* KBLiteSemanticCachePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteSemanticCachePolicy.swift; sourceTree = "<group>"; };
+		C7E180000000000000000101 /* KnowledgeLocalStoragePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeLocalStoragePolicy.swift; sourceTree = "<group>"; };
+		C7E190000000000000000101 /* ReleasePolicyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleasePolicyStore.swift; sourceTree = "<group>"; };
+		C7E190000000000000000102 /* RuntimeCapabilitySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeCapabilitySnapshot.swift; sourceTree = "<group>"; };
+		C7E1A0000000000000000101 /* OperationsEvidenceEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationsEvidenceEvent.swift; sourceTree = "<group>"; };
+		C7E1B0000000000000000101 /* BackendIdentityChallenge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendIdentityChallenge.swift; sourceTree = "<group>"; };
+		C7E1B2000000000000000101 /* AccountSessionActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSessionActor.swift; sourceTree = "<group>"; };
+		C7E1B3000000000000000101 /* AccountLease.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountLease.swift; sourceTree = "<group>"; };
+		C7E1B4000000000000000101 /* AccountLifecycleCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountLifecycleCoordinator.swift; sourceTree = "<group>"; };
+		C7E1B5000000000000000101 /* AccountLifecycleRuntimeRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountLifecycleRuntimeRegistry.swift; sourceTree = "<group>"; };
+		C7E1D0000000000000000101 /* ArchiveLocalStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveLocalStorage.swift; sourceTree = "<group>"; };
+		C7E1E0000000000000000101 /* ArchiveMediaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveMediaStore.swift; sourceTree = "<group>"; };
+		C7E1F0000000000000000101 /* ConversationLocalStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLocalStorage.swift; sourceTree = "<group>"; };
+		C7E200000000000000000101 /* AccountPrivateMediaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountPrivateMediaStore.swift; sourceTree = "<group>"; };
+		C7E300000000000000000101 /* ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift; sourceTree = "<group>"; };
 		C9115FEF531F2DA00EDE4969 /* bs_texture_halfFace.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = bs_texture_halfFace.png; sourceTree = "<group>"; };
-		CCCEC476950937337FC59A5C /* Pods-DreamJourney.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourney.debug.xcconfig"; path = "Target Support Files/Pods-DreamJourney/Pods-DreamJourney.debug.xcconfig"; sourceTree = "<group>"; };
 		D1D000000000000000000101 /* PushDeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushDeviceTokenStore.swift; sourceTree = "<group>"; };
 		D1D000000000000000000202 /* DreamJourney.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DreamJourney.entitlements; sourceTree = "<group>"; };
 		D2D000000000000000000046 /* DigitalHumanLive.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = DigitalHumanLive.html; sourceTree = "<group>"; };
@@ -348,21 +353,6 @@
 		D3A000000000000000000110 /* TencentVirtualmanSDKBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TencentVirtualmanSDKBridge.swift; sourceTree = "<group>"; };
 		D4566C37A3A020CABC4D249A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D4C24A29B21F6E3786F14398 /* MapFootprintViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapFootprintViewController.swift; sourceTree = "<group>"; };
-		D6AC678D507A1494FFBFDAA0 /* SharedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedModels.swift; sourceTree = "<group>"; };
-		DEB0707389E5BC6A57EAB3BD /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
-		DF3727699437781613AA5CB5 /* OpenAvatarChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAvatarChatService.swift; sourceTree = "<group>"; };
-		E42E6A033C32ECFE3C4F3D5B /* MessageCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCells.swift; sourceTree = "<group>"; };
-		E4571331D3ED0551FB8C8DE7 /* TGLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TGLoadingView.swift; sourceTree = "<group>"; };
-		E5C4A811788E64351DDF40A2 /* KBGraphEdge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBGraphEdge.swift; sourceTree = "<group>"; };
-		EA5EF2310BF928C7F4BFADD7 /* HomeHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeHeaderView.swift; sourceTree = "<group>"; };
-		EA7025362579F4B59C5376E8 /* KBLitePDFExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLitePDFExporter.swift; sourceTree = "<group>"; };
-		EE368D9CDFA77A1F03C66806 /* WarmMemoryAnnotationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarmMemoryAnnotationView.swift; sourceTree = "<group>"; };
-		EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DreamJourneyBackendClient.swift; sourceTree = "<group>"; };
-		A9F000000000000000000101 /* BackendAuthSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendAuthSessionStore.swift; sourceTree = "<group>"; };
-		C7E1B0000000000000000101 /* BackendIdentityChallenge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendIdentityChallenge.swift; sourceTree = "<group>"; };
-		F000C9191CDE42D8FB0D946A /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		F6C5E6FFF33ED30F772F732A /* Coordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Coordinator.swift; sourceTree = "<group>"; };
-		FF7E1F392A912E6A3B365A8C /* TodayInHistoryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayInHistoryProvider.swift; sourceTree = "<group>"; };
 		D4F000000000000000000101 /* TestDoubles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestDoubles.swift; sourceTree = "<group>"; };
 		D4F000000000000000000102 /* AccountLeaseRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountLeaseRuntimeTests.swift; sourceTree = "<group>"; };
 		D4F000000000000000000103 /* AudioOwnerLeaseModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOwnerLeaseModelTests.swift; sourceTree = "<group>"; };
@@ -373,6 +363,20 @@
 		D5F000000000000000000101 /* OwnerTruthContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthContracts.swift; sourceTree = "<group>"; };
 		D5F000000000000000000102 /* OwnerTruthRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthRepository.swift; sourceTree = "<group>"; };
 		D5F000000000000000000103 /* OwnerTruthContractsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthContractsTests.swift; sourceTree = "<group>"; };
+		D6AC678D507A1494FFBFDAA0 /* SharedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedModels.swift; sourceTree = "<group>"; };
+		DEB0707389E5BC6A57EAB3BD /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		DF3727699437781613AA5CB5 /* OpenAvatarChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAvatarChatService.swift; sourceTree = "<group>"; };
+		E42E6A033C32ECFE3C4F3D5B /* MessageCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCells.swift; sourceTree = "<group>"; };
+		E4571331D3ED0551FB8C8DE7 /* TGLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TGLoadingView.swift; sourceTree = "<group>"; };
+		E5C4A811788E64351DDF40A2 /* KBGraphEdge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBGraphEdge.swift; sourceTree = "<group>"; };
+		EA5EF2310BF928C7F4BFADD7 /* HomeHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeHeaderView.swift; sourceTree = "<group>"; };
+		EA7025362579F4B59C5376E8 /* KBLitePDFExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLitePDFExporter.swift; sourceTree = "<group>"; };
+		EB3AF777329870FF273D2992 /* Pods-DreamJourneyTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DreamJourneyTests.release.xcconfig"; path = "Target Support Files/Pods-DreamJourneyTests/Pods-DreamJourneyTests.release.xcconfig"; sourceTree = "<group>"; };
+		EE368D9CDFA77A1F03C66806 /* WarmMemoryAnnotationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarmMemoryAnnotationView.swift; sourceTree = "<group>"; };
+		EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DreamJourneyBackendClient.swift; sourceTree = "<group>"; };
+		F000C9191CDE42D8FB0D946A /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		F6C5E6FFF33ED30F772F732A /* Coordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Coordinator.swift; sourceTree = "<group>"; };
+		FF7E1F392A912E6A3B365A8C /* TodayInHistoryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayInHistoryProvider.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -390,6 +394,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D4F000000000000000000004 /* XCTest.framework in Frameworks */,
+				A33CD0C2C00B4D4844763CD8 /* Pods_DreamJourneyTests.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -527,9 +532,10 @@
 		43C21E05558EE05B32A77B17 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				D4F000000000000000000105 /* XCTest.framework */,
 				D3A000000000000000000108 /* VirtualmanStreamSDK.xcframework */,
 				6F92F68CA0C355AE2B34198A /* Pods_DreamJourney.framework */,
-				D4F000000000000000000105 /* XCTest.framework */,
+				38C3AF07FF62B21502A002E0 /* Pods_DreamJourneyTests.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -668,8 +674,10 @@
 		7EAFE3F5C63985A98B874F53 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				CCCEC476950937337FC59A5C /* Pods-DreamJourney.debug.xcconfig */,
-				16DC1997EF2F7459C92D09EF /* Pods-DreamJourney.release.xcconfig */,
+				094C9CCC8D3F397B945189BE /* Pods-DreamJourney.debug.xcconfig */,
+				3246BCB463896E2DDA5F51E9 /* Pods-DreamJourney.release.xcconfig */,
+				36FE9228A5A9C6E02B66A12C /* Pods-DreamJourneyTests.debug.xcconfig */,
+				EB3AF777329870FF273D2992 /* Pods-DreamJourneyTests.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -694,11 +702,11 @@
 		A353AEB5FE48C1961C1D7DF3 /* App */ = {
 			isa = PBXGroup;
 			children = (
-				D4F000000000000000000106 /* AudioOwnerLeaseModel.swift */,
-				D4F000000000000000000107 /* AudioOwnerLeaseCoordinator.swift */,
 				C7E1B4000000000000000101 /* AccountLifecycleCoordinator.swift */,
 				C7E1B5000000000000000101 /* AccountLifecycleRuntimeRegistry.swift */,
 				C7E1B3000000000000000101 /* AccountLease.swift */,
+				D4F000000000000000000106 /* AudioOwnerLeaseModel.swift */,
+				D4F000000000000000000107 /* AudioOwnerLeaseCoordinator.swift */,
 				C7E1B2000000000000000101 /* AccountSessionActor.swift */,
 				165FB245CE23B3EF2C90C799 /* AppCoordinator.swift */,
 				8D7A1AAB6E1338AE2A2C4F75 /* AuthCoordinator.swift */,
@@ -760,8 +768,8 @@
 		C58D179B05A500658642EB93 = {
 			isa = PBXGroup;
 			children = (
-				D4F000000000000000000201 /* DreamJourneyTests */,
 				F9A16ACB58DF276F2BF39DE4 /* DreamJourney */,
+				D4F000000000000000000201 /* DreamJourneyTests */,
 				697A85CBA95E64BD34FC210E /* DreamJourneyWidget */,
 				7DE936DB591FFBAD8E9E50A5 /* Products */,
 				7EAFE3F5C63985A98B874F53 /* Pods */,
@@ -782,32 +790,6 @@
 				D3A000000000000000000110 /* TencentVirtualmanSDKBridge.swift */,
 			);
 			path = DigitalHuman;
-			sourceTree = "<group>";
-		};
-		F9A16ACB58DF276F2BF39DE4 /* DreamJourney */ = {
-			isa = PBXGroup;
-			children = (
-				41B3D2BD9BE7DFE0AABF34F1 /* Assets.xcassets */,
-				D1D000000000000000000202 /* DreamJourney.entitlements */,
-				0EF4341D967D06AAD14B81E4 /* Resources */,
-				55AC4B70337CF0A2927D0196 /* Sources */,
-			);
-			path = DreamJourney;
-			sourceTree = "<group>";
-		};
-		FD9C177C492E4A7005C20F4C /* web */ = {
-			isa = PBXGroup;
-			children = (
-				2A0648C7E87957BF18381DE1 /* DHLiveMini.js */,
-				BD7318F07FAEE0966045F115 /* DHLiveMini.wasm */,
-				D2D000000000000000000046 /* DigitalHumanLive.html */,
-				B918EB99B79AE43472DACB6A /* MiniLive2.js */,
-				AA3777B38C40C14928088B38 /* MiniMateLoader.js */,
-				4B70B14E8FFEE31DDE6BAB7B /* pako.min.js */,
-				5B1F3C5CF83899C7FC773A09 /* assets */,
-				156CBBC0D562C5D46752C0D0 /* common */,
-			);
-			path = web;
 			sourceTree = "<group>";
 		};
 		D4F000000000000000000201 /* DreamJourneyTests */ = {
@@ -836,6 +818,32 @@
 				D5F000000000000000000201 /* OwnerTruth */,
 			);
 			path = Domain;
+			sourceTree = "<group>";
+		};
+		F9A16ACB58DF276F2BF39DE4 /* DreamJourney */ = {
+			isa = PBXGroup;
+			children = (
+				41B3D2BD9BE7DFE0AABF34F1 /* Assets.xcassets */,
+				D1D000000000000000000202 /* DreamJourney.entitlements */,
+				0EF4341D967D06AAD14B81E4 /* Resources */,
+				55AC4B70337CF0A2927D0196 /* Sources */,
+			);
+			path = DreamJourney;
+			sourceTree = "<group>";
+		};
+		FD9C177C492E4A7005C20F4C /* web */ = {
+			isa = PBXGroup;
+			children = (
+				2A0648C7E87957BF18381DE1 /* DHLiveMini.js */,
+				BD7318F07FAEE0966045F115 /* DHLiveMini.wasm */,
+				D2D000000000000000000046 /* DigitalHumanLive.html */,
+				B918EB99B79AE43472DACB6A /* MiniLive2.js */,
+				AA3777B38C40C14928088B38 /* MiniMateLoader.js */,
+				4B70B14E8FFEE31DDE6BAB7B /* pako.min.js */,
+				5B1F3C5CF83899C7FC773A09 /* assets */,
+				156CBBC0D562C5D46752C0D0 /* common */,
+			);
+			path = web;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -884,6 +892,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = D4F000000000000000000603 /* Build configuration list for PBXNativeTarget "DreamJourneyTests" */;
 			buildPhases = (
+				413B5286B89AB9ACBB0DF78B /* [CP] Check Pods Manifest.lock */,
 				D4F000000000000000000301 /* Sources */,
 				D4F000000000000000000302 /* Frameworks */,
 			);
@@ -906,15 +915,15 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-				D4F000000000000000000401 = {
-					CreatedOnToolsVersion = 16.4;
-					TestTargetID = AD8A0F107BD0211216A04FE4;
-				};
 					14D813E1BAF7F066DE226016 = {
 						ProvisioningStyle = Automatic;
 					};
 					AD8A0F107BD0211216A04FE4 = {
 						ProvisioningStyle = Automatic;
+					};
+					D4F000000000000000000401 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = AD8A0F107BD0211216A04FE4;
 					};
 				};
 			};
@@ -962,6 +971,28 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		413B5286B89AB9ACBB0DF78B /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-DreamJourneyTests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
 		7D834CCB6EB51CA3F9AEBD44 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -1060,14 +1091,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D4F000000000000000000005 /* AudioOwnerLeaseModel.swift in Sources */,
-				D4F000000000000000000006 /* AudioOwnerLeaseCoordinator.swift in Sources */,
-				D5F000000000000000000001 /* OwnerTruthContracts.swift in Sources */,
-				D5F000000000000000000002 /* OwnerTruthRepository.swift in Sources */,
 				E6D53A82564EE472B1164972 /* AIRecordingViewController.swift in Sources */,
 				C7E1B4000000000000000001 /* AccountLifecycleCoordinator.swift in Sources */,
 				C7E1B5000000000000000001 /* AccountLifecycleRuntimeRegistry.swift in Sources */,
 				C7E1B3000000000000000001 /* AccountLease.swift in Sources */,
+				D4F000000000000000000005 /* AudioOwnerLeaseModel.swift in Sources */,
+				D4F000000000000000000006 /* AudioOwnerLeaseCoordinator.swift in Sources */,
+				D5F000000000000000000001 /* OwnerTruthContracts.swift in Sources */,
+				D5F000000000000000000002 /* OwnerTruthRepository.swift in Sources */,
 				C7E1B2000000000000000001 /* AccountSessionActor.swift in Sources */,
 				502F2FC9318D2718A929EFD5 /* AppCoordinator.swift in Sources */,
 				885C95FBDAA6BCEA04BEC2F6 /* AppDelegate.swift in Sources */,
@@ -1305,12 +1336,12 @@
 		};
 		2222E1245F8E900D1C044CB8 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = CCCEC476950937337FC59A5C /* Pods-DreamJourney.debug.xcconfig */;
+			baseConfigurationReference = 094C9CCC8D3F397B945189BE /* Pods-DreamJourney.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_ENTITLEMENTS = DreamJourney/DreamJourney.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "$(DREAMJOURNEY_DEVELOPMENT_TEAM)";
 				DREAMJOURNEY_APP_GROUP_IDENTIFIER = group.com.dreamjourney.shared;
@@ -1356,12 +1387,12 @@
 		};
 		C8DD16459E3E0B3840AE970F /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 16DC1997EF2F7459C92D09EF /* Pods-DreamJourney.release.xcconfig */;
+			baseConfigurationReference = 3246BCB463896E2DDA5F51E9 /* Pods-DreamJourney.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_ENTITLEMENTS = DreamJourney/DreamJourney.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "$(DREAMJOURNEY_DEVELOPMENT_TEAM)";
 				DREAMJOURNEY_APP_GROUP_IDENTIFIER = group.com.dreamjourney.shared;
@@ -1449,7 +1480,7 @@
 		};
 		D4F000000000000000000601 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = CCCEC476950937337FC59A5C /* Pods-DreamJourney.debug.xcconfig */;
+			baseConfigurationReference = 36FE9228A5A9C6E02B66A12C /* Pods-DreamJourneyTests.debug.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = NO;
@@ -1460,10 +1491,11 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.gaominge.dreamjourney.app.tests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.gaominge.dreamjourney.app.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DreamJourney.app/DreamJourney";
@@ -1473,7 +1505,7 @@
 		};
 		D4F000000000000000000602 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 16DC1997EF2F7459C92D09EF /* Pods-DreamJourney.release.xcconfig */;
+			baseConfigurationReference = EB3AF777329870FF273D2992 /* Pods-DreamJourneyTests.release.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = NO;
@@ -1484,10 +1516,11 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.gaominge.dreamjourney.app.tests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.gaominge.dreamjourney.app.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DreamJourney.app/DreamJourney";

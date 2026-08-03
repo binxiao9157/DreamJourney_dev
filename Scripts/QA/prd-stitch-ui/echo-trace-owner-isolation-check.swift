@@ -28,6 +28,7 @@ func ordered(_ first: String, before second: String, in source: String, message:
 let backend = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let userManager = read("DreamJourney/Sources/Services/UserManager.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
+let lifecycleRegistry = read("DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift")
 
 for required in [
     "import CryptoKit",
@@ -97,19 +98,27 @@ require(echo.contains("requestOwnerUserId: requestOwnerUserId"), "digital-human 
 require(echo.contains("activeOwnerUserId == EchoTraceOwnerScope.normalizedOwnerUserId(requestOwnerUserId)"), "digital-human callbacks must reject stale account responses")
 require(echo.contains("activeOwnerUserId == EchoTraceOwnerScope.normalizedOwnerUserId(userId)"), "voice synthesis callbacks must reject stale account responses")
 
-require(userManager.contains("EchoTraceAccountLifecycle.activate(ownerUserId: currentUser?.id)"), "cold start must activate restored owner")
+require(
+    userManager.contains("func markPrivateAccessValidated(session: BackendAuthSessionContract) -> Bool") &&
+        userManager.contains("session.isPrivateAccessEligible(for: userId)") &&
+        userManager.contains("EchoTraceAccountLifecycle.activate(ownerUserId: userId)"),
+    "a restored owner must be activated only after private session validation"
+)
 require(userManager.contains("EchoTraceAccountLifecycle.switchOwner(from: previousOwnerUserId, to: user.id)"), "login must switch and clean old owner")
-require(userManager.contains("EchoTraceAccountLifecycle.invalidateAndClear(ownerUserId: ownerUserId)"), "logout must invalidate and clean owner stores")
+require(
+    userManager.contains("AccountLifecycleTransitionController.shared.perform(") &&
+        userManager.contains("event: .logout"),
+    "logout must enter the account lifecycle teardown flow"
+)
+require(
+    lifecycleRegistry.contains("teardownQAEvidence") &&
+        lifecycleRegistry.contains("EchoTraceAccountLifecycle.invalidateAndClear(") &&
+        lifecycleRegistry.contains("ownerUserId: context.oldAccountLease?.subjectId"),
+    "account lifecycle teardown must invalidate and clean Echo owner stores"
+)
 require(userManager.contains("private let accountStateLock = NSRecursiveLock()"), "account transitions must be serialized")
 require(userManager.contains("private var storedCurrentUser: UserModel?"), "current account reads must share the transition lock")
 require(userManager.contains("expectedUserId == nil || expectedUserId == user.id"), "profile saves captured before an account switch must not mutate the new account")
-ordered(
-    "EchoTraceAccountLifecycle.invalidateAndClear(ownerUserId: ownerUserId)",
-    before: "DreamJourneyBackendClient.shared.logoutAuthSession()",
-    in: userManager,
-    message: "logout must invalidate Echo owner scope before other logout work"
-)
-
 for required in [
     "EchoTraceStore.shared.record(record, ownerUserId:",
     "EchoRuntimeDiagnosticsStore.shared.record(snapshot, ownerUserId:",

@@ -151,7 +151,7 @@ for forbidden in [
 for required in [
     "VoiceCloneProfileAPITests",
     "test_voice_clone_profile_contract_requires_authorization_and_persists_lifecycle",
-    "test_voice_clone_profile_persists_provider_failure_message",
+    "test_voice_clone_profile_persists_provider_failure_code_without_raw_message",
 ] {
     assertContains(backendTests, required, "backend tests should cover voice clone API \(required)")
 }
@@ -201,7 +201,8 @@ for forbidden in [
 assertNotContains(voiceService, "\"X-Api-Key\":", "iOS VoiceCloneService must not send VolcEngine API headers directly")
 
 for required in [
-    "DreamJourneyBackendClient.shared.requestVoiceCloneSynthesis",
+    "voiceCloneSynthesisClient: VoiceCloneSynthesisClientPort = DreamJourneyBackendClient.shared",
+    "voiceCloneSynthesisClient.requestVoiceCloneSynthesis",
     "synthesis.audioData",
 ] {
     assertContains(memoirTTSService, required, "MemoirTTSService should use backend synthesis \(required)")

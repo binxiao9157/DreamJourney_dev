@@ -72,17 +72,17 @@ require(
     "Echo cloned voice provider failure must not silently fall back to Tencent default text voice"
 )
 require(
-    echo.contains("复刻声音生成失败") &&
-        voiceClonePCMDriveBody.contains("voice-clone PCM-drive request failed; no default voice fallback") &&
-        voiceClonePCMDriveBody.contains("voice-clone PCM-drive incompatible; no default voice fallback"),
+    echo.contains("handleVoiceClonePCMDriveFailureWithoutDefaultVoice") &&
+        echo.contains("复刻声音生成失败，未切换默认音色"),
     "Echo should surface cloned voice synthesis failure instead of default voice fallback"
 )
 require(
-        voiceClonePCMDriveBody.contains("providerLogId=\\(synthesis.providerLogId ?? \"none\")") &&
-        voiceClonePCMDriveBody.contains("outputMode=\\(synthesis.outputMode ?? \"none\")") &&
-        voiceClonePCMDriveBody.contains("durationSeconds=\\(synthesis.durationSeconds ?? 0)") &&
-        voiceClonePCMDriveBody.contains("\\(self.currentEchoAudioOwner.logLabel)") &&
-        echo.contains("var logLabel: String"),
+        voiceClonePCMDriveBody.contains("self.lastVoiceSynthesisEvidenceSummary = EchoVoiceSynthesisEvidenceSummary(") &&
+        voiceClonePCMDriveBody.contains("\"providerLog\": synthesis.providerLogId") &&
+        voiceClonePCMDriveBody.contains("\"outputMode\": synthesis.outputMode ?? \"none\"") &&
+        echo.contains("\"voiceProfileIdHash\": PrivacySafeDiagnostics.correlationHash(voiceProfileId)") &&
+        echo.contains("\"providerLogIdHash\": PrivacySafeDiagnostics.correlationHash(providerLogId)") &&
+        echo.contains("\"audioOwner\": snapshot.audioOwner"),
     "Echo QA logs should include voiceProfileId, outputMode, providerLogId, and audioOwner"
 )
 require(

@@ -79,7 +79,9 @@ for required in [
 
 for required in [
     "DreamJourneyBackendClient.shared.fetchFamilyMembers",
-    "replaceRemoteMembers(remoteMembers, ownerUserId: requestedOwner)",
+    "replaceRemoteMembers(",
+    "accountLease: accountLease",
+    "isCurrentAccountLease(",
     "isOwnedBackendRecord",
 ] {
     assertContains(familyRepository, required, "iOS FamilyRepository should consume typed family contract \(required)")

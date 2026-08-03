@@ -25,6 +25,7 @@ func require(_ condition: Bool, _ message: String) {
 let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 let uiqaSmoke = read("Scripts/QA/prd-stitch-ui/run-echo-trace-evidence-package-export-smoke.sh")
@@ -92,6 +93,17 @@ for required in [
 for required in [
     "DJRunEchoTraceEvidencePackageExportSmoke",
     "DJRunEchoTraceEvidencePackagePanelExportSmoke",
+    "case echoTraceEvidencePackageExportSmoke",
+    "case echoTraceEvidencePackagePanelExportSmoke",
+    ".echoTraceEvidencePackageExportSmoke",
+    ".echoTraceEvidencePackagePanelExportSmoke",
+] {
+    require(featureFlags.contains(required), "evidence package UIQA smoke should stay centrally registered: \(required)")
+}
+
+for required in [
+    "case .echoTraceEvidencePackageExportSmoke:",
+    "case .echoTraceEvidencePackagePanelExportSmoke:",
     "runEchoTraceEvidencePackageExportSmoke",
     "runEchoTraceEvidencePackagePanelExportSmoke",
     "writeEchoTraceEvidencePackageExportSmokeResult",

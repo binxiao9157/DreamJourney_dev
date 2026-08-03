@@ -48,6 +48,8 @@ let legal = read("DreamJourney/Sources/Modules/Profile/ProfileLegalViewControlle
 let matrix = read("docs/superpowers/status/2026-06-17-release-feature-matrix.md")
 let infoPlist = read("DreamJourney/Resources/Info.plist")
 let sceneDelegate = read("DreamJourney/Sources/SceneDelegate.swift")
+let appCoordinator = read("DreamJourney/Sources/App/AppCoordinator.swift")
+let accountLease = read("DreamJourney/Sources/App/AccountLease.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 
 let ownerCore: Set<String> = [
@@ -147,7 +149,21 @@ for argument in ["DJEnableArchiveHiddenBranches", "DJEnableProfileHiddenBranches
 }
 assertNotContains(matrix, "enabled by default", "matrix must not preserve the superseded public digital-human policy")
 assertNotContains(infoPlist, "CFBundleURLTypes", "Closed Pilot must not register hidden deep links")
-assertNotContains(sceneDelegate, "openURLContexts", "Closed Pilot must not handle hidden deep links")
+assertContains(
+    sceneDelegate,
+    "receiveNotificationRuntimeDeepLink(context.url)",
+    "external URL ingress must only forward to the notification runtime router"
+)
+assertContains(
+    appCoordinator,
+    "notificationRuntimeRouteInbox.ingest(deepLinkURL: url)",
+    "deep-link ingress must be validated by NotificationRuntimeRouteInbox"
+)
+assertContains(
+    accountLease,
+    "payload.matches(accountLease)",
+    "deep-link payloads must be account-lease scoped before routing"
+)
 assertContains(releaseRegression, "RUN_PUBLIC_RELEASE_SCOPE_GATE", "release regression must expose the combined public-scope gate")
 
 print("Release feature matrix checks passed")

@@ -22,6 +22,7 @@ let detail = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewC
 let repository = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift")
 let factory = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItemFactory.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let mediaEchoSmokeRunner = read("Scripts/QA/prd-stitch-ui/run-archive-media-echo-context-smoke.sh")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
@@ -85,6 +86,14 @@ for required in [
 
 for required in [
     "DJRunArchiveMediaEchoContextSmoke",
+    "case archiveMediaEchoContextSmoke",
+    ".archiveMediaEchoContextSmoke",
+] {
+    assertContains(featureFlags, required, "Archive media -> Echo UIQA smoke should stay centrally registered \(required)")
+}
+
+for required in [
+    "case .archiveMediaEchoContextSmoke:",
     "seedArchiveMediaEchoContext",
     "runArchiveMediaEchoContextSmoke",
     "writeArchiveMediaEchoContextSmokeResult",

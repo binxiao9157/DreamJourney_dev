@@ -1,0 +1,326 @@
+# Complex Problem Ledger
+
+Ledger: L20260712-003917
+Schema: v6
+Root: P000 - Task 27：DreamJourney 产品成果物与可执行开发路线 V4
+Status: done
+Updated: 2026-07-12T11:12:14+00:00
+
+## Problem Tree
+- [done] P000: Task 27：DreamJourney 产品成果物与可执行开发路线 V4
+  - [done] P001: Round 1：来源、需求与工程事实基线
+    - [done] P006: Round 1A：资料来源、权威性与冲突审计
+    - [done] P007: Round 1B：iOS 真实实现证据审计
+    - [done] P008: Round 1C：后端真实实现与部署证据审计
+    - [done] P009: Round 1D：PRD Requirement 覆盖与差距矩阵
+  - [done] P002: Round 2：产品模型、范围与决策收敛
+    - [done] P010: Round 2A：产品定位、阶段范围与指标收敛
+    - [done] P011: Round 2B：领域模型、数据权威与权限状态机
+      - [done] P014: Round 2B1：角色、领域权威与数据流
+      - [done] P015: Round 2B2：生命周期、四维隐私与变更传播
+    - [done] P012: Round 2C：产品决策登记册与底稿生命周期
+      - [done] P016: Round 2C1：产品决策登记册
+      - [done] P017: Round 2C2：底稿生命周期与决策静态检查
+    - [done] P013: Round 2D：Product Spec V4 集成与独立复审
+      - [done] P018: Round 2D1：Product Spec V4 内容补全
+      - [done] P019: Round 2D2：独立复审响应与 Product Spec 验收
+  - [done] P003: Round 3：目标架构与增量迁移路径
+    - [done] P020: Round 3A：系统上下文与 iOS/后端模块边界
+      - [done] P024: Round 3A1：iOS 目标分层与当前模块迁移
+      - [done] P025: Round 3A2：系统上下文、部署单元与后端模块边界
+        - [done] P026: Round 3A2a：后端现状与部署证据审计
+        - [done] P027: Round 3A2b：后端目标拓扑与模块边界
+    - [done] P021: Round 3B：数据、API、授权、任务与 provider 合同
+      - [done] P028: Round 3B1：核心数据与 authority 合同
+      - [done] P029: Round 3B2：Identity、AuthZ 与 /v2 API 合同
+      - [done] P030: Round 3B3：Job、Outbox、对象存储与 provider 合同
+    - [done] P022: Round 3C：Legacy 迁移、rollout、rollback 与退役
+      - [done] P031: Round 3C1 数据 Schema、Backfill 与 Authority 切换
+        - [done] P035: Round 3C1A Legacy 数据目录与确定性 Backfill
+        - [done] P036: Round 3C1B 数据 Migration Waves、Authority Cutover 与 Rollback
+      - [done] P032: Round 3C2 iOS、API 与 AuthZ 双轨 Rollout
+        - [done] P037: Round 3C2A iOS AccountSession、Generation 与本地 Store 迁移
+        - [done] P038: Round 3C2B Typed API、Identity/AuthZ 与 Capability Rollout
+      - [done] P033: Round 3C3 Job、对象存储与 Provider 副作用迁移
+        - [done] P039: Round 3C3A Job、Outbox 与 Legacy Timer 迁移
+        - [done] P040: Round 3C3B 对象存储与媒体迁移
+        - [done] P041: Round 3C3C Provider Effect、Credential 与 Exit 迁移
+          - [done] P042: Round 3C3C Evidence 与静态门收敛
+      - [done] P034: Round 3C4 组合 Cutover、Rollback 与 Legacy 退役 Runbook
+        - [done] P043: Round 3C4A 组合 Cutover、Rollback 与 Retirement Runbook
+        - [done] P044: Round 3C4B Runbook Evidence、Decision 与静态门
+    - [done] P023: Round 3D：目标架构独立复审与静态验收
+      - [done] P045: Round 3D1 iOS/客户端独立架构复审
+      - [done] P046: Round 3D2 后端/数据/异步独立架构复审
+      - [done] P047: Round 3D3 安全/隐私/运维/过度设计独立复审
+      - [done] P048: Round 3D4 独立评审综合、修正与静态验收
+        - [done] P049: Round 3D4A 独立发现 Disposition 与架构修正
+        - [done] P050: Round 3D4B 架构、评审与链接静态验收
+  - [done] P004: Round 4：可执行开发路线与验收门
+    - [done] P051: Round 4A：路线图控制模型、阶段与依赖 DAG
+    - [done] P052: Round 4B：Stage 0 七个安全止损工作包
+      - [done] P056: Round 4B1：账号、身份、凭据与发布止损任务
+        - [done] P059: Round 4B1A：Account/Local Isolation 与 Release Scope
+        - [done] P060: Round 4B1B：Identity/AuthZ 与 Credential Stop-Loss
+      - [done] P057: Round 4B2：数据库恢复与数据权利任务
+      - [done] P058: Round 4B3：运维证据与 Stage 0 集成门
+    - [done] P053: Round 4C：Owner Truth Loop 与 iOS Runtime 工作包
+      - [done] P061: Round 4C1：Owner Truth Authority 原子工作项
+      - [done] P062: Round 4C2：Async Effect Authority 原子工作项
+      - [done] P063: Round 4C3：iOS Composition 与 Runtime 原子工作项
+      - [done] P064: Round 4C Stage 1 集成状态、跨包顺序与静态门
+    - [done] P054: Round 4D：Publication、Voice/DH 与组合迁移工作包
+      - [done] P065: Round 4D1：Publication 独立公开副本工作项
+      - [done] P066: Round 4D2：Voice/DH Governance 工作项
+      - [done] P067: Round 4D3：Composite Migration Drills 工作项
+      - [done] P068: Round 4D 状态、跨 Lane 优先级与 Optional/Migration 静态门
+    - [done] P055: Round 4E：路线追踪、静态验收与下一个任务选择规则
+      - [done] P069: Round 4E1：FR/DR/Finding/Risk/Package/Work Item 双向追踪
+        - [done] P071: Round 4E1A：补齐 Safety、Persona 与 Media 路线缺口
+          - [done] P073: Round 4E1A1：补齐危机响应与 AI 披露路线
+          - [done] P074: Round 4E1A2：补齐 Persona 与真实媒体 Authority 路线
+          - [done] P075: Round 4E1A3：收敛 canonical 引用、计数与跨包追踪边
+        - [done] P072: Round 4E1B：建立V4双向追踪矩阵与Checker
+          - [done] P076: Round 4E1B1：建立V4路线追踪矩阵与生成器
+          - [done] P077: Round 4E1B2：建立双向追踪Checker与负向证据
+            - [done] P078: 修复 Gate 语义解析并重新生成可验证追踪矩阵
+      - [done] P070: Round 4E2：Roadmap 总检查、DAG 与确定性 Next Selector
+        - [done] P079: Round 4E2A：路线执行注册表与确定性 Next Selector
+          - [done] P081: Round 4E2A1：生成 typed Execution Registry
+          - [done] P082: Round 4E2A2：Roadmap Selector、状态失效与 Round 4 Header
+        - [done] P080: Round 4E2B：Roadmap 总 Checker 与负向验收
+          - [done] P083: Round 4E2B1：独立 Roadmap 总 Checker 与八类负向 Fixture
+          - [done] P084: Round 4E2B2：全量静态验收与 Round 4 状态发布
+  - [done] P005: Round 5：独立复审、压力测试与成果物定稿
+    - [done] P085: Round 5A：第一轮三视角独立复审
+      - [done] P086: Round 5A1：产品价值、PRD与范围独立复审
+      - [done] P087: Round 5A2：工程证据、架构与路线可执行性独立复审
+      - [done] P088: Round 5A3：安全、隐私、运维、成本与过度设计独立复审
+    - [done] P089: Round 5B-D：发现处置、第二轮盲审与成果物定稿
+      - [done] P090: Round 5B：第一轮发现处置与验收清单初稿
+        - [done] P093: Round 5B1：23条发现处置与第五成果物初稿
+        - [done] P094: Round 5B2：独立Review Disposition Checker与负向证明
+      - [done] P091: Round 5C：第二轮盲审与反证
+        - [done] P095: Round 5C1：三份第二轮盲审原始报告
+        - [done] P096: Round 5C2：第二轮覆盖索引与独立性验收
+      - [done] P092: Round 5D：最终处置、静态验收与成果物定稿
+        - [done] P097: Round 5D1：五份成果物定稿与评审处置
+        - [done] P098: Round 5D2：终态检查器与全量静态验收
+
+## Active
+
+## Blocked
+
+## Done
+- [x] P000: Task 27：DreamJourney 产品成果物与可执行开发路线 V4
+- [x] P001: Round 1：来源、需求与工程事实基线
+- [x] P002: Round 2：产品模型、范围与决策收敛
+- [x] P003: Round 3：目标架构与增量迁移路径
+- [x] P004: Round 4：可执行开发路线与验收门
+- [x] P005: Round 5：独立复审、压力测试与成果物定稿
+- [x] P006: Round 1A：资料来源、权威性与冲突审计
+- [x] P007: Round 1B：iOS 真实实现证据审计
+- [x] P008: Round 1C：后端真实实现与部署证据审计
+- [x] P009: Round 1D：PRD Requirement 覆盖与差距矩阵
+- [x] P010: Round 2A：产品定位、阶段范围与指标收敛
+- [x] P011: Round 2B：领域模型、数据权威与权限状态机
+- [x] P012: Round 2C：产品决策登记册与底稿生命周期
+- [x] P013: Round 2D：Product Spec V4 集成与独立复审
+- [x] P014: Round 2B1：角色、领域权威与数据流
+- [x] P015: Round 2B2：生命周期、四维隐私与变更传播
+- [x] P016: Round 2C1：产品决策登记册
+- [x] P017: Round 2C2：底稿生命周期与决策静态检查
+- [x] P018: Round 2D1：Product Spec V4 内容补全
+- [x] P019: Round 2D2：独立复审响应与 Product Spec 验收
+- [x] P020: Round 3A：系统上下文与 iOS/后端模块边界
+- [x] P021: Round 3B：数据、API、授权、任务与 provider 合同
+- [x] P022: Round 3C：Legacy 迁移、rollout、rollback 与退役
+- [x] P023: Round 3D：目标架构独立复审与静态验收
+- [x] P024: Round 3A1：iOS 目标分层与当前模块迁移
+- [x] P025: Round 3A2：系统上下文、部署单元与后端模块边界
+- [x] P026: Round 3A2a：后端现状与部署证据审计
+- [x] P027: Round 3A2b：后端目标拓扑与模块边界
+- [x] P028: Round 3B1：核心数据与 authority 合同
+- [x] P029: Round 3B2：Identity、AuthZ 与 /v2 API 合同
+- [x] P030: Round 3B3：Job、Outbox、对象存储与 provider 合同
+- [x] P031: Round 3C1 数据 Schema、Backfill 与 Authority 切换
+- [x] P032: Round 3C2 iOS、API 与 AuthZ 双轨 Rollout
+- [x] P033: Round 3C3 Job、对象存储与 Provider 副作用迁移
+- [x] P034: Round 3C4 组合 Cutover、Rollback 与 Legacy 退役 Runbook
+- [x] P035: Round 3C1A Legacy 数据目录与确定性 Backfill
+- [x] P036: Round 3C1B 数据 Migration Waves、Authority Cutover 与 Rollback
+- [x] P037: Round 3C2A iOS AccountSession、Generation 与本地 Store 迁移
+- [x] P038: Round 3C2B Typed API、Identity/AuthZ 与 Capability Rollout
+- [x] P039: Round 3C3A Job、Outbox 与 Legacy Timer 迁移
+- [x] P040: Round 3C3B 对象存储与媒体迁移
+- [x] P041: Round 3C3C Provider Effect、Credential 与 Exit 迁移
+- [x] P042: Round 3C3C Evidence 与静态门收敛
+- [x] P043: Round 3C4A 组合 Cutover、Rollback 与 Retirement Runbook
+- [x] P044: Round 3C4B Runbook Evidence、Decision 与静态门
+- [x] P045: Round 3D1 iOS/客户端独立架构复审
+- [x] P046: Round 3D2 后端/数据/异步独立架构复审
+- [x] P047: Round 3D3 安全/隐私/运维/过度设计独立复审
+- [x] P048: Round 3D4 独立评审综合、修正与静态验收
+- [x] P049: Round 3D4A 独立发现 Disposition 与架构修正
+- [x] P050: Round 3D4B 架构、评审与链接静态验收
+- [x] P051: Round 4A：路线图控制模型、阶段与依赖 DAG
+- [x] P052: Round 4B：Stage 0 七个安全止损工作包
+- [x] P053: Round 4C：Owner Truth Loop 与 iOS Runtime 工作包
+- [x] P054: Round 4D：Publication、Voice/DH 与组合迁移工作包
+- [x] P055: Round 4E：路线追踪、静态验收与下一个任务选择规则
+- [x] P056: Round 4B1：账号、身份、凭据与发布止损任务
+- [x] P057: Round 4B2：数据库恢复与数据权利任务
+- [x] P058: Round 4B3：运维证据与 Stage 0 集成门
+- [x] P059: Round 4B1A：Account/Local Isolation 与 Release Scope
+- [x] P060: Round 4B1B：Identity/AuthZ 与 Credential Stop-Loss
+- [x] P061: Round 4C1：Owner Truth Authority 原子工作项
+- [x] P062: Round 4C2：Async Effect Authority 原子工作项
+- [x] P063: Round 4C3：iOS Composition 与 Runtime 原子工作项
+- [x] P064: Round 4C Stage 1 集成状态、跨包顺序与静态门
+- [x] P065: Round 4D1：Publication 独立公开副本工作项
+- [x] P066: Round 4D2：Voice/DH Governance 工作项
+- [x] P067: Round 4D3：Composite Migration Drills 工作项
+- [x] P068: Round 4D 状态、跨 Lane 优先级与 Optional/Migration 静态门
+- [x] P069: Round 4E1：FR/DR/Finding/Risk/Package/Work Item 双向追踪
+- [x] P070: Round 4E2：Roadmap 总检查、DAG 与确定性 Next Selector
+- [x] P071: Round 4E1A：补齐 Safety、Persona 与 Media 路线缺口
+- [x] P072: Round 4E1B：建立V4双向追踪矩阵与Checker
+- [x] P073: Round 4E1A1：补齐危机响应与 AI 披露路线
+- [x] P074: Round 4E1A2：补齐 Persona 与真实媒体 Authority 路线
+- [x] P075: Round 4E1A3：收敛 canonical 引用、计数与跨包追踪边
+- [x] P076: Round 4E1B1：建立V4路线追踪矩阵与生成器
+- [x] P077: Round 4E1B2：建立双向追踪Checker与负向证据
+- [x] P078: 修复 Gate 语义解析并重新生成可验证追踪矩阵
+- [x] P079: Round 4E2A：路线执行注册表与确定性 Next Selector
+- [x] P080: Round 4E2B：Roadmap 总 Checker 与负向验收
+- [x] P081: Round 4E2A1：生成 typed Execution Registry
+- [x] P082: Round 4E2A2：Roadmap Selector、状态失效与 Round 4 Header
+- [x] P083: Round 4E2B1：独立 Roadmap 总 Checker 与八类负向 Fixture
+- [x] P084: Round 4E2B2：全量静态验收与 Round 4 状态发布
+- [x] P085: Round 5A：第一轮三视角独立复审
+- [x] P086: Round 5A1：产品价值、PRD与范围独立复审
+- [x] P087: Round 5A2：工程证据、架构与路线可执行性独立复审
+- [x] P088: Round 5A3：安全、隐私、运维、成本与过度设计独立复审
+- [x] P089: Round 5B-D：发现处置、第二轮盲审与成果物定稿
+- [x] P090: Round 5B：第一轮发现处置与验收清单初稿
+- [x] P091: Round 5C：第二轮盲审与反证
+- [x] P092: Round 5D：最终处置、静态验收与成果物定稿
+- [x] P093: Round 5B1：23条发现处置与第五成果物初稿
+- [x] P094: Round 5B2：独立Review Disposition Checker与负向证明
+- [x] P095: Round 5C1：三份第二轮盲审原始报告
+- [x] P096: Round 5C2：第二轮覆盖索引与独立性验收
+- [x] P097: Round 5D1：五份成果物定稿与评审处置
+- [x] P098: Round 5D2：终态检查器与全量静态验收
+
+## Tickets
+- [done] T000: 五轮证据收敛与产品路线定稿 -> P000 (split)
+- [done] T001: 并行事实审计与需求覆盖矩阵 -> P001 (split)
+- [done] T002: 建立来源登记表和冲突清单 -> P006 (one_go)
+- [done] T003: 以源码和 QA 证据重建 iOS 能力矩阵 -> P007 (one_go)
+- [done] T004: 以路由、表和部署证据重建后端能力矩阵 -> P008 (one_go)
+- [done] T005: 合并 36 项 FR 的双端成熟度与下一动作 -> P009 (one_go)
+- [done] T006: Round 2 产品模型、范围与决策收敛方案 -> P002 (split)
+- [done] T007: Round 2A 产品定位、阶段范围与指标收敛方案 -> P010 (one_go)
+- [done] T008: Round 2B 领域模型、数据权威与权限状态机方案 -> P011 (split)
+- [done] T009: Round 2B1 角色、领域权威与数据流方案 -> P014 (one_go)
+- [done] T010: Round 2B2 生命周期、四维隐私与变更传播方案 -> P015 (one_go)
+- [done] T011: Round 2C 产品决策登记册与底稿生命周期方案 -> P012 (split)
+- [done] T012: Round 2C1 产品决策登记册方案 -> P016 (one_go)
+- [done] T013: Round 2C2 底稿生命周期与决策静态检查方案 -> P017 (one_go)
+- [done] T014: Round 2D Product Spec V4 集成与独立复审方案 -> P013 (split)
+- [done] T015: Round 2D1 Product Spec V4 内容补全方案 -> P018 (one_go)
+- [done] T016: Round 2D2 独立复审响应与 Product Spec 验收方案 -> P019 (one_go)
+- [done] T017: Round 3 目标架构与增量迁移方案 -> P003 (split)
+- [done] T018: Round 3A 系统上下文与 iOS/后端模块边界方案 -> P020 (split)
+- [done] T019: Round 3A1 iOS 目标分层与当前模块迁移方案 -> P024 (one_go)
+- [done] T020: Round 3A2 系统上下文、部署单元与后端模块边界方案 -> P025 (split)
+- [done] T021: Round 3A2a 后端现状与部署证据审计方案 -> P026 (one_go)
+- [done] T022: Round 3A2b 后端目标拓扑与模块边界方案 -> P027 (one_go)
+- [done] T023: Round 3B 数据、API、授权、任务与 provider 合同方案 -> P021 (split)
+- [done] T024: Round 3B1 核心数据与 authority 合同方案 -> P028 (one_go)
+- [done] T025: Round 3B2 Identity、AuthZ 与 /v2 API 合同方案 -> P029 (one_go)
+- [done] T026: Round 3B3 Job、Outbox、对象存储与 provider 合同方案 -> P030 (one_go)
+- [done] T027: Round 3C Legacy 迁移、Rollout、Rollback 与退役方案 -> P022 (split)
+- [done] T028: Round 3C1 数据 Schema、Backfill 与 Authority 切换方案 -> P031 (split)
+- [done] T029: Round 3C1A Legacy 数据目录与确定性 Backfill 方案 -> P035 (one_go)
+- [done] T030: Round 3C1B 数据 Migration Waves、Authority Cutover 与 Rollback 方案 -> P036 (one_go)
+- [done] T031: Round 3C2 iOS、API 与 AuthZ 双轨 Rollout 方案 -> P032 (split)
+- [done] T032: Round 3C2A iOS AccountSession、Generation 与本地 Store 迁移方案 -> P037 (one_go)
+- [done] T033: Round 3C2B Typed API、Identity/AuthZ 与 Capability Rollout 方案 -> P038 (one_go)
+- [done] T034: Round 3C3 Job、对象存储与 Provider 副作用迁移方案 -> P033 (split)
+- [done] T035: Round 3C3A Job、Outbox 与 Legacy Timer 迁移方案 -> P039 (one_go)
+- [done] T036: Round 3C3B 对象存储与媒体迁移方案 -> P040 (one_go)
+- [done] T037: Round 3C3C Provider Effect、Credential 与 Exit 迁移方案 -> P041 (one_go)
+- [done] T038: 收敛 Round 3C3C Evidence 与 Provider 静态门 -> P042 (one_go)
+- [done] T039: 构建组合 Cutover、Rollback 与 Legacy 退役 Runbook -> P034 (split)
+- [done] T040: 编写 Round 3C4A 组合迁移 Runbook -> P043 (one_go)
+- [done] T041: 收敛组合 Runbook Evidence、Decision 与静态门 -> P044 (one_go)
+- [done] T042: 执行 Round 3D 目标架构独立复审与静态验收 -> P023 (split)
+- [done] T043: 委托 iOS/客户端独立架构复审 -> P045 (one_go)
+- [done] T044: 委托后端/数据/异步独立架构复审 -> P046 (one_go)
+- [done] T045: 委托安全/隐私/运维/过度设计独立复审 -> P047 (one_go)
+- [done] T046: 综合 Round 3 独立评审并建立架构静态验收 -> P048 (split)
+- [done] T047: 完成 22 项独立发现 Disposition 与目标修正 -> P049 (one_go)
+- [done] T048: 建立 Round 3 架构、评审与链接静态验收 -> P050 (one_go)
+- [done] T049: 将 V4 目标架构解析为可执行开发路线与验收门 -> P004 (split)
+- [done] T050: 建立路线图权威骨架、阶段门与依赖 DAG -> P051 (one_go)
+- [done] T051: 将 Stage 0 七个风险包拆成可实施的安全止损任务 -> P052 (split)
+- [done] T052: 细化账号/发布与身份/凭据四个 Stage 0 工作包 -> P056 (split)
+- [done] T053: 规划 iOS AccountLease、Store 隔离与 Release Policy 止损 -> P059 (one_go)
+- [done] T054: 规划 Strong Identity、AuthZ Enforce 与 Credential Stop-Loss -> P060 (one_go)
+- [done] T055: 规划 Postgres UoW/恢复与 Access-First 数据权利 -> P057 (one_go)
+- [done] T056: 规划最小运维证据域与 Stage 0 硬门 -> P058 (one_go)
+- [done] T057: 将 Owner Truth、异步 Effect 与 iOS Runtime 拆成可渐进迁移的 Stage 1 工作项 -> P053 (split)
+- [done] T058: 用十个迁移波次建立单一 Owner Truth Authority -> P061 (one_go)
+- [done] T059: 用事务 Outbox、Job Lease 与 Inbox Receipt 收敛所有异步副作用 -> P062 (one_go)
+- [done] T060: 以 Composition Root、Typed Ports 与 Runtime Lease 渐进收敛 iOS -> P063 (one_go)
+- [done] T061: 收敛 Stage 1 状态、跨包执行顺序与防回归检查 -> P064 (one_go)
+- [done] T062: 将公开副本、声音/数字人与组合迁移拆成三个独立可停止 Lane -> P054 (split)
+- [done] T063: 用九个独立步骤建立可撤回的 Publication 与 Visitor 文字 Lane -> P065 (one_go)
+- [done] T064: 用十一项治理门把声音复刻、TTS 与数字人从原型变成可控 Beta -> P066 (one_go)
+- [done] T065: 用 C00–C11 十二个证据门编排唯一 Composite Migration -> P067 (one_go)
+- [done] T066: 固化 Round 4D 状态、跨 Lane 选择与机器防回归 -> P068 (one_go)
+- [done] T067: 用双向追踪矩阵与机器可判定路线门完成 Round 4 -> P055 (split)
+- [done] T068: 建立双向追踪 Authority，并补齐追踪暴露的真实路线缺口 -> P069 (split)
+- [done] T069: 先修路线语义缺口与非规范引用，再生成追踪矩阵 -> P071 (split)
+- [done] T070: 将危机响应与 AI 披露固定为 Stage 0 独立止损任务 -> P073 (one_go)
+- [done] T071: 以三个后置 Work Item 补齐 Persona 与媒体 Authority -> P074 (one_go)
+- [done] T072: 用 canonical 集合和显式关系收敛路线引用 -> P075 (one_go)
+- [done] T073: 建立可生成、可复核的V4双向追踪矩阵 -> P072 (split)
+- [done] T074: 由权威文档确定性生成完整追踪矩阵 -> P076 (one_go)
+- [done] T075: 独立复算矩阵并用负向变体证明失败能力 -> P077 (one_go)
+- [done] T076: 建立适用 Gate 解析约定并重生成矩阵 -> P078 (one_go)
+- [done] T077: 建立路线执行注册表、确定性 Selector 与总验收 Checker -> P070 (split)
+- [done] T078: 生成 typed 路线执行注册表并固定 Selector 语义 -> P079 (split)
+- [done] T079: 从 Roadmap 生成确定性 typed Execution Registry -> P081 (one_go)
+- [done] T080: 在 Roadmap 固化安全的确定性 Selector 与失效重排规则 -> P082 (one_go)
+- [done] T081: 独立复算 Roadmap、Execution Registry、DAG 与 Selector -> P080 (split)
+- [done] T082: 用独立解析器证明 Roadmap 和 Registry 可执行且会安全失败 -> P083 (one_go)
+- [done] T083: 在全量门通过后发布 Round 4 静态验收状态 -> P084 (one_go)
+- [done] T084: 两轮独立复审、发现处置与五份成果物定稿 -> P005 (split)
+- [done] T085: 并行完成产品、工程与安全运维三份只读独立复审 -> P085 (split)
+- [done] T086: 以产品审查者身份只读复核V4产品闭环 -> P086 (one_go)
+- [done] T087: 以工程审查者身份核对双仓证据与路线可执行性 -> P087 (one_go)
+- [done] T088: 以风险审查者身份挑战隐私、安全、运维、成本和复杂度 -> P088 (one_go)
+- [done] T089: 依次完成处置与清单、第二轮盲审、最终定稿 -> P089 (split)
+- [done] T090: 建立双状态disposition、第五成果物初稿与机器检查 -> P090 (split)
+- [done] T091: 用双状态模型处置23条发现并生成验收清单 -> P093 (one_go)
+- [done] T092: 独立解析报告与清单并用负向变体证明失败能力 -> P094 (one_go)
+- [done] T093: 用三个新上下文并行盲审五份成果物与Round5B处置 -> P091 (split)
+- [done] T094: 并行运行三个fresh agent并保留原始盲审输出 -> P095 (one_go)
+- [done] T095: 建立22项复核索引并验证第二轮独立性 -> P096 (one_go)
+- [done] T096: 定稿五份成果物并建立最终静态验收门 -> P092 (split)
+- [done] T097: 统一五份成果物状态、互链与两轮评审处置 -> P097 (one_go)
+- [done] T098: 建立独立终态检查器并完成全量静态验收 -> P098 (one_go)
+
+## Latest Checks
+- [success] C094: P090 结论为`success`。`R090`同时完成了语义处置和独立机器验证；23条发现无遗漏，P0文档层闭环而底层保持开放，第五成果物已具备第二轮盲审所需的证据、STOP和Gate边界。
+- [success] C095: P095 结论为`success`。`R091`使用三个fresh agent完成三视角第二轮复核，精确覆盖22个第一轮P0/P1；全部处置被独立验证，且仅新增一个可定位P2文档治理问题，没有通过重复“底层未实现”制造新发现。
+- [success] C096: P096 结论为 `success`。`R092` 建立了可复验的 Wave 1 / Wave 2 精确覆盖索引，22 个 P0/P1 finding 无漏项、无重复，全部由职责对应的第二轮审阅者判定为 `VERIFIED`，0 个 `CHALLENGED`。唯一新增 P2 保持待 Round 5D 处置，没有被覆盖或误写成底层工程完成。
+- [success] C097: P091 结论为 `success`。`R093` 满足三视角独立复审、第一轮 22 个 P0/P1 finding 逐项验证、统一覆盖索引和新发现登记要求。第二轮没有发现处置失真或 severity 弱化；唯一新增 P2 被保留给 Round 5D，未越界修改 Authority。
+- [success] C098: P097 结论为 `success`。`R094` 完成五份成果物状态、代码基线、互链和两轮评审处置的统一，修复 `R5C-PROD-001`，同时诚实保留 artifact commit、工程 Work Item、G2-G4、外部门与开放决定。已有 23 个 Product V4 checker 全部通过。
+- [success] C099: P098 结论为 `success`。`R095` 建立了独立终态检查器并用 10 类负向漂移证明拒绝能力，随后通过 24 个现有/新增 checker、双次派生物确定性、链接、敏感信息和 diff 门。最终报告完整保留未提交与工程未完成风险。
+- [success] C100: P092 结论为 `success`。`R096` 通过两个已独立验收的子问题完成五份成果物定稿和终态机器门，满足 P092 全部成功条件。文档被明确标记为 reviewed baseline pending commit，没有把静态验收或路线规划升级为工程完成。
+- [success] C101: P089 结论为 `success`。`R097` 依次引用已成功关闭的 Round 5B、5C、5D，完成 23 条第一轮发现处置、第二轮独立反证、第五成果物和最终机器门。文档层闭环与底层工程状态被严格分离。
+- [success] C102: P005 结论为 `success`。`R087` 完成第一轮三视角独立复审，`R097` 完成发现处置、第二轮盲审、成果物定稿与终态机器门。两轮审查、双向追踪、失败/不可逆/外部门和五份最终成果物均满足 P005 成功条件。
+- [success] C103: P000 结论为 `success`。`R098` 汇总的五轮闭环满足 Task 27 全部成功标准：需求与证据/决策可追踪，领域和权限边界一致，目标架构采用增量迁移，P0 路线可执行，Provider/Voice/DH 有隔离与外部门，两轮独立复审完成，且静态终态门通过。

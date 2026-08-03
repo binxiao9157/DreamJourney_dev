@@ -76,7 +76,7 @@ for required in [
 
 for required in [
     "TimeLetterReminderScheduler",
-    "UNUserNotificationCenter.current()",
+    "notificationCenter: UNUserNotificationCenter = .current()",
     "UNNotificationRequest",
     "dueTimeLetters",
     "TimeLetterMailboxReminder",
@@ -87,7 +87,7 @@ for required in [
     "markTimeLetterMailboxReminderArchived",
     "timeLetterReminderCount",
     "timeLetterDeliveryStatus != \"delivered\"",
-    "if items.contains(where: { $0.id == id && $0.isSealedTimeLetter })",
+    "if removedItem.isSealedTimeLetter",
 ] {
     assertContains(repository, required, "time-letter repository should schedule and protect sealed letters \(required)")
 }

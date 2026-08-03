@@ -63,7 +63,9 @@ for required in [
 }
 let applyCurrent = functionBody("private func applyCurrent(", in: store)
 for required in [
-    "UserDefaults.standard.set(data, forKey: key(for: userId))",
+    "let storageKey = scopedKey(for: accountLease)",
+    "DigitalHumanContextStorageEnvelope(",
+    "defaults.set(data, forKey: storageKey)",
     "KBLiteManager.shared.personaContextDidChange(to: identity)",
     "KnowledgeSyncCoordinator.shared.personaContextDidChange(to: identity)",
     "guard previousContext != safeContext else { return }",

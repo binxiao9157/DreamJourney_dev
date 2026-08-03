@@ -29,6 +29,7 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 
 let runner = "Scripts/QA/prd-stitch-ui/run-voice-clone-profile-selection-smoke.sh"
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releasePackage = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 
@@ -36,6 +37,14 @@ assertFileExists(runner, "voice clone profile selection smoke runner")
 
 for required in [
     "DJRunVoiceCloneProfileSelectionSmoke",
+    "case voiceCloneProfileSelectionSmoke",
+    ".voiceCloneProfileSelectionSmoke",
+] {
+    assertContains(featureFlags, required, "voice clone profile selection smoke should stay centrally registered \(required)")
+}
+
+for required in [
+    "case .voiceCloneProfileSelectionSmoke:",
     "runVoiceCloneProfileSelectionSmoke()",
     "makeUIQAVoiceCloneProfile(",
     "VoiceCloneService.shared.preferredVoiceCloneProfile(from: profiles)",

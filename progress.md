@@ -32,6 +32,14 @@ Update this file after every recursive state-changing command bundle and before 
 - Next action: `none`
 - Counts: 2/2 problems done, 0 blocked, 2/2 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Task 27 Review Complete - 2026-07-12
+
+- Closure ledger `L20260712-003917`: valid; 99/99 problems done, 99/99 tickets done, 104 checks, active=0, blocked=0.
+- Closure Lodestar: 27/27 task ledgers closed; `closure.py check` passed with `all-task-ledgers-closed`.
+- Five fixed artifacts: `REVIEWED_BASELINE_PENDING_COMMIT`.
+- Final gates: 24 Product V4 checkers, 10 finalization negative fixtures, deterministic Trace/Registry generation, links, sensitive scan and `git diff --check` passed.
+- Scope result: Task 27 document/product/architecture/roadmap objective is 100% complete; 115 engineering Work Items and G2-G4 remain separate execution work.
 ## Task 19 Closure - 2026-07-11T12:19:30+08:00
 
 - Ledger `L20260711-113033` closed with 6/6 problems, 6/6 tickets and 6/6 checks complete.
@@ -2941,4 +2949,3532 @@ Update this file after every recursive state-changing command bundle and before 
 - Root: `P000` / done
 - Next action: `none`
 - Counts: 17/17 problems done, 0 blocked, 17/17 tickets done
+- Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.
+
+## Recursive Closure Checkpoint - 2026-07-12T00:39:17+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 0/1 problems done, 0 blocked, 0/0 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P000: Task 27：DreamJourney 产品成果物与可执行开发路线 V4`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field...
+
+## Recursive Closure Checkpoint - 2026-07-12T01:00:05+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 5/10 problems done, 0 blocked, 5/6 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P002: Round 2：产品模型、范围与决策收敛`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in En...
+
+## Recursive Closure Checkpoint - 2026-07-12T02:03:55+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 16/20 problems done, 0 blocked, 16/17 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P003: Round 3：目标架构与增量迁移路径`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in Eng...
+
+## Recursive Closure Checkpoint - 2026-07-12T02:16:50+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 17/26 problems done, 0 blocked, 17/20 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P025: Round 3A2：系统上下文、部署单元与后端模块边界`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names sta...
+
+## Recursive Closure Checkpoint - 2026-07-12T02:17:47+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 17/26 problems done, 0 blocked, 17/21 tickets done
+- Next instruction: Only perform `classify-ticket` for `T020` on `P025: Round 3A2：系统上下文、部署单元与后端模块边界`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English....
+
+## Recursive Closure Checkpoint - 2026-07-12T02:18:14+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 17/26 problems done, 0 blocked, 17/21 tickets done
+- Next instruction: Only perform `split-ticket` for `T020` on `P025: Round 3A2：系统上下文、部署单元与后端模块边界`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI ...
+
+## Recursive Closure Checkpoint - 2026-07-12T02:19:59+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 17/28 problems done, 0 blocked, 17/21 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P026: Round 3A2a：后端现状与部署证据审计`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in ...
+
+## Recursive Closure Checkpoint - 2026-07-12T02:20:38+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 17/28 problems done, 0 blocked, 17/22 tickets done
+- Next instruction: Only perform `classify-ticket` for `T021` on `P026: Round 3A2a：后端现状与部署证据审计`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Afte...
+
+## Recursive Closure Checkpoint - 2026-07-12T02:20:54+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 17/28 problems done, 0 blocked, 17/22 tickets done
+- Next instruction: Only perform `execute-ticket` for `T021` on `P026: Round 3A2a：后端现状与部署证据审计`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-t...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:15:17+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 17/28 problems done, 0 blocked, 18/22 tickets done
+- Next instruction: Only perform `check-success` for `P026: Round 3A2a：后端现状与部署证据审计`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) ...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:16:11+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 18/28 problems done, 0 blocked, 18/22 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P027: Round 3A2b：后端目标拓扑与模块边界`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in ...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:17:10+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 18/28 problems done, 0 blocked, 18/23 tickets done
+- Next instruction: Only perform `classify-ticket` for `T022` on `P027: Round 3A2b：后端目标拓扑与模块边界`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Afte...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:17:33+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 18/28 problems done, 0 blocked, 18/23 tickets done
+- Next instruction: Only perform `execute-ticket` for `T022` on `P027: Round 3A2b：后端目标拓扑与模块边界`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-t...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:27:30+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 18/28 problems done, 0 blocked, 19/23 tickets done
+- Next instruction: Only perform `check-success` for `P027: Round 3A2b：后端目标拓扑与模块边界`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) ...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:28:20+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 19/28 problems done, 0 blocked, 19/23 tickets done
+- Next instruction: Only perform `record-result` for ticket `T020`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T08:29:12+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 19/28 problems done, 0 blocked, 20/23 tickets done
+- Next instruction: Only perform `check-success` for `P025: Round 3A2：系统上下文、部署单元与后端模块边界`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evide...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:30:06+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 20/28 problems done, 0 blocked, 20/23 tickets done
+- Next instruction: Only perform `record-result` for ticket `T018`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T08:33:14+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 20/28 problems done, 0 blocked, 21/23 tickets done
+- Next instruction: Only perform `check-success` for `P020: Round 3A：系统上下文与 iOS/后端模块边界`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, eviden...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:34:08+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 21/28 problems done, 0 blocked, 21/23 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P021: Round 3B：数据、API、授权、任务与 provider 合同`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field na...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:35:47+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 21/28 problems done, 0 blocked, 21/24 tickets done
+- Next instruction: Only perform `classify-ticket` for `T023` on `P021: Round 3B：数据、API、授权、任务与 provider 合同`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in E...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:36:18+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 21/28 problems done, 0 blocked, 21/24 tickets done
+- Next instruction: Only perform `split-ticket` for `T023` on `P021: Round 3B：数据、API、授权、任务与 provider 合同`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in z...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:37:40+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 21/31 problems done, 0 blocked, 21/24 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P028: Round 3B1：核心数据与 authority 合同`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names st...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:39:02+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 21/31 problems done, 0 blocked, 21/25 tickets done
+- Next instruction: Only perform `classify-ticket` for `T024` on `P028: Round 3B1：核心数据与 authority 合同`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:39:24+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 21/31 problems done, 0 blocked, 21/25 tickets done
+- Next instruction: Only perform `execute-ticket` for `T024` on `P028: Round 3B1：核心数据与 authority 合同`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/exe...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:47:34+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 21/31 problems done, 0 blocked, 22/25 tickets done
+- Next instruction: Only perform `check-success` for `P028: Round 3B1：核心数据与 authority 合同`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evid...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:48:16+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 22/31 problems done, 0 blocked, 22/25 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P029: Round 3B2：Identity、AuthZ 与 /v2 API 合同`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:49:32+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 22/31 problems done, 0 blocked, 22/26 tickets done
+- Next instruction: Only perform `classify-ticket` for `T025` on `P029: Round 3B2：Identity、AuthZ 与 /v2 API 合同`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay i...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:50:00+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 22/31 problems done, 0 blocked, 22/26 tickets done
+- Next instruction: Only perform `execute-ticket` for `T025` on `P029: Round 3B2：Identity、AuthZ 与 /v2 API 合同`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/wo...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:58:24+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 22/31 problems done, 0 blocked, 23/26 tickets done
+- Next instruction: Only perform `check-success` for `P029: Round 3B2：Identity、AuthZ 与 /v2 API 合同`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, crite...
+
+## Recursive Closure Checkpoint - 2026-07-12T08:59:20+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 23/31 problems done, 0 blocked, 23/26 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P030: Round 3B3：Job、Outbox、对象存储与 provider 合同`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and fiel...
+
+## Recursive Closure Checkpoint - 2026-07-12T09:01:07+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 23/31 problems done, 0 blocked, 23/27 tickets done
+- Next instruction: Only perform `classify-ticket` for `T026` on `P030: Round 3B3：Job、Outbox、对象存储与 provider 合同`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay ...
+
+## Recursive Closure Checkpoint - 2026-07-12T09:01:46+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 23/31 problems done, 0 blocked, 23/27 tickets done
+- Next instruction: Only perform `execute-ticket` for `T026` on `P030: Round 3B3：Job、Outbox、对象存储与 provider 合同`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/w...
+
+## Recursive Closure Checkpoint - 2026-07-12T09:10:40+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 24/31 problems done, 0 blocked, 24/27 tickets done
+- Next instruction: Only perform `record-result` for ticket `T023`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T09:21:01+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 25/37 problems done, 0 blocked, 25/30 tickets done
+- Next instruction: Only perform `record-result` for ticket `T029`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T09:35:48+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 26/37 problems done, 0 blocked, 26/31 tickets done
+- Next instruction: Only perform `record-result` for ticket `T030`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T09:52:51+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 28/39 problems done, 0 blocked, 28/33 tickets done
+- Next instruction: Only perform `record-result` for ticket `T032`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T10:02:16+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 29/39 problems done, 0 blocked, 29/34 tickets done
+- Next instruction: Only perform `record-result` for ticket `T033`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T10:17:16+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 31/42 problems done, 0 blocked, 31/36 tickets done
+- Next instruction: Only perform `record-result` for ticket `T035`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T10:24:18+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 32/42 problems done, 0 blocked, 32/37 tickets done
+- Next instruction: Only perform `record-result` for ticket `T036`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T10:31:49+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 33/42 problems done, 0 blocked, 33/38 tickets done
+- Next instruction: Only perform `record-result` for ticket `T037`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T10:37:07+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 33/42 problems done, 0 blocked, 34/38 tickets done
+- Next instruction: Only perform `check-success` for `P041: Round 3C3C Provider Effect、Credential 与 Exit 迁移`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summar...
+
+## Recursive Closure Checkpoint - 2026-07-12T10:37:58+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 33/43 problems done, 0 blocked, 34/38 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P042: Round 3C3C Evidence 与静态门收敛`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay...
+
+## Recursive Closure Checkpoint - 2026-07-12T10:38:48+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 33/43 problems done, 0 blocked, 34/39 tickets done
+- Next instruction: Only perform `classify-ticket` for `T038` on `P042: Round 3C3C Evidence 与静态门收敛`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. ...
+
+## Recursive Closure Checkpoint - 2026-07-12T10:39:19+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 33/43 problems done, 0 blocked, 34/39 tickets done
+- Next instruction: Only perform `execute-ticket` for `T038` on `P042: Round 3C3C Evidence 与静态门收敛`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execu...
+
+## Recursive Closure Checkpoint - 2026-07-12T10:43:55+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 33/43 problems done, 0 blocked, 35/39 tickets done
+- Next instruction: Only perform `check-success` for `P042: Round 3C3C Evidence 与静态门收敛`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, eviden...
+
+## Recursive Closure Checkpoint - 2026-07-12T10:44:37+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 34/43 problems done, 0 blocked, 35/39 tickets done
+- Next instruction: Only perform `check-success` for `P041: Round 3C3C Provider Effect、Credential 与 Exit 迁移`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summar...
+
+## Recursive Closure Checkpoint - 2026-07-12T10:45:30+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 35/43 problems done, 0 blocked, 35/39 tickets done
+- Next instruction: Only perform `record-result` for ticket `T034`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T10:46:49+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 35/43 problems done, 0 blocked, 36/39 tickets done
+- Next instruction: Only perform `check-success` for `P033: Round 3C3 Job、对象存储与 Provider 副作用迁移`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria...
+
+## Recursive Closure Checkpoint - 2026-07-12T10:47:35+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 36/43 problems done, 0 blocked, 36/39 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P034: Round 3C4 组合 Cutover、Rollback 与 Legacy 退役 Runbook`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI fla...
+
+## Recursive Closure Checkpoint - 2026-07-12T10:48:27+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 36/43 problems done, 0 blocked, 36/40 tickets done
+- Next instruction: Only perform `classify-ticket` for `T039` on `P034: Round 3C4 组合 Cutover、Rollback 与 Legacy 退役 Runbook`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field ...
+
+## Recursive Closure Checkpoint - 2026-07-12T10:48:46+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 36/43 problems done, 0 blocked, 36/40 tickets done
+- Next instruction: Only perform `split-ticket` for `T039` on `P034: Round 3C4 组合 Cutover、Rollback 与 Legacy 退役 Runbook`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria,...
+
+## Recursive Closure Checkpoint - 2026-07-12T10:49:55+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 36/45 problems done, 0 blocked, 36/40 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P043: Round 3C4A 组合 Cutover、Rollback 与 Retirement Runbook`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI f...
+
+## Recursive Closure Checkpoint - 2026-07-12T10:50:43+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 36/45 problems done, 0 blocked, 36/41 tickets done
+- Next instruction: Only perform `classify-ticket` for `T040` on `P043: Round 3C4A 组合 Cutover、Rollback 与 Retirement Runbook`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and fiel...
+
+## Recursive Closure Checkpoint - 2026-07-12T10:51:07+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 36/45 problems done, 0 blocked, 36/41 tickets done
+- Next instruction: Only perform `execute-ticket` for `T040` on `P043: Round 3C4A 组合 Cutover、Rollback 与 Retirement Runbook`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: ...
+
+## Recursive Closure Checkpoint - 2026-07-12T10:59:58+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 36/45 problems done, 0 blocked, 37/41 tickets done
+- Next instruction: Only perform `check-success` for `P043: Round 3C4A 组合 Cutover、Rollback 与 Retirement Runbook`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, su...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:00:43+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 37/45 problems done, 0 blocked, 37/41 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P044: Round 3C4B Runbook Evidence、Decision 与静态门`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and f...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:01:37+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 37/45 problems done, 0 blocked, 37/42 tickets done
+- Next instruction: Only perform `classify-ticket` for `T041` on `P044: Round 3C4B Runbook Evidence、Decision 与静态门`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names st...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:02:00+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 37/45 problems done, 0 blocked, 37/42 tickets done
+- Next instruction: Only perform `execute-ticket` for `T041` on `P044: Round 3C4B Runbook Evidence、Decision 与静态门`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `reference...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:06:55+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 37/45 problems done, 0 blocked, 38/42 tickets done
+- Next instruction: Only perform `check-success` for `P044: Round 3C4B Runbook Evidence、Decision 与静态门`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, c...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:07:45+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 38/45 problems done, 0 blocked, 38/42 tickets done
+- Next instruction: Only perform `record-result` for ticket `T039`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T11:08:39+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 38/45 problems done, 0 blocked, 39/42 tickets done
+- Next instruction: Only perform `check-success` for `P034: Round 3C4 组合 Cutover、Rollback 与 Legacy 退役 Runbook`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summ...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:09:28+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 39/45 problems done, 0 blocked, 39/42 tickets done
+- Next instruction: Only perform `record-result` for ticket `T027`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T11:10:43+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 39/45 problems done, 0 blocked, 40/42 tickets done
+- Next instruction: Only perform `check-success` for `P022: Round 3C：Legacy 迁移、rollout、rollback 与退役`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, cri...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:11:34+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 40/45 problems done, 0 blocked, 40/42 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P023: Round 3D：目标架构独立复审与静态验收`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in ...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:12:36+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 40/45 problems done, 0 blocked, 40/43 tickets done
+- Next instruction: Only perform `classify-ticket` for `T042` on `P023: Round 3D：目标架构独立复审与静态验收`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Afte...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:13:03+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 40/45 problems done, 0 blocked, 40/43 tickets done
+- Next instruction: Only perform `split-ticket` for `T042` on `P023: Round 3D：目标架构独立复审与静态验收`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:14:11+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 40/49 problems done, 0 blocked, 40/43 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P045: Round 3D1 iOS/客户端独立架构复审`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:15:02+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 40/49 problems done, 0 blocked, 40/44 tickets done
+- Next instruction: Only perform `classify-ticket` for `T043` on `P045: Round 3D1 iOS/客户端独立架构复审`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Aft...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:15:32+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 40/49 problems done, 0 blocked, 40/44 tickets done
+- Next instruction: Only perform `execute-ticket` for `T043` on `P045: Round 3D1 iOS/客户端独立架构复审`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:32:58+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 40/49 problems done, 0 blocked, 41/44 tickets done
+- Next instruction: Only perform `check-success` for `P045: Round 3D1 iOS/客户端独立架构复审`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence)...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:33:45+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 41/49 problems done, 0 blocked, 41/44 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P046: Round 3D2 后端/数据/异步独立架构复审`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay i...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:34:39+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 41/49 problems done, 0 blocked, 41/45 tickets done
+- Next instruction: Only perform `classify-ticket` for `T044` on `P046: Round 3D2 后端/数据/异步独立架构复审`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Af...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:35:03+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 41/49 problems done, 0 blocked, 41/45 tickets done
+- Next instruction: Only perform `execute-ticket` for `T044` on `P046: Round 3D2 后端/数据/异步独立架构复审`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:40:27+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 41/49 problems done, 0 blocked, 42/45 tickets done
+- Next instruction: Only perform `check-success` for `P046: Round 3D2 后端/数据/异步独立架构复审`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:41:21+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 42/49 problems done, 0 blocked, 42/45 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P047: Round 3D3 安全/隐私/运维/过度设计独立复审`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names sta...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:42:04+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 42/49 problems done, 0 blocked, 42/46 tickets done
+- Next instruction: Only perform `classify-ticket` for `T045` on `P047: Round 3D3 安全/隐私/运维/过度设计独立复审`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English....
+
+## Recursive Closure Checkpoint - 2026-07-12T11:42:34+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 42/49 problems done, 0 blocked, 42/46 tickets done
+- Next instruction: Only perform `execute-ticket` for `T045` on `P047: Round 3D3 安全/隐私/运维/过度设计独立复审`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/exec...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:49:01+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 42/49 problems done, 0 blocked, 43/46 tickets done
+- Next instruction: Only perform `check-success` for `P047: Round 3D3 安全/隐私/运维/过度设计独立复审`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evide...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:49:45+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 43/49 problems done, 0 blocked, 43/46 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P048: Round 3D4 独立评审综合、修正与静态验收`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay i...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:50:57+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 43/49 problems done, 0 blocked, 43/47 tickets done
+- Next instruction: Only perform `classify-ticket` for `T046` on `P048: Round 3D4 独立评审综合、修正与静态验收`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Af...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:51:21+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 43/49 problems done, 0 blocked, 43/47 tickets done
+- Next instruction: Only perform `split-ticket` for `T046` on `P048: Round 3D4 独立评审综合、修正与静态验收`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI fla...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:52:20+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 43/51 problems done, 0 blocked, 43/47 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P049: Round 3D4A 独立发现 Disposition 与架构修正`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field nam...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:53:04+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 43/51 problems done, 0 blocked, 43/48 tickets done
+- Next instruction: Only perform `classify-ticket` for `T047` on `P049: Round 3D4A 独立发现 Disposition 与架构修正`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in En...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:53:32+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 43/51 problems done, 0 blocked, 43/48 tickets done
+- Next instruction: Only perform `execute-ticket` for `T047` on `P049: Round 3D4A 独立发现 Disposition 与架构修正`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/worker...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:58:39+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 43/51 problems done, 0 blocked, 44/48 tickets done
+- Next instruction: Only perform `check-success` for `P049: Round 3D4A 独立发现 Disposition 与架构修正`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria,...
+
+## Recursive Closure Checkpoint - 2026-07-12T11:59:25+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 44/51 problems done, 0 blocked, 44/48 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P050: Round 3D4B 架构、评审与链接静态验收`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:00:31+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 44/51 problems done, 0 blocked, 44/49 tickets done
+- Next instruction: Only perform `classify-ticket` for `T048` on `P050: Round 3D4B 架构、评审与链接静态验收`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Aft...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:01:02+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 44/51 problems done, 0 blocked, 44/49 tickets done
+- Next instruction: Only perform `execute-ticket` for `T048` on `P050: Round 3D4B 架构、评审与链接静态验收`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:04:30+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 44/51 problems done, 0 blocked, 44/49 tickets done
+- Next instruction: Only perform `execute-ticket` for `T048` on `P050: Round 3D4B 架构、评审与链接静态验收`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:04:44+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 44/51 problems done, 0 blocked, 44/49 tickets done
+- Next instruction: Only perform `record-result` for ticket `T048`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T12:11:48+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 44/51 problems done, 0 blocked, 45/49 tickets done
+- Next instruction: Only perform `check-success` for `P050: Round 3D4B 架构、评审与链接静态验收`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence)...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:12:57+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 45/51 problems done, 0 blocked, 45/49 tickets done
+- Next instruction: Only perform `record-result` for ticket `T046`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T12:13:29+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 45/51 problems done, 0 blocked, 45/49 tickets done
+- Next instruction: Only perform `record-result` for ticket `T046`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T12:14:06+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 45/51 problems done, 0 blocked, 46/49 tickets done
+- Next instruction: Only perform `check-success` for `P048: Round 3D4 独立评审综合、修正与静态验收`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:14:47+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 46/51 problems done, 0 blocked, 46/49 tickets done
+- Next instruction: Only perform `record-result` for ticket `T042`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T12:15:06+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 46/51 problems done, 0 blocked, 46/49 tickets done
+- Next instruction: Only perform `record-result` for ticket `T042`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T12:15:54+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 46/51 problems done, 0 blocked, 47/49 tickets done
+- Next instruction: Only perform `check-success` for `P023: Round 3D：目标架构独立复审与静态验收`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) ...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:16:35+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 47/51 problems done, 0 blocked, 47/49 tickets done
+- Next instruction: Only perform `record-result` for ticket `T017`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T12:16:57+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 47/51 problems done, 0 blocked, 47/49 tickets done
+- Next instruction: Only perform `record-result` for ticket `T017`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T12:18:15+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 47/51 problems done, 0 blocked, 48/49 tickets done
+- Next instruction: Only perform `check-success` for `P003: Round 3：目标架构与增量迁移路径`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in ...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:18:58+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 48/51 problems done, 0 blocked, 48/49 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P004: Round 4：可执行开发路线与验收门`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in Eng...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:20:17+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 48/51 problems done, 0 blocked, 48/50 tickets done
+- Next instruction: Only perform `classify-ticket` for `T049` on `P004: Round 4：可执行开发路线与验收门`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After t...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:20:40+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 48/51 problems done, 0 blocked, 48/50 tickets done
+- Next instruction: Only perform `split-ticket` for `T049` on `P004: Round 4：可执行开发路线与验收门`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags an...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:21:19+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 48/51 problems done, 0 blocked, 48/50 tickets done
+- Next instruction: Only perform `record-result` for ticket `T049`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T12:21:55+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 48/51 problems done, 0 blocked, 48/50 tickets done
+- Next instruction: Only perform `record-result` for ticket `T049`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T12:23:37+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 48/56 problems done, 0 blocked, 48/50 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P051: Round 4A：路线图控制模型、阶段与依赖 DAG`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:24:35+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 48/56 problems done, 0 blocked, 48/51 tickets done
+- Next instruction: Only perform `classify-ticket` for `T050` on `P051: Round 4A：路线图控制模型、阶段与依赖 DAG`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. ...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:25:04+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 48/56 problems done, 0 blocked, 48/51 tickets done
+- Next instruction: Only perform `execute-ticket` for `T050` on `P051: Round 4A：路线图控制模型、阶段与依赖 DAG`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execu...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:25:22+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 48/56 problems done, 0 blocked, 48/51 tickets done
+- Next instruction: Only perform `execute-ticket` for `T050` on `P051: Round 4A：路线图控制模型、阶段与依赖 DAG`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execu...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:25:44+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 48/56 problems done, 0 blocked, 48/51 tickets done
+- Next instruction: Only perform `record-result` for ticket `T050`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T12:29:30+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 48/56 problems done, 0 blocked, 49/51 tickets done
+- Next instruction: Only perform `check-success` for `P051: Round 4A：路线图控制模型、阶段与依赖 DAG`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, eviden...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:30:12+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 49/56 problems done, 0 blocked, 49/51 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P052: Round 4B：Stage 0 七个安全止损工作包`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:31:35+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 49/56 problems done, 0 blocked, 49/52 tickets done
+- Next instruction: Only perform `classify-ticket` for `T051` on `P052: Round 4B：Stage 0 七个安全止损工作包`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. ...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:32:09+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 49/56 problems done, 0 blocked, 49/52 tickets done
+- Next instruction: Only perform `split-ticket` for `T051` on `P052: Round 4B：Stage 0 七个安全止损工作包`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI f...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:32:56+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 49/59 problems done, 0 blocked, 49/52 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P056: Round 4B1：账号、身份、凭据与发布止损任务`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay ...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:34:21+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 49/59 problems done, 0 blocked, 49/53 tickets done
+- Next instruction: Only perform `classify-ticket` for `T052` on `P056: Round 4B1：账号、身份、凭据与发布止损任务`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. A...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:34:42+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 49/59 problems done, 0 blocked, 49/53 tickets done
+- Next instruction: Only perform `split-ticket` for `T052` on `P056: Round 4B1：账号、身份、凭据与发布止损任务`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI fl...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:35:27+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 49/61 problems done, 0 blocked, 49/53 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P059: Round 4B1A：Account/Local Isolation 与 Release Scope`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI fl...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:36:19+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 49/61 problems done, 0 blocked, 49/54 tickets done
+- Next instruction: Only perform `classify-ticket` for `T053` on `P059: Round 4B1A：Account/Local Isolation 与 Release Scope`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:36:49+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 49/61 problems done, 0 blocked, 49/54 tickets done
+- Next instruction: Only perform `execute-ticket` for `T053` on `P059: Round 4B1A：Account/Local Isolation 与 Release Scope`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:37:10+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 49/61 problems done, 0 blocked, 49/54 tickets done
+- Next instruction: Only perform `execute-ticket` for `T053` on `P059: Round 4B1A：Account/Local Isolation 与 Release Scope`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:37:34+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 49/61 problems done, 0 blocked, 49/54 tickets done
+- Next instruction: Only perform `record-result` for ticket `T053`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T12:51:47+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 49/61 problems done, 0 blocked, 50/54 tickets done
+- Next instruction: Only perform `check-success` for `P059: Round 4B1A：Account/Local Isolation 与 Release Scope`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, sum...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:52:44+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 50/61 problems done, 0 blocked, 50/54 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P060: Round 4B1B：Identity/AuthZ 与 Credential Stop-Loss`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flag...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:53:44+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 50/61 problems done, 0 blocked, 50/55 tickets done
+- Next instruction: Only perform `classify-ticket` for `T054` on `P060: Round 4B1B：Identity/AuthZ 与 Credential Stop-Loss`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field n...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:54:22+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 50/61 problems done, 0 blocked, 50/55 tickets done
+- Next instruction: Only perform `execute-ticket` for `T054` on `P060: Round 4B1B：Identity/AuthZ 与 Credential Stop-Loss`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `re...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:54:52+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 50/61 problems done, 0 blocked, 50/55 tickets done
+- Next instruction: Only perform `execute-ticket` for `T054` on `P060: Round 4B1B：Identity/AuthZ 与 Credential Stop-Loss`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `re...
+
+## Recursive Closure Checkpoint - 2026-07-12T12:55:19+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 50/61 problems done, 0 blocked, 50/55 tickets done
+- Next instruction: Only perform `record-result` for ticket `T054`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T13:03:16+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 50/61 problems done, 0 blocked, 51/55 tickets done
+- Next instruction: Only perform `check-success` for `P060: Round 4B1B：Identity/AuthZ 与 Credential Stop-Loss`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summa...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:04:24+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 51/61 problems done, 0 blocked, 51/55 tickets done
+- Next instruction: Only perform `record-result` for ticket `T052`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T13:05:09+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 51/61 problems done, 0 blocked, 51/55 tickets done
+- Next instruction: Only perform `record-result` for ticket `T052`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T13:06:01+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 51/61 problems done, 0 blocked, 52/55 tickets done
+- Next instruction: Only perform `check-success` for `P056: Round 4B1：账号、身份、凭据与发布止损任务`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidenc...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:06:56+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 52/61 problems done, 0 blocked, 52/55 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P057: Round 4B2：数据库恢复与数据权利任务`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in ...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:07:53+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 52/61 problems done, 0 blocked, 52/56 tickets done
+- Next instruction: Only perform `classify-ticket` for `T055` on `P057: Round 4B2：数据库恢复与数据权利任务`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Afte...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:08:22+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 52/61 problems done, 0 blocked, 52/56 tickets done
+- Next instruction: Only perform `execute-ticket` for `T055` on `P057: Round 4B2：数据库恢复与数据权利任务`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-t...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:08:53+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 52/61 problems done, 0 blocked, 52/56 tickets done
+- Next instruction: Only perform `execute-ticket` for `T055` on `P057: Round 4B2：数据库恢复与数据权利任务`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-t...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:09:19+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 52/61 problems done, 0 blocked, 52/56 tickets done
+- Next instruction: Only perform `record-result` for ticket `T055`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T13:13:09+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 52/61 problems done, 0 blocked, 53/56 tickets done
+- Next instruction: Only perform `check-success` for `P057: Round 4B2：数据库恢复与数据权利任务`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) ...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:14:08+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 53/61 problems done, 0 blocked, 53/56 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P058: Round 4B3：运维证据与 Stage 0 集成门`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names sta...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:15:15+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 53/61 problems done, 0 blocked, 53/57 tickets done
+- Next instruction: Only perform `classify-ticket` for `T056` on `P058: Round 4B3：运维证据与 Stage 0 集成门`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English....
+
+## Recursive Closure Checkpoint - 2026-07-12T13:15:50+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 53/61 problems done, 0 blocked, 53/57 tickets done
+- Next instruction: Only perform `execute-ticket` for `T056` on `P058: Round 4B3：运维证据与 Stage 0 集成门`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/exec...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:16:23+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 53/61 problems done, 0 blocked, 53/57 tickets done
+- Next instruction: Only perform `execute-ticket` for `T056` on `P058: Round 4B3：运维证据与 Stage 0 集成门`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/exec...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:16:48+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 53/61 problems done, 0 blocked, 53/57 tickets done
+- Next instruction: Only perform `record-result` for ticket `T056`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T13:20:32+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 53/61 problems done, 0 blocked, 54/57 tickets done
+- Next instruction: Only perform `check-success` for `P058: Round 4B3：运维证据与 Stage 0 集成门`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evide...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:21:16+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 54/61 problems done, 0 blocked, 54/57 tickets done
+- Next instruction: Only perform `record-result` for ticket `T051`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T13:21:43+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 54/61 problems done, 0 blocked, 54/57 tickets done
+- Next instruction: Only perform `record-result` for ticket `T051`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T13:22:27+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 54/61 problems done, 0 blocked, 55/57 tickets done
+- Next instruction: Only perform `check-success` for `P052: Round 4B：Stage 0 七个安全止损工作包`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, eviden...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:23:15+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 55/61 problems done, 0 blocked, 55/57 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P053: Round 4C：Owner Truth Loop 与 iOS Runtime 工作包`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:27:57+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 55/61 problems done, 0 blocked, 55/58 tickets done
+- Next instruction: Only perform `classify-ticket` for `T057` on `P053: Round 4C：Owner Truth Loop 与 iOS Runtime 工作包`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names ...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:28:17+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 55/61 problems done, 0 blocked, 55/58 tickets done
+- Next instruction: Only perform `split-ticket` for `T057` on `P053: Round 4C：Owner Truth Loop 与 iOS Runtime 工作包`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evide...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:29:12+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 55/64 problems done, 0 blocked, 55/58 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P061: Round 4C1：Owner Truth Authority 原子工作项`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:30:43+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 55/64 problems done, 0 blocked, 55/59 tickets done
+- Next instruction: Only perform `classify-ticket` for `T058` on `P061: Round 4C1：Owner Truth Authority 原子工作项`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay i...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:31:01+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 55/64 problems done, 0 blocked, 55/59 tickets done
+- Next instruction: Only perform `execute-ticket` for `T058` on `P061: Round 4C1：Owner Truth Authority 原子工作项`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/wo...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:31:29+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 55/64 problems done, 0 blocked, 55/59 tickets done
+- Next instruction: Only perform `record-result` for ticket `T058`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T13:36:55+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 55/64 problems done, 0 blocked, 56/59 tickets done
+- Next instruction: Only perform `check-success` for `P061: Round 4C1：Owner Truth Authority 原子工作项`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, crite...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:38:08+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 56/64 problems done, 0 blocked, 56/59 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P062: Round 4C2：Async Effect Authority 原子工作项`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and fiel...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:39:08+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 56/64 problems done, 0 blocked, 56/60 tickets done
+- Next instruction: Only perform `classify-ticket` for `T059` on `P062: Round 4C2：Async Effect Authority 原子工作项`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay ...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:39:28+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 56/64 problems done, 0 blocked, 56/60 tickets done
+- Next instruction: Only perform `execute-ticket` for `T059` on `P062: Round 4C2：Async Effect Authority 原子工作项`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/w...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:40:05+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 56/64 problems done, 0 blocked, 56/60 tickets done
+- Next instruction: Only perform `record-result` for ticket `T059`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T13:43:33+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 56/64 problems done, 0 blocked, 57/60 tickets done
+- Next instruction: Only perform `check-success` for `P062: Round 4C2：Async Effect Authority 原子工作项`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, crit...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:43:57+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 57/64 problems done, 0 blocked, 57/60 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P063: Round 4C3：iOS Composition 与 Runtime 原子工作项`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and f...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:44:54+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 57/64 problems done, 0 blocked, 57/61 tickets done
+- Next instruction: Only perform `classify-ticket` for `T060` on `P063: Round 4C3：iOS Composition 与 Runtime 原子工作项`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names st...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:45:20+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 57/64 problems done, 0 blocked, 57/61 tickets done
+- Next instruction: Only perform `execute-ticket` for `T060` on `P063: Round 4C3：iOS Composition 与 Runtime 原子工作项`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `reference...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:46:02+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 57/64 problems done, 0 blocked, 57/61 tickets done
+- Next instruction: Only perform `record-result` for ticket `T060`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T13:49:45+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 57/64 problems done, 0 blocked, 58/61 tickets done
+- Next instruction: Only perform `check-success` for `P063: Round 4C3：iOS Composition 与 Runtime 原子工作项`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, c...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:50:18+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 58/64 problems done, 0 blocked, 58/61 tickets done
+- Next instruction: Only perform `record-result` for ticket `T057`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T13:52:17+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 58/64 problems done, 0 blocked, 59/61 tickets done
+- Next instruction: Only perform `check-success` for `P053: Round 4C：Owner Truth Loop 与 iOS Runtime 工作包`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries,...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:53:14+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 58/65 problems done, 0 blocked, 59/61 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P064: Round 4C Stage 1 集成状态、跨包顺序与静态门`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names ...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:54:07+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 58/65 problems done, 0 blocked, 59/62 tickets done
+- Next instruction: Only perform `classify-ticket` for `T061` on `P064: Round 4C Stage 1 集成状态、跨包顺序与静态门`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in Engli...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:54:32+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 58/65 problems done, 0 blocked, 59/62 tickets done
+- Next instruction: Only perform `execute-ticket` for `T061` on `P064: Round 4C Stage 1 集成状态、跨包顺序与静态门`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/e...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:55:10+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 58/65 problems done, 0 blocked, 59/62 tickets done
+- Next instruction: Only perform `record-result` for ticket `T061`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T13:58:32+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 58/65 problems done, 0 blocked, 60/62 tickets done
+- Next instruction: Only perform `check-success` for `P064: Round 4C Stage 1 集成状态、跨包顺序与静态门`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, ev...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:59:00+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 59/65 problems done, 0 blocked, 60/62 tickets done
+- Next instruction: Only perform `check-success` for `P053: Round 4C：Owner Truth Loop 与 iOS Runtime 工作包`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries,...
+
+## Recursive Closure Checkpoint - 2026-07-12T13:59:59+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 60/65 problems done, 0 blocked, 60/62 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P054: Round 4D：Publication、Voice/DH 与组合迁移工作包`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and fiel...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:01:56+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 60/65 problems done, 0 blocked, 60/63 tickets done
+- Next instruction: Only perform `classify-ticket` for `T062` on `P054: Round 4D：Publication、Voice/DH 与组合迁移工作包`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay ...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:02:25+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 60/65 problems done, 0 blocked, 60/63 tickets done
+- Next instruction: Only perform `split-ticket` for `T062` on `P054: Round 4D：Publication、Voice/DH 与组合迁移工作包`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) ...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:03:49+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 60/68 problems done, 0 blocked, 60/63 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P065: Round 4D1：Publication 独立公开副本工作项`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:05:03+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 60/68 problems done, 0 blocked, 60/64 tickets done
+- Next instruction: Only perform `classify-ticket` for `T063` on `P065: Round 4D1：Publication 独立公开副本工作项`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in Engl...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:05:33+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 60/68 problems done, 0 blocked, 60/64 tickets done
+- Next instruction: Only perform `execute-ticket` for `T063` on `P065: Round 4D1：Publication 独立公开副本工作项`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:06:10+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 60/68 problems done, 0 blocked, 60/64 tickets done
+- Next instruction: Only perform `record-result` for ticket `T063`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T14:10:25+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 60/68 problems done, 0 blocked, 61/64 tickets done
+- Next instruction: Only perform `check-success` for `P065: Round 4D1：Publication 独立公开副本工作项`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, e...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:11:01+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 61/68 problems done, 0 blocked, 61/64 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P066: Round 4D2：Voice/DH Governance 工作项`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field nam...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:12:16+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 61/68 problems done, 0 blocked, 61/65 tickets done
+- Next instruction: Only perform `classify-ticket` for `T064` on `P066: Round 4D2：Voice/DH Governance 工作项`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in En...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:12:48+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 61/68 problems done, 0 blocked, 61/65 tickets done
+- Next instruction: Only perform `execute-ticket` for `T064` on `P066: Round 4D2：Voice/DH Governance 工作项`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/worker...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:13:24+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 61/68 problems done, 0 blocked, 61/65 tickets done
+- Next instruction: Only perform `record-result` for ticket `T064`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T14:17:40+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 61/68 problems done, 0 blocked, 62/65 tickets done
+- Next instruction: Only perform `check-success` for `P066: Round 4D2：Voice/DH Governance 工作项`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria,...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:18:03+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 62/68 problems done, 0 blocked, 62/65 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P067: Round 4D3：Composite Migration Drills 工作项`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and fi...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:19:07+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 62/68 problems done, 0 blocked, 62/66 tickets done
+- Next instruction: Only perform `classify-ticket` for `T065` on `P067: Round 4D3：Composite Migration Drills 工作项`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names sta...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:19:35+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 62/68 problems done, 0 blocked, 62/66 tickets done
+- Next instruction: Only perform `execute-ticket` for `T065` on `P067: Round 4D3：Composite Migration Drills 工作项`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:20:11+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 62/68 problems done, 0 blocked, 62/66 tickets done
+- Next instruction: Only perform `record-result` for ticket `T065`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T14:24:37+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 62/68 problems done, 0 blocked, 63/66 tickets done
+- Next instruction: Only perform `check-success` for `P067: Round 4D3：Composite Migration Drills 工作项`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, cr...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:25:08+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 63/68 problems done, 0 blocked, 63/66 tickets done
+- Next instruction: Only perform `record-result` for ticket `T062`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T14:26:18+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 63/68 problems done, 0 blocked, 64/66 tickets done
+- Next instruction: Only perform `check-success` for `P054: Round 4D：Publication、Voice/DH 与组合迁移工作包`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, crit...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:27:11+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 63/69 problems done, 0 blocked, 64/66 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P068: Round 4D 状态、跨 Lane 优先级与 Optional/Migration 静态门`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags ...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:27:53+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 63/69 problems done, 0 blocked, 64/67 tickets done
+- Next instruction: Only perform `classify-ticket` for `T066` on `P068: Round 4D 状态、跨 Lane 优先级与 Optional/Migration 静态门`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field nam...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:28:19+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 63/69 problems done, 0 blocked, 64/67 tickets done
+- Next instruction: Only perform `execute-ticket` for `T066` on `P068: Round 4D 状态、跨 Lane 优先级与 Optional/Migration 静态门`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `refe...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:28:47+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 63/69 problems done, 0 blocked, 64/67 tickets done
+- Next instruction: Only perform `record-result` for ticket `T066`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T14:32:08+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 63/69 problems done, 0 blocked, 65/67 tickets done
+- Next instruction: Only perform `check-success` for `P068: Round 4D 状态、跨 Lane 优先级与 Optional/Migration 静态门`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summari...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:32:44+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 64/69 problems done, 0 blocked, 65/67 tickets done
+- Next instruction: Only perform `check-success` for `P054: Round 4D：Publication、Voice/DH 与组合迁移工作包`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, crit...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:33:40+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 65/69 problems done, 0 blocked, 65/67 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P055: Round 4E：路线追踪、静态验收与下一个任务选择规则`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names st...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:35:17+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 65/69 problems done, 0 blocked, 65/68 tickets done
+- Next instruction: Only perform `classify-ticket` for `T067` on `P055: Round 4E：路线追踪、静态验收与下一个任务选择规则`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:35:48+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 65/69 problems done, 0 blocked, 65/68 tickets done
+- Next instruction: Only perform `split-ticket` for `T067` on `P055: Round 4E：路线追踪、静态验收与下一个任务选择规则`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:36:47+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 65/71 problems done, 0 blocked, 65/68 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P069: Round 4E1：FR/DR/Finding/Risk/Package/Work Item 双向追踪`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI f...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:39:59+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 65/71 problems done, 0 blocked, 65/69 tickets done
+- Next instruction: Only perform `classify-ticket` for `T068` on `P069: Round 4E1：FR/DR/Finding/Risk/Package/Work Item 双向追踪`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and fiel...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:40:38+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 65/71 problems done, 0 blocked, 65/69 tickets done
+- Next instruction: Only perform `split-ticket` for `T068` on `P069: Round 4E1：FR/DR/Finding/Risk/Package/Work Item 双向追踪`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteri...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:41:45+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 65/73 problems done, 0 blocked, 65/69 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P071: Round 4E1A：补齐 Safety、Persona 与 Media 路线缺口`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and f...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:52:35+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 65/73 problems done, 0 blocked, 65/70 tickets done
+- Next instruction: Only perform `classify-ticket` for `T069` on `P071: Round 4E1A：补齐 Safety、Persona 与 Media 路线缺口`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names st...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:52:49+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 65/73 problems done, 0 blocked, 65/70 tickets done
+- Next instruction: Only perform `split-ticket` for `T069` on `P071: Round 4E1A：补齐 Safety、Persona 与 Media 路线缺口`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidenc...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:53:50+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 65/73 problems done, 0 blocked, 65/70 tickets done
+- Next instruction: Only perform `record-result` for ticket `T069`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T14:54:29+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 65/73 problems done, 0 blocked, 65/70 tickets done
+- Next instruction: Only perform `record-result` for ticket `T069`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T14:55:01+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 65/76 problems done, 0 blocked, 65/70 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P073: Round 4E1A1：补齐危机响应与 AI 披露路线`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names sta...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:55:55+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 65/76 problems done, 0 blocked, 65/71 tickets done
+- Next instruction: Only perform `classify-ticket` for `T070` on `P073: Round 4E1A1：补齐危机响应与 AI 披露路线`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English....
+
+## Recursive Closure Checkpoint - 2026-07-12T14:56:08+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 65/76 problems done, 0 blocked, 65/71 tickets done
+- Next instruction: Only perform `execute-ticket` for `T070` on `P073: Round 4E1A1：补齐危机响应与 AI 披露路线`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/exec...
+
+## Recursive Closure Checkpoint - 2026-07-12T14:59:02+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 65/76 problems done, 0 blocked, 66/71 tickets done
+- Next instruction: Only perform `check-success` for `P073: Round 4E1A1：补齐危机响应与 AI 披露路线`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evide...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:06:39+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 66/76 problems done, 0 blocked, 66/71 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P074: Round 4E1A2：补齐 Persona 与真实媒体 Authority 路线`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and f...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:07:29+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 66/76 problems done, 0 blocked, 66/72 tickets done
+- Next instruction: Only perform `classify-ticket` for `T071` on `P074: Round 4E1A2：补齐 Persona 与真实媒体 Authority 路线`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names st...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:07:42+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 66/76 problems done, 0 blocked, 66/72 tickets done
+- Next instruction: Only perform `execute-ticket` for `T071` on `P074: Round 4E1A2：补齐 Persona 与真实媒体 Authority 路线`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `reference...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:10:30+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 66/76 problems done, 0 blocked, 67/72 tickets done
+- Next instruction: Only perform `check-success` for `P074: Round 4E1A2：补齐 Persona 与真实媒体 Authority 路线`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, c...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:11:10+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 67/76 problems done, 0 blocked, 67/72 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P075: Round 4E1A3：收敛 canonical 引用、计数与跨包追踪边`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field ...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:11:44+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 67/76 problems done, 0 blocked, 67/73 tickets done
+- Next instruction: Only perform `classify-ticket` for `T072` on `P075: Round 4E1A3：收敛 canonical 引用、计数与跨包追踪边`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:11:59+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 67/76 problems done, 0 blocked, 67/73 tickets done
+- Next instruction: Only perform `execute-ticket` for `T072` on `P075: Round 4E1A3：收敛 canonical 引用、计数与跨包追踪边`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/wor...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:20:46+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 67/76 problems done, 0 blocked, 68/73 tickets done
+- Next instruction: Only perform `check-success` for `P075: Round 4E1A3：收敛 canonical 引用、计数与跨包追踪边`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criter...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:21:28+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 68/76 problems done, 0 blocked, 68/73 tickets done
+- Next instruction: Only perform `record-result` for ticket `T069`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T15:22:00+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 68/76 problems done, 0 blocked, 69/73 tickets done
+- Next instruction: Only perform `check-success` for `P071: Round 4E1A：补齐 Safety、Persona 与 Media 路线缺口`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, c...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:22:33+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 69/76 problems done, 0 blocked, 69/73 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P072: Round 4E1B：建立V4双向追踪矩阵与Checker`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names s...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:23:37+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 69/76 problems done, 0 blocked, 69/74 tickets done
+- Next instruction: Only perform `classify-ticket` for `T073` on `P072: Round 4E1B：建立V4双向追踪矩阵与Checker`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in Englis...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:23:53+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 69/76 problems done, 0 blocked, 69/74 tickets done
+- Next instruction: Only perform `split-ticket` for `T073` on `P072: Round 4E1B：建立V4双向追踪矩阵与Checker`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CL...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:24:37+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 69/78 problems done, 0 blocked, 69/74 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P076: Round 4E1B1：建立V4路线追踪矩阵与生成器`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:27:09+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 69/78 problems done, 0 blocked, 69/75 tickets done
+- Next instruction: Only perform `classify-ticket` for `T074` on `P076: Round 4E1B1：建立V4路线追踪矩阵与生成器`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. ...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:27:20+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 69/78 problems done, 0 blocked, 69/75 tickets done
+- Next instruction: Only perform `execute-ticket` for `T074` on `P076: Round 4E1B1：建立V4路线追踪矩阵与生成器`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execu...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:33:29+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 69/78 problems done, 0 blocked, 70/75 tickets done
+- Next instruction: Only perform `check-success` for `P076: Round 4E1B1：建立V4路线追踪矩阵与生成器`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, eviden...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:34:02+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 70/78 problems done, 0 blocked, 70/75 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P077: Round 4E1B2：建立双向追踪Checker与负向证据`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names ...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:34:41+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 70/78 problems done, 0 blocked, 70/76 tickets done
+- Next instruction: Only perform `classify-ticket` for `T075` on `P077: Round 4E1B2：建立双向追踪Checker与负向证据`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in Engli...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:34:52+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 70/78 problems done, 0 blocked, 70/76 tickets done
+- Next instruction: Only perform `execute-ticket` for `T075` on `P077: Round 4E1B2：建立双向追踪Checker与负向证据`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/e...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:47:33+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 70/78 problems done, 0 blocked, 71/76 tickets done
+- Next instruction: Only perform `check-success` for `P077: Round 4E1B2：建立双向追踪Checker与负向证据`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, ev...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:48:19+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 70/79 problems done, 0 blocked, 71/76 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P078: 修复 Gate 语义解析并重新生成可验证追踪矩阵`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay i...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:50:12+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 70/79 problems done, 0 blocked, 71/77 tickets done
+- Next instruction: Only perform `classify-ticket` for `T076` on `P078: 修复 Gate 语义解析并重新生成可验证追踪矩阵`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Af...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:50:37+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 70/79 problems done, 0 blocked, 71/77 tickets done
+- Next instruction: Only perform `execute-ticket` for `T076` on `P078: 修复 Gate 语义解析并重新生成可验证追踪矩阵`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:54:01+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 70/79 problems done, 0 blocked, 72/77 tickets done
+- Next instruction: Only perform `check-success` for `P078: 修复 Gate 语义解析并重新生成可验证追踪矩阵`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:54:46+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 71/79 problems done, 0 blocked, 72/77 tickets done
+- Next instruction: Only perform `check-success` for `P077: Round 4E1B2：建立双向追踪Checker与负向证据`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, ev...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:55:21+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 72/79 problems done, 0 blocked, 72/77 tickets done
+- Next instruction: Only perform `record-result` for ticket `T073`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T15:56:14+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 72/79 problems done, 0 blocked, 73/77 tickets done
+- Next instruction: Only perform `check-success` for `P072: Round 4E1B：建立V4双向追踪矩阵与Checker`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evi...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:56:52+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 73/79 problems done, 0 blocked, 73/77 tickets done
+- Next instruction: Only perform `record-result` for ticket `T068`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T15:57:39+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 73/79 problems done, 0 blocked, 74/77 tickets done
+- Next instruction: Only perform `check-success` for `P069: Round 4E1：FR/DR/Finding/Risk/Package/Work Item 双向追踪`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, su...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:58:23+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 74/79 problems done, 0 blocked, 74/77 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P070: Round 4E2：Roadmap 总检查、DAG 与确定性 Next Selector`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags an...
+
+## Recursive Closure Checkpoint - 2026-07-12T15:59:53+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 74/79 problems done, 0 blocked, 74/78 tickets done
+- Next instruction: Only perform `classify-ticket` for `T077` on `P070: Round 4E2：Roadmap 总检查、DAG 与确定性 Next Selector`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:00:19+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 74/79 problems done, 0 blocked, 74/78 tickets done
+- Next instruction: Only perform `split-ticket` for `T077` on `P070: Round 4E2：Roadmap 总检查、DAG 与确定性 Next Selector`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evid...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:01:08+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 74/81 problems done, 0 blocked, 74/78 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P079: Round 4E2A：路线执行注册表与确定性 Next Selector`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field ...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:02:44+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 74/81 problems done, 0 blocked, 74/79 tickets done
+- Next instruction: Only perform `classify-ticket` for `T078` on `P079: Round 4E2A：路线执行注册表与确定性 Next Selector`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:03:10+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 74/81 problems done, 0 blocked, 74/79 tickets done
+- Next instruction: Only perform `split-ticket` for `T078` on `P079: Round 4E2A：路线执行注册表与确定性 Next Selector`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:03:55+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 74/83 problems done, 0 blocked, 74/79 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P081: Round 4E2A1：生成 typed Execution Registry`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and fie...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:04:44+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 74/83 problems done, 0 blocked, 74/80 tickets done
+- Next instruction: Only perform `classify-ticket` for `T079` on `P081: Round 4E2A1：生成 typed Execution Registry`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:05:05+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 74/83 problems done, 0 blocked, 74/80 tickets done
+- Next instruction: Only perform `execute-ticket` for `T079` on `P081: Round 4E2A1：生成 typed Execution Registry`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:19:15+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 74/83 problems done, 0 blocked, 75/80 tickets done
+- Next instruction: Only perform `check-success` for `P081: Round 4E2A1：生成 typed Execution Registry`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, cri...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:20:05+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 75/83 problems done, 0 blocked, 75/80 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P082: Round 4E2A2：Roadmap Selector、状态失效与 Round 4 Header`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI fla...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:21:12+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 75/83 problems done, 0 blocked, 75/81 tickets done
+- Next instruction: Only perform `classify-ticket` for `T080` on `P082: Round 4E2A2：Roadmap Selector、状态失效与 Round 4 Header`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field ...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:21:39+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 75/83 problems done, 0 blocked, 75/81 tickets done
+- Next instruction: Only perform `execute-ticket` for `T080` on `P082: Round 4E2A2：Roadmap Selector、状态失效与 Round 4 Header`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `r...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:25:43+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 75/83 problems done, 0 blocked, 76/81 tickets done
+- Next instruction: Only perform `check-success` for `P082: Round 4E2A2：Roadmap Selector、状态失效与 Round 4 Header`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summ...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:26:31+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 76/83 problems done, 0 blocked, 76/81 tickets done
+- Next instruction: Only perform `record-result` for ticket `T078`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T16:27:14+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 76/83 problems done, 0 blocked, 77/81 tickets done
+- Next instruction: Only perform `check-success` for `P079: Round 4E2A：路线执行注册表与确定性 Next Selector`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criter...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:27:59+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 77/83 problems done, 0 blocked, 77/81 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P080: Round 4E2B：Roadmap 总 Checker 与负向验收`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field na...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:29:31+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 77/83 problems done, 0 blocked, 77/82 tickets done
+- Next instruction: Only perform `classify-ticket` for `T081` on `P080: Round 4E2B：Roadmap 总 Checker 与负向验收`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in E...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:29:53+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 77/83 problems done, 0 blocked, 77/82 tickets done
+- Next instruction: Only perform `split-ticket` for `T081` on `P080: Round 4E2B：Roadmap 总 Checker 与负向验收`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in z...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:30:33+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 77/85 problems done, 0 blocked, 77/82 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P083: Round 4E2B1：独立 Roadmap 总 Checker 与八类负向 Fixture`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags ...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:31:20+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 77/85 problems done, 0 blocked, 77/83 tickets done
+- Next instruction: Only perform `classify-ticket` for `T082` on `P083: Round 4E2B1：独立 Roadmap 总 Checker 与八类负向 Fixture`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field nam...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:31:44+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 77/85 problems done, 0 blocked, 77/83 tickets done
+- Next instruction: Only perform `execute-ticket` for `T082` on `P083: Round 4E2B1：独立 Roadmap 总 Checker 与八类负向 Fixture`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `refe...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:46:39+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 77/85 problems done, 0 blocked, 78/83 tickets done
+- Next instruction: Only perform `check-success` for `P083: Round 4E2B1：独立 Roadmap 总 Checker 与八类负向 Fixture`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summari...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:47:27+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 78/85 problems done, 0 blocked, 78/83 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P084: Round 4E2B2：全量静态验收与 Round 4 状态发布`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field name...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:48:21+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 78/85 problems done, 0 blocked, 78/84 tickets done
+- Next instruction: Only perform `classify-ticket` for `T083` on `P084: Round 4E2B2：全量静态验收与 Round 4 状态发布`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in Eng...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:48:45+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 78/85 problems done, 0 blocked, 78/84 tickets done
+- Next instruction: Only perform `execute-ticket` for `T083` on `P084: Round 4E2B2：全量静态验收与 Round 4 状态发布`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:53:43+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 78/85 problems done, 0 blocked, 78/84 tickets done
+- Next instruction: Only perform `execute-ticket` for `T083` on `P084: Round 4E2B2：全量静态验收与 Round 4 状态发布`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:54:07+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 78/85 problems done, 0 blocked, 78/84 tickets done
+- Next instruction: Only perform `record-result` for ticket `T083`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T16:54:31+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 78/85 problems done, 0 blocked, 79/84 tickets done
+- Next instruction: Only perform `check-success` for `P084: Round 4E2B2：全量静态验收与 Round 4 状态发布`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, ...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:55:30+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 79/85 problems done, 0 blocked, 79/84 tickets done
+- Next instruction: Only perform `record-result` for ticket `T081`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T16:56:50+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 79/85 problems done, 0 blocked, 79/84 tickets done
+- Next instruction: Only perform `record-result` for ticket `T081`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T16:57:20+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 79/85 problems done, 0 blocked, 80/84 tickets done
+- Next instruction: Only perform `check-success` for `P080: Round 4E2B：Roadmap 总 Checker 与负向验收`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria...
+
+## Recursive Closure Checkpoint - 2026-07-12T16:58:09+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 80/85 problems done, 0 blocked, 80/84 tickets done
+- Next instruction: Only perform `record-result` for ticket `T077`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T16:59:18+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 80/85 problems done, 0 blocked, 80/84 tickets done
+- Next instruction: Only perform `record-result` for ticket `T077`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T16:59:41+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 80/85 problems done, 0 blocked, 81/84 tickets done
+- Next instruction: Only perform `check-success` for `P070: Round 4E2：Roadmap 总检查、DAG 与确定性 Next Selector`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:00:20+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 81/85 problems done, 0 blocked, 81/84 tickets done
+- Next instruction: Only perform `record-result` for ticket `T067`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T17:01:21+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 81/85 problems done, 0 blocked, 81/84 tickets done
+- Next instruction: Only perform `record-result` for ticket `T067`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T17:01:48+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 81/85 problems done, 0 blocked, 82/84 tickets done
+- Next instruction: Only perform `check-success` for `P055: Round 4E：路线追踪、静态验收与下一个任务选择规则`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evid...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:02:24+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 82/85 problems done, 0 blocked, 82/84 tickets done
+- Next instruction: Only perform `record-result` for ticket `T049`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T17:03:23+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 82/85 problems done, 0 blocked, 83/84 tickets done
+- Next instruction: Only perform `check-success` for `P004: Round 4：可执行开发路线与验收门`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in ...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:04:09+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 83/85 problems done, 0 blocked, 83/84 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P005: Round 5：独立复审、压力测试与成果物定稿`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:05:43+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 83/85 problems done, 0 blocked, 83/85 tickets done
+- Next instruction: Only perform `classify-ticket` for `T084` on `P005: Round 5：独立复审、压力测试与成果物定稿`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Aft...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:06:16+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 83/85 problems done, 0 blocked, 83/85 tickets done
+- Next instruction: Only perform `split-ticket` for `T084` on `P005: Round 5：独立复审、压力测试与成果物定稿`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flag...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:07:13+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 83/85 problems done, 0 blocked, 83/85 tickets done
+- Next instruction: Only perform `record-result` for ticket `T084`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T17:08:02+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 83/85 problems done, 0 blocked, 83/85 tickets done
+- Next instruction: Only perform `record-result` for ticket `T084`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T17:08:44+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 83/86 problems done, 0 blocked, 83/85 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P085: Round 5A：第一轮三视角独立复审`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in Eng...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:10:00+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 83/86 problems done, 0 blocked, 83/86 tickets done
+- Next instruction: Only perform `classify-ticket` for `T085` on `P085: Round 5A：第一轮三视角独立复审`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After t...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:10:32+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 83/86 problems done, 0 blocked, 83/86 tickets done
+- Next instruction: Only perform `split-ticket` for `T085` on `P085: Round 5A：第一轮三视角独立复审`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags an...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:11:15+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 83/86 problems done, 0 blocked, 83/86 tickets done
+- Next instruction: Only perform `record-result` for ticket `T085`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T17:11:15+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 83/87 problems done, 0 blocked, 83/86 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P086: Round 5A1：产品价值、PRD与范围独立复审`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay ...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:11:15+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 83/88 problems done, 0 blocked, 83/86 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P086: Round 5A1：产品价值、PRD与范围独立复审`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay ...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:11:16+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 83/89 problems done, 0 blocked, 83/86 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P086: Round 5A1：产品价值、PRD与范围独立复审`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay ...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:12:12+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 83/89 problems done, 0 blocked, 83/87 tickets done
+- Next instruction: Only perform `classify-ticket` for `T086` on `P086: Round 5A1：产品价值、PRD与范围独立复审`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. A...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:12:38+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 83/89 problems done, 0 blocked, 83/87 tickets done
+- Next instruction: Only perform `execute-ticket` for `T086` on `P086: Round 5A1：产品价值、PRD与范围独立复审`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execut...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:13:10+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 83/89 problems done, 0 blocked, 83/87 tickets done
+- Next instruction: Only perform `execute-ticket` for `T086` on `P086: Round 5A1：产品价值、PRD与范围独立复审`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execut...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:13:11+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 83/89 problems done, 0 blocked, 83/87 tickets done
+- Next instruction: Only perform `record-result` for ticket `T086`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T17:40:47+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 83/89 problems done, 0 blocked, 84/87 tickets done
+- Next instruction: Only perform `check-success` for `P086: Round 5A1：产品价值、PRD与范围独立复审`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidenc...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:41:34+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 84/89 problems done, 0 blocked, 84/87 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P087: Round 5A2：工程证据、架构与路线可执行性独立复审`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names st...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:42:13+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 84/89 problems done, 0 blocked, 84/88 tickets done
+- Next instruction: Only perform `classify-ticket` for `T087` on `P087: Round 5A2：工程证据、架构与路线可执行性独立复审`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:42:37+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 84/89 problems done, 0 blocked, 84/88 tickets done
+- Next instruction: Only perform `execute-ticket` for `T087` on `P087: Round 5A2：工程证据、架构与路线可执行性独立复审`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/exe...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:43:00+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 84/89 problems done, 0 blocked, 84/88 tickets done
+- Next instruction: Only perform `execute-ticket` for `T087` on `P087: Round 5A2：工程证据、架构与路线可执行性独立复审`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/exe...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:43:00+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 84/89 problems done, 0 blocked, 84/88 tickets done
+- Next instruction: Only perform `record-result` for ticket `T087`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T17:50:42+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 84/89 problems done, 0 blocked, 85/88 tickets done
+- Next instruction: Only perform `check-success` for `P087: Round 5A2：工程证据、架构与路线可执行性独立复审`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evid...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:51:29+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 85/89 problems done, 0 blocked, 85/88 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P088: Round 5A3：安全、隐私、运维、成本与过度设计独立复审`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names ...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:52:09+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 85/89 problems done, 0 blocked, 85/89 tickets done
+- Next instruction: Only perform `classify-ticket` for `T088` on `P088: Round 5A3：安全、隐私、运维、成本与过度设计独立复审`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in Engli...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:52:40+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 85/89 problems done, 0 blocked, 85/89 tickets done
+- Next instruction: Only perform `execute-ticket` for `T088` on `P088: Round 5A3：安全、隐私、运维、成本与过度设计独立复审`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/e...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:52:58+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 85/89 problems done, 0 blocked, 85/89 tickets done
+- Next instruction: Only perform `execute-ticket` for `T088` on `P088: Round 5A3：安全、隐私、运维、成本与过度设计独立复审`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/e...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:52:58+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 85/89 problems done, 0 blocked, 85/89 tickets done
+- Next instruction: Only perform `record-result` for ticket `T088`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T17:58:18+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 85/89 problems done, 0 blocked, 86/89 tickets done
+- Next instruction: Only perform `check-success` for `P088: Round 5A3：安全、隐私、运维、成本与过度设计独立复审`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, ev...
+
+## Recursive Closure Checkpoint - 2026-07-12T17:58:58+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 86/89 problems done, 0 blocked, 86/89 tickets done
+- Next instruction: Only perform `record-result` for ticket `T085`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:00:39+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 86/89 problems done, 0 blocked, 86/89 tickets done
+- Next instruction: Only perform `record-result` for ticket `T085`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:01:03+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 86/89 problems done, 0 blocked, 87/89 tickets done
+- Next instruction: Only perform `check-success` for `P085: Round 5A：第一轮三视角独立复审`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in ...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:01:43+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 87/89 problems done, 0 blocked, 87/89 tickets done
+- Next instruction: Only perform `record-result` for ticket `T084`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:02:24+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 87/89 problems done, 0 blocked, 88/89 tickets done
+- Next instruction: Only perform `check-success` for `P005: Round 5：独立复审、压力测试与成果物定稿`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence)...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:03:31+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 87/90 problems done, 0 blocked, 88/89 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P089: Round 5B-D：发现处置、第二轮盲审与成果物定稿`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names sta...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:04:19+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 87/90 problems done, 0 blocked, 88/90 tickets done
+- Next instruction: Only perform `classify-ticket` for `T089` on `P089: Round 5B-D：发现处置、第二轮盲审与成果物定稿`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English....
+
+## Recursive Closure Checkpoint - 2026-07-12T18:04:44+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 87/90 problems done, 0 blocked, 88/90 tickets done
+- Next instruction: Only perform `split-ticket` for `T089` on `P089: Round 5B-D：发现处置、第二轮盲审与成果物定稿`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI ...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:05:04+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 87/90 problems done, 0 blocked, 88/90 tickets done
+- Next instruction: Only perform `record-result` for ticket `T089`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:05:04+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 87/91 problems done, 0 blocked, 88/90 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P090: Round 5B：第一轮发现处置与验收清单初稿`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:05:04+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 87/92 problems done, 0 blocked, 88/90 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P090: Round 5B：第一轮发现处置与验收清单初稿`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:05:05+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 87/93 problems done, 0 blocked, 88/90 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P090: Round 5B：第一轮发现处置与验收清单初稿`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:07:42+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 87/93 problems done, 0 blocked, 88/91 tickets done
+- Next instruction: Only perform `classify-ticket` for `T090` on `P090: Round 5B：第一轮发现处置与验收清单初稿`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Aft...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:08:56+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 87/93 problems done, 0 blocked, 88/91 tickets done
+- Next instruction: Only perform `split-ticket` for `T090` on `P090: Round 5B：第一轮发现处置与验收清单初稿`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flag...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:10:01+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 87/93 problems done, 0 blocked, 88/91 tickets done
+- Next instruction: Only perform `record-result` for ticket `T090`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:10:01+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 87/94 problems done, 0 blocked, 88/91 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P093: Round 5B1：23条发现处置与第五成果物初稿`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay ...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:10:01+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 87/95 problems done, 0 blocked, 88/91 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P093: Round 5B1：23条发现处置与第五成果物初稿`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay ...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:11:01+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 87/95 problems done, 0 blocked, 88/92 tickets done
+- Next instruction: Only perform `classify-ticket` for `T091` on `P093: Round 5B1：23条发现处置与第五成果物初稿`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. A...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:11:26+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 87/95 problems done, 0 blocked, 88/92 tickets done
+- Next instruction: Only perform `execute-ticket` for `T091` on `P093: Round 5B1：23条发现处置与第五成果物初稿`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execut...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:11:47+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 87/95 problems done, 0 blocked, 88/92 tickets done
+- Next instruction: Only perform `execute-ticket` for `T091` on `P093: Round 5B1：23条发现处置与第五成果物初稿`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execut...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:11:47+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 87/95 problems done, 0 blocked, 88/92 tickets done
+- Next instruction: Only perform `record-result` for ticket `T091`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:15:37+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 87/95 problems done, 0 blocked, 89/92 tickets done
+- Next instruction: Only perform `check-success` for `P093: Round 5B1：23条发现处置与第五成果物初稿`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidenc...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:16:44+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 88/95 problems done, 0 blocked, 89/92 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P094: Round 5B2：独立Review Disposition Checker与负向证明`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:17:34+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 88/95 problems done, 0 blocked, 89/93 tickets done
+- Next instruction: Only perform `classify-ticket` for `T092` on `P094: Round 5B2：独立Review Disposition Checker与负向证明`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names ...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:18:08+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 88/95 problems done, 0 blocked, 89/93 tickets done
+- Next instruction: Only perform `execute-ticket` for `T092` on `P094: Round 5B2：独立Review Disposition Checker与负向证明`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `referen...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:18:34+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 88/95 problems done, 0 blocked, 89/93 tickets done
+- Next instruction: Only perform `execute-ticket` for `T092` on `P094: Round 5B2：独立Review Disposition Checker与负向证明`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `referen...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:18:34+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 88/95 problems done, 0 blocked, 89/93 tickets done
+- Next instruction: Only perform `record-result` for ticket `T092`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:27:02+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 88/95 problems done, 0 blocked, 90/93 tickets done
+- Next instruction: Only perform `check-success` for `P094: Round 5B2：独立Review Disposition Checker与负向证明`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries,...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:27:48+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 89/95 problems done, 0 blocked, 90/93 tickets done
+- Next instruction: Only perform `record-result` for ticket `T090`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:28:46+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 89/95 problems done, 0 blocked, 90/93 tickets done
+- Next instruction: Only perform `record-result` for ticket `T090`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:29:17+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 89/95 problems done, 0 blocked, 91/93 tickets done
+- Next instruction: Only perform `check-success` for `P090: Round 5B：第一轮发现处置与验收清单初稿`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence)...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:30:13+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 90/95 problems done, 0 blocked, 91/93 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P091: Round 5C：第二轮盲审与反证`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in Engli...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:31:35+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 90/95 problems done, 0 blocked, 91/94 tickets done
+- Next instruction: Only perform `classify-ticket` for `T093` on `P091: Round 5C：第二轮盲审与反证`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After thi...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:32:25+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 90/95 problems done, 0 blocked, 91/94 tickets done
+- Next instruction: Only perform `split-ticket` for `T093` on `P091: Round 5C：第二轮盲审与反证`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and ...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:33:11+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 90/95 problems done, 0 blocked, 91/94 tickets done
+- Next instruction: Only perform `record-result` for ticket `T093`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:33:11+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 90/96 problems done, 0 blocked, 91/94 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P095: Round 5C1：三份第二轮盲审原始报告`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in E...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:33:12+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 90/97 problems done, 0 blocked, 91/94 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P095: Round 5C1：三份第二轮盲审原始报告`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in E...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:33:58+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 90/97 problems done, 0 blocked, 91/95 tickets done
+- Next instruction: Only perform `classify-ticket` for `T094` on `P095: Round 5C1：三份第二轮盲审原始报告`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:34:36+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 90/97 problems done, 0 blocked, 91/95 tickets done
+- Next instruction: Only perform `execute-ticket` for `T094` on `P095: Round 5C1：三份第二轮盲审原始报告`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-ti...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:34:56+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 90/97 problems done, 0 blocked, 91/95 tickets done
+- Next instruction: Only perform `execute-ticket` for `T094` on `P095: Round 5C1：三份第二轮盲审原始报告`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-ti...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:34:56+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 90/97 problems done, 0 blocked, 91/95 tickets done
+- Next instruction: Only perform `record-result` for ticket `T094`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:41:39+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 90/97 problems done, 0 blocked, 92/95 tickets done
+- Next instruction: Only perform `check-success` for `P095: Round 5C1：三份第二轮盲审原始报告`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) i...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:42:40+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 91/97 problems done, 0 blocked, 92/95 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P096: Round 5C2：第二轮覆盖索引与独立性验收`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:45:41+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 91/97 problems done, 0 blocked, 92/96 tickets done
+- Next instruction: Only perform `execute-ticket` for `T095` on `P096: Round 5C2：第二轮覆盖索引与独立性验收`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:47:53+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 91/97 problems done, 0 blocked, 92/96 tickets done
+- Next instruction: Only perform `execute-ticket` for `T095` on `P096: Round 5C2：第二轮覆盖索引与独立性验收`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:48:08+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 91/97 problems done, 0 blocked, 92/96 tickets done
+- Next instruction: Only perform `execute-ticket` for `T095` on `P096: Round 5C2：第二轮覆盖索引与独立性验收`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:48:18+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 91/97 problems done, 0 blocked, 92/96 tickets done
+- Next instruction: Only perform `record-result` for ticket `T095`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:48:42+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 91/97 problems done, 0 blocked, 93/96 tickets done
+- Next instruction: Only perform `check-success` for `P096: Round 5C2：第二轮覆盖索引与独立性验收`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence)...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:49:23+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 92/97 problems done, 0 blocked, 93/96 tickets done
+- Next instruction: Only perform `record-result` for ticket `T093`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:50:01+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 92/97 problems done, 0 blocked, 93/96 tickets done
+- Next instruction: Only perform `record-result` for ticket `T093`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:50:13+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 92/97 problems done, 0 blocked, 94/96 tickets done
+- Next instruction: Only perform `check-success` for `P091: Round 5C：第二轮盲审与反证`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:50:53+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 93/97 problems done, 0 blocked, 94/96 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P092: Round 5D：最终处置、静态验收与成果物定稿`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay i...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:51:51+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 93/97 problems done, 0 blocked, 94/97 tickets done
+- Next instruction: Only perform `classify-ticket` for `T096` on `P092: Round 5D：最终处置、静态验收与成果物定稿`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Af...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:52:04+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `split-ticket`
+- Counts: 93/97 problems done, 0 blocked, 94/97 tickets done
+- Next instruction: Only perform `split-ticket` for `T096` on `P092: Round 5D：最终处置、静态验收与成果物定稿`. Goal: move the ticket to splitting and create child problem bodies. Boundary: do not solve children, record the parent result, or check the parent. Effort [medium]: Split into children that are each small enough to solve recursively with clear success criteria. Detailed worker requirements: `references/workers/split-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI fla...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:52:42+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 93/97 problems done, 0 blocked, 94/97 tickets done
+- Next instruction: Only perform `record-result` for ticket `T096`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:53:21+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 93/97 problems done, 0 blocked, 94/97 tickets done
+- Next instruction: Only perform `record-result` for ticket `T096`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:53:36+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 93/97 problems done, 0 blocked, 94/97 tickets done
+- Next instruction: Only perform `record-result` for ticket `T096`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:54:10+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 93/99 problems done, 0 blocked, 94/97 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P097: Round 5D1：五份成果物定稿与评审处置`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in ...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:54:38+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 93/99 problems done, 0 blocked, 94/98 tickets done
+- Next instruction: Only perform `classify-ticket` for `T097` on `P097: Round 5D1：五份成果物定稿与评审处置`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Afte...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:54:51+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 93/99 problems done, 0 blocked, 94/98 tickets done
+- Next instruction: Only perform `execute-ticket` for `T097` on `P097: Round 5D1：五份成果物定稿与评审处置`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-t...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:58:39+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 93/99 problems done, 0 blocked, 94/98 tickets done
+- Next instruction: Only perform `execute-ticket` for `T097` on `P097: Round 5D1：五份成果物定稿与评审处置`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-t...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:58:51+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 93/99 problems done, 0 blocked, 94/98 tickets done
+- Next instruction: Only perform `record-result` for ticket `T097`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T18:59:03+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 93/99 problems done, 0 blocked, 95/98 tickets done
+- Next instruction: Only perform `check-success` for `P097: Round 5D1：五份成果物定稿与评审处置`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) ...
+
+## Recursive Closure Checkpoint - 2026-07-12T18:59:36+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `create-solution-ticket`
+- Counts: 94/99 problems done, 0 blocked, 95/98 tickets done
+- Next instruction: Only perform `create-solution-ticket` for `P098: Round 5D2：终态检查器与全量静态验收`. Goal: create exactly one solution ticket. Boundary: do not classify, execute, split, record a result, or check success. Effort [medium]: Write a clear ticket with concrete acceptance criteria and a realistic verification plan. Detailed worker requirements: `references/workers/create-solution-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in ...
+
+## Recursive Closure Checkpoint - 2026-07-12T19:00:04+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `classify-ticket`
+- Counts: 94/99 problems done, 0 blocked, 95/99 tickets done
+- Next instruction: Only perform `classify-ticket` for `T098` on `P098: Round 5D2：终态检查器与全量静态验收`. Goal: classify the ticket as `one_go` or `split`. Boundary: do not execute, split, record a result, or check success. Effort [medium]: Prefer `split` unless it is clearly small, concrete, low-risk, and easy to verify. Detailed worker requirements: `references/workers/classify-ticket.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. Afte...
+
+## Recursive Closure Checkpoint - 2026-07-12T19:00:18+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 94/99 problems done, 0 blocked, 95/99 tickets done
+- Next instruction: Only perform `execute-ticket` for `T098` on `P098: Round 5D2：终态检查器与全量静态验收`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-t...
+
+## Recursive Closure Checkpoint - 2026-07-12T19:05:49+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `execute-ticket`
+- Counts: 94/99 problems done, 0 blocked, 95/99 tickets done
+- Next instruction: Only perform `execute-ticket` for `T098` on `P098: Round 5D2：终态检查器与全量静态验收`. Goal: make one bounded execution attempt; either record the actual result or spawn a blocking runtime subproblem if execution discovers one is needed. Boundary: do not run problem-level check_success; do not create split or follow-up children. Effort [medium]: Push the task as far as safely and honestly possible. Be honest about what was and was not verified. Detailed worker requirements: `references/workers/execute-t...
+
+## Recursive Closure Checkpoint - 2026-07-12T19:06:04+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 94/99 problems done, 0 blocked, 95/99 tickets done
+- Next instruction: Only perform `record-result` for ticket `T098`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T19:06:15+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 94/99 problems done, 0 blocked, 96/99 tickets done
+- Next instruction: Only perform `check-success` for `P098: Round 5D2：终态检查器与全量静态验收`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) ...
+
+## Recursive Closure Checkpoint - 2026-07-12T19:06:48+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 95/99 problems done, 0 blocked, 96/99 tickets done
+- Next instruction: Only perform `record-result` for ticket `T096`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T19:07:21+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 95/99 problems done, 0 blocked, 97/99 tickets done
+- Next instruction: Only perform `check-success` for `P092: Round 5D：最终处置、静态验收与成果物定稿`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence...
+
+## Recursive Closure Checkpoint - 2026-07-12T19:07:51+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 96/99 problems done, 0 blocked, 97/99 tickets done
+- Next instruction: Only perform `record-result` for ticket `T089`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T19:09:05+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 96/99 problems done, 0 blocked, 97/99 tickets done
+- Next instruction: Only perform `record-result` for ticket `T089`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T19:09:16+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 96/99 problems done, 0 blocked, 98/99 tickets done
+- Next instruction: Only perform `check-success` for `P089: Round 5B-D：发现处置、第二轮盲审与成果物定稿`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evide...
+
+## Recursive Closure Checkpoint - 2026-07-12T19:09:56+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `check-success`
+- Counts: 97/99 problems done, 0 blocked, 98/99 tickets done
+- Next instruction: Only perform `check-success` for `P005: Round 5：独立复审、压力测试与成果物定稿`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, criteria, evidence)...
+
+## Recursive Closure Checkpoint - 2026-07-12T19:10:28+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / todo
+- Next action: `record-result`
+- Counts: 98/99 problems done, 0 blocked, 98/99 tickets done
+- Next instruction: Only perform `record-result` for ticket `T000`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T19:11:14+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / doing
+- Next action: `record-result`
+- Counts: 98/99 problems done, 0 blocked, 98/99 tickets done
+- Next instruction: Only perform `record-result` for ticket `T000`. Goal: record the current ticket result body. Boundary: do not judge problem success or create follow-ups. Effort [medium]: Record a clear summary with done items, verification notes, and honest gap list. Detailed worker requirements: `references/workers/record-result.md`. Write all body content (titles, descriptions, summaries, criteria, evidence) in zh. CLI flags and field names stay in English. After this action, run `ledger.py next`.
+
+## Recursive Closure Checkpoint - 2026-07-12T19:11:28+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / doing
+- Next action: `check-success`
+- Counts: 98/99 problems done, 0 blocked, 99/99 tickets done
+- Next instruction: Only perform `check-success` for `P000: Task 27：DreamJourney 产品成果物与可执行开发路线 V4`. Goal: judge whether cited results solve the original problem. Boundary: do not perform new implementation work; create at most one follow-up if not successful. Effort [medium]: Strictly judge whether cited results solve the original problem; apply extra skepticism to `one_go` results. Detailed worker requirements: `references/workers/check-success.md`. Write all body content (titles, descriptions, summaries, crite...
+
+## Recursive Closure Checkpoint - 2026-07-12T19:12:15+08:00
+
+- Ledger: `L20260712-003917`
+- Lodestar task: `docs/plans/task_27_product-architecture-and-executable-roadmap.md`
+- Root: `P000` / done
+- Next action: `none`
+- Counts: 99/99 problems done, 0 blocked, 99/99 tickets done
 - Next instruction: Only perform `none` finalization. Goal: validate, render, status, and summarize the closed ledger. Detailed worker requirements: `references/workers/none.md`.

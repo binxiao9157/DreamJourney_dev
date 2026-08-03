@@ -89,19 +89,23 @@ require(
     "Echo should model the active digital-human audio owner explicitly"
 )
 require(
-    echo.contains("audioOwner=tencentDigitalHuman"),
+    echo.contains("case tencentDigitalHuman") &&
+        echo.contains("\"audioOwner\": owner.rawValue"),
     "Echo logs must identify Tencent as the provider audio owner"
 )
 require(
-    echo.contains("audioOwner=volcengineLocalTTS"),
+    echo.contains("case volcengineLocalTTS") &&
+        echo.contains("setEchoAudioOwner(.volcengineLocalTTS"),
     "Echo logs must identify ordinary Echo fallback audio owner"
 )
 require(
-    echo.contains("audioOwner=fallbackMuted"),
+    echo.contains("case fallbackMuted") &&
+        echo.contains("setEchoAudioOwner(.fallbackMuted"),
     "Echo logs must identify muted provider capture handoff state"
 )
 require(
-    echo.contains("assetSource=\\(contract.assetSource)"),
+    echo.contains("event: \"sessionContractReceived\"") &&
+        echo.contains("\"assetSource\": contract.assetSource"),
     "Echo session logs should include digital-human asset source"
 )
 require(
@@ -145,9 +149,9 @@ require(
         fallbackRoute.contains("removeProviderViewMessage: message.panel") &&
         fallbackRoute.contains("resetsAudioOwnerToOrdinaryEcho: true") &&
         releaseRuntime.contains("removeHostedProviderView(showFallbackMessage:") &&
-        releaseRuntime.contains("DialogEngineManager.shared.setLocalTTSPlaybackEnabled(true)") &&
+        releaseRuntime.contains("setDialogEngineLocalTTSPlaybackEnabled(true)") &&
         releaseRuntime.contains("setEchoAudioOwner(.volcengineLocalTTS") &&
-        fallbackRoute.contains("route fallback after runtime failure"),
+        fallbackRoute.contains("event: \"routeFallback\""),
     "Tencent provider failure should explicitly degrade to ordinary Echo fallback"
 )
 require(

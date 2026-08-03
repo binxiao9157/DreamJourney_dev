@@ -36,6 +36,8 @@ let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let userManager = read("DreamJourney/Sources/Services/UserManager.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
 let sceneDelegate = read("DreamJourney/Sources/SceneDelegate.swift")
+let appCoordinator = read("DreamJourney/Sources/App/AppCoordinator.swift")
+let accountLifecycleRegistry = read("DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift")
 let project = read("DreamJourney.xcodeproj/project.pbxproj")
 let regression = read("scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
@@ -153,13 +155,20 @@ require(
 
 require(
     echo.contains("EchoTurnKnowledgeContextGate") &&
-        echo.contains("latestEchoContextRequestTurnID == turnID") &&
+        echo.contains("cancelActiveEchoContextBuild(reason: \"newEchoTurn\")") &&
+        echo.contains("activeEchoTurnKnowledgeContextGate === gate") &&
         echo.contains("generationContextText") &&
+        echo.contains("packet.generationContextContentHash != nil") &&
+        echo.contains("source: \"backendContextPacket\"") &&
+        echo.contains("source: \"localKBLiteTimeout\"") &&
         echo.contains("KBLiteManager.shared.buildGenerationAllowedContextString(") &&
+        echo.contains("query: text") &&
         echo.contains("expectedIdentity: gate.expectedIdentity") &&
+        echo.contains("EchoKnowledgeContextPolicy.allowsLocalKBLiteFallback(") &&
+        echo.contains("currentIdentity == gate.expectedIdentity") &&
         echo.contains("echoTurnKnowledgeTimeout") &&
         echo.contains("submitTurnKnowledgeContext("),
-    "Echo should prefer backend generation context and use query-scoped KBLite on timeout"
+    "Echo should prefer backend generation context, use query-scoped KBLite only on allowed timeout fallback, and reject stale context gates"
 )
 
 
@@ -179,11 +188,15 @@ require(
 
 require(
     userManager.contains("KBLiteManager.shared.switchUser(to: user.id)") &&
-        userManager.contains("KBLiteManager.shared.switchUser(to: nil)") &&
         appDelegate.contains("KnowledgeSyncCoordinator.shared.userDidChange(to: currentKnowledgeUserId)") &&
-        sceneDelegate.contains("bootstrapCurrentUserFromBackend") &&
-        sceneDelegate.contains("synchronizeCurrentUser(reason: \"foregroundAfterFamilyRefresh\")"),
-    "login, logout, app restore, and foreground should drive the knowledge lifecycle"
+        appDelegate.contains("KBLiteManager.shared.switchUser(to: currentKnowledgeUserId)") &&
+        sceneDelegate.contains("handleSceneLifecycleEvent(.willEnterForeground)") &&
+        appCoordinator.contains("FamilyRepository.shared.bootstrapCurrentUserFromBackend") &&
+        appCoordinator.contains("synchronizeCurrentUser(") &&
+        appCoordinator.contains("reason: \"foregroundAfterFamilyRefresh\"") &&
+        accountLifecycleRegistry.contains("KnowledgeSyncCoordinator.shared.teardownForAccountLifecycle(") &&
+        accountLifecycleRegistry.contains("KBLiteManager.shared.teardownForAccountLifecycle(context: context)"),
+    "login, lifecycle teardown, app restore, and foreground refresh should drive the knowledge lifecycle"
 )
 
 

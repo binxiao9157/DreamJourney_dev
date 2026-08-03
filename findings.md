@@ -224,3 +224,42 @@
 - 后端 `4c0538b` 已 reader-first 部署。线上 dry-run 识别 12 条候选且失败为 0；apply 后 receipt identity 聚合不变，result 占用从 15408 降至 2396 字节。
 - 第二次 dry-run/apply 为零候选、零更新；部署知识 smoke 新建 receipt 后，最终 18 条均已 compact。Privacy 和 change-feed maintenance dry-run 无无效记录、跳过或超时。
 - iOS 跨仓 gate、release QA package、默认 release regression、Simulator smoke 和 generic iPhoneOS build 均通过；本任务不改变公开 UI，也不依赖真机。
+
+## Task 27 Exploration
+
+- 用户提供路径实际为 `/Users/yxj/Documents/Codex/AI/Hermes-Skills-All`；`Hermes-Skills-Al` 不存在。该目录包含 109 个 Skill、少量长期 memory 文件及 15 个 AOS Memory Go 源文件，但不是完整 AOS Memory 仓库。
+- 最新 PRD 把 Publication、Visitor、数据导出和公开数字分身列入 P0；V3 Blueprint 又把 Family、Care、TimeLetter、Digital Legacy 后置。现有工程长期实现了后者的合同与隐藏壳层，因此不能把任一文档直接当成无冲突执行命令。
+- 既有 `2026-07-11-product-knowledge-base-architecture-v2.md` 已完成知识证据、同步、治理、家庭授权和 Context 安全边界，但不等于最新 PRD 所要求的完整 Source、Memory Candidate、Publication 和 Visitor 产品闭环。
+- Task 27 必须先建立来源优先级和产品决策登记册，再决定哪些现有能力保留、迁移、隐藏或废弃；禁止用 UI 名称差异推断领域缺失，也禁止用已有合同壳层冒充生产验收。
+
+## Task 27 Round 3 Architecture Findings
+
+- iOS 第 22 节目标方向成立，但当前代码不符合目标分层；架构完成与迁移完成必须分开表述。
+- 当前 Archive proposal 直接进入 KBLite，缺少 Source → Candidate → DecisionReceipt → immutable MemoryVersion authority；Knowledge UI 不是 Candidate Inbox。
+- Owner QA 仍可使用 legacy observed 内容，Correction 是原地修改 Archive item，不是 correction candidate + 新 MemoryVersion。
+- Archive/TimeLetter draft、remote callback、VoiceClone timer、Conversation/Echo delayed store 仍有 account generation/owner scope 缺口；账号切换可能产生晚到写入或跨账号 cache/runtime 污染。
+- iOS 只有单一 App target 且无 XCTest target，六层依赖尚未由编译/静态检查强制；迁移 Step 0 必须先建立测试 target、Stitch/UIQA baseline 和 legacy store inventory。
+- `VoiceCloneService/MemoirTTSService` 需要拆成 Infrastructure provider client 与 Runtime playback/audio owner；`DigitalHumanRuntime` 暴露 `UIView`，不能作为 Domain port。
+- Future/Beta feature flag 当前默认开启，与 V4 默认关闭不一致；应在生产止损阶段修正 server/release policy 和本地 fail-closed fallback。
+- 后端当前 58 路由、18 表、30 个组件证据行；模块化单体方向成立，但认证 fail-open、手机号弱身份、静态 provider credential、通用 upsert 跨 owner、单连接 Postgres、非原子 job/outbox 是生产阻断项。
+
+## Task 27 Round 3C Migration Findings
+
+- 后端完整 immutable MemoryVersion 历史不可恢复：旧 snapshot 本身缺前序，compaction 会删除 `kb_changes`，privacy/receipt maintenance 会改写历史；迁移只能承诺 current state + retained revisions，并显式记录 `history_gap/missing_actor`。
+- 外层 `user_id` 是当前最可信 owner 输入，payload 内 `ownerUserId/personaScope/digitalHumanId` 只能用于一致性校验；错配必须 quarantine。通用 `_insert_payload` 会在 ID 冲突时改写 owner，不能用于 V4 backfill。
+- Legacy owner ID 至少存在当前手机号全量 FNV-1a 与历史 `user_{后四位}` 两代形式；需要 claim-pending alias bridge 和强身份 claim，不能按 ID 外观自动合并。
+- 当前 `created_at` 可能被 upsert 重置，JSON 时间又可能由客户端提供或按字符串比较；migration 必须区分 committed/recorded/last-persisted/client-claimed time，并隔离无时区值。
+- Backfill 前必须先修复共享 Postgres connection/开放事务，暂停会删除或改写 KB history 的 maintenance；没有独立 migration runner、备份恢复和线上 inventory 时不得进入写模式。
+- iOS 本地 `UserManager` 与 Keychain session 可 split-brain；refresh waiter 未绑定 account generation，旧 refresh 可覆盖新账号 session。
+- Archive/mailbox callback 在完成时读取“当前账号”并保存，账号 A 的晚到响应可能写入账号 B；TimeLetter draft 当前也会进入旧后端 sync，而不是严格本地 draft。
+- Memoir、Memory、个人 Voice、TTS、delayed reply/notification 等仍有全局 key/目录；Round 3C2 必须先建立 AccountSessionActor/AccountLease 和 owner-scoped store envelope，再做 `/v2` mutation canary。
+- iOS 的 404/405 自动 legacy fallback 与跨 vault 404 隐匿语义冲突；切换后 401/403/404/unknown error 均不得触发旧写路径。
+
+## Task 27 Resolution
+
+- 五轮证据化审计和产品/架构收敛已完成，五份固定成果物统一为 `REVIEWED_BASELINE_PENDING_COMMIT`。
+- 当前执行基线为 36 FR、41 DR、22 Round 3 Findings、12 Canonical Risks、13 Work Packages、115 Work Items、1840 Work Item fields。
+- Round 5A 产生 23 条 finding 并全部 disposition；Round 5C 使用三个 fresh review context 对 22 个 P0/P1 逐项复核，结果为 22/22 `VERIFIED`、0 `CHALLENGED`。
+- `R5C-PROD-001` 文档互链问题已修复；`R5A-ENG-008` 继续为 `ARTIFACT_COMMIT_REQUIRED`，提交与 clean-checkout 重生成前不关闭。
+- Product V4 finalization checker 默认通过，10 类负向 fixture、24 个非生成器 checker、双次生成确定性、链接、敏感信息高置信扫描和 diff gate 均通过。
+- Task 27 文档目标完成度为 100%；115 个工程 Work Item 的实施完成度必须按 Execution Registry 单独度量，不能复用该百分比。

@@ -40,14 +40,16 @@ require(
         echo.contains("allowsGeneration: !self.viewModel.isWaitingForDelayedReply") &&
         echo.contains("private var lastEchoTraceRecord: EchoTraceRecord?") &&
         echo.contains("lastEchoTraceRecord = record") &&
-        echo.contains("[CFLite] context built") &&
+        echo.contains("event: \"contextBuilt\"") &&
         backendClient.contains("[CFLite] trace record") &&
         echo.contains("record.logLine") &&
-        echo.contains("crossScopeArchiveIncluded=\\(packet.crossScopeArchiveIncluded)") &&
-        echo.contains("privacyScope=\\(packet.privacyScopeLabel)") &&
-        echo.contains("archiveItemIDs=\\(record.archiveItemIDs.joined(separator: \",\"))") &&
-        echo.contains("voiceProfileId=\\(packet.voiceProfileId ?? \"none\")") &&
-        echo.contains("latencyMs=\\(packet.latencyMs)"),
+        echo.contains("\"privacyScope\": packet.privacyScopeLabel") &&
+        echo.contains("\"latencyMs\": packet.latencyMs") &&
+        backendClient.contains("crossScopeArchiveIncluded=\\(crossScopeArchiveIncluded)") &&
+        backendClient.contains("privacyScopeHash=") &&
+        backendClient.contains("archiveItemIDHashes=") &&
+        backendClient.contains("voiceProfileIdHash=") &&
+        backendClient.contains("fallbacks=\\(fallbackList) latencyMs=\\(latencyMs)"),
     "Echo should request context packet for each final user turn and persist a structured trace record"
 )
 

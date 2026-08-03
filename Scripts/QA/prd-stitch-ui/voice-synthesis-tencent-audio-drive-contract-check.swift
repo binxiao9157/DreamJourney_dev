@@ -64,9 +64,9 @@ require(runtime.contains("func sendPCMChunk(_ data: Data"), "Tencent runtime mus
 require(trueDeviceScript.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke"), "true-device script must launch backend PCM-drive smoke")
 require(trueDeviceScript.contains("DJ_TENCENT_BACKEND_PCM_VOICE_PROFILE_ID"), "true-device script must allow explicit voiceProfileId without code changes")
 require(trueDeviceScript.contains("DJTencentBackendPCMDriveVoiceProfileId="), "true-device script must pass voiceProfileId as a QA launch argument")
-require(trueDeviceScript.contains("backend PCM-drive smoke synthesis ready"), "true-device script must verify backend synthesis completion")
-require(trueDeviceScript.contains("sent PCM chunk"), "true-device script must verify PCM chunks were sent")
-require(trueDeviceScript.contains("AudioStart"), "true-device script must verify Tencent started audio playback")
+require(trueDeviceScript.contains("event=backendPCMDriveReady"), "true-device script must verify backend synthesis completion")
+require(trueDeviceScript.contains("event=pcmChunkSent"), "true-device script must verify PCM chunks were sent")
+require(trueDeviceScript.contains("event=providerAudioStarted"), "true-device script must verify Tencent started audio playback")
 require(trueDeviceScript.contains("DreamJourney/Config/YXJ.local.xcconfig is required"), "true-device script must avoid printing backend/signing secrets as command-line build settings")
 
 print("Tencent audio-drive contract check passed")

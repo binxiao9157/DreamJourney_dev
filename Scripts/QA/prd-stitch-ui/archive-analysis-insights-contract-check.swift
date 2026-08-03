@@ -19,6 +19,7 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 let item = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveItem.swift")
 let detail = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveDetailViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
+let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releaseQA = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 
@@ -50,6 +51,14 @@ for required in [
 
 for required in [
     "DJSeedArchiveAnalysisInsights",
+    "case seedArchiveAnalysisInsights",
+    ".seedArchiveAnalysisInsights",
+] {
+    assertContains(featureFlags, required, "QA seed should stay centrally registered \(required)")
+}
+
+for required in [
+    "case .seedArchiveAnalysisInsights:",
     "seedArchiveAnalysisInsightsContext()",
     "detectedLocationClues",
     "detectedSceneClues",

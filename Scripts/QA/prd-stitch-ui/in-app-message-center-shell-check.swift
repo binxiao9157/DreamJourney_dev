@@ -197,7 +197,12 @@ assertContains(
 )
 assertContains(
     archiveView,
-    "EchoReplyMessageStore.shared.sources()",
+    "EchoReplyMessageStore.shared.inboxSources(",
+    "Archive message center should load account-scoped arrived Echo delayed replies"
+)
+assertContains(
+    archiveView,
+    "echoReplySources: echoReplySources",
     "Archive message center snapshot should include arrived Echo delayed replies"
 )
 assertContains(

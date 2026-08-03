@@ -21,6 +21,7 @@ let repository = try read("DreamJourney/Sources/Services/FamilyRepository.swift"
 let coordinator = try read("DreamJourney/Sources/Services/KnowledgeSyncCoordinator.swift")
 let appDelegate = try read("DreamJourney/Sources/AppDelegate.swift")
 let sceneDelegate = try read("DreamJourney/Sources/SceneDelegate.swift")
+let appCoordinator = try read("DreamJourney/Sources/App/AppCoordinator.swift")
 
 require(model.contains("relationshipOwnerUserId: String = \"\""), "local model default must have no owner authority")
 require(model.contains("relationshipAuthoritySource: FamilyRelationshipAuthoritySource = .legacyUnverified"), "local model default must be legacy-unverified")
@@ -69,8 +70,35 @@ for required in [
     require(coordinator.contains(required), "knowledge sync must consume an account-level immutable family authorization snapshot: \(required)")
 }
 
-require(sceneDelegate.contains("bootstrapCurrentUserFromBackend"), "foreground must refresh family authorization before knowledge sync")
-require(sceneDelegate.contains("foregroundAfterFamilyRefresh"), "foreground sync must run only after family refresh completion")
+require(
+    sceneDelegate.contains("handleSceneLifecycleEvent(.willEnterForeground)"),
+    "SceneDelegate must forward foreground lifecycle events to AppCoordinator"
+)
+let foregroundRefreshStart = appCoordinator.range(
+    of: "private static func refreshPrivateForegroundRuntime"
+)
+let foregroundFamilyRefresh = appCoordinator.range(
+    of: "FamilyRepository.shared.bootstrapCurrentUserFromBackend",
+    range: foregroundRefreshStart.map { $0.lowerBound..<appCoordinator.endIndex }
+)
+let foregroundKnowledgeSync = appCoordinator.range(
+    of: "reason: \"foregroundAfterFamilyRefresh\"",
+    range: foregroundRefreshStart.map { $0.lowerBound..<appCoordinator.endIndex }
+)
+require(
+    foregroundFamilyRefresh != nil,
+    "foreground must refresh family authorization before knowledge sync"
+)
+require(
+    foregroundKnowledgeSync != nil,
+    "foreground sync must run only after family refresh completion"
+)
+if let foregroundFamilyRefresh, let foregroundKnowledgeSync {
+    require(
+        foregroundFamilyRefresh.lowerBound < foregroundKnowledgeSync.lowerBound,
+        "family authorization refresh must be registered before foreground knowledge sync"
+    )
+}
 
 let qaFixtureCount = appDelegate.components(separatedBy: "relationshipAuthoritySource: .qaFixture").count - 1
 require(qaFixtureCount >= 4, "existing AppDelegate family QA fixtures must be explicitly marked")

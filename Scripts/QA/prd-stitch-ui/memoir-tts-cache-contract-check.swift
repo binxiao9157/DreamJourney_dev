@@ -35,8 +35,9 @@ for requiredField in [
 
 assertContains(service, "struct MemoirTTSCacheResult", "Memoir TTS cache should expose an audio + metadata read result")
 assertContains(service, "memoir_tts_cache", "Memoir TTS metadata should use an explicit cache directory")
-assertContains(service, "saveCacheEntry", "Memoir TTS should save cache metadata after synthesis")
-assertContains(service, "loadCacheEntry", "Memoir TTS should load cache metadata")
+assertContains(service, "commitSynthesisArtifacts", "Memoir TTS should atomically commit audio and metadata after synthesis")
+assertContains(service, "saveCacheEnvelope", "Memoir TTS should persist scoped cache metadata")
+assertContains(service, "cachedEntries", "Memoir TTS should load scoped cache metadata")
 assertContains(service, "getCachedSynthesis", "Memoir TTS should expose cache reads with audio and timeline metadata")
 assertContains(service, "synthesis.visemeTimeline", "Memoir TTS should persist provider viseme timelines")
 assertContains(service, "synthesis.providerMode", "Memoir TTS should persist provider mode")

@@ -40,7 +40,7 @@ assertContains(echo, "channelCount: 1", "PCM smoke should use Tencent-required m
 assertContains(echo, "sendPCMChunk(chunk, requestID: requestID, sequence: sequence, isFinal: false)", "PCM smoke should send audio chunks before the final marker")
 assertContains(echo, "sendPCMChunk(Data(), requestID: requestID, sequence: sequence, isFinal: true)", "PCM smoke should end Tencent audio-drive with an empty final packet")
 assertContains(echo, "source: \"trueDevicePCMDriveSmoke\"", "PCM smoke should tag logs separately from text-drive smoke")
-assertContains(echo, "scheduleTencentDigitalHumanTextOverTimeout(requestID:", "PCM smoke should reuse provider TextOver timeout recovery")
+assertContains(echo, "scheduleTencentDigitalHumanTextOverTimeout(", "PCM smoke should reuse provider TextOver timeout recovery")
 assertContains(echo, "interruptDigitalHumanPlayback(reason: \"pcmDriveSmokeStopProbe\")", "PCM smoke should exercise stop/interrupt semantics")
 
 assertContains(sdkBridge, "func sendPCM(_ data: Data, requestID: String, sequence: Int, isFinal: Bool) throws", "SDK bridge should expose PCM audio-drive")
