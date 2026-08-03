@@ -817,6 +817,9 @@ final class AppLifecycleEventForwarder {
     private static func refreshPrivateForegroundRuntime(
         runtimeContext: AppFeatureRuntimeContext
     ) {
+        OwnerTruthMediaTaskRecoveryCoordinator.shared.restore(
+            accountLease: runtimeContext.accountLease
+        ) { _ in }
         FamilyRepository.shared.bootstrapCurrentUserFromBackend { _ in
             guard AccountLeaseRuntime.shared.validate(
                 runtimeContext.accountLease,
@@ -840,7 +843,10 @@ final class AppFeatureFactory {
     func makeArchiveNavigationController(
         runtimeContext: AppFeatureRuntimeContext
     ) -> UINavigationController {
-        makeNavigationController(
+        OwnerTruthMediaTaskRecoveryCoordinator.shared.restore(
+            accountLease: runtimeContext.accountLease
+        ) { _ in }
+        return makeNavigationController(
             rootViewController: MemoryArchiveViewController(),
             runtimeContext: runtimeContext
         )

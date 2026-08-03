@@ -5528,6 +5528,98 @@ final class OwnerTruthContractsTests: XCTestCase {
             .joined()
     }
 
+    private func mediaUploadIntentReceipt(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMediaUploadIntentCommand,
+        sourceObjectID: OwnerTruthRecordID,
+        token: OwnerTruthMediaUploadToken
+    ) throws -> OwnerTruthMediaUploadIntentReceipt {
+        try OwnerTruthMediaUploadIntentReceipt(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthMediaUploadIntentReceipt.schemaVersion,
+                "status": OwnerTruthMediaUploadIntentOutcome.created.rawValue,
+                "vaultId": vaultID.rawValue,
+                "sourceObject": mediaSourceObjectJSON(
+                    command: command,
+                    sourceObjectID: sourceObjectID,
+                    state: .uploadPending,
+                    processingStatus: .notQueued
+                ),
+                "uploadIntent": [
+                    "uploadIntentId": UUID().uuidString,
+                    "state": OwnerTruthMediaUploadIntentState.pending.rawValue,
+                    "expiresAt": "2026-08-04T12:00:00Z",
+                    "transport": "authenticatedDirectUpload",
+                    "uploadMethod": "PUT",
+                    "uploadTokenHeader": "X-DreamJourney-Upload-Token",
+                    "requiresClientUpload": true,
+                    "uploadToken": token.rawValue,
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+    }
+
+    private func mediaSourceObjectResponse(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMediaUploadIntentCommand,
+        sourceObjectID: OwnerTruthRecordID,
+        state: OwnerTruthMediaSourceObjectState,
+        processingStatus: OwnerTruthMediaProcessingStatus,
+        status: OwnerTruthMediaSourceObjectResponseStatus? = nil,
+        derivedSourceID: OwnerTruthRecordID? = nil
+    ) throws -> OwnerTruthMediaSourceObjectResponse {
+        var object: [String: Any] = [
+            "schemaVersion": OwnerTruthMediaSourceObjectResponse.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "sourceObject": mediaSourceObjectJSON(
+                command: command,
+                sourceObjectID: sourceObjectID,
+                state: state,
+                processingStatus: processingStatus,
+                derivedSourceID: derivedSourceID
+            ),
+        ]
+        if let status {
+            object["status"] = status.rawValue
+        }
+        return try OwnerTruthMediaSourceObjectResponse(
+            backendJSONObject: object,
+            expectedVaultID: vaultID,
+            expectedSourceObjectID: sourceObjectID
+        )
+    }
+
+    private func mediaSourceObjectJSON(
+        command: OwnerTruthMediaUploadIntentCommand,
+        sourceObjectID: OwnerTruthRecordID,
+        state: OwnerTruthMediaSourceObjectState,
+        processingStatus: OwnerTruthMediaProcessingStatus,
+        derivedSourceID: OwnerTruthRecordID? = nil
+    ) -> [String: Any] {
+        [
+            "sourceObjectId": sourceObjectID.rawValue.uuidString,
+            "mediaKind": command.mediaKind.rawValue,
+            "state": state.rawValue,
+            "contentType": command.contentType,
+            "magicMime": state == .uploadPending ? NSNull() : command.contentType,
+            "fileName": command.fileName,
+            "fileSizeBytes": command.fileSizeBytes,
+            "contentSha256": command.contentSHA256,
+            "safetyStatus": state == .uploadPending
+                ? OwnerTruthMediaSafetyStatus.pending.rawValue
+                : OwnerTruthMediaSafetyStatus.clean.rawValue,
+            "safetyProvider": state == .uploadPending ? NSNull() : "local-signature",
+            "processingStatus": processingStatus.rawValue,
+            "processingGeneration": processingStatus == .notQueued ? 0 : 1,
+            "externalProcessingAllowed": command.allowExternalProcessing,
+            "retryable": processingStatus == .retryableFailed,
+            "failureCode": processingStatus == .retryableFailed ? "providerUnavailable" : NSNull(),
+            "derivedSourceId": derivedSourceID?.rawValue.uuidString ?? NSNull(),
+            "updatedAt": "2026-08-03T12:00:00Z",
+        ]
+    }
+
     private func makeActiveRuntime() throws -> (AccountLeaseRuntime, AccountLease) {
         let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
         runtime.publish(session: accountSession(
@@ -8232,6 +8324,274 @@ final class OwnerTruthContractsTests: XCTestCase {
         }
     }
 
+    func testMediaTaskStorePersistsProtectedPendingReceiptWithoutSecretLeakage() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-media-store-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let secretStore = OwnerTruthMediaUploadSecretStoreSpy()
+        let content = Data(repeating: 0x41, count: 128)
+        let command = try OwnerTruthMediaUploadIntentCommand(
+            commandID: UUID(uuidString: "00000000-0000-0000-0000-000000000094")!,
+            expectedAuthorityEpoch: 0,
+            mediaKind: .document,
+            fileName: "memory.txt",
+            contentType: "text/plain",
+            content: content,
+            clientCreatedAt: Date(timeIntervalSince1970: 1_775_000_000)
+        )
+        let sourceObjectID = recordID("00000000-0000-0000-0000-000000000095")
+        let token = try XCTUnwrap(
+            OwnerTruthMediaUploadToken("one-time-owner-media-upload-token-000094")
+        )
+        let intent = try mediaUploadIntentReceipt(
+            vaultID: vaultID,
+            command: command,
+            sourceObjectID: sourceObjectID,
+            token: token
+        )
+        let firstStore = OwnerTruthMediaTaskStore(
+            rootDirectory: rootURL,
+            secretStore: secretStore,
+            accountLeaseRuntime: runtime
+        )
+
+        let prepared = try firstStore.prepare(
+            accountLease: lease,
+            command: command,
+            content: content
+        )
+        let uploadReady = try firstStore.apply(
+            uploadIntentReceipt: intent,
+            to: prepared.taskID,
+            accountLease: lease
+        )
+
+        XCTAssertEqual(uploadReady.phase, .uploadReady)
+        XCTAssertEqual(
+            try firstStore.uploadToken(for: prepared.taskID, accountLease: lease),
+            token
+        )
+        XCTAssertEqual(
+            try firstStore.loadPendingContent(for: prepared.taskID, accountLease: lease),
+            content
+        )
+
+        let restartedStore = OwnerTruthMediaTaskStore(
+            rootDirectory: rootURL,
+            secretStore: secretStore,
+            accountLeaseRuntime: runtime
+        )
+        XCTAssertEqual(try restartedStore.recoverableTasks(for: lease), [uploadReady])
+        XCTAssertEqual(
+            try restartedStore.uploadToken(for: prepared.taskID, accountLease: lease),
+            token
+        )
+
+        let manifestData = try XCTUnwrap(
+            FileManager.default.enumerator(
+                at: rootURL,
+                includingPropertiesForKeys: nil
+            )?.compactMap { $0 as? URL }
+                .first(where: { $0.lastPathComponent == OwnerTruthMediaTaskStore.manifestFileName })
+                .map { try Data(contentsOf: $0) }
+        )
+        let manifestText = try XCTUnwrap(String(data: manifestData, encoding: .utf8))
+        XCTAssertFalse(manifestText.contains(token.rawValue))
+        XCTAssertFalse(manifestText.contains(lease.subjectId))
+        XCTAssertFalse(manifestText.contains(lease.vaultId))
+        XCTAssertFalse(manifestText.localizedCaseInsensitiveContains("storageKey"))
+        XCTAssertFalse(manifestText.localizedCaseInsensitiveContains("objectKey"))
+
+        XCTAssertTrue(
+            restartedStore.purgeAccountDataForAccountDeletion(accountLease: lease)
+        )
+        XCTAssertEqual(try restartedStore.recoverableTasks(for: lease), [])
+        XCTAssertNil(
+            try secretStore.load(
+                scopeDigest: uploadReady.scopeDigest,
+                taskID: uploadReady.taskID
+            )
+        )
+    }
+
+    @MainActor
+    func testMediaTaskRecoveryResumesUploadAndRefreshesProcessingAfterRestart() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-media-recovery-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let secretStore = OwnerTruthMediaUploadSecretStoreSpy()
+        let content = Data(repeating: 0x42, count: 128)
+        let command = try OwnerTruthMediaUploadIntentCommand(
+            commandID: UUID(uuidString: "00000000-0000-0000-0000-000000000096")!,
+            expectedAuthorityEpoch: 0,
+            mediaKind: .document,
+            fileName: "restart.txt",
+            contentType: "text/plain",
+            content: content,
+            clientCreatedAt: Date(timeIntervalSince1970: 1_775_000_100)
+        )
+        let sourceObjectID = recordID("00000000-0000-0000-0000-000000000097")
+        let derivedSourceID = recordID("00000000-0000-0000-0000-000000000098")
+        let token = try XCTUnwrap(
+            OwnerTruthMediaUploadToken("one-time-owner-media-upload-token-000096")
+        )
+        let store = OwnerTruthMediaTaskStore(
+            rootDirectory: rootURL,
+            secretStore: secretStore,
+            accountLeaseRuntime: runtime
+        )
+        let prepared = try store.prepare(
+            accountLease: lease,
+            command: command,
+            content: content
+        )
+        _ = try store.apply(
+            uploadIntentReceipt: try mediaUploadIntentReceipt(
+                vaultID: vaultID,
+                command: command,
+                sourceObjectID: sourceObjectID,
+                token: token
+            ),
+            to: prepared.taskID,
+            accountLease: lease
+        )
+
+        let uploadClient = OwnerTruthMediaCaptureClientSpy()
+        uploadClient.uploadResult = .success(try mediaSourceObjectResponse(
+            vaultID: vaultID,
+            command: command,
+            sourceObjectID: sourceObjectID,
+            state: .verified,
+            processingStatus: .queued,
+            status: .uploaded
+        ))
+        let restartedStore = OwnerTruthMediaTaskStore(
+            rootDirectory: rootURL,
+            secretStore: secretStore,
+            accountLeaseRuntime: runtime
+        )
+        let uploadRecovery = OwnerTruthMediaTaskRecoveryCoordinator(
+            store: restartedStore,
+            client: uploadClient,
+            accountLeaseRuntime: runtime
+        )
+        var uploadReport: OwnerTruthMediaTaskRecoveryReport?
+        uploadRecovery.restore(accountLease: lease) { uploadReport = $0 }
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { uploadReport != nil })
+        XCTAssertEqual(uploadReport?.resumedUploadCount, 1)
+        XCTAssertEqual(uploadReport?.failedTaskCount, 0)
+        XCTAssertEqual(uploadClient.uploadRequests.count, 1)
+        XCTAssertEqual(try restartedStore.recoverableTasks(for: lease).first?.phase, .processingQueued)
+        XCTAssertNil(try restartedStore.uploadToken(for: prepared.taskID, accountLease: lease))
+        XCTAssertThrowsError(
+            try restartedStore.loadPendingContent(for: prepared.taskID, accountLease: lease)
+        )
+
+        let statusClient = OwnerTruthMediaCaptureClientSpy()
+        statusClient.fetchResult = .success(try mediaSourceObjectResponse(
+            vaultID: vaultID,
+            command: command,
+            sourceObjectID: sourceObjectID,
+            state: .processed,
+            processingStatus: .succeeded,
+            derivedSourceID: derivedSourceID
+        ))
+        let secondRestartStore = OwnerTruthMediaTaskStore(
+            rootDirectory: rootURL,
+            secretStore: secretStore,
+            accountLeaseRuntime: runtime
+        )
+        let statusRecovery = OwnerTruthMediaTaskRecoveryCoordinator(
+            store: secondRestartStore,
+            client: statusClient,
+            accountLeaseRuntime: runtime
+        )
+        var statusReport: OwnerTruthMediaTaskRecoveryReport?
+        statusRecovery.restore(accountLease: lease) { statusReport = $0 }
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { statusReport != nil })
+        XCTAssertEqual(statusReport?.refreshedStatusCount, 1)
+        XCTAssertEqual(statusReport?.failedTaskCount, 0)
+        XCTAssertEqual(statusClient.fetchRequests, [sourceObjectID])
+        XCTAssertEqual(try secondRestartStore.recoverableTasks(for: lease).first?.phase, .processed)
+    }
+
+    func testMediaTaskStoreKeepsABATasksPartitionedAndRejectsOldLease() throws {
+        let (runtime, firstLease) = try makeActiveRuntime()
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-media-aba-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let secretStore = OwnerTruthMediaUploadSecretStoreSpy()
+        let store = OwnerTruthMediaTaskStore(
+            rootDirectory: rootURL,
+            secretStore: secretStore,
+            accountLeaseRuntime: runtime
+        )
+        let firstContent = Data(repeating: 0x43, count: 64)
+        let firstCommand = try OwnerTruthMediaUploadIntentCommand(
+            expectedAuthorityEpoch: 0,
+            mediaKind: .document,
+            fileName: "owner-a.txt",
+            contentType: "text/plain",
+            content: firstContent
+        )
+        let firstTask = try store.prepare(
+            accountLease: firstLease,
+            command: firstCommand,
+            content: firstContent
+        )
+
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000202")!
+        ))
+        let secondLease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-b"))
+        XCTAssertEqual(try store.recoverableTasks(for: secondLease), [])
+        XCTAssertThrowsError(
+            try store.loadPendingContent(for: firstTask.taskID, accountLease: firstLease)
+        ) { error in
+            XCTAssertEqual(error as? OwnerTruthMediaTaskStoreError, .staleAccountLease)
+        }
+
+        let secondContent = Data(repeating: 0x44, count: 64)
+        let secondTask = try store.prepare(
+            accountLease: secondLease,
+            command: OwnerTruthMediaUploadIntentCommand(
+                expectedAuthorityEpoch: 0,
+                mediaKind: .document,
+                fileName: "owner-b.txt",
+                contentType: "text/plain",
+                content: secondContent
+            ),
+            content: secondContent
+        )
+        XCTAssertEqual(try store.recoverableTasks(for: secondLease).map(\.taskID), [secondTask.taskID])
+
+        runtime.publish(session: accountSession(
+            subjectId: "owner-a",
+            vaultId: "vault-a",
+            generation: 3,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000203")!
+        ))
+        let recoveredLease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-a"))
+        let recoveredTasks = try store.recoverableTasks(for: recoveredLease)
+        XCTAssertEqual(recoveredTasks.map(\.taskID), [firstTask.taskID])
+        XCTAssertEqual(
+            try store.loadPendingContent(for: firstTask.taskID, accountLease: recoveredLease),
+            firstContent
+        )
+        XCTAssertThrowsError(try store.recoverableTasks(for: secondLease)) { error in
+            XCTAssertEqual(error as? OwnerTruthMediaTaskStoreError, .staleAccountLease)
+        }
+    }
+
     @MainActor
     func testNaturalInputProductReviewBatchAcknowledgementStaysHiddenWithoutPolicy() throws {
         let (runtime, lease) = try makeActiveRuntime()
@@ -8871,6 +9231,85 @@ private final class OwnerTruthReviewReadyHTTPURLProtocol: URLProtocol {
         client?.urlProtocol(self, didLoad: body)
         client?.urlProtocolDidFinishLoading(self)
     }
+}
+
+private final class OwnerTruthMediaUploadSecretStoreSpy: OwnerTruthMediaUploadSecretStoring {
+    private var values: [String: OwnerTruthMediaUploadToken] = [:]
+
+    func save(
+        _ token: OwnerTruthMediaUploadToken,
+        scopeDigest: String,
+        taskID: UUID
+    ) throws {
+        values[key(scopeDigest: scopeDigest, taskID: taskID)] = token
+    }
+
+    func load(scopeDigest: String, taskID: UUID) throws -> OwnerTruthMediaUploadToken? {
+        values[key(scopeDigest: scopeDigest, taskID: taskID)]
+    }
+
+    func remove(scopeDigest: String, taskID: UUID) throws {
+        values.removeValue(forKey: key(scopeDigest: scopeDigest, taskID: taskID))
+    }
+
+    private func key(scopeDigest: String, taskID: UUID) -> String {
+        "\(scopeDigest):\(taskID.uuidString.lowercased())"
+    }
+}
+
+private final class OwnerTruthMediaCaptureClientSpy: OwnerTruthMediaCaptureClient {
+    var createIntentResult: Result<OwnerTruthMediaUploadIntentReceipt, Error>?
+    var uploadResult: Result<OwnerTruthMediaSourceObjectResponse, Error>?
+    var fetchResult: Result<OwnerTruthMediaSourceObjectResponse, Error>?
+    var retryResult: Result<OwnerTruthMediaSourceObjectResponse, Error>?
+
+    private(set) var uploadRequests: [(OwnerTruthRecordID, Data)] = []
+    private(set) var fetchRequests: [OwnerTruthRecordID] = []
+
+    func createOwnerTruthMediaUploadIntent(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMediaUploadIntentCommand,
+        completion: @escaping (Result<OwnerTruthMediaUploadIntentReceipt, Error>) -> Void
+    ) {
+        completion(createIntentResult ?? .failure(OwnerTruthMediaCaptureClientSpyError.missingResult))
+    }
+
+    func uploadOwnerTruthMediaContent(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        uploadIntentID: OwnerTruthRecordID,
+        uploadToken: OwnerTruthMediaUploadToken,
+        contentType: String,
+        content: Data,
+        completion: @escaping (Result<OwnerTruthMediaSourceObjectResponse, Error>) -> Void
+    ) {
+        uploadRequests.append((uploadIntentID, content))
+        completion(uploadResult ?? .failure(OwnerTruthMediaCaptureClientSpyError.missingResult))
+    }
+
+    func fetchOwnerTruthMediaSourceObject(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sourceObjectID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthMediaSourceObjectResponse, Error>) -> Void
+    ) {
+        fetchRequests.append(sourceObjectID)
+        completion(fetchResult ?? .failure(OwnerTruthMediaCaptureClientSpyError.missingResult))
+    }
+
+    func retryOwnerTruthMediaProcessing(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sourceObjectID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthMediaSourceObjectResponse, Error>) -> Void
+    ) {
+        completion(retryResult ?? .failure(OwnerTruthMediaCaptureClientSpyError.missingResult))
+    }
+}
+
+private enum OwnerTruthMediaCaptureClientSpyError: Error {
+    case missingResult
 }
 
 private final class KBLiteCompatibilityClientSpy: OwnerTruthKBLiteCompatibilityClient {

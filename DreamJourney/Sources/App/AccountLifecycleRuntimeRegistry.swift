@@ -640,6 +640,9 @@ enum AccountLifecycleRuntimeRegistry {
             AccountPrivateMediaStore.shared.purgeAccountDataForAccountDeletion(
                 accountLease: oldAccountLease
             ),
+            OwnerTruthMediaTaskStore.shared.purgeAccountDataForAccountDeletion(
+                accountLease: oldAccountLease
+            ),
             MemoirRepository.shared.purgeLocalDataForAccountDeletion(
                 accountLease: oldAccountLease
             ),
