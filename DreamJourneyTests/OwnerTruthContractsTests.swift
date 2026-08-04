@@ -324,12 +324,69 @@ final class OwnerTruthContractsTests: XCTestCase {
             isAudioUploadEnabled: false,
             isVideoUploadEnabled: false,
             isTimeLettersEnabled: false,
-            isOwnerTruthTextCaptureEnabled: true
+            isOwnerTruthTextCaptureEnabled: true,
+            isOwnerTruthMediaCaptureEnabled: true
         )
 
+        XCTAssertEqual(defaultOptions.map(\.title), ["添加文字描述", "选择照片"])
         XCTAssertFalse(defaultOptions.contains(where: \.submitsOwnerTruthSource))
         XCTAssertEqual(closedPilotOptions.filter(\.submitsOwnerTruthSource).count, 1)
-        XCTAssertEqual(closedPilotOptions[1].title, "提交待确认记忆")
+        XCTAssertEqual(
+            closedPilotOptions.map(\.title),
+            ["记录文字", "选择图片", "选择音频", "选择文档", "选择视频"]
+        )
+        XCTAssertEqual(
+            closedPilotOptions.compactMap(\.ownerTruthMediaKind),
+            [.image, .audio, .document, .video]
+        )
+    }
+
+    func testOwnerTruthMediaCreationPolicyRequiresExplicitProcessingChoice() throws {
+        XCTAssertTrue(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .image))
+        XCTAssertTrue(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .audio))
+        XCTAssertFalse(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .document))
+        XCTAssertFalse(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .video))
+        XCTAssertEqual(OwnerTruthMediaCreationPolicy.maximumFileSizeMB(for: .image), 20)
+        XCTAssertEqual(OwnerTruthMediaCreationPolicy.maximumFileSizeMB(for: .audio), 50)
+        XCTAssertEqual(OwnerTruthMediaCreationPolicy.maximumFileSizeMB(for: .document), 50)
+        XCTAssertEqual(OwnerTruthMediaCreationPolicy.maximumFileSizeMB(for: .video), 50)
+
+        XCTAssertThrowsError(
+            try OwnerTruthMediaCreationPolicy.makeCommand(
+                mediaKind: .image,
+                fileName: "memory.jpg",
+                contentType: "image/jpeg",
+                content: Data("image".utf8),
+                allowExternalProcessing: nil
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? OwnerTruthMediaCreationPolicyError,
+                .externalProcessingChoiceRequired
+            )
+        }
+
+        let audioCommand = try OwnerTruthMediaCreationPolicy.makeCommand(
+            mediaKind: .audio,
+            fileName: "memory.m4a",
+            contentType: "audio/m4a",
+            content: Data("audio".utf8),
+            allowExternalProcessing: true
+        )
+        XCTAssertTrue(audioCommand.allowExternalProcessing)
+
+        let videoCommand = try OwnerTruthMediaCreationPolicy.makeCommand(
+            mediaKind: .video,
+            fileName: "memory.mov",
+            contentType: "video/quicktime",
+            content: Data("video".utf8),
+            allowExternalProcessing: true
+        )
+        XCTAssertFalse(videoCommand.allowExternalProcessing)
+        XCTAssertEqual(
+            OwnerTruthMediaCreationPolicy.successMessage(for: .video),
+            "已保存，暂不分析"
+        )
     }
 
     func testCandidateInboxDecodesTypedProposalAndEvidence() throws {

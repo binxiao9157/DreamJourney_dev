@@ -63,7 +63,8 @@ assertContains(options, "isVideoUploadEnabled", "creation options must accept a 
 assertContains(options, "options.append(.video)", "video may appear only when the hidden-candidate gate is enabled")
 
 assertContains(audio, "MicrophonePermissionManager.shared.requestPermission", "audio creation must request microphone permission before recording")
-assertContains(audio, "archive-audio", "audio recording must stay in the local archive audio directory")
+assertContains(audio, "ArchiveMediaStore.shared", "audio recording must use the account-isolated archive media store")
+assertContains(audio, "mediaStore.prepareWriteTarget", "audio recording must stage its account-scoped local file")
 assertContains(video, "final class MemoryArchiveVideoEntryViewController", "video hidden shell should exist")
 assertContains(video, "视频素材暂为隐藏候选入口", "video shell must declare hidden candidate boundary")
 assertContains(video, "不会打开系统视频选择、不会上传视频", "video shell must not imply a real picker/upload flow")

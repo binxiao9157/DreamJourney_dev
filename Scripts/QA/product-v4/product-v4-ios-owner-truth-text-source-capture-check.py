@@ -108,12 +108,14 @@ def main() -> None:
 
     require(
         "isOwnerTruthTextCaptureEnabled: Bool = false" in creation_options
-        and "submitsOwnerTruthSource: false" in creation_options,
+        and "isOwnerTruthMediaCaptureEnabled: Bool = false" in creation_options
+        and "route: .archive(.text)" in creation_options,
         "text Source creation option must remain hidden by default",
     )
     require(
-        "submitsOwnerTruthSource: true" in creation_options
-        and 'title: "提交待确认记忆"' in creation_options,
+        "route: .ownerTruthTextSource" in creation_options
+        and 'title: "记录文字"' in creation_options
+        and "options[0] = .ownerTruthTextCapture" in creation_options,
         "closed-pilot text Source option is missing product wording",
     )
     require(

@@ -49,7 +49,7 @@ final class MemoryArchiveCreationSheetViewController: UIViewController {
 
     private func configureSheet() {
         if let sheet = sheetPresentationController {
-            sheet.detents = [.medium(), .large()]
+            sheet.detents = options.count > 4 ? [.large()] : [.medium(), .large()]
             sheet.prefersGrabberVisible = true
             sheet.preferredCornerRadius = DJDesignTokens.Radius.extraLarge
         }

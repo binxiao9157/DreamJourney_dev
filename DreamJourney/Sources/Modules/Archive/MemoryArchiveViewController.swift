@@ -1,4 +1,5 @@
 import UIKit
+import UniformTypeIdentifiers
 
 private enum ArchiveLayout {
     static let contentTopMargin: CGFloat = 8
@@ -113,6 +114,13 @@ private enum ArchiveKindFilter {
             return "视频片段仍在确认压缩、缩略图和存储策略。"
         }
     }
+}
+
+private struct OwnerTruthMediaPickerOperation {
+    let mediaKind: OwnerTruthMediaKind
+    let accountLease: AccountLease
+    let archiveContext: DigitalHumanContext
+    let allowExternalProcessing: Bool
 }
 
 private final class InAppMessageCenterViewController: UIViewController {
@@ -615,6 +623,11 @@ final class MemoryArchiveViewController: UIViewController {
     private var activeKindFilter: ArchiveKindFilter?
     private var photoPickerAccountLease: AccountLease?
     private var photoPickerArchiveContext: DigitalHumanContext?
+    private var ownerTruthMediaPickerOperation: OwnerTruthMediaPickerOperation?
+    private let ownerTruthMediaImportQueue = DispatchQueue(
+        label: "com.dreamjourney.owner-truth-media-import",
+        qos: .userInitiated
+    )
 
     private var creationOptions: [MemoryArchiveCreationOption] {
         guard isSelfAutobiographyMode else {
@@ -624,7 +637,8 @@ final class MemoryArchiveViewController: UIViewController {
             isAudioUploadEnabled: false,
             isVideoUploadEnabled: false,
             isTimeLettersEnabled: false,
-            isOwnerTruthTextCaptureEnabled: isOwnerTruthTextCaptureClosedPilotEnabled
+            isOwnerTruthTextCaptureEnabled: isOwnerTruthTextCaptureClosedPilotEnabled,
+            isOwnerTruthMediaCaptureEnabled: isOwnerTruthMediaCaptureClosedPilotEnabled
         )
     }
 
@@ -641,6 +655,12 @@ final class MemoryArchiveViewController: UIViewController {
             .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTextCaptureV1)
             && FeatureGateService.shared
                 .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
+    }
+
+    private var isOwnerTruthMediaCaptureClosedPilotEnabled: Bool {
+        isOwnerTruthTextCaptureClosedPilotEnabled
+            && FeatureGateService.shared
+                .isServerPolicyManagedClosedPilotRouteAllowed(.ownerMediaCaptureV1)
     }
 
     private var archivePersonaName: String {
@@ -3294,6 +3314,264 @@ final class MemoryArchiveViewController: UIViewController {
             self.showToast("已提交，整理完成后可在待确认记忆中确认", type: .success)
         }
         present(entryViewController, animated: true)
+    }
+
+    private func presentOwnerTruthMediaEntry(_ mediaKind: OwnerTruthMediaKind) {
+        guard isSelfAutobiographyMode,
+              isOwnerTruthMediaCaptureClosedPilotEnabled,
+              let accountLease = captureMediaAccountLease() else {
+            showToast("该素材入口当前不可用", type: .info)
+            return
+        }
+        let archiveContext = currentArchiveContext
+        guard OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: mediaKind) else {
+            presentOwnerTruthMediaPicker(
+                mediaKind: mediaKind,
+                accountLease: accountLease,
+                archiveContext: archiveContext,
+                allowExternalProcessing: false
+            )
+            return
+        }
+
+        let isImage = mediaKind == .image
+        let alert = UIAlertController(
+            title: isImage ? "是否允许图片分析？" : "是否允许语音转写？",
+            message: isImage
+                ? "允许后，图片会发送给已披露的外部 AI 服务，用于 OCR 和线索整理。你也可以仅保存原始图片。"
+                : "允许后，音频会发送给已披露的外部语音服务，用于 ASR 转写和线索整理。你也可以仅保存原始音频。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "仅保存", style: .default) { [weak self] _ in
+            self?.presentOwnerTruthMediaPicker(
+                mediaKind: mediaKind,
+                accountLease: accountLease,
+                archiveContext: archiveContext,
+                allowExternalProcessing: false
+            )
+        })
+        alert.addAction(UIAlertAction(
+            title: isImage ? "允许图片分析" : "允许语音转写",
+            style: .default
+        ) { [weak self] _ in
+            self?.presentOwnerTruthMediaPicker(
+                mediaKind: mediaKind,
+                accountLease: accountLease,
+                archiveContext: archiveContext,
+                allowExternalProcessing: true
+            )
+        })
+        present(alert, animated: true)
+    }
+
+    private func presentOwnerTruthMediaPicker(
+        mediaKind: OwnerTruthMediaKind,
+        accountLease: AccountLease,
+        archiveContext: DigitalHumanContext,
+        allowExternalProcessing: Bool
+    ) {
+        guard validateMediaOperation(accountLease, archiveContext: archiveContext, at: .ui),
+              isOwnerTruthMediaCaptureClosedPilotEnabled else {
+            showToast("账号或开放状态已变化，请重新选择", type: .info)
+            return
+        }
+        let operation = OwnerTruthMediaPickerOperation(
+            mediaKind: mediaKind,
+            accountLease: accountLease,
+            archiveContext: archiveContext,
+            allowExternalProcessing: allowExternalProcessing
+        )
+        ownerTruthMediaPickerOperation = operation
+
+        if mediaKind == .image {
+            guard UIImagePickerController.isSourceTypeAvailable(.photoLibrary) else {
+                clearOwnerTruthMediaPickerOperation()
+                showToast("无法打开相册", type: .error)
+                return
+            }
+            let picker = UIImagePickerController()
+            picker.sourceType = .photoLibrary
+            picker.mediaTypes = [UTType.image.identifier]
+            picker.delegate = self
+            picker.allowsEditing = false
+            present(picker, animated: true)
+            return
+        }
+
+        let contentTypes = ownerTruthDocumentPickerContentTypes(for: mediaKind)
+        guard !contentTypes.isEmpty else {
+            clearOwnerTruthMediaPickerOperation()
+            showToast("当前文件类型暂不支持", type: .info)
+            return
+        }
+        let picker = UIDocumentPickerViewController(
+            forOpeningContentTypes: contentTypes,
+            asCopy: true
+        )
+        picker.delegate = self
+        picker.allowsMultipleSelection = false
+        present(picker, animated: true)
+    }
+
+    private func ownerTruthDocumentPickerContentTypes(
+        for mediaKind: OwnerTruthMediaKind
+    ) -> [UTType] {
+        let fileExtensions: [String]
+        switch mediaKind {
+        case .audio:
+            fileExtensions = ["mp3", "wav", "m4a"]
+        case .video:
+            fileExtensions = ["mp4", "mov"]
+        case .document:
+            fileExtensions = ["txt", "pdf", "docx"]
+        case .image:
+            fileExtensions = ["jpg", "jpeg", "png", "webp"]
+        }
+        return fileExtensions.compactMap { UTType(filenameExtension: $0) }
+    }
+
+    private func ownerTruthContentType(
+        for fileURL: URL,
+        mediaKind: OwnerTruthMediaKind
+    ) -> String? {
+        switch (mediaKind, fileURL.pathExtension.lowercased()) {
+        case (.image, "jpg"), (.image, "jpeg"):
+            return "image/jpeg"
+        case (.image, "png"):
+            return "image/png"
+        case (.image, "webp"):
+            return "image/webp"
+        case (.audio, "mp3"):
+            return "audio/mpeg"
+        case (.audio, "wav"):
+            return "audio/wav"
+        case (.audio, "m4a"):
+            return "audio/m4a"
+        case (.video, "mp4"):
+            return "video/mp4"
+        case (.video, "mov"):
+            return "video/quicktime"
+        case (.document, "txt"):
+            return "text/plain"
+        case (.document, "pdf"):
+            return "application/pdf"
+        case (.document, "docx"):
+            return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        default:
+            return nil
+        }
+    }
+
+    private func enqueueOwnerTruthMediaImport(
+        operation: OwnerTruthMediaPickerOperation,
+        fileName: String,
+        contentType: String,
+        content: Data
+    ) {
+        guard validateMediaOperation(
+            operation.accountLease,
+            archiveContext: operation.archiveContext,
+            at: .request
+        ), let vaultID = OwnerTruthVaultID(operation.accountLease.vaultId),
+              isOwnerTruthMediaCaptureClosedPilotEnabled else {
+            showToast("账号或开放状态已变化，请重新选择", type: .info)
+            return
+        }
+
+        DreamJourneyBackendClient.shared.fetchOwnerTruthTextSourceCaptureState(
+            vaultID: vaultID
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self,
+                      self.validateMediaOperation(
+                        operation.accountLease,
+                        archiveContext: operation.archiveContext,
+                        at: .runtime
+                      ), self.isOwnerTruthMediaCaptureClosedPilotEnabled else {
+                    return
+                }
+                switch result {
+                case .failure:
+                    self.showToast("无法读取当前档案权限，请稍后重试", type: .error)
+                case .success(let state):
+                    self.prepareOwnerTruthMediaTask(
+                        operation: operation,
+                        authorityEpoch: state.authorityEpoch,
+                        fileName: fileName,
+                        contentType: contentType,
+                        content: content
+                    )
+                }
+            }
+        }
+    }
+
+    private func prepareOwnerTruthMediaTask(
+        operation: OwnerTruthMediaPickerOperation,
+        authorityEpoch: Int,
+        fileName: String,
+        contentType: String,
+        content: Data
+    ) {
+        ownerTruthMediaImportQueue.async { [weak self] in
+            let result: Result<Void, Error>
+            do {
+                let command = try OwnerTruthMediaCreationPolicy.makeCommand(
+                    expectedAuthorityEpoch: authorityEpoch,
+                    mediaKind: operation.mediaKind,
+                    fileName: fileName,
+                    contentType: contentType,
+                    content: content,
+                    allowExternalProcessing: operation.allowExternalProcessing
+                )
+                _ = try OwnerTruthMediaTaskStore.shared.prepare(
+                    accountLease: operation.accountLease,
+                    command: command,
+                    content: content
+                )
+                result = .success(())
+            } catch {
+                result = .failure(error)
+            }
+
+            DispatchQueue.main.async {
+                guard let self,
+                      self.validateMediaOperation(
+                        operation.accountLease,
+                        archiveContext: operation.archiveContext,
+                        at: .ui
+                      ) else { return }
+                switch result {
+                case .failure(let error):
+                    self.showToast(
+                        (error as? LocalizedError)?.errorDescription ?? "素材保存失败，请稍后重试",
+                        type: .error
+                    )
+                case .success:
+                    self.showToast(
+                        OwnerTruthMediaCreationPolicy.successMessage(for: operation.mediaKind),
+                        type: .success
+                    )
+                    OwnerTruthMediaTaskRecoveryCoordinator.shared.restore(
+                        accountLease: operation.accountLease
+                    ) { [weak self] report in
+                        guard report.failedTaskCount > 0,
+                              let self,
+                              self.validateMediaOperation(
+                                operation.accountLease,
+                                archiveContext: operation.archiveContext,
+                                at: .ui
+                              ) else { return }
+                        self.showToast("素材已保存在本地，将稍后继续同步", type: .info)
+                    }
+                }
+            }
+        }
+    }
+
+    private func clearOwnerTruthMediaPickerOperation() {
+        ownerTruthMediaPickerOperation = nil
     }
 
     private func presentAudioEntry() {
@@ -8609,6 +8887,34 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
         _ picker: UIImagePickerController,
         didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
     ) {
+        if let operation = ownerTruthMediaPickerOperation {
+            clearOwnerTruthMediaPickerOperation()
+            picker.dismiss(animated: true)
+            guard operation.mediaKind == .image,
+                  validateMediaOperation(
+                    operation.accountLease,
+                    archiveContext: operation.archiveContext,
+                    at: .ui
+                  ), let image = info[.originalImage] as? UIImage,
+                  let content = image.jpegData(compressionQuality: 0.88) else {
+                showToast("图片读取失败", type: .error)
+                return
+            }
+            let originalName = (info[.imageURL] as? URL)?
+                .deletingPathExtension()
+                .lastPathComponent ?? ""
+            let fileBaseName = originalName.isEmpty
+                ? "memory-\(UUID().uuidString.lowercased())"
+                : originalName
+            enqueueOwnerTruthMediaImport(
+                operation: operation,
+                fileName: "\(fileBaseName).jpg",
+                contentType: "image/jpeg",
+                content: content
+            )
+            return
+        }
+
         picker.dismiss(animated: true)
         defer { clearPhotoPickerOperation() }
 
@@ -8646,7 +8952,83 @@ extension MemoryArchiveViewController: UIImagePickerControllerDelegate, UINaviga
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
+        clearOwnerTruthMediaPickerOperation()
         clearPhotoPickerOperation()
+    }
+}
+
+extension MemoryArchiveViewController: UIDocumentPickerDelegate {
+    func documentPicker(
+        _ controller: UIDocumentPickerViewController,
+        didPickDocumentsAt urls: [URL]
+    ) {
+        guard let operation = ownerTruthMediaPickerOperation,
+              let fileURL = urls.first else {
+            clearOwnerTruthMediaPickerOperation()
+            return
+        }
+        clearOwnerTruthMediaPickerOperation()
+        guard validateMediaOperation(
+            operation.accountLease,
+            archiveContext: operation.archiveContext,
+            at: .ui
+        ), let contentType = ownerTruthContentType(
+            for: fileURL,
+            mediaKind: operation.mediaKind
+        ) else {
+            showToast("当前文件格式暂不支持", type: .info)
+            return
+        }
+
+        ownerTruthMediaImportQueue.async { [weak self] in
+            let accessGranted = fileURL.startAccessingSecurityScopedResource()
+            defer {
+                if accessGranted {
+                    fileURL.stopAccessingSecurityScopedResource()
+                }
+            }
+            let result = Result { () -> Data in
+                let maximumMB = OwnerTruthMediaCreationPolicy.maximumFileSizeMB(
+                    for: operation.mediaKind
+                )
+                let maximumBytes = maximumMB * 1_024 * 1_024
+                let resourceValues = try fileURL.resourceValues(forKeys: [.fileSizeKey])
+                if let fileSize = resourceValues.fileSize, fileSize > maximumBytes {
+                    throw OwnerTruthMediaCreationPolicyError.fileTooLarge(maximumMB: maximumMB)
+                }
+                let content = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+                guard content.count <= maximumBytes else {
+                    throw OwnerTruthMediaCreationPolicyError.fileTooLarge(maximumMB: maximumMB)
+                }
+                return content
+            }
+            DispatchQueue.main.async {
+                guard let self,
+                      self.validateMediaOperation(
+                        operation.accountLease,
+                        archiveContext: operation.archiveContext,
+                        at: .ui
+                      ) else { return }
+                switch result {
+                case .failure(let error):
+                    self.showToast(
+                        (error as? LocalizedError)?.errorDescription ?? "文件读取失败，请重新选择",
+                        type: .error
+                    )
+                case .success(let content):
+                    self.enqueueOwnerTruthMediaImport(
+                        operation: operation,
+                        fileName: fileURL.lastPathComponent,
+                        contentType: contentType,
+                        content: content
+                    )
+                }
+            }
+        }
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        clearOwnerTruthMediaPickerOperation()
     }
 }
 
@@ -8664,6 +9046,11 @@ extension MemoryArchiveViewController: MemoryArchiveCreationSheetViewControllerD
 
         if option.submitsOwnerTruthSource {
             presentOwnerTruthTextCaptureEntry()
+            return
+        }
+
+        if let mediaKind = option.ownerTruthMediaKind {
+            presentOwnerTruthMediaEntry(mediaKind)
             return
         }
 

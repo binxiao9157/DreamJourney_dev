@@ -359,6 +359,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runArchiveAudioLifecycleSmoke() }
         case .archiveHiddenShellSmoke:
             scheduleUIQAScenario(scenario) { $0.runArchiveHiddenShellSmoke() }
+        case .ownerMediaUnifiedCreationSmoke:
+            scheduleUIQAScenario(scenario) { $0.runOwnerMediaUnifiedCreationSmoke() }
         case .ownerTruthCandidateInboxSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthCandidateInboxSmoke() }
         case .ownerTruthInterviewCandidateReviewSmoke:
@@ -3293,6 +3295,82 @@ private extension AppDelegate {
                 failureReason: error.localizedDescription
             )
             print("[UI_QA] ArchiveHiddenShellSmoke failed reason=\(error.localizedDescription)")
+        }
+    }
+
+    func runOwnerMediaUnifiedCreationSmoke(retryCount: Int = 0) {
+        guard let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }),
+              keyWindow.rootViewController is WarmTabBarController else {
+            guard retryCount < 20 else {
+                QAScenarioResultWriter.writeAndLog(
+                    [
+                        "completed": false,
+                        "failureReason": "mainRootUnavailable",
+                    ],
+                    fileName: "owner-media-unified-creation-smoke-result.json",
+                    smokeName: "OwnerMediaUnifiedCreationSmoke"
+                )
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerMediaUnifiedCreationSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        let publicOptions = MemoryArchiveCreationOption.availableOptions(
+            isAudioUploadEnabled: false,
+            isVideoUploadEnabled: false,
+            isTimeLettersEnabled: false
+        )
+        let unifiedOptions = MemoryArchiveCreationOption.availableOptions(
+            isAudioUploadEnabled: false,
+            isVideoUploadEnabled: false,
+            isTimeLettersEnabled: false,
+            isOwnerTruthTextCaptureEnabled: true,
+            isOwnerTruthMediaCaptureEnabled: true
+        )
+        let hostViewController = UIViewController()
+        hostViewController.view.backgroundColor = DJDesignTokens.Color.background
+        keyWindow.rootViewController = hostViewController
+        keyWindow.makeKeyAndVisible()
+
+        let sheetViewController = MemoryArchiveCreationSheetViewController(options: unifiedOptions)
+        sheetViewController.loadViewIfNeeded()
+        hostViewController.present(sheetViewController, animated: false) { [weak self] in
+            guard let self else { return }
+            sheetViewController.view.layoutIfNeeded()
+            let detents = sheetViewController.sheetPresentationController?.detents ?? []
+            let usesLargeDetent = detents.count == 1
+            let expectedTitles = ["记录文字", "选择图片", "选择音频", "选择文档", "选择视频"]
+            let titles = unifiedOptions.map(\.title)
+            let allOptionsVisible = expectedTitles.allSatisfy {
+                self.viewTreeContainsText($0, in: sheetViewController.view)
+            }
+            let completed = publicOptions.map(\.title) == ["添加文字描述", "选择照片"]
+                && titles == expectedTitles
+                && unifiedOptions.compactMap(\.ownerTruthMediaKind) == [.image, .audio, .document, .video]
+                && usesLargeDetent
+                && allOptionsVisible
+
+            QAScenarioResultWriter.writeAndLog(
+                [
+                    "completed": completed,
+                    "launchScenario": QALaunchScenario.ownerMediaUnifiedCreationSmoke.rawValue,
+                    "publicOptionTitles": publicOptions.map(\.title),
+                    "unifiedOptionTitles": titles,
+                    "unifiedOptionCount": unifiedOptions.count,
+                    "usesLargeDetent": usesLargeDetent,
+                    "allOptionsVisible": allOptionsVisible,
+                    "backendNetworkStarted": false,
+                    "persistentOwnerTruthWriteStarted": false,
+                ],
+                fileName: "owner-media-unified-creation-smoke-result.json",
+                smokeName: "OwnerMediaUnifiedCreationSmoke"
+            )
         }
     }
 
