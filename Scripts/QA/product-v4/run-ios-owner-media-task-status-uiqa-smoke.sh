@@ -69,6 +69,8 @@ if sorted(payload.get("retryActions") or []) != ["resumeUpload", "retryProcessin
     raise SystemExit("media task retry actions drifted")
 if payload.get("uploadRetryVisible") is not True or payload.get("processingRetryVisible") is not True:
     raise SystemExit("media task retry actions are not visible")
+if payload.get("candidateHandoffVisible") is not True:
+    raise SystemExit("processed media must expose the Candidate handoff")
 if payload.get("backendNetworkStarted") is not False:
     raise SystemExit("visual smoke must not call the backend")
 if payload.get("persistentOwnerTruthWriteStarted") is not False:

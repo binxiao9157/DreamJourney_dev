@@ -3425,6 +3425,7 @@ private extension AppDelegate {
                 phase: .processed,
                 allowExternalProcessing: false,
                 sourceObjectID: sourceObjectID,
+                hasCandidateHandoffSource: true,
                 updatedAt: Date(timeIntervalSince1970: 1_786_000_100)
             ),
         ]
@@ -3451,6 +3452,7 @@ private extension AppDelegate {
                     ]
                     && (payload["uploadRetryVisible"] as? Bool) == true
                     && (payload["processingRetryVisible"] as? Bool) == true
+                    && (payload["candidateHandoffVisible"] as? Bool) == true
                     && (payload["backendNetworkStarted"] as? Bool) == false
                     && (payload["persistentOwnerTruthWriteStarted"] as? Bool) == false
                 var result = payload

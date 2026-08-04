@@ -11955,6 +11955,10 @@ final class OwnerTruthCandidateReviewUseCase {
     private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let qaGateEnabled: () -> Bool
     private let commandIDFactory: CommandIDFactory
+    /// Optional in-memory scope used when a processed media Source hands the
+    /// owner into review. The server inbox remains authoritative; this only
+    /// narrows the rendered Candidate set to that derived Source.
+    private let sourceIDFilter: OwnerTruthRecordID?
 
     private var candidatesByID: [OwnerTruthRecordID: OwnerTruthCandidateInboxItem] = [:]
     private var orderedCandidateIDs: [OwnerTruthRecordID] = []
@@ -11977,6 +11981,7 @@ final class OwnerTruthCandidateReviewUseCase {
         client: OwnerTruthCandidateReviewClient,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled },
+        sourceIDFilter: OwnerTruthRecordID? = nil,
         commandIDFactory: @escaping CommandIDFactory = { UUID().uuidString.lowercased() }
     ) {
         self.accountLease = accountLease
@@ -11984,6 +11989,7 @@ final class OwnerTruthCandidateReviewUseCase {
         self.client = client
         self.accountLeaseRuntime = accountLeaseRuntime
         self.qaGateEnabled = qaGateEnabled
+        self.sourceIDFilter = sourceIDFilter
         self.commandIDFactory = commandIDFactory
     }
 
@@ -12299,8 +12305,13 @@ final class OwnerTruthCandidateReviewUseCase {
                 transitionFailure(.requestFailed)
                 return
             }
+            let scopedCandidates = inbox.candidates.filter { candidate in
+                guard let sourceIDFilter else { return true }
+                return candidate.sourceID == sourceIDFilter
+                    && candidate.sourceReferences.contains(where: { $0.sourceID == sourceIDFilter })
+            }
             var nextCandidates: [OwnerTruthRecordID: OwnerTruthCandidateInboxItem] = [:]
-            for candidate in inbox.candidates {
+            for candidate in scopedCandidates {
                 guard nextCandidates[candidate.id] == nil else {
                     transitionFailure(.requestFailed)
                     return
@@ -12315,10 +12326,10 @@ final class OwnerTruthCandidateReviewUseCase {
                 return nextCandidate.candidateVersion == previousCandidate.candidateVersion
             }
             candidatesByID = nextCandidates
-            orderedCandidateIDs = inbox.candidates.map(\.id)
+            orderedCandidateIDs = scopedCandidates.map(\.id)
             batchCommandIDsByCandidateID = retainedBatchCommandIDs
             viewState = OwnerTruthCandidateInboxViewState(
-                phase: inbox.candidates.isEmpty ? .empty : .ready,
+                phase: scopedCandidates.isEmpty ? .empty : .ready,
                 items: currentItems,
                 notice: nil,
                 latestReceipt: nil,

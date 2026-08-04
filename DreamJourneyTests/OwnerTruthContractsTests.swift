@@ -595,6 +595,51 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(useCase.viewState.latestReceipt?.createdMemoryVersion == true)
     }
 
+    func testCandidateReviewUseCaseScopesMediaHandoffToDerivedSource() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let derivedSourceID = recordID("00000000-0000-0000-0000-0000000001b1")
+        let unrelatedSourceID = recordID("00000000-0000-0000-0000-0000000001b2")
+        let scopedCandidateID = recordID("00000000-0000-0000-0000-0000000001b3")
+        let unrelatedCandidateID = recordID("00000000-0000-0000-0000-0000000001b4")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try candidateInbox(
+            vaultID: lease.vaultId,
+            candidateSpecifications: [
+                (id: scopedCandidateID, reviewMode: "single", sensitivity: .standard),
+                (id: unrelatedCandidateID, reviewMode: "single", sensitivity: .standard),
+            ],
+            sourceIDByCandidateID: [
+                scopedCandidateID: derivedSourceID.rawValue.uuidString,
+                unrelatedCandidateID: unrelatedSourceID.rawValue.uuidString,
+            ]
+        ))
+        client.reviewResult = .success(try decisionResult(
+            candidateID: scopedCandidateID,
+            decision: .accepted
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            sourceIDFilter: derivedSourceID,
+            commandIDFactory: { "candidate-review-media-handoff-001" }
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.items.map(\.id), [scopedCandidateID])
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+
+        useCase.send(.accept(candidateID: scopedCandidateID))
+
+        XCTAssertEqual(client.reviewedCommands.count, 1)
+        XCTAssertEqual(client.reviewedCommands.first?.action, .accept)
+        XCTAssertEqual(useCase.viewState.notice, .candidateAccepted)
+        XCTAssertTrue(useCase.viewState.latestReceipt?.createdMemoryVersion == true)
+    }
+
     func testCandidateReviewUseCasePreservesCandidateContentForCorrection() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let candidateID = recordID("00000000-0000-0000-0000-000000000042")
@@ -6584,7 +6629,8 @@ final class OwnerTruthContractsTests: XCTestCase {
         candidateSpecifications: [
             (id: OwnerTruthRecordID, reviewMode: String, sensitivity: OwnerTruthSensitivityLevel)
         ],
-        sourceID: String = "00000000-0000-0000-0000-000000000045"
+        sourceID: String = "00000000-0000-0000-0000-000000000045",
+        sourceIDByCandidateID: [OwnerTruthRecordID: String] = [:]
     ) throws -> OwnerTruthCandidateInbox {
         let expectedVaultID = try XCTUnwrap(OwnerTruthVaultID(vaultID))
         return try OwnerTruthCandidateInbox(
@@ -6592,9 +6638,10 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "schemaVersion": "owner-truth-candidate-inbox-v1",
                 "vaultId": vaultID,
                 "candidates": candidateSpecifications.map { specification in
-                    [
+                    let candidateSourceID = sourceIDByCandidateID[specification.id] ?? sourceID
+                    return [
                     "candidateId": specification.id.rawValue.uuidString.lowercased(),
-                    "sourceId": sourceID,
+                    "sourceId": candidateSourceID,
                     "memoryKind": "experience",
                     "perspectiveType": "firstPerson",
                     "epistemicStatus": "recalled",
@@ -6606,7 +6653,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                     ],
                     "contentHash": "content-hash",
                     "sourceRefs": [[
-                        "sourceId": sourceID,
+                        "sourceId": candidateSourceID,
                         "sourceVersion": 1,
                     ]],
                     "reviewMode": specification.reviewMode,
@@ -8575,7 +8622,14 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(statusReport?.refreshedStatusCount, 1)
         XCTAssertEqual(statusReport?.failedTaskCount, 0)
         XCTAssertEqual(statusClient.fetchRequests, [sourceObjectID])
-        XCTAssertEqual(try secondRestartStore.recoverableTasks(for: lease).first?.phase, .processed)
+        let restoredProcessedTask = try XCTUnwrap(
+            secondRestartStore.recoverableTasks(for: lease).first
+        )
+        XCTAssertEqual(restoredProcessedTask.phase, .processed)
+        XCTAssertEqual(restoredProcessedTask.derivedSourceID, derivedSourceID.rawValue)
+        let handoffPresentation = OwnerTruthMediaTaskPresentation(receipt: restoredProcessedTask)
+        XCTAssertTrue(handoffPresentation.candidateHandoffAvailable)
+        XCTAssertEqual(handoffPresentation.candidateHandoffTitle, "查看待确认记忆")
     }
 
     func testOwnerTruthMediaTaskPresentationKeepsUploadAndProcessingFailuresDistinct() {
@@ -8620,6 +8674,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(terminalProcessingFailure.retryAction, .retryProcessing)
         XCTAssertEqual(localOnlyVerified.stateTitle, "文件已验证")
         XCTAssertTrue(localOnlyVerified.detail.contains("未请求外部 AI 处理"))
+        XCTAssertFalse(localOnlyVerified.candidateHandoffAvailable)
     }
 
     @MainActor

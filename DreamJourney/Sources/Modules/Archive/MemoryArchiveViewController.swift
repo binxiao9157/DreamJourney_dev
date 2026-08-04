@@ -628,6 +628,8 @@ final class MemoryArchiveViewController: UIViewController {
     private var photoPickerArchiveContext: DigitalHumanContext?
     private var ownerTruthMediaPickerOperation: OwnerTruthMediaPickerOperation?
     private var ownerTruthMediaTaskPresentations: [OwnerTruthMediaTaskPresentation] = []
+    private var ownerTruthMediaCandidateHandoffTaskIDs: [Int: UUID] = [:]
+    private var ownerTruthMediaCandidateHandoffNextTag = 1
     private var ownerTruthMediaTaskRefreshGeneration: UInt64 = 0
     private let ownerTruthMediaImportQueue = DispatchQueue(
         label: "com.dreamjourney.owner-truth-media-import",
@@ -973,6 +975,8 @@ final class MemoryArchiveViewController: UIViewController {
         _ presentations: [OwnerTruthMediaTaskPresentation]
     ) {
         ownerTruthMediaTaskPresentations = presentations
+        ownerTruthMediaCandidateHandoffTaskIDs.removeAll()
+        ownerTruthMediaCandidateHandoffNextTag = 1
         ownerTruthMediaTaskStatusStack.removeAllArrangedSubviews()
 
         guard shouldShowOwnerTruthMediaTaskStatus, !presentations.isEmpty else {
@@ -1096,6 +1100,37 @@ final class MemoryArchiveViewController: UIViewController {
             stack.addArrangedSubview(retryButton)
         }
 
+        if presentation.candidateHandoffAvailable,
+           let handoffTitle = presentation.candidateHandoffTitle {
+            let handoffButton = UIButton(type: .system)
+            var configuration = UIButton.Configuration.plain()
+            configuration.title = handoffTitle
+            configuration.baseForegroundColor = DJDesignTokens.Color.accentDeep
+            configuration.contentInsets = NSDirectionalEdgeInsets(
+                top: 9,
+                leading: 12,
+                bottom: 9,
+                trailing: 12
+            )
+            configuration.background.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.13)
+            configuration.background.cornerRadius = DJDesignTokens.Radius.medium
+            handoffButton.configuration = configuration
+            handoffButton.titleLabel?.font = DJDesignTokens.Font.label(13)
+            handoffButton.contentHorizontalAlignment = .center
+            handoffButton.accessibilityIdentifier = "owner-truth-media-candidate-handoff-button"
+            handoffButton.accessibilityLabel = handoffTitle
+            let handoffTag = ownerTruthMediaCandidateHandoffNextTag
+            ownerTruthMediaCandidateHandoffNextTag += 1
+            ownerTruthMediaCandidateHandoffTaskIDs[handoffTag] = presentation.taskID
+            handoffButton.tag = handoffTag
+            handoffButton.addTarget(
+                self,
+                action: #selector(ownerTruthMediaCandidateHandoffTapped(_:)),
+                for: .touchUpInside
+            )
+            stack.addArrangedSubview(handoffButton)
+        }
+
         card.addSubview(stack)
         stack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -1164,6 +1199,41 @@ final class MemoryArchiveViewController: UIViewController {
         }
     }
 
+    @objc private func ownerTruthMediaCandidateHandoffTapped(_ sender: UIButton) {
+        guard let taskID = ownerTruthMediaCandidateHandoffTaskIDs[sender.tag],
+              let presentation = ownerTruthMediaTaskPresentations.first(where: { $0.taskID == taskID }),
+              presentation.candidateHandoffAvailable,
+              let accountLease = captureMediaAccountLease(),
+              isOwnerTruthMediaCaptureClosedPilotEnabled else {
+            return
+        }
+
+        let archiveContext = currentArchiveContext
+        let taskStore = ownerTruthMediaTaskStore
+        ownerTruthMediaImportQueue.async { [weak self] in
+            let derivedSourceID = (try? taskStore.recoverableTasks(for: accountLease))?
+                .first(where: { $0.taskID == taskID })?
+                .derivedSourceID
+            DispatchQueue.main.async {
+                guard let self,
+                      self.validateMediaOperation(accountLease, archiveContext: archiveContext, at: .ui) else {
+                    return
+                }
+                guard let derivedSourceID else {
+                    self.showToast("本次素材仍在整理候选记忆，可稍后刷新", type: .info)
+                    return
+                }
+                self.navigationController?.pushViewController(
+                    OwnerTruthCandidateInboxViewController(
+                        accountLease: accountLease,
+                        sourceIDFilter: OwnerTruthRecordID(rawValue: derivedSourceID)
+                    ),
+                    animated: true
+                )
+            }
+        }
+    }
+
     func runUIQAOwnerTruthMediaTaskStatusSmoke(
         completion: @escaping ([String: Any]) -> Void
     ) {
@@ -1185,6 +1255,9 @@ final class MemoryArchiveViewController: UIViewController {
                 },
                 "processingRetryVisible": self.ownerTruthMediaTaskPresentations.contains {
                     $0.retryAction == .retryProcessing
+                },
+                "candidateHandoffVisible": self.ownerTruthMediaTaskPresentations.contains {
+                    $0.candidateHandoffAvailable
                 },
                 "backendNetworkStarted": false,
                 "persistentOwnerTruthWriteStarted": false,
@@ -5798,6 +5871,7 @@ private final class OwnerTruthCandidateConfirmationCell: UITableViewCell {
 final class OwnerTruthCandidateInboxViewController: UIViewController {
     private let accountLease: AccountLease
     private let useCase: OwnerTruthCandidateReviewUseCase
+    private let sourceIDFilter: OwnerTruthRecordID?
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let headerStack = UIStackView()
     private let titleLabel = UILabel()
@@ -5841,14 +5915,17 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
             OwnerTruthCandidateReviewQAGate.isEnabled
                 || FeatureGateService.shared
                     .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
-        }
+        },
+        sourceIDFilter: OwnerTruthRecordID? = nil
     ) {
         self.accountLease = accountLease
+        self.sourceIDFilter = sourceIDFilter
         self.useCase = OwnerTruthCandidateReviewUseCase(
             accountLease: accountLease,
             client: client,
             accountLeaseRuntime: accountLeaseRuntime,
-            qaGateEnabled: qaGateEnabled
+            qaGateEnabled: qaGateEnabled,
+            sourceIDFilter: sourceIDFilter
         )
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
@@ -5860,7 +5937,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "候选记忆审核"
+        title = sourceIDFilter == nil ? "候选记忆审核" : "素材候选记忆"
         view.backgroundColor = DJDesignTokens.Color.background
         refreshButton.accessibilityIdentifier = "owner-truth-candidate-inbox-refresh"
         batchSelectionButton.accessibilityIdentifier = "owner-truth-candidate-inbox-batch-select"
@@ -5899,7 +5976,9 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         titleLabel.font = DJDesignTokens.Font.title(24)
         titleLabel.textColor = DJDesignTokens.Color.textPrimary
 
-        subtitleLabel.text = "确认后才会形成正式记忆，你可确认、更正或拒绝。"
+        subtitleLabel.text = sourceIDFilter == nil
+            ? "确认后才会形成正式记忆，你可确认、更正或拒绝。"
+            : "本次素材整理出的内容会先留在这里，确认后才会形成正式记忆。"
         subtitleLabel.font = DJDesignTokens.Font.body(14)
         subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
         subtitleLabel.numberOfLines = 0
@@ -5999,7 +6078,9 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         case .loading:
             return "正在读取待确认候选记忆"
         case .ready:
-            return "已加载 \(state.items.count) 条候选记忆"
+            return sourceIDFilter == nil
+                ? "已加载 \(state.items.count) 条候选记忆"
+                : "已加载 \(state.items.count) 条本次素材的候选记忆"
         case .empty:
             return noticeText(state.notice) ?? "没有待确认候选记忆"
         case .submitting:
@@ -6015,7 +6096,9 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         guard state.items.isEmpty else { return nil }
         switch state.phase {
         case .empty:
-            return "当前没有需要你确认的候选记忆。"
+            return sourceIDFilter == nil
+                ? "当前没有需要你确认的候选记忆。"
+                : "当前素材暂未生成可确认内容，可稍后刷新。"
         case .unavailable:
             return "当前账号暂未开通候选记忆审核。"
         case .failed:

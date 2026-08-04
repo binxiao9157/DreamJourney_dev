@@ -123,6 +123,9 @@ struct OwnerTruthMediaTaskReceipt: Codable, Equatable, Sendable {
     var sourceObjectID: UUID?
     var sourceObjectState: OwnerTruthMediaSourceObjectState?
     var processingStatus: OwnerTruthMediaProcessingStatus?
+    /// The derived private Source is persisted only to continue the in-app
+    /// Candidate handoff after a restart. It is never rendered to the user.
+    var derivedSourceID: UUID?
     var retryable: Bool
     var failureCode: String?
     let createdAt: Date
@@ -155,6 +158,7 @@ struct OwnerTruthMediaTaskReceipt: Codable, Equatable, Sendable {
         sourceObjectID = nil
         sourceObjectState = nil
         processingStatus = nil
+        derivedSourceID = nil
         retryable = false
         failureCode = nil
         createdAt = now
@@ -201,6 +205,11 @@ struct OwnerTruthMediaTaskPresentation: Equatable, Sendable {
     let tone: OwnerTruthMediaTaskPresentationTone
     let retryAction: OwnerTruthMediaTaskRetryAction?
     let retryTitle: String?
+    /// A completed processor has persisted a derived Source and can open the
+    /// existing Candidate review surface. The Source identifier stays in the
+    /// durable receipt and is never exposed by this presentation.
+    let candidateHandoffAvailable: Bool
+    let candidateHandoffTitle: String?
     let updatedAt: Date
 
     init(receipt: OwnerTruthMediaTaskReceipt) {
@@ -211,6 +220,7 @@ struct OwnerTruthMediaTaskPresentation: Equatable, Sendable {
             phase: receipt.phase,
             allowExternalProcessing: receipt.allowExternalProcessing,
             sourceObjectID: receipt.sourceObjectID,
+            hasCandidateHandoffSource: receipt.derivedSourceID != nil,
             updatedAt: receipt.updatedAt
         )
     }
@@ -222,6 +232,7 @@ struct OwnerTruthMediaTaskPresentation: Equatable, Sendable {
         phase: OwnerTruthMediaTaskPhase,
         allowExternalProcessing: Bool,
         sourceObjectID: UUID? = nil,
+        hasCandidateHandoffSource: Bool = false,
         updatedAt: Date = Date()
     ) {
         self.taskID = taskID
@@ -271,7 +282,9 @@ struct OwnerTruthMediaTaskPresentation: Equatable, Sendable {
             retryTitle = nil
         case .processed:
             stateTitle = "已处理"
-            detail = "处理结果已就绪，仍需确认后才会进入正式记忆。"
+            detail = hasCandidateHandoffSource
+                ? "素材已整理为待确认记忆；确认后才会进入正式记忆。"
+                : "处理结果已就绪，仍需确认后才会进入正式记忆。"
             tone = .neutral
             retryAction = nil
             retryTitle = nil
@@ -294,6 +307,9 @@ struct OwnerTruthMediaTaskPresentation: Equatable, Sendable {
             retryAction = nil
             retryTitle = nil
         }
+
+        candidateHandoffAvailable = phase == .processed && hasCandidateHandoffSource
+        candidateHandoffTitle = candidateHandoffAvailable ? "查看待确认记忆" : nil
     }
 
     var mediaTitle: String {
@@ -691,6 +707,7 @@ final class OwnerTruthMediaTaskStore: @unchecked Sendable {
     ) {
         receipt.sourceObjectState = sourceObject.state
         receipt.processingStatus = sourceObject.processingStatus
+        receipt.derivedSourceID = sourceObject.derivedSourceID?.rawValue
         receipt.retryable = sourceObject.retryable
         receipt.failureCode = sourceObject.failureCode
         switch sourceObject.state {
