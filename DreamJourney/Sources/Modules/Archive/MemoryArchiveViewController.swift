@@ -5877,6 +5877,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
     private let statusLabel = UILabel()
+    private let formalMemoryNoticeLabel = PaddingLabel(horizontalInset: 12, verticalInset: 9)
     private let emptyStateLabel = UILabel()
     private lazy var refreshButton = UIBarButtonItem(
         barButtonSystemItem: .refresh,
@@ -5988,9 +5989,19 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         statusLabel.numberOfLines = 0
         statusLabel.accessibilityIdentifier = "owner-truth-candidate-inbox-status"
 
+        formalMemoryNoticeLabel.font = DJDesignTokens.Font.label(13)
+        formalMemoryNoticeLabel.textColor = DJDesignTokens.Color.accentDeep
+        formalMemoryNoticeLabel.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.12)
+        formalMemoryNoticeLabel.layer.cornerRadius = DJDesignTokens.Radius.medium
+        formalMemoryNoticeLabel.layer.masksToBounds = true
+        formalMemoryNoticeLabel.numberOfLines = 0
+        formalMemoryNoticeLabel.isHidden = true
+        formalMemoryNoticeLabel.accessibilityIdentifier = "owner-truth-candidate-formal-memory-status"
+
         headerStack.addArrangedSubview(titleLabel)
         headerStack.addArrangedSubview(subtitleLabel)
         headerStack.addArrangedSubview(statusLabel)
+        headerStack.addArrangedSubview(formalMemoryNoticeLabel)
     }
 
     private func configureTableView() {
@@ -6062,6 +6073,10 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         updateBatchNavigation(isSubmitting: isSubmitting)
         statusLabel.text = statusText(for: state)
         statusLabel.accessibilityLabel = statusLabel.text
+        let formalMemoryNotice = formalMemoryNoticeText(for: state)
+        formalMemoryNoticeLabel.text = formalMemoryNotice
+        formalMemoryNoticeLabel.accessibilityLabel = formalMemoryNotice
+        formalMemoryNoticeLabel.isHidden = formalMemoryNotice == nil
         emptyStateLabel.text = emptyText(for: state)
         emptyStateLabel.isHidden = emptyStateLabel.text == nil
         tableView.reloadData()
@@ -6089,6 +6104,20 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
             return "正在逐条确认候选记忆（\(completedCount + 1)/\(totalCount)）"
         case .failed:
             return noticeText(state.notice) ?? "读取失败，可重新载入"
+        }
+    }
+
+    private func formalMemoryNoticeText(
+        for state: OwnerTruthCandidateInboxViewState
+    ) -> String? {
+        guard state.latestReceipt?.createdMemoryVersion == true else { return nil }
+        switch state.latestReceipt?.decision {
+        case .accepted:
+            return "已纳入正式记忆，可在后续回顾与回响中使用。"
+        case .corrected:
+            return "已按更正内容纳入正式记忆，可在后续回顾与回响中使用。"
+        case .rejected, .invalidated, .pending, .none:
+            return nil
         }
     }
 
@@ -6295,6 +6324,14 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
     }
 
     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+    var formalMemoryNoticeVisibleForUIQA: Bool {
+        !formalMemoryNoticeLabel.isHidden && !(formalMemoryNoticeLabel.text ?? "").isEmpty
+    }
+
+    var formalMemoryNoticeTextForUIQA: String? {
+        formalMemoryNoticeLabel.text
+    }
+
     func runUIQAAcceptFirstCandidate() {
         guard OwnerTruthCandidateReviewQAGate.isEnabled,
               let candidateID = renderedState.items.first?.id else {
@@ -7184,6 +7221,8 @@ struct OwnerTruthCandidateInboxUIQASmokeResult: Codable {
     let terminalDecision: String?
     let receiptConsumed: Bool
     let memoryVersionCreated: Bool
+    let formalMemoryPresentationVisible: Bool
+    let formalMemoryPresentationText: String?
     let candidateRemovedAfterReview: Bool
     let batchCandidateCount: Int
     let batchAcceptedCount: Int
@@ -7233,6 +7272,8 @@ enum OwnerTruthCandidateInboxUIQASmoke {
             terminalDecision: nil,
             receiptConsumed: false,
             memoryVersionCreated: false,
+            formalMemoryPresentationVisible: false,
+            formalMemoryPresentationText: nil,
             candidateRemovedAfterReview: false,
             batchCandidateCount: 0,
             batchAcceptedCount: 0,
@@ -7294,13 +7335,16 @@ private final class CandidateInboxUIQAScenario {
         }
 
         didWrite = true
+        let formalMemoryPresentationVisible = controller?.formalMemoryNoticeVisibleForUIQA == true
+        let formalMemoryPresentationText = controller?.formalMemoryNoticeTextForUIQA
         let result = OwnerTruthCandidateInboxUIQASmokeResult(
             completed: OwnerTruthCandidateReviewQAGate.isEnabled
                 && didSubmit
                 && candidateVisible
                 && candidatePreviewVisible
                 && reviewActionsAvailable
-                && batchSummary.acceptedCount == batchCandidateCount,
+                && batchSummary.acceptedCount == batchCandidateCount
+                && formalMemoryPresentationVisible,
             qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
             candidateVisible: candidateVisible,
             candidatePreviewVisible: candidatePreviewVisible,
@@ -7310,6 +7354,8 @@ private final class CandidateInboxUIQAScenario {
             terminalDecision: receipt.decision.rawValue,
             receiptConsumed: true,
             memoryVersionCreated: receipt.createdMemoryVersion,
+            formalMemoryPresentationVisible: formalMemoryPresentationVisible,
+            formalMemoryPresentationText: formalMemoryPresentationText,
             candidateRemovedAfterReview: state.items.isEmpty,
             batchCandidateCount: batchCandidateCount,
             batchAcceptedCount: batchSummary.acceptedCount,

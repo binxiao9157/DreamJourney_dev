@@ -4,15 +4,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
-SCHEME="${SCHEME:-DreamJourney}"
-CONFIGURATION="${CONFIGURATION:-Debug}"
-SIMULATOR_NAME="${SIMULATOR_NAME:-iPhone 17}"
-SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG UI_QA_SIMULATOR'
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/tmp/visual-qa/product-v4/DerivedDataOwnerTruthCandidateInboxSmoke}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/product-v4/owner-truth-candidate-inbox-smoke}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 OUTPUT_DIR="$OUTPUT_ROOT/$RUN_ID"
-BUILD_LOG="$OUTPUT_DIR/build.log"
+INSTALL_OUTPUT_DIR="$OUTPUT_DIR/install"
 RUNTIME_LOG="$OUTPUT_DIR/runtime.log"
 OS_LOG="$OUTPUT_DIR/oslog.log"
 SCREENSHOT_PATH="$OUTPUT_DIR/01-owner-truth-candidate-inbox.png"
@@ -25,52 +21,20 @@ cd "$ROOT_DIR"
 
 fail() {
   echo "[owner-truth-candidate-inbox-smoke] $*" >&2
-  if [[ -f "$RUNTIME_LOG" ]]; then
-    tail -80 "$RUNTIME_LOG" >&2 || true
-  fi
-  if [[ -f "$OS_LOG" ]]; then
-    tail -80 "$OS_LOG" >&2 || true
-  fi
+  [[ -f "$RUNTIME_LOG" ]] && tail -80 "$RUNTIME_LOG" >&2 || true
+  [[ -f "$OS_LOG" ]] && tail -80 "$OS_LOG" >&2 || true
   exit 1
 }
 
-booted_simulator_udid() {
-  xcrun simctl list devices booted | awk -F '[()]' '/Booted/ { print $2; exit }'
-}
+echo "[owner-truth-candidate-inbox-smoke] Building and installing UIQA app..."
+OUTPUT_DIR="$INSTALL_OUTPUT_DIR" \
+DERIVED_DATA_PATH="$DERIVED_DATA_PATH" \
+LOCAL_BUNDLE_ID="${LOCAL_BUNDLE_ID:-com.yxj.dreamjourney.app}" \
+LOCAL_DEVELOPMENT_TEAM="${LOCAL_DEVELOPMENT_TEAM:-2BTR77V3R8}" \
+bash "$ROOT_DIR/Scripts/QA/prd-stitch-ui/run-installable-simulator-uiqa.sh"
 
-SIMULATOR_UDID="${SIMULATOR_UDID:-$(booted_simulator_udid)}"
-if [[ -z "$SIMULATOR_UDID" ]]; then
-  xcrun simctl boot "$SIMULATOR_NAME" >/dev/null
-  SIMULATOR_UDID="$(booted_simulator_udid)"
-fi
-[[ -n "$SIMULATOR_UDID" ]] || fail "No booted simulator. Set SIMULATOR_UDID or SIMULATOR_NAME."
-
-echo "[owner-truth-candidate-inbox-smoke] Building UIQA app..."
-xcodebuild \
-  -workspace DreamJourney.xcworkspace \
-  -scheme "$SCHEME" \
-  -configuration "$CONFIGURATION" \
-  -sdk iphonesimulator \
-  -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  CODE_SIGNING_ALLOWED=NO \
-  SWIFT_ACTIVE_COMPILATION_CONDITIONS="$SWIFT_ACTIVE_COMPILATION_CONDITIONS" \
-  EXCLUDED_ARCHS='' \
-  ARCHS=arm64 \
-  ONLY_ACTIVE_ARCH=NO \
-  build > "$BUILD_LOG"
-
-APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/DreamJourney.app"
-[[ -d "$APP_PATH" ]] || fail "Built app not found: $APP_PATH"
-BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
-[[ -n "$BUNDLE_ID" ]] || fail "Unable to read bundle id from $APP_PATH"
-
-echo "[owner-truth-candidate-inbox-smoke] Installing $BUNDLE_ID on $SIMULATOR_UDID..."
-xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
-xcrun simctl uninstall "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
-xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
-xcrun simctl spawn "$SIMULATOR_UDID" defaults delete "$BUNDLE_ID" >/dev/null 2>&1 || true
-DATA_CONTAINER="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data)"
+# shellcheck disable=SC1090
+source "$INSTALL_OUTPUT_DIR/install.env"
 RESULT_FILE="$DATA_CONTAINER/Documents/owner-truth-candidate-inbox-uiqa-result.json"
 rm -f "$RESULT_FILE"
 
@@ -124,6 +88,8 @@ grep -Eq '"reviewAction"[[:space:]]*:[[:space:]]*"acceptBatch"' "$RESULT_FILE" |
 grep -Eq '"terminalDecision"[[:space:]]*:[[:space:]]*"accepted"' "$RESULT_FILE" || fail "Candidate receipt should be accepted."
 grep -Eq '"receiptConsumed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate receipt should be consumed."
 grep -Eq '"memoryVersionCreated"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Accepted Candidate should create a MemoryVersion."
+grep -Eq '"formalMemoryPresentationVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Confirmed Candidate should present its formal memory state."
+grep -Eq '"formalMemoryPresentationText"[[:space:]]*:[[:space:]]*".*正式记忆' "$RESULT_FILE" || fail "Formal memory presentation wording drifted."
 grep -Eq '"candidateRemovedAfterReview"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Reviewed Candidate should leave the pending Inbox."
 grep -Eq '"batchCandidateCount"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Batch smoke should render two batch candidates."
 grep -Eq '"batchAcceptedCount"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Batch smoke should accept every selected candidate."
@@ -133,7 +99,7 @@ grep -Eq '"launchArgument"[[:space:]]*:[[:space:]]*"DJEnableOwnerTruthCandidateR
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
 
-echo "[owner-truth-candidate-inbox-smoke] Build log: $BUILD_LOG"
+echo "[owner-truth-candidate-inbox-smoke] Build log: $INSTALL_OUTPUT_DIR/build.log"
 echo "[owner-truth-candidate-inbox-smoke] Runtime log: $RUNTIME_LOG"
 echo "[owner-truth-candidate-inbox-smoke] OS log: $OS_LOG"
 echo "[owner-truth-candidate-inbox-smoke] Result: $RESULT_COPY_PATH"
