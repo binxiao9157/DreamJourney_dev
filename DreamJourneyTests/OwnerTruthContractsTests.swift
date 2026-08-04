@@ -8578,6 +8578,134 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(try secondRestartStore.recoverableTasks(for: lease).first?.phase, .processed)
     }
 
+    func testOwnerTruthMediaTaskPresentationKeepsUploadAndProcessingFailuresDistinct() {
+        let sourceObjectID = UUID(uuidString: "00000000-0000-0000-0000-000000000b40")!
+        let uploadFailure = OwnerTruthMediaTaskPresentation(
+            mediaKind: .image,
+            fileName: "summer.jpg",
+            phase: .uploadRetryableFailed,
+            allowExternalProcessing: true
+        )
+        let processingFailure = OwnerTruthMediaTaskPresentation(
+            mediaKind: .audio,
+            fileName: "father.m4a",
+            phase: .retryableFailed,
+            allowExternalProcessing: true,
+            sourceObjectID: sourceObjectID
+        )
+        let terminalProcessingFailure = OwnerTruthMediaTaskPresentation(
+            mediaKind: .document,
+            fileName: "notes.pdf",
+            phase: .failed,
+            allowExternalProcessing: false,
+            sourceObjectID: sourceObjectID
+        )
+        let localOnlyVerified = OwnerTruthMediaTaskPresentation(
+            mediaKind: .video,
+            fileName: "family.mov",
+            phase: .uploaded,
+            allowExternalProcessing: false
+        )
+
+        XCTAssertEqual(uploadFailure.stateTitle, "云端文件未同步")
+        XCTAssertEqual(uploadFailure.retryAction, .resumeUpload)
+        XCTAssertEqual(uploadFailure.retryTitle, "重新上传")
+        XCTAssertTrue(uploadFailure.detail.contains("本机"))
+
+        XCTAssertEqual(processingFailure.stateTitle, "文件已同步，处理暂不可用")
+        XCTAssertEqual(processingFailure.retryAction, .retryProcessing)
+        XCTAssertEqual(processingFailure.retryTitle, "重新处理")
+        XCTAssertTrue(processingFailure.detail.contains("无需重新选择文件"))
+
+        XCTAssertEqual(terminalProcessingFailure.retryAction, .retryProcessing)
+        XCTAssertEqual(localOnlyVerified.stateTitle, "文件已验证")
+        XCTAssertTrue(localOnlyVerified.detail.contains("未请求外部 AI 处理"))
+    }
+
+    @MainActor
+    func testMediaTaskProcessingRetryUsesExistingSourceWithoutRepickingContent() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-media-processing-retry-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let secretStore = OwnerTruthMediaUploadSecretStoreSpy()
+        let store = OwnerTruthMediaTaskStore(
+            rootDirectory: rootURL,
+            secretStore: secretStore,
+            accountLeaseRuntime: runtime
+        )
+        let content = Data(repeating: 0x56, count: 128)
+        let command = try OwnerTruthMediaUploadIntentCommand(
+            expectedAuthorityEpoch: 0,
+            mediaKind: .audio,
+            fileName: "father.m4a",
+            contentType: "audio/m4a",
+            content: content,
+            allowExternalProcessing: true
+        )
+        let sourceObjectID = recordID("00000000-0000-0000-0000-000000000b41")
+        let token = try XCTUnwrap(
+            OwnerTruthMediaUploadToken("one-time-owner-media-upload-token-000b41")
+        )
+        let prepared = try store.prepare(
+            accountLease: lease,
+            command: command,
+            content: content
+        )
+        _ = try store.apply(
+            uploadIntentReceipt: try mediaUploadIntentReceipt(
+                vaultID: vaultID,
+                command: command,
+                sourceObjectID: sourceObjectID,
+                token: token
+            ),
+            to: prepared.taskID,
+            accountLease: lease
+        )
+        _ = try store.apply(
+            sourceObjectResponse: try mediaSourceObjectResponse(
+                vaultID: vaultID,
+                command: command,
+                sourceObjectID: sourceObjectID,
+                state: .failed,
+                processingStatus: .failed
+            ),
+            to: prepared.taskID,
+            accountLease: lease
+        )
+
+        let client = OwnerTruthMediaCaptureClientSpy()
+        client.retryResult = .success(try mediaSourceObjectResponse(
+            vaultID: vaultID,
+            command: command,
+            sourceObjectID: sourceObjectID,
+            state: .processing,
+            processingStatus: .processing,
+            status: .processingRequested
+        ))
+        let coordinator = OwnerTruthMediaTaskRecoveryCoordinator(
+            store: store,
+            client: client,
+            accountLeaseRuntime: runtime
+        )
+        var retryResult: Result<Void, Error>?
+        coordinator.retryProcessing(taskID: prepared.taskID, accountLease: lease) {
+            retryResult = $0
+        }
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { retryResult != nil })
+        guard case .success? = retryResult else {
+            return XCTFail("processing retry should succeed")
+        }
+        XCTAssertEqual(client.retryRequests, [sourceObjectID])
+        XCTAssertEqual(
+            try store.recoverableTasks(for: lease).first?.phase,
+            .processing
+        )
+        XCTAssertThrowsError(try store.loadPendingContent(for: prepared.taskID, accountLease: lease))
+    }
+
     func testMediaTaskStoreKeepsABATasksPartitionedAndRejectsOldLease() throws {
         let (runtime, firstLease) = try makeActiveRuntime()
         let rootURL = FileManager.default.temporaryDirectory
@@ -9322,6 +9450,7 @@ private final class OwnerTruthMediaCaptureClientSpy: OwnerTruthMediaCaptureClien
 
     private(set) var uploadRequests: [(OwnerTruthRecordID, Data)] = []
     private(set) var fetchRequests: [OwnerTruthRecordID] = []
+    private(set) var retryRequests: [OwnerTruthRecordID] = []
 
     func createOwnerTruthMediaUploadIntent(
         accountLease: AccountLease,
@@ -9361,6 +9490,7 @@ private final class OwnerTruthMediaCaptureClientSpy: OwnerTruthMediaCaptureClien
         sourceObjectID: OwnerTruthRecordID,
         completion: @escaping (Result<OwnerTruthMediaSourceObjectResponse, Error>) -> Void
     ) {
+        retryRequests.append(sourceObjectID)
         completion(retryResult ?? .failure(OwnerTruthMediaCaptureClientSpyError.missingResult))
     }
 }

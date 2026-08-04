@@ -585,6 +585,8 @@ private final class InAppMessageCell: UITableViewCell {
 
 final class MemoryArchiveViewController: UIViewController {
     private let repository: MemoryArchiveRepository
+    private let ownerTruthMediaTaskStore: OwnerTruthMediaTaskStore
+    private let ownerTruthMediaTaskPresentationOverride: [OwnerTruthMediaTaskPresentation]?
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
     private let mediaStore = ArchiveMediaStore.shared
     private lazy var delayedReplyInboxAnswerReader = EchoDelayedReplyInboxAnswerReader(
@@ -597,6 +599,7 @@ final class MemoryArchiveViewController: UIViewController {
     private let mainStack = UIStackView()
     private let featureCardsStack = UIStackView()
     private let listStack = UIStackView()
+    private let ownerTruthMediaTaskStatusStack = UIStackView()
     private let archiveFilterButton = UIButton(type: .system)
 
     private weak var headerTitleLabel: UILabel?
@@ -624,6 +627,8 @@ final class MemoryArchiveViewController: UIViewController {
     private var photoPickerAccountLease: AccountLease?
     private var photoPickerArchiveContext: DigitalHumanContext?
     private var ownerTruthMediaPickerOperation: OwnerTruthMediaPickerOperation?
+    private var ownerTruthMediaTaskPresentations: [OwnerTruthMediaTaskPresentation] = []
+    private var ownerTruthMediaTaskRefreshGeneration: UInt64 = 0
     private let ownerTruthMediaImportQueue = DispatchQueue(
         label: "com.dreamjourney.owner-truth-media-import",
         qos: .userInitiated
@@ -661,6 +666,11 @@ final class MemoryArchiveViewController: UIViewController {
         isOwnerTruthTextCaptureClosedPilotEnabled
             && FeatureGateService.shared
                 .isServerPolicyManagedClosedPilotRouteAllowed(.ownerMediaCaptureV1)
+    }
+
+    private var shouldShowOwnerTruthMediaTaskStatus: Bool {
+        ownerTruthMediaTaskPresentationOverride != nil
+            || (isSelfAutobiographyMode && isOwnerTruthMediaCaptureClosedPilotEnabled)
     }
 
     private var archivePersonaName: String {
@@ -738,8 +748,14 @@ final class MemoryArchiveViewController: UIViewController {
         DJDesignTokens.Spacing.tabBarHeight + warmTabBarFloatingBottomInset + safeAreaBottomInset + DJDesignTokens.Spacing.page
     }
 
-    init(repository: MemoryArchiveRepository = .shared) {
+    init(
+        repository: MemoryArchiveRepository = .shared,
+        ownerTruthMediaTaskStore: OwnerTruthMediaTaskStore = .shared,
+        ownerTruthMediaTaskPresentationOverride: [OwnerTruthMediaTaskPresentation]? = nil
+    ) {
         self.repository = repository
+        self.ownerTruthMediaTaskStore = ownerTruthMediaTaskStore
+        self.ownerTruthMediaTaskPresentationOverride = ownerTruthMediaTaskPresentationOverride
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -795,6 +811,10 @@ final class MemoryArchiveViewController: UIViewController {
         featureCardsStack.axis = .vertical
         featureCardsStack.spacing = 0
 
+        ownerTruthMediaTaskStatusStack.axis = .vertical
+        ownerTruthMediaTaskStatusStack.spacing = 10
+        ownerTruthMediaTaskStatusStack.isHidden = true
+
         listStack.axis = .vertical
         listStack.spacing = ArchiveLayout.timelineItemSpacing
 
@@ -846,6 +866,7 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.addArrangedSubview(bookEntry)
         mainStack.addArrangedSubview(materialsHeader)
         mainStack.addArrangedSubview(primaryCTA)
+        mainStack.addArrangedSubview(ownerTruthMediaTaskStatusStack)
         mainStack.addArrangedSubview(archiveFilterButton)
         mainStack.addArrangedSubview(listStack)
         mainStack.setCustomSpacing(ArchiveLayout.afterHeaderSpacing, after: header)
@@ -859,6 +880,7 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.setCustomSpacing(22, after: bookEntry)
         mainStack.setCustomSpacing(10, after: materialsHeader)
         mainStack.setCustomSpacing(18, after: primaryCTA)
+        mainStack.setCustomSpacing(14, after: ownerTruthMediaTaskStatusStack)
         mainStack.setCustomSpacing(8, after: archiveFilterButton)
         mainStack.setCustomSpacing(ArchiveLayout.afterListSpacing, after: listStack)
     }
@@ -901,6 +923,7 @@ final class MemoryArchiveViewController: UIViewController {
         updateCandidateMemoryActivationButton()
         updateCandidateReviewQAButton()
         updateArchiveFilterButton()
+        refreshOwnerTruthMediaTaskStatus()
         reloadArchiveList()
     }
 
@@ -910,6 +933,262 @@ final class MemoryArchiveViewController: UIViewController {
             DispatchQueue.main.async {
                 self?.refreshContent()
             }
+        }
+    }
+
+    private func refreshOwnerTruthMediaTaskStatus() {
+        guard shouldShowOwnerTruthMediaTaskStatus else {
+            ownerTruthMediaTaskRefreshGeneration &+= 1
+            updateOwnerTruthMediaTaskStatus([])
+            return
+        }
+        if let ownerTruthMediaTaskPresentationOverride {
+            updateOwnerTruthMediaTaskStatus(ownerTruthMediaTaskPresentationOverride)
+            return
+        }
+        guard let accountLease = captureMediaAccountLease() else {
+            updateOwnerTruthMediaTaskStatus([])
+            return
+        }
+        let archiveContext = currentArchiveContext
+        let taskStore = ownerTruthMediaTaskStore
+        ownerTruthMediaTaskRefreshGeneration &+= 1
+        let generation = ownerTruthMediaTaskRefreshGeneration
+        ownerTruthMediaImportQueue.async { [weak self] in
+            let presentations = (try? taskStore.recoverableTasks(for: accountLease))?
+                .map(OwnerTruthMediaTaskPresentation.init(receipt:)) ?? []
+            DispatchQueue.main.async {
+                guard let self,
+                      generation == self.ownerTruthMediaTaskRefreshGeneration,
+                      self.shouldShowOwnerTruthMediaTaskStatus,
+                      self.validateMediaOperation(accountLease, archiveContext: archiveContext, at: .ui) else {
+                    return
+                }
+                self.updateOwnerTruthMediaTaskStatus(presentations)
+            }
+        }
+    }
+
+    private func updateOwnerTruthMediaTaskStatus(
+        _ presentations: [OwnerTruthMediaTaskPresentation]
+    ) {
+        ownerTruthMediaTaskPresentations = presentations
+        ownerTruthMediaTaskStatusStack.removeAllArrangedSubviews()
+
+        guard shouldShowOwnerTruthMediaTaskStatus, !presentations.isEmpty else {
+            ownerTruthMediaTaskStatusStack.isHidden = true
+            return
+        }
+
+        let sorted = presentations.sorted { lhs, rhs in
+            if lhs.updatedAt == rhs.updatedAt {
+                return lhs.taskID.uuidString > rhs.taskID.uuidString
+            }
+            return lhs.updatedAt > rhs.updatedAt
+        }
+        let active = sorted.filter { $0.phase != .processed && $0.phase != .deleted }
+        let latestTerminal = sorted.first { $0.phase == .processed || $0.phase == .deleted }
+        var visible = Array(active.prefix(3))
+        if visible.count < 3, let latestTerminal {
+            visible.append(latestTerminal)
+        }
+
+        let titleLabel = UILabel()
+        titleLabel.text = "素材处理状态"
+        titleLabel.font = DJDesignTokens.Font.title(18)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        titleLabel.accessibilityIdentifier = "owner-truth-media-status-title"
+        ownerTruthMediaTaskStatusStack.addArrangedSubview(titleLabel)
+
+        visible.forEach { presentation in
+            ownerTruthMediaTaskStatusStack.addArrangedSubview(
+                makeOwnerTruthMediaTaskStatusCard(presentation)
+            )
+        }
+        if presentations.count > visible.count {
+            let moreLabel = UILabel()
+            moreLabel.text = "另有 \(presentations.count - visible.count) 项素材状态已保留"
+            moreLabel.font = DJDesignTokens.Font.label(12)
+            moreLabel.textColor = DJDesignTokens.Color.textTertiary
+            ownerTruthMediaTaskStatusStack.addArrangedSubview(moreLabel)
+        }
+        ownerTruthMediaTaskStatusStack.isHidden = false
+    }
+
+    private func makeOwnerTruthMediaTaskStatusCard(
+        _ presentation: OwnerTruthMediaTaskPresentation
+    ) -> UIView {
+        let card = DJComponentFactory.cardView(radius: DJDesignTokens.Radius.medium)
+        card.accessibilityIdentifier = "owner-truth-media-status-card-\(presentation.phase.rawValue)"
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 8
+
+        let titleRow = UIStackView()
+        titleRow.axis = .horizontal
+        titleRow.alignment = .center
+        titleRow.spacing = 10
+
+        let titleLabel = UILabel()
+        titleLabel.text = presentation.mediaTitle
+        titleLabel.font = DJDesignTokens.Font.title(16)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        titleLabel.numberOfLines = 1
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let stateLabel = PaddingLabel(horizontalInset: 9, verticalInset: 5)
+        stateLabel.text = presentation.stateTitle
+        stateLabel.font = DJDesignTokens.Font.label(11)
+        stateLabel.textColor = ownerTruthMediaTaskStatusTint(for: presentation.tone)
+        stateLabel.backgroundColor = ownerTruthMediaTaskStatusTint(for: presentation.tone)
+            .withAlphaComponent(0.12)
+        stateLabel.layer.cornerRadius = 10
+        stateLabel.layer.masksToBounds = true
+        stateLabel.accessibilityIdentifier = "owner-truth-media-status-\(presentation.phase.rawValue)"
+        stateLabel.setContentHuggingPriority(.required, for: .horizontal)
+
+        titleRow.addArrangedSubview(titleLabel)
+        titleRow.addArrangedSubview(stateLabel)
+
+        let fileNameLabel = UILabel()
+        fileNameLabel.text = presentation.fileName
+        fileNameLabel.font = DJDesignTokens.Font.label(12)
+        fileNameLabel.textColor = DJDesignTokens.Color.textTertiary
+        fileNameLabel.numberOfLines = 1
+        fileNameLabel.lineBreakMode = .byTruncatingMiddle
+
+        let detailLabel = UILabel()
+        detailLabel.text = presentation.detail
+        detailLabel.font = DJDesignTokens.Font.body(13)
+        detailLabel.textColor = DJDesignTokens.Color.textSecondary
+        detailLabel.numberOfLines = 0
+
+        stack.addArrangedSubview(titleRow)
+        stack.addArrangedSubview(fileNameLabel)
+        stack.addArrangedSubview(detailLabel)
+
+        if let action = presentation.retryAction,
+           let retryTitle = presentation.retryTitle {
+            let retryButton = UIButton(type: .system)
+            var configuration = UIButton.Configuration.plain()
+            configuration.title = retryTitle
+            configuration.baseForegroundColor = DJDesignTokens.Color.accentDeep
+            configuration.contentInsets = NSDirectionalEdgeInsets(
+                top: 9,
+                leading: 12,
+                bottom: 9,
+                trailing: 12
+            )
+            configuration.background.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.13)
+            configuration.background.cornerRadius = DJDesignTokens.Radius.medium
+            retryButton.configuration = configuration
+            retryButton.titleLabel?.font = DJDesignTokens.Font.label(13)
+            retryButton.contentHorizontalAlignment = .center
+            retryButton.accessibilityIdentifier = "owner-truth-media-\(action.rawValue)-button"
+            retryButton.accessibilityLabel = retryTitle
+            retryButton.accessibilityValue = presentation.taskID.uuidString
+            retryButton.addTarget(
+                self,
+                action: #selector(ownerTruthMediaRetryTapped(_:)),
+                for: .touchUpInside
+            )
+            stack.addArrangedSubview(retryButton)
+        }
+
+        card.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
+        ])
+        return card
+    }
+
+    private func ownerTruthMediaTaskStatusTint(
+        for tone: OwnerTruthMediaTaskPresentationTone
+    ) -> UIColor {
+        switch tone {
+        case .neutral:
+            return DJDesignTokens.Color.accentDeep
+        case .progress:
+            return UIColor.systemBlue
+        case .warning:
+            return UIColor.systemOrange
+        case .failure:
+            return DJDesignTokens.Color.danger
+        }
+    }
+
+    @objc private func ownerTruthMediaRetryTapped(_ sender: UIButton) {
+        guard let taskIDRaw = sender.accessibilityValue,
+              let taskID = UUID(uuidString: taskIDRaw),
+              let presentation = ownerTruthMediaTaskPresentations.first(where: { $0.taskID == taskID }),
+              let action = presentation.retryAction,
+              let accountLease = captureMediaAccountLease(),
+              isOwnerTruthMediaCaptureClosedPilotEnabled else {
+            return
+        }
+
+        switch action {
+        case .resumeUpload:
+            showToast("正在继续上传原文件", type: .info)
+            OwnerTruthMediaTaskRecoveryCoordinator.shared.restore(accountLease: accountLease) { [weak self] report in
+                guard let self,
+                      self.validateMediaAccountLease(accountLease, at: .ui) else { return }
+                self.refreshOwnerTruthMediaTaskStatus()
+                if report.failedTaskCount > 0 {
+                    self.showToast("文件仍未同步，可稍后再次尝试", type: .error)
+                } else {
+                    self.showToast("已继续同步素材", type: .success)
+                }
+            }
+        case .retryProcessing:
+            showToast("正在重新加入处理队列", type: .info)
+            OwnerTruthMediaTaskRecoveryCoordinator.shared.retryProcessing(
+                taskID: taskID,
+                accountLease: accountLease
+            ) { [weak self] result in
+                guard let self,
+                      self.validateMediaAccountLease(accountLease, at: .ui) else { return }
+                self.refreshOwnerTruthMediaTaskStatus()
+                switch result {
+                case .success:
+                    self.showToast("已重新加入处理队列", type: .success)
+                case .failure:
+                    self.showToast("处理暂不可用，可稍后重试", type: .error)
+                }
+            }
+        }
+    }
+
+    func runUIQAOwnerTruthMediaTaskStatusSmoke(
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        view.layoutIfNeeded()
+        let statusFrame = ownerTruthMediaTaskStatusStack.convert(
+            ownerTruthMediaTaskStatusStack.bounds,
+            to: scrollView
+        )
+        scrollView.scrollRectToVisible(statusFrame.insetBy(dx: 0, dy: -12), animated: false)
+        DispatchQueue.main.async {
+            let statusTitles = self.ownerTruthMediaTaskPresentations.map(\.stateTitle)
+            let retryActions = self.ownerTruthMediaTaskPresentations.compactMap(\.retryAction).map(\.rawValue)
+            completion([
+                "statusStackVisible": self.ownerTruthMediaTaskStatusStack.isHidden == false,
+                "statusTitles": statusTitles,
+                "retryActions": retryActions,
+                "uploadRetryVisible": self.ownerTruthMediaTaskPresentations.contains {
+                    $0.retryAction == .resumeUpload
+                },
+                "processingRetryVisible": self.ownerTruthMediaTaskPresentations.contains {
+                    $0.retryAction == .retryProcessing
+                },
+                "backendNetworkStarted": false,
+                "persistentOwnerTruthWriteStarted": false,
+            ])
         }
     }
 
@@ -3553,17 +3832,20 @@ final class MemoryArchiveViewController: UIViewController {
                         OwnerTruthMediaCreationPolicy.successMessage(for: operation.mediaKind),
                         type: .success
                     )
+                    self.refreshOwnerTruthMediaTaskStatus()
                     OwnerTruthMediaTaskRecoveryCoordinator.shared.restore(
                         accountLease: operation.accountLease
                     ) { [weak self] report in
-                        guard report.failedTaskCount > 0,
-                              let self,
+                        guard let self,
                               self.validateMediaOperation(
                                 operation.accountLease,
                                 archiveContext: operation.archiveContext,
                                 at: .ui
                               ) else { return }
-                        self.showToast("素材已保存在本地，将稍后继续同步", type: .info)
+                        self.refreshOwnerTruthMediaTaskStatus()
+                        if report.failedTaskCount > 0 {
+                            self.showToast("素材已保存在本地，将稍后继续同步", type: .info)
+                        }
                     }
                 }
             }

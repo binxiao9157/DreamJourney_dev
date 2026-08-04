@@ -78,6 +78,7 @@ enum OwnerTruthMediaTaskPhase: String, Codable, Equatable, Sendable {
     case prepared
     case uploadReady
     case uploading
+    case uploadRetryableFailed
     case uploaded
     case processingQueued
     case processing
@@ -88,7 +89,10 @@ enum OwnerTruthMediaTaskPhase: String, Codable, Equatable, Sendable {
     case deleted
 
     fileprivate var needsPendingContent: Bool {
-        self == .prepared || self == .uploadReady || self == .uploading
+        self == .prepared
+            || self == .uploadReady
+            || self == .uploading
+            || self == .uploadRetryableFailed
     }
 
     fileprivate var needsStatusRefresh: Bool {
@@ -170,6 +174,139 @@ struct OwnerTruthMediaTaskReceipt: Codable, Equatable, Sendable {
             clientCreatedAt: clientCreatedAt,
             allowExternalProcessing: allowExternalProcessing
         )
+    }
+}
+
+enum OwnerTruthMediaTaskRetryAction: String, Equatable, Sendable {
+    case resumeUpload
+    case retryProcessing
+}
+
+enum OwnerTruthMediaTaskPresentationTone: String, Equatable, Sendable {
+    case neutral
+    case progress
+    case warning
+    case failure
+}
+
+/// User-facing projection of the durable Owner Truth media receipt. It never
+/// exposes SourceObject IDs, object-store identities or provider error codes.
+struct OwnerTruthMediaTaskPresentation: Equatable, Sendable {
+    let taskID: UUID
+    let mediaKind: OwnerTruthMediaKind
+    let fileName: String
+    let phase: OwnerTruthMediaTaskPhase
+    let stateTitle: String
+    let detail: String
+    let tone: OwnerTruthMediaTaskPresentationTone
+    let retryAction: OwnerTruthMediaTaskRetryAction?
+    let retryTitle: String?
+    let updatedAt: Date
+
+    init(receipt: OwnerTruthMediaTaskReceipt) {
+        self.init(
+            taskID: receipt.taskID,
+            mediaKind: receipt.mediaKind,
+            fileName: receipt.fileName,
+            phase: receipt.phase,
+            allowExternalProcessing: receipt.allowExternalProcessing,
+            sourceObjectID: receipt.sourceObjectID,
+            updatedAt: receipt.updatedAt
+        )
+    }
+
+    init(
+        taskID: UUID = UUID(),
+        mediaKind: OwnerTruthMediaKind,
+        fileName: String,
+        phase: OwnerTruthMediaTaskPhase,
+        allowExternalProcessing: Bool,
+        sourceObjectID: UUID? = nil,
+        updatedAt: Date = Date()
+    ) {
+        self.taskID = taskID
+        self.mediaKind = mediaKind
+        self.fileName = fileName
+        self.phase = phase
+        self.updatedAt = updatedAt
+
+        switch phase {
+        case .prepared, .uploadReady:
+            stateTitle = "待上传"
+            detail = "文件已保存在本机，网络恢复后会继续同步。"
+            tone = .neutral
+            retryAction = .resumeUpload
+            retryTitle = "继续上传"
+        case .uploading:
+            stateTitle = "上传中"
+            detail = "正在安全同步文件，请保持当前页面。"
+            tone = .progress
+            retryAction = nil
+            retryTitle = nil
+        case .uploadRetryableFailed:
+            stateTitle = "云端文件未同步"
+            detail = "文件仍保存在本机，可使用原文件重新上传。"
+            tone = .failure
+            retryAction = .resumeUpload
+            retryTitle = "重新上传"
+        case .uploaded:
+            stateTitle = "文件已验证"
+            detail = allowExternalProcessing
+                ? "文件已同步，等待处理服务开始整理。"
+                : "文件已同步，未请求外部 AI 处理。"
+            tone = .neutral
+            retryAction = nil
+            retryTitle = nil
+        case .processingQueued:
+            stateTitle = "排队处理中"
+            detail = "文件已同步，正在等待处理服务。"
+            tone = .progress
+            retryAction = nil
+            retryTitle = nil
+        case .processing:
+            stateTitle = "处理中"
+            detail = "文件已同步，正在整理内容；结果不会自动进入回响。"
+            tone = .progress
+            retryAction = nil
+            retryTitle = nil
+        case .processed:
+            stateTitle = "已处理"
+            detail = "处理结果已就绪，仍需确认后才会进入正式记忆。"
+            tone = .neutral
+            retryAction = nil
+            retryTitle = nil
+        case .retryableFailed, .failed:
+            stateTitle = "文件已同步，处理暂不可用"
+            detail = "原文件已保留，可稍后重新处理，无需重新选择文件。"
+            tone = .failure
+            retryAction = sourceObjectID == nil ? nil : .retryProcessing
+            retryTitle = sourceObjectID == nil ? nil : "重新处理"
+        case .quarantined:
+            stateTitle = "文件已隔离"
+            detail = "文件未通过安全检查，当前不会进入后续处理。"
+            tone = .warning
+            retryAction = nil
+            retryTitle = nil
+        case .deleted:
+            stateTitle = "已删除"
+            detail = "该文件已不再提供读取或处理。"
+            tone = .neutral
+            retryAction = nil
+            retryTitle = nil
+        }
+    }
+
+    var mediaTitle: String {
+        switch mediaKind {
+        case .image:
+            return "图片素材"
+        case .audio:
+            return "音频素材"
+        case .document:
+            return "文档素材"
+        case .video:
+            return "视频素材"
+        }
     }
 }
 
@@ -324,6 +461,20 @@ final class OwnerTruthMediaTaskStore: @unchecked Sendable {
                 throw OwnerTruthMediaTaskStoreError.invalidReceipt
             }
             receipt.phase = .uploading
+        }
+    }
+
+    func markUploadRetryableFailure(
+        taskID: UUID,
+        accountLease: AccountLease
+    ) throws -> OwnerTruthMediaTaskReceipt {
+        try mutate(taskID: taskID, accountLease: accountLease) { receipt in
+            guard receipt.phase.needsPendingContent else {
+                throw OwnerTruthMediaTaskStoreError.invalidReceipt
+            }
+            receipt.phase = .uploadRetryableFailed
+            receipt.retryable = true
+            receipt.failureCode = "uploadRetryable"
         }
     }
 
@@ -726,6 +877,47 @@ final class OwnerTruthMediaTaskRecoveryCoordinator: @unchecked Sendable {
         )
     }
 
+    /// Requests a new server-side processing generation for an already
+    /// uploaded SourceObject. The local file is not picked or uploaded again.
+    func retryProcessing(
+        taskID: UUID,
+        accountLease: AccountLease,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let generation = beginOperation()
+        do {
+            guard accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+                  let task = try store.recoverableTasks(for: accountLease)
+                    .first(where: { $0.taskID == taskID }),
+                  task.phase == .retryableFailed || task.phase == .failed,
+                  let vaultID = OwnerTruthVaultID(accountLease.vaultId),
+                  let sourceObjectID = task.sourceObjectID.map({ OwnerTruthRecordID(rawValue: $0) }) else {
+                throw OwnerTruthMediaTaskStoreError.invalidReceipt
+            }
+
+            client.retryOwnerTruthMediaProcessing(
+                accountLease: accountLease,
+                vaultID: vaultID,
+                sourceObjectID: sourceObjectID
+            ) { [weak self] result in
+                guard let self,
+                      self.acceptsCallback(generation, accountLease: accountLease) else { return }
+                do {
+                    _ = try self.store.apply(
+                        sourceObjectResponse: result.get(),
+                        to: taskID,
+                        accountLease: accountLease
+                    )
+                    self.finishRetry(.success(()), generation: generation, completion: completion)
+                } catch {
+                    self.finishRetry(.failure(error), generation: generation, completion: completion)
+                }
+            }
+        } catch {
+            finishRetry(.failure(error), generation: generation, completion: completion)
+        }
+    }
+
     private func process(
         _ tasks: [OwnerTruthMediaTaskReceipt],
         index: Int,
@@ -743,7 +935,7 @@ final class OwnerTruthMediaTaskRecoveryCoordinator: @unchecked Sendable {
             return
         }
         let task = tasks[index]
-        if task.phase == .prepared {
+        if task.phase == .prepared || task.phase == .uploadRetryableFailed {
             createIntentAndContinue(
                 task,
                 tasks: tasks,
@@ -798,7 +990,7 @@ final class OwnerTruthMediaTaskRecoveryCoordinator: @unchecked Sendable {
               let command = try? task.command() else {
             continueAfterFailure(
                 tasks, index: index, accountLease: accountLease, generation: generation,
-                report: report, completion: completion
+                report: report, completion: completion, uploadTask: task
             )
             return
         }
@@ -838,7 +1030,7 @@ final class OwnerTruthMediaTaskRecoveryCoordinator: @unchecked Sendable {
             } catch {
                 self.continueAfterFailure(
                     tasks, index: index, accountLease: accountLease, generation: generation,
-                    report: report, completion: completion
+                    report: report, completion: completion, uploadTask: task
                 )
             }
         }
@@ -892,14 +1084,14 @@ final class OwnerTruthMediaTaskRecoveryCoordinator: @unchecked Sendable {
                 } catch {
                     self.continueAfterFailure(
                         tasks, index: index, accountLease: accountLease, generation: generation,
-                        report: report, completion: completion
+                        report: report, completion: completion, uploadTask: task
                     )
                 }
             }
         } catch {
             continueAfterFailure(
                 tasks, index: index, accountLease: accountLease, generation: generation,
-                report: report, completion: completion
+                report: report, completion: completion, uploadTask: task
             )
         }
     }
@@ -961,8 +1153,16 @@ final class OwnerTruthMediaTaskRecoveryCoordinator: @unchecked Sendable {
         accountLease: AccountLease,
         generation: UInt64,
         report: OwnerTruthMediaTaskRecoveryReport,
-        completion: @escaping (OwnerTruthMediaTaskRecoveryReport) -> Void
+        completion: @escaping (OwnerTruthMediaTaskRecoveryReport) -> Void,
+        uploadTask: OwnerTruthMediaTaskReceipt? = nil
     ) {
+        if let uploadTask,
+           acceptsCallback(generation, accountLease: accountLease) {
+            _ = try? store.markUploadRetryableFailure(
+                taskID: uploadTask.taskID,
+                accountLease: accountLease
+            )
+        }
         process(
             tasks,
             index: index + 1,
@@ -1006,6 +1206,19 @@ final class OwnerTruthMediaTaskRecoveryCoordinator: @unchecked Sendable {
             completion(report)
         } else {
             DispatchQueue.main.async { completion(report) }
+        }
+    }
+
+    private func finishRetry(
+        _ result: Result<Void, Error>,
+        generation: UInt64,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        guard isCurrent(generation) else { return }
+        if Thread.isMainThread {
+            completion(result)
+        } else {
+            DispatchQueue.main.async { completion(result) }
         }
     }
 }

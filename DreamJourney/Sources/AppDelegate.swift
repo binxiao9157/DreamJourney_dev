@@ -361,6 +361,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runArchiveHiddenShellSmoke() }
         case .ownerMediaUnifiedCreationSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerMediaUnifiedCreationSmoke() }
+        case .ownerMediaTaskStatusSmoke:
+            scheduleUIQAScenario(scenario) { $0.runOwnerMediaTaskStatusSmoke() }
         case .ownerTruthCandidateInboxSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthCandidateInboxSmoke() }
         case .ownerTruthInterviewCandidateReviewSmoke:
@@ -3371,6 +3373,95 @@ private extension AppDelegate {
                 fileName: "owner-media-unified-creation-smoke-result.json",
                 smokeName: "OwnerMediaUnifiedCreationSmoke"
             )
+        }
+    }
+
+    func runOwnerMediaTaskStatusSmoke(retryCount: Int = 0) {
+        guard let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }),
+              keyWindow.rootViewController is WarmTabBarController else {
+            guard retryCount < 20 else {
+                QAScenarioResultWriter.writeAndLog(
+                    [
+                        "completed": false,
+                        "failureReason": "mainRootUnavailable",
+                    ],
+                    fileName: "owner-media-task-status-smoke-result.json",
+                    smokeName: "OwnerMediaTaskStatusSmoke"
+                )
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerMediaTaskStatusSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        let sourceObjectID = UUID(uuidString: "00000000-0000-0000-0000-000000000b30")!
+        let samplePresentations = [
+            OwnerTruthMediaTaskPresentation(
+                taskID: UUID(uuidString: "00000000-0000-0000-0000-000000000b31")!,
+                mediaKind: .image,
+                fileName: "summer-memory.jpg",
+                phase: .uploadRetryableFailed,
+                allowExternalProcessing: true,
+                updatedAt: Date(timeIntervalSince1970: 1_786_000_300)
+            ),
+            OwnerTruthMediaTaskPresentation(
+                taskID: UUID(uuidString: "00000000-0000-0000-0000-000000000b32")!,
+                mediaKind: .audio,
+                fileName: "father-story.m4a",
+                phase: .retryableFailed,
+                allowExternalProcessing: true,
+                sourceObjectID: sourceObjectID,
+                updatedAt: Date(timeIntervalSince1970: 1_786_000_200)
+            ),
+            OwnerTruthMediaTaskPresentation(
+                taskID: UUID(uuidString: "00000000-0000-0000-0000-000000000b33")!,
+                mediaKind: .document,
+                fileName: "family-notes.pdf",
+                phase: .processed,
+                allowExternalProcessing: false,
+                sourceObjectID: sourceObjectID,
+                updatedAt: Date(timeIntervalSince1970: 1_786_000_100)
+            ),
+        ]
+        let archive = MemoryArchiveViewController(
+            ownerTruthMediaTaskPresentationOverride: samplePresentations
+        )
+        keyWindow.rootViewController = archive
+        keyWindow.makeKeyAndVisible()
+        archive.loadViewIfNeeded()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            archive.runUIQAOwnerTruthMediaTaskStatusSmoke { payload in
+                let statuses = payload["statusTitles"] as? [String] ?? []
+                let actions = payload["retryActions"] as? [String] ?? []
+                let completed = (payload["statusStackVisible"] as? Bool) == true
+                    && statuses == [
+                        "云端文件未同步",
+                        "文件已同步，处理暂不可用",
+                        "已处理",
+                    ]
+                    && actions.sorted() == [
+                        OwnerTruthMediaTaskRetryAction.resumeUpload.rawValue,
+                        OwnerTruthMediaTaskRetryAction.retryProcessing.rawValue,
+                    ]
+                    && (payload["uploadRetryVisible"] as? Bool) == true
+                    && (payload["processingRetryVisible"] as? Bool) == true
+                    && (payload["backendNetworkStarted"] as? Bool) == false
+                    && (payload["persistentOwnerTruthWriteStarted"] as? Bool) == false
+                var result = payload
+                result["completed"] = completed
+                result["launchScenario"] = QALaunchScenario.ownerMediaTaskStatusSmoke.rawValue
+                QAScenarioResultWriter.writeAndLog(
+                    result,
+                    fileName: "owner-media-task-status-smoke-result.json",
+                    smokeName: "OwnerMediaTaskStatusSmoke"
+                )
+            }
         }
     }
 
