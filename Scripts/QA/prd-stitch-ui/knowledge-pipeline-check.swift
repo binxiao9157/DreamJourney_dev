@@ -188,8 +188,10 @@ require(
 
 require(
     userManager.contains("KBLiteManager.shared.switchUser(to: user.id)") &&
-        appDelegate.contains("KnowledgeSyncCoordinator.shared.userDidChange(to: currentKnowledgeUserId)") &&
-        appDelegate.contains("KBLiteManager.shared.switchUser(to: currentKnowledgeUserId)") &&
+        appDelegate.contains("appComposition.prepareForProcessLaunch()") &&
+        appCoordinator.contains("KnowledgeSyncCoordinator.shared.userDidChange(to: $0)") &&
+        appCoordinator.contains("KBLiteManager.shared.switchUser(to: $0)") &&
+        appCoordinator.contains("func prepareForProcessLaunch()") &&
         sceneDelegate.contains("handleSceneLifecycleEvent(.willEnterForeground)") &&
         appCoordinator.contains("FamilyRepository.shared.bootstrapCurrentUserFromBackend") &&
         appCoordinator.contains("synchronizeCurrentUser(") &&

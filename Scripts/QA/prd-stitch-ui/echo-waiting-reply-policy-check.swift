@@ -30,13 +30,13 @@ assertContains(echoViewModel, "static func shouldWaitForReply(afterUserTurnCount
 assertContains(echoViewModel, "static func shouldTriggerEarlyWait(for userText: String) -> Bool", "Echo should expose the updated PRD early trigger hook for emotion/content signals")
 assertContains(echoViewModel, "userTurnCount >= waitAfterUserTurnCount", "Echo waiting policy should trigger at the configured turn threshold")
 assertContains(echoViewModel, "private var currentSessionUserTurnCount = 0", "Echo view model should track user turns within the current voice session")
-assertContains(echoViewModel, "currentSessionUserTurnCount += 1", "Echo should increment the current voice-session user turn count")
+assertContains(echoViewModel, "currentSessionUserTurnCount = nextUserTurnCount", "Echo should persist the accepted voice-session user turn count")
 assertContains(echoViewModel, "EchoReplyPacingPolicy.shouldWaitForReply(", "Echo should use the pacing policy before entering waiting reply")
-assertContains(echoViewModel, "afterUserTurnCount: currentSessionUserTurnCount", "Echo waiting policy should receive the current turn count")
+assertContains(echoViewModel, "afterUserTurnCount: nextUserTurnCount", "Echo waiting policy should receive the accepted next turn count")
 assertContains(echoViewModel, "userText: normalizedText", "Echo waiting policy should receive the current user text")
 assertContains(
     echoViewModel,
-    "_ = applyTurnIntent(.userTurnAccepted, state: .thinking)",
+    "return applyTurnIntent(.userTurnAccepted, state: .thinking)",
     "Echo should enter thinking through the turn-intent reducer before the waiting threshold is reached"
 )
 assertContains(echoViewModel, "max(0, sessionCount) % 6", "Echo should distribute wait minutes across the 5-10 minute range")

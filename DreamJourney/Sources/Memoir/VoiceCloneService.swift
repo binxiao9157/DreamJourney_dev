@@ -172,13 +172,58 @@ struct VoiceCloneProfileSnapshot {
     }
 
     var exitDisclosureText: String {
-        if exitState == "partial" && providerCleanupState == "unsupported" && !providerCleanupReceiptAvailable {
-            return "该音色已停止用于回响。本地记录已标记删除；第三方服务清理尚未接入，无法确认第三方数据是否已删除。"
+        switch exitState {
+        case "accessRevoked":
+            return "该音色已暂停用于回响，不会再用于新的回响合成。"
+        case "pending":
+            return "该音色已停止用于回响，正在等待第三方服务确认清理结果。"
+        case "partial":
+            if providerCleanupReceiptAvailable {
+                return "该音色已停止用于回响，部分第三方清理结果仍待完成。"
+            }
+            return "该音色已停止用于回响。本地记录已标记删除，第三方服务清理结果尚待确认。"
+        case "completed":
+            return "该音色已停止用于回响，第三方服务已确认完成清理。"
+        case "unsupported":
+            return "该音色已停止用于回响。第三方服务暂不支持返回清理结果。"
+        default:
+            return ""
         }
-        if exitState == "accessRevoked" {
-            return "该音色已停止用于回响，第三方服务清理未被请求。"
-        }
-        return ""
+    }
+
+    var isUseRevoked: Bool {
+        accessRevoked
+            || sampleStatus == .disabled
+            || sampleStatus == .deleted
+            || lifecycleState == .paused
+            || lifecycleState == .deleting
+            || lifecycleState == .deleted
+    }
+
+    var canDisableRemotely: Bool {
+        hasCanonicalLifecycleContract
+            && !isUseRevoked
+            && allowedOperations.contains("disable")
+    }
+
+    var canDeleteRemotely: Bool {
+        hasCanonicalLifecycleContract
+            && lifecycleState != .deleting
+            && lifecycleState != .deleted
+            && sampleStatus != .deleted
+            && allowedOperations.contains("delete")
+    }
+
+    var canRefreshExitState: Bool {
+        hasCanonicalLifecycleContract
+            && (
+                lifecycleState == .deleting
+                    || (lifecycleState == .deleted && exitState != "completed")
+            )
+    }
+
+    private var hasCanonicalLifecycleContract: Bool {
+        lifecycleSchemaVersion == "voice-profile-lifecycle-v1" && lifecycleState != nil
     }
 
     private static func defaultExitState(for sampleStatus: VoiceCloneSampleStatus) -> String {

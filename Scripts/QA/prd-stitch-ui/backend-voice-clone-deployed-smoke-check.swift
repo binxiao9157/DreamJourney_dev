@@ -95,15 +95,19 @@ let backendRoot = root.deletingLastPathComponent().appendingPathComponent("Dream
 let backendVoiceClone = backendRoot.appendingPathComponent("app/services/voice_clone.py")
 let backendMain = backendRoot.appendingPathComponent("app/main.py")
 let backendStore = backendRoot.appendingPathComponent("app/services/postgres_store.py")
+let backendLifecycle = backendRoot.appendingPathComponent("app/services/voice_profile_lifecycle.py")
 if fileManager.fileExists(atPath: backendVoiceClone.path),
    fileManager.fileExists(atPath: backendMain.path),
-   fileManager.fileExists(atPath: backendStore.path) {
+   fileManager.fileExists(atPath: backendStore.path),
+   fileManager.fileExists(atPath: backendLifecycle.path) {
     let providerContent = try String(contentsOf: backendVoiceClone, encoding: .utf8)
     let mainContent = try String(contentsOf: backendMain, encoding: .utf8)
     let storeContent = try String(contentsOf: backendStore, encoding: .utf8)
+    let lifecycleContent = try String(contentsOf: backendLifecycle, encoding: .utf8)
     assertNotContains(providerContent, "_speaker_id_for_profile", "backend must not restore hash-based slot selection")
     assertContains(mainContent, "voice clone speaker slot capacity exhausted", "backend should expose explicit slot capacity failure")
-    assertContains(mainContent, "qualityAcceptanceRequired", "synthesis should enforce quality acceptance")
+    assertContains(mainContent, "elif lifecycle_state is not VoiceProfileLifecycleState.ACCEPTED:", "synthesis should reject profiles without accepted owner quality confirmation")
+    assertContains(lifecycleContent, "qualityAcceptanceRequired", "voice profile lifecycle should preserve the quality-acceptance projection")
     assertContains(storeContent, "FOR UPDATE SKIP LOCKED", "Postgres slot allocation should remain atomic")
 }
 

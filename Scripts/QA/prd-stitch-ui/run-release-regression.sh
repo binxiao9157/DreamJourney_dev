@@ -92,10 +92,10 @@ if [[ "$RUN_P0_ARCHIVE_ECHO_REGRESSION" == "1" ]]; then
   RUN_SIMULATOR_SMOKE=1
 fi
 if [[ "$RUN_P0_PROFILE_CARE_REGRESSION" == "1" ]]; then
-  # RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PROFILE_CARE_STATE_SMOKE and RUN_PROFILE_CARE_BACKEND_STATE_SMOKE
-  # so public MVP care regression cannot accidentally run only half of the gate.
+  # Public MVP covers the local empty/stale/failed presentation contract. The
+  # deployed backend fixture requires the default-off careDashboard closed-pilot
+  # policy and must remain an explicit opt-in gate.
   RUN_PROFILE_CARE_STATE_SMOKE=1
-  RUN_PROFILE_CARE_BACKEND_STATE_SMOKE=1
 fi
 if [[ "$RUN_KNOWLEDGE_V2_SYNC_GATE" == "1" ]]; then
   # The local three-way merge model always runs. This switch adds the deployed
@@ -163,7 +163,21 @@ run_step() {
 
   echo "== $name ==" | tee -a "$COMMAND_LOG"
   echo "$*" >> "$COMMAND_LOG"
-  "$@" > "$log_path" 2>&1
+  if "$@" > "$log_path" 2>&1; then
+    return 0
+  fi
+
+  local exit_code=$?
+  # Swift's command-line interpreter has occasionally exited with SIGTRAP
+  # after a guard already wrote its successful result. Retry only that
+  # tool-level failure; a guard's own fatal assertion stays fail-closed.
+  if [[ "$exit_code" == "133" && "${1:-}" == "swift" ]] \
+    && ! grep -q "Fatal error:" "$log_path"; then
+    echo "Retrying transient Swift interpreter exit for $name" | tee -a "$COMMAND_LOG"
+    "$@" > "$log_path" 2>&1
+    return
+  fi
+  return "$exit_code"
 }
 
 append_report_header() {
@@ -305,9 +319,9 @@ Run ID: \`$RUN_ID\`
 - Optional hidden media combo gate when \`RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=1\`; this runs the hidden media detail UIQA smoke and deployed backend hidden media sync smoke under one run-id.
 - Optional archive media -> Echo context smoke when \`RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE=1\`; this verifies fake audio, pending video, and sealed/draft time-letter prompt injection rules.
 - Media Echo context polish guard is documented in \`2026-06-19-archive-media-echo-context-polish.md\`.
-- Optional P0 Profile care regression gate when \`RUN_P0_PROFILE_CARE_REGRESSION=1\`; this forces both local empty/stale/failed UIQA and deployed backend active/empty/stale/failed-retry UIQA.
+- Optional P0 Profile care regression gate when \`RUN_P0_PROFILE_CARE_REGRESSION=1\`; this forces the public local empty/stale/failed UIQA contract.
 - Optional Profile care empty/stale/failed state UIQA smoke when \`RUN_PROFILE_CARE_STATE_SMOKE=1\`.
-- Optional deployed backend Profile care active/empty/stale UIQA smoke when \`RUN_PROFILE_CARE_BACKEND_STATE_SMOKE=1\`.
+- Optional deployed backend Profile care active/empty/stale UIQA smoke when \`RUN_PROFILE_CARE_BACKEND_STATE_SMOKE=1\`; it requires an explicitly approved care-dashboard closed-pilot policy and is not part of public MVP regression.
 - Optional release-like Postgres backend acceptance when \`RUN_RELEASE_LIKE_BACKEND=1\`.
 - Release handoff mode forces release-like backend acceptance and hidden media combo gate; release-like backend acceptance cannot be disabled by \`RUN_RELEASE_LIKE_BACKEND=0\`.
 
@@ -369,7 +383,7 @@ append_report_footer() {
 - Archive hidden media/time-letter shell UIQA smoke: \`archive-hidden-shell-smoke/$RUN_ID/\`
 - Archive hidden media combo gate: \`archive-hidden-media-combo-gate/$RUN_ID/\`
 - Archive media -> Echo context smoke: \`archive-media-echo-context-smoke/$RUN_ID/\`
-- P0 Profile care regression gate: \`profile-care-state-smoke/$RUN_ID/\` and \`profile-care-backend-state-smoke/$RUN_ID/\`
+- P0 Profile care public regression gate: \`profile-care-state-smoke/$RUN_ID/\`; the closed-pilot backend fixture is emitted separately only when explicitly enabled.
 - Profile care state UIQA smoke: \`profile-care-state-smoke/$RUN_ID/\`
 - Profile care deployed backend state UIQA smoke: \`profile-care-backend-state-smoke/$RUN_ID/\`
 - Release-like backend acceptance: \`release-like-backend/$RUN_ID/\`
@@ -614,6 +628,12 @@ fi
 run_step "Product V4 verified Postgres backup" "$STATIC_LOG_DIR/product-v4-db-backup.log" \
   env BACKEND_ROOT="$BACKEND_ROOT" python3 "$ROOT_DIR/Scripts/QA/product-v4/product-v4-db-backup-check.py"
 
+run_step "Owner Truth candidate proposal admission guard" "$STATIC_LOG_DIR/owner-truth-candidate-proposal-admission-check.log" \
+  swift "$ROOT_DIR/Scripts/QA/product-v4/owner-truth-candidate-proposal-admission-check.swift"
+
+run_step "Owner Truth candidate proposal status handoff guard" "$STATIC_LOG_DIR/owner-truth-candidate-proposal-status-handoff-check.log" \
+  swift "$ROOT_DIR/Scripts/QA/product-v4/owner-truth-candidate-proposal-status-handoff-check.swift"
+
 for guard in \
   release-policy-shadow-contract-check.swift \
   release-policy-cache-contract-check.swift \
@@ -647,8 +667,6 @@ for guard in \
   knowledge-evidence-context-policy-check.swift \
   knowledge-proposal-persona-policy-check.swift \
   knowledge-widget-privacy-lifecycle-check.swift \
-  owner-truth-candidate-proposal-admission-check.swift \
-  owner-truth-candidate-proposal-status-handoff-check.swift \
   profile-settings-save-state-check.swift \
   profile-account-fields-check.swift \
   profile-password-change-check.swift \
@@ -737,6 +755,7 @@ for guard in \
   ios-family-voice-consumer-contract-check.swift \
   ios-family-voice-hidden-uiqa-smoke-check.swift \
   voice-clone-shell-contract-check.swift \
+  voice-clone-exit-receipt-check.swift \
   voice-clone-stale-ready-state-check.swift \
   voice-clone-status-feedback-check.swift \
   voice-clone-runtime-capability-check.swift \

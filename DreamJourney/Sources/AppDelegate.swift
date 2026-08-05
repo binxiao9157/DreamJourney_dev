@@ -1656,6 +1656,67 @@ private extension AppDelegate {
             realCloneProviderReady: false,
             isEnabled: false
         )
+        let deletingSnapshot = VoiceCloneProfileSnapshot(
+            voiceProfileId: "S_deleting_uiqa",
+            sampleStatus: .pending,
+            authorizationCopy: "UIQA 删除等待回执合同。",
+            isEnabled: false,
+            realCloneProviderReady: false,
+            qualityAcceptanceRequired: false,
+            disableContract: "",
+            deleteContract: "",
+            providerMode: "mockContract",
+            providerStatus: "deletionPending",
+            providerMessage: "",
+            contractVersion: 2,
+            defaultReleaseVisible: false,
+            exitState: "partial",
+            accessRevoked: true,
+            localCleanupState: "tombstoned",
+            providerCleanupState: "pending",
+            providerCleanupReceiptAvailable: false,
+            lifecycleSchemaVersion: "voice-profile-lifecycle-v1",
+            lifecycleState: .deleting,
+            profileVersion: 1,
+            retryGeneration: 0,
+            stateChangedAt: "2026-08-05T00:00:00Z",
+            eligibilityAllowed: true,
+            eligibilityReasonCode: "eligibleLivingAdultSelf",
+            consentPurpose: "private_synthesis",
+            consentState: "active",
+            consentExpiresAt: "2099-01-01T00:00:00Z"
+        )
+        let pausedSnapshot = VoiceCloneProfileSnapshot(
+            voiceProfileId: "S_paused_uiqa",
+            sampleStatus: .disabled,
+            authorizationCopy: "UIQA 暂停后删除合同。",
+            isEnabled: false,
+            realCloneProviderReady: false,
+            qualityAcceptanceRequired: false,
+            disableContract: "",
+            deleteContract: "",
+            providerMode: "mockContract",
+            providerStatus: "paused",
+            providerMessage: "",
+            contractVersion: 2,
+            defaultReleaseVisible: false,
+            exitState: "accessRevoked",
+            accessRevoked: true,
+            localCleanupState: "retained",
+            providerCleanupState: "notRequested",
+            providerCleanupReceiptAvailable: false,
+            lifecycleSchemaVersion: "voice-profile-lifecycle-v1",
+            lifecycleState: .paused,
+            profileVersion: 1,
+            retryGeneration: 0,
+            stateChangedAt: "2026-08-05T00:00:00Z",
+            eligibilityAllowed: true,
+            eligibilityReasonCode: "eligibleLivingAdultSelf",
+            consentPurpose: "private_synthesis",
+            consentState: "active",
+            consentExpiresAt: "2099-01-01T00:00:00Z",
+            allowedOperations: ["delete"]
+        )
         let legacyReadyProfile = makeUIQALegacyReadyVoiceCloneProfile(
             voiceProfileId: "S_legacy_ready_uiqa"
         )
@@ -1677,6 +1738,8 @@ private extension AppDelegate {
         let usableBeforeRetry = VoiceCloneService.shared.currentUsableSpeakerId
         VoiceCloneService.shared.persistSnapshot(VoiceCloneProfileSnapshot(backendContract: retryPendingProfile))
         let usableAfterRetryPending = VoiceCloneService.shared.currentUsableSpeakerId
+        VoiceCloneService.shared.persistSnapshot(deletingSnapshot)
+        let usableAfterDeleting = VoiceCloneService.shared.currentUsableSpeakerId
 
         let readyPreferredOverPending = selectedProfile?.voiceProfileId == readyProfile.voiceProfileId
         let pendingPreferredRespected = selectedWithPendingPreferred?.voiceProfileId == pendingProfile.voiceProfileId
@@ -1688,6 +1751,11 @@ private extension AppDelegate {
         let retryReusesSameVoiceProfileId = retryPendingProfile.voiceProfileId == failedProfile.voiceProfileId
         let retryGenerationAdvanced = retryPendingProfile.retryGeneration == failedProfile.retryGeneration + 1
         let retryPendingNotUsable = usableBeforeRetry == nil && usableAfterRetryPending == nil
+        let deletionPendingRevokesUse = deletingSnapshot.isUseRevoked
+            && usableAfterDeleting == nil
+            && deletingSnapshot.exitDisclosureText.contains("尚待确认")
+        let deletionPendingCanRefresh = deletingSnapshot.canRefreshExitState
+        let pausedProfileCanDelete = pausedSnapshot.canDeleteRemotely
         let completed = readyPreferredOverPending
             && pendingPreferredRespected
             && pendingClearsUsableReady
@@ -1697,6 +1765,9 @@ private extension AppDelegate {
             && retryReusesSameVoiceProfileId
             && retryGenerationAdvanced
             && retryPendingNotUsable
+            && deletionPendingRevokesUse
+            && deletionPendingCanRefresh
+            && pausedProfileCanDelete
 
         var smokeResult: [String: Any] = [
             "completed": completed,
@@ -1723,6 +1794,9 @@ private extension AppDelegate {
         smokeResult["retryReusesSameVoiceProfileId"] = retryReusesSameVoiceProfileId
         smokeResult["retryGenerationAdvanced"] = retryGenerationAdvanced
         smokeResult["retryPendingNotUsable"] = retryPendingNotUsable
+        smokeResult["deletionPendingRevokesUse"] = deletionPendingRevokesUse
+        smokeResult["deletionPendingCanRefresh"] = deletionPendingCanRefresh
+        smokeResult["pausedProfileCanDelete"] = pausedProfileCanDelete
         writeVoiceCloneProfileSelectionSmokeResult(smokeResult)
         print(
             "[UI_QA] VoiceCloneProfileSelectionSmoke completed " +
@@ -1730,7 +1804,9 @@ private extension AppDelegate {
             "selectedWithPendingPreferred=\(selectedWithPendingPreferred?.voiceProfileId ?? "missing") " +
             "legacyReadyRejectedForEcho=\(legacyReadyRejectedForEcho) " +
             "retryReusesSameVoiceProfileId=\(retryReusesSameVoiceProfileId) " +
-            "retryPendingNotUsable=\(retryPendingNotUsable)"
+            "retryPendingNotUsable=\(retryPendingNotUsable) " +
+            "deletionPendingRevokesUse=\(deletionPendingRevokesUse) " +
+            "pausedProfileCanDelete=\(pausedProfileCanDelete)"
         )
     }
 
@@ -1986,15 +2062,50 @@ private extension AppDelegate {
     }
 
     func showVoiceCloneStatusFeedbackPreview() {
-        let readyProfile = makeUIQAVoiceCloneProfile(
-            voiceProfileId: "S_ready_preview",
-            sampleStatus: .ready,
-            providerStatus: "2",
-            providerMessage: "ready",
-            realCloneProviderReady: true,
-            isEnabled: true
-        )
-        let snapshot = VoiceCloneService.shared.voiceCloneShellSnapshot(from: readyProfile)
+        let previewState = uiqaArgumentValue(prefix: "DJVoiceCloneStatusFeedbackState=")
+        let snapshot: VoiceCloneProfileSnapshot
+        if previewState == "deletionPending" {
+            snapshot = VoiceCloneProfileSnapshot(
+                voiceProfileId: "S_deletion_pending_preview",
+                sampleStatus: .pending,
+                authorizationCopy: "UIQA 音色删除状态，仅用于验证本地撤权和外部回执提示。",
+                isEnabled: false,
+                realCloneProviderReady: false,
+                qualityAcceptanceRequired: false,
+                disableContract: "",
+                deleteContract: "",
+                providerMode: "mockContract",
+                providerStatus: "deletionPending",
+                providerMessage: "",
+                contractVersion: 2,
+                defaultReleaseVisible: false,
+                exitState: "partial",
+                accessRevoked: true,
+                localCleanupState: "tombstoned",
+                providerCleanupState: "pending",
+                providerCleanupReceiptAvailable: false,
+                lifecycleSchemaVersion: "voice-profile-lifecycle-v1",
+                lifecycleState: .deleting,
+                profileVersion: 1,
+                retryGeneration: 0,
+                stateChangedAt: "2026-08-05T00:00:00Z",
+                eligibilityAllowed: true,
+                eligibilityReasonCode: "eligibleLivingAdultSelf",
+                consentPurpose: "private_synthesis",
+                consentState: "active",
+                consentExpiresAt: "2099-01-01T00:00:00Z"
+            )
+        } else {
+            let readyProfile = makeUIQAVoiceCloneProfile(
+                voiceProfileId: "S_ready_preview",
+                sampleStatus: .ready,
+                providerStatus: "2",
+                providerMessage: "ready",
+                realCloneProviderReady: true,
+                isEnabled: true
+            )
+            snapshot = VoiceCloneService.shared.voiceCloneShellSnapshot(from: readyProfile)
+        }
         let viewController = ProfileVoiceCloneShellViewController(snapshot: snapshot)
 
         guard let tabBarController = UIApplication.shared.connectedScenes

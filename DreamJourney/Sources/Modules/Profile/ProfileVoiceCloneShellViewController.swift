@@ -589,7 +589,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     @objc private func deleteVoiceTapped() {
         confirmDestructive(
             title: "删除音色",
-            message: "删除会立即停止该音色用于回响，并更新本地记录。当前未接入第三方服务清理回执，无法确认第三方数据是否已删除。此操作不可恢复。",
+            message: "删除会立即停止该音色用于回响，并开始清理本地和已支持的第三方服务记录。清理状态会在本页更新；在收到确认前，不会把第三方清理误报为完成。此操作不可恢复。",
             actionTitle: "删除"
         ) { [weak self] in
             self?.performDeleteVoice()
@@ -738,7 +738,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     private func performDisableVoice() {
         guard validateViewOperation(at: .request) else { return }
-        guard hasVoiceProfile else {
+        guard hasVoiceProfile, snapshot.canDisableRemotely else {
             feedbackLabel?.text = "还没有可禁用的音色。"
             return
         }
@@ -749,7 +749,10 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
                 guard self.validateViewOperation(at: .ui) else { return }
                 switch result {
                 case .success(let snapshot):
-                    self.applySnapshot(snapshot, feedback: "音色已禁用。")
+                    self.applySnapshot(
+                        snapshot,
+                        feedback: snapshot.exitDisclosureText.isEmpty ? "音色已暂停用于回响。" : snapshot.exitDisclosureText
+                    )
                 case .failure(let error):
                     self.finishBusy(feedback: error.localizedDescription)
                 }
@@ -759,7 +762,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     private func performDeleteVoice() {
         guard validateViewOperation(at: .request) else { return }
-        guard hasVoiceProfile else {
+        guard hasVoiceProfile, snapshot.canDeleteRemotely else {
             feedbackLabel?.text = "还没有可删除的音色。"
             return
         }
@@ -850,7 +853,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         self.snapshot = snapshot
         statusTitleLabel?.text = voiceStatusTitle(for: snapshot)
         statusCaptionLabel?.text = voiceStatusCaption(for: snapshot)
-        sampleStatusValueLabel?.text = snapshot.sampleStatus.displayText
+        sampleStatusValueLabel?.text = voiceSampleStatusText(for: snapshot)
         voiceAvailabilityLabel?.text = voiceAvailabilityText(for: snapshot)
         synthesisStatusValueLabel?.text = voiceSynthesisStatusText(for: snapshot)
         if let feedback {
@@ -915,11 +918,10 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         refreshButton?.isEnabled = hasValidLease
             && !isBusy
             && hasVoiceProfile
-            && snapshot.sampleStatus != .deleted
-            && snapshot.sampleStatus != .disabled
             && canRefreshVoiceTrainingStatus
-        disableButton?.isEnabled = hasValidLease && !isBusy && hasVoiceProfile && snapshot.sampleStatus != .disabled && snapshot.sampleStatus != .deleted
-        deleteButton?.isEnabled = hasValidLease && !isBusy && hasVoiceProfile && snapshot.sampleStatus != .deleted
+            && (!snapshot.isUseRevoked || snapshot.canRefreshExitState)
+        disableButton?.isEnabled = hasValidLease && !isBusy && hasVoiceProfile && snapshot.canDisableRemotely
+        deleteButton?.isEnabled = hasValidLease && !isBusy && hasVoiceProfile && snapshot.canDeleteRemotely
         previewButton?.isHidden = !canPreviewVoice
         acceptQualityButton?.isHidden = !canAcceptVoiceQuality
         [refreshButton, disableButton, deleteButton].forEach { button in
@@ -941,6 +943,16 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private func voiceStatusTitle(for snapshot: VoiceCloneProfileSnapshot) -> String {
+        switch snapshot.lifecycleState {
+        case .paused:
+            return "音色已暂停"
+        case .deleting:
+            return "正在停止音色"
+        case .deleted:
+            return snapshot.exitState == "completed" ? "音色已删除" : "正在确认删除"
+        default:
+            break
+        }
         switch snapshot.sampleStatus {
         case .notProvided:
             return "还没有创建音色"
@@ -969,7 +981,26 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         }
     }
 
+    private func voiceSampleStatusText(for snapshot: VoiceCloneProfileSnapshot) -> String {
+        switch snapshot.lifecycleState {
+        case .deleting:
+            return "清理中"
+        case .deleted:
+            return "已删除"
+        default:
+            return snapshot.sampleStatus.displayText
+        }
+    }
+
     private func voiceStatusCaption(for snapshot: VoiceCloneProfileSnapshot) -> String {
+        switch snapshot.lifecycleState {
+        case .paused, .deleting, .deleted:
+            return snapshot.exitDisclosureText.isEmpty
+                ? "该音色已停止用于回响。"
+                : snapshot.exitDisclosureText
+        default:
+            break
+        }
         switch snapshot.sampleStatus {
         case .notProvided:
             return "确认授权后，选择一段清晰的本人音频样本开始训练。"
@@ -1009,6 +1040,9 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private func voiceAvailabilityText(for snapshot: VoiceCloneProfileSnapshot) -> String {
+        if snapshot.isUseRevoked {
+            return "不可用于回响"
+        }
         switch snapshot.sampleStatus {
         case .ready:
             if snapshot.isReadyForUse {
@@ -1038,6 +1072,12 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private func voiceSynthesisStatusText(for snapshot: VoiceCloneProfileSnapshot) -> String {
+        if snapshot.isUseRevoked {
+            if snapshot.lifecycleState == .paused || snapshot.exitState == "accessRevoked" {
+                return "音色已暂停，回响会使用普通语音"
+            }
+            return "音色已停止使用，回响会使用普通语音"
+        }
         switch snapshot.sampleStatus {
         case .ready:
             guard snapshot.isReadyForUse else {

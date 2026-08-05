@@ -35,7 +35,7 @@ for required in [
     "@app.delete(\"/archive/items/{user_id}/{item_id}\")",
     "store.delete_archive_item_with_kb_mutation(",
     "except ArchiveItemDeletionForbidden as exc:",
-    "\"status\": \"deleted\"",
+    "\"status\": \"duplicate\" if result[\"duplicate\"] else \"deleted\"",
 ] {
     assertContains(backendMain, required, "backend API should expose timeLetter archive delete contract \(required)")
 }

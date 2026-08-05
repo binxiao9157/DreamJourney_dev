@@ -106,8 +106,7 @@ for required in [
     "case .echoTraceEvidencePackagePanelExportSmoke:",
     "runEchoTraceEvidencePackageExportSmoke",
     "runEchoTraceEvidencePackagePanelExportSmoke",
-    "writeEchoTraceEvidencePackageExportSmokeResult",
-    "writeEchoTraceEvidencePackagePanelExportSmokeResult",
+    "QAScenarioResultWriter.writeAndLog",
     "echo-trace-evidence-package-export-smoke-result.json",
     "echo-trace-evidence-package-panel-export-smoke-result.json",
 ] {

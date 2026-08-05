@@ -84,7 +84,7 @@ require(
 
 for required in [
     "runEchoRuntimeDiagnosticsExportSmoke",
-    "writeEchoRuntimeDiagnosticsExportSmokeResult",
+    "QAScenarioResultWriter.writeAndLog",
     "echo-runtime-diagnostics-export-smoke-result.json",
 ] {
     require(appDelegate.contains(required), "AppDelegate should expose Echo runtime diagnostics UIQA smoke: \(required)")

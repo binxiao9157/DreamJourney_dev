@@ -3603,6 +3603,7 @@ final class EchoViewController: UIViewController {
             "personaHash: \(PrivacySafeDiagnostics.correlationHash(snapshot.privacyScopeLabel))",
             "family: \(snapshot.canUseFamilyData) cross: \(snapshot.crossScopeArchiveIncluded)",
             "voiceHash: \(voiceProfileHash) \(PrivacySafeDiagnostics.safeCode(snapshot.voiceOutputMode, fallback: "unknown"))",
+            "outputMode: \(PrivacySafeDiagnostics.safeCode(snapshot.voiceOutputMode, fallback: "unknown"))",
             "roleVoiceSource: \(PrivacySafeDiagnostics.safeCode(snapshot.roleVoiceSource, fallback: "unknown"))",
             "roleVoiceDisplayNameHash: \(PrivacySafeDiagnostics.correlationHash(snapshot.roleVoiceDisplayName))",
             "roleVoiceContextOwnerHash: \(PrivacySafeDiagnostics.correlationHash(snapshot.roleVoiceContextOwnerId))",

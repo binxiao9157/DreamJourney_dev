@@ -52,7 +52,7 @@ assertContains(realBridge, "case \"AudioOver\"", "real bridge should parse Tence
 assertContains(cloudRuntime, "func sendPCMChunk", "cloud runtime should expose PCM chunk drive")
 assertContains(cloudRuntime, "setRemoteAudioMuted(false)", "PCM drive should unmute Tencent remote audio before sending")
 assertContains(cloudRuntime, "case .audioStart(let requestID):", "cloud runtime should enter speaking on AudioStart")
-assertContains(cloudRuntime, "case .audioOver:", "cloud runtime should complete provider request on AudioOver")
+assertContains(cloudRuntime, "case .audioOver(let requestID):", "cloud runtime should complete the matching provider request on AudioOver")
 
 assertContains(livePanelCheck, "DJRunTencentDigitalHumanPCMDriveSmoke", "digital-human live-panel guard should cover PCM smoke launch argument")
 assertContains(releasePackage, "tencent-digital-human-pcm-drive-poc-check.swift", "release QA package should include PCM drive POC guard")

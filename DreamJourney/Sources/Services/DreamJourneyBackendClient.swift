@@ -8222,7 +8222,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
     ) {
         let path = "/voice/profiles/\(pathComponent(userId))/\(pathComponent(voiceProfileId))"
-        requestJSON(path: path, method: .delete, payload: nil, authPolicy: .userRequired) { result in
+        requestJSON(
+            path: path,
+            method: .delete,
+            payload: nil,
+            authPolicy: .userRequired,
+            sessionUserId: userId
+        ) { result in
             switch result {
             case .success(let object):
                 guard let profileJSON = object["profile"] as? [String: Any],

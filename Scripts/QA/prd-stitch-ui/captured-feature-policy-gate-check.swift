@@ -71,7 +71,7 @@ for required in [
     require(archive, required, "Archive controlled entry must use a feature route decision")
 }
 for required in [
-    "feature: .echoTextInput",
+    "captureServerPolicyManagedClosedPilotRoute(\n            .echoTextInput,",
     ".digitalHumanLivePanel",
     "featurePolicyDecisions: policyDecisions",
     "policy.\\(decision.feature)",

@@ -31,7 +31,7 @@
 
 ## 3. 当前执行指针
 
-已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`。当前执行：`P1-S4：暂停、删除与退出。`
+已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`。当前执行：`P2-S1：Publication Authority 与独立公开副本。`
 
 完成当前 Slice 后，不停留等待，按本文件顺序进入下一个未完成 Slice。只有缺少真实 Provider、不可逆生产迁移、数据删除授权或重大产品决策时才暂停。
 
@@ -137,6 +137,8 @@
 3. 保持腾讯 audio-drive 为 Echo 的唯一音频 owner；本地播放器仅用于试听。
 
 ### P1-S4：暂停、删除与退出
+
+**状态**：非真机合同和 QA 已完成，默认关闭。暂停、删除、账号删除和合成使用同一 owner 串行边界；删除先撤销本地使用权，再持久化去标识化的 async effect / Provider-effect `accepted` 回执。没有上游回执时只显示 `pending/partial`，不会把本地 tombstone 或 outbox 受理误报为 Provider 清理完成。真实 Provider 删除执行器和上游回执对账仍是外部启用 Gate。
 
 1. 暂停立即拒绝新合成；删除写 provider effect 并保留 receipt。
 2. 未收到 provider 回执时维持 `pending/partial`；账号删除与授权撤销同步关闭 profile 使用权。

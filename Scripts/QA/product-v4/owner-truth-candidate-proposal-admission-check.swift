@@ -107,7 +107,7 @@ let admissionClient = requireSlice(
     "formal candidate proposal admission client is missing"
 )
 for required in [
-    "FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview)",
+    "requestFeatureDecision(for: .ownerTruthCandidateReview)",
     "/candidate-proposal/admit",
     "method: .post",
     "authPolicy: .userRequired",
@@ -116,6 +116,10 @@ for required in [
 ] {
     require(admissionClient.contains(required), "formal admission client is missing: \(required)")
 }
+require(
+    client.contains("FeatureGateService.shared.requestServerPolicyManagedClosedPilotDecision(for: feature)"),
+    "formal admission policy helper must remain server-policy managed"
+)
 require(!admissionClient.contains("echoTextInput"), "formal admission client must not borrow the natural-input policy")
 require(!admissionClient.contains("X-DreamJourney-QA-Owner-Truth"), "formal admission client must not send a QA header")
 

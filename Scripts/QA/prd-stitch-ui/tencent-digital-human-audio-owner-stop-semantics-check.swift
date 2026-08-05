@@ -49,6 +49,7 @@ let conversationCoordinator = try read("DreamJourney/Sources/Modules/Echo/Digita
 let dialogEngine = try read("DreamJourney/Sources/Services/DialogEngineManager.swift")
 let cloudRuntime = try read("DreamJourney/Sources/Services/DigitalHuman/TencentDigitalHumanCloudRuntime.swift")
 let bridge = try read("DreamJourney/Sources/Services/DigitalHuman/TencentVirtualmanSDKBridge.swift")
+let audioOwnerCoordinator = try read("DreamJourney/Sources/App/AudioOwnerLeaseCoordinator.swift")
 let releaseRegression = try read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 
 let stopBody = functionBody(named: "stopVoiceCapture", in: echo)
@@ -77,11 +78,11 @@ if let start = dialogEndedBodyStart, let end = dialogEndedBodyEnd {
 
 let audioSessionBody = functionBody(named: "prepareAudioSessionForTencentProviderPlayback", in: echo)
 require(audioSessionBody.contains("preserveRecordingCategory"), "Tencent playback prep must keep an explicit preserve-recording path")
-require(audioSessionBody.contains("setActive(true)") && !audioSessionBody.contains("overrideOutputAudioPort"), "Tencent playback prep should avoid route override churn")
-require(audioSessionBody.contains("setCategory(") && audioSessionBody.contains(".playAndRecord"), "Tencent playback prep must keep a record-capable session for half-duplex Echo turns")
-require(audioSessionBody.contains(".allowBluetoothHFP"), "Tencent playback prep should use the non-deprecated Bluetooth HFP audio-session option")
-require(!audioSessionBody.contains(".allowBluetooth]") && !audioSessionBody.contains(".allowBluetooth,"), "Tencent playback prep must not use deprecated .allowBluetooth")
-require(!audioSessionBody.contains("setCategory(.playback"), "Tencent playback prep must not switch to playback-only while the Tencent stream is open")
+require(audioSessionBody.contains("acquireEchoRuntimeAudioOwner("), "Tencent playback prep should delegate physical session ownership to the shared coordinator")
+require(!audioSessionBody.contains("setCategory(") && !audioSessionBody.contains("setActive("), "Tencent playback prep must not churn AVAudioSession directly")
+require(audioOwnerCoordinator.contains("try session.setActive(true)") && !audioOwnerCoordinator.contains("overrideOutputAudioPort"), "shared audio coordinator should activate without route override churn")
+require(audioOwnerCoordinator.contains(".playAndRecord") && audioOwnerCoordinator.contains(".allowBluetoothHFP"), "shared audio coordinator must keep a record-capable Bluetooth HFP route for half-duplex Echo turns")
+require(!audioOwnerCoordinator.contains(".allowBluetooth]") && !audioOwnerCoordinator.contains(".allowBluetooth,"), "shared audio coordinator must not use deprecated .allowBluetooth")
 
 require(echo.contains("tencentDigitalHumanAudioRouteReserved"), "Echo must reserve Tencent audio ownership before the provider reaches ready")
 require(echo.contains("case .preparing, .connecting, .ready, .buffering, .speaking"), "Tencent audio route must be reserved during preparing/connecting/ready/buffering/speaking states")

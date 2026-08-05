@@ -86,9 +86,11 @@ def main() -> None:
         "case userAuthenticationRequired",
         "switch endpoint.authPolicy",
         "case .userRequired:",
-        "let currentSession = authSessionStore.currentSession",
+        "let currentSession = currentAuthenticatedSession",
         "guard let authenticatedSession = currentSession else",
         "completion(.failure(ClientError.userAuthenticationRequired))",
+        "endpoint.sessionUserAssertions.allSatisfy({ $0 == authenticatedSession.userId })",
+        "completion(.failure(ClientError.accountScopeChanged))",
         "case .publicRequest, .refreshExchange:",
         "authPolicy == .userRequired",
     ):
@@ -96,10 +98,10 @@ def main() -> None:
                 f"local user-session preflight is missing: {snippet}")
     preflight = request.index("guard let authenticatedSession = currentSession else")
     recovery_gate = request.index("RecoveryRuntimePolicyStore.shared.requestDecision")
-    network_request = request.index("AF.request(")
+    network_request = request.index("transportSession.request(")
     require(
         preflight < recovery_gate < network_request,
-        "user session preflight must run before recovery fetches and AF.request",
+        "user session preflight must run before recovery fetches and the transport request",
     )
 
     public_functions = {

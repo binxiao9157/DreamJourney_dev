@@ -51,7 +51,7 @@ require(
 for required in [
     "case .echoContinuousTurnSmoke:",
     "runEchoContinuousTurnSmoke",
-    "writeEchoContinuousTurnSmokeResult",
+    "QAScenarioResultWriter.writeAndLog",
     "echo-continuous-turn-smoke-result.json",
 ] {
     require(appDelegate.contains(required), "AppDelegate continuous-turn UIQA wiring is missing \(required)")
