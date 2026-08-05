@@ -31,7 +31,7 @@
 
 ## 3. 当前执行指针
 
-已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`、`P2-S1`。当前执行：`P2-S2：ShareGrant、Visitor 与安全回答。`
+已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`、`P2-S1`、`P2-S2a`。当前执行：`P2-S2b：独立 Public Projection 的受邀 Visitor 读取与回答边界。`
 
 完成当前 Slice 后，不停留等待，按本文件顺序进入下一个未完成 Slice。只有缺少真实 Provider、不可逆生产迁移、数据删除授权或重大产品决策时才暂停。
 
@@ -160,9 +160,13 @@
 
 ### P2-S2：ShareGrant、Visitor 与安全回答
 
+**已完成子项 P2-S2a：默认关闭的 ShareGrant / Visitor Session 准入合同。** 后端 `main@88586ef` 已部署，生产迁移头为 `0081`。Owner 只能对 active 独立 Public Projection 发放绑定 version、scope、authority epoch、TTL 和 usage limit 的 ShareGrant；访客仅在成人已验证且 direct relationship 的服务端资格判定通过后可开会话。匿名、unknown、minor、family-derived 均拒绝，撤销关闭活动 session，projection/authority 变化拒绝新的准入。三条内部 QA 路由不入 schema，未带 QA 条件时在认证前返回 `404`；没有新增公开 Visitor、阅读或深链入口。完整后端验证、隔离 Postgres 并发/CAS/撤销 smoke 与线上 production-Postgres smoke 已通过。
+
 1. ShareGrant 绑定 publication version、scope、TTL、usage limit、成人资格和撤回状态；Family 关系不自动授权，匿名访问关闭。
 2. Visitor 仅可读取独立 Public Projection；回答必须带 AI 身份、来源/不确定性和“不知道”路径。
 3. 高风险表达、持续会话阈值和医疗/金融/支付限制走服务端 policy，不能由客户端绕过。
+
+**下一子项 P2-S2b**：在保持默认关闭的前提下，仅基于已获准 session 增加独立 Public Projection reader 与服务端回答 policy；不得读取 private Source、Candidate、MemoryVersion、KBLite 或私人 Echo 上下文。
 
 ### P2-S3：iOS 产品面与在世数字人 scope
 
