@@ -9,7 +9,7 @@
 本计划以当前两个仓库的已提交实现为基线，目标是尽快完成 **不依赖真机的 V4 功能开发**。
 
 - iOS 基线：`feature/prd-stitch-ui-adaptation@307abfb3`
-- 后端基线：`main@7d5ce0b`；P0-S1、P0-S2、P0-S3 已完成代码、迁移和部署态非真机验证。
+- 后端基线：`main@069bc6f`；P0-S1 至 P0-S4 已完成代码和部署态非真机验证。
 - 已完成且不再重复开发：M0 的 Wave 0-6（Owner Truth、引导式访谈、双推荐、数据权利/Family 基础、三 Tab M0 UI、统一非真机 Gate），以及 Stage 2 的 iOS B1-B5。
 - 当前不计入完成条件：真机权限、真实短信送达、APNs 到达、真实 OCR/ASR 质量、真实 Voice/Digital Human 听感与配额、签名和设备性能。
 - 但不把 `mock`、`shadow`、`default-off` 或静态检查误写为已发布功能；它们只能算相应 Slice 的代码完成。
@@ -31,7 +31,7 @@
 
 ## 3. 当前执行指针
 
-已完成：`P0-S1`、`P0-S2`、`P0-S3`。当前执行：`P0-S4：M0 DFX 最小生产基线。`
+已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`。当前执行：`P1-S1：资格、同意与 voiceProfile 状态机。`
 
 完成当前 Slice 后，不停留等待，按本文件顺序进入下一个未完成 Slice。只有缺少真实 Provider、不可逆生产迁移、数据删除授权或重大产品决策时才暂停。
 
@@ -90,6 +90,11 @@
 完成定义：用户能获得准确且可解释的删除/撤销状态；没有一个外部域能通过写 `deleted=true` 绕过真实 receipt。
 
 ### P0-S4：M0 DFX 最小生产基线
+
+**状态**：已完成。`m0-dfx-baseline-v1` 已将 Context、Stage 2 媒体/Candidate/Projection 和
+跨 Vault/撤权组合为固定合成回归证据；部署容器 smoke 在 `069bc6f` 通过，`7/7` 样本成功。
+报告明确标记队列年龄、SQL 数、进程资源和 Projection 时钟为 `notMeasured`，不输出生产性能
+承诺。
 
 **目标**：先建立可重复测量，而不是无证据优化。
 
