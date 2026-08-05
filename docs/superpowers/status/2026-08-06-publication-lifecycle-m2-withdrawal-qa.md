@@ -38,4 +38,4 @@
 
 - 本轮不新增公开发布入口、第四 Tab、公开 URL 或深链；没有三重 QA 参数时撤回控件不存在。
 - 这不是“外部删除已完成”：Public Index、缓存、腾讯数字人 session、Voice/对象存储等外部 effect 仍是 `pending/notApplicable` 的真实回执状态。
-- 下一小项为 P2-S4C：把已持久化的撤回/争议回执接入异步传播 worker，逐域追踪外部清理的 `pending / partial / completed / unsupported`，并保持先拒绝访问、后执行 effect 的顺序。
+- 后续 P2-S4C 已完成并部署：后端 `main@58e346f`、migration head `0083`。撤回/争议 lifecycle receipt 现在会为 Public Index、缓存、数字人 session、Voice、对象存储生成五域脱敏 `pending` effect/receipt；Provider 完成态必须附独立回执哈希。authority trigger 的历史 receipt 由默认关闭的 materializer 补料，三个 worker 开关在线上均保持关闭。部署容器内 disposable Postgres smoke 已验证撤回、异议、authority trigger、补料和幂等重放；详见后端 `docs/backend/2026-08-06-publication-external-cleanup-p2-s4c.md`。

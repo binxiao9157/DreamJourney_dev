@@ -31,7 +31,7 @@
 
 ## 3. 当前执行指针
 
-已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`、`P2-S1`、`P2-S2a`、`P2-S2b`、`P2-S3a`、`P2-S3b`、`P2-S4A`、`P2-S4B`。当前执行：`P2-S4C：撤回后的异步传播与外部回执。`
+已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`、`P2-S1`、`P2-S2a`、`P2-S2b`、`P2-S3a`、`P2-S3b`、`P2-S4A`、`P2-S4B`、`P2-S4C`。当前执行：`P3-S1：统一非真机发布证据包与 lane registry。`
 
 完成当前 Slice 后，不停留等待，按本文件顺序进入下一个未完成 Slice。只有缺少真实 Provider、不可逆生产迁移、数据删除授权或重大产品决策时才暂停。
 
@@ -190,7 +190,7 @@
 
 **已完成子项 P2-S4B：iOS QA-only 撤回与 Visitor 内存失效。** 后端 `main@909fe73` 已部署，owner summary 返回用于乐观并发的 `lifecycleAuthorityEpoch`。iOS 仅在发布管理、Visitor、lifecycle 三个 QA gate 同时开启时显示撤回控件；成功后刷新为发布/预览/授权均已撤回，并保留“访问阻断已完成、公开索引清理待处理”的诚实回执。Visitor 遇到撤回/拒绝响应会清空内存 session、scope 和 projection，不能保留旧公开副本。定向 XCTest、静态 gate、模拟器 UIQA 和部署态 disposable Postgres smoke 已通过；证据见 `docs/superpowers/status/2026-08-06-publication-lifecycle-m2-withdrawal-qa.md`。
 
-**下一子项 P2-S4C：撤回后的异步传播与外部回执。** 将已持久化的 lifecycle receipt 接入现有 async effect / worker 边界，按 Public Index、缓存、数字人 session、Voice、对象存储等 effect 分域返回 `pending / partial / completed / unsupported`。不得因 outbox 受理或本地 tombstone 把外部清理写成已完成，也不得放松已完成的访问拒绝。
+**已完成子项 P2-S4C：撤回后的异步传播与外部回执。** 后端 `main@58e346f` 已部署，migration head 为 `0083`。已持久化的 lifecycle receipt 现在会按 Public Index、缓存、数字人 session、Voice、对象存储等五域生成脱敏 effect/receipt，并返回 `pending / partial / completed / unsupported` 的 additive 状态；`completed` 必须绑定 SHA-256 Provider 回执，不能由 outbox、tombstone 或任意布尔标记推断。authority trigger 的历史 receipt 可由独立、默认关闭的 materializer 补料；该 worker 不调用任何 Provider。全量后端验证和部署容器内 disposable Postgres smoke 已通过，三个 worker 开关均保持关闭。真实 Provider adapter、删除/关闭回执及其外部验收仍属于后续外部 Gate。
 
 **P2 Gate**：只形成 default-off 的内部 closed beta 功能；成年人核验、法务/隐私、Provider 成本和真机为独立外部 Gate，未关闭不得公开发布。
 
@@ -201,6 +201,8 @@
 1. 将 M0、Stage 2、M1、M2 分别接入统一 release gate；每个 lane 产生独立 evidence bundle。
 2. 强制后端全量测试、迁移 replay/rollback、部署 Postgres E2E、worker restart、A/B authorization、provider failure；iOS 强制 XCTest、模拟器 UIQA、generic iPhoneOS build、release scope regression。
 3. 输出明确剩余项：`DEVICE_REQUIRED`、`EXTERNAL_PROVIDER_REQUIRED`、`PRODUCT_OR_LEGAL_REQUIRED`；不生成“全部完成”的笼统结论。
+
+**当前子项 P3-S1：统一 evidence bundle envelope 与 lane registry。** 先不重写既有 M0、Stage 2、M1、M2 gate。建立一份代码拥有的 lane registry，并提供一个聚合 runner：每个 lane 仍执行自己的既有 gate、写入独立输出目录，聚合层仅汇总 revision、gate 状态、证据路径、默认开关状态和剩余 blocker 分类。聚合输出必须脱敏、可重跑，且不能把 default-off、mock、shadow 或外部未验收能力标为发布完成。
 
 ## 8. 并行与提交规则
 
