@@ -31,7 +31,7 @@
 
 ## 3. 当前执行指针
 
-已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`、`P2-S1`、`P2-S2a`。当前执行：`P2-S2b：独立 Public Projection 的受邀 Visitor 读取与回答边界。`
+已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`、`P2-S1`、`P2-S2a`、`P2-S2b`。当前执行：`P2-S3：iOS 产品面与在世数字人 scope。`
 
 完成当前 Slice 后，不停留等待，按本文件顺序进入下一个未完成 Slice。只有缺少真实 Provider、不可逆生产迁移、数据删除授权或重大产品决策时才暂停。
 
@@ -166,7 +166,7 @@
 2. Visitor 仅可读取独立 Public Projection；回答必须带 AI 身份、来源/不确定性和“不知道”路径。
 3. 高风险表达、持续会话阈值和医疗/金融/支付限制走服务端 policy，不能由客户端绕过。
 
-**下一子项 P2-S2b**：在保持默认关闭的前提下，仅基于已获准 session 增加独立 Public Projection reader 与服务端回答 policy；不得读取 private Source、Candidate、MemoryVersion、KBLite 或私人 Echo 上下文。
+**已完成子项 P2-S2b：独立 Public Projection 的受邀 Visitor 读取与回答边界。** 后端 `main@6d83d60` 已部署，生产迁移头仍为 `0081`。新增的两条内部 QA 路由不进入 schema，未带 QA 条件时认证前返回 `404`。每次读取都重新验证用户会话、session credential、成人/direct 资格、grant/session 状态与有效期、同一 publication version、projection 状态和 authority epoch；返回字段严格限制为独立公开副本及其披露/哈希。回答不调用 Provider，普通问题只能摘录公开副本，私密上下文、提示词注入、医疗、金融和支付请求统一返回带来源、不确定性和原因码的 `unknown`。完整后端验证、默认关闭 gate、隔离 Postgres CAS/撤销/阻断 smoke 与线上 production-Postgres smoke 已通过；没有新增公开 Visitor、链接、深链、iOS 入口或私人 Echo 回退。
 
 ### P2-S3：iOS 产品面与在世数字人 scope
 
