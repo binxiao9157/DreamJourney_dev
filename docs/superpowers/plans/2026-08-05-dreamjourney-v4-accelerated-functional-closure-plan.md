@@ -31,7 +31,7 @@
 
 ## 3. 当前执行指针
 
-已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`、`P2-S1`、`P2-S2a`、`P2-S2b`、`P2-S3a`。当前执行：`P2-S3b：QA-only 的“我的”发布管理壳层。`
+已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`、`P2-S1`、`P2-S2a`、`P2-S2b`、`P2-S3a`、`P2-S3b`。当前执行：`P2-S4：撤回、争议、删除传播。`
 
 完成当前 Slice 后，不停留等待，按本文件顺序进入下一个未完成 Slice。只有缺少真实 Provider、不可逆生产迁移、数据删除授权或重大产品决策时才暂停。
 
@@ -176,7 +176,7 @@
 
 **已完成子项 P2-S3a：iOS Visitor scope 与读取边界。** 新增默认关闭且仅限 Debug/UI-QA launch argument 的 `publicationVisitorM2` 读取合同。Visitor credential、scope 和 projection 仅保存在内存，账户 lease 变化、scope/响应不匹配、过期或读取失败都会共同清空；客户端仅可调用后端内部 QA projection/answer 路由，并拒绝允许私人上下文、Provider 推理或缺少“未知”降级的响应。该层不增加 Tab、Profile、公开深链或 Visitor UI，也不依赖私人 Echo、数字人、声音复刻、KBLite、家庭或本地公开档案实现。XCTest、默认关闭静态 gate、公开入口 G1 gate 和模拟器构建均已通过。
 
-**当前子项 P2-S3b：QA-only 的“我的”发布管理壳层。** 在既有“我的”信息架构内增加 default-off 的发布管理、预览和授权状态入口；先消费已冻结的后端 authority/session 合同，展示脱敏状态而非私有 Source/Candidate/Memory 原文。不得新增第四 Tab、公开 URL/深链或把 M2 Visitor 接到私人 Echo；未启用、过期、撤回或读取失败只能显示 M2 文本态和明确失败状态。
+**已完成子项 P2-S3b：QA-only 的“我的”发布管理壳层。** 在既有“我的”信息架构内增加 default-off 的发布管理、预览和授权状态入口；仅消费已冻结的 owner authority/session 读取合同，展示脱敏公开预览与授权生命周期，而不读取或持久化私有 Source/Candidate/Memory 原文、访客身份或 credential。入口受 Debug/UI-QA launch argument 限制，普通发布态保持关闭；未新增第四 Tab、公开 URL/深链，也没有把 M2 Visitor 接到私人 Echo。账户 lease、vault 与响应不一致、过期或读取失败时共同回到明确的 M2 文本失败态。默认关闭静态 gate、既有 Visitor/public-entry gate、定向 XCTest、模拟器 UIQA smoke 和 generic iPhoneOS build 均已通过；证据见 `docs/superpowers/status/2026-08-06-publication-management-m2-qa-shell.md`。
 
 ### P2-S4：撤回、争议、删除传播
 

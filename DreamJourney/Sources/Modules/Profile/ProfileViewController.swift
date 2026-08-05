@@ -294,6 +294,10 @@ final class ProfileViewController: UIViewController {
         )
     }
 
+    private var isPublicationManagementQAEntryVisible: Bool {
+        PublicationManagementM2QAGate.isEnabled
+    }
+
     private func isFeatureRouteAllowed(
         _ feature: DJFeature,
         risk: ReleasePolicyRiskClass? = nil
@@ -810,6 +814,9 @@ final class ProfileViewController: UIViewController {
         if isVoiceCloneShellVisible {
             rows.append(.voiceClone)
         }
+        if isPublicationManagementQAEntryVisible {
+            rows.append(.publicationManagementQA)
+        }
         if isFeatureRouteAllowed(.legalCenter, risk: .ownerTextCore) {
             rows.append(.legalCenter)
         }
@@ -937,6 +944,8 @@ final class ProfileViewController: UIViewController {
             openFamilyManagement()
         case .voiceClone:
             showVoiceCloneShell()
+        case .publicationManagementQA:
+            showPublicationManagementQA()
         case .legalCenter:
             showLegalCenter()
         case .dataExport:
@@ -970,6 +979,16 @@ final class ProfileViewController: UIViewController {
             let viewController = ProfileVoiceCloneShellViewController(snapshot: snapshot)
             self?.navigationController?.pushViewController(viewController, animated: true)
         }
+    }
+
+    private func showPublicationManagementQA() {
+        guard isPublicationManagementQAEntryVisible else {
+            return
+        }
+        navigationController?.pushViewController(
+            ProfilePublicationManagementQAViewController(),
+            animated: true
+        )
     }
 
     private func loadBackendVoiceCloneSnapshot(
@@ -1434,6 +1453,7 @@ private enum ProfileRowAction {
     case profileSettings
     case familyManagement
     case voiceClone
+    case publicationManagementQA
     case legalCenter
     case dataExport
     case logout
@@ -1447,6 +1467,8 @@ private enum ProfileRowAction {
             return "家人管理"
         case .voiceClone:
             return "音色复刻"
+        case .publicationManagementQA:
+            return "发布管理"
         case .legalCenter:
             return "法律法规"
         case .dataExport:
@@ -1466,6 +1488,8 @@ private enum ProfileRowAction {
             return "chevron.right"
         case .voiceClone:
             return "waveform.badge.mic"
+        case .publicationManagementQA:
+            return "rectangle.3.group.bubble"
         case .legalCenter:
             return "chevron.right"
         case .dataExport:
@@ -1481,8 +1505,29 @@ private enum ProfileRowAction {
         switch self {
         case .accountDeletion:
             return true
-        case .profileSettings, .familyManagement, .voiceClone, .legalCenter, .dataExport, .logout:
+        case .profileSettings, .familyManagement, .voiceClone, .publicationManagementQA, .legalCenter, .dataExport, .logout:
             return false
+        }
+    }
+
+    var accessibilityIdentifier: String {
+        switch self {
+        case .profileSettings:
+            return "profile-settings-row"
+        case .familyManagement:
+            return "profile-family-management-row"
+        case .voiceClone:
+            return "profile-voice-clone-row"
+        case .publicationManagementQA:
+            return "profile-publication-management-qa-entry"
+        case .legalCenter:
+            return "profile-legal-center-row"
+        case .dataExport:
+            return "profile-data-export-row"
+        case .logout:
+            return "profile-logout-row"
+        case .accountDeletion:
+            return "profile-account-deletion-row"
         }
     }
 
@@ -1513,6 +1558,7 @@ private final class ProfileActionRow: UIControl {
     }
 
     private func setupView(isLast: Bool) {
+        accessibilityIdentifier = action.accessibilityIdentifier
         accessibilityTraits = .button
         accessibilityLabel = action.title
 

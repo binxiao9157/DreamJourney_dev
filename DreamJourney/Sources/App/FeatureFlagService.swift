@@ -104,6 +104,7 @@ enum QALaunchScenario: String, CaseIterable {
     case profileCareStateSmoke = "DJRunProfileCareStateSmoke"
     case profileCareEscalationBoundarySmoke = "DJRunProfileCareEscalationBoundarySmoke"
     case profileFamilyPersonaReleaseSmoke = "DJRunProfileFamilyPersonaReleaseSmoke"
+    case publicationManagementM2Smoke = "DJRunPublicationManagementM2Smoke"
     case globalPrivateStoreRetirementSmoke = "DJRunGlobalPrivateStoreRetirementSmoke"
     case archiveMediaEntriesSmoke = "DJRunArchiveMediaEntriesSmoke"
     case archiveAudioLifecycleSmoke = "DJRunArchiveAudioLifecycleSmoke"
@@ -164,6 +165,7 @@ enum QALaunchScenario: String, CaseIterable {
         .profileCareStateSmoke,
         .profileCareEscalationBoundarySmoke,
         .profileFamilyPersonaReleaseSmoke,
+        .publicationManagementM2Smoke,
         .globalPrivateStoreRetirementSmoke,
         .archiveMediaEntriesSmoke,
         .archiveAudioLifecycleSmoke,
@@ -229,6 +231,7 @@ enum QALaunchScenario: String, CaseIterable {
              .profileCareBackendStateSmoke,
              .profileCareStateSmoke,
              .profileFamilyPersonaReleaseSmoke,
+             .publicationManagementM2Smoke,
              .archiveMediaEntriesSmoke,
              .archiveAudioLifecycleSmoke,
              .archiveHiddenShellSmoke,
@@ -644,6 +647,7 @@ enum DJFeature: String, CaseIterable {
     case voiceCloneShell
     case digitalHumanLivePanel
     case publicationVisitorM2
+    case publicationManagementM2
 }
 
 final class FeatureFlagService {
@@ -681,6 +685,7 @@ final class FeatureFlagService {
         .voiceCloneShell,
         .digitalHumanLivePanel,
         .publicationVisitorM2,
+        .publicationManagementM2,
     ]
 
     private var enabled: Set<DJFeature>

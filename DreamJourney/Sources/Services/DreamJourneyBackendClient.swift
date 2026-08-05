@@ -541,6 +541,13 @@ final class FeatureGateService {
         payload: [String: Any]?
     ) -> DJFeature? {
         let normalizedPath = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
+        if normalizedPath.hasPrefix("/v2/internal/owner-authority/vaults/") {
+            return .publicationManagementM2
+        }
+        if normalizedPath.hasPrefix("/v2/internal/publication-access/vaults/")
+            && normalizedPath.hasSuffix("/grants") {
+            return .publicationManagementM2
+        }
         if normalizedPath.hasPrefix("/v2/internal/publication-access/") {
             return .publicationVisitorM2
         }
@@ -4974,7 +4981,7 @@ final class EchoDelayedReplyInboxAnswerReader {
     }
 }
 
-final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorReaderClient {
+final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorReaderClient, PublicationManagementReaderClient {
     static let shared = DreamJourneyBackendClient()
 
     struct BackendErrorContext: Equatable {
@@ -5046,6 +5053,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             if normalizedPath.hasPrefix("/care/") { return "care" }
             if normalizedPath.hasPrefix("/voice/") { return "voice" }
             if normalizedPath.hasPrefix("/digital-human/") { return "digitalHuman" }
+            if normalizedPath.hasPrefix("/v2/internal/owner-authority/vaults/") {
+                return "publicationManagement"
+            }
+            if normalizedPath.hasPrefix("/v2/internal/publication-access/vaults/")
+                && normalizedPath.hasSuffix("/grants") {
+                return "publicationManagement"
+            }
             if normalizedPath.hasPrefix("/v2/internal/publication-access/") {
                 return "publicationVisitor"
             }
@@ -5254,6 +5268,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
 
     var isPublicationVisitorM2QAConfigured: Bool {
         hasExplicitBaseURL && PublicationVisitorM2QAGate.isEnabled
+    }
+
+    var isPublicationManagementM2QAConfigured: Bool {
+        hasExplicitBaseURL && PublicationManagementM2QAGate.isEnabled
     }
 
     private var currentAuthenticatedSession: BackendAuthSessionContract? {
@@ -9266,6 +9284,120 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         #endif
     }
 
+    func fetchOwnerPublications(
+        vaultID: String,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationManagementPublicationList, Error>) -> Void
+    ) {
+        #if DEBUG || UI_QA_SIMULATOR
+        guard PublicationManagementM2QAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationManagementAccessError.disabled))
+            }
+            return
+        }
+        let normalizedVaultID = vaultID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedVaultID.isEmpty,
+              normalizedVaultID == accountLease.vaultId,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/internal/owner-authority/vaults/\(pathComponent(normalizedVaultID))/publications",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            additionalHeaders: ["X-DreamJourney-QA-Publication": "1"]
+        ) { [weak self] result in
+            guard let self else { return }
+            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+                return
+            }
+            switch result {
+            case .success(let object):
+                guard let response = PublicationManagementPublicationList(json: object) else {
+                    completion(.failure(PublicationManagementAccessError.malformedResponse))
+                    return
+                }
+                guard response.vaultID == normalizedVaultID else {
+                    completion(.failure(PublicationManagementAccessError.responseScopeMismatch))
+                    return
+                }
+                completion(.success(response))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+        #else
+        DispatchQueue.main.async {
+            completion(.failure(PublicationManagementAccessError.disabled))
+        }
+        #endif
+    }
+
+    func fetchOwnerGrants(
+        vaultID: String,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationManagementGrantList, Error>) -> Void
+    ) {
+        #if DEBUG || UI_QA_SIMULATOR
+        guard PublicationManagementM2QAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationManagementAccessError.disabled))
+            }
+            return
+        }
+        let normalizedVaultID = vaultID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedVaultID.isEmpty,
+              normalizedVaultID == accountLease.vaultId,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/internal/publication-access/vaults/\(pathComponent(normalizedVaultID))/grants",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            additionalHeaders: ["X-DreamJourney-QA-Visitor-Access": "1"]
+        ) { [weak self] result in
+            guard let self else { return }
+            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+                return
+            }
+            switch result {
+            case .success(let object):
+                guard let response = PublicationManagementGrantList(json: object) else {
+                    completion(.failure(PublicationManagementAccessError.malformedResponse))
+                    return
+                }
+                guard response.vaultID == normalizedVaultID else {
+                    completion(.failure(PublicationManagementAccessError.responseScopeMismatch))
+                    return
+                }
+                completion(.success(response))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+        #else
+        DispatchQueue.main.async {
+            completion(.failure(PublicationManagementAccessError.disabled))
+        }
+        #endif
+    }
+
     private func requestJSON(
         path: String,
         method: HTTPMethod,
@@ -9432,12 +9564,23 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         let isExplicitPublicationVisitorQARequest =
             additionalHeaders["X-DreamJourney-QA-Visitor-Access"] == "1"
             && PublicationVisitorM2QAGate.isEnabled
+        let isExplicitPublicationManagementQARequest =
+            PublicationManagementM2QAGate.isEnabled
+            && (
+                path.hasPrefix("/v2/internal/owner-authority/vaults/")
+                    && path.hasSuffix("/publications")
+                    && additionalHeaders["X-DreamJourney-QA-Publication"] == "1"
+                || path.hasPrefix("/v2/internal/publication-access/vaults/")
+                    && path.hasSuffix("/grants")
+                    && additionalHeaders["X-DreamJourney-QA-Visitor-Access"] == "1"
+            )
         let preparedFeatureDecision: FeatureDecision?
         if let featureDecision {
             preparedFeatureDecision = revalidatedRequestFeatureDecision(featureDecision)
         } else if let gatedFeature,
                   !isExplicitOwnerTruthQARequest,
-                  !isExplicitPublicationVisitorQARequest {
+                  !isExplicitPublicationVisitorQARequest,
+                  !isExplicitPublicationManagementQARequest {
             preparedFeatureDecision = requestFeatureDecision(for: gatedFeature)
         } else {
             preparedFeatureDecision = nil

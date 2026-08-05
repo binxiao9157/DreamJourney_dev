@@ -363,6 +363,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runProfileCareEscalationBoundarySmoke() }
         case .profileFamilyPersonaReleaseSmoke:
             scheduleUIQAScenario(scenario) { $0.runProfileFamilyPersonaReleaseSmoke() }
+        case .publicationManagementM2Smoke:
+            scheduleUIQAScenario(scenario) { $0.runPublicationManagementM2Smoke() }
         case .globalPrivateStoreRetirementSmoke:
             scheduleUIQAScenario(scenario) { _ in
                 ProductV4GlobalPrivateStoreRetirementUIQASmoke.runAndPresent()
@@ -1569,6 +1571,112 @@ private extension AppDelegate {
             "backendFamilyDigitalHumanMode=\(backendFamilyMember?.digitalHumanMode.rawValue ?? "missing") " +
             "backendVoiceProfileId=\(backendVoiceSnapshot?.voiceProfileId ?? "missing")"
         )
+    }
+
+    func runPublicationManagementM2Smoke() {
+        let gateEnabled = PublicationManagementM2QAGate.isEnabled
+        let featureFlagDefaultOff = !FeatureFlagService.shared.isEnabled(.publicationManagementM2)
+        guard let profileNavigationController = profileNavigationControllerForPublicationManagementSmoke() else {
+            writePublicationManagementM2SmokeResult(
+                completed: false,
+                gateEnabled: gateEnabled,
+                featureFlagDefaultOff: featureFlagDefaultOff,
+                profileEntryVisible: false,
+                shellRendered: false,
+                publicationRendered: false,
+                grantRendered: false,
+                failureReason: "profileNavigationUnavailable"
+            )
+            return
+        }
+
+        profileNavigationController.topViewController?.loadViewIfNeeded()
+        let profileEntryVisible = containsUIQAAccessibilityIdentifier(
+            "profile-publication-management-qa-entry",
+            in: profileNavigationController.topViewController?.view
+        )
+
+        let runtime = AccountLeaseRuntime(authorityEpoch: "uiqa-publication-management-v1")
+        runtime.publish(session: AccountSession(
+            subjectId: "uiqa-publication-owner",
+            vaultId: "uiqa-publication-vault",
+            sessionId: "uiqa-publication-session",
+            tokenFamilyId: "uiqa-publication-family",
+            sessionVersion: 1,
+            generation: 1,
+            generationId: UUID(),
+            state: .active,
+            activatedAt: Date()
+        ))
+        let accountLease = runtime.capture(forSubjectId: "uiqa-publication-owner")
+        let fixtureClient = PublicationManagementM2UIQAFixtureClient()
+        let shell = ProfilePublicationManagementQAViewController(
+            client: fixtureClient,
+            accountLeaseRuntime: runtime,
+            accountLeaseProvider: { accountLease }
+        )
+        profileNavigationController.pushViewController(shell, animated: false)
+        shell.loadViewIfNeeded()
+
+        let shellRendered = shell.view.accessibilityIdentifier == "profile-publication-management-qa-shell"
+        let publicationRendered = containsUIQAAccessibilityIdentifier(
+            "profile-publication-management-qa-publications",
+            in: shell.view
+        )
+        let grantRendered = containsUIQAAccessibilityIdentifier(
+            "profile-publication-management-qa-grants",
+            in: shell.view
+        )
+        let completed = gateEnabled
+            && featureFlagDefaultOff
+            && profileEntryVisible
+            && shellRendered
+            && publicationRendered
+            && grantRendered
+
+        writePublicationManagementM2SmokeResult(
+            completed: completed,
+            gateEnabled: gateEnabled,
+            featureFlagDefaultOff: featureFlagDefaultOff,
+            profileEntryVisible: profileEntryVisible,
+            shellRendered: shellRendered,
+            publicationRendered: publicationRendered,
+            grantRendered: grantRendered,
+            failureReason: completed ? nil : "publicationManagementM2SurfaceMismatch"
+        )
+        print(
+            "[UI_QA] PublicationManagementM2Smoke completed " +
+                "gateEnabled=\(gateEnabled) " +
+                "profileEntryVisible=\(profileEntryVisible) " +
+                "shellRendered=\(shellRendered)"
+        )
+    }
+
+    func profileNavigationControllerForPublicationManagementSmoke() -> UINavigationController? {
+        guard let tabBarController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController as? WarmTabBarController,
+              let viewControllers = tabBarController.viewControllers,
+              viewControllers.indices.contains(2),
+              let profileNavigationController = viewControllers[2] as? UINavigationController else {
+            return nil
+        }
+
+        tabBarController.selectedIndex = 2
+        profileNavigationController.popToRootViewController(animated: false)
+        return profileNavigationController
+    }
+
+    func containsUIQAAccessibilityIdentifier(_ identifier: String, in view: UIView?) -> Bool {
+        guard let view else { return false }
+        if view.accessibilityIdentifier == identifier {
+            return true
+        }
+        return view.subviews.contains { child in
+            containsUIQAAccessibilityIdentifier(identifier, in: child)
+        }
     }
 
     func makeProfileFamilyVoiceBackendDerivedFamilyMember() -> FamilyMember? {
@@ -5405,6 +5513,36 @@ private extension AppDelegate {
         }
     }
 
+    func writePublicationManagementM2SmokeResult(
+        completed: Bool,
+        gateEnabled: Bool,
+        featureFlagDefaultOff: Bool,
+        profileEntryVisible: Bool,
+        shellRendered: Bool,
+        publicationRendered: Bool,
+        grantRendered: Bool,
+        failureReason: String?
+    ) {
+        var result: [String: Any] = [
+            "completed": completed,
+            "gateEnabled": gateEnabled,
+            "featureFlagDefaultOff": featureFlagDefaultOff,
+            "profileEntryVisible": profileEntryVisible,
+            "shellRendered": shellRendered,
+            "publicationRendered": publicationRendered,
+            "grantRendered": grantRendered,
+            "launchArgument": PublicationManagementM2QAGate.launchArgument,
+        ]
+        if let failureReason {
+            result["failureReason"] = failureReason
+        }
+        QAProfileScenarioRunner.writeResult(
+            result,
+            fileName: "publication-management-m2-smoke-result.json",
+            smokeName: "PublicationManagementM2Smoke"
+        )
+    }
+
     func writeArchiveMediaEntriesSmokeResult(
         completed: Bool,
         releaseOptionTitles: [String],
@@ -5837,6 +5975,63 @@ private extension AppDelegate {
         } catch {
             print("[UI_QA] BackendEnvSmoke failed reason=storeSummaryWrite error=\(error.localizedDescription)")
         }
+    }
+}
+
+private final class PublicationManagementM2UIQAFixtureClient: PublicationManagementReaderClient {
+    func fetchOwnerPublications(
+        vaultID: String,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationManagementPublicationList, Error>) -> Void
+    ) {
+        guard vaultID == "uiqa-publication-vault",
+              accountLease.subjectId == "uiqa-publication-owner",
+              let response = PublicationManagementPublicationList(json: [
+                "schemaVersion": PublicationManagementPublicationList.schemaVersion,
+                "vaultId": vaultID,
+                "publications": [[
+                    "publicationId": "uiqa-publication-1",
+                    "publicationVersionId": "uiqa-publication-version-1",
+                    "publicationState": "confirmed",
+                    "projectionState": "active",
+                    "preview": [
+                        "title": "雨后的院子",
+                        "body": "这是已脱敏的公开预览，仅用于内部界面验证。",
+                    ],
+                    "requiresSecondConfirmation": false,
+                    "thirdPartyReviewRequired": false,
+                    "aiDisclosureRequired": true,
+                ]],
+              ]) else {
+            completion(.failure(PublicationManagementAccessError.unavailable))
+            return
+        }
+        completion(.success(response))
+    }
+
+    func fetchOwnerGrants(
+        vaultID: String,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationManagementGrantList, Error>) -> Void
+    ) {
+        guard vaultID == "uiqa-publication-vault",
+              accountLease.subjectId == "uiqa-publication-owner",
+              let response = PublicationManagementGrantList(json: [
+                "schemaVersion": PublicationManagementGrantList.schemaVersion,
+                "vaultId": vaultID,
+                "grants": [[
+                    "grantId": "uiqa-grant-1",
+                    "publicationId": "uiqa-publication-1",
+                    "publicationVersionId": "uiqa-publication-version-1",
+                    "state": "active",
+                    "expiresAt": ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600)),
+                    "useRemaining": 2,
+                ]],
+              ]) else {
+            completion(.failure(PublicationManagementAccessError.unavailable))
+            return
+        }
+        completion(.success(response))
     }
 }
 #endif

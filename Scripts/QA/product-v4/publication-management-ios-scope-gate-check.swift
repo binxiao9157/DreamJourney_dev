@@ -1,0 +1,109 @@
+#!/usr/bin/env swift
+
+import Foundation
+
+let root = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? FileManager.default.currentDirectoryPath)
+
+func read(_ relativePath: String) throws -> String {
+    try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+}
+
+func require(_ condition: @autoclosure () -> Bool, _ message: String) {
+    guard condition() else {
+        fputs("Publication management iOS scope gate failed: \(message)\n", stderr)
+        exit(1)
+    }
+}
+
+let featureFlags = try read("DreamJourney/Sources/App/FeatureFlagService.swift")
+let backendClient = try read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
+let managementAccess = try read("DreamJourney/Sources/Services/PublicationManagementAccess.swift")
+let managementView = try read("DreamJourney/Sources/Modules/Profile/ProfilePublicationManagementQAViewController.swift")
+let profile = try read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
+let tabCoordinator = try read("DreamJourney/Sources/App/TabCoordinator.swift")
+let appDelegate = try read("DreamJourney/Sources/AppDelegate.swift")
+let project = try read("DreamJourney.xcodeproj/project.pbxproj")
+
+require(
+    featureFlags.contains("case publicationManagementM2")
+        && featureFlags.contains(".publicationManagementM2,"),
+    "M2 management feature must be non-persistent and default-off"
+)
+require(
+    managementAccess.contains("#if DEBUG || UI_QA_SIMULATOR")
+        && managementAccess.contains("static let launchArgument = \"DJEnablePublicationManagementM2QA\"")
+        && managementAccess.contains("QALaunchConfiguration.shared.contains(launchArgument)")
+        && managementAccess.contains("#else\n        false"),
+    "management reader must stay compile-time QA gated"
+)
+require(
+    backendClient.contains("/v2/internal/owner-authority/vaults/")
+        && backendClient.contains("/v2/internal/publication-access/vaults/")
+        && backendClient.contains("X-DreamJourney-QA-Publication")
+        && backendClient.contains("X-DreamJourney-QA-Visitor-Access")
+        && backendClient.contains("PublicationManagementM2QAGate.isEnabled"),
+    "management transport must use both explicit internal QA boundaries"
+)
+require(
+    backendClient.contains("return .publicationManagementM2")
+        && backendClient.contains("return \"publicationManagement\""),
+    "management requests must be purpose and feature classified"
+)
+require(
+    managementAccess.contains("accountLeaseRuntime.validate(accountLease, at: .request)")
+        && managementAccess.contains("accountLeaseRuntime.validate(accountLease, at: .commit)")
+        && managementAccess.contains("responseScopeMismatch"),
+    "management reads must bind request and response to the AccountLease vault"
+)
+require(
+    managementAccess.contains("publication-owner-management-v1")
+        && managementAccess.contains("publication-owner-grant-list-v1")
+        && !managementAccess.contains("UserDefaults")
+        && !managementAccess.contains(": Codable"),
+    "management state must remain schema-checked and in memory only"
+)
+
+for forbiddenSymbol in [
+    "EchoViewController",
+    "DigitalHumanContextStore",
+    "DialogEngineManager",
+    "TencentDigitalHuman",
+    "VoiceClone",
+    "KBLite",
+    "MemoryRepository",
+    "grantCredential",
+    "granteeUserId",
+    "sessionCredential",
+] {
+    require(
+        !managementAccess.contains(forbiddenSymbol)
+            && !managementView.contains(forbiddenSymbol),
+        "management shell must not expose or depend on private runtime symbol \(forbiddenSymbol)"
+    )
+}
+
+require(
+    profile.contains("PublicationManagementM2QAGate.isEnabled")
+        && profile.contains("case publicationManagementQA")
+        && profile.contains("profile-publication-management-qa-entry"),
+    "management route must be profile-only and QA gated"
+)
+require(
+    !tabCoordinator.contains("PublicationManagement"),
+    "M2 management must not add a public Tab"
+)
+require(
+    appDelegate.contains("case .publicationManagementM2Smoke")
+        && appDelegate.contains("runPublicationManagementM2Smoke()")
+        && appDelegate.contains("publication-management-m2-smoke-result.json")
+        && appDelegate.contains("[UI_QA] PublicationManagementM2Smoke completed"),
+    "UIQA harness must produce a pollable M2 result"
+)
+require(
+    project.contains("PublicationManagementAccess.swift in Sources")
+        && project.contains("ProfilePublicationManagementQAViewController.swift in Sources")
+        && project.contains("PublicationManagementAccessTests.swift in Sources"),
+    "management source and tests must be in Xcode targets"
+)
+
+print("Publication management iOS scope gate passed")
