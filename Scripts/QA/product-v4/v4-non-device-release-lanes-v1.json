@@ -1,0 +1,177 @@
+{
+  "schemaVersion": "dreamjourney-v4-non-device-lane-registry-v1",
+  "lanes": [
+    {
+      "id": "m0",
+      "title": "M0 owner truth",
+      "defaultState": "publicCore",
+      "defaultOff": false,
+      "requiredEnvironment": [
+        "BACKEND_EVIDENCE_PATH"
+      ],
+      "commands": [
+        {
+          "id": "ios-m0-non-device-release",
+          "repo": "ios",
+          "argv": [
+            "bash",
+            "Scripts/QA/product-v4/run-v4-m0-non-device-release-gate.sh"
+          ],
+          "timeoutSeconds": 3600
+        }
+      ],
+      "remainingGates": [
+        {
+          "kind": "EXTERNAL_PROVIDER_REQUIRED",
+          "id": "realIdentityProvider"
+        },
+        {
+          "kind": "DEVICE_REQUIRED",
+          "id": "m0PhysicalDeviceAcceptance"
+        }
+      ]
+    },
+    {
+      "id": "stage2",
+      "title": "Stage 2 private media",
+      "defaultState": "closedPilotDefaultOff",
+      "defaultOff": true,
+      "requiredEnvironment": [],
+      "commands": [
+        {
+          "id": "backend-media-processing-contract",
+          "repo": "backend",
+          "argv": [
+            "bash",
+            "scripts/run-backend-owner-truth-media-processing-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "ios-media-stage2-uiqa",
+          "repo": "ios",
+          "argv": [
+            "bash",
+            "Scripts/QA/product-v4/run-owner-media-stage2-uiqa-gate.sh"
+          ],
+          "timeoutSeconds": 1800
+        }
+      ],
+      "remainingGates": [
+        {
+          "kind": "EXTERNAL_PROVIDER_REQUIRED",
+          "id": "mediaStorageAndProcessingProvider"
+        },
+        {
+          "kind": "DEVICE_REQUIRED",
+          "id": "mediaCaptureAndLargeFileAcceptance"
+        }
+      ]
+    },
+    {
+      "id": "m1",
+      "title": "M1 private adult voice",
+      "defaultState": "closedPilotDefaultOff",
+      "defaultOff": true,
+      "requiredEnvironment": [],
+      "commands": [
+        {
+          "id": "backend-voice-dh-readiness",
+          "repo": "backend",
+          "argv": [
+            "bash",
+            "scripts/run-backend-voice-dh-lane-readiness-g0-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "ios-voice-dh-readiness",
+          "repo": "ios",
+          "argv": [
+            "bash",
+            "Scripts/QA/product-v4/run-ios-voice-dh-readiness-evidence-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "ios-voice-dh-account-lifecycle",
+          "repo": "ios",
+          "argv": [
+            "bash",
+            "Scripts/QA/product-v4/run-voice-tts-dh-account-lifecycle-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        }
+      ],
+      "remainingGates": [
+        {
+          "kind": "EXTERNAL_PROVIDER_REQUIRED",
+          "id": "voiceTrainingAndDeletionReceipts"
+        },
+        {
+          "kind": "DEVICE_REQUIRED",
+          "id": "voiceQualityAndAudioRouteAcceptance"
+        }
+      ]
+    },
+    {
+      "id": "m2",
+      "title": "M2 publication visitor and living digital human",
+      "defaultState": "closedPilotDefaultOff",
+      "defaultOff": true,
+      "requiredEnvironment": [],
+      "commands": [
+        {
+          "id": "backend-publication-lifecycle-propagation",
+          "repo": "backend",
+          "argv": [
+            "bash",
+            "scripts/run-backend-publication-lifecycle-propagation-g0-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "backend-publication-external-cleanup",
+          "repo": "backend",
+          "argv": [
+            "bash",
+            "scripts/run-backend-publication-external-cleanup-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "ios-publication-management-uiqa",
+          "repo": "ios",
+          "argv": [
+            "bash",
+            "Scripts/QA/prd-stitch-ui/run-publication-management-m2-smoke.sh"
+          ],
+          "timeoutSeconds": 1800
+        },
+        {
+          "id": "ios-publication-lifecycle-uiqa",
+          "repo": "ios",
+          "argv": [
+            "bash",
+            "Scripts/QA/prd-stitch-ui/run-publication-lifecycle-m2-smoke.sh"
+          ],
+          "timeoutSeconds": 1800
+        }
+      ],
+      "remainingGates": [
+        {
+          "kind": "EXTERNAL_PROVIDER_REQUIRED",
+          "id": "publicationIndexAndProviderCleanupReceipts"
+        },
+        {
+          "kind": "DEVICE_REQUIRED",
+          "id": "visitorAndDigitalHumanLongSessionAcceptance"
+        },
+        {
+          "kind": "PRODUCT_OR_LEGAL_REQUIRED",
+          "id": "adultIdentitySafetyAndRegulatoryReleaseGate"
+        }
+      ]
+    }
+  ]
+}
