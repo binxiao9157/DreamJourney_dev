@@ -589,7 +589,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     @objc private func deleteVoiceTapped() {
         confirmDestructive(
             title: "删除音色",
-            message: "删除会立即停止该音色用于回响，并开始清理本地和已支持的第三方服务记录。清理状态会在本页更新；在收到确认前，不会把第三方清理误报为完成。此操作不可恢复。",
+            message: "删除会立即停止该音色用于回响，并更新本地记录。当前未接入第三方服务清理回执，无法确认第三方数据是否已删除。此操作不可恢复。",
             actionTitle: "删除"
         ) { [weak self] in
             self?.performDeleteVoice()

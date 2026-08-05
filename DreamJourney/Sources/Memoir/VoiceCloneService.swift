@@ -185,7 +185,7 @@ struct VoiceCloneProfileSnapshot {
         case "completed":
             return "该音色已停止用于回响，第三方服务已确认完成清理。"
         case "unsupported":
-            return "该音色已停止用于回响。第三方服务暂不支持返回清理结果。"
+            return "该音色已停止用于回响。第三方服务清理尚未接入，无法确认第三方数据是否已删除。"
         default:
             return ""
         }
