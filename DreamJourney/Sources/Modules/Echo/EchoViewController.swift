@@ -4454,6 +4454,24 @@ final class EchoViewController: UIViewController {
               let voiceProfileId = voiceSelection.voiceProfileId else {
             return false
         }
+        guard voiceSelection.source == .personalOwner,
+              let userId = UserManager.shared.currentUser?.id.trimmingCharacters(in: .whitespacesAndNewlines),
+              !userId.isEmpty,
+              voiceSelection.contextOwnerId == userId else {
+            renderVoiceStatus(
+                text: "复刻声音身份状态已变化，本轮未使用默认音色",
+                isVisible: true,
+                accessibilityIdentifier: "echoVoiceClonePCMDriveStatus"
+            )
+            lastVoiceSynthesisEvidenceSummary = .unavailable(
+                ownerUserId: currentEchoEvidenceOwnerUserId,
+                reason: "voiceCloneRoleOwnerMismatch"
+            )
+            lastEchoRuntimeFallbackReason = "voiceCloneRoleOwnerMismatch"
+            recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneRoleOwnerMismatch")
+            return true
+        }
+        let roleKey = voiceSelection.source.rawValue
         guard DreamJourneyBackendClient.shared.isVoiceCloneSynthesisConfigured else {
             renderVoiceStatus(text: "复刻声音服务暂不可用", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
             lastVoiceCloneProviderLogId = nil
@@ -4575,7 +4593,6 @@ final class EchoViewController: UIViewController {
         )
         renderVoiceStatus(text: "正在生成复刻声音", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
 
-        let userId = UserManager.shared.currentUser?.id ?? "default"
         PrivacySafeDiagnostics.log(
             subsystem: "TencentDigitalHuman",
             event: "voiceClonePCMDriveRequested",
@@ -4602,7 +4619,12 @@ final class EchoViewController: UIViewController {
             sampleRate: 16_000,
             speechRate: -10,
             loudnessRate: 10,
-            outputMode: "tencentAudioDrive"
+            outputMode: "tencentAudioDrive",
+            requestPurpose: "echo",
+            roleKey: roleKey,
+            roleSubjectId: userId,
+            personaScope: "personal",
+            digitalHumanId: userId
         ) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -4633,7 +4655,19 @@ final class EchoViewController: UIViewController {
 
                 switch result {
                 case .success(let synthesis):
-                    guard synthesis.isTencentAudioDrivePCMCompatible,
+                    guard synthesis.voiceProfileId == voiceProfileId,
+                          synthesis.isBound(
+                            toOwnerUserId: userId,
+                            voiceProfileId: voiceProfileId,
+                            roleSubjectId: userId,
+                            roleKey: roleKey,
+                            personaScope: "personal",
+                            digitalHumanId: userId,
+                            requestPurpose: "echo",
+                            outputMode: "tencentAudioDrive",
+                            audioOwner: "tencentDigitalHuman"
+                          ),
+                          synthesis.isTencentAudioDrivePCMCompatible,
                           let signal = self.makeTencentDigitalHumanPCMDriveSignal(from: synthesis) else {
                         self.handleVoiceClonePCMDriveFailureWithoutDefaultVoice(
                             requestID: requestID,
@@ -4643,8 +4677,19 @@ final class EchoViewController: UIViewController {
                             providerLogId: synthesis.providerLogId,
                             providerRequestId: synthesis.providerRequestId,
                             ownerUserId: userId,
-                            reason: "incompatibleAudioFormat",
-                            detail: "format=\(synthesis.audioFormat) sampleRate=\(synthesis.sampleRate ?? 0) bits=\(synthesis.bitsPerSample ?? 0) channels=\(synthesis.channelCount ?? 0)",
+                            reason: synthesis.voiceProfileId == voiceProfileId
+                                && synthesis.isBound(
+                                    toOwnerUserId: userId,
+                                    voiceProfileId: voiceProfileId,
+                                    roleSubjectId: userId,
+                                    roleKey: roleKey,
+                                    personaScope: "personal",
+                                    digitalHumanId: userId,
+                                    requestPurpose: "echo",
+                                    outputMode: "tencentAudioDrive",
+                                    audioOwner: "tencentDigitalHuman"
+                                ) ? "incompatibleAudioFormat" : "synthesisBindingMismatch",
+                            detail: "Echo only accepts a PCM response bound to the current owner, profile, role, purpose, and output mode.",
                             lifecycleToken: lifecycleToken,
                             runtimeInteractionCallback: runtimeInteractionCallback
                         )
@@ -6479,7 +6524,12 @@ final class EchoViewController: UIViewController {
             sampleRate: 16_000,
             speechRate: -10,
             loudnessRate: 10,
-            outputMode: "tencentAudioDrive"
+            outputMode: "tencentAudioDrive",
+            requestPurpose: "echo",
+            roleKey: "personalOwner",
+            roleSubjectId: userId,
+            personaScope: "personal",
+            digitalHumanId: userId
         ) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -9815,7 +9865,12 @@ extension EchoViewController {
                         sampleRate: capability.tencentAudioDrive.sampleRate,
                         speechRate: -10,
                         loudnessRate: 10,
-                        outputMode: capability.tencentAudioDrive.requestOutputMode
+                        outputMode: capability.tencentAudioDrive.requestOutputMode,
+                        requestPurpose: "echo",
+                        roleKey: "personalOwner",
+                        roleSubjectId: userId,
+                        personaScope: "personal",
+                        digitalHumanId: userId
                     ) { [weak self] synthesisResult in
                         DispatchQueue.main.async {
                             guard let self,
@@ -9833,6 +9888,25 @@ extension EchoViewController {
                                     "userId": userId,
                                 ])
                             case .success(let synthesis):
+                                guard synthesis.isBound(
+                                    toOwnerUserId: userId,
+                                    voiceProfileId: voiceProfileId,
+                                    roleSubjectId: userId,
+                                    roleKey: "personalOwner",
+                                    personaScope: "personal",
+                                    digitalHumanId: userId,
+                                    requestPurpose: "echo",
+                                    outputMode: "tencentAudioDrive",
+                                    audioOwner: "tencentDigitalHuman"
+                                ) else {
+                                    completion([
+                                        "completed": false,
+                                        "failureReason": "synthesisBindingMismatch",
+                                        "voiceProfileId": synthesis.voiceProfileId,
+                                        "userId": userId,
+                                    ])
+                                    return
+                                }
                                 guard let signal = self.makeTencentDigitalHumanPCMDriveSignal(from: synthesis) else {
                                     completion([
                                         "completed": false,
@@ -9907,6 +9981,7 @@ extension EchoViewController {
                                         "userId": userId,
                                         "providerMode": synthesis.providerMode,
                                         "outputMode": synthesis.outputMode ?? "",
+                                        "bindingVerified": true,
                                         "audioFormat": synthesis.audioFormat,
                                         "byteCount": synthesis.byteCount,
                                         "preparedByteCount": preparedByteCount,

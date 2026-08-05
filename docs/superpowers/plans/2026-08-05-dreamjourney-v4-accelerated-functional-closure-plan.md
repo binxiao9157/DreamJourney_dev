@@ -31,7 +31,7 @@
 
 ## 3. 当前执行指针
 
-已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`。当前执行：`P1-S3：Echo 单一路径与角色选择。`
+已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`。当前执行：`P1-S4：暂停、删除与退出。`
 
 完成当前 Slice 后，不停留等待，按本文件顺序进入下一个未完成 Slice。只有缺少真实 Provider、不可逆生产迁移、数据删除授权或重大产品决策时才暂停。
 
@@ -129,6 +129,8 @@
 3. 试听成功后由用户显式接受，才把 profile 提升为 `accepted`。
 
 ### P1-S3：Echo 单一路径与角色选择
+
+**状态**：非真机合同完成，默认关闭。`/voice/synthesis` 的 Tencent PCM 响应现在绑定 profile、owner、role、persona scope、数字人 ID、用途、output mode 和 audio owner；iOS 仅接受与当前本人角色完全匹配的绑定。无可用 profile、绑定不匹配或 provider 失败均进入可解释的非复刻回退，不能复用旧角色、其他用户或默认腾讯音色。模拟器 PCM mock 已验证分片、最终帧、顺序与打断清理。
 
 1. `accepted` profile 唯一可走 `/voice/synthesis?outputMode=tencentAudioDrive`；输出 PCM 与 profile/owner/role 绑定。
 2. 无 accepted profile 只允许中性默认声音或文字模式，并有可解释的状态；Provider 失败不得落回其他用户、旧角色或未授权声音。

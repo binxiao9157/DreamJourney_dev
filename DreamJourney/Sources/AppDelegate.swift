@@ -301,7 +301,21 @@ private extension AppDelegate {
         }
         QAScenarioRunner.prepareSession(
             for: launchPlan,
-            login: { UserManager.shared.login(phone: "13800009999", nickname: "UI QA") },
+            login: { [weak self] in
+                let requestedUserId: String?
+                if scenario == .tencentBackendPCMDriveMockSmoke {
+                    requestedUserId = self?.uiqaArgumentValue(
+                        prefix: "DJTencentBackendPCMDriveMockUserId="
+                    )
+                } else {
+                    requestedUserId = nil
+                }
+                UserManager.shared.login(
+                    phone: "13800009999",
+                    nickname: "UI QA",
+                    id: requestedUserId
+                )
+            },
             resetFeatureFlags: { FeatureFlagService.shared.resetToDefaults() }
         )
 
@@ -1906,7 +1920,12 @@ private extension AppDelegate {
                         sampleRate: capability.tencentAudioDrive.sampleRate,
                         speechRate: -10,
                         loudnessRate: 10,
-                        outputMode: capability.tencentAudioDrive.requestOutputMode
+                        outputMode: capability.tencentAudioDrive.requestOutputMode,
+                        requestPurpose: "echo",
+                        roleKey: "personalOwner",
+                        roleSubjectId: userId,
+                        personaScope: "personal",
+                        digitalHumanId: userId
                     ) { [weak self] synthesisResult in
                         DispatchQueue.main.async {
                             guard let self else { return }

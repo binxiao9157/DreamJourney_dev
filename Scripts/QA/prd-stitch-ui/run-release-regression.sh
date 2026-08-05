@@ -708,6 +708,7 @@ for guard in \
   tencent-digital-human-voice-clone-route-check.swift \
   echo-role-voice-profile-selection-check.swift \
   tencent-voice-clone-echo-contract-check.swift \
+  echo-voice-synthesis-binding-check.swift \
   context-packet-v1-check.swift \
   context-packet-v2-trace-check.swift \
   echo-context-v2-clue-panel-check.swift \

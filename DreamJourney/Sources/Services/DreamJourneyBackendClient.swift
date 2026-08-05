@@ -2272,6 +2272,96 @@ struct VoiceCloneProfileContract {
     }
 }
 
+struct VoiceCloneSynthesisBinding {
+    let schemaVersion: String
+    let ownerUserId: String
+    let voiceProfileId: String
+    let profileVersion: Int
+    let roleSubjectId: String
+    let roleKey: String
+    let personaScope: String
+    let digitalHumanId: String
+    let requestPurpose: String
+    let outputMode: String
+    let audioOwner: String
+
+    init?(json: [String: Any]?) {
+        guard let json,
+              let schemaVersion = Self.normalized(json["schemaVersion"]),
+              let ownerUserId = Self.normalized(json["ownerUserId"]),
+              let voiceProfileId = Self.normalized(json["voiceProfileId"]),
+              let profileVersion = Self.intValue(json["profileVersion"]),
+              profileVersion > 0,
+              let roleSubjectId = Self.normalized(json["roleSubjectId"]),
+              let roleKey = Self.normalized(json["roleKey"]),
+              let personaScope = Self.normalized(json["personaScope"]),
+              let digitalHumanId = Self.normalized(json["digitalHumanId"]),
+              let requestPurpose = Self.normalized(json["requestPurpose"]),
+              let outputMode = Self.normalized(json["outputMode"]),
+              let audioOwner = Self.normalized(json["audioOwner"]) else {
+            return nil
+        }
+        self.schemaVersion = schemaVersion
+        self.ownerUserId = ownerUserId
+        self.voiceProfileId = voiceProfileId
+        self.profileVersion = profileVersion
+        self.roleSubjectId = roleSubjectId
+        self.roleKey = roleKey
+        self.personaScope = personaScope
+        self.digitalHumanId = digitalHumanId
+        self.requestPurpose = requestPurpose
+        self.outputMode = outputMode
+        self.audioOwner = audioOwner
+    }
+
+    func matches(
+        ownerUserId: String,
+        voiceProfileId: String,
+        roleSubjectId: String,
+        roleKey: String,
+        personaScope: String,
+        digitalHumanId: String,
+        requestPurpose: String,
+        outputMode: String,
+        audioOwner: String
+    ) -> Bool {
+        guard let expectedOwnerUserId = Self.normalized(ownerUserId),
+              let expectedVoiceProfileId = Self.normalized(voiceProfileId),
+              let expectedRoleSubjectId = Self.normalized(roleSubjectId),
+              let expectedRoleKey = Self.normalized(roleKey),
+              let expectedPersonaScope = Self.normalized(personaScope),
+              let expectedDigitalHumanId = Self.normalized(digitalHumanId),
+              let expectedRequestPurpose = Self.normalized(requestPurpose),
+              let expectedOutputMode = Self.normalized(outputMode),
+              let expectedAudioOwner = Self.normalized(audioOwner) else {
+            return false
+        }
+        return self.ownerUserId == expectedOwnerUserId
+            && self.voiceProfileId == expectedVoiceProfileId
+            && self.roleSubjectId == expectedRoleSubjectId
+            && self.roleKey == expectedRoleKey
+            && self.personaScope == expectedPersonaScope
+            && self.digitalHumanId == expectedDigitalHumanId
+            && self.requestPurpose == expectedRequestPurpose
+            && self.outputMode == expectedOutputMode
+            && self.audioOwner == expectedAudioOwner
+    }
+
+    private static func normalized(_ value: Any?) -> String? {
+        guard let raw = value as? String else { return nil }
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, value.count <= 128 else { return nil }
+        return value
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+}
+
 struct VoiceCloneSynthesisResult {
     let voiceProfileId: String
     let providerMode: String
@@ -2289,6 +2379,7 @@ struct VoiceCloneSynthesisResult {
     let qualityPreviewExpiresAt: String?
     let visemeTimeline: DigitalHumanLipSyncTimeline?
     let authority: VoiceDigitalHumanAuthorityEnvelope?
+    let synthesisBinding: VoiceCloneSynthesisBinding?
 
     init?(json: [String: Any]) {
         guard let voiceProfileId = json["voiceProfileId"] as? String,
@@ -2317,6 +2408,7 @@ struct VoiceCloneSynthesisResult {
             self.visemeTimeline = nil
         }
         self.authority = VoiceDigitalHumanAuthorityEnvelope(json: json["authority"] as? [String: Any])
+        self.synthesisBinding = VoiceCloneSynthesisBinding(json: json["synthesisBinding"] as? [String: Any])
     }
 
     var audioData: Data? {
@@ -2337,6 +2429,30 @@ struct VoiceCloneSynthesisResult {
             return nil
         }
         return audioData
+    }
+
+    func isBound(
+        toOwnerUserId ownerUserId: String,
+        voiceProfileId: String,
+        roleSubjectId: String,
+        roleKey: String,
+        personaScope: String,
+        digitalHumanId: String,
+        requestPurpose: String,
+        outputMode: String,
+        audioOwner: String
+    ) -> Bool {
+        synthesisBinding?.matches(
+            ownerUserId: ownerUserId,
+            voiceProfileId: voiceProfileId,
+            roleSubjectId: roleSubjectId,
+            roleKey: roleKey,
+            personaScope: personaScope,
+            digitalHumanId: digitalHumanId,
+            requestPurpose: requestPurpose,
+            outputMode: outputMode,
+            audioOwner: audioOwner
+        ) == true
     }
 
     var lipSyncPlaybackEvent: DigitalHumanPlaybackEvent? {
@@ -5708,8 +5824,31 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         loudnessRate: Int = 10,
         outputMode: String? = nil,
         requestPurpose: String? = nil,
+        roleKey: String? = nil,
+        roleSubjectId: String? = nil,
+        personaScope: String? = nil,
+        digitalHumanId: String? = nil,
         completion: @escaping (Result<VoiceCloneSynthesisResult, Error>) -> Void
     ) {
+        #if DEBUG || UI_QA_SIMULATOR
+        if QALaunchConfiguration.shared.contains("DJRunTencentBackendPCMDriveMockSmoke"),
+           outputMode == "tencentAudioDrive",
+           let mockSynthesis = makeTencentBackendPCMDriveMockSynthesis(
+               userId: userId,
+               voiceProfileId: voiceProfileId,
+               roleKey: roleKey,
+               roleSubjectId: roleSubjectId,
+               personaScope: personaScope,
+               digitalHumanId: digitalHumanId,
+               requestPurpose: requestPurpose
+           ) {
+            DispatchQueue.main.async {
+                completion(.success(mockSynthesis))
+            }
+            return
+        }
+        #endif
+
         var payload: [String: Any] = [
             "userId": userId,
             "voiceProfileId": voiceProfileId,
@@ -5724,6 +5863,18 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
         if let requestPurpose, !requestPurpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             payload["requestPurpose"] = requestPurpose
+        }
+        if let roleKey, !roleKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["roleKey"] = roleKey
+        }
+        if let roleSubjectId, !roleSubjectId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["roleSubjectId"] = roleSubjectId
+        }
+        if let personaScope, !personaScope.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["personaScope"] = personaScope
+        }
+        if let digitalHumanId, !digitalHumanId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["digitalHumanId"] = digitalHumanId
         }
         requestJSON(
             path: "/voice/synthesis",
@@ -5743,6 +5894,47 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
             }
         }
     }
+
+    #if DEBUG || UI_QA_SIMULATOR
+    private func makeTencentBackendPCMDriveMockSynthesis(
+        userId: String,
+        voiceProfileId: String,
+        roleKey: String?,
+        roleSubjectId: String?,
+        personaScope: String?,
+        digitalHumanId: String?,
+        requestPurpose: String?
+    ) -> VoiceCloneSynthesisResult? {
+        let pcmData = Data(repeating: 0x18, count: 3_200)
+        return VoiceCloneSynthesisResult(json: [
+            "voiceProfileId": voiceProfileId,
+            "providerMode": "uiqaMock",
+            "outputMode": "tencentAudioDrive",
+            "audio": [
+                "data": pcmData.base64EncodedString(),
+                "format": "pcm16kMono",
+                "byteCount": pcmData.count,
+                "sampleRate": 16_000,
+                "bitsPerSample": 16,
+                "channelCount": 1,
+                "durationSeconds": 0.1,
+            ],
+            "synthesisBinding": [
+                "schemaVersion": "voice-synthesis-binding-v1",
+                "voiceProfileId": voiceProfileId,
+                "profileVersion": 1,
+                "ownerUserId": userId,
+                "roleSubjectId": roleSubjectId ?? userId,
+                "roleKey": roleKey ?? "personalOwner",
+                "personaScope": personaScope ?? "personal",
+                "digitalHumanId": digitalHumanId ?? userId,
+                "requestPurpose": requestPurpose ?? "echo",
+                "outputMode": "tencentAudioDrive",
+                "audioOwner": "tencentDigitalHuman",
+            ],
+        ])
+    }
+    #endif
 
     func buildEchoContextPacket(
         userId: String,

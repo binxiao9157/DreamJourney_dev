@@ -222,6 +222,8 @@ if result.get("audioDataOmitted") is not True:
     raise SystemExit(f"Raw audio must be omitted: {result}")
 if result.get("outputMode") != "tencentAudioDrive":
     raise SystemExit(f"outputMode mismatch: {result}")
+if result.get("bindingVerified") is not True:
+    raise SystemExit(f"synthesis binding should match the current owner and role: {result}")
 if result.get("audioFormat") != "pcm16kMono":
     raise SystemExit(f"audioFormat mismatch: {result}")
 if int(result.get("pcmChunkCount") or 0) <= 1:
