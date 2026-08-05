@@ -31,7 +31,7 @@
 
 ## 3. 当前执行指针
 
-已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`。当前执行：`P2-S1：Publication Authority 与独立公开副本。`
+已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`、`P2-S1`。当前执行：`P2-S2：ShareGrant、Visitor 与安全回答。`
 
 完成当前 Slice 后，不停留等待，按本文件顺序进入下一个未完成 Slice。只有缺少真实 Provider、不可逆生产迁移、数据删除授权或重大产品决策时才暂停。
 
@@ -151,6 +151,8 @@
 ## 6. P2：M2 Publication / Visitor / 在世数字人闭环
 
 ### P2-S1：Publication Authority 与独立公开副本
+
+**状态**：已完成，仍为内部 QA-only 且默认关闭。后端 `main@b8c36ef` 的 `0079/0080` 已部署，生产数据库迁移账本为 `0080`；隔离 Postgres smoke 已验证 Owner fence、并发确认重放、独立公开副本不可变、直接身份信息拒绝，以及 Source/MemoryVersion/Vault 变化后的自动阻断。未携带 QA 条件的内部写路由在认证前统一返回 `404`，没有新增 Visitor 或公开读取入口。
 
 1. 在既有 `0050-0057` 上补正式 Owner API：仅可选择 active、confirmed MemoryVersion；草稿有脱敏预览、第三方提示和二次确认。
 2. 发布生成不可变 `PublicationVersion` 和独立 Public Projection；禁止从 private Projection、KBLite 或 `isPrivate=false` 快捷公开。
