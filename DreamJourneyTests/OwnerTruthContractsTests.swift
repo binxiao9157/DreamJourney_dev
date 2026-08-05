@@ -5692,6 +5692,59 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private func mediaDeletionReceipt(
+        vaultID: OwnerTruthVaultID,
+        uploadCommand: OwnerTruthMediaUploadIntentCommand,
+        sourceObjectID: OwnerTruthRecordID,
+        outcome: OwnerTruthMediaDeletionOutcome = .deletionRequested,
+        deletionStatus: OwnerTruthMediaDeletionStatus = .pending,
+        retryable: Bool = true,
+        failureCode: String? = nil
+    ) throws -> OwnerTruthMediaDeletionReceipt {
+        try OwnerTruthMediaDeletionReceipt(
+            backendJSONObject: mediaDeletionResponseJSON(
+                vaultID: vaultID,
+                uploadCommand: uploadCommand,
+                sourceObjectID: sourceObjectID,
+                outcome: outcome,
+                deletionStatus: deletionStatus,
+                retryable: retryable,
+                failureCode: failureCode
+            ),
+            expectedVaultID: vaultID,
+            expectedSourceObjectID: sourceObjectID
+        )
+    }
+
+    private func mediaDeletionResponseJSON(
+        vaultID: OwnerTruthVaultID,
+        uploadCommand: OwnerTruthMediaUploadIntentCommand,
+        sourceObjectID: OwnerTruthRecordID,
+        outcome: OwnerTruthMediaDeletionOutcome = .deletionRequested,
+        deletionStatus: OwnerTruthMediaDeletionStatus = .pending,
+        retryable: Bool = true,
+        failureCode: String? = nil
+    ) -> [String: Any] {
+        [
+            "schemaVersion": OwnerTruthMediaDeletionReceipt.schemaVersion,
+            "status": outcome.rawValue,
+            "vaultId": vaultID.rawValue,
+            "sourceObject": mediaSourceObjectJSON(
+                command: uploadCommand,
+                sourceObjectID: sourceObjectID,
+                state: .deleted,
+                processingStatus: .blocked
+            ),
+            "deletion": [
+                "accessState": OwnerTruthMediaAccessState.accessRevoked.rawValue,
+                "deletionStatus": deletionStatus.rawValue,
+                "retryable": retryable,
+                "failureCode": failureCode ?? NSNull(),
+                "updatedAt": "2026-08-05T12:00:00Z",
+            ],
+        ]
+    }
+
     private func mediaSourceObjectJSON(
         command: OwnerTruthMediaUploadIntentCommand,
         sourceObjectID: OwnerTruthRecordID,
@@ -8361,6 +8414,150 @@ final class OwnerTruthContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testRealHTTPMediaDeletionUsesRevocationOnlyContract() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let sourceObjectID = recordID("00000000-0000-0000-0000-000000000094")
+        let uploadCommand = try OwnerTruthMediaUploadIntentCommand(
+            commandID: UUID(uuidString: "00000000-0000-0000-0000-000000000095")!,
+            expectedAuthorityEpoch: 0,
+            mediaKind: .document,
+            fileName: "private-memory.txt",
+            contentType: "text/plain",
+            content: Data("private owner memory".utf8),
+            clientCreatedAt: Date(timeIntervalSince1970: 1_775_000_000)
+        )
+        let deletionCommand = try OwnerTruthMediaDeletionCommand(
+            commandID: UUID(uuidString: "00000000-0000-0000-0000-000000000096")!,
+            expectedAuthorityEpoch: 0,
+            clientRequestedAt: Date(timeIntervalSince1970: 1_775_000_100)
+        )
+        let response = try JSONSerialization.data(withJSONObject: mediaDeletionResponseJSON(
+            vaultID: vaultID,
+            uploadCommand: uploadCommand,
+            sourceObjectID: sourceObjectID
+        ))
+        let session = try makeOwnerTruthHTTPTestSession()
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: session,
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
+            loader.respond(statusCode: 202, body: response)
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        var result: Result<OwnerTruthMediaDeletionReceipt, Error>?
+        client.requestOwnerTruthMediaDeletion(
+            accountLease: lease,
+            vaultID: vaultID,
+            sourceObjectID: sourceObjectID,
+            command: deletionCommand
+        ) { result = $0 }
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { result != nil })
+        let receipt = try XCTUnwrap(result).get()
+        XCTAssertEqual(receipt.outcome, .deletionRequested)
+        XCTAssertEqual(receipt.accessState, .accessRevoked)
+        XCTAssertEqual(receipt.deletionStatus, .pending)
+        XCTAssertTrue(receipt.retryable)
+
+        let request = try XCTUnwrap(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.first)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(
+            request.url?.path,
+            "/v2/vaults/\(vaultID.rawValue)/source-objects/\(sourceObjectID.rawValue.uuidString)/deletions"
+        )
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer \(authSession.accessToken)")
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "X-DreamJourney-Feature"),
+            DJFeature.ownerMediaCaptureV1.rawValue
+        )
+        let requestData = try XCTUnwrap(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequestBodies.first ?? nil)
+        let requestPayload = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: requestData) as? [String: Any]
+        )
+        XCTAssertEqual(Set(requestPayload.keys), ["commandId", "expectedAuthorityEpoch", "clientRequestedAt"])
+        XCTAssertEqual(requestPayload["commandId"] as? String, deletionCommand.commandID.uuidString.lowercased())
+        XCTAssertNil(requestPayload["storageKey"])
+        XCTAssertNil(requestPayload["provider"])
+    }
+
+    @MainActor
+    func testRealHTTPMediaDeletionRetryUsesRevocationOnlyContract() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let sourceObjectID = recordID("00000000-0000-0000-0000-0000000000c4")
+        let uploadCommand = try OwnerTruthMediaUploadIntentCommand(
+            commandID: UUID(uuidString: "00000000-0000-0000-0000-0000000000c5")!,
+            expectedAuthorityEpoch: 0,
+            mediaKind: .document,
+            fileName: "private-retry.txt",
+            contentType: "text/plain",
+            content: Data("private owner retry".utf8),
+            clientCreatedAt: Date(timeIntervalSince1970: 1_775_000_500)
+        )
+        let deletionCommand = try OwnerTruthMediaDeletionCommand(
+            commandID: UUID(uuidString: "00000000-0000-0000-0000-0000000000c6")!,
+            expectedAuthorityEpoch: 0,
+            clientRequestedAt: Date(timeIntervalSince1970: 1_775_000_600)
+        )
+        let response = try JSONSerialization.data(withJSONObject: mediaDeletionResponseJSON(
+            vaultID: vaultID,
+            uploadCommand: uploadCommand,
+            sourceObjectID: sourceObjectID,
+            outcome: .deletionRetryRequested,
+            deletionStatus: .pending,
+            retryable: true
+        ))
+        let session = try makeOwnerTruthHTTPTestSession()
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: session,
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
+            loader.respond(statusCode: 202, body: response)
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        var result: Result<OwnerTruthMediaDeletionReceipt, Error>?
+        client.retryOwnerTruthMediaDeletion(
+            accountLease: lease,
+            vaultID: vaultID,
+            sourceObjectID: sourceObjectID,
+            command: deletionCommand
+        ) { result = $0 }
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { result != nil })
+        XCTAssertEqual(try XCTUnwrap(result).get().outcome, .deletionRetryRequested)
+        let request = try XCTUnwrap(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.first)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(
+            request.url?.path,
+            "/v2/vaults/\(vaultID.rawValue)/source-objects/\(sourceObjectID.rawValue.uuidString)/deletion-retries"
+        )
+        let requestData = try XCTUnwrap(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequestBodies.first ?? nil)
+        let requestPayload = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: requestData) as? [String: Any]
+        )
+        XCTAssertEqual(Set(requestPayload.keys), ["commandId", "expectedAuthorityEpoch", "clientRequestedAt"])
+        XCTAssertNil(requestPayload["storageKey"])
+        XCTAssertNil(requestPayload["provider"])
+    }
+
+    @MainActor
     func testRealHTTPMediaSourceObjectDropsResponseAfterAccountLeaseSwitch() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
@@ -8518,6 +8715,187 @@ final class OwnerTruthContractsTests: XCTestCase {
                 taskID: uploadReady.taskID
             )
         )
+    }
+
+    @MainActor
+    func testMediaTaskDeletionRevokesLocalRecoveryAndUsesSanitizedPresentation() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-media-delete-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let secretStore = OwnerTruthMediaUploadSecretStoreSpy()
+        let content = Data(repeating: 0x45, count: 128)
+        let uploadCommand = try OwnerTruthMediaUploadIntentCommand(
+            commandID: UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!,
+            expectedAuthorityEpoch: 0,
+            mediaKind: .document,
+            fileName: "delete-me.txt",
+            contentType: "text/plain",
+            content: content,
+            clientCreatedAt: Date(timeIntervalSince1970: 1_775_000_200)
+        )
+        let sourceObjectID = recordID("00000000-0000-0000-0000-0000000000a2")
+        let token = try XCTUnwrap(
+            OwnerTruthMediaUploadToken("one-time-owner-media-upload-token-0000a1")
+        )
+        let store = OwnerTruthMediaTaskStore(
+            rootDirectory: rootURL,
+            secretStore: secretStore,
+            accountLeaseRuntime: runtime
+        )
+        let prepared = try store.prepare(
+            accountLease: lease,
+            command: uploadCommand,
+            content: content
+        )
+        _ = try store.apply(
+            uploadIntentReceipt: try mediaUploadIntentReceipt(
+                vaultID: vaultID,
+                command: uploadCommand,
+                sourceObjectID: sourceObjectID,
+                token: token
+            ),
+            to: prepared.taskID,
+            accountLease: lease
+        )
+        XCTAssertEqual(try store.loadPendingContent(for: prepared.taskID, accountLease: lease), content)
+
+        let deletionReceipt = try mediaDeletionReceipt(
+            vaultID: vaultID,
+            uploadCommand: uploadCommand,
+            sourceObjectID: sourceObjectID
+        )
+        let client = OwnerTruthMediaCaptureClientSpy()
+        client.deletionResult = .success(deletionReceipt)
+        let coordinator = OwnerTruthMediaTaskRecoveryCoordinator(
+            store: store,
+            client: client,
+            accountLeaseRuntime: runtime
+        )
+        var result: Result<Void, Error>?
+        coordinator.requestDeletion(
+            taskID: prepared.taskID,
+            accountLease: lease,
+            command: try OwnerTruthMediaDeletionCommand(
+                commandID: UUID(uuidString: "00000000-0000-0000-0000-0000000000a3")!,
+                expectedAuthorityEpoch: 0,
+                clientRequestedAt: Date(timeIntervalSince1970: 1_775_000_300)
+            )
+        ) { result = $0 }
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { result != nil })
+        XCTAssertNoThrow(try XCTUnwrap(result).get())
+        XCTAssertEqual(client.deletionRequests, [sourceObjectID])
+        let deleted = try XCTUnwrap(try store.recoverableTasks(for: lease).first)
+        XCTAssertEqual(deleted.phase, .deleted)
+        XCTAssertEqual(deleted.mediaAccessState, .accessRevoked)
+        XCTAssertEqual(deleted.deletionStatus, .pending)
+        XCTAssertEqual(deleted.deletionRetryable, true)
+        XCTAssertThrowsError(try store.loadPendingContent(for: prepared.taskID, accountLease: lease))
+        XCTAssertNil(try secretStore.load(scopeDigest: deleted.scopeDigest, taskID: deleted.taskID))
+
+        let presentation = OwnerTruthMediaTaskPresentation(receipt: deleted)
+        XCTAssertEqual(presentation.stateTitle, "访问已撤销")
+        XCTAssertEqual(presentation.detail, "该文件已停止读取和处理，删除会由服务端继续完成。")
+        XCTAssertNil(presentation.retryAction)
+
+        let restartedStore = OwnerTruthMediaTaskStore(
+            rootDirectory: rootURL,
+            secretStore: secretStore,
+            accountLeaseRuntime: runtime
+        )
+        XCTAssertEqual(try restartedStore.recoverableTasks(for: lease), [deleted])
+        XCTAssertThrowsError(try restartedStore.loadPendingContent(for: prepared.taskID, accountLease: lease))
+    }
+
+    @MainActor
+    func testMediaTaskDeletionRetryRequeuesOnlySanitizedDeletionWork() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-media-delete-retry-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let secretStore = OwnerTruthMediaUploadSecretStoreSpy()
+        let content = Data(repeating: 0x46, count: 128)
+        let uploadCommand = try OwnerTruthMediaUploadIntentCommand(
+            commandID: UUID(uuidString: "00000000-0000-0000-0000-0000000000b1")!,
+            expectedAuthorityEpoch: 0,
+            mediaKind: .document,
+            fileName: "retry-delete.txt",
+            contentType: "text/plain",
+            content: content,
+            clientCreatedAt: Date(timeIntervalSince1970: 1_775_000_400)
+        )
+        let sourceObjectID = recordID("00000000-0000-0000-0000-0000000000b2")
+        let token = try XCTUnwrap(
+            OwnerTruthMediaUploadToken("one-time-owner-media-upload-token-0000b1")
+        )
+        let store = OwnerTruthMediaTaskStore(
+            rootDirectory: rootURL,
+            secretStore: secretStore,
+            accountLeaseRuntime: runtime
+        )
+        let prepared = try store.prepare(
+            accountLease: lease,
+            command: uploadCommand,
+            content: content
+        )
+        _ = try store.apply(
+            uploadIntentReceipt: try mediaUploadIntentReceipt(
+                vaultID: vaultID,
+                command: uploadCommand,
+                sourceObjectID: sourceObjectID,
+                token: token
+            ),
+            to: prepared.taskID,
+            accountLease: lease
+        )
+        _ = try store.apply(
+            deletionReceipt: try mediaDeletionReceipt(
+                vaultID: vaultID,
+                uploadCommand: uploadCommand,
+                sourceObjectID: sourceObjectID,
+                deletionStatus: .partial,
+                retryable: true,
+                failureCode: "objectStorageUnavailable"
+            ),
+            to: prepared.taskID,
+            accountLease: lease
+        )
+        let failedDeletion = try XCTUnwrap(try store.recoverableTasks(for: lease).first)
+        let failedPresentation = OwnerTruthMediaTaskPresentation(receipt: failedDeletion)
+        XCTAssertEqual(failedPresentation.retryAction, .retryDeletion)
+        XCTAssertEqual(failedPresentation.retryTitle, "重试删除")
+        XCTAssertThrowsError(try store.loadPendingContent(for: prepared.taskID, accountLease: lease))
+
+        let client = OwnerTruthMediaCaptureClientSpy()
+        client.deletionRetryResult = .success(try mediaDeletionReceipt(
+            vaultID: vaultID,
+            uploadCommand: uploadCommand,
+            sourceObjectID: sourceObjectID,
+            outcome: .deletionRetryRequested,
+            deletionStatus: .pending,
+            retryable: true
+        ))
+        let coordinator = OwnerTruthMediaTaskRecoveryCoordinator(
+            store: store,
+            client: client,
+            accountLeaseRuntime: runtime
+        )
+        var result: Result<Void, Error>?
+        coordinator.retryDeletion(taskID: prepared.taskID, accountLease: lease) { result = $0 }
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { result != nil })
+        XCTAssertNoThrow(try XCTUnwrap(result).get())
+        XCTAssertEqual(client.deletionRetryRequests, [sourceObjectID])
+        let pendingDeletion = try XCTUnwrap(try store.recoverableTasks(for: lease).first)
+        XCTAssertEqual(pendingDeletion.phase, .deleted)
+        XCTAssertEqual(pendingDeletion.mediaAccessState, .accessRevoked)
+        XCTAssertEqual(pendingDeletion.deletionStatus, .pending)
+        XCTAssertEqual(pendingDeletion.deletionRetryable, true)
+        XCTAssertNil(OwnerTruthMediaTaskPresentation(receipt: pendingDeletion).retryAction)
+        XCTAssertThrowsError(try store.loadPendingContent(for: prepared.taskID, accountLease: lease))
     }
 
     @MainActor
@@ -9502,10 +9880,14 @@ private final class OwnerTruthMediaCaptureClientSpy: OwnerTruthMediaCaptureClien
     var uploadResult: Result<OwnerTruthMediaSourceObjectResponse, Error>?
     var fetchResult: Result<OwnerTruthMediaSourceObjectResponse, Error>?
     var retryResult: Result<OwnerTruthMediaSourceObjectResponse, Error>?
+    var deletionResult: Result<OwnerTruthMediaDeletionReceipt, Error>?
+    var deletionRetryResult: Result<OwnerTruthMediaDeletionReceipt, Error>?
 
     private(set) var uploadRequests: [(OwnerTruthRecordID, Data)] = []
     private(set) var fetchRequests: [OwnerTruthRecordID] = []
     private(set) var retryRequests: [OwnerTruthRecordID] = []
+    private(set) var deletionRequests: [OwnerTruthRecordID] = []
+    private(set) var deletionRetryRequests: [OwnerTruthRecordID] = []
 
     func createOwnerTruthMediaUploadIntent(
         accountLease: AccountLease,
@@ -9547,6 +9929,28 @@ private final class OwnerTruthMediaCaptureClientSpy: OwnerTruthMediaCaptureClien
     ) {
         retryRequests.append(sourceObjectID)
         completion(retryResult ?? .failure(OwnerTruthMediaCaptureClientSpyError.missingResult))
+    }
+
+    func requestOwnerTruthMediaDeletion(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sourceObjectID: OwnerTruthRecordID,
+        command: OwnerTruthMediaDeletionCommand,
+        completion: @escaping (Result<OwnerTruthMediaDeletionReceipt, Error>) -> Void
+    ) {
+        deletionRequests.append(sourceObjectID)
+        completion(deletionResult ?? .failure(OwnerTruthMediaCaptureClientSpyError.missingResult))
+    }
+
+    func retryOwnerTruthMediaDeletion(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sourceObjectID: OwnerTruthRecordID,
+        command: OwnerTruthMediaDeletionCommand,
+        completion: @escaping (Result<OwnerTruthMediaDeletionReceipt, Error>) -> Void
+    ) {
+        deletionRetryRequests.append(sourceObjectID)
+        completion(deletionRetryResult ?? .failure(OwnerTruthMediaCaptureClientSpyError.missingResult))
     }
 }
 

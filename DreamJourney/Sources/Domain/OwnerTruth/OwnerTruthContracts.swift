@@ -1027,6 +1027,25 @@ enum OwnerTruthMediaSourceObjectResponseStatus: String, Equatable, Sendable {
     case processingRequested
 }
 
+enum OwnerTruthMediaAccessState: String, Codable, Equatable, Sendable {
+    case available
+    case accessRevoked
+}
+
+enum OwnerTruthMediaDeletionStatus: String, Codable, Equatable, Sendable {
+    case notRequested
+    case pending
+    case partial
+    case unsupported
+    case completed
+}
+
+enum OwnerTruthMediaDeletionOutcome: String, Equatable, Sendable {
+    case deletionRequested
+    case deletionRetryRequested
+    case deletionDeduplicated
+}
+
 /// One-time bearer secret returned only when an upload intent is first
 /// created. It deliberately is not Codable so a generic receipt cache cannot
 /// persist it accidentally.
@@ -1162,6 +1181,37 @@ struct OwnerTruthMediaUploadIntentCommand: Equatable, Sendable {
 
     private static func isValidPurpose(_ value: String) -> Bool {
         value.range(of: "^[A-Za-z][A-Za-z0-9._-]{0,79}$", options: .regularExpression) != nil
+    }
+}
+
+/// Idempotent owner command for revocation-first private-media deletion.
+/// It intentionally carries no storage key, provider identifier or delete mode.
+struct OwnerTruthMediaDeletionCommand: Equatable, Sendable {
+    let commandID: UUID
+    let expectedAuthorityEpoch: Int
+    let clientRequestedAt: Date
+
+    init(
+        commandID: UUID = UUID(),
+        expectedAuthorityEpoch: Int,
+        clientRequestedAt: Date = Date()
+    ) throws {
+        guard expectedAuthorityEpoch >= 0 else {
+            throw OwnerTruthRemoteContractError.invalidMediaCapture(
+                "media deletion requires a non-negative authority epoch"
+            )
+        }
+        self.commandID = commandID
+        self.expectedAuthorityEpoch = expectedAuthorityEpoch
+        self.clientRequestedAt = clientRequestedAt
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "commandId": commandID.uuidString.lowercased(),
+            "expectedAuthorityEpoch": expectedAuthorityEpoch,
+            "clientRequestedAt": OwnerTruthMediaCaptureContract.iso8601String(clientRequestedAt),
+        ]
     }
 }
 
@@ -1375,6 +1425,74 @@ struct OwnerTruthMediaSourceObjectResponse: Equatable, Sendable {
     }
 }
 
+/// Value-minimized receipt for an accepted SourceObject deletion. `pending`
+/// means access has already been revoked while server-owned physical cleanup is
+/// still outstanding; it never means the client may retry processing or read
+/// the object again.
+struct OwnerTruthMediaDeletionReceipt: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-media-deletion-response-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let outcome: OwnerTruthMediaDeletionOutcome
+    let sourceObject: OwnerTruthMediaSourceObjectReceipt
+    let accessState: OwnerTruthMediaAccessState
+    let deletionStatus: OwnerTruthMediaDeletionStatus
+    let retryable: Bool
+    let failureCode: String?
+    let updatedAt: Date
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID,
+        expectedSourceObjectID: OwnerTruthRecordID
+    ) throws {
+        guard Set(object.keys) == [
+            "schemaVersion", "status", "vaultId", "sourceObject", "deletion",
+        ],
+        OwnerTruthMediaCaptureContract.requiredString(object["schemaVersion"]) == Self.schemaVersion,
+        OwnerTruthMediaCaptureContract.requiredString(object["vaultId"]) == expectedVaultID.rawValue,
+        let outcomeRaw = OwnerTruthMediaCaptureContract.requiredString(object["status"]),
+        let outcome = OwnerTruthMediaDeletionOutcome(rawValue: outcomeRaw),
+        let sourceObjectJSON = object["sourceObject"] as? [String: Any],
+        let deletionJSON = object["deletion"] as? [String: Any],
+        Set(deletionJSON.keys) == OwnerTruthMediaCaptureContract.deletionReceiptKeys,
+        let accessStateRaw = OwnerTruthMediaCaptureContract.requiredString(deletionJSON["accessState"]),
+        let accessState = OwnerTruthMediaAccessState(rawValue: accessStateRaw),
+        let deletionStatusRaw = OwnerTruthMediaCaptureContract.requiredString(deletionJSON["deletionStatus"]),
+        let deletionStatus = OwnerTruthMediaDeletionStatus(rawValue: deletionStatusRaw),
+        let retryable = OwnerTruthMediaCaptureContract.strictBool(deletionJSON["retryable"]),
+        OwnerTruthMediaCaptureContract.optionalStringIsValid(deletionJSON["failureCode"]),
+        let updatedAt = OwnerTruthMediaCaptureContract.iso8601Date(deletionJSON["updatedAt"]) else {
+            throw OwnerTruthRemoteContractError.invalidMediaCapture(
+                "media deletion receipt is invalid"
+            )
+        }
+
+        let sourceObject = try OwnerTruthMediaSourceObjectReceipt(backendJSONObject: sourceObjectJSON)
+        let failureCode = OwnerTruthMediaCaptureContract.optionalString(deletionJSON["failureCode"])
+        guard sourceObject.sourceObjectID == expectedSourceObjectID,
+              sourceObject.state == .deleted,
+              sourceObject.processingStatus == .blocked,
+              accessState == .accessRevoked,
+              deletionStatus != .notRequested,
+              !(deletionStatus == .completed && (retryable || failureCode != nil)),
+              !((deletionStatus == .partial || deletionStatus == .unsupported) && failureCode == nil) else {
+            throw OwnerTruthRemoteContractError.invalidMediaCapture(
+                "media deletion receipt is internally inconsistent"
+            )
+        }
+
+        vaultID = expectedVaultID
+        self.outcome = outcome
+        self.sourceObject = sourceObject
+        self.accessState = accessState
+        self.deletionStatus = deletionStatus
+        self.retryable = retryable
+        self.failureCode = failureCode
+        self.updatedAt = updatedAt
+    }
+}
+
 protocol OwnerTruthMediaCaptureClient: AnyObject {
     func createOwnerTruthMediaUploadIntent(
         accountLease: AccountLease,
@@ -1406,6 +1524,22 @@ protocol OwnerTruthMediaCaptureClient: AnyObject {
         sourceObjectID: OwnerTruthRecordID,
         completion: @escaping (Result<OwnerTruthMediaSourceObjectResponse, Error>) -> Void
     )
+
+    func requestOwnerTruthMediaDeletion(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sourceObjectID: OwnerTruthRecordID,
+        command: OwnerTruthMediaDeletionCommand,
+        completion: @escaping (Result<OwnerTruthMediaDeletionReceipt, Error>) -> Void
+    )
+
+    func retryOwnerTruthMediaDeletion(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sourceObjectID: OwnerTruthRecordID,
+        command: OwnerTruthMediaDeletionCommand,
+        completion: @escaping (Result<OwnerTruthMediaDeletionReceipt, Error>) -> Void
+    )
 }
 
 private enum OwnerTruthMediaCaptureContract {
@@ -1418,6 +1552,9 @@ private enum OwnerTruthMediaCaptureContract {
     static let uploadIntentKeys: Set<String> = [
         "uploadIntentId", "state", "expiresAt", "transport", "uploadMethod",
         "uploadTokenHeader", "requiresClientUpload",
+    ]
+    static let deletionReceiptKeys: Set<String> = [
+        "accessState", "deletionStatus", "retryable", "failureCode", "updatedAt",
     ]
 
     static func requiredString(_ value: Any?) -> String? {

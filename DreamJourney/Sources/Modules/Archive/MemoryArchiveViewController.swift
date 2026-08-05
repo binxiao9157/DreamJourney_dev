@@ -1196,6 +1196,22 @@ final class MemoryArchiveViewController: UIViewController {
                     self.showToast("处理暂不可用，可稍后重试", type: .error)
                 }
             }
+        case .retryDeletion:
+            showToast("正在重新请求删除", type: .info)
+            OwnerTruthMediaTaskRecoveryCoordinator.shared.retryDeletion(
+                taskID: taskID,
+                accountLease: accountLease
+            ) { [weak self] result in
+                guard let self,
+                      self.validateMediaAccountLease(accountLease, at: .ui) else { return }
+                self.refreshOwnerTruthMediaTaskStatus()
+                switch result {
+                case .success:
+                    self.showToast("已重新请求删除", type: .success)
+                case .failure:
+                    self.showToast("删除暂不可用，可稍后重试", type: .error)
+                }
+            }
         }
     }
 
@@ -1255,6 +1271,9 @@ final class MemoryArchiveViewController: UIViewController {
                 },
                 "processingRetryVisible": self.ownerTruthMediaTaskPresentations.contains {
                     $0.retryAction == .retryProcessing
+                },
+                "deletionRetryVisible": self.ownerTruthMediaTaskPresentations.contains {
+                    $0.retryAction == .retryDeletion
                 },
                 "candidateHandoffVisible": self.ownerTruthMediaTaskPresentations.contains {
                     $0.candidateHandoffAvailable

@@ -5918,6 +5918,108 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         )
     }
 
+    func requestOwnerTruthMediaDeletion(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sourceObjectID: OwnerTruthRecordID,
+        command: OwnerTruthMediaDeletionCommand,
+        completion: @escaping (Result<OwnerTruthMediaDeletionReceipt, Error>) -> Void
+    ) {
+        guard accountLease.vaultId == vaultID.rawValue else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.accountScopeChanged))
+            }
+            return
+        }
+        let decision = requestFeatureDecision(for: .ownerMediaCaptureV1)
+        guard decision.allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerMediaCaptureV1.rawValue,
+                    reason: decision.reason
+                )))
+            }
+            return
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/source-objects/\(pathComponent(sourceObjectID.rawValue.uuidString))/deletions"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthMediaDeletionReceipt(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID,
+                        expectedSourceObjectID: sourceObjectID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func retryOwnerTruthMediaDeletion(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sourceObjectID: OwnerTruthRecordID,
+        command: OwnerTruthMediaDeletionCommand,
+        completion: @escaping (Result<OwnerTruthMediaDeletionReceipt, Error>) -> Void
+    ) {
+        guard accountLease.vaultId == vaultID.rawValue else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.accountScopeChanged))
+            }
+            return
+        }
+        let decision = requestFeatureDecision(for: .ownerMediaCaptureV1)
+        guard decision.allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerMediaCaptureV1.rawValue,
+                    reason: decision.reason
+                )))
+            }
+            return
+        }
+
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/source-objects/\(pathComponent(sourceObjectID.rawValue.uuidString))/deletion-retries"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthMediaDeletionReceipt(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID,
+                        expectedSourceObjectID: sourceObjectID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     private func performOwnerTruthMediaSourceObjectRequest(
         accountLease: AccountLease,
         vaultID: OwnerTruthVaultID,

@@ -123,6 +123,59 @@ final class OwnerTruthCoreContractTests: XCTestCase {
         )
     }
 
+    func testMediaDeletionReceiptRemainsValueMinimizedAndRequiresRevokedAccess() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-media-a"))
+        let sourceObjectID = OwnerTruthRecordID(
+            rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000404")!
+        )
+        let command = try OwnerTruthMediaDeletionCommand(
+            commandID: UUID(uuidString: "00000000-0000-0000-0000-000000000407")!,
+            expectedAuthorityEpoch: 3,
+            clientRequestedAt: Date(timeIntervalSince1970: 1_775_000_100)
+        )
+        XCTAssertEqual(Set(command.backendPayload.keys), [
+            "commandId", "expectedAuthorityEpoch", "clientRequestedAt",
+        ])
+        XCTAssertNil(command.backendPayload["storageKey"])
+        XCTAssertNil(command.backendPayload["provider"])
+
+        var sourceObject = mediaSourceObjectJSON()
+        sourceObject["state"] = "deleted"
+        sourceObject["processingStatus"] = "blocked"
+        let response: [String: Any] = [
+            "schemaVersion": OwnerTruthMediaDeletionReceipt.schemaVersion,
+            "status": OwnerTruthMediaDeletionOutcome.deletionRequested.rawValue,
+            "vaultId": vaultID.rawValue,
+            "sourceObject": sourceObject,
+            "deletion": [
+                "accessState": OwnerTruthMediaAccessState.accessRevoked.rawValue,
+                "deletionStatus": OwnerTruthMediaDeletionStatus.pending.rawValue,
+                "retryable": true,
+                "failureCode": NSNull(),
+                "updatedAt": "2026-08-05T12:00:00Z",
+            ],
+        ]
+
+        let receipt = try OwnerTruthMediaDeletionReceipt(
+            backendJSONObject: response,
+            expectedVaultID: vaultID,
+            expectedSourceObjectID: sourceObjectID
+        )
+        XCTAssertEqual(receipt.accessState, .accessRevoked)
+        XCTAssertEqual(receipt.deletionStatus, .pending)
+        XCTAssertTrue(receipt.retryable)
+
+        var unsafe = response
+        unsafe["providerReceipt"] = "must-not-cross-client-boundary"
+        XCTAssertThrowsError(
+            try OwnerTruthMediaDeletionReceipt(
+                backendJSONObject: unsafe,
+                expectedVaultID: vaultID,
+                expectedSourceObjectID: sourceObjectID
+            )
+        )
+    }
+
     func testCompatibilityRuntimeAcceptsAnInjectedCoreClient() {
         let runtime = OwnerTruthKBLiteCompatibilityProjectionRuntime(
             client: CoreKBLiteCompatibilityClient(),

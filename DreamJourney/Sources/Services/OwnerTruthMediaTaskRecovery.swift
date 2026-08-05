@@ -123,6 +123,11 @@ struct OwnerTruthMediaTaskReceipt: Codable, Equatable, Sendable {
     var sourceObjectID: UUID?
     var sourceObjectState: OwnerTruthMediaSourceObjectState?
     var processingStatus: OwnerTruthMediaProcessingStatus?
+    /// Sanitized server deletion state. It carries no storage or Provider data.
+    var mediaAccessState: OwnerTruthMediaAccessState?
+    var deletionStatus: OwnerTruthMediaDeletionStatus?
+    var deletionRetryable: Bool?
+    var deletionFailureCode: String?
     /// The derived private Source is persisted only to continue the in-app
     /// Candidate handoff after a restart. It is never rendered to the user.
     var derivedSourceID: UUID?
@@ -158,6 +163,10 @@ struct OwnerTruthMediaTaskReceipt: Codable, Equatable, Sendable {
         sourceObjectID = nil
         sourceObjectState = nil
         processingStatus = nil
+        mediaAccessState = nil
+        deletionStatus = nil
+        deletionRetryable = nil
+        deletionFailureCode = nil
         derivedSourceID = nil
         retryable = false
         failureCode = nil
@@ -184,6 +193,7 @@ struct OwnerTruthMediaTaskReceipt: Codable, Equatable, Sendable {
 enum OwnerTruthMediaTaskRetryAction: String, Equatable, Sendable {
     case resumeUpload
     case retryProcessing
+    case retryDeletion
 }
 
 enum OwnerTruthMediaTaskPresentationTone: String, Equatable, Sendable {
@@ -220,6 +230,8 @@ struct OwnerTruthMediaTaskPresentation: Equatable, Sendable {
             phase: receipt.phase,
             allowExternalProcessing: receipt.allowExternalProcessing,
             sourceObjectID: receipt.sourceObjectID,
+            deletionStatus: receipt.deletionStatus,
+            deletionRetryable: receipt.deletionRetryable,
             hasCandidateHandoffSource: receipt.derivedSourceID != nil,
             updatedAt: receipt.updatedAt
         )
@@ -232,6 +244,8 @@ struct OwnerTruthMediaTaskPresentation: Equatable, Sendable {
         phase: OwnerTruthMediaTaskPhase,
         allowExternalProcessing: Bool,
         sourceObjectID: UUID? = nil,
+        deletionStatus: OwnerTruthMediaDeletionStatus? = nil,
+        deletionRetryable: Bool? = nil,
         hasCandidateHandoffSource: Bool = false,
         updatedAt: Date = Date()
     ) {
@@ -301,11 +315,44 @@ struct OwnerTruthMediaTaskPresentation: Equatable, Sendable {
             retryAction = nil
             retryTitle = nil
         case .deleted:
-            stateTitle = "已删除"
-            detail = "该文件已不再提供读取或处理。"
-            tone = .neutral
-            retryAction = nil
-            retryTitle = nil
+            switch deletionStatus {
+            case .pending:
+                stateTitle = "访问已撤销"
+                detail = deletionRetryable == true
+                    ? "该文件已停止读取和处理，删除会由服务端继续完成。"
+                    : "该文件已停止读取和处理，正在完成删除。"
+                tone = .neutral
+                retryAction = nil
+                retryTitle = nil
+            case .partial:
+                stateTitle = "访问已撤销"
+                detail = deletionRetryable == true
+                    ? "该文件已停止读取和处理，可重新请求完成删除。"
+                    : "该文件已停止读取和处理，部分删除步骤将由服务端继续完成。"
+                tone = deletionRetryable == true ? .failure : .warning
+                retryAction = deletionRetryable == true ? .retryDeletion : nil
+                retryTitle = deletionRetryable == true ? "重试删除" : nil
+            case .unsupported:
+                stateTitle = "访问已撤销"
+                detail = deletionRetryable == true
+                    ? "该文件已停止读取和处理，存储服务暂不可用，可稍后重试删除。"
+                    : "该文件已停止读取和处理，当前存储服务暂不支持完成删除。"
+                tone = deletionRetryable == true ? .failure : .warning
+                retryAction = deletionRetryable == true ? .retryDeletion : nil
+                retryTitle = deletionRetryable == true ? "重试删除" : nil
+            case .completed:
+                stateTitle = "已删除"
+                detail = "该文件已停止读取和处理，删除已完成。"
+                tone = .neutral
+                retryAction = nil
+                retryTitle = nil
+            case .notRequested, .none:
+                stateTitle = "已删除"
+                detail = "该文件已不再提供读取或处理。"
+                tone = .neutral
+                retryAction = nil
+                retryTitle = nil
+            }
         }
 
         candidateHandoffAvailable = phase == .processed && hasCandidateHandoffSource
@@ -528,6 +575,48 @@ final class OwnerTruthMediaTaskStore: @unchecked Sendable {
         if source.state != .uploadPending {
             try clearPendingArtifacts(for: receipt)
         }
+        return receipt
+    }
+
+    func apply(
+        deletionReceipt response: OwnerTruthMediaDeletionReceipt,
+        to taskID: UUID,
+        accountLease: AccountLease
+    ) throws -> OwnerTruthMediaTaskReceipt {
+        lock.lock()
+        defer { lock.unlock() }
+        try validateActiveLease(accountLease, at: .request)
+        let scopeDigest = try Self.scopeDigest(for: accountLease)
+        var receipt = try loadReceipt(
+            taskID: taskID,
+            scopeDigest: scopeDigest,
+            accountLease: accountLease,
+            allowLeaseRebind: true
+        )
+        let source = response.sourceObject
+        guard response.vaultID.rawValue == accountLease.vaultId,
+              receipt.sourceObjectID == nil || receipt.sourceObjectID == source.sourceObjectID.rawValue,
+              source.mediaKind == receipt.mediaKind,
+              source.contentType == receipt.contentType,
+              source.fileName == receipt.fileName,
+              source.fileSizeBytes == receipt.fileSizeBytes,
+              source.contentSHA256 == receipt.contentSHA256,
+              response.accessState == .accessRevoked else {
+            throw OwnerTruthMediaTaskStoreError.invalidReceipt
+        }
+        receipt.sourceObjectID = source.sourceObjectID.rawValue
+        apply(sourceObject: source, to: &receipt)
+        receipt.mediaAccessState = response.accessState
+        receipt.deletionStatus = response.deletionStatus
+        receipt.deletionRetryable = response.retryable
+        receipt.deletionFailureCode = response.failureCode
+        receipt.retryable = false
+        receipt.failureCode = nil
+        receipt.phase = .deleted
+        receipt.updatedAt = response.updatedAt
+        try write(receipt, to: manifestURL(scopeDigest: scopeDigest, taskID: taskID))
+        try validateActiveLease(accountLease, at: .commit)
+        try clearPendingArtifacts(for: receipt)
         return receipt
     }
 
@@ -922,6 +1011,96 @@ final class OwnerTruthMediaTaskRecoveryCoordinator: @unchecked Sendable {
                 do {
                     _ = try self.store.apply(
                         sourceObjectResponse: result.get(),
+                        to: taskID,
+                        accountLease: accountLease
+                    )
+                    self.finishRetry(.success(()), generation: generation, completion: completion)
+                } catch {
+                    self.finishRetry(.failure(error), generation: generation, completion: completion)
+                }
+            }
+        } catch {
+            finishRetry(.failure(error), generation: generation, completion: completion)
+        }
+    }
+
+    /// Accepts a revocation-first deletion command. The local task is updated
+    /// only from the server's value-minimized receipt, which clears any
+    /// pending upload content and prevents restart recovery from resuming it.
+    func requestDeletion(
+        taskID: UUID,
+        accountLease: AccountLease,
+        command: OwnerTruthMediaDeletionCommand,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let generation = beginOperation()
+        do {
+            guard accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+                  let task = try store.recoverableTasks(for: accountLease)
+                    .first(where: { $0.taskID == taskID }),
+                  let vaultID = OwnerTruthVaultID(accountLease.vaultId),
+                  let sourceObjectID = task.sourceObjectID.map({ OwnerTruthRecordID(rawValue: $0) }) else {
+                throw OwnerTruthMediaTaskStoreError.invalidReceipt
+            }
+
+            client.requestOwnerTruthMediaDeletion(
+                accountLease: accountLease,
+                vaultID: vaultID,
+                sourceObjectID: sourceObjectID,
+                command: command
+            ) { [weak self] result in
+                guard let self,
+                      self.acceptsCallback(generation, accountLease: accountLease) else { return }
+                do {
+                    _ = try self.store.apply(
+                        deletionReceipt: result.get(),
+                        to: taskID,
+                        accountLease: accountLease
+                    )
+                    self.finishRetry(.success(()), generation: generation, completion: completion)
+                } catch {
+                    self.finishRetry(.failure(error), generation: generation, completion: completion)
+                }
+            }
+        } catch {
+            finishRetry(.failure(error), generation: generation, completion: completion)
+        }
+    }
+
+    /// Replays only a provider-side deletion after the object has already
+    /// been revoked locally and on the server. It never restores bytes,
+    /// upload credentials, processing, or read access.
+    func retryDeletion(
+        taskID: UUID,
+        accountLease: AccountLease,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let generation = beginOperation()
+        do {
+            guard accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+                  let task = try store.recoverableTasks(for: accountLease)
+                    .first(where: { $0.taskID == taskID }),
+                  task.phase == .deleted,
+                  task.deletionRetryable == true,
+                  task.deletionStatus == .partial || task.deletionStatus == .unsupported,
+                  let vaultID = OwnerTruthVaultID(accountLease.vaultId),
+                  let sourceObjectID = task.sourceObjectID.map({ OwnerTruthRecordID(rawValue: $0) }) else {
+                throw OwnerTruthMediaTaskStoreError.invalidReceipt
+            }
+            let command = try OwnerTruthMediaDeletionCommand(
+                expectedAuthorityEpoch: task.expectedAuthorityEpoch
+            )
+            client.retryOwnerTruthMediaDeletion(
+                accountLease: accountLease,
+                vaultID: vaultID,
+                sourceObjectID: sourceObjectID,
+                command: command
+            ) { [weak self] result in
+                guard let self,
+                      self.acceptsCallback(generation, accountLease: accountLease) else { return }
+                do {
+                    _ = try self.store.apply(
+                        deletionReceipt: result.get(),
                         to: taskID,
                         accountLease: accountLease
                     )
