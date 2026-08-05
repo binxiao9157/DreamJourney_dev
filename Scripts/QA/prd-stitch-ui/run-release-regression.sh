@@ -77,6 +77,7 @@ RUN_ARCHIVE_HIDDEN_SHELL_SMOKE="${RUN_ARCHIVE_HIDDEN_SHELL_SMOKE:-0}"
 RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE="${RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE:-0}"
 RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE="${RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE:-0}"
 RUN_OWNER_TRUTH_CANDIDATE_PROPOSAL_REVIEW_READY_SMOKE="${RUN_OWNER_TRUTH_CANDIDATE_PROPOSAL_REVIEW_READY_SMOKE:-0}"
+RUN_PUBLICATION_LIFECYCLE_M2_UIQA_SMOKE="${RUN_PUBLICATION_LIFECYCLE_M2_UIQA_SMOKE:-0}"
 RUN_P0_PROFILE_CARE_REGRESSION="${RUN_P0_PROFILE_CARE_REGRESSION:-0}"
 RUN_PROFILE_CARE_STATE_SMOKE="${RUN_PROFILE_CARE_STATE_SMOKE:-0}"
 RUN_PROFILE_CARE_BACKEND_STATE_SMOKE="${RUN_PROFILE_CARE_BACKEND_STATE_SMOKE:-0}"
@@ -199,6 +200,7 @@ Run ID: \`$RUN_ID\`
 - P0 Archive -> Echo regression gate: \`$RUN_P0_ARCHIVE_ECHO_REGRESSION\`
 - Archive -> Echo simulator smoke: \`$RUN_SIMULATOR_SMOKE\`
 - Owner Truth review-ready focused confirmation UIQA smoke: \`$RUN_OWNER_TRUTH_CANDIDATE_PROPOSAL_REVIEW_READY_SMOKE\`
+- Publication lifecycle M2 UIQA smoke: \`$RUN_PUBLICATION_LIFECYCLE_M2_UIQA_SMOKE\`
 - Echo delayed reply notification smoke: \`$RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE\`
 - Echo trace export UIQA smoke: \`$RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE\`
 - Echo trace evidence package export UIQA smoke: \`$RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE\`
@@ -318,6 +320,7 @@ Run ID: \`$RUN_ID\`
 - Optional hidden media/time-letter shell UIQA smoke when \`RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=1\`.
 - Optional hidden media combo gate when \`RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE=1\`; this runs the hidden media detail UIQA smoke and deployed backend hidden media sync smoke under one run-id.
 - Optional archive media -> Echo context smoke when \`RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE=1\`; this verifies fake audio, pending video, and sealed/draft time-letter prompt injection rules.
+- Optional publication lifecycle M2 UIQA smoke when \`RUN_PUBLICATION_LIFECYCLE_M2_UIQA_SMOKE=1\`; this proves the default-off owner QA shell can withdraw a fixture publication only when all three QA launch gates are present, then renders the honest local receipt without adding a public release entry.
 - Media Echo context polish guard is documented in \`2026-06-19-archive-media-echo-context-polish.md\`.
 - Optional P0 Profile care regression gate when \`RUN_P0_PROFILE_CARE_REGRESSION=1\`; this forces the public local empty/stale/failed UIQA contract.
 - Optional Profile care empty/stale/failed state UIQA smoke when \`RUN_PROFILE_CARE_STATE_SMOKE=1\`.
@@ -383,6 +386,7 @@ append_report_footer() {
 - Archive hidden media/time-letter shell UIQA smoke: \`archive-hidden-shell-smoke/$RUN_ID/\`
 - Archive hidden media combo gate: \`archive-hidden-media-combo-gate/$RUN_ID/\`
 - Archive media -> Echo context smoke: \`archive-media-echo-context-smoke/$RUN_ID/\`
+- Publication lifecycle M2 UIQA smoke: \`publication-lifecycle-m2-smoke/$RUN_ID/\`
 - P0 Profile care public regression gate: \`profile-care-state-smoke/$RUN_ID/\`; the closed-pilot backend fixture is emitted separately only when explicitly enabled.
 - Profile care state UIQA smoke: \`profile-care-state-smoke/$RUN_ID/\`
 - Profile care deployed backend state UIQA smoke: \`profile-care-backend-state-smoke/$RUN_ID/\`
@@ -767,6 +771,9 @@ do
   run_step "Swift guard $guard" "$STATIC_LOG_DIR/${guard%.swift}.log" \
     swift "$SCRIPT_DIR/$guard" "$ROOT_DIR"
 done
+
+run_step "Swift guard publication lifecycle iOS scope gate" "$STATIC_LOG_DIR/publication-lifecycle-ios-scope-gate-check.log" \
+  swift "$ROOT_DIR/Scripts/QA/product-v4/publication-lifecycle-ios-scope-gate-check.swift" "$ROOT_DIR"
 
 run_step "iOS git diff --check" "$STATIC_LOG_DIR/ios-diff-check.log" \
   git diff --check
@@ -1408,6 +1415,17 @@ else
   mkdir -p "$OUTPUT_DIR/owner-truth-candidate-proposal-review-ready-smoke/$RUN_ID"
   echo "Skipped by RUN_OWNER_TRUTH_CANDIDATE_PROPOSAL_REVIEW_READY_SMOKE=0" \
     > "$OUTPUT_DIR/owner-truth-candidate-proposal-review-ready-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_PUBLICATION_LIFECYCLE_M2_UIQA_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/publication-lifecycle-m2-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataPublicationLifecycleM2Smoke" \
+  "$SCRIPT_DIR/run-publication-lifecycle-m2-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/publication-lifecycle-m2-smoke/$RUN_ID"
+  echo "Skipped by RUN_PUBLICATION_LIFECYCLE_M2_UIQA_SMOKE=0" \
+    > "$OUTPUT_DIR/publication-lifecycle-m2-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_PROFILE_CARE_STATE_SMOKE" == "1" ]]; then

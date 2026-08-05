@@ -159,6 +159,134 @@ final class PublicationManagementAccessTests: XCTestCase {
     }
 }
 
+final class PublicationLifecycleAccessTests: XCTestCase {
+    func testWithdrawReusesInMemoryCommandAfterAmbiguousFailure() throws {
+        let runtime = makeRuntime(subjectID: "owner-a", vaultID: "vault-a", generation: 4)
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-a"))
+        let publication = try makeWithdrawablePublication()
+        let client = PublicationLifecycleClientStub()
+        client.results = [
+            .failure(PublicationLifecycleAccessError.unavailable),
+            .success(makeWithdrawalReceipt(for: publication)),
+        ]
+        let useCase = PublicationLifecycleUseCase(
+            client: client,
+            accountLeaseRuntime: runtime,
+            isQAGateEnabled: { true }
+        )
+
+        let first = expectation(description: "ambiguous failure")
+        useCase.withdraw(publication: publication, accountLease: lease) { result in
+            guard case .failure = result else {
+                XCTFail("Expected first withdrawal to fail")
+                first.fulfill()
+                return
+            }
+            first.fulfill()
+        }
+        wait(for: [first], timeout: 1)
+
+        let second = expectation(description: "retry receipt")
+        useCase.withdraw(publication: publication, accountLease: lease) { result in
+            guard case let .success(receipt) = result else {
+                XCTFail("Expected idempotent retry receipt")
+                second.fulfill()
+                return
+            }
+            XCTAssertEqual(receipt.publicationID, publication.publicationID.lowercased())
+            XCTAssertEqual(receipt.publicationState, "withdrawn")
+            second.fulfill()
+        }
+        wait(for: [second], timeout: 1)
+
+        XCTAssertEqual(client.commandIDs.count, 2)
+        XCTAssertEqual(client.commandIDs.first, client.commandIDs.last)
+    }
+
+    func testWithdrawFailsClosedWithoutLifecycleQAGate() throws {
+        let runtime = makeRuntime(subjectID: "owner-a", vaultID: "vault-a", generation: 4)
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-a"))
+        let client = PublicationLifecycleClientStub()
+        let useCase = PublicationLifecycleUseCase(
+            client: client,
+            accountLeaseRuntime: runtime,
+            isQAGateEnabled: { false }
+        )
+
+        let expectation = expectation(description: "disabled")
+        useCase.withdraw(publication: try makeWithdrawablePublication(), accountLease: lease) { result in
+            guard case let .failure(error) = result else {
+                XCTFail("Expected default-off lifecycle gate")
+                expectation.fulfill()
+                return
+            }
+            XCTAssertEqual(error as? PublicationLifecycleAccessError, .disabled)
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1)
+        XCTAssertTrue(client.commandIDs.isEmpty)
+    }
+
+    private func makeRuntime(subjectID: String, vaultID: String, generation: UInt64) -> AccountLeaseRuntime {
+        let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
+        runtime.publish(session: AccountSession(
+            subjectId: subjectID,
+            vaultId: vaultID,
+            sessionId: "session-\(generation)",
+            tokenFamilyId: "family-\(generation)",
+            sessionVersion: Int(generation),
+            generation: generation,
+            generationId: UUID(),
+            state: .active,
+            activatedAt: Date()
+        ))
+        return runtime
+    }
+
+    private func makeWithdrawablePublication() throws -> PublicationManagementPublication {
+        let publicationID = UUID().uuidString.lowercased()
+        let versionID = UUID().uuidString.lowercased()
+        return try XCTUnwrap(PublicationManagementPublication(json: [
+            "publicationId": publicationID,
+            "publicationVersionId": versionID,
+            "lifecycleAuthorityEpoch": 0,
+            "publicationState": "confirmed",
+            "projectionState": "active",
+            "preview": [
+                "title": "院子里的雨声",
+                "body": "这是已确认的公开预览。",
+            ],
+            "requiresSecondConfirmation": false,
+            "thirdPartyReviewRequired": false,
+            "aiDisclosureRequired": true,
+        ]))
+    }
+
+    private func makeWithdrawalReceipt(
+        for publication: PublicationManagementPublication
+    ) -> PublicationLifecycleReceipt {
+        try! XCTUnwrap(PublicationLifecycleReceipt(json: [
+            "schemaVersion": PublicationLifecycleReceipt.schemaVersion,
+            "vaultId": "vault-a",
+            "publicationId": publication.publicationID,
+            "publicationVersionId": publication.publicationVersionID ?? UUID().uuidString.lowercased(),
+            "outcome": "withdrawn",
+            "publicationState": "withdrawn",
+            "projectionState": "withdrawn",
+            "conflictHold": false,
+            "revokedGrantCount": 1,
+            "revokedVisitorSessionCount": 1,
+            "receipt": [
+                "receiptId": UUID().uuidString.lowercased(),
+                "reasonCode": "ownerWithdrawal",
+                "accessDenyState": "completed",
+                "publicIndexCleanupState": "pending",
+                "runtimeCleanupState": "notApplicable",
+            ],
+        ]))
+    }
+}
+
 private final class PublicationManagementReaderClientStub: PublicationManagementReaderClient {
     var publicationsResult: Result<PublicationManagementPublicationList, Error>?
     var grantsResult: Result<PublicationManagementGrantList, Error>?
@@ -187,5 +315,22 @@ private final class PublicationManagementReaderClientStub: PublicationManagement
         lastGrantVaultID = vaultID
         beforeGrantCompletion?()
         completion(grantsResult ?? .failure(PublicationManagementAccessError.unavailable))
+    }
+}
+
+private final class PublicationLifecycleClientStub: PublicationLifecycleClient {
+    var results: [Result<PublicationLifecycleReceipt, Error>] = []
+    private(set) var commandIDs: [UUID] = []
+
+    func executePublicationLifecycle(
+        action: PublicationLifecycleAction,
+        vaultID: String,
+        publicationID: String,
+        command: PublicationLifecycleCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationLifecycleReceipt, Error>) -> Void
+    ) {
+        commandIDs.append(command.commandID)
+        completion(results.isEmpty ? .failure(PublicationLifecycleAccessError.unavailable) : results.removeFirst())
     }
 }

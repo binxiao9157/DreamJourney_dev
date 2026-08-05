@@ -544,6 +544,9 @@ final class FeatureGateService {
         if normalizedPath.hasPrefix("/v2/internal/owner-authority/vaults/") {
             return .publicationManagementM2
         }
+        if normalizedPath.hasPrefix("/v2/internal/publication-lifecycle/") {
+            return .publicationManagementM2
+        }
         if normalizedPath.hasPrefix("/v2/internal/publication-access/vaults/")
             && normalizedPath.hasSuffix("/grants") {
             return .publicationManagementM2
@@ -4981,7 +4984,7 @@ final class EchoDelayedReplyInboxAnswerReader {
     }
 }
 
-final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorReaderClient, PublicationManagementReaderClient {
+final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorReaderClient, PublicationManagementReaderClient, PublicationLifecycleClient {
     static let shared = DreamJourneyBackendClient()
 
     struct BackendErrorContext: Equatable {
@@ -9398,6 +9401,70 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         #endif
     }
 
+    func executePublicationLifecycle(
+        action: PublicationLifecycleAction,
+        vaultID: String,
+        publicationID: String,
+        command: PublicationLifecycleCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationLifecycleReceipt, Error>) -> Void
+    ) {
+        #if DEBUG || UI_QA_SIMULATOR
+        guard PublicationLifecycleM2QAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationLifecycleAccessError.disabled))
+            }
+            return
+        }
+        let normalizedVaultID = vaultID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedPublicationID = publicationID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedVaultID.isEmpty,
+              normalizedVaultID == accountLease.vaultId,
+              UUID(uuidString: normalizedPublicationID) != nil,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationLifecycleAccessError.accountLeaseInvalid))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/internal/publication-lifecycle/vaults/\(pathComponent(normalizedVaultID))/publications/\(pathComponent(normalizedPublicationID))/\(action.rawValue)",
+            method: .post,
+            payload: command.requestPayload(),
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            additionalHeaders: [
+                "X-DreamJourney-QA-Publication": "1",
+                "X-DreamJourney-QA-Visitor-Access": "1",
+                "X-DreamJourney-QA-Publication-Lifecycle": "1",
+            ]
+        ) { [weak self] result in
+            guard let self else { return }
+            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(PublicationLifecycleAccessError.accountLeaseInvalid))
+                return
+            }
+            switch result {
+            case .success(let object):
+                guard let receipt = PublicationLifecycleReceipt(json: object),
+                      receipt.publicationID.caseInsensitiveCompare(normalizedPublicationID) == .orderedSame,
+                      receipt.outcome == action.rawValue || receipt.outcome == "deduplicated" else {
+                    completion(.failure(PublicationLifecycleAccessError.malformedResponse))
+                    return
+                }
+                completion(.success(receipt))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+        #else
+        DispatchQueue.main.async {
+            completion(.failure(PublicationLifecycleAccessError.disabled))
+        }
+        #endif
+    }
+
     private func requestJSON(
         path: String,
         method: HTTPMethod,
@@ -9574,13 +9641,20 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                     && path.hasSuffix("/grants")
                     && additionalHeaders["X-DreamJourney-QA-Visitor-Access"] == "1"
             )
+        let isExplicitPublicationLifecycleQARequest =
+            PublicationLifecycleM2QAGate.isEnabled
+            && path.hasPrefix("/v2/internal/publication-lifecycle/vaults/")
+            && additionalHeaders["X-DreamJourney-QA-Publication"] == "1"
+            && additionalHeaders["X-DreamJourney-QA-Visitor-Access"] == "1"
+            && additionalHeaders["X-DreamJourney-QA-Publication-Lifecycle"] == "1"
         let preparedFeatureDecision: FeatureDecision?
         if let featureDecision {
             preparedFeatureDecision = revalidatedRequestFeatureDecision(featureDecision)
         } else if let gatedFeature,
                   !isExplicitOwnerTruthQARequest,
                   !isExplicitPublicationVisitorQARequest,
-                  !isExplicitPublicationManagementQARequest {
+                  !isExplicitPublicationManagementQARequest,
+                  !isExplicitPublicationLifecycleQARequest {
             preparedFeatureDecision = requestFeatureDecision(for: gatedFeature)
         } else {
             preparedFeatureDecision = nil

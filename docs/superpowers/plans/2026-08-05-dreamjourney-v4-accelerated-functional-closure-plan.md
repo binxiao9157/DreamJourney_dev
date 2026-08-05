@@ -31,7 +31,7 @@
 
 ## 3. 当前执行指针
 
-已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`、`P2-S1`、`P2-S2a`、`P2-S2b`、`P2-S3a`、`P2-S3b`。当前执行：`P2-S4：撤回、争议、删除传播。`
+已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`、`P2-S1`、`P2-S2a`、`P2-S2b`、`P2-S3a`、`P2-S3b`、`P2-S4A`、`P2-S4B`。当前执行：`P2-S4C：撤回后的异步传播与外部回执。`
 
 完成当前 Slice 后，不停留等待，按本文件顺序进入下一个未完成 Slice。只有缺少真实 Provider、不可逆生产迁移、数据删除授权或重大产品决策时才暂停。
 
@@ -185,6 +185,12 @@
 3. 每一步写可重放、可查询、脱敏的 receipt。
 
 验证：后端 API/负向策略/迁移、A/B visitor isolation、独立 projection Postgres smoke、iOS 模拟器发布/访问/撤回 UIQA、M2 default-off regression。
+
+**已完成子项 P2-S4A：后端先拒绝访问的撤回/争议执行合同。** 后端 `main@b473ed5` 已部署，迁移头为 `0082`。Owner 撤回和第三方异议会在同一事务内先撤销 ShareGrant 与 Visitor session、阻断 Public Projection，再追加可重放、脱敏的 lifecycle receipt；异议进入 `suspended/conflictHold`，不能由最后写入者覆盖。独立 Postgres smoke 已验证 A/B 隔离、幂等回放和 authority-trigger 阻断。
+
+**已完成子项 P2-S4B：iOS QA-only 撤回与 Visitor 内存失效。** 后端 `main@909fe73` 已部署，owner summary 返回用于乐观并发的 `lifecycleAuthorityEpoch`。iOS 仅在发布管理、Visitor、lifecycle 三个 QA gate 同时开启时显示撤回控件；成功后刷新为发布/预览/授权均已撤回，并保留“访问阻断已完成、公开索引清理待处理”的诚实回执。Visitor 遇到撤回/拒绝响应会清空内存 session、scope 和 projection，不能保留旧公开副本。定向 XCTest、静态 gate、模拟器 UIQA 和部署态 disposable Postgres smoke 已通过；证据见 `docs/superpowers/status/2026-08-06-publication-lifecycle-m2-withdrawal-qa.md`。
+
+**下一子项 P2-S4C：撤回后的异步传播与外部回执。** 将已持久化的 lifecycle receipt 接入现有 async effect / worker 边界，按 Public Index、缓存、数字人 session、Voice、对象存储等 effect 分域返回 `pending / partial / completed / unsupported`。不得因 outbox 受理或本地 tombstone 把外部清理写成已完成，也不得放松已完成的访问拒绝。
 
 **P2 Gate**：只形成 default-off 的内部 closed beta 功能；成年人核验、法务/隐私、Provider 成本和真机为独立外部 Gate，未关闭不得公开发布。
 

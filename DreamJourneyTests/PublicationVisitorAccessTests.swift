@@ -91,6 +91,37 @@ final class PublicationVisitorAccessTests: XCTestCase {
         XCTAssertEqual(client.answerRequestCount, 0)
     }
 
+    func testWithdrawnPublicationInvalidatesInMemoryVisitorContent() throws {
+        let runtime = makeRuntime(subjectID: "visitor-a", vaultID: "vault-a", generation: 3)
+        let scope = try makeScope(runtime: runtime)
+        let coordinator = PublicationVisitorSessionCoordinator(accountLeaseRuntime: runtime)
+        XCTAssertTrue(coordinator.activate(scope))
+        XCTAssertTrue(coordinator.accept(makeProjection(scope: scope), for: scope))
+
+        let client = PublicationVisitorReaderClientStub()
+        client.projectionResult = .failure(DreamJourneyBackendClient.ClientError.backendError(
+            statusCode: 409,
+            context: .init(code: "publicationVisitorAccessUnavailable", detail: "publication unavailable")
+        ))
+        let useCase = PublicationVisitorReadUseCase(client: client, sessionCoordinator: coordinator)
+
+        let expectation = expectation(description: "withdrawn visitor content invalidated")
+        useCase.loadProjection { result in
+            guard case let .failure(error) = result else {
+                XCTFail("Expected lifecycle access denial")
+                expectation.fulfill()
+                return
+            }
+            XCTAssertEqual(error as? PublicationVisitorAccessError, .accessRevoked)
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1)
+
+        XCTAssertFalse(coordinator.snapshot().isActive)
+        XCTAssertNil(coordinator.currentProjection())
+        XCTAssertEqual(coordinator.snapshot().invalidationReason, .accessRevoked)
+    }
+
     func testProductionGateIsFailClosedWithoutQAArgument() {
         #if DEBUG || UI_QA_SIMULATOR
         XCTAssertFalse(PublicationVisitorM2QAGate.isEnabled)

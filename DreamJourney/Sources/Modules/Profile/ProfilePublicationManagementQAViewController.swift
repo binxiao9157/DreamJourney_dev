@@ -14,13 +14,18 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
     }
 
     private let useCase: PublicationManagementReadUseCase
+    private let lifecycleUseCase: PublicationLifecycleUseCase
     private let accountLeaseProvider: () -> AccountLease?
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
     private var loadState: LoadState = .idle
+    private var lifecycleReceipts: [String: PublicationLifecycleReceipt] = [:]
+    private var lifecycleFailures: [String: String] = [:]
+    private var lifecyclePendingPublicationIDs: Set<String> = []
 
     init(
         client: PublicationManagementReaderClient = DreamJourneyBackendClient.shared,
+        lifecycleClient: PublicationLifecycleClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         accountLeaseProvider: @escaping () -> AccountLease? = {
             AccountLeaseRuntime.shared.capture(forSubjectId: UserManager.shared.currentUser?.id)
@@ -28,6 +33,10 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
     ) {
         useCase = PublicationManagementReadUseCase(
             client: client,
+            accountLeaseRuntime: accountLeaseRuntime
+        )
+        lifecycleUseCase = PublicationLifecycleUseCase(
+            client: lifecycleClient,
             accountLeaseRuntime: accountLeaseRuntime
         )
         self.accountLeaseProvider = accountLeaseProvider
@@ -64,6 +73,9 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
         if isMovingFromParent || navigationController?.isBeingDismissed == true {
             // The server response is intentionally page-memory-only.
             loadState = .idle
+            lifecycleReceipts.removeAll()
+            lifecycleFailures.removeAll()
+            lifecyclePendingPublicationIDs.removeAll()
         }
     }
 
@@ -132,6 +144,13 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
             return accessError.localizedDescription
         }
         return "发布管理暂时不可用"
+    }
+
+    private func displayLifecycleMessage(for error: Error) -> String {
+        if let accessError = error as? PublicationLifecycleAccessError {
+            return accessError.localizedDescription
+        }
+        return "发布撤回暂时不可用"
     }
 
     private func render(_ state: LoadState) {
@@ -264,7 +283,92 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
             ].compactMap { $0 }
             stack.addArrangedSubview(makePillRow(disclosures))
         }
+
+        if PublicationLifecycleM2QAGate.isEnabled,
+           publication.isWithdrawableInLifecycleQA {
+            stack.addArrangedSubview(makeWithdrawalControl(for: publication))
+        }
+        if let receipt = lifecycleReceipts[publication.publicationID] {
+            stack.addArrangedSubview(makeLifecycleReceipt(receipt))
+        }
+        if let message = lifecycleFailures[publication.publicationID] {
+            let label = makeLabel(
+                text: message,
+                font: DJDesignTokens.Font.body(13),
+                color: DJDesignTokens.Color.danger
+            )
+            label.accessibilityIdentifier = "profile-publication-management-qa-withdraw-failure"
+            stack.addArrangedSubview(label)
+        }
         return stack
+    }
+
+    private func makeWithdrawalControl(for publication: PublicationManagementPublication) -> UIView {
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 6
+
+        stack.addArrangedSubview(makeLabel(
+            text: "撤回会立即阻断现有受邀访问；外部索引与运行时清理仍由服务端后续处理。",
+            font: DJDesignTokens.Font.body(12),
+            color: DJDesignTokens.Color.textSecondary
+        ))
+
+        let button = UIButton(type: .system)
+        let isPending = lifecyclePendingPublicationIDs.contains(publication.publicationID)
+        button.setTitle(isPending ? "正在撤回" : "撤回公开预览", for: .normal)
+        button.setTitleColor(DJDesignTokens.Color.danger, for: .normal)
+        button.titleLabel?.font = DJDesignTokens.Font.label(15)
+        button.contentHorizontalAlignment = .leading
+        button.isEnabled = !isPending
+        button.accessibilityIdentifier = "profile-publication-management-qa-withdraw"
+        button.addAction(UIAction { [weak self] _ in
+            self?.withdraw(publication)
+        }, for: .touchUpInside)
+        stack.addArrangedSubview(button)
+        return stack
+    }
+
+    private func makeLifecycleReceipt(_ receipt: PublicationLifecycleReceipt) -> UIView {
+        let label = makeLabel(
+            text: "已撤回：访问阻断已完成；公开索引清理待处理。",
+            font: DJDesignTokens.Font.body(13),
+            color: DJDesignTokens.Color.textSecondary
+        )
+        label.accessibilityIdentifier = "profile-publication-management-qa-withdraw-receipt"
+        label.accessibilityValue = receipt.receiptID
+        return label
+    }
+
+    private func withdraw(_ publication: PublicationManagementPublication) {
+        guard PublicationLifecycleM2QAGate.isEnabled,
+              !lifecyclePendingPublicationIDs.contains(publication.publicationID),
+              let accountLease = accountLeaseProvider() else {
+            return
+        }
+
+        lifecycleFailures.removeValue(forKey: publication.publicationID)
+        lifecyclePendingPublicationIDs.insert(publication.publicationID)
+        if case let .loaded(snapshot) = loadState {
+            render(.loaded(snapshot))
+        }
+
+        lifecycleUseCase.withdraw(publication: publication, accountLease: accountLease) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.lifecyclePendingPublicationIDs.remove(publication.publicationID)
+                switch result {
+                case .success(let receipt):
+                    self.lifecycleReceipts[publication.publicationID] = receipt
+                    self.reload()
+                case .failure(let error):
+                    self.lifecycleFailures[publication.publicationID] = self.displayLifecycleMessage(for: error)
+                    if case let .loaded(snapshot) = self.loadState {
+                        self.render(.loaded(snapshot))
+                    }
+                }
+            }
+        }
     }
 
     private func makeGrantRow(_ grant: PublicationManagementGrant) -> UIView {
@@ -272,6 +376,7 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
         stack.axis = .vertical
         stack.spacing = 7
         stack.accessibilityIdentifier = "profile-publication-management-qa-grant-row"
+        stack.accessibilityValue = "\(grant.state):\(grant.useRemaining)"
 
         let state = grant.isUsable ? "有效" : displayState(grant.state)
         stack.addArrangedSubview(makeLabel(
@@ -414,6 +519,10 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
             return "草稿"
         case "revoked":
             return "已撤回"
+        case "withdrawn":
+            return "已撤回"
+        case "suspended":
+            return "已冻结"
         case "expired":
             return "已过期"
         default:

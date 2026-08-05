@@ -365,6 +365,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runProfileFamilyPersonaReleaseSmoke() }
         case .publicationManagementM2Smoke:
             scheduleUIQAScenario(scenario) { $0.runPublicationManagementM2Smoke() }
+        case .publicationLifecycleM2Smoke:
+            scheduleUIQAScenario(scenario) { $0.runPublicationLifecycleM2Smoke() }
         case .globalPrivateStoreRetirementSmoke:
             scheduleUIQAScenario(scenario) { _ in
                 ProductV4GlobalPrivateStoreRetirementUIQASmoke.runAndPresent()
@@ -1652,6 +1654,119 @@ private extension AppDelegate {
         )
     }
 
+    func runPublicationLifecycleM2Smoke() {
+        let managementGateEnabled = PublicationManagementM2QAGate.isEnabled
+        let visitorGateEnabled = PublicationVisitorM2QAGate.isEnabled
+        let lifecycleGateEnabled = PublicationLifecycleM2QAGate.isEnabled
+        let featureFlagDefaultOff = !FeatureFlagService.shared.isEnabled(.publicationManagementM2)
+        guard let profileNavigationController = profileNavigationControllerForPublicationManagementSmoke() else {
+            writePublicationLifecycleM2SmokeResult(
+                completed: false,
+                managementGateEnabled: managementGateEnabled,
+                visitorGateEnabled: visitorGateEnabled,
+                lifecycleGateEnabled: lifecycleGateEnabled,
+                featureFlagDefaultOff: featureFlagDefaultOff,
+                profileEntryVisible: false,
+                withdrawButtonRendered: false,
+                receiptRendered: false,
+                grantRevokedRendered: false,
+                fixtureWithdrawalObserved: false,
+                failureReason: "profileNavigationUnavailable"
+            )
+            return
+        }
+
+        profileNavigationController.topViewController?.loadViewIfNeeded()
+        let profileEntryVisible = containsUIQAAccessibilityIdentifier(
+            "profile-publication-management-qa-entry",
+            in: profileNavigationController.topViewController?.view
+        )
+        let runtime = AccountLeaseRuntime(authorityEpoch: "uiqa-publication-lifecycle-v1")
+        runtime.publish(session: AccountSession(
+            subjectId: "uiqa-publication-owner",
+            vaultId: "uiqa-publication-vault",
+            sessionId: "uiqa-publication-lifecycle-session",
+            tokenFamilyId: "uiqa-publication-lifecycle-family",
+            sessionVersion: 1,
+            generation: 1,
+            generationId: UUID(),
+            state: .active,
+            activatedAt: Date()
+        ))
+        let accountLease = runtime.capture(forSubjectId: "uiqa-publication-owner")
+        let fixtureClient = PublicationManagementM2UIQAFixtureClient()
+        let shell = ProfilePublicationManagementQAViewController(
+            client: fixtureClient,
+            lifecycleClient: fixtureClient,
+            accountLeaseRuntime: runtime,
+            accountLeaseProvider: { accountLease }
+        )
+        profileNavigationController.pushViewController(shell, animated: false)
+        shell.loadViewIfNeeded()
+
+        guard let withdrawButton = firstUIQAView(
+            withAccessibilityIdentifier: "profile-publication-management-qa-withdraw",
+            in: shell.view
+        ) as? UIButton else {
+            writePublicationLifecycleM2SmokeResult(
+                completed: false,
+                managementGateEnabled: managementGateEnabled,
+                visitorGateEnabled: visitorGateEnabled,
+                lifecycleGateEnabled: lifecycleGateEnabled,
+                featureFlagDefaultOff: featureFlagDefaultOff,
+                profileEntryVisible: profileEntryVisible,
+                withdrawButtonRendered: false,
+                receiptRendered: false,
+                grantRevokedRendered: false,
+                fixtureWithdrawalObserved: fixtureClient.withdrawalObserved,
+                failureReason: "withdrawButtonUnavailable"
+            )
+            return
+        }
+
+        withdrawButton.sendActions(for: .touchUpInside)
+        DispatchQueue.main.async { [weak self, weak shell, weak fixtureClient] in
+            guard let self, let shell, let fixtureClient else { return }
+            let receiptRendered = self.containsUIQAAccessibilityIdentifier(
+                "profile-publication-management-qa-withdraw-receipt",
+                in: shell.view
+            )
+            let grantRevokedRendered = self.firstUIQAView(
+                withAccessibilityIdentifier: "profile-publication-management-qa-grant-row",
+                in: shell.view
+            )?.accessibilityValue == "revoked:0"
+            let completed = managementGateEnabled
+                && visitorGateEnabled
+                && lifecycleGateEnabled
+                && featureFlagDefaultOff
+                && profileEntryVisible
+                && receiptRendered
+                && grantRevokedRendered
+                && fixtureClient.withdrawalObserved
+                && fixtureClient.publicationState == "withdrawn"
+                && fixtureClient.projectionState == "withdrawn"
+            self.writePublicationLifecycleM2SmokeResult(
+                completed: completed,
+                managementGateEnabled: managementGateEnabled,
+                visitorGateEnabled: visitorGateEnabled,
+                lifecycleGateEnabled: lifecycleGateEnabled,
+                featureFlagDefaultOff: featureFlagDefaultOff,
+                profileEntryVisible: profileEntryVisible,
+                withdrawButtonRendered: true,
+                receiptRendered: receiptRendered,
+                grantRevokedRendered: grantRevokedRendered,
+                fixtureWithdrawalObserved: fixtureClient.withdrawalObserved,
+                failureReason: completed ? nil : "publicationLifecycleM2SurfaceMismatch"
+            )
+            print(
+                "[UI_QA] PublicationLifecycleM2Smoke completed " +
+                    "lifecycleGateEnabled=\(lifecycleGateEnabled) " +
+                    "receiptRendered=\(receiptRendered) " +
+                    "grantRevokedRendered=\(grantRevokedRendered)"
+            )
+        }
+    }
+
     func profileNavigationControllerForPublicationManagementSmoke() -> UINavigationController? {
         guard let tabBarController = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
@@ -1677,6 +1792,22 @@ private extension AppDelegate {
         return view.subviews.contains { child in
             containsUIQAAccessibilityIdentifier(identifier, in: child)
         }
+    }
+
+    func firstUIQAView(
+        withAccessibilityIdentifier identifier: String,
+        in view: UIView?
+    ) -> UIView? {
+        guard let view else { return nil }
+        if view.accessibilityIdentifier == identifier {
+            return view
+        }
+        for child in view.subviews {
+            if let match = firstUIQAView(withAccessibilityIdentifier: identifier, in: child) {
+                return match
+            }
+        }
+        return nil
     }
 
     func makeProfileFamilyVoiceBackendDerivedFamilyMember() -> FamilyMember? {
@@ -5543,6 +5674,44 @@ private extension AppDelegate {
         )
     }
 
+    func writePublicationLifecycleM2SmokeResult(
+        completed: Bool,
+        managementGateEnabled: Bool,
+        visitorGateEnabled: Bool,
+        lifecycleGateEnabled: Bool,
+        featureFlagDefaultOff: Bool,
+        profileEntryVisible: Bool,
+        withdrawButtonRendered: Bool,
+        receiptRendered: Bool,
+        grantRevokedRendered: Bool,
+        fixtureWithdrawalObserved: Bool,
+        failureReason: String?
+    ) {
+        var result: [String: Any] = [
+            "completed": completed,
+            "managementGateEnabled": managementGateEnabled,
+            "visitorGateEnabled": visitorGateEnabled,
+            "lifecycleGateEnabled": lifecycleGateEnabled,
+            "featureFlagDefaultOff": featureFlagDefaultOff,
+            "profileEntryVisible": profileEntryVisible,
+            "withdrawButtonRendered": withdrawButtonRendered,
+            "receiptRendered": receiptRendered,
+            "grantRevokedRendered": grantRevokedRendered,
+            "fixtureWithdrawalObserved": fixtureWithdrawalObserved,
+            "managementLaunchArgument": PublicationManagementM2QAGate.launchArgument,
+            "visitorLaunchArgument": PublicationVisitorM2QAGate.launchArgument,
+            "lifecycleLaunchArgument": PublicationLifecycleM2QAGate.launchArgument,
+        ]
+        if let failureReason {
+            result["failureReason"] = failureReason
+        }
+        QAProfileScenarioRunner.writeResult(
+            result,
+            fileName: "publication-lifecycle-m2-smoke-result.json",
+            smokeName: "PublicationLifecycleM2Smoke"
+        )
+    }
+
     func writeArchiveMediaEntriesSmokeResult(
         completed: Bool,
         releaseOptionTitles: [String],
@@ -5978,7 +6147,15 @@ private extension AppDelegate {
     }
 }
 
-private final class PublicationManagementM2UIQAFixtureClient: PublicationManagementReaderClient {
+private final class PublicationManagementM2UIQAFixtureClient: PublicationManagementReaderClient, PublicationLifecycleClient {
+    private let publicationID = "61111111-1111-4111-8111-111111111111"
+    private let publicationVersionID = "62222222-2222-4222-8222-222222222222"
+    fileprivate private(set) var publicationState = "confirmed"
+    fileprivate private(set) var projectionState = "active"
+    private var grantState = "active"
+    private var grantUseRemaining = 2
+    fileprivate private(set) var withdrawalObserved = false
+
     func fetchOwnerPublications(
         vaultID: String,
         accountLease: AccountLease,
@@ -5990,10 +6167,11 @@ private final class PublicationManagementM2UIQAFixtureClient: PublicationManagem
                 "schemaVersion": PublicationManagementPublicationList.schemaVersion,
                 "vaultId": vaultID,
                 "publications": [[
-                    "publicationId": "uiqa-publication-1",
-                    "publicationVersionId": "uiqa-publication-version-1",
-                    "publicationState": "confirmed",
-                    "projectionState": "active",
+                    "publicationId": publicationID,
+                    "publicationVersionId": publicationVersionID,
+                    "lifecycleAuthorityEpoch": 0,
+                    "publicationState": publicationState,
+                    "projectionState": projectionState,
                     "preview": [
                         "title": "雨后的院子",
                         "body": "这是已脱敏的公开预览，仅用于内部界面验证。",
@@ -6021,17 +6199,65 @@ private final class PublicationManagementM2UIQAFixtureClient: PublicationManagem
                 "vaultId": vaultID,
                 "grants": [[
                     "grantId": "uiqa-grant-1",
-                    "publicationId": "uiqa-publication-1",
-                    "publicationVersionId": "uiqa-publication-version-1",
-                    "state": "active",
+                    "publicationId": publicationID,
+                    "publicationVersionId": publicationVersionID,
+                    "state": grantState,
                     "expiresAt": ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600)),
-                    "useRemaining": 2,
+                    "useRemaining": grantUseRemaining,
                 ]],
               ]) else {
             completion(.failure(PublicationManagementAccessError.unavailable))
             return
         }
         completion(.success(response))
+    }
+
+    func executePublicationLifecycle(
+        action: PublicationLifecycleAction,
+        vaultID: String,
+        publicationID: String,
+        command: PublicationLifecycleCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationLifecycleReceipt, Error>) -> Void
+    ) {
+        guard action == .withdraw,
+              vaultID == "uiqa-publication-vault",
+              publicationID == self.publicationID,
+              accountLease.subjectId == "uiqa-publication-owner",
+              command.expectedAuthorityEpoch == 0,
+              publicationState == "confirmed",
+              projectionState == "active" else {
+            completion(.failure(PublicationLifecycleAccessError.unavailable))
+            return
+        }
+        publicationState = "withdrawn"
+        projectionState = "withdrawn"
+        grantState = "revoked"
+        grantUseRemaining = 0
+        withdrawalObserved = true
+        guard let receipt = PublicationLifecycleReceipt(json: [
+            "schemaVersion": PublicationLifecycleReceipt.schemaVersion,
+            "vaultId": vaultID,
+            "publicationId": self.publicationID,
+            "publicationVersionId": publicationVersionID,
+            "outcome": "withdrawn",
+            "publicationState": publicationState,
+            "projectionState": projectionState,
+            "conflictHold": false,
+            "revokedGrantCount": 1,
+            "revokedVisitorSessionCount": 1,
+            "receipt": [
+                "receiptId": "63333333-3333-4333-8333-333333333333",
+                "reasonCode": "ownerWithdrawal",
+                "accessDenyState": "completed",
+                "publicIndexCleanupState": "pending",
+                "runtimeCleanupState": "notApplicable",
+            ],
+        ]) else {
+            completion(.failure(PublicationLifecycleAccessError.malformedResponse))
+            return
+        }
+        completion(.success(receipt))
     }
 }
 #endif

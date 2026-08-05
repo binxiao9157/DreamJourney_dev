@@ -105,6 +105,7 @@ enum QALaunchScenario: String, CaseIterable {
     case profileCareEscalationBoundarySmoke = "DJRunProfileCareEscalationBoundarySmoke"
     case profileFamilyPersonaReleaseSmoke = "DJRunProfileFamilyPersonaReleaseSmoke"
     case publicationManagementM2Smoke = "DJRunPublicationManagementM2Smoke"
+    case publicationLifecycleM2Smoke = "DJRunPublicationLifecycleM2Smoke"
     case globalPrivateStoreRetirementSmoke = "DJRunGlobalPrivateStoreRetirementSmoke"
     case archiveMediaEntriesSmoke = "DJRunArchiveMediaEntriesSmoke"
     case archiveAudioLifecycleSmoke = "DJRunArchiveAudioLifecycleSmoke"
@@ -166,6 +167,7 @@ enum QALaunchScenario: String, CaseIterable {
         .profileCareEscalationBoundarySmoke,
         .profileFamilyPersonaReleaseSmoke,
         .publicationManagementM2Smoke,
+        .publicationLifecycleM2Smoke,
         .globalPrivateStoreRetirementSmoke,
         .archiveMediaEntriesSmoke,
         .archiveAudioLifecycleSmoke,
@@ -232,6 +234,7 @@ enum QALaunchScenario: String, CaseIterable {
              .profileCareStateSmoke,
              .profileFamilyPersonaReleaseSmoke,
              .publicationManagementM2Smoke,
+             .publicationLifecycleM2Smoke,
              .archiveMediaEntriesSmoke,
              .archiveAudioLifecycleSmoke,
              .archiveHiddenShellSmoke,

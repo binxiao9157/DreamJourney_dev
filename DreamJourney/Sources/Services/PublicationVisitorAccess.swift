@@ -24,6 +24,7 @@ enum PublicationVisitorAccessError: LocalizedError, Equatable {
     case accountLeaseInvalid
     case malformedResponse
     case responseScopeMismatch
+    case accessRevoked
     case sessionUnavailable
     case invalidQuestion
 
@@ -41,6 +42,8 @@ enum PublicationVisitorAccessError: LocalizedError, Equatable {
             return "公开副本响应无效"
         case .responseScopeMismatch:
             return "公开副本与当前访问范围不一致"
+        case .accessRevoked:
+            return "该公开内容已撤回或当前访问已被撤销"
         case .sessionUnavailable:
             return "该受邀访问当前不可用"
         case .invalidQuestion:
@@ -315,6 +318,7 @@ enum PublicationVisitorSessionInvalidationReason: String, Equatable {
     case expired
     case accountLeaseInvalid
     case responseScopeMismatch
+    case accessRevoked
     case sessionUnavailable
     case manuallyReleased
 }
@@ -442,8 +446,9 @@ final class PublicationVisitorReadUseCase {
                 }
                 completion(.success(projection))
             case .failure(let error):
-                self?.sessionCoordinator.invalidate(.sessionUnavailable)
-                completion(.failure(error))
+                let resolution = Self.resolveFailure(error)
+                self?.sessionCoordinator.invalidate(resolution.invalidationReason)
+                completion(.failure(resolution.error))
             }
         }
     }
@@ -470,13 +475,30 @@ final class PublicationVisitorReadUseCase {
                 }
                 completion(.success(response))
             case .failure(let error):
-                self?.sessionCoordinator.invalidate(.sessionUnavailable)
-                completion(.failure(error))
+                let resolution = Self.resolveFailure(error)
+                self?.sessionCoordinator.invalidate(resolution.invalidationReason)
+                completion(.failure(resolution.error))
             }
         }
     }
 
     func release() {
         sessionCoordinator.invalidate(.manuallyReleased)
+    }
+
+    private static func resolveFailure(
+        _ error: Error
+    ) -> (invalidationReason: PublicationVisitorSessionInvalidationReason, error: Error) {
+        guard case let DreamJourneyBackendClient.ClientError.backendError(statusCode, context) = error,
+              let code = context.code else {
+            return (.sessionUnavailable, error)
+        }
+
+        let isRevokedAccess = (statusCode == 409 && code == "publicationVisitorAccessUnavailable")
+            || (statusCode == 403 && code == "publicationVisitorAccessDenied")
+        guard isRevokedAccess else {
+            return (.sessionUnavailable, error)
+        }
+        return (.accessRevoked, PublicationVisitorAccessError.accessRevoked)
     }
 }
