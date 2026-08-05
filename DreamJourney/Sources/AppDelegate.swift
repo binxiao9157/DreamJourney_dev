@@ -1622,12 +1622,18 @@ private extension AppDelegate {
             realCloneProviderReady: false,
             isEnabled: false
         )
+        let legacyReadyProfile = makeUIQALegacyReadyVoiceCloneProfile(
+            voiceProfileId: "S_legacy_ready_uiqa"
+        )
 
         let profiles = [pendingProfile, deletedProfile, readyProfile]
         let selectedProfile = VoiceCloneService.shared.preferredVoiceCloneProfile(from: profiles)
         let selectedWithPendingPreferred = VoiceCloneService.shared.preferredVoiceCloneProfile(from: profiles, preferredProfileId: pendingProfile.voiceProfileId)
 
         VoiceCloneService.shared.deleteVoiceProfile(profileId: readyProfile.voiceProfileId)
+        VoiceCloneService.shared.deleteVoiceProfile(profileId: legacyReadyProfile.voiceProfileId)
+        VoiceCloneService.shared.persistSnapshot(VoiceCloneProfileSnapshot(backendContract: legacyReadyProfile))
+        let usableLegacyReady = VoiceCloneService.shared.currentUsableSpeakerId
         VoiceCloneService.shared.persistSnapshot(VoiceCloneProfileSnapshot(backendContract: readyProfile))
         let usableBeforePending = VoiceCloneService.shared.currentUsableSpeakerId
         VoiceCloneService.shared.persistSnapshot(VoiceCloneProfileSnapshot(backendContract: pendingProfile))
@@ -1638,29 +1644,35 @@ private extension AppDelegate {
         let pendingClearsUsableReady = usableBeforePending == readyProfile.voiceProfileId
             && usableAfterPending == nil
         let deletedIgnored = selectedProfile?.voiceProfileId != deletedProfile.voiceProfileId
+        let legacyReadyRejectedForEcho = usableLegacyReady == nil
         let completed = readyPreferredOverPending
             && pendingPreferredRespected
             && pendingClearsUsableReady
             && deletedIgnored
+            && legacyReadyRejectedForEcho
 
         writeVoiceCloneProfileSelectionSmokeResult([
             "completed": completed,
             "readyVoiceProfileId": readyProfile.voiceProfileId,
             "pendingVoiceProfileId": pendingProfile.voiceProfileId,
             "deletedVoiceProfileId": deletedProfile.voiceProfileId,
+            "legacyReadyVoiceProfileId": legacyReadyProfile.voiceProfileId,
             "selectedVoiceProfileId": selectedProfile?.voiceProfileId ?? "missing",
             "selectedWithPendingPreferredVoiceProfileId": selectedWithPendingPreferred?.voiceProfileId ?? "missing",
+            "usableLegacyReady": usableLegacyReady ?? "missing",
             "usableBeforePending": usableBeforePending ?? "missing",
             "usableAfterPending": usableAfterPending ?? "missing",
             "readyPreferredOverPending": readyPreferredOverPending,
             "pendingPreferredRespected": pendingPreferredRespected,
             "pendingClearsUsableReady": pendingClearsUsableReady,
             "deletedIgnored": deletedIgnored,
+            "legacyReadyRejectedForEcho": legacyReadyRejectedForEcho,
         ])
         print(
             "[UI_QA] VoiceCloneProfileSelectionSmoke completed " +
             "selected=\(selectedProfile?.voiceProfileId ?? "missing") " +
             "selectedWithPendingPreferred=\(selectedWithPendingPreferred?.voiceProfileId ?? "missing") " +
+            "legacyReadyRejectedForEcho=\(legacyReadyRejectedForEcho) " +
             "usableAfterPending=\(usableAfterPending ?? "missing")"
         )
     }
@@ -1672,8 +1684,18 @@ private extension AppDelegate {
         providerMessage: String,
         realCloneProviderReady: Bool,
         isEnabled: Bool,
-        qualityAcceptanceRequired: Bool = false
+        qualityAcceptanceRequired: Bool = false,
+        lifecycleState: String? = nil,
+        profileVersion: Int = 1
     ) -> VoiceCloneProfileContract {
+        let resolvedLifecycleState = lifecycleState ?? defaultUIQAVoiceProfileLifecycleState(
+            sampleStatus: sampleStatus,
+            realCloneProviderReady: realCloneProviderReady,
+            isEnabled: isEnabled,
+            qualityAcceptanceRequired: qualityAcceptanceRequired
+        )
+        let allowedOperations = uiqaAllowedVoiceProfileOperations(for: resolvedLifecycleState)
+        let consentPurpose = resolvedLifecycleState == "accepted" ? "private_synthesis" : "training"
         guard let profile = VoiceCloneProfileContract(json: [
             "voiceProfileId": voiceProfileId,
             "sampleStatus": sampleStatus.rawValue,
@@ -1692,10 +1714,92 @@ private extension AppDelegate {
             "deleteContract": "后端删除样本、训练产物和授权记录。",
             "personaScope": "personal",
             "digitalHumanId": "digital_human_uiqa_self",
+            "lifecycleSchemaVersion": "voice-profile-lifecycle-v1",
+            "lifecycleState": resolvedLifecycleState,
+            "profileVersion": profileVersion,
+            "stateChangedAt": "2026-08-05T00:00:00Z",
+            "eligibility": [
+                "allowed": true,
+                "reasonCode": "eligibleLivingAdultSelf",
+                "policyVersion": "voice-profile-eligibility-v1",
+                "expiresAt": "2099-01-01T00:00:00Z",
+            ],
+            "consent": [
+                "purpose": consentPurpose,
+                "version": "voice-clone-consent-v1",
+                "state": "active",
+                "expiresAt": "2099-01-01T00:00:00Z",
+            ],
+            "allowedOperations": allowedOperations,
         ]) else {
             preconditionFailure("Unable to build UIQA voice clone profile \(voiceProfileId)")
         }
         return profile
+    }
+
+    func makeUIQALegacyReadyVoiceCloneProfile(voiceProfileId: String) -> VoiceCloneProfileContract {
+        guard let profile = VoiceCloneProfileContract(json: [
+            "voiceProfileId": voiceProfileId,
+            "sampleStatus": VoiceCloneSampleStatus.ready.rawValue,
+            "authorizationConfirmed": true,
+            "authorizationVersion": "voice-clone-consent-v1",
+            "authorizationCopy": "旧版 UIQA 声音复刻合同，用于验证缺少 canonical lifecycle 时默认不能用于回响。",
+            "providerMode": "volcengineVoiceClone2",
+            "providerStatus": "2",
+            "providerMessage": "legacy ready",
+            "realCloneProviderReady": true,
+            "qualityAcceptanceRequired": false,
+            "isEnabled": true,
+            "defaultReleaseVisible": true,
+            "contractVersion": 2,
+            "disableContract": "后端禁用 voiceProfileId 的合成权限。",
+            "deleteContract": "后端删除样本、训练产物和授权记录。",
+            "personaScope": "personal",
+            "digitalHumanId": "digital_human_uiqa_self",
+        ]) else {
+            preconditionFailure("Unable to build legacy UIQA voice clone profile \(voiceProfileId)")
+        }
+        return profile
+    }
+
+    private func defaultUIQAVoiceProfileLifecycleState(
+        sampleStatus: VoiceCloneSampleStatus,
+        realCloneProviderReady: Bool,
+        isEnabled: Bool,
+        qualityAcceptanceRequired: Bool
+    ) -> String {
+        switch sampleStatus {
+        case .notProvided:
+            return "draft"
+        case .pending:
+            return "training"
+        case .ready:
+            if qualityAcceptanceRequired || !realCloneProviderReady || !isEnabled {
+                return "previewReady"
+            }
+            return "accepted"
+        case .disabled:
+            return "paused"
+        case .deleted:
+            return "deleted"
+        case .failed:
+            return "failed"
+        }
+    }
+
+    private func uiqaAllowedVoiceProfileOperations(for lifecycleState: String) -> [String] {
+        switch lifecycleState {
+        case "previewReady":
+            return ["preview", "accept", "delete"]
+        case "accepted":
+            return ["preview", "synthesize", "pause", "delete"]
+        case "paused":
+            return ["preview", "delete"]
+        case "draft", "uploadPending", "training", "failed":
+            return ["delete"]
+        default:
+            return []
+        }
     }
 
     func runVoiceCloneSynthesisRuntimeSmoke() {

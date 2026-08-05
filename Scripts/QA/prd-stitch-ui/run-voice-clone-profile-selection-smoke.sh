@@ -117,10 +117,11 @@ echo
 
 grep -Eq '"completed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Smoke did not complete."
 grep -Eq '"readyPreferredOverPending"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Ready profile should win over pending."
-grep -Eq '"readyPreferredOverPendingPreferred"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Pending preferred id should not beat a ready usable profile."
-grep -Eq '"pendingDidNotOverwriteReady"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Pending profile should not overwrite persisted ready profile."
+grep -Eq '"pendingPreferredRespected"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "A selected pending profile should remain selected for status display."
+grep -Eq '"pendingClearsUsableReady"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "A pending profile must clear a previously usable profile."
 grep -Eq '"deletedIgnored"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Deleted profile should be ignored."
-grep -Eq '"usableAfterPending"[[:space:]]*:[[:space:]]*"S_ready_uiqa"' "$RESULT_FILE" || fail "Usable speaker should remain ready after pending persistence."
+grep -Eq '"legacyReadyRejectedForEcho"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Legacy ready profiles without the canonical lifecycle must fail closed."
+grep -Eq '"usableAfterPending"[[:space:]]*:[[:space:]]*"missing"' "$RESULT_FILE" || fail "Pending profiles must not leave a usable speaker selected."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true

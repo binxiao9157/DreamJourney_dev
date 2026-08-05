@@ -776,9 +776,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     private var canPreviewVoice: Bool {
         hasVoiceProfile
-            && snapshot.sampleStatus == .ready
-            && snapshot.realCloneProviderReady
-            && snapshot.isEnabled
+            && snapshot.canPreviewQuality
             && voiceCloneRuntimeCapability.canSynthesize
     }
 
@@ -791,7 +789,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private var canAcceptVoiceQuality: Bool {
-        canPreviewVoice && snapshot.qualityAcceptanceRequired && currentQualityPreviewReceipt != nil
+        snapshot.canAcceptQuality && currentQualityPreviewReceipt != nil
     }
 
     private var currentQualityPreviewReceipt: QualityPreviewReceipt? {
@@ -847,6 +845,12 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             return "样本已提交"
         case .ready:
             guard snapshot.isReadyForUse else {
+                if !snapshot.eligibilityAllowed {
+                    return "本人资格待验证"
+                }
+                if snapshot.lifecycleSchemaVersion != "voice-profile-lifecycle-v1" {
+                    return "音色状态待安全校验"
+                }
                 if snapshot.qualityAcceptanceRequired && snapshot.realCloneProviderReady {
                     return "训练完成，待试听确认"
                 }
@@ -870,6 +874,12 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             return "后端已接收样本，稍后刷新即可查看训练结果。"
         case .ready:
             guard snapshot.isReadyForUse else {
+                if !snapshot.eligibilityAllowed {
+                    return "当前账号尚未完成本人、在世成年人资格验证，这份音色暂不能试听或用于回响。"
+                }
+                if snapshot.lifecycleSchemaVersion != "voice-profile-lifecycle-v1" {
+                    return "这份历史音色缺少当前授权与资格状态，请刷新训练状态后再使用。"
+                }
                 if !snapshot.realCloneProviderReady {
                     return "后端还未确认这次训练可用于合成，请刷新训练状态。"
                 }
@@ -901,6 +911,12 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             if snapshot.isReadyForUse {
                 return "可用于回响"
             }
+            if !snapshot.eligibilityAllowed {
+                return "资格待验证"
+            }
+            if snapshot.lifecycleSchemaVersion != "voice-profile-lifecycle-v1" {
+                return "待安全校验"
+            }
             if snapshot.qualityAcceptanceRequired && snapshot.realCloneProviderReady {
                 return "待试听确认"
             }
@@ -922,6 +938,12 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         switch snapshot.sampleStatus {
         case .ready:
             guard snapshot.isReadyForUse else {
+                if !snapshot.eligibilityAllowed {
+                    return "本人资格待验证，暂不用于回响"
+                }
+                if snapshot.lifecycleSchemaVersion != "voice-profile-lifecycle-v1" {
+                    return "音色状态待安全校验，暂不用于回响"
+                }
                 if snapshot.qualityAcceptanceRequired && snapshot.realCloneProviderReady {
                     return "可合成，待确认效果"
                 }

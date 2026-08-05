@@ -54,6 +54,9 @@ for required in [
     "currentUsableSpeakerId",
     "pendingPreferredRespected",
     "pendingClearsUsableReady",
+    "makeUIQALegacyReadyVoiceCloneProfile",
+    "legacyReadyRejectedForEcho",
+    "lifecycleSchemaVersion\": \"voice-profile-lifecycle-v1\"",
     "voice-clone-profile-selection-smoke-result.json",
 ] {
     assertContains(appDelegate, required, "AppDelegate should implement voice clone profile selection UIQA smoke \(required)")

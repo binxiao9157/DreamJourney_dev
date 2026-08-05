@@ -54,6 +54,16 @@ struct VoiceCloneProfileSnapshot {
     let localCleanupState: String
     let providerCleanupState: String
     let providerCleanupReceiptAvailable: Bool
+    let lifecycleSchemaVersion: String?
+    let lifecycleState: VoiceProfileLifecycleState?
+    let profileVersion: Int
+    let stateChangedAt: String?
+    let eligibilityAllowed: Bool
+    let eligibilityReasonCode: String
+    let consentPurpose: String?
+    let consentState: String
+    let consentExpiresAt: String?
+    let allowedOperations: Set<String>
 
     init(
         voiceProfileId: String,
@@ -76,7 +86,17 @@ struct VoiceCloneProfileSnapshot {
         accessRevoked: Bool? = nil,
         localCleanupState: String = "",
         providerCleanupState: String = "",
-        providerCleanupReceiptAvailable: Bool = false
+        providerCleanupReceiptAvailable: Bool = false,
+        lifecycleSchemaVersion: String? = nil,
+        lifecycleState: VoiceProfileLifecycleState? = nil,
+        profileVersion: Int = 0,
+        stateChangedAt: String? = nil,
+        eligibilityAllowed: Bool = false,
+        eligibilityReasonCode: String = "unavailable",
+        consentPurpose: String? = nil,
+        consentState: String = "missing",
+        consentExpiresAt: String? = nil,
+        allowedOperations: Set<String> = []
     ) {
         self.voiceProfileId = voiceProfileId
         self.sampleStatus = sampleStatus
@@ -99,6 +119,16 @@ struct VoiceCloneProfileSnapshot {
         self.localCleanupState = localCleanupState.isEmpty ? Self.defaultLocalCleanupState(for: sampleStatus) : localCleanupState
         self.providerCleanupState = providerCleanupState.isEmpty ? Self.defaultProviderCleanupState(for: sampleStatus) : providerCleanupState
         self.providerCleanupReceiptAvailable = providerCleanupReceiptAvailable
+        self.lifecycleSchemaVersion = lifecycleSchemaVersion
+        self.lifecycleState = lifecycleState
+        self.profileVersion = profileVersion
+        self.stateChangedAt = stateChangedAt
+        self.eligibilityAllowed = eligibilityAllowed
+        self.eligibilityReasonCode = eligibilityReasonCode
+        self.consentPurpose = consentPurpose
+        self.consentState = consentState
+        self.consentExpiresAt = consentExpiresAt
+        self.allowedOperations = allowedOperations
     }
 
     init(backendContract: VoiceCloneProfileContract) {
@@ -123,7 +153,17 @@ struct VoiceCloneProfileSnapshot {
             accessRevoked: backendContract.accessRevoked,
             localCleanupState: backendContract.localCleanupState,
             providerCleanupState: backendContract.providerCleanupState,
-            providerCleanupReceiptAvailable: backendContract.providerCleanupReceiptAvailable
+            providerCleanupReceiptAvailable: backendContract.providerCleanupReceiptAvailable,
+            lifecycleSchemaVersion: backendContract.lifecycleSchemaVersion,
+            lifecycleState: backendContract.lifecycleState,
+            profileVersion: backendContract.profileVersion,
+            stateChangedAt: backendContract.stateChangedAt,
+            eligibilityAllowed: backendContract.eligibility.isAllowed,
+            eligibilityReasonCode: backendContract.eligibility.reasonCode,
+            consentPurpose: backendContract.consent.purpose,
+            consentState: backendContract.consent.state,
+            consentExpiresAt: backendContract.consent.expiresAt,
+            allowedOperations: backendContract.allowedOperations
         )
     }
 
@@ -157,7 +197,33 @@ struct VoiceCloneProfileSnapshot {
     }
 
     var isReadyForUse: Bool {
-        sampleStatus == .ready && isEnabled && realCloneProviderReady && !qualityAcceptanceRequired
+        lifecycleSchemaVersion == "voice-profile-lifecycle-v1"
+            && lifecycleState == .accepted
+            && sampleStatus == .ready
+            && isEnabled
+            && realCloneProviderReady
+            && eligibilityAllowed
+            && consentState == "active"
+            && consentPurpose == "private_synthesis"
+            && allowedOperations.contains("synthesize")
+    }
+
+    var canPreviewQuality: Bool {
+        lifecycleSchemaVersion == "voice-profile-lifecycle-v1"
+            && (lifecycleState == .previewReady || lifecycleState == .accepted)
+            && sampleStatus == .ready
+            && realCloneProviderReady
+            && eligibilityAllowed
+            && consentState == "active"
+            && allowedOperations.contains("preview")
+    }
+
+    var canAcceptQuality: Bool {
+        lifecycleSchemaVersion == "voice-profile-lifecycle-v1"
+            && lifecycleState == .previewReady
+            && eligibilityAllowed
+            && consentState == "active"
+            && allowedOperations.contains("accept")
     }
 
     var providerFailureDisplayText: String? {
@@ -249,6 +315,16 @@ private struct VoiceClonePersistedState: Codable, Equatable {
     var providerMode: String?
     var providerStatus: String?
     var providerMessage: String?
+    var lifecycleSchemaVersion: String?
+    var lifecycleStateRaw: String?
+    var profileVersion: Int?
+    var stateChangedAt: String?
+    var eligibilityAllowed: Bool?
+    var eligibilityReasonCode: String?
+    var consentPurpose: String?
+    var consentState: String?
+    var consentExpiresAt: String?
+    var allowedOperations: [String]?
 
     static let empty = VoiceClonePersistedState(
         speakerId: nil,
@@ -258,7 +334,17 @@ private struct VoiceClonePersistedState: Codable, Equatable {
         qualityAcceptanceRequired: nil,
         providerMode: nil,
         providerStatus: nil,
-        providerMessage: nil
+        providerMessage: nil,
+        lifecycleSchemaVersion: nil,
+        lifecycleStateRaw: nil,
+        profileVersion: nil,
+        stateChangedAt: nil,
+        eligibilityAllowed: nil,
+        eligibilityReasonCode: nil,
+        consentPurpose: nil,
+        consentState: nil,
+        consentExpiresAt: nil,
+        allowedOperations: nil
     )
 }
 
@@ -1005,7 +1091,17 @@ final class VoiceCloneService {
             deleteContract: Self.deleteContract,
             providerMode: state?.providerMode ?? "localFallback",
             providerStatus: state?.providerStatus ?? "",
-            providerMessage: state?.providerMessage ?? ""
+            providerMessage: state?.providerMessage ?? "",
+            lifecycleSchemaVersion: state?.lifecycleSchemaVersion,
+            lifecycleState: state?.lifecycleStateRaw.flatMap(VoiceProfileLifecycleState.init(rawValue:)),
+            profileVersion: state?.profileVersion ?? 0,
+            stateChangedAt: state?.stateChangedAt,
+            eligibilityAllowed: state?.eligibilityAllowed ?? false,
+            eligibilityReasonCode: state?.eligibilityReasonCode ?? "unavailable",
+            consentPurpose: state?.consentPurpose,
+            consentState: state?.consentState ?? "missing",
+            consentExpiresAt: state?.consentExpiresAt,
+            allowedOperations: Set(state?.allowedOperations ?? [])
         )
     }
 
@@ -1102,6 +1198,16 @@ final class VoiceCloneService {
             state.providerMode = snapshot.providerMode
             state.providerStatus = snapshot.providerStatus
             state.providerMessage = snapshot.providerMessage
+            state.lifecycleSchemaVersion = snapshot.lifecycleSchemaVersion
+            state.lifecycleStateRaw = snapshot.lifecycleState?.rawValue
+            state.profileVersion = snapshot.profileVersion
+            state.stateChangedAt = snapshot.stateChangedAt
+            state.eligibilityAllowed = snapshot.eligibilityAllowed
+            state.eligibilityReasonCode = snapshot.eligibilityReasonCode
+            state.consentPurpose = snapshot.consentPurpose
+            state.consentState = snapshot.consentState
+            state.consentExpiresAt = snapshot.consentExpiresAt
+            state.allowedOperations = snapshot.allowedOperations.sorted()
         }
     }
 
@@ -1367,7 +1473,7 @@ final class VoiceCloneService {
     }
 
     private static func isBackendProfileReadyForUse(_ profile: VoiceCloneProfileContract) -> Bool {
-        profile.sampleStatus == .ready && profile.isEnabled && profile.realCloneProviderReady && !profile.qualityAcceptanceRequired
+        profile.isReadyForEcho
     }
 
     private func normalizedVoiceProfileId(_ value: String?) -> String? {
@@ -1407,7 +1513,17 @@ final class VoiceCloneService {
             accessRevoked: source.accessRevoked,
             localCleanupState: source.localCleanupState,
             providerCleanupState: source.providerCleanupState,
-            providerCleanupReceiptAvailable: source.providerCleanupReceiptAvailable
+            providerCleanupReceiptAvailable: source.providerCleanupReceiptAvailable,
+            lifecycleSchemaVersion: source.lifecycleSchemaVersion,
+            lifecycleState: source.lifecycleState,
+            profileVersion: source.profileVersion,
+            stateChangedAt: source.stateChangedAt,
+            eligibilityAllowed: source.eligibilityAllowed,
+            eligibilityReasonCode: source.eligibilityReasonCode,
+            consentPurpose: source.consentPurpose,
+            consentState: source.consentState,
+            consentExpiresAt: source.consentExpiresAt,
+            allowedOperations: source.allowedOperations
         )
     }
 
@@ -1761,6 +1877,8 @@ final class VoiceCloneService {
             "sampleCount": 1,
             "authorizationConfirmed": authorizationConfirmed,
             "authorizationVersion": "voice-clone-consent-v1",
+            "consentVersion": "voice-clone-consent-v1",
+            "purpose": "training",
             "authorizationText": Self.authorizationCopy,
             "personaScope": target.personaScope,
             "digitalHumanId": target.digitalHumanId,

@@ -31,7 +31,7 @@
 
 ## 3. 当前执行指针
 
-已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`。当前执行：`P1-S1：资格、同意与 voiceProfile 状态机。`
+已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`。当前执行：`P1-S2：样本、质量与试听确认合同。`
 
 完成当前 Slice 后，不停留等待，按本文件顺序进入下一个未完成 Slice。只有缺少真实 Provider、不可逆生产迁移、数据删除授权或重大产品决策时才暂停。
 
@@ -113,6 +113,8 @@
 ## 5. P1：M1 在世成年人本人私有声音非真机闭环
 
 ### P1-S1：资格、同意与 voiceProfile 状态机
+
+**状态**：非真机合同完成，默认关闭。服务端现在只接受可信资格来源；客户端提交的资格字段不再能授权训练或合成。profile 生命周期、显式试听接受、旧 profile fail-closed、Family/未成年人/跨账号 hard deny 和 iOS 脱敏投影均已有回归证据。真实的服务端年龄/活体资格回执 Provider 仍是外部启用条件，未满足前 M1 不得公开启用。
 
 1. 基于现有 `voice_dh_authority`、`voice_dh_consent_policy` 和训练 preflight，固定“在世本人 + 强身份/成年人结果 + purpose + consent version + expiry”缺一不可。
 2. 将 profile 状态统一为：`draft`、`uploadPending`、`training`、`previewReady`、`accepted`、`paused`、`deleting`、`deleted`、`failed`；禁止 Provider `ready` 自动等于用户已接受。

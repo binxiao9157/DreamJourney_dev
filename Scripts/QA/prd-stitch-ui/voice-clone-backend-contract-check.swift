@@ -28,6 +28,7 @@ let backendConfig = read("app/core/config.py", in: backendRoot)
 let backendRuntime = read("app/services/runtime_config.py", in: backendRoot)
 let backendProvider = read("app/services/voice_clone.py", in: backendRoot)
 let backendTTS = read("app/services/tts.py", in: backendRoot)
+let backendLifecycle = read("app/services/voice_profile_lifecycle.py", in: backendRoot)
 let backendMemoryStore = read("app/services/in_memory_store.py", in: backendRoot)
 let backendPostgresStore = read("app/services/postgres_store.py", in: backendRoot)
 let backendBaselineMigration = read("db/migrations/0001_existing_schema_baseline.sql", in: backendRoot)
@@ -58,10 +59,25 @@ for required in [
     "authorizationConfirmed",
     "voiceProfileId",
     "sampleStatus",
+    "purpose",
+    "consentVersion",
     "disableContract",
     "deleteContract",
 ] {
     assertContains(backendMain, required, "backend should expose voice clone profile contract \(required)")
+}
+
+for required in [
+    "VOICE_PROFILE_LIFECYCLE_SCHEMA_VERSION = \"voice-profile-lifecycle-v1\"",
+    "class VoiceProfileLifecycleState",
+    "PREVIEW_READY = \"previewReady\"",
+    "ACCEPTED = \"accepted\"",
+    "profile_public_projection",
+    "subjectEligibilityDecision",
+    "allowedOperations",
+    "is_voice_profile_synthesizable",
+] {
+    assertContains(backendLifecycle, required, "backend lifecycle module should define P1-S1 contract \(required)")
 }
 
 for required in [
@@ -171,6 +187,12 @@ for required in [
     "let authorizationConfirmed: Bool",
     "let disableContract: String",
     "let deleteContract: String",
+    "enum VoiceProfileLifecycleState",
+    "struct VoiceCloneProfileConsentContract",
+    "struct VoiceCloneProfileEligibilityContract",
+    "let lifecycleState: VoiceProfileLifecycleState?",
+    "let allowedOperations: Set<String>",
+    "var isReadyForEcho: Bool",
     "saveVoiceCloneProfile(",
     "fetchVoiceCloneProfiles(",
     "refreshVoiceCloneProfile(",

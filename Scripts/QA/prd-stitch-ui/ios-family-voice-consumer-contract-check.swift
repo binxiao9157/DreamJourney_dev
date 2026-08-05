@@ -64,6 +64,10 @@ assertNotContains(
 for required in [
     "let providerMode: String",
     "let contractVersion: Int",
+    "let lifecycleState: VoiceProfileLifecycleState?",
+    "let eligibilityAllowed: Bool",
+    "let consentPurpose: String?",
+    "let allowedOperations: Set<String>",
     "let defaultReleaseVisible: Bool",
     "init(backendContract: VoiceCloneProfileContract)",
     "voiceCloneShellSnapshot(from backendContract: VoiceCloneProfileContract)",
@@ -77,6 +81,8 @@ for required in [
     "profileVoiceCloneEntryStatusValue",
     "profileVoiceCloneAuthorizationHint",
     "可用于回响",
+    "本人资格待验证",
+    "音色状态待安全校验",
 ] {
     assertContains(voiceShell, required, "Voice clone shell should render user-facing backend-derived status \(required)")
 }

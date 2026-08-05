@@ -2046,6 +2046,54 @@ struct ArchiveMediaUploadIntent {
     }
 }
 
+enum VoiceProfileLifecycleState: String, Codable {
+    case draft
+    case uploadPending
+    case training
+    case previewReady
+    case accepted
+    case paused
+    case deleting
+    case deleted
+    case failed
+}
+
+struct VoiceCloneProfileConsentContract {
+    let purpose: String?
+    let version: String?
+    let state: String
+    let expiresAt: String?
+
+    init(json: [String: Any]?) {
+        purpose = (json?["purpose"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        version = (json?["version"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        state = (json?["state"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "missing"
+        expiresAt = (json?["expiresAt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var isActive: Bool {
+        state == "active"
+    }
+
+    var grantsPrivateSynthesis: Bool {
+        isActive && purpose == "private_synthesis"
+    }
+}
+
+struct VoiceCloneProfileEligibilityContract {
+    let isAllowed: Bool
+    let reasonCode: String
+    let policyVersion: String
+    let expiresAt: String?
+
+    init(json: [String: Any]?) {
+        isAllowed = json?["allowed"] as? Bool ?? false
+        reasonCode = (json?["reasonCode"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unavailable"
+        policyVersion = (json?["policyVersion"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        expiresAt = (json?["expiresAt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 struct VoiceCloneProfileContract {
     let voiceProfileId: String
     let sampleStatus: VoiceCloneSampleStatus
@@ -2074,6 +2122,13 @@ struct VoiceCloneProfileContract {
     let localCleanupState: String
     let providerCleanupState: String
     let providerCleanupReceiptAvailable: Bool
+    let lifecycleSchemaVersion: String?
+    let lifecycleState: VoiceProfileLifecycleState?
+    let profileVersion: Int
+    let stateChangedAt: String?
+    let consent: VoiceCloneProfileConsentContract
+    let eligibility: VoiceCloneProfileEligibilityContract
+    let allowedOperations: Set<String>
     let authority: VoiceDigitalHumanAuthorityEnvelope?
 
     init?(json: [String: Any]) {
@@ -2111,7 +2166,51 @@ struct VoiceCloneProfileContract {
         self.localCleanupState = json["localCleanupState"] as? String ?? Self.defaultLocalCleanupState(for: sampleStatus)
         self.providerCleanupState = json["providerCleanupState"] as? String ?? Self.defaultProviderCleanupState(for: sampleStatus)
         self.providerCleanupReceiptAvailable = json["providerCleanupReceiptAvailable"] as? Bool ?? false
+        self.lifecycleSchemaVersion = (json["lifecycleSchemaVersion"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.lifecycleState = (json["lifecycleState"] as? String).flatMap(VoiceProfileLifecycleState.init(rawValue:))
+        self.profileVersion = Self.intValue(json["profileVersion"]) ?? 0
+        self.stateChangedAt = (json["stateChangedAt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.consent = VoiceCloneProfileConsentContract(json: json["consent"] as? [String: Any])
+        self.eligibility = VoiceCloneProfileEligibilityContract(json: json["eligibility"] as? [String: Any])
+        self.allowedOperations = Set((json["allowedOperations"] as? [Any] ?? []).compactMap {
+            guard let value = $0 as? String else { return nil }
+            let operation = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return operation.isEmpty ? nil : operation
+        })
         self.authority = VoiceDigitalHumanAuthorityEnvelope(json: json["authority"] as? [String: Any])
+    }
+
+    var hasCanonicalLifecycleContract: Bool {
+        lifecycleSchemaVersion == "voice-profile-lifecycle-v1" && lifecycleState != nil
+    }
+
+    var isReadyForEcho: Bool {
+        hasCanonicalLifecycleContract
+            && lifecycleState == .accepted
+            && sampleStatus == .ready
+            && isEnabled
+            && realCloneProviderReady
+            && eligibility.isAllowed
+            && consent.grantsPrivateSynthesis
+            && allowedOperations.contains("synthesize")
+    }
+
+    var canPreviewQuality: Bool {
+        hasCanonicalLifecycleContract
+            && (lifecycleState == .previewReady || lifecycleState == .accepted)
+            && sampleStatus == .ready
+            && realCloneProviderReady
+            && eligibility.isAllowed
+            && consent.isActive
+            && allowedOperations.contains("preview")
+    }
+
+    var canAcceptQuality: Bool {
+        hasCanonicalLifecycleContract
+            && lifecycleState == .previewReady
+            && eligibility.isAllowed
+            && consent.isActive
+            && allowedOperations.contains("accept")
     }
 
     private static func defaultExitState(for sampleStatus: VoiceCloneSampleStatus) -> String {
