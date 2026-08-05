@@ -2094,6 +2094,30 @@ struct VoiceCloneProfileEligibilityContract {
     }
 }
 
+struct VoiceCloneSampleAuthorizationContract {
+    let receiptId: String
+    let statementId: String
+    let statement: String
+    let expiresAt: String
+
+    init?(json: [String: Any]) {
+        guard let receiptId = json["receiptId"] as? String,
+              let statementId = json["statementId"] as? String,
+              let statement = json["statement"] as? String,
+              let expiresAt = json["expiresAt"] as? String,
+              !receiptId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !statementId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !statement.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !expiresAt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        self.receiptId = receiptId
+        self.statementId = statementId
+        self.statement = statement
+        self.expiresAt = expiresAt
+    }
+}
+
 struct VoiceCloneProfileContract {
     let voiceProfileId: String
     let sampleStatus: VoiceCloneSampleStatus
@@ -2125,6 +2149,7 @@ struct VoiceCloneProfileContract {
     let lifecycleSchemaVersion: String?
     let lifecycleState: VoiceProfileLifecycleState?
     let profileVersion: Int
+    let retryGeneration: Int
     let stateChangedAt: String?
     let consent: VoiceCloneProfileConsentContract
     let eligibility: VoiceCloneProfileEligibilityContract
@@ -2169,6 +2194,7 @@ struct VoiceCloneProfileContract {
         self.lifecycleSchemaVersion = (json["lifecycleSchemaVersion"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.lifecycleState = (json["lifecycleState"] as? String).flatMap(VoiceProfileLifecycleState.init(rawValue:))
         self.profileVersion = Self.intValue(json["profileVersion"]) ?? 0
+        self.retryGeneration = max(Self.intValue(json["retryGeneration"]) ?? 0, 0)
         self.stateChangedAt = (json["stateChangedAt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.consent = VoiceCloneProfileConsentContract(json: json["consent"] as? [String: Any])
         self.eligibility = VoiceCloneProfileEligibilityContract(json: json["eligibility"] as? [String: Any])
@@ -5518,6 +5544,69 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
                     return
                 }
                 completion(.success(profileJSONArray.compactMap(VoiceCloneProfileContract.init(json:))))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func retryVoiceCloneProfile(
+        userId: String,
+        profileId voiceProfileId: String,
+        retryGeneration: Int,
+        expectedProfileVersion: Int,
+        payload: [String: Any],
+        completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
+    ) {
+        var retryPayload = payload
+        retryPayload["userId"] = userId
+        retryPayload["voiceProfileId"] = voiceProfileId
+        retryPayload["retryGeneration"] = retryGeneration
+        retryPayload["expectedProfileVersion"] = expectedProfileVersion
+
+        let path = "/voice/profiles/\(pathComponent(userId))/\(pathComponent(voiceProfileId))/retry"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: retryPayload,
+            authPolicy: .userRequired,
+            sessionUserId: userId
+        ) { result in
+            switch result {
+            case .success(let object):
+                guard let profileJSON = object["profile"] as? [String: Any],
+                      let profile = VoiceCloneProfileContract(json: profileJSON) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(profile))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func issueVoiceCloneSampleAuthorization(
+        userId: String,
+        profileId voiceProfileId: String,
+        completion: @escaping (Result<VoiceCloneSampleAuthorizationContract, Error>) -> Void
+    ) {
+        let path = "/voice/profiles/\(pathComponent(userId))/sample-authorization"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: ["voiceProfileId": voiceProfileId],
+            authPolicy: .userRequired,
+            sessionUserId: userId
+        ) { result in
+            switch result {
+            case .success(let object):
+                guard let authorizationJSON = object["sampleAuthorization"] as? [String: Any],
+                      let authorization = VoiceCloneSampleAuthorizationContract(json: authorizationJSON) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(authorization))
             case .failure(let error):
                 completion(.failure(error))
             }

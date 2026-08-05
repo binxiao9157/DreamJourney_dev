@@ -57,6 +57,7 @@ struct VoiceCloneProfileSnapshot {
     let lifecycleSchemaVersion: String?
     let lifecycleState: VoiceProfileLifecycleState?
     let profileVersion: Int
+    let retryGeneration: Int
     let stateChangedAt: String?
     let eligibilityAllowed: Bool
     let eligibilityReasonCode: String
@@ -90,6 +91,7 @@ struct VoiceCloneProfileSnapshot {
         lifecycleSchemaVersion: String? = nil,
         lifecycleState: VoiceProfileLifecycleState? = nil,
         profileVersion: Int = 0,
+        retryGeneration: Int = 0,
         stateChangedAt: String? = nil,
         eligibilityAllowed: Bool = false,
         eligibilityReasonCode: String = "unavailable",
@@ -122,6 +124,7 @@ struct VoiceCloneProfileSnapshot {
         self.lifecycleSchemaVersion = lifecycleSchemaVersion
         self.lifecycleState = lifecycleState
         self.profileVersion = profileVersion
+        self.retryGeneration = max(retryGeneration, 0)
         self.stateChangedAt = stateChangedAt
         self.eligibilityAllowed = eligibilityAllowed
         self.eligibilityReasonCode = eligibilityReasonCode
@@ -157,6 +160,7 @@ struct VoiceCloneProfileSnapshot {
             lifecycleSchemaVersion: backendContract.lifecycleSchemaVersion,
             lifecycleState: backendContract.lifecycleState,
             profileVersion: backendContract.profileVersion,
+            retryGeneration: backendContract.retryGeneration,
             stateChangedAt: backendContract.stateChangedAt,
             eligibilityAllowed: backendContract.eligibility.isAllowed,
             eligibilityReasonCode: backendContract.eligibility.reasonCode,
@@ -226,6 +230,14 @@ struct VoiceCloneProfileSnapshot {
             && allowedOperations.contains("accept")
     }
 
+    var canRetryTraining: Bool {
+        lifecycleSchemaVersion == "voice-profile-lifecycle-v1"
+            && lifecycleState == .failed
+            && sampleStatus == .failed
+            && !accessRevoked
+            && allowedOperations.contains("retry")
+    }
+
     var providerFailureDisplayText: String? {
         let trimmed = providerMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -264,6 +276,20 @@ private struct VoiceCloneTrainingRuntimeOperation: Equatable {
     let speakerId: String
     let target: VoiceClonePersonaTarget
     let accountLease: AccountLease
+}
+
+private struct VoiceCloneTrainingRetryRequest {
+    let voiceProfileId: String
+    let retryGeneration: Int
+    let expectedProfileVersion: Int
+}
+
+/// A server-issued, short-lived statement that must be explicitly confirmed
+/// before a selected voice sample can enter the training path. The receipt is
+/// bound to one owner and one profile; the client never fabricates it.
+struct VoiceCloneSampleAuthorizationPreparation {
+    let voiceProfileId: String
+    let authorization: VoiceCloneSampleAuthorizationContract
 }
 
 private struct VoiceCloneTrainingRuntimeCompletions {
@@ -318,6 +344,7 @@ private struct VoiceClonePersistedState: Codable, Equatable {
     var lifecycleSchemaVersion: String?
     var lifecycleStateRaw: String?
     var profileVersion: Int?
+    var retryGeneration: Int?
     var stateChangedAt: String?
     var eligibilityAllowed: Bool?
     var eligibilityReasonCode: String?
@@ -338,6 +365,7 @@ private struct VoiceClonePersistedState: Codable, Equatable {
         lifecycleSchemaVersion: nil,
         lifecycleStateRaw: nil,
         profileVersion: nil,
+        retryGeneration: nil,
         stateChangedAt: nil,
         eligibilityAllowed: nil,
         eligibilityReasonCode: nil,
@@ -1095,6 +1123,7 @@ final class VoiceCloneService {
             lifecycleSchemaVersion: state?.lifecycleSchemaVersion,
             lifecycleState: state?.lifecycleStateRaw.flatMap(VoiceProfileLifecycleState.init(rawValue:)),
             profileVersion: state?.profileVersion ?? 0,
+            retryGeneration: state?.retryGeneration ?? 0,
             stateChangedAt: state?.stateChangedAt,
             eligibilityAllowed: state?.eligibilityAllowed ?? false,
             eligibilityReasonCode: state?.eligibilityReasonCode ?? "unavailable",
@@ -1201,6 +1230,7 @@ final class VoiceCloneService {
             state.lifecycleSchemaVersion = snapshot.lifecycleSchemaVersion
             state.lifecycleStateRaw = snapshot.lifecycleState?.rawValue
             state.profileVersion = snapshot.profileVersion
+            state.retryGeneration = snapshot.retryGeneration
             state.stateChangedAt = snapshot.stateChangedAt
             state.eligibilityAllowed = snapshot.eligibilityAllowed
             state.eligibilityReasonCode = snapshot.eligibilityReasonCode
@@ -1517,6 +1547,7 @@ final class VoiceCloneService {
             lifecycleSchemaVersion: source.lifecycleSchemaVersion,
             lifecycleState: source.lifecycleState,
             profileVersion: source.profileVersion,
+            retryGeneration: source.retryGeneration,
             stateChangedAt: source.stateChangedAt,
             eligibilityAllowed: source.eligibilityAllowed,
             eligibilityReasonCode: source.eligibilityReasonCode,
@@ -1801,16 +1832,19 @@ final class VoiceCloneService {
 
     /// 上传音频训练声音复刻
     /// - Parameters:
-    ///   - audioURL: 本地音频文件 URL（wav/mp3/m4a/aac，建议 ≥10秒，≤10MB）
+    ///   - audioURL: 本地 PCM WAV 音频文件 URL（建议 10–30 秒，≤10MB）
     ///   - speakerId: 指定的音色 ID，为空则自动生成
     ///   - language: 语种，0=中文（默认）
     ///   - authorizationConfirmed: 用户已主动确认本人授权
+    ///   - retryingProfile: 失败态的既有 profile；仅通过显式 retry generation 重试，绝不生成新 profile ID
     ///   - onProfileAccepted: 后端接收 pending/ready profile 后的即时回调，用于 UI 回显 voiceProfileId
     ///   - completion: 结果回调
     func trainVoice(audioURL: URL,
                     speakerId: String? = nil,
                     language: Int = 0,
                     authorizationConfirmed: Bool,
+                    sampleAuthorization: VoiceCloneSampleAuthorizationContract,
+                    retryingProfile: VoiceCloneProfileSnapshot? = nil,
                     onProfileAccepted: ((VoiceCloneProfileSnapshot) -> Void)? = nil,
                     completion: @escaping (Result<String, VoiceCloneError>) -> Void) {
 
@@ -1830,6 +1864,25 @@ final class VoiceCloneService {
         }
         let accountLease = operation.accountLease
         let target = operation.target
+
+        let retryRequest: VoiceCloneTrainingRetryRequest?
+        if let retryingProfile {
+            guard let request = trainingRetryRequest(for: retryingProfile) else {
+                completion(.failure(.retryNotAllowed))
+                return
+            }
+            retryRequest = request
+        } else {
+            retryRequest = nil
+        }
+        let currentSnapshot = voiceCloneShellSnapshot(
+            accountLease: accountLease,
+            target: target
+        )
+        guard currentSnapshot.sampleStatus != .failed || retryRequest != nil else {
+            completion(.failure(.retryNotAllowed))
+            return
+        }
 
         // 读取音频文件并 base64 编码
         guard let audioData = try? Data(contentsOf: audioURL) else {
@@ -1852,9 +1905,8 @@ final class VoiceCloneService {
             return
         }
 
-        // 失败/删除/禁用后的重试不能复用旧 speakerId，否则 provider 侧可能继续命中
-        // 已经失败或归属错误的音色资源，导致 resource mismatch 一直存在。
-        let finalSpeakerId = speakerId
+        let finalSpeakerId = retryRequest?.voiceProfileId
+            ?? speakerId
             ?? reusableSpeakerIdForTraining(target: target, accountLease: accountLease)
             ?? Self.makeSpeakerId()
 
@@ -1884,12 +1936,14 @@ final class VoiceCloneService {
             "digitalHumanId": target.digitalHumanId,
             "audioBase64": base64Audio,
             "audioFormat": format,
+            "sampleVersion": "voice-sample-v1",
+            "sampleAuthorizationReceiptId": sampleAuthorization.receiptId,
+            "sampleAuthorizationStatementId": sampleAuthorization.statementId,
             "language": language,
             "privacyMetadata": ["scope": "generationAllowed"],
         ]
 
-        DDLogInfo("[VoiceClone] 通过后端提交音色训练: \(finalSpeakerId), scope=\(target.personaScope), digitalHumanId=\(target.digitalHumanId), 音频大小: \(audioData.count) bytes")
-        DreamJourneyBackendClient.shared.saveVoiceCloneProfile(payload: payload) { [weak self] result in
+        let handleSubmission: (Result<VoiceCloneProfileContract, Error>) -> Void = { [weak self] result in
             guard let self,
                   self.isCurrentTrainingRuntimeOperation(trainingOperation, at: .runtime) else {
                 return
@@ -1941,6 +1995,87 @@ final class VoiceCloneService {
                     operation: trainingOperation,
                     primaryCompletion: completion
                 )
+            }
+        }
+
+        if let retryRequest {
+            DDLogInfo("[VoiceClone] 通过后端重试音色训练: \(finalSpeakerId), retryGeneration=\(retryRequest.retryGeneration), scope=\(target.personaScope), digitalHumanId=\(target.digitalHumanId), 音频大小: \(audioData.count) bytes")
+            DreamJourneyBackendClient.shared.retryVoiceCloneProfile(
+                userId: accountLease.subjectId,
+                profileId: finalSpeakerId,
+                retryGeneration: retryRequest.retryGeneration,
+                expectedProfileVersion: retryRequest.expectedProfileVersion,
+                payload: payload,
+                completion: handleSubmission
+            )
+        } else {
+            DDLogInfo("[VoiceClone] 通过后端提交音色训练: \(finalSpeakerId), scope=\(target.personaScope), digitalHumanId=\(target.digitalHumanId), 音频大小: \(audioData.count) bytes")
+            DreamJourneyBackendClient.shared.saveVoiceCloneProfile(
+                payload: payload,
+                completion: handleSubmission
+            )
+        }
+    }
+
+    /// Obtains a server-signed statement before showing the user's explicit
+    /// confirmation prompt. The returned profile ID is passed back unchanged
+    /// when the sample is submitted, so an initial attempt cannot accidentally
+    /// switch to a different provider slot after confirmation.
+    func prepareSampleAuthorization(
+        speakerId: String? = nil,
+        retryingProfile: VoiceCloneProfileSnapshot? = nil,
+        completion: @escaping (Result<VoiceCloneSampleAuthorizationPreparation, VoiceCloneError>) -> Void
+    ) {
+        guard DreamJourneyBackendClient.shared.isVoiceCloneProfileConfigured else {
+            completion(.failure(.apiKeyMissing))
+            return
+        }
+        guard let operation = activePersonaOperation() else {
+            completion(.failure(.accountSessionChanged))
+            return
+        }
+        let accountLease = operation.accountLease
+        let target = operation.target
+        let retryRequest: VoiceCloneTrainingRetryRequest?
+        if let retryingProfile {
+            guard let request = trainingRetryRequest(for: retryingProfile) else {
+                completion(.failure(.retryNotAllowed))
+                return
+            }
+            retryRequest = request
+        } else {
+            retryRequest = nil
+        }
+        let currentSnapshot = voiceCloneShellSnapshot(accountLease: accountLease, target: target)
+        guard currentSnapshot.sampleStatus != .failed || retryRequest != nil else {
+            completion(.failure(.retryNotAllowed))
+            return
+        }
+        let finalSpeakerId = retryRequest?.voiceProfileId
+            ?? speakerId
+            ?? reusableSpeakerIdForTraining(target: target, accountLease: accountLease)
+            ?? Self.makeSpeakerId()
+        DreamJourneyBackendClient.shared.issueVoiceCloneSampleAuthorization(
+            userId: accountLease.subjectId,
+            profileId: finalSpeakerId
+        ) { [weak self] result in
+            guard let self,
+                  self.accountLeaseRuntime.validate(accountLease, at: .runtime).allowed,
+                  let currentOperation = self.activePersonaOperation(),
+                  currentOperation.accountLease == accountLease,
+                  currentOperation.target == target else {
+                completion(.failure(.accountSessionChanged))
+                return
+            }
+            switch result {
+            case .success(let authorization):
+                completion(.success(VoiceCloneSampleAuthorizationPreparation(
+                    voiceProfileId: finalSpeakerId,
+                    authorization: authorization
+                )))
+            case .failure(let error):
+                DDLogError("[VoiceClone] 样本授权语句请求失败: \(error.localizedDescription)")
+                completion(.failure(.networkError(error.localizedDescription)))
             }
         }
     }
@@ -2118,6 +2253,19 @@ final class VoiceCloneService {
         case .pending, .ready:
             return speakerId
         }
+    }
+
+    private func trainingRetryRequest(for snapshot: VoiceCloneProfileSnapshot) -> VoiceCloneTrainingRetryRequest? {
+        guard snapshot.canRetryTraining,
+              let voiceProfileId = normalizedVoiceProfileId(snapshot.voiceProfileId),
+              snapshot.profileVersion > 0 else {
+            return nil
+        }
+        return VoiceCloneTrainingRetryRequest(
+            voiceProfileId: voiceProfileId,
+            retryGeneration: snapshot.retryGeneration + 1,
+            expectedProfileVersion: snapshot.profileVersion
+        )
     }
 
     private static func makeSpeakerId() -> String {
@@ -2397,14 +2545,7 @@ final class VoiceCloneService {
 
     /// 从文件 URL 推断音频格式
     private func audioFormat(from url: URL) -> String? {
-        let ext = url.pathExtension.lowercased()
-        switch ext {
-        case "wav": return "wav"
-        case "mp3": return "mp3"
-        case "m4a": return "m4a"
-        case "aac": return "aac"
-        default: return nil
-        }
+        url.pathExtension.lowercased() == "wav" ? "wav" : nil
     }
 }
 
@@ -2414,6 +2555,7 @@ enum VoiceCloneError: LocalizedError {
     case apiKeyMissing
     case accountSessionChanged
     case authorizationRequired
+    case retryNotAllowed
     case speakerIdNotFound
     case audioReadFailed
     case unsupportedAudioFormat
@@ -2431,12 +2573,14 @@ enum VoiceCloneError: LocalizedError {
             return "账号状态已变化，请重新进入声音复刻页面后重试"
         case .authorizationRequired:
             return "请先确认本人授权后再提交声音样本"
+        case .retryNotAllowed:
+            return "当前失败记录尚未获得重试许可，请先刷新训练状态。"
         case .speakerIdNotFound:
             return "未找到声音复刻音色 ID"
         case .audioReadFailed:
             return "音频文件读取失败，请确认文件已下载到本机后重试"
         case .unsupportedAudioFormat:
-            return "暂只支持 wav、mp3、m4a、aac 音频样本"
+            return "当前声音复刻只支持可验证的 WAV 音频格式"
         case .audioTooLarge:
             return "音频文件过大（最大 10MB），请剪裁或压缩后重试"
         case .networkError(let msg):

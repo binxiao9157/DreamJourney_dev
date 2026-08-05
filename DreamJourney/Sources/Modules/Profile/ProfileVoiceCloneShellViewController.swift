@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPickerDelegate, AVAudioPlayerDelegate {
     private struct QualityPreviewReceipt {
         let voiceProfileId: String
+        let retryGeneration: Int
         let value: String
         let expiresAt: String?
     }
@@ -384,7 +385,8 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             return
         }
 
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.audio], asCopy: true)
+        let wavType = UTType(filenameExtension: "wav") ?? .audio
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [wavType], asCopy: true)
         picker.delegate = self
         picker.allowsMultipleSelection = false
         present(picker, animated: true)
@@ -444,6 +446,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
                     }
                     let receipt = QualityPreviewReceipt(
                         voiceProfileId: self.snapshot.voiceProfileId,
+                        retryGeneration: self.snapshot.retryGeneration,
                         value: receiptId,
                         expiresAt: synthesis.qualityPreviewExpiresAt
                     )
@@ -597,7 +600,9 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         guard validateViewOperation(at: .ui),
               validateViewOperation(at: .request) else { return }
         guard canSubmitVoiceTraining else {
-            feedbackLabel?.text = "声音复刻训练服务暂不可用，请稍后再试。"
+            feedbackLabel?.text = snapshot.sampleStatus == .failed
+                ? "当前失败记录尚未获得重试许可，请先刷新训练状态。"
+                : "声音复刻训练服务暂不可用，请稍后再试。"
             return
         }
         guard let audioURL = urls.first else { return }
@@ -608,10 +613,79 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             }
         }
 
-        setBusyFeedback("已选择音频样本，正在提交后端训练...")
+        let retryingProfile = snapshot.canRetryTraining ? snapshot : nil
+        guard let temporaryURL = copySelectedVoiceSample(audioURL) else {
+            feedbackLabel?.text = "音频文件读取失败，请确认文件已下载到本机后重试。"
+            return
+        }
+        setBusyFeedback("正在获取本人授权语句...")
+        VoiceCloneService.shared.prepareSampleAuthorization(
+            retryingProfile: retryingProfile
+        ) { [weak self] result in
+            guard let self, self.validateViewOperation(at: .runtime) else {
+                self?.removeTemporaryVoiceSample(temporaryURL)
+                return
+            }
+            DispatchQueue.main.async {
+                guard self.validateViewOperation(at: .ui) else {
+                    self.removeTemporaryVoiceSample(temporaryURL)
+                    return
+                }
+                switch result {
+                case .success(let preparation):
+                    self.presentSampleAuthorizationConfirmation(
+                        temporaryURL: temporaryURL,
+                        retryingProfile: retryingProfile,
+                        preparation: preparation
+                    )
+                case .failure(let error):
+                    self.removeTemporaryVoiceSample(temporaryURL)
+                    self.finishBusy(feedback: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func presentSampleAuthorizationConfirmation(
+        temporaryURL: URL,
+        retryingProfile: VoiceCloneProfileSnapshot?,
+        preparation: VoiceCloneSampleAuthorizationPreparation
+    ) {
+        let alert = UIAlertController(
+            title: "确认本人声音样本",
+            message: "请确认以下声明后再提交训练：\n\n\(preparation.authorization.statement)\n\n该授权语句将在短时间后失效。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel) { [weak self] _ in
+            self?.removeTemporaryVoiceSample(temporaryURL)
+            self?.finishBusy(feedback: "已取消提交声音样本。")
+        })
+        alert.addAction(UIAlertAction(title: "确认并提交", style: .default) { [weak self] _ in
+            self?.submitAuthorizedVoiceSample(
+                temporaryURL: temporaryURL,
+                retryingProfile: retryingProfile,
+                preparation: preparation
+            )
+        })
+        present(alert, animated: true)
+    }
+
+    private func submitAuthorizedVoiceSample(
+        temporaryURL: URL,
+        retryingProfile: VoiceCloneProfileSnapshot?,
+        preparation: VoiceCloneSampleAuthorizationPreparation
+    ) {
+        guard validateViewOperation(at: .request) else {
+            removeTemporaryVoiceSample(temporaryURL)
+            return
+        }
+        setBusyFeedback(retryingProfile == nil ? "正在提交后端训练..." : "正在重新提交后端训练...")
         VoiceCloneService.shared.trainVoice(
-            audioURL: audioURL,
-            authorizationConfirmed: authorizationSwitch.isOn,
+            audioURL: temporaryURL,
+            speakerId: preparation.voiceProfileId,
+            authorizationConfirmed: true,
+            sampleAuthorization: preparation.authorization,
+            retryingProfile: retryingProfile,
             onProfileAccepted: { [weak self] snapshot in
                 guard let self, self.validateViewOperation(at: .runtime) else { return }
                 DispatchQueue.main.async {
@@ -622,6 +696,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         ) { [weak self] result in
             guard let self, self.validateViewOperation(at: .runtime) else { return }
             DispatchQueue.main.async {
+                self.removeTemporaryVoiceSample(temporaryURL)
                 guard self.validateViewOperation(at: .ui) else { return }
                 switch result {
                 case .success:
@@ -631,6 +706,29 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
                 }
             }
         }
+    }
+
+    private func copySelectedVoiceSample(_ sourceURL: URL) -> URL? {
+        let extensionValue = sourceURL.pathExtension.lowercased()
+        guard extensionValue == "wav",
+              let data = try? Data(contentsOf: sourceURL),
+              !data.isEmpty,
+              data.count <= 10 * 1024 * 1024 else {
+            return nil
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("voice-clone-sample-\(UUID().uuidString)")
+            .appendingPathExtension("wav")
+        do {
+            try data.write(to: url, options: .atomic)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
+    private func removeTemporaryVoiceSample(_ url: URL) {
+        try? FileManager.default.removeItem(at: url)
     }
 
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
@@ -737,7 +835,10 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     private func applySnapshot(_ snapshot: VoiceCloneProfileSnapshot, feedback: String? = nil) {
         guard validateViewOperation(at: .commit) else { return }
-        if qualityPreviewReceipt?.voiceProfileId != snapshot.voiceProfileId || !snapshot.qualityAcceptanceRequired {
+        if qualityPreviewReceipt?.voiceProfileId != snapshot.voiceProfileId
+            || qualityPreviewReceipt?.retryGeneration != snapshot.retryGeneration
+            || !snapshot.qualityAcceptanceRequired
+            || snapshot.lifecycleState != .previewReady {
             qualityPreviewReceipt = nil
         }
         VoiceCloneService.shared.persistSnapshot(snapshot)
@@ -781,7 +882,8 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private var canSubmitVoiceTraining: Bool {
-        voiceCloneRuntimeCapability.canTrain
+        guard voiceCloneRuntimeCapability.canTrain else { return false }
+        return snapshot.sampleStatus != .failed || snapshot.canRetryTraining
     }
 
     private var canRefreshVoiceTrainingStatus: Bool {
@@ -795,6 +897,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     private var currentQualityPreviewReceipt: QualityPreviewReceipt? {
         guard let receipt = qualityPreviewReceipt,
               receipt.voiceProfileId == snapshot.voiceProfileId,
+              receipt.retryGeneration == snapshot.retryGeneration,
               !receipt.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return nil
         }

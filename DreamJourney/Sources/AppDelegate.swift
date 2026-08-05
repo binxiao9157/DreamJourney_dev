@@ -1614,6 +1614,26 @@ private extension AppDelegate {
             realCloneProviderReady: false,
             isEnabled: false
         )
+        let failedProfile = makeUIQAVoiceCloneProfile(
+            voiceProfileId: "S_failed_retry_uiqa",
+            sampleStatus: .failed,
+            providerStatus: "failed",
+            providerMessage: "sample rejected",
+            realCloneProviderReady: false,
+            isEnabled: false,
+            profileVersion: 9,
+            retryGeneration: 2
+        )
+        let retryPendingProfile = makeUIQAVoiceCloneProfile(
+            voiceProfileId: failedProfile.voiceProfileId,
+            sampleStatus: .pending,
+            providerStatus: "pending",
+            providerMessage: "retry accepted",
+            realCloneProviderReady: false,
+            isEnabled: false,
+            profileVersion: failedProfile.profileVersion + 1,
+            retryGeneration: failedProfile.retryGeneration + 1
+        )
         let deletedProfile = makeUIQAVoiceCloneProfile(
             voiceProfileId: "S_deleted_uiqa",
             sampleStatus: .deleted,
@@ -1638,6 +1658,11 @@ private extension AppDelegate {
         let usableBeforePending = VoiceCloneService.shared.currentUsableSpeakerId
         VoiceCloneService.shared.persistSnapshot(VoiceCloneProfileSnapshot(backendContract: pendingProfile))
         let usableAfterPending = VoiceCloneService.shared.currentUsableSpeakerId
+        let failedSnapshot = VoiceCloneProfileSnapshot(backendContract: failedProfile)
+        VoiceCloneService.shared.persistSnapshot(failedSnapshot)
+        let usableBeforeRetry = VoiceCloneService.shared.currentUsableSpeakerId
+        VoiceCloneService.shared.persistSnapshot(VoiceCloneProfileSnapshot(backendContract: retryPendingProfile))
+        let usableAfterRetryPending = VoiceCloneService.shared.currentUsableSpeakerId
 
         let readyPreferredOverPending = selectedProfile?.voiceProfileId == readyProfile.voiceProfileId
         let pendingPreferredRespected = selectedWithPendingPreferred?.voiceProfileId == pendingProfile.voiceProfileId
@@ -1645,13 +1670,21 @@ private extension AppDelegate {
             && usableAfterPending == nil
         let deletedIgnored = selectedProfile?.voiceProfileId != deletedProfile.voiceProfileId
         let legacyReadyRejectedForEcho = usableLegacyReady == nil
+        let failedProfileCanRetry = failedSnapshot.canRetryTraining
+        let retryReusesSameVoiceProfileId = retryPendingProfile.voiceProfileId == failedProfile.voiceProfileId
+        let retryGenerationAdvanced = retryPendingProfile.retryGeneration == failedProfile.retryGeneration + 1
+        let retryPendingNotUsable = usableBeforeRetry == nil && usableAfterRetryPending == nil
         let completed = readyPreferredOverPending
             && pendingPreferredRespected
             && pendingClearsUsableReady
             && deletedIgnored
             && legacyReadyRejectedForEcho
+            && failedProfileCanRetry
+            && retryReusesSameVoiceProfileId
+            && retryGenerationAdvanced
+            && retryPendingNotUsable
 
-        writeVoiceCloneProfileSelectionSmokeResult([
+        var smokeResult: [String: Any] = [
             "completed": completed,
             "readyVoiceProfileId": readyProfile.voiceProfileId,
             "pendingVoiceProfileId": pendingProfile.voiceProfileId,
@@ -1667,13 +1700,23 @@ private extension AppDelegate {
             "pendingClearsUsableReady": pendingClearsUsableReady,
             "deletedIgnored": deletedIgnored,
             "legacyReadyRejectedForEcho": legacyReadyRejectedForEcho,
-        ])
+        ]
+        smokeResult["failedVoiceProfileId"] = failedProfile.voiceProfileId
+        smokeResult["retryPendingVoiceProfileId"] = retryPendingProfile.voiceProfileId
+        smokeResult["usableBeforeRetry"] = usableBeforeRetry ?? "missing"
+        smokeResult["usableAfterRetryPending"] = usableAfterRetryPending ?? "missing"
+        smokeResult["failedProfileCanRetry"] = failedProfileCanRetry
+        smokeResult["retryReusesSameVoiceProfileId"] = retryReusesSameVoiceProfileId
+        smokeResult["retryGenerationAdvanced"] = retryGenerationAdvanced
+        smokeResult["retryPendingNotUsable"] = retryPendingNotUsable
+        writeVoiceCloneProfileSelectionSmokeResult(smokeResult)
         print(
             "[UI_QA] VoiceCloneProfileSelectionSmoke completed " +
             "selected=\(selectedProfile?.voiceProfileId ?? "missing") " +
             "selectedWithPendingPreferred=\(selectedWithPendingPreferred?.voiceProfileId ?? "missing") " +
             "legacyReadyRejectedForEcho=\(legacyReadyRejectedForEcho) " +
-            "usableAfterPending=\(usableAfterPending ?? "missing")"
+            "retryReusesSameVoiceProfileId=\(retryReusesSameVoiceProfileId) " +
+            "retryPendingNotUsable=\(retryPendingNotUsable)"
         )
     }
 
@@ -1686,7 +1729,8 @@ private extension AppDelegate {
         isEnabled: Bool,
         qualityAcceptanceRequired: Bool = false,
         lifecycleState: String? = nil,
-        profileVersion: Int = 1
+        profileVersion: Int = 1,
+        retryGeneration: Int = 0
     ) -> VoiceCloneProfileContract {
         let resolvedLifecycleState = lifecycleState ?? defaultUIQAVoiceProfileLifecycleState(
             sampleStatus: sampleStatus,
@@ -1717,6 +1761,7 @@ private extension AppDelegate {
             "lifecycleSchemaVersion": "voice-profile-lifecycle-v1",
             "lifecycleState": resolvedLifecycleState,
             "profileVersion": profileVersion,
+            "retryGeneration": retryGeneration,
             "stateChangedAt": "2026-08-05T00:00:00Z",
             "eligibility": [
                 "allowed": true,
@@ -1795,8 +1840,10 @@ private extension AppDelegate {
             return ["preview", "synthesize", "pause", "delete"]
         case "paused":
             return ["preview", "delete"]
-        case "draft", "uploadPending", "training", "failed":
+        case "draft", "uploadPending", "training":
             return ["delete"]
+        case "failed":
+            return ["retry", "delete"]
         default:
             return []
         }

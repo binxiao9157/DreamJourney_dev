@@ -30,6 +30,9 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 let runner = "Scripts/QA/prd-stitch-ui/run-voice-clone-profile-selection-smoke.sh"
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
 let featureFlags = read("DreamJourney/Sources/App/FeatureFlagService.swift")
+let backendClient = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
+let voiceCloneService = read("DreamJourney/Sources/Memoir/VoiceCloneService.swift")
+let voiceCloneShell = read("DreamJourney/Sources/Modules/Profile/ProfileVoiceCloneShellViewController.swift")
 let releaseRegression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 let releasePackage = read("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
 
@@ -54,12 +57,58 @@ for required in [
     "currentUsableSpeakerId",
     "pendingPreferredRespected",
     "pendingClearsUsableReady",
+    "failedProfileCanRetry",
+    "retryReusesSameVoiceProfileId",
+    "retryGenerationAdvanced",
+    "retryPendingNotUsable",
+    "S_failed_retry_uiqa",
     "makeUIQALegacyReadyVoiceCloneProfile",
     "legacyReadyRejectedForEcho",
     "lifecycleSchemaVersion\": \"voice-profile-lifecycle-v1\"",
     "voice-clone-profile-selection-smoke-result.json",
 ] {
     assertContains(appDelegate, required, "AppDelegate should implement voice clone profile selection UIQA smoke \(required)")
+}
+
+for required in [
+    "let retryGeneration: Int",
+    "func retryVoiceCloneProfile(",
+    "/voice/profiles/\\(pathComponent(userId))/\\(pathComponent(voiceProfileId))/retry",
+    "\"retryGeneration\"] = retryGeneration",
+    "\"expectedProfileVersion\"] = expectedProfileVersion",
+    "struct VoiceCloneSampleAuthorizationContract",
+    "func issueVoiceCloneSampleAuthorization(",
+    "/voice/profiles/\\(pathComponent(userId))/sample-authorization",
+] {
+    assertContains(backendClient, required, "iOS backend client should expose the explicit same-profile retry contract \(required)")
+}
+
+for required in [
+    "retryingProfile: VoiceCloneProfileSnapshot? = nil",
+    "trainingRetryRequest(for:",
+    "DreamJourneyBackendClient.shared.retryVoiceCloneProfile",
+    "func prepareSampleAuthorization(",
+    "sampleAuthorization: VoiceCloneSampleAuthorizationContract",
+    "\"sampleVersion\": \"voice-sample-v1\"",
+    "\"sampleAuthorizationReceiptId\": sampleAuthorization.receiptId",
+    "url.pathExtension.lowercased() == \"wav\" ? \"wav\" : nil",
+    "retryGeneration: snapshot.retryGeneration + 1",
+    "var canRetryTraining: Bool",
+    "currentSnapshot.sampleStatus != .failed || retryRequest != nil",
+] {
+    assertContains(voiceCloneService, required, "voice clone service should keep failed retries on the same profile and fail closed for Echo \(required)")
+}
+
+for required in [
+    "retryingProfile: retryingProfile",
+    "receipt.retryGeneration == snapshot.retryGeneration",
+    "qualityPreviewReceipt?.retryGeneration != snapshot.retryGeneration",
+    "UTType(filenameExtension: \"wav\") ?? .audio",
+    "presentSampleAuthorizationConfirmation(",
+    "确认本人声音样本",
+    "sampleAuthorization: preparation.authorization",
+] {
+    assertContains(voiceCloneShell, required, "voice clone shell should invalidate stale preview acceptance after retry \(required)")
 }
 
 for required in [

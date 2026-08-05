@@ -122,6 +122,10 @@ grep -Eq '"pendingClearsUsableReady"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE
 grep -Eq '"deletedIgnored"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Deleted profile should be ignored."
 grep -Eq '"legacyReadyRejectedForEcho"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Legacy ready profiles without the canonical lifecycle must fail closed."
 grep -Eq '"usableAfterPending"[[:space:]]*:[[:space:]]*"missing"' "$RESULT_FILE" || fail "Pending profiles must not leave a usable speaker selected."
+grep -Eq '"failedProfileCanRetry"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Failed profiles must expose an explicit retry contract."
+grep -Eq '"retryReusesSameVoiceProfileId"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Retry must keep the original voice profile ID."
+grep -Eq '"retryGenerationAdvanced"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Retry must advance retryGeneration."
+grep -Eq '"retryPendingNotUsable"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "A retried pending profile must not be usable by Echo before preview acceptance."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
