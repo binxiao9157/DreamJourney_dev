@@ -643,6 +643,7 @@ enum DJFeature: String, CaseIterable {
     case careDoctorContact
     case voiceCloneShell
     case digitalHumanLivePanel
+    case publicationVisitorM2
 }
 
 final class FeatureFlagService {
@@ -679,6 +680,7 @@ final class FeatureFlagService {
         .careDoctorContact,
         .voiceCloneShell,
         .digitalHumanLivePanel,
+        .publicationVisitorM2,
     ]
 
     private var enabled: Set<DJFeature>

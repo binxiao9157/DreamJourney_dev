@@ -541,6 +541,9 @@ final class FeatureGateService {
         payload: [String: Any]?
     ) -> DJFeature? {
         let normalizedPath = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
+        if normalizedPath.hasPrefix("/v2/internal/publication-access/") {
+            return .publicationVisitorM2
+        }
         if normalizedPath.hasPrefix("/digital-human/") { return .digitalHumanLivePanel }
         if normalizedPath.hasPrefix("/voice/") || normalizedPath == "/tts" { return .voiceCloneShell }
         if normalizedPath.hasPrefix("/family/") { return .familyManagement }
@@ -4971,7 +4974,7 @@ final class EchoDelayedReplyInboxAnswerReader {
     }
 }
 
-final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
+final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorReaderClient {
     static let shared = DreamJourneyBackendClient()
 
     struct BackendErrorContext: Equatable {
@@ -5043,6 +5046,9 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
             if normalizedPath.hasPrefix("/care/") { return "care" }
             if normalizedPath.hasPrefix("/voice/") { return "voice" }
             if normalizedPath.hasPrefix("/digital-human/") { return "digitalHuman" }
+            if normalizedPath.hasPrefix("/v2/internal/publication-access/") {
+                return "publicationVisitor"
+            }
             if normalizedPath.hasPrefix("/kb/") { return "knowledge" }
             if normalizedPath.hasPrefix("/v2/vaults/") { return "ownerTruth" }
             if normalizedPath.hasPrefix("/echo/") || normalizedPath == "/context/build" { return "echo" }
@@ -5244,6 +5250,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
 
     var isOwnerTruthCorrectionRequestQAConfigured: Bool {
         hasExplicitBaseURL && OwnerTruthCorrectionRequestQAGate.isEnabled
+    }
+
+    var isPublicationVisitorM2QAConfigured: Bool {
+        hasExplicitBaseURL && PublicationVisitorM2QAGate.isEnabled
     }
 
     private var currentAuthenticatedSession: BackendAuthSessionContract? {
@@ -9148,6 +9158,114 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         }
     }
 
+    func fetchProjection(
+        scope: PublicationVisitorSessionScope,
+        completion: @escaping (Result<PublicationVisitorProjection, Error>) -> Void
+    ) {
+        #if DEBUG || UI_QA_SIMULATOR
+        guard PublicationVisitorM2QAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationVisitorAccessError.disabled))
+            }
+            return
+        }
+        guard scope.isUsable() else {
+            DispatchQueue.main.async {
+                completion(.failure(
+                    scope.expiresAt <= Date()
+                        ? PublicationVisitorAccessError.expired
+                        : PublicationVisitorAccessError.accountLeaseInvalid
+                ))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/internal/publication-access/sessions/\(pathComponent(scope.visitorSessionID))/projection",
+            method: .post,
+            payload: scope.requestPayload(),
+            authPolicy: .userRequired,
+            applicationLease: scope.accountLease,
+            sessionUserId: scope.accountLease.subjectId,
+            additionalHeaders: ["X-DreamJourney-QA-Visitor-Access": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                guard let projection = PublicationVisitorProjection(json: object),
+                      projection.matches(scope) else {
+                    completion(.failure(PublicationVisitorAccessError.malformedResponse))
+                    return
+                }
+                completion(.success(projection))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+        #else
+        DispatchQueue.main.async {
+            completion(.failure(PublicationVisitorAccessError.disabled))
+        }
+        #endif
+    }
+
+    func answer(
+        scope: PublicationVisitorSessionScope,
+        question: String,
+        completion: @escaping (Result<PublicationVisitorAnswerResponse, Error>) -> Void
+    ) {
+        #if DEBUG || UI_QA_SIMULATOR
+        guard PublicationVisitorM2QAGate.isEnabled else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationVisitorAccessError.disabled))
+            }
+            return
+        }
+        let normalizedQuestion = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedQuestion.isEmpty, normalizedQuestion.count <= 800 else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationVisitorAccessError.invalidQuestion))
+            }
+            return
+        }
+        guard scope.isUsable() else {
+            DispatchQueue.main.async {
+                completion(.failure(
+                    scope.expiresAt <= Date()
+                        ? PublicationVisitorAccessError.expired
+                        : PublicationVisitorAccessError.accountLeaseInvalid
+                ))
+            }
+            return
+        }
+        var payload = scope.requestPayload()
+        payload["question"] = normalizedQuestion
+        requestJSON(
+            path: "/v2/internal/publication-access/sessions/\(pathComponent(scope.visitorSessionID))/answers",
+            method: .post,
+            payload: payload,
+            authPolicy: .userRequired,
+            applicationLease: scope.accountLease,
+            sessionUserId: scope.accountLease.subjectId,
+            additionalHeaders: ["X-DreamJourney-QA-Visitor-Access": "1"]
+        ) { result in
+            switch result {
+            case .success(let object):
+                guard let response = PublicationVisitorAnswerResponse(json: object),
+                      response.projection.matches(scope) else {
+                    completion(.failure(PublicationVisitorAccessError.malformedResponse))
+                    return
+                }
+                completion(.success(response))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+        #else
+        DispatchQueue.main.async {
+            completion(.failure(PublicationVisitorAccessError.disabled))
+        }
+        #endif
+    }
+
     private func requestJSON(
         path: String,
         method: HTTPMethod,
@@ -9311,10 +9429,15 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient {
         let isExplicitOwnerTruthQARequest =
             additionalHeaders["X-DreamJourney-QA-Owner-Truth"] == "1"
             && (OwnerTruthCandidateReviewQAGate.isEnabled || qaFeatureDecisionProvider != nil)
+        let isExplicitPublicationVisitorQARequest =
+            additionalHeaders["X-DreamJourney-QA-Visitor-Access"] == "1"
+            && PublicationVisitorM2QAGate.isEnabled
         let preparedFeatureDecision: FeatureDecision?
         if let featureDecision {
             preparedFeatureDecision = revalidatedRequestFeatureDecision(featureDecision)
-        } else if let gatedFeature, !isExplicitOwnerTruthQARequest {
+        } else if let gatedFeature,
+                  !isExplicitOwnerTruthQARequest,
+                  !isExplicitPublicationVisitorQARequest {
             preparedFeatureDecision = requestFeatureDecision(for: gatedFeature)
         } else {
             preparedFeatureDecision = nil

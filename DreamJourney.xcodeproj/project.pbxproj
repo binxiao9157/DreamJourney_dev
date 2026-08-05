@@ -133,6 +133,8 @@
 		C7E1F0000000000000000001 /* ConversationLocalStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1F0000000000000000101 /* ConversationLocalStorage.swift */; };
 		C7E200000000000000000001 /* AccountPrivateMediaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E200000000000000000101 /* AccountPrivateMediaStore.swift */; };
 		C7E300000000000000000001 /* ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E300000000000000000101 /* ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift */; };
+		C7E4A0000000000000000001 /* PublicationVisitorAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E4A0000000000000000101 /* PublicationVisitorAccess.swift */; };
+		C7E4A0000000000000000002 /* PublicationVisitorAccessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E4A0000000000000000102 /* PublicationVisitorAccessTests.swift */; };
 		D3A000000000000000000001 /* DigitalHumanRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A000000000000000000101 /* DigitalHumanRuntime.swift */; };
 		D3A000000000000000000002 /* AudioOnlyDigitalHumanRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A000000000000000000102 /* AudioOnlyDigitalHumanRuntime.swift */; };
 		D3A000000000000000000003 /* TencentDigitalHumanRuntimeStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A000000000000000000103 /* TencentDigitalHumanRuntimeStub.swift */; };
@@ -340,6 +342,8 @@
 		C7E1F0000000000000000101 /* ConversationLocalStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLocalStorage.swift; sourceTree = "<group>"; };
 		C7E200000000000000000101 /* AccountPrivateMediaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountPrivateMediaStore.swift; sourceTree = "<group>"; };
 		C7E300000000000000000101 /* ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift; sourceTree = "<group>"; };
+		C7E4A0000000000000000101 /* PublicationVisitorAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicationVisitorAccess.swift; sourceTree = "<group>"; };
+		C7E4A0000000000000000102 /* PublicationVisitorAccessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicationVisitorAccessTests.swift; sourceTree = "<group>"; };
 		C9115FEF531F2DA00EDE4969 /* bs_texture_halfFace.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = bs_texture_halfFace.png; sourceTree = "<group>"; };
 		D1D000000000000000000101 /* PushDeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushDeviceTokenStore.swift; sourceTree = "<group>"; };
 		D1D000000000000000000202 /* DreamJourney.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DreamJourney.entitlements; sourceTree = "<group>"; };
@@ -450,6 +454,7 @@
 				C7E1F0000000000000000101 /* ConversationLocalStorage.swift */,
 				C7E200000000000000000101 /* AccountPrivateMediaStore.swift */,
 				C7E300000000000000000101 /* ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift */,
+				C7E4A0000000000000000101 /* PublicationVisitorAccess.swift */,
 				9B3A23A2BA7FD3D92A7BC975 /* DialogEngineManager.swift */,
 				EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */,
 				6603143627D340B690FFE39E /* OwnerTruthMediaTaskRecovery.swift */,
@@ -802,6 +807,7 @@
 				D4F000000000000000000102 /* AccountLeaseRuntimeTests.swift */,
 				D4F000000000000000000103 /* AudioOwnerLeaseModelTests.swift */,
 				D5F000000000000000000103 /* OwnerTruthContractsTests.swift */,
+				C7E4A0000000000000000102 /* PublicationVisitorAccessTests.swift */,
 			);
 			path = DreamJourneyTests;
 			sourceTree = "<group>";
@@ -1110,6 +1116,7 @@
 				C7E1F0000000000000000001 /* ConversationLocalStorage.swift in Sources */,
 				C7E200000000000000000001 /* AccountPrivateMediaStore.swift in Sources */,
 				C7E300000000000000000001 /* ProductV4GlobalPrivateStoreRetirementUIQASmoke.swift in Sources */,
+				C7E4A0000000000000000001 /* PublicationVisitorAccess.swift in Sources */,
 				EB8C6638C1D5E34AC579873D /* Coordinator.swift in Sources */,
 				F90DDD2F07DD62057280F6B1 /* DeepSeekService.swift in Sources */,
 				7FE1A54F9280057AA970D224 /* DialogEngineManager.swift in Sources */,
@@ -1236,6 +1243,7 @@
 				D4F000000000000000000002 /* AccountLeaseRuntimeTests.swift in Sources */,
 				D4F000000000000000000003 /* AudioOwnerLeaseModelTests.swift in Sources */,
 				D5F000000000000000000003 /* OwnerTruthContractsTests.swift in Sources */,
+				C7E4A0000000000000000002 /* PublicationVisitorAccessTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
