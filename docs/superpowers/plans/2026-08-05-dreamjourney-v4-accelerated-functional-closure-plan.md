@@ -31,9 +31,9 @@
 
 ## 3. 当前执行指针
 
-已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`、`P2-S1`、`P2-S2a`、`P2-S2b`、`P2-S3a`、`P2-S3b`、`P2-S4A`、`P2-S4B`、`P2-S4C`、`P3-S1`。当前执行：`P3-S2：形成同 revision 的完整非真机 evidence snapshot。`
+已完成：`P0-S1`、`P0-S2`、`P0-S3`、`P0-S4`、`P1-S1`、`P1-S2`、`P1-S3`、`P1-S4`、`P2-S1`、`P2-S2a`、`P2-S2b`、`P2-S3a`、`P2-S3b`、`P2-S4A`、`P2-S4B`、`P2-S4C`、`P3-S1`、`P3-S2`。当前执行：本计划定义的**非真机功能开发与统一证据收敛已完成**；后续仅按独立 Gate 进入真实 Provider、产品/法务或真机验收，不能把它们伪装成新的非真机功能 Slice。
 
-完成当前 Slice 后，不停留等待，按本文件顺序进入下一个未完成 Slice。只有缺少真实 Provider、不可逆生产迁移、数据删除授权或重大产品决策时才暂停。
+完整证据见 `docs/superpowers/status/2026-08-06-v4-unified-non-device-evidence-p3-s2.md`。只有获得对应的真实 Provider、不可逆生产迁移/数据删除授权、产品/法务决策或真机条件时，才启动后续验收任务。
 
 ## 4. P0：完成 R1 的私有媒体与 M0 生产依赖
 
@@ -206,7 +206,9 @@
 
 **已完成 P3-S1。** 新增 `Scripts/QA/product-v4/v4-non-device-release-lanes-v1.json` 与 `run-v4-unified-non-device-evidence.sh`；runner 默认 dry-run，只有 `--execute` 才调用既有 gate，命令日志会在归档前按环境变量名脱敏。M1 实际 lane 已通过，输出固定为 `NO_GO`，不替代真机或外部 Provider 验收。
 
-**当前子项 P3-S2：完整非真机 evidence snapshot。** 在同一 iOS/Backend revision 下执行 Stage 2、M1、M2，并为 M0 提供已验证的后端 evidence manifest。每个 lane 保持独立日志和 blocker；最终输出只汇总通过状态、revision 和尚未关闭的外部/设备/产品 Gate。
+**已完成 P3-S2：完整非真机 evidence snapshot。** `p3-s2-full-dea13b1-182984` 在同一份快照中记录 iOS `182984f9` 与 Backend `dea13b1`：M0、Stage 2、M1、M2 的所有既有 lane command 均通过。M0 后端 manifest 同时覆盖本地全量验证、隔离 PostgreSQL 和部署 API 共 15 步；为保持迁移验证真实可靠，家庭贡献 smoke 从错误要求历史 `0072` 永远是 schema head，修正为要求该迁移已应用且 `verify()==ready`，补丁已部署。聚合 manifest 固定输出 `releaseDecision=NO_GO`，并分别列出真实身份/媒体/声音/公开索引 Provider、真机和成年人安全/法务 Gate。详情见 `docs/superpowers/status/2026-08-06-v4-unified-non-device-evidence-p3-s2.md`。
+
+**P3 Gate**：本计划内的非真机证据已收敛；M0 仍需真实身份 Provider 与设备验收，Stage 2 仍需真实媒体 Provider 与设备验收，M1 仍需真实声音 Provider 回执与音频路由验收，M2 仍需公开索引/清理回执、长会话设备验收和成年人安全/法务准入。它们必须作为独立的外部或真机任务启动。
 
 ## 8. 并行与提交规则
 
