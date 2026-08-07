@@ -1,8 +1,8 @@
 # DreamJourney V4 剩余功能加速闭环计划
 
 日期：2026-08-05
-状态：`IN_PROGRESS`
-日常开发唯一入口：本文件
+状态：`COMPLETE`
+定位：已完成的非真机功能与证据基线；后续日常开发入口见 `docs/superpowers/plans/2026-08-06-dreamjourney-v4-production-functional-closure-plan.md`。
 
 ## 1. 计划口径
 
