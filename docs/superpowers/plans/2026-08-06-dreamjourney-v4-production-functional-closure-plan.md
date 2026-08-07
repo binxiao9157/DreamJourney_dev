@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余生产功能闭环计划
 
 日期：2026-08-06
-状态：`READY_FOR_EXECUTION`
+状态：`A0_COMPLETE_A1_WAITING_EXTERNAL_INPUT`
 日常开发唯一入口：本文件
 前置基线：`docs/superpowers/plans/2026-08-05-dreamjourney-v4-accelerated-functional-closure-plan.md` 已完成，作为非真机合同、默认关闭策略与证据基线，不再重复开发。
 
@@ -30,9 +30,9 @@
 
 当前提交基线：
 
-- iOS：`feature/prd-stitch-ui-adaptation@f8dd978e`
-- 后端：`main@dea13b1`
-- 已部署后端：`dea13b1`，健康检查与 Postgres readiness 已验证。
+- iOS：`feature/prd-stitch-ui-adaptation@e1048680`
+- 后端：`main@f819c2e`
+- 已部署后端：`f819c2e`，健康检查、Postgres readiness 与 A0 runtime capability smoke 已验证。
 - 完整非真机证据：`docs/superpowers/status/2026-08-06-v4-unified-non-device-evidence-p3-s2.md`。
 
 ## 3. 执行原则
@@ -79,6 +79,14 @@ flowchart LR
 **验收**：后端单测、配置矩阵 smoke、脱敏检查、部署 `/ready` 和 iOS typed client 静态/单测。
 **完成定义**：无 Provider 时所有相关能力明确不可用；有 Provider 时可追踪其用途与 Gate，不泄露密钥。
 **外部输入**：无，可先实施。
+
+**执行状态（2026-08-07）**：`COMPLETE`
+
+- 后端 `f819c2e`：新增启动期 Provider inventory，覆盖私有对象存储、媒体处理、OTP、声音复刻与数字人；每项能力独立 fail-closed，公开响应只返回脱敏元数据。
+- iOS `e1048680`：新增 typed runtime consumer；媒体摄入入口必须同时满足服务端 capability、release policy 与完整合同，旧运行时响应保持保守关闭。
+- 验证：后端 9 项 runtime 单测、配置脱敏检查、iOS typed smoke、完整 iOS Debug 模拟器构建、统一非真机发布回归，以及已部署 `/config/runtime` smoke 均通过。
+- 部署证据：生产 API revision `f819c2e`；`scripts/run-backend-runtime-capability-deployed-smoke.sh` 已通过。详细字段与配置矩阵见后端 `docs/backend/2026-08-07-provider-runtime-capability-a0.md`。
+- 下一项：`A1`。它需要先确定唯一的首发对象存储 Provider、地域、bucket、加密/保留策略、最小权限服务端凭据和测试租户；在这些输入明确前不启用真实媒体入口。
 
 ### A1：真实私有对象存储 Adapter
 
