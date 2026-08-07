@@ -513,6 +513,9 @@ run_step "Swift model guard captured-feature-policy" "$STATIC_LOG_DIR/feature-ga
 run_step "Swift model guard runtime-capability-snapshot" "$STATIC_LOG_DIR/runtime-capability-snapshot-model-smoke.log" \
   "$SCRIPT_DIR/run-runtime-capability-snapshot-model-smoke.sh"
 
+run_step "Owner Truth media runtime capability typed client" "$STATIC_LOG_DIR/owner-truth-media-runtime-capability-model-smoke.log" \
+  "$SCRIPT_DIR/../product-v4/run-owner-truth-media-runtime-capability-smoke.sh"
+
 run_step "Swift guard knowledge-semantic-cache-isolation" "$STATIC_LOG_DIR/knowledge-semantic-cache-isolation-check.log" \
   "$SCRIPT_DIR/run-knowledge-semantic-cache-isolation-check.sh"
 

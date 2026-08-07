@@ -15,6 +15,13 @@ enum RuntimeCapabilitySnapshotModelSmoke {
             "fallbackMode": "providerProxy",
             "reason": "externalEvidenceMissing",
             "evidenceTimestamp": NSNull(),
+            "providerKind": "voiceCloneAndSynthesis",
+            "operation": "trainQuerySynthesizeDelete",
+            "dataClass": "authorizedAdultVoiceSample",
+            "region": "providerManaged",
+            "retentionPolicyVersion": "voiceProfileRetention-v1",
+            "configurationStatus": "valid",
+            "evidenceStatus": "notVerified",
         ]
 
         guard let complete = RuntimeCapabilitySnapshot(json: completeJSON) else {
@@ -27,6 +34,8 @@ enum RuntimeCapabilitySnapshotModelSmoke {
         require(complete.isProviderOperational, "configured provider should be operational")
         require(!complete.isPubliclyAvailable, "provider ready must not imply release/external ready")
         require(complete.readiness == .externalVerificationMissing, "missing G3/G4 evidence should be explicit")
+        require(complete.providerMetadataComplete, "provider metadata should decode from a complete runtime contract")
+        require(complete.providerKind == "voiceCloneAndSynthesis", "provider kind should remain typed")
 
         let legacy = RuntimeCapabilitySnapshot.conservativeLegacy(
             capability: "voiceCloneShell",
@@ -41,6 +50,7 @@ enum RuntimeCapabilitySnapshotModelSmoke {
         require(!legacy.isProviderOperational, "legacy providerReady alias must not unlock provider effects")
         require(!legacy.isPubliclyAvailable, "legacy aliases must fail closed")
         require(legacy.readiness == .unknown, "legacy aliases should render unknown")
+        require(!legacy.providerMetadataComplete, "legacy aliases should not invent provider metadata")
 
         let staleJSON: [String: Any] = [
             "schemaVersion": 1,

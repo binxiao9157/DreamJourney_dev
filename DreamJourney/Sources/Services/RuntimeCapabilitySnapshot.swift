@@ -4,6 +4,9 @@ enum RuntimeCapabilityID: String, CaseIterable {
     case archiveImageAnalysis
     case archiveAudioUpload
     case archiveVideoUpload
+    case ownerTruthMediaStorage
+    case ownerTruthMediaProcessing
+    case identityChallenge
     case timeLetters
     case familyManagement
     case familySpace
@@ -34,6 +37,14 @@ struct RuntimeCapabilitySnapshot: Equatable {
     let fallbackMode: String
     let reason: String
     let evidenceTimestamp: Date?
+    let providerKind: String
+    let operation: String
+    let dataClass: String
+    let region: String
+    let retentionPolicyVersion: String
+    let configurationStatus: String
+    let evidenceStatus: String
+    let providerMetadataComplete: Bool
     let contractComplete: Bool
 
     /// The runtime contract is safe to use as an authority boundary.  A missing
@@ -84,6 +95,13 @@ struct RuntimeCapabilitySnapshot: Equatable {
             "releaseVisible=\(releaseVisible)",
             "externalVerified=\(externalVerified)",
             "provider=\(provider)",
+            "providerKind=\(providerKind)",
+            "operation=\(operation)",
+            "dataClass=\(dataClass)",
+            "region=\(region)",
+            "retention=\(retentionPolicyVersion)",
+            "configuration=\(configurationStatus)",
+            "evidence=\(evidenceStatus)",
             "fallback=\(fallbackMode)",
             "reason=\(reason)",
             "contractComplete=\(contractComplete)",
@@ -114,6 +132,27 @@ struct RuntimeCapabilitySnapshot: Equatable {
         self.fallbackMode = fallbackMode
         self.reason = reason
         evidenceTimestamp = Self.dateValue(json["evidenceTimestamp"])
+        let parsedProviderKind = json["providerKind"] as? String
+        let parsedOperation = json["operation"] as? String
+        let parsedDataClass = json["dataClass"] as? String
+        let parsedRegion = json["region"] as? String
+        let parsedRetentionPolicyVersion = json["retentionPolicyVersion"] as? String
+        let parsedConfigurationStatus = json["configurationStatus"] as? String
+        let parsedEvidenceStatus = json["evidenceStatus"] as? String
+        providerKind = parsedProviderKind ?? "unknown"
+        operation = parsedOperation ?? "unknown"
+        dataClass = parsedDataClass ?? "unknown"
+        region = parsedRegion ?? "unknown"
+        retentionPolicyVersion = parsedRetentionPolicyVersion ?? "unknown"
+        configurationStatus = parsedConfigurationStatus ?? "unknown"
+        evidenceStatus = parsedEvidenceStatus ?? "unknown"
+        providerMetadataComplete = parsedProviderKind != nil
+            && parsedOperation != nil
+            && parsedDataClass != nil
+            && parsedRegion != nil
+            && parsedRetentionPolicyVersion != nil
+            && parsedConfigurationStatus != nil
+            && parsedEvidenceStatus != nil
         contractComplete = true
     }
 
@@ -137,6 +176,14 @@ struct RuntimeCapabilitySnapshot: Equatable {
             fallbackMode: fallbackMode,
             reason: "legacyCapabilityContractIncomplete",
             evidenceTimestamp: nil,
+            providerKind: "unknown",
+            operation: "unknown",
+            dataClass: "unknown",
+            region: "unknown",
+            retentionPolicyVersion: "unknown",
+            configurationStatus: "unknown",
+            evidenceStatus: "unknown",
+            providerMetadataComplete: false,
             contractComplete: false
         )
     }
@@ -153,6 +200,14 @@ struct RuntimeCapabilitySnapshot: Equatable {
         fallbackMode: String,
         reason: String,
         evidenceTimestamp: Date?,
+        providerKind: String,
+        operation: String,
+        dataClass: String,
+        region: String,
+        retentionPolicyVersion: String,
+        configurationStatus: String,
+        evidenceStatus: String,
+        providerMetadataComplete: Bool,
         contractComplete: Bool
     ) {
         self.schemaVersion = schemaVersion
@@ -166,6 +221,14 @@ struct RuntimeCapabilitySnapshot: Equatable {
         self.fallbackMode = fallbackMode
         self.reason = reason
         self.evidenceTimestamp = evidenceTimestamp
+        self.providerKind = providerKind
+        self.operation = operation
+        self.dataClass = dataClass
+        self.region = region
+        self.retentionPolicyVersion = retentionPolicyVersion
+        self.configurationStatus = configurationStatus
+        self.evidenceStatus = evidenceStatus
+        self.providerMetadataComplete = providerMetadataComplete
         self.contractComplete = contractComplete
     }
 

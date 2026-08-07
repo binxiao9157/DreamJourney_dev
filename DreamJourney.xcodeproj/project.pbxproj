@@ -122,6 +122,7 @@
 		C7E180000000000000000001 /* KnowledgeLocalStoragePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E180000000000000000101 /* KnowledgeLocalStoragePolicy.swift */; };
 		C7E190000000000000000001 /* ReleasePolicyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E190000000000000000101 /* ReleasePolicyStore.swift */; };
 		C7E190000000000000000002 /* RuntimeCapabilitySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E190000000000000000102 /* RuntimeCapabilitySnapshot.swift */; };
+		EB7B1D6664E54B32AF507382 /* OwnerTruthMediaRuntimeCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE5E4BFE07EA4623B6832EB0 /* OwnerTruthMediaRuntimeCapability.swift */; };
 		C7E1A0000000000000000001 /* OperationsEvidenceEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1A0000000000000000101 /* OperationsEvidenceEvent.swift */; };
 		C7E1B0000000000000000001 /* BackendIdentityChallenge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B0000000000000000101 /* BackendIdentityChallenge.swift */; };
 		C7E1B2000000000000000001 /* AccountSessionActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B2000000000000000101 /* AccountSessionActor.swift */; };
@@ -334,6 +335,7 @@
 		6603143627D340B690FFE39E /* OwnerTruthMediaTaskRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthMediaTaskRecovery.swift; sourceTree = "<group>"; };
 		C7E190000000000000000101 /* ReleasePolicyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleasePolicyStore.swift; sourceTree = "<group>"; };
 		C7E190000000000000000102 /* RuntimeCapabilitySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeCapabilitySnapshot.swift; sourceTree = "<group>"; };
+		BE5E4BFE07EA4623B6832EB0 /* OwnerTruthMediaRuntimeCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthMediaRuntimeCapability.swift; sourceTree = "<group>"; };
 		C7E1A0000000000000000101 /* OperationsEvidenceEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationsEvidenceEvent.swift; sourceTree = "<group>"; };
 		C7E1B0000000000000000101 /* BackendIdentityChallenge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendIdentityChallenge.swift; sourceTree = "<group>"; };
 		C7E1B2000000000000000101 /* AccountSessionActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSessionActor.swift; sourceTree = "<group>"; };
@@ -489,6 +491,7 @@
 				C7E180000000000000000101 /* KnowledgeLocalStoragePolicy.swift */,
 				C7E190000000000000000101 /* ReleasePolicyStore.swift */,
 				C7E190000000000000000102 /* RuntimeCapabilitySnapshot.swift */,
+				BE5E4BFE07EA4623B6832EB0 /* OwnerTruthMediaRuntimeCapability.swift */,
 				C7E1A0000000000000000101 /* OperationsEvidenceEvent.swift */,
 				8C5B565061358529E1029413 /* KBLiteTestHelper.swift */,
 				1EC2B6D3AE2C256785CCE388 /* MemoryModel.swift */,
@@ -1144,6 +1147,7 @@
 				28D8501C781E7E8F03B1C87B /* FeatureFlagService.swift in Sources */,
 				C7E190000000000000000001 /* ReleasePolicyStore.swift in Sources */,
 				C7E190000000000000000002 /* RuntimeCapabilitySnapshot.swift in Sources */,
+				EB7B1D6664E54B32AF507382 /* OwnerTruthMediaRuntimeCapability.swift in Sources */,
 				C7E1A0000000000000000001 /* OperationsEvidenceEvent.swift in Sources */,
 				9D62718D2F007D0949BE1701 /* FootprintNotificationBanner.swift in Sources */,
 				9A84BB0966C1478900AA56A3 /* HomeHeaderView.swift in Sources */,

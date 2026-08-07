@@ -1143,6 +1143,7 @@ struct BackendRuntimeConfig {
     let archiveMediaUploadIntentAvailable: Bool
     let archiveMediaUploadIntentEndpoint: String?
     let archiveMedia: ArchiveMediaRuntimeCapability
+    let ownerTruthMedia: OwnerTruthMediaRuntimeCapability
     let archiveImageAnalysis: ArchiveImageAnalysisRuntimeCapability
     let voiceClone: VoiceCloneRuntimeCapability
     let digitalHuman: DigitalHumanRuntimeCapability
@@ -1167,6 +1168,7 @@ struct BackendRuntimeConfig {
         let voice = json["voice"] as? [String: Any]
         let fallback = voice?["fallback"] as? [String: Any]
         let archive = json["archive"] as? [String: Any]
+        let ownerTruthMedia = json["ownerTruthMedia"] as? [String: Any]
         let archiveImageAnalysis = json["archiveImageAnalysis"] as? [String: Any]
         let voiceClone = json["voiceClone"] as? [String: Any]
         let digitalHuman = json["digitalHuman"] as? [String: Any]
@@ -1180,6 +1182,10 @@ struct BackendRuntimeConfig {
         archiveMediaUploadIntentAvailable = capabilities?["archiveMediaUploadIntent"] as? Bool ?? false
         archiveMediaUploadIntentEndpoint = archive?["uploadIntentEndpoint"] as? String
         self.archiveMedia = ArchiveMediaRuntimeCapability(json: archive, capabilities: capabilities)
+        self.ownerTruthMedia = OwnerTruthMediaRuntimeCapability(
+            json: ownerTruthMedia,
+            snapshots: decodedSnapshots
+        )
         self.archiveImageAnalysis = ArchiveImageAnalysisRuntimeCapability(
             json: archiveImageAnalysis,
             axisSnapshot: decodedSnapshots[RuntimeCapabilityID.archiveImageAnalysis.rawValue]
