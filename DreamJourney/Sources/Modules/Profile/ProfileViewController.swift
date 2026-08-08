@@ -455,7 +455,12 @@ final class ProfileViewController: UIViewController {
     }
 
     private var isPublicationManagementQAEntryVisible: Bool {
-        PublicationManagementM2QAGate.isEnabled
+        PublicationManagementM2AccessGate.isManagementRouteAllowed
+    }
+
+    private var isPublicationVisitorEntryVisible: Bool {
+        PublicationVisitorRuntime.shared.hasPendingOrActiveAccess
+            && PublicationVisitorM2AccessGate.isRouteAllowed
     }
 
     private var isAccountDataExportVisible: Bool {
@@ -519,6 +524,7 @@ final class ProfileViewController: UIViewController {
         navigationController?.setNavigationBarHidden(true, animated: animated)
         restoreAccountDataExportStatus()
         updateAccountDataExportRow()
+        rebuildContent()
     }
 
     override func viewDidLayoutSubviews() {
@@ -998,6 +1004,9 @@ final class ProfileViewController: UIViewController {
         if isPublicationManagementQAEntryVisible {
             rows.append(.publicationManagementQA)
         }
+        if isPublicationVisitorEntryVisible {
+            rows.append(.publicationVisitor)
+        }
         if isFeatureRouteAllowed(.legalCenter, risk: .ownerTextCore) {
             rows.append(.legalCenter)
         }
@@ -1127,6 +1136,8 @@ final class ProfileViewController: UIViewController {
             showVoiceCloneShell()
         case .publicationManagementQA:
             showPublicationManagementQA()
+        case .publicationVisitor:
+            showPublicationVisitor()
         case .legalCenter:
             showLegalCenter()
         case .dataExport:
@@ -1168,6 +1179,14 @@ final class ProfileViewController: UIViewController {
         }
         navigationController?.pushViewController(
             ProfilePublicationManagementQAViewController(),
+            animated: true
+        )
+    }
+
+    private func showPublicationVisitor() {
+        guard isPublicationVisitorEntryVisible else { return }
+        navigationController?.pushViewController(
+            ProfilePublicationVisitorViewController(),
             animated: true
         )
     }
@@ -1901,6 +1920,7 @@ private enum ProfileRowAction: Equatable {
     case familyManagement
     case voiceClone
     case publicationManagementQA
+    case publicationVisitor
     case legalCenter
     case dataExport
     case logout
@@ -1916,6 +1936,8 @@ private enum ProfileRowAction: Equatable {
             return "音色复刻"
         case .publicationManagementQA:
             return "发布管理"
+        case .publicationVisitor:
+            return "受邀回忆"
         case .legalCenter:
             return "法律法规"
         case .dataExport:
@@ -1937,6 +1959,8 @@ private enum ProfileRowAction: Equatable {
             return "waveform.badge.mic"
         case .publicationManagementQA:
             return "rectangle.3.group.bubble"
+        case .publicationVisitor:
+            return "text.book.closed"
         case .legalCenter:
             return "chevron.right"
         case .dataExport:
@@ -1952,7 +1976,7 @@ private enum ProfileRowAction: Equatable {
         switch self {
         case .accountDeletion:
             return true
-        case .profileSettings, .familyManagement, .voiceClone, .publicationManagementQA, .legalCenter, .dataExport, .logout:
+        case .profileSettings, .familyManagement, .voiceClone, .publicationManagementQA, .publicationVisitor, .legalCenter, .dataExport, .logout:
             return false
         }
     }
@@ -1967,6 +1991,8 @@ private enum ProfileRowAction: Equatable {
             return "profile-voice-clone-row"
         case .publicationManagementQA:
             return "profile-publication-management-qa-entry"
+        case .publicationVisitor:
+            return "profile-publication-visitor-entry"
         case .legalCenter:
             return "profile-legal-center-row"
         case .dataExport:

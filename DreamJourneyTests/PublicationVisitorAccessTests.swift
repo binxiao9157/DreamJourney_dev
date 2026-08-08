@@ -6,6 +6,147 @@ import XCTest
 #endif
 
 final class PublicationVisitorAccessTests: XCTestCase {
+    func testM2PolicyBindingsSeparateOwnerGrantManagementFromVisitorAccess() {
+        XCTAssertEqual(DJFeature.publicationManagementM2.backendReleasePolicyFeature, "publication")
+        XCTAssertEqual(DJFeature.publicationManagementM2.backendReleasePolicyAudience, "owner")
+        XCTAssertEqual(DJFeature.publicationGrantManagementM2.backendReleasePolicyFeature, "visitorAccess")
+        XCTAssertEqual(DJFeature.publicationGrantManagementM2.backendReleasePolicyAudience, "owner")
+        XCTAssertEqual(DJFeature.publicationVisitorM2.backendReleasePolicyFeature, "visitorAccess")
+        XCTAssertEqual(DJFeature.publicationVisitorM2.backendReleasePolicyAudience, "visitor")
+    }
+
+    func testReleasePolicyCacheScopeSeparatesOwnerAndVisitorAudience() {
+        let store = ReleasePolicyStore(userDefaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let owner = ReleasePolicyCacheScope(
+            accountUserId: "account-a",
+            appBuild: "100",
+            audience: "owner"
+        )
+        let visitor = ReleasePolicyCacheScope(
+            accountUserId: "account-a",
+            appBuild: "100",
+            audience: "visitor"
+        )
+
+        XCTAssertNotEqual(owner, visitor)
+        XCTAssertNotEqual(store.storageKey(for: owner), store.storageKey(for: visitor))
+    }
+
+    func testFormalRoutesUseIndependentOwnerGrantAndVisitorPolicyFeatures() {
+        let service = FeatureGateService.shared
+        XCTAssertEqual(
+            service.featureForRequest(
+                path: "/v2/vaults/vault-a/publications",
+                method: .get,
+                payload: nil
+            ),
+            .publicationManagementM2
+        )
+        XCTAssertEqual(
+            service.featureForRequest(
+                path: "/v2/vaults/vault-a/publication-grants",
+                method: .get,
+                payload: nil
+            ),
+            .publicationGrantManagementM2
+        )
+        XCTAssertEqual(
+            service.featureForRequest(
+                path: "/v2/publication-grants/grant-a/sessions",
+                method: .post,
+                payload: nil
+            ),
+            .publicationVisitorM2
+        )
+        XCTAssertEqual(
+            service.featureForRequest(
+                path: "/v2/publication-sessions/session-a/projection",
+                method: .post,
+                payload: nil
+            ),
+            .publicationVisitorM2
+        )
+    }
+
+    func testVisitorDeepLinkRequiresOneStrictGrantAndCredentialPair() throws {
+        let grantID = UUID().uuidString.lowercased()
+        let credential = String(repeating: "g", count: 32)
+        let valid = try XCTUnwrap(URL(string:
+            "dreamjourney://publication/visitor?grantId=\(grantID)&grantCredential=\(credential)"
+        ))
+        let duplicate = try XCTUnwrap(URL(string:
+            "dreamjourney://publication/visitor?grantId=\(grantID)&grantId=\(grantID)&grantCredential=\(credential)"
+        ))
+        let unrelated = try XCTUnwrap(URL(string:
+            "dreamjourney://echo/visitor?grantId=\(grantID)&grantCredential=\(credential)"
+        ))
+
+        XCTAssertEqual(PublicationVisitorInvitation(deepLinkURL: valid)?.grantID, grantID)
+        XCTAssertNil(PublicationVisitorInvitation(deepLinkURL: duplicate))
+        XCTAssertNil(PublicationVisitorInvitation(deepLinkURL: unrelated))
+    }
+
+    func testExpiredScopeIsClearedBeforeItCanBeRead() throws {
+        let runtime = makeRuntime(subjectID: "visitor-a", vaultID: "vault-a", generation: 3)
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "visitor-a"))
+        let now = Date()
+        let scope = try XCTUnwrap(PublicationVisitorSessionScope(
+            visitorSessionID: "visitor-session-1",
+            publicationID: "publication-1",
+            publicationVersionID: "publication-version-1",
+            expiresAt: now.addingTimeInterval(1),
+            sessionCredential: String(repeating: "c", count: 32),
+            accountLease: lease,
+            now: now
+        ))
+        let coordinator = PublicationVisitorSessionCoordinator(accountLeaseRuntime: runtime)
+        XCTAssertTrue(coordinator.activate(scope, at: now))
+
+        XCTAssertNil(coordinator.currentScope(at: now.addingTimeInterval(2)))
+        XCTAssertEqual(coordinator.snapshot().invalidationReason, .expired)
+    }
+
+    func testAccountSwitchDropsPendingAdmissionCallbackAndCredentialScope() throws {
+        let accountRuntime = makeRuntime(subjectID: "visitor-a", vaultID: "vault-a", generation: 3)
+        let lease = try XCTUnwrap(accountRuntime.capture(forSubjectId: "visitor-a"))
+        let client = PublicationVisitorAdmissionClientStub()
+        let coordinator = PublicationVisitorSessionCoordinator(accountLeaseRuntime: accountRuntime)
+        let runtime = PublicationVisitorRuntime(
+            client: client,
+            sessionCoordinator: coordinator,
+            accountLeaseRuntime: accountRuntime,
+            routeAllowed: { true }
+        )
+        let invitation = try XCTUnwrap(PublicationVisitorInvitation(
+            grantID: UUID().uuidString,
+            grantCredential: String(repeating: "g", count: 32)
+        ))
+        runtime.stage(invitation)
+
+        let expectation = expectation(description: "stale admission rejected")
+        runtime.open(accountLease: lease) { result in
+            guard case let .failure(error) = result else {
+                XCTFail("Expected stale admission to fail")
+                expectation.fulfill()
+                return
+            }
+            XCTAssertEqual(error as? PublicationVisitorAccessError, .accountLeaseInvalid)
+            expectation.fulfill()
+        }
+        accountRuntime.publish(session: makeSession(
+            subjectID: "visitor-b",
+            vaultID: "vault-b",
+            generation: 4
+        ))
+        runtime.clear(reason: .accountLeaseInvalid)
+        client.complete(with: .success(try makeAdmission(grantID: invitation.grantID)))
+        wait(for: [expectation], timeout: 1)
+
+        XCTAssertFalse(runtime.snapshot().hasPendingInvitation)
+        XCTAssertFalse(runtime.snapshot().session.isActive)
+        XCTAssertEqual(runtime.snapshot().session.invalidationReason, .accountLeaseInvalid)
+    }
+
     func testCoordinatorClearsScopeAndProjectionAfterAccountLeaseChanges() throws {
         let runtime = makeRuntime(subjectID: "visitor-a", vaultID: "vault-a", generation: 3)
         let scope = try makeScope(runtime: runtime)
@@ -188,6 +329,36 @@ final class PublicationVisitorAccessTests: XCTestCase {
             state: .active,
             activatedAt: Date()
         )
+    }
+
+    private func makeAdmission(grantID: String) throws -> PublicationVisitorAdmission {
+        try XCTUnwrap(PublicationVisitorAdmission(json: [
+            "schemaVersion": PublicationVisitorAdmission.schemaVersion,
+            "grantId": grantID,
+            "visitorSessionId": "visitor-session-1",
+            "publicationId": "publication-1",
+            "publicationVersionId": "publication-version-1",
+            "expiresAt": ISO8601DateFormatter().string(from: Date().addingTimeInterval(300)),
+            "useRemaining": 1,
+        ]))
+    }
+}
+
+private final class PublicationVisitorAdmissionClientStub: PublicationVisitorAdmissionClient {
+    private var completion: ((Result<PublicationVisitorAdmission, Error>) -> Void)?
+
+    func admitVisitor(
+        invitation: PublicationVisitorInvitation,
+        sessionCredential: String,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationVisitorAdmission, Error>) -> Void
+    ) {
+        self.completion = completion
+    }
+
+    func complete(with result: Result<PublicationVisitorAdmission, Error>) {
+        completion?(result)
+        completion = nil
     }
 }
 

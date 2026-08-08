@@ -465,12 +465,15 @@ enum AccountLifecycleRuntimeRegistry {
             let appBuild = Bundle.main.object(
                 forInfoDictionaryKey: "CFBundleVersion"
             ) as? String ?? "0"
-            ReleasePolicyStore.shared.remove(
-                scope: ReleasePolicyCacheScope(
+            for audience in ["owner", "visitor"] {
+                ReleasePolicyStore.shared.remove(scope: ReleasePolicyCacheScope(
                     accountUserId: oldAccountLease.subjectId,
-                    appBuild: appBuild
-                )
-            )
+                    appBuild: appBuild,
+                    audience: audience,
+                    cohort: "closedPilotAdultSelf"
+                ))
+            }
+            PublicationVisitorRuntime.shared.clear(reason: .accountLeaseInvalid)
         }
         return .completed(
             requestedOutcome,

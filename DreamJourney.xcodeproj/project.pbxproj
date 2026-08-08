@@ -138,6 +138,7 @@
 		C7E4A0000000000000000002 /* PublicationVisitorAccessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E4A0000000000000000102 /* PublicationVisitorAccessTests.swift */; };
 		C7E5A0000000000000000001 /* PublicationManagementAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E5A0000000000000000101 /* PublicationManagementAccess.swift */; };
 		C7E5A0000000000000000002 /* ProfilePublicationManagementQAViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E5A0000000000000000102 /* ProfilePublicationManagementQAViewController.swift */; };
+		A1B2C3D4E5F60708090A0B0C /* ProfilePublicationVisitorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60708090A0B0D /* ProfilePublicationVisitorViewController.swift */; };
 		C7E5A0000000000000000003 /* PublicationManagementAccessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E5A0000000000000000103 /* PublicationManagementAccessTests.swift */; };
 		D3A000000000000000000001 /* DigitalHumanRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A000000000000000000101 /* DigitalHumanRuntime.swift */; };
 		D3A000000000000000000002 /* AudioOnlyDigitalHumanRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A000000000000000000102 /* AudioOnlyDigitalHumanRuntime.swift */; };
@@ -351,6 +352,7 @@
 		C7E4A0000000000000000102 /* PublicationVisitorAccessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicationVisitorAccessTests.swift; sourceTree = "<group>"; };
 		C7E5A0000000000000000101 /* PublicationManagementAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicationManagementAccess.swift; sourceTree = "<group>"; };
 		C7E5A0000000000000000102 /* ProfilePublicationManagementQAViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePublicationManagementQAViewController.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60708090A0B0D /* ProfilePublicationVisitorViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePublicationVisitorViewController.swift; sourceTree = "<group>"; };
 		C7E5A0000000000000000103 /* PublicationManagementAccessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicationManagementAccessTests.swift; sourceTree = "<group>"; };
 		C9115FEF531F2DA00EDE4969 /* bs_texture_halfFace.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = bs_texture_halfFace.png; sourceTree = "<group>"; };
 		D1D000000000000000000101 /* PushDeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushDeviceTokenStore.swift; sourceTree = "<group>"; };
@@ -662,6 +664,7 @@
 				B1B000000000000000000006 /* ProfileCareModels.swift */,
 				B1B000000000000000000007 /* ProfileViewController.swift */,
 				C7E5A0000000000000000102 /* ProfilePublicationManagementQAViewController.swift */,
+				A1B2C3D4E5F60708090A0B0D /* ProfilePublicationVisitorViewController.swift */,
 				B1B000000000000000000016 /* ProfileLegalViewController.swift */,
 				B1B000000000000000000017 /* ProfileSettingsViewController.swift */,
 				B1B000000000000000000043 /* ProfilePasswordChangeViewController.swift */,
@@ -1131,6 +1134,7 @@
 				C7E4A0000000000000000001 /* PublicationVisitorAccess.swift in Sources */,
 				C7E5A0000000000000000001 /* PublicationManagementAccess.swift in Sources */,
 				C7E5A0000000000000000002 /* ProfilePublicationManagementQAViewController.swift in Sources */,
+				A1B2C3D4E5F60708090A0B0C /* ProfilePublicationVisitorViewController.swift in Sources */,
 				EB8C6638C1D5E34AC579873D /* Coordinator.swift in Sources */,
 				F90DDD2F07DD62057280F6B1 /* DeepSeekService.swift in Sources */,
 				7FE1A54F9280057AA970D224 /* DialogEngineManager.swift in Sources */,

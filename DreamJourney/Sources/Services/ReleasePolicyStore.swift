@@ -432,8 +432,15 @@ struct FeatureGateEvaluator {
 struct ReleasePolicyCacheScope: Hashable {
     let accountOrAnonymousScope: String
     let appBuild: String
+    let audience: String
+    let cohort: String
 
-    init(accountUserId: String?, appBuild: String) {
+    init(
+        accountUserId: String?,
+        appBuild: String,
+        audience: String = "owner",
+        cohort: String = "closedPilotAdultSelf"
+    ) {
         let normalizedAccount = accountUserId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if normalizedAccount.isEmpty {
             accountOrAnonymousScope = "anonymous"
@@ -443,14 +450,20 @@ struct ReleasePolicyCacheScope: Hashable {
 
         let normalizedBuild = appBuild.trimmingCharacters(in: .whitespacesAndNewlines)
         self.appBuild = normalizedBuild.isEmpty ? "unknown" : normalizedBuild
+        self.audience = audience.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        self.cohort = cohort.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var isValid: Bool {
-        !accountOrAnonymousScope.isEmpty && appBuild != "unknown" && appBuild != "0"
+        !accountOrAnonymousScope.isEmpty
+            && appBuild != "unknown"
+            && appBuild != "0"
+            && ["owner", "family", "visitor", "qa"].contains(audience)
+            && !cohort.isEmpty
     }
 
     fileprivate var storageFingerprint: String {
-        Self.digest("\(accountOrAnonymousScope)|\(appBuild)")
+        Self.digest("\(accountOrAnonymousScope)|\(appBuild)|\(audience)|\(cohort)")
     }
 
     private static func digest(_ value: String) -> String {
@@ -459,7 +472,7 @@ struct ReleasePolicyCacheScope: Hashable {
 }
 
 struct ReleasePolicyCacheEnvelope: Codable, Equatable {
-    static let currentEnvelopeVersion = 1
+    static let currentEnvelopeVersion = 2
     static let supportedPolicySchemaVersion = 1
 
     let envelopeVersion: Int
@@ -469,6 +482,8 @@ struct ReleasePolicyCacheEnvelope: Codable, Equatable {
     let emergencyRevision: Int
     let accountOrAnonymousScope: String
     let appBuild: String
+    let audience: String
+    let cohort: String
     let fetchedAt: Date
     let expiresAt: Date
     let payloadHash: String
@@ -506,7 +521,7 @@ enum ReleasePolicyStoreError: LocalizedError {
 final class ReleasePolicyStore {
     static let shared = ReleasePolicyStore()
 
-    private static let storagePrefix = "dj.releasePolicy.cache.v1"
+    private static let storagePrefix = "dj.releasePolicy.cache.v2"
     private static let maximumFutureClockSkew: TimeInterval = 300
 
     private let userDefaults: UserDefaults
@@ -544,6 +559,8 @@ final class ReleasePolicyStore {
             emergencyRevision: emergencyRevision,
             accountOrAnonymousScope: scope.accountOrAnonymousScope,
             appBuild: scope.appBuild,
+            audience: scope.audience,
+            cohort: scope.cohort,
             fetchedAt: fetchedAt,
             expiresAt: expiresAt,
             payloadHash: Self.payloadHash(payload),
@@ -581,6 +598,16 @@ final class ReleasePolicyStore {
         }
         guard envelope.appBuild == scope.appBuild else {
             return unavailable(state: .appBuildMismatch, risk: risk, reason: "appBuildMismatch", envelope: envelope, now: now)
+        }
+        guard envelope.audience == scope.audience,
+              envelope.cohort == scope.cohort else {
+            return unavailable(
+                state: .scopeMismatch,
+                risk: risk,
+                reason: "policyAudienceOrCohortMismatch",
+                envelope: envelope,
+                now: now
+            )
         }
         guard envelope.envelopeVersion == ReleasePolicyCacheEnvelope.currentEnvelopeVersion,
               envelope.policySchemaVersion == ReleasePolicyCacheEnvelope.supportedPolicySchemaVersion else {

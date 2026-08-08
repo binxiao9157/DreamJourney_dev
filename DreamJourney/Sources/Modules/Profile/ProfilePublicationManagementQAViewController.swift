@@ -114,7 +114,7 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
     }
 
     private func reload() {
-        guard PublicationManagementM2QAGate.isEnabled else {
+        guard PublicationManagementM2AccessGate.isManagementRouteAllowed else {
             render(.failed(PublicationManagementAccessError.disabled.localizedDescription))
             return
         }

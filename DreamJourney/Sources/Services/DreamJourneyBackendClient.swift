@@ -279,10 +279,10 @@ struct BackendReleasePolicySnapshot {
 
     func decision(for feature: DJFeature) -> BackendReleasePolicyFeatureDecision {
         guard !isExpired else {
-            return .failClosed(feature: feature.rawValue, reason: "expiredPolicy")
+            return .failClosed(feature: feature.backendReleasePolicyFeature, reason: "expiredPolicy")
         }
-        return features.first(where: { $0.feature == feature.rawValue })
-            ?? .failClosed(feature: feature.rawValue, reason: "unknownFeature")
+        return features.first(where: { $0.feature == feature.backendReleasePolicyFeature })
+            ?? .failClosed(feature: feature.backendReleasePolicyFeature, reason: "unknownFeature")
     }
 
     private static func intValue(_ value: Any?) -> Int? {
@@ -311,7 +311,7 @@ struct BackendCachedReleasePolicyEvaluation {
 
     func decision(for feature: DJFeature) -> BackendReleasePolicyFeatureDecision {
         guard accessMode == .useCachedPolicy, let snapshot else {
-            return .failClosed(feature: feature.rawValue, reason: reason)
+            return .failClosed(feature: feature.backendReleasePolicyFeature, reason: reason)
         }
         return snapshot.decision(for: feature)
     }
@@ -378,6 +378,9 @@ final class FeatureGateService {
         .ownerMediaProcessingV1,
         .ownerTruthCandidateReview,
         .accountDataExport,
+        .publicationManagementM2,
+        .publicationGrantManagementM2,
+        .publicationVisitorM2,
     ]
 
     private let evaluator = FeatureGateEvaluator()
@@ -392,12 +395,21 @@ final class FeatureGateService {
         return max(1, Int(rawValue ?? "") ?? 1)
     }
 
-    func refreshPolicy(completion: ((Result<BackendReleasePolicySnapshot, Error>) -> Void)? = nil) {
+    func refreshPolicy(
+        for feature: DJFeature? = nil,
+        completion: ((Result<BackendReleasePolicySnapshot, Error>) -> Void)? = nil
+    ) {
+        let audience = feature?.backendReleasePolicyAudience ?? "owner"
+        let cohort = feature?.backendReleasePolicyCohort ?? "closedPilotAdultSelf"
         let cached = DreamJourneyBackendClient.shared.cachedReleasePolicyEvaluation(
             risk: .futureBeta,
-            clientBuild: clientBuild
+            clientBuild: clientBuild,
+            audience: audience,
+            cohort: cohort
         )
         DreamJourneyBackendClient.shared.fetchReleasePolicy(
+            audience: audience,
+            cohort: cohort,
             clientBuild: clientBuild,
             knownPolicyRevision: cached.policyRevision ?? 0
         ) { result in
@@ -561,6 +573,28 @@ final class FeatureGateService {
         }
         if normalizedPath.hasPrefix("/v2/internal/publication-access/") {
             return .publicationVisitorM2
+        }
+        let publicationPathComponents = normalizedPath.split(separator: "/")
+        if publicationPathComponents.count >= 2,
+           publicationPathComponents[0] == "v2",
+           publicationPathComponents[1] == "publication-grants" {
+            return .publicationVisitorM2
+        }
+        if publicationPathComponents.count >= 2,
+           publicationPathComponents[0] == "v2",
+           publicationPathComponents[1] == "publication-sessions" {
+            return .publicationVisitorM2
+        }
+        if publicationPathComponents.count >= 4,
+           publicationPathComponents[0] == "v2",
+           publicationPathComponents[1] == "vaults" {
+            if publicationPathComponents[3] == "publication-grants" {
+                return .publicationGrantManagementM2
+            }
+            if publicationPathComponents[3] == "publications"
+                || publicationPathComponents[3] == "publication-drafts" {
+                return .publicationManagementM2
+            }
         }
         if normalizedPath.hasPrefix("/digital-human/") { return .digitalHumanLivePanel }
         if normalizedPath.hasPrefix("/voice/") || normalizedPath == "/tts" { return .voiceCloneShell }
@@ -728,13 +762,13 @@ final class FeatureGateService {
 
     func metadataHeaders(for decision: FeatureDecision) -> [String: String] {
         var headers: [String: String] = [
-            "X-DreamJourney-Feature": decision.feature.rawValue,
+            "X-DreamJourney-Feature": decision.feature.backendReleasePolicyFeature,
             "X-DreamJourney-Feature-Decision-Id": decision.decisionId,
             "X-DreamJourney-Feature-Allowed": decision.allowed ? "true" : "false",
             "X-DreamJourney-Account-Generation": decision.accountGeneration,
             "X-DreamJourney-Client-Build": String(clientBuild),
-            "X-DreamJourney-Policy-Audience": "owner",
-            "X-DreamJourney-Policy-Cohort": "closedPilotAdultSelf",
+            "X-DreamJourney-Policy-Audience": decision.feature.backendReleasePolicyAudience,
+            "X-DreamJourney-Policy-Cohort": decision.feature.backendReleasePolicyCohort,
         ]
         if let policyVersion = decision.policyVersion {
             headers["X-DreamJourney-Policy-Version"] = policyVersion
@@ -765,7 +799,9 @@ final class FeatureGateService {
     ) -> FeatureGatePolicySnapshot {
         DreamJourneyBackendClient.shared.cachedReleasePolicyEvaluation(
             risk: risk,
-            clientBuild: clientBuild
+            clientBuild: clientBuild,
+            audience: feature.backendReleasePolicyAudience,
+            cohort: feature.backendReleasePolicyCohort
         ).featureGatePolicySnapshot(for: feature)
     }
 
@@ -5438,7 +5474,7 @@ final class EchoDelayedReplyInboxAnswerReader {
     }
 }
 
-final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorReaderClient, PublicationManagementReaderClient, PublicationLifecycleClient {
+final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorAdmissionClient, PublicationVisitorReaderClient, PublicationManagementReaderClient, PublicationLifecycleClient {
     static let shared = DreamJourneyBackendClient()
 
     struct BackendErrorContext: Equatable {
@@ -5877,24 +5913,39 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         knownPolicyRevision: Int = 0,
         completion: @escaping (Result<BackendReleasePolicySnapshot, Error>) -> Void
     ) {
-        let requestedScope = releasePolicyCacheScope(clientBuild: clientBuild)
+        let normalizedAudience = audience.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedCohort = cohort.trimmingCharacters(in: .whitespacesAndNewlines)
+        let requestedScope = releasePolicyCacheScope(
+            clientBuild: clientBuild,
+            audience: normalizedAudience,
+            cohort: normalizedCohort
+        )
+        let sessionUserID = authSessionStore.currentSession?.userId
         let path = "/v2/release-policy"
-            + "?audience=\(queryComponent(audience))"
-            + "&cohort=\(queryComponent(cohort))"
+            + "?audience=\(queryComponent(normalizedAudience))"
+            + "&cohort=\(queryComponent(normalizedCohort))"
             + "&clientBuild=\(max(0, clientBuild))"
             + "&knownPolicyRevision=\(max(0, knownPolicyRevision))"
         requestJSON(
             path: path,
             method: .get,
             payload: nil,
-            authPolicy: .publicRequest
+            authPolicy: sessionUserID == nil ? .publicRequest : .userRequired,
+            sessionUserId: sessionUserID
         ) { result in
             switch result {
             case .success(let json):
                 do {
                     let snapshot = try BackendReleasePolicySnapshot(json: json)
+                    guard snapshot.audience == normalizedAudience else {
+                        throw BackendReleasePolicyContractError.accountScopeChanged
+                    }
                     let payload = try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])
-                    guard requestedScope == self.releasePolicyCacheScope(clientBuild: clientBuild) else {
+                    guard requestedScope == self.releasePolicyCacheScope(
+                        clientBuild: clientBuild,
+                        audience: normalizedAudience,
+                        cohort: normalizedCohort
+                    ) else {
                         throw BackendReleasePolicyContractError.accountScopeChanged
                     }
                     try self.releasePolicyStore.save(
@@ -5920,11 +5971,17 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
     func cachedReleasePolicyEvaluation(
         risk: ReleasePolicyRiskClass,
         clientBuild: Int,
+        audience: String = "owner",
+        cohort: String = "closedPilotAdultSelf",
         now: Date = Date(),
         minimumEmergencyRevision: Int = 0
     ) -> BackendCachedReleasePolicyEvaluation {
         let cache = releasePolicyStore.evaluate(
-            scope: releasePolicyCacheScope(clientBuild: clientBuild),
+            scope: releasePolicyCacheScope(
+                clientBuild: clientBuild,
+                audience: audience,
+                cohort: cohort
+            ),
             risk: risk,
             now: now,
             minimumEmergencyRevision: minimumEmergencyRevision
@@ -5932,14 +5989,28 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         return BackendCachedReleasePolicyEvaluation(cache: cache, risk: risk)
     }
 
-    func invalidateCachedReleasePolicyAuthority(clientBuild: Int) {
-        releasePolicyStore.remove(scope: releasePolicyCacheScope(clientBuild: clientBuild))
+    func invalidateCachedReleasePolicyAuthority(
+        clientBuild: Int,
+        audience: String = "owner",
+        cohort: String = "closedPilotAdultSelf"
+    ) {
+        releasePolicyStore.remove(scope: releasePolicyCacheScope(
+            clientBuild: clientBuild,
+            audience: audience,
+            cohort: cohort
+        ))
     }
 
-    private func releasePolicyCacheScope(clientBuild: Int) -> ReleasePolicyCacheScope {
+    private func releasePolicyCacheScope(
+        clientBuild: Int,
+        audience: String,
+        cohort: String
+    ) -> ReleasePolicyCacheScope {
         ReleasePolicyCacheScope(
             accountUserId: authSessionStore.currentSession?.userId,
-            appBuild: String(max(0, clientBuild))
+            appBuild: String(max(0, clientBuild)),
+            audience: audience,
+            cohort: cohort
         )
     }
 
@@ -9865,12 +9936,62 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         }
     }
 
+    func admitVisitor(
+        invitation: PublicationVisitorInvitation,
+        sessionCredential: String,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationVisitorAdmission, Error>) -> Void
+    ) {
+        let usesQAContract = PublicationVisitorM2QAGate.isEnabled
+        guard usesQAContract || PublicationVisitorM2AccessGate.isRouteAllowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationVisitorAccessError.disabled))
+            }
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationVisitorAccessError.accountLeaseInvalid))
+            }
+            return
+        }
+        let path = usesQAContract
+            ? "/v2/internal/publication-access/grants/\(pathComponent(invitation.grantID))/sessions"
+            : "/v2/publication-grants/\(pathComponent(invitation.grantID))/sessions"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: invitation.requestPayload(sessionCredential: sessionCredential),
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            additionalHeaders: usesQAContract ? ["X-DreamJourney-QA-Visitor-Access": "1"] : [:]
+        ) { [weak self] result in
+            guard let self else { return }
+            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(PublicationVisitorAccessError.accountLeaseInvalid))
+                return
+            }
+            switch result {
+            case .success(let object):
+                guard let admission = PublicationVisitorAdmission(json: object),
+                      admission.grantID == invitation.grantID else {
+                    completion(.failure(PublicationVisitorAccessError.malformedResponse))
+                    return
+                }
+                completion(.success(admission))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func fetchProjection(
         scope: PublicationVisitorSessionScope,
         completion: @escaping (Result<PublicationVisitorProjection, Error>) -> Void
     ) {
-        #if DEBUG || UI_QA_SIMULATOR
-        guard PublicationVisitorM2QAGate.isEnabled else {
+        let usesQAContract = PublicationVisitorM2QAGate.isEnabled
+        guard usesQAContract || PublicationVisitorM2AccessGate.isRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationVisitorAccessError.disabled))
             }
@@ -9887,13 +10008,15 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             return
         }
         requestJSON(
-            path: "/v2/internal/publication-access/sessions/\(pathComponent(scope.visitorSessionID))/projection",
+            path: usesQAContract
+                ? "/v2/internal/publication-access/sessions/\(pathComponent(scope.visitorSessionID))/projection"
+                : "/v2/publication-sessions/\(pathComponent(scope.visitorSessionID))/projection",
             method: .post,
             payload: scope.requestPayload(),
             authPolicy: .userRequired,
             applicationLease: scope.accountLease,
             sessionUserId: scope.accountLease.subjectId,
-            additionalHeaders: ["X-DreamJourney-QA-Visitor-Access": "1"]
+            additionalHeaders: usesQAContract ? ["X-DreamJourney-QA-Visitor-Access": "1"] : [:]
         ) { result in
             switch result {
             case .success(let object):
@@ -9907,11 +10030,6 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 completion(.failure(error))
             }
         }
-        #else
-        DispatchQueue.main.async {
-            completion(.failure(PublicationVisitorAccessError.disabled))
-        }
-        #endif
     }
 
     func answer(
@@ -9919,8 +10037,8 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         question: String,
         completion: @escaping (Result<PublicationVisitorAnswerResponse, Error>) -> Void
     ) {
-        #if DEBUG || UI_QA_SIMULATOR
-        guard PublicationVisitorM2QAGate.isEnabled else {
+        let usesQAContract = PublicationVisitorM2QAGate.isEnabled
+        guard usesQAContract || PublicationVisitorM2AccessGate.isRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationVisitorAccessError.disabled))
             }
@@ -9946,13 +10064,15 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         var payload = scope.requestPayload()
         payload["question"] = normalizedQuestion
         requestJSON(
-            path: "/v2/internal/publication-access/sessions/\(pathComponent(scope.visitorSessionID))/answers",
+            path: usesQAContract
+                ? "/v2/internal/publication-access/sessions/\(pathComponent(scope.visitorSessionID))/answers"
+                : "/v2/publication-sessions/\(pathComponent(scope.visitorSessionID))/answers",
             method: .post,
             payload: payload,
             authPolicy: .userRequired,
             applicationLease: scope.accountLease,
             sessionUserId: scope.accountLease.subjectId,
-            additionalHeaders: ["X-DreamJourney-QA-Visitor-Access": "1"]
+            additionalHeaders: usesQAContract ? ["X-DreamJourney-QA-Visitor-Access": "1"] : [:]
         ) { result in
             switch result {
             case .success(let object):
@@ -9966,11 +10086,6 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 completion(.failure(error))
             }
         }
-        #else
-        DispatchQueue.main.async {
-            completion(.failure(PublicationVisitorAccessError.disabled))
-        }
-        #endif
     }
 
     func fetchOwnerPublications(
@@ -9978,8 +10093,8 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         accountLease: AccountLease,
         completion: @escaping (Result<PublicationManagementPublicationList, Error>) -> Void
     ) {
-        #if DEBUG || UI_QA_SIMULATOR
-        guard PublicationManagementM2QAGate.isEnabled else {
+        let usesQAContract = PublicationManagementM2QAGate.isEnabled
+        guard usesQAContract || PublicationManagementM2AccessGate.isManagementRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationManagementAccessError.disabled))
             }
@@ -9995,13 +10110,15 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             return
         }
         requestJSON(
-            path: "/v2/internal/owner-authority/vaults/\(pathComponent(normalizedVaultID))/publications",
+            path: usesQAContract
+                ? "/v2/internal/owner-authority/vaults/\(pathComponent(normalizedVaultID))/publications"
+                : "/v2/vaults/\(pathComponent(normalizedVaultID))/publications",
             method: .get,
             payload: nil,
             authPolicy: .userRequired,
             applicationLease: accountLease,
             sessionUserId: accountLease.subjectId,
-            additionalHeaders: ["X-DreamJourney-QA-Publication": "1"]
+            additionalHeaders: usesQAContract ? ["X-DreamJourney-QA-Publication": "1"] : [:]
         ) { [weak self] result in
             guard let self else { return }
             guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
@@ -10023,11 +10140,6 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 completion(.failure(error))
             }
         }
-        #else
-        DispatchQueue.main.async {
-            completion(.failure(PublicationManagementAccessError.disabled))
-        }
-        #endif
     }
 
     func fetchOwnerGrants(
@@ -10035,8 +10147,8 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         accountLease: AccountLease,
         completion: @escaping (Result<PublicationManagementGrantList, Error>) -> Void
     ) {
-        #if DEBUG || UI_QA_SIMULATOR
-        guard PublicationManagementM2QAGate.isEnabled else {
+        let usesQAContract = PublicationManagementM2QAGate.isEnabled
+        guard usesQAContract || PublicationManagementM2AccessGate.isManagementRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationManagementAccessError.disabled))
             }
@@ -10052,13 +10164,15 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             return
         }
         requestJSON(
-            path: "/v2/internal/publication-access/vaults/\(pathComponent(normalizedVaultID))/grants",
+            path: usesQAContract
+                ? "/v2/internal/publication-access/vaults/\(pathComponent(normalizedVaultID))/grants"
+                : "/v2/vaults/\(pathComponent(normalizedVaultID))/publication-grants",
             method: .get,
             payload: nil,
             authPolicy: .userRequired,
             applicationLease: accountLease,
             sessionUserId: accountLease.subjectId,
-            additionalHeaders: ["X-DreamJourney-QA-Visitor-Access": "1"]
+            additionalHeaders: usesQAContract ? ["X-DreamJourney-QA-Visitor-Access": "1"] : [:]
         ) { [weak self] result in
             guard let self else { return }
             guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
@@ -10080,11 +10194,6 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 completion(.failure(error))
             }
         }
-        #else
-        DispatchQueue.main.async {
-            completion(.failure(PublicationManagementAccessError.disabled))
-        }
-        #endif
     }
 
     func executePublicationLifecycle(
@@ -10095,8 +10204,8 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         accountLease: AccountLease,
         completion: @escaping (Result<PublicationLifecycleReceipt, Error>) -> Void
     ) {
-        #if DEBUG || UI_QA_SIMULATOR
-        guard PublicationLifecycleM2QAGate.isEnabled else {
+        let usesQAContract = PublicationLifecycleM2QAGate.isEnabled
+        guard usesQAContract || PublicationManagementM2AccessGate.isLifecycleRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationLifecycleAccessError.disabled))
             }
@@ -10114,17 +10223,21 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             return
         }
         requestJSON(
-            path: "/v2/internal/publication-lifecycle/vaults/\(pathComponent(normalizedVaultID))/publications/\(pathComponent(normalizedPublicationID))/\(action.rawValue)",
+            path: usesQAContract
+                ? "/v2/internal/publication-lifecycle/vaults/\(pathComponent(normalizedVaultID))/publications/\(pathComponent(normalizedPublicationID))/\(action.rawValue)"
+                : "/v2/vaults/\(pathComponent(normalizedVaultID))/publications/\(pathComponent(normalizedPublicationID))/\(action.rawValue)",
             method: .post,
             payload: command.requestPayload(),
             authPolicy: .userRequired,
             applicationLease: accountLease,
             sessionUserId: accountLease.subjectId,
-            additionalHeaders: [
-                "X-DreamJourney-QA-Publication": "1",
-                "X-DreamJourney-QA-Visitor-Access": "1",
-                "X-DreamJourney-QA-Publication-Lifecycle": "1",
-            ]
+            additionalHeaders: usesQAContract
+                ? [
+                    "X-DreamJourney-QA-Publication": "1",
+                    "X-DreamJourney-QA-Visitor-Access": "1",
+                    "X-DreamJourney-QA-Publication-Lifecycle": "1",
+                ]
+                : [:]
         ) { [weak self] result in
             guard let self else { return }
             guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
@@ -10144,11 +10257,6 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 completion(.failure(error))
             }
         }
-        #else
-        DispatchQueue.main.async {
-            completion(.failure(PublicationLifecycleAccessError.disabled))
-        }
-        #endif
     }
 
     private func requestJSON(

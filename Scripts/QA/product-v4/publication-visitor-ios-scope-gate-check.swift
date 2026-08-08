@@ -18,8 +18,11 @@ func require(_ condition: @autoclosure () -> Bool, _ message: String) {
 let featureFlags = try read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let backendClient = try read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let visitorAccess = try read("DreamJourney/Sources/Services/PublicationVisitorAccess.swift")
+let visitorView = try read("DreamJourney/Sources/Modules/Profile/ProfilePublicationVisitorViewController.swift")
 let tabCoordinator = try read("DreamJourney/Sources/App/TabCoordinator.swift")
 let profile = try read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
+let appCoordinator = try read("DreamJourney/Sources/App/AppCoordinator.swift")
+let sceneDelegate = try read("DreamJourney/Sources/SceneDelegate.swift")
 let project = try read("DreamJourney.xcodeproj/project.pbxproj")
 
 require(
@@ -28,20 +31,24 @@ require(
     "M2 visitor feature must be default-off and non-persistent"
 )
 require(
-    visitorAccess.contains("#if DEBUG || UI_QA_SIMULATOR")
-        && visitorAccess.contains("static let launchArgument = \"DJEnablePublicationVisitorM2QA\"")
-        && visitorAccess.contains("#else\n        false"),
-    "visitor reader must remain compile-time QA gated"
+    visitorAccess.contains("static let launchArgument = \"DJEnablePublicationVisitorM2QA\"")
+        && visitorAccess.contains("PublicationVisitorM2AccessGate")
+        && visitorAccess.contains("isServerPolicyManagedClosedPilotRouteAllowed"),
+    "visitor must preserve QA access while requiring server policy for the formal shell"
 )
 require(
     backendClient.contains("/v2/internal/publication-access/")
+        && backendClient.contains("/v2/publication-grants/")
+        && backendClient.contains("/v2/publication-sessions/")
         && backendClient.contains("X-DreamJourney-QA-Visitor-Access")
-        && backendClient.contains("PublicationVisitorM2QAGate.isEnabled"),
-    "reader transport must use the explicit QA-only backend boundary"
+        && backendClient.contains("PublicationVisitorM2AccessGate.isRouteAllowed"),
+    "visitor transport must separate QA and formal closed-beta contracts"
 )
 require(
-    backendClient.contains("return .publicationVisitorM2"),
-    "direct publication access requests must be feature-classified"
+    backendClient.contains("return .publicationVisitorM2")
+        && featureFlags.contains("return \"visitorAccess\"")
+        && featureFlags.contains("return \"visitor\""),
+    "formal visitor requests must map to the visitorAccess policy audience"
 )
 require(
     visitorAccess.contains("activeScope = nil")
@@ -69,19 +76,33 @@ for forbiddenSymbol in [
     "getPublicByOwner",
 ] {
     require(
-        !visitorAccess.contains(forbiddenSymbol),
-        "visitor reader must not depend on private runtime symbol \(forbiddenSymbol)"
+        !visitorAccess.contains(forbiddenSymbol)
+            && !visitorView.contains(forbiddenSymbol),
+        "visitor shell must not depend on private runtime symbol \(forbiddenSymbol)"
     )
 }
 
 require(
-    !tabCoordinator.contains("PublicationVisitor")
-        && !profile.contains("PublicationVisitor"),
-    "P2-S3a must not add a release navigation entry"
+    tabCoordinator.contains("selectPublicationVisitor")
+        && profile.contains("ProfilePublicationVisitorViewController")
+        && profile.contains("profile-publication-visitor-entry")
+        && !tabCoordinator.contains("viewControllers = [archiveNav, echoNav, profileNav,")
+        && visitorView.contains("内容来自本人确认的公开副本")
+        && visitorView.contains("profile-publication-visitor-shell"),
+    "visitor shell must remain a neutral Profile-only surface without a fourth Tab"
+)
+require(
+    appCoordinator.contains("publicationVisitorRuntime.stage(deepLinkURL: url)")
+        && appCoordinator.contains("routePendingPublicationVisitorIfPossible")
+        && sceneDelegate.contains("receiveAppDeepLink")
+        && visitorAccess.contains("pendingInvitation = nil")
+        && visitorAccess.contains("admissionGeneration = UUID()"),
+    "deep links and stale callbacks must be process-local and account fenced"
 )
 require(
     project.contains("PublicationVisitorAccess.swift in Sources")
-        && project.contains("PublicationVisitorAccessTests.swift in Sources"),
+        && project.contains("PublicationVisitorAccessTests.swift in Sources")
+        && project.contains("ProfilePublicationVisitorViewController.swift in Sources"),
     "visitor source and tests must be in Xcode targets"
 )
 

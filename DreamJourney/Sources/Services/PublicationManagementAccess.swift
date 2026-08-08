@@ -31,6 +31,26 @@ enum PublicationLifecycleM2QAGate {
     }
 }
 
+enum PublicationManagementM2AccessGate {
+    static var isManagementRouteAllowed: Bool {
+        if PublicationManagementM2QAGate.isEnabled {
+            return true
+        }
+        return FeatureGateService.shared.isServerPolicyManagedClosedPilotRouteAllowed(
+            .publicationManagementM2
+        ) && FeatureGateService.shared.isServerPolicyManagedClosedPilotRouteAllowed(
+            .publicationGrantManagementM2
+        )
+    }
+
+    static var isLifecycleRouteAllowed: Bool {
+        PublicationLifecycleM2QAGate.isEnabled
+            || FeatureGateService.shared.isServerPolicyManagedClosedPilotRouteAllowed(
+                .publicationManagementM2
+            )
+    }
+}
+
 enum PublicationManagementAccessError: LocalizedError, Equatable {
     case disabled
     case accountLeaseInvalid
@@ -510,7 +530,9 @@ final class PublicationLifecycleUseCase {
     init(
         client: PublicationLifecycleClient,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
-        isQAGateEnabled: @escaping () -> Bool = { PublicationLifecycleM2QAGate.isEnabled }
+        isQAGateEnabled: @escaping () -> Bool = {
+            PublicationManagementM2AccessGate.isLifecycleRouteAllowed
+        }
     ) {
         self.client = client
         self.accountLeaseRuntime = accountLeaseRuntime

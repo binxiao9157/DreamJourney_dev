@@ -30,22 +30,25 @@ require(
     "M2 management feature must be non-persistent and default-off"
 )
 require(
-    managementAccess.contains("#if DEBUG || UI_QA_SIMULATOR")
-        && managementAccess.contains("static let launchArgument = \"DJEnablePublicationManagementM2QA\"")
+    managementAccess.contains("static let launchArgument = \"DJEnablePublicationManagementM2QA\"")
         && managementAccess.contains("QALaunchConfiguration.shared.contains(launchArgument)")
-        && managementAccess.contains("#else\n        false"),
-    "management reader must stay compile-time QA gated"
+        && managementAccess.contains("PublicationManagementM2AccessGate")
+        && managementAccess.contains("isServerPolicyManagedClosedPilotRouteAllowed"),
+    "management must preserve QA access while requiring server policy for formal routes"
 )
 require(
     backendClient.contains("/v2/internal/owner-authority/vaults/")
         && backendClient.contains("/v2/internal/publication-access/vaults/")
+        && backendClient.contains("/v2/vaults/\\(pathComponent(normalizedVaultID))/publications")
+        && backendClient.contains("/v2/vaults/\\(pathComponent(normalizedVaultID))/publication-grants")
         && backendClient.contains("X-DreamJourney-QA-Publication")
         && backendClient.contains("X-DreamJourney-QA-Visitor-Access")
         && backendClient.contains("PublicationManagementM2QAGate.isEnabled"),
-    "management transport must use both explicit internal QA boundaries"
+    "management transport must separate internal QA and formal closed-beta routes"
 )
 require(
     backendClient.contains("return .publicationManagementM2")
+        && backendClient.contains("return .publicationGrantManagementM2")
         && backendClient.contains("return \"publicationManagement\""),
     "management requests must be purpose and feature classified"
 )
@@ -83,10 +86,10 @@ for forbiddenSymbol in [
 }
 
 require(
-    profile.contains("PublicationManagementM2QAGate.isEnabled")
+    profile.contains("PublicationManagementM2AccessGate.isManagementRouteAllowed")
         && profile.contains("case publicationManagementQA")
         && profile.contains("profile-publication-management-qa-entry"),
-    "management route must be profile-only and QA gated"
+    "management route must be Profile-only and policy gated"
 )
 require(
     !tabCoordinator.contains("PublicationManagement"),

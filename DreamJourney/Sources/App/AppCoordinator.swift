@@ -18,24 +18,28 @@ final class AppCoordinator: Coordinator {
     private let appComposition: AppComposition
     private let lifecycleEventForwarder: AppLifecycleEventForwarder
     private let notificationRuntimeRouteInbox: NotificationRuntimeRouteInbox
+    private let publicationVisitorRuntime: PublicationVisitorRuntime
     private var rootMode: RootMode = .unresolved
     private var accountSessionReceipt: AccountSessionTransitionReceipt?
     private var accountSessionTask: Task<Void, Never>?
     private weak var activeTabCoordinator: TabCoordinator?
     private var notificationRuntimeRouteObserver: NSObjectProtocol?
+    private var publicationVisitorPolicyRefreshInFlight = false
 
     init(
         window: UIWindow,
         accountSessionActor: AccountSessionActor = .shared,
         appComposition: AppComposition? = nil,
         lifecycleEventForwarder: AppLifecycleEventForwarder? = nil,
-        notificationRuntimeRouteInbox: NotificationRuntimeRouteInbox = .shared
+        notificationRuntimeRouteInbox: NotificationRuntimeRouteInbox = .shared,
+        publicationVisitorRuntime: PublicationVisitorRuntime = .shared
     ) {
         self.window = window
         self.accountSessionActor = accountSessionActor
         self.appComposition = appComposition ?? AppComposition()
         self.lifecycleEventForwarder = lifecycleEventForwarder ?? AppLifecycleEventForwarder()
         self.notificationRuntimeRouteInbox = notificationRuntimeRouteInbox
+        self.publicationVisitorRuntime = publicationVisitorRuntime
         self.navigationController = UINavigationController()
     }
 
@@ -134,6 +138,7 @@ final class AppCoordinator: Coordinator {
         window?.makeKeyAndVisible()
         tabCoordinator.start()
         routePendingNotificationRuntimeRoutesIfPossible()
+        routePendingPublicationVisitorIfPossible()
     }
 
     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
@@ -168,6 +173,14 @@ final class AppCoordinator: Coordinator {
         routePendingNotificationRuntimeRoutesIfPossible()
     }
 
+    func receiveAppDeepLink(_ url: URL) {
+        if publicationVisitorRuntime.stage(deepLinkURL: url) {
+            routePendingPublicationVisitorIfPossible()
+            return
+        }
+        receiveNotificationRuntimeDeepLink(url)
+    }
+
     /// SceneDelegate owns only UIKit callback forwarding. The coordinator
     /// captures a coherent account/policy context before any private effect is
     /// allowed to run.
@@ -182,12 +195,14 @@ final class AppCoordinator: Coordinator {
     @objc private func handleLogout() {
         accountSessionTask?.cancel()
         accountSessionReceipt = nil
+        publicationVisitorRuntime.clear(reason: .accountLeaseInvalid)
         transitionToAuth()
     }
 
     @objc private func handlePrivateAccessSuspended() {
         accountSessionTask?.cancel()
         accountSessionReceipt = nil
+        publicationVisitorRuntime.clear(reason: .accountLeaseInvalid)
         transitionToAuth()
     }
 
@@ -403,6 +418,50 @@ final class AppCoordinator: Coordinator {
                 route,
                 runtimeContext: runtimeContext
             )
+        }
+    }
+
+    private func routePendingPublicationVisitorIfPossible() {
+        guard publicationVisitorRuntime.hasPendingInvitation,
+              rootMode == .main,
+              let runtimeContext = currentFeatureRuntimeContext(),
+              let activeTabCoordinator,
+              AccountLeaseRuntime.shared.validate(runtimeContext.accountLease, at: .ui).allowed,
+              !publicationVisitorPolicyRefreshInFlight else {
+            return
+        }
+
+        let routeIfAllowed: () -> Void = { [weak self, weak activeTabCoordinator] in
+            guard let self,
+                  let activeTabCoordinator,
+                  self.rootMode == .main,
+                  self.currentFeatureRuntimeContext()?.accountLease == runtimeContext.accountLease,
+                  PublicationVisitorM2AccessGate.isRouteAllowed else {
+                self?.publicationVisitorRuntime.clear(reason: .policyDenied)
+                return
+            }
+            _ = activeTabCoordinator.selectPublicationVisitor(
+                runtime: self.publicationVisitorRuntime,
+                runtimeContext: runtimeContext
+            )
+        }
+
+        if PublicationVisitorM2QAGate.isEnabled {
+            routeIfAllowed()
+            return
+        }
+
+        publicationVisitorPolicyRefreshInFlight = true
+        FeatureGateService.shared.refreshPolicy(for: .publicationVisitorM2) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.publicationVisitorPolicyRefreshInFlight = false
+                guard case .success = result else {
+                    self.publicationVisitorRuntime.clear(reason: .policyDenied)
+                    return
+                }
+                routeIfAllowed()
+            }
         }
     }
 

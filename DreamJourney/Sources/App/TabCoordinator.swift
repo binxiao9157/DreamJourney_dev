@@ -45,6 +45,33 @@ final class TabCoordinator: Coordinator {
         return true
     }
 
+    /// Routes an already policy-approved invitation into the controlled
+    /// Profile area. It never adds a fourth tab or falls back to private chat.
+    @discardableResult
+    func selectPublicationVisitor(
+        runtime: PublicationVisitorRuntime,
+        runtimeContext: AppFeatureRuntimeContext
+    ) -> Bool {
+        guard runtime.hasPendingOrActiveAccess,
+              runtimeContext.accountLease == self.runtimeContext.accountLease,
+              AccountLeaseRuntime.shared.validate(runtimeContext.accountLease, at: .ui).allowed,
+              PublicationVisitorM2AccessGate.isRouteAllowed,
+              let viewControllers = tabBarController.viewControllers,
+              viewControllers.indices.contains(2),
+              let profileNavigationController = viewControllers[2] as? UINavigationController else {
+            return false
+        }
+        tabBarController.selectedIndex = 2
+        if profileNavigationController.topViewController is ProfilePublicationVisitorViewController {
+            return true
+        }
+        profileNavigationController.pushViewController(
+            ProfilePublicationVisitorViewController(runtime: runtime),
+            animated: true
+        )
+        return true
+    }
+
     private func setupTabs() {
         let archiveNav = featureFactory.makeArchiveNavigationController(
             runtimeContext: runtimeContext

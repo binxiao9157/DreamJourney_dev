@@ -28,22 +28,22 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             )
         }
         connectionOptions.urlContexts.forEach { context in
-            coordinator.receiveNotificationRuntimeDeepLink(context.url)
+            coordinator.receiveAppDeepLink(context.url)
         }
         connectionOptions.userActivities.compactMap(\.webpageURL).forEach { url in
-            coordinator.receiveNotificationRuntimeDeepLink(url)
+            coordinator.receiveAppDeepLink(url)
         }
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         URLContexts.forEach { context in
-            appCoordinator?.receiveNotificationRuntimeDeepLink(context.url)
+            appCoordinator?.receiveAppDeepLink(context.url)
         }
     }
 
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
         guard let url = userActivity.webpageURL else { return }
-        appCoordinator?.receiveNotificationRuntimeDeepLink(url)
+        appCoordinator?.receiveAppDeepLink(url)
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {

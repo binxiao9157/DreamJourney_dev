@@ -17,8 +17,19 @@ enum PublicationVisitorM2QAGate {
     }
 }
 
+enum PublicationVisitorM2AccessGate {
+    static var isRouteAllowed: Bool {
+        PublicationVisitorM2QAGate.isEnabled
+            || FeatureGateService.shared.isServerPolicyManagedClosedPilotRouteAllowed(
+                .publicationVisitorM2
+            )
+    }
+}
+
 enum PublicationVisitorAccessError: LocalizedError, Equatable {
     case disabled
+    case invalidInvitation
+    case adultVerificationRequired
     case invalidScope
     case expired
     case accountLeaseInvalid
@@ -32,6 +43,10 @@ enum PublicationVisitorAccessError: LocalizedError, Equatable {
         switch self {
         case .disabled:
             return "受邀访问当前未启用"
+        case .invalidInvitation:
+            return "受邀访问链接无效"
+        case .adultVerificationRequired:
+            return "该受邀访问需要先完成成年身份校验"
         case .invalidScope:
             return "受邀访问范围无效"
         case .expired:
@@ -50,6 +65,124 @@ enum PublicationVisitorAccessError: LocalizedError, Equatable {
             return "问题内容无效"
         }
     }
+}
+
+/// A process-memory-only invitation. Grant credentials are never persisted,
+/// encoded, logged, or exposed back to UI code.
+struct PublicationVisitorInvitation: Equatable {
+    let grantID: String
+    private let grantCredential: String
+
+    init?(grantID: String, grantCredential: String) {
+        let normalizedGrantID = grantID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedCredential = grantCredential.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard UUID(uuidString: normalizedGrantID) != nil,
+              (24...256).contains(normalizedCredential.count) else {
+            return nil
+        }
+        self.grantID = normalizedGrantID.lowercased()
+        self.grantCredential = normalizedCredential
+    }
+
+    init?(deepLinkURL: URL) {
+        guard let components = URLComponents(url: deepLinkURL, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+        let normalizedScheme = components.scheme?.lowercased() ?? ""
+        let normalizedHost = components.host?.lowercased() ?? ""
+        let normalizedPath = components.path.lowercased()
+        let isAppLink = normalizedScheme == "dreamjourney"
+            && normalizedHost == "publication"
+            && normalizedPath == "/visitor"
+        let isUniversalLink = ["http", "https"].contains(normalizedScheme)
+            && normalizedPath.hasSuffix("/publication/visitor")
+        guard isAppLink || isUniversalLink else { return nil }
+
+        let items = components.queryItems ?? []
+        guard items.filter({ $0.name == "grantId" }).count == 1,
+              items.filter({ $0.name == "grantCredential" }).count == 1,
+              let grantID = items.first(where: { $0.name == "grantId" })?.value,
+              let grantCredential = items.first(where: { $0.name == "grantCredential" })?.value else {
+            return nil
+        }
+        self.init(grantID: grantID, grantCredential: grantCredential)
+    }
+
+    func requestPayload(sessionCredential: String) -> [String: Any] {
+        [
+            "commandId": UUID().uuidString.lowercased(),
+            "grantCredential": grantCredential,
+            "sessionCredential": sessionCredential,
+        ]
+    }
+}
+
+struct PublicationVisitorAdmission: Equatable {
+    static let schemaVersion = "publication-visitor-access-v1"
+
+    let grantID: String
+    let visitorSessionID: String
+    let publicationID: String
+    let publicationVersionID: String
+    let expiresAt: Date
+    let useRemaining: Int
+
+    init?(json: [String: Any]) {
+        guard json["schemaVersion"] as? String == Self.schemaVersion,
+              let grantID = Self.identifier(json["grantId"] as? String),
+              let visitorSessionID = Self.identifier(json["visitorSessionId"] as? String),
+              let publicationID = Self.identifier(json["publicationId"] as? String),
+              let publicationVersionID = Self.identifier(json["publicationVersionId"] as? String),
+              let expiresAt = Self.date(json["expiresAt"] as? String),
+              let useRemaining = json["useRemaining"] as? Int,
+              useRemaining >= 0 else {
+            return nil
+        }
+        self.grantID = grantID
+        self.visitorSessionID = visitorSessionID
+        self.publicationID = publicationID
+        self.publicationVersionID = publicationVersionID
+        self.expiresAt = expiresAt
+        self.useRemaining = useRemaining
+    }
+
+    func sessionScope(
+        sessionCredential: String,
+        accountLease: AccountLease,
+        now: Date = Date()
+    ) -> PublicationVisitorSessionScope? {
+        PublicationVisitorSessionScope(
+            visitorSessionID: visitorSessionID,
+            publicationID: publicationID,
+            publicationVersionID: publicationVersionID,
+            expiresAt: expiresAt,
+            sessionCredential: sessionCredential,
+            accountLease: accountLease,
+            now: now
+        )
+    }
+
+    private static func identifier(_ value: String?) -> String? {
+        let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func date(_ value: String?) -> Date? {
+        guard let value = identifier(value) else { return nil }
+        let base = ISO8601DateFormatter()
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: value) ?? base.date(from: value)
+    }
+}
+
+protocol PublicationVisitorAdmissionClient {
+    func admitVisitor(
+        invitation: PublicationVisitorInvitation,
+        sessionCredential: String,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationVisitorAdmission, Error>) -> Void
+    )
 }
 
 /// An in-memory visitor capability. It is intentionally not Codable and does
@@ -320,6 +453,7 @@ enum PublicationVisitorSessionInvalidationReason: String, Equatable {
     case responseScopeMismatch
     case accessRevoked
     case sessionUnavailable
+    case policyDenied
     case manuallyReleased
 }
 
@@ -415,6 +549,177 @@ final class PublicationVisitorSessionCoordinator {
             expiresAt: activeScope?.expiresAt,
             invalidationReason: invalidationReason
         )
+    }
+}
+
+struct PublicationVisitorRuntimeSnapshot: Equatable {
+    let hasPendingInvitation: Bool
+    let session: PublicationVisitorSessionSnapshot
+}
+
+/// Owns the one process-local Visitor invitation and session. A generation
+/// fence prevents an admission callback from a previous account or invitation
+/// from reactivating cleared access.
+final class PublicationVisitorRuntime {
+    static let shared = PublicationVisitorRuntime()
+
+    private let lock = NSLock()
+    private let client: PublicationVisitorAdmissionClient
+    private let sessionCoordinator: PublicationVisitorSessionCoordinator
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let routeAllowed: () -> Bool
+    private var pendingInvitation: PublicationVisitorInvitation?
+    private var admissionGeneration = UUID()
+
+    init(
+        client: PublicationVisitorAdmissionClient = DreamJourneyBackendClient.shared,
+        sessionCoordinator: PublicationVisitorSessionCoordinator = PublicationVisitorSessionCoordinator(),
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        routeAllowed: @escaping () -> Bool = { PublicationVisitorM2AccessGate.isRouteAllowed }
+    ) {
+        self.client = client
+        self.sessionCoordinator = sessionCoordinator
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.routeAllowed = routeAllowed
+    }
+
+    @discardableResult
+    func stage(deepLinkURL: URL) -> Bool {
+        guard let invitation = PublicationVisitorInvitation(deepLinkURL: deepLinkURL) else {
+            return false
+        }
+        stage(invitation)
+        return true
+    }
+
+    func stage(_ invitation: PublicationVisitorInvitation) {
+        lock.lock()
+        pendingInvitation = invitation
+        admissionGeneration = UUID()
+        lock.unlock()
+        sessionCoordinator.invalidate(.manuallyReleased)
+    }
+
+    var hasPendingInvitation: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return pendingInvitation != nil
+    }
+
+    var hasPendingOrActiveAccess: Bool {
+        hasPendingInvitation || sessionCoordinator.currentScope() != nil
+    }
+
+    func open(
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationVisitorSessionScope, Error>) -> Void
+    ) {
+        if let scope = sessionCoordinator.currentScope(), scope.accountLease == accountLease {
+            completion(.success(scope))
+            return
+        }
+        guard routeAllowed() else {
+            clear(reason: .policyDenied)
+            completion(.failure(PublicationVisitorAccessError.disabled))
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            clear(reason: .accountLeaseInvalid)
+            completion(.failure(PublicationVisitorAccessError.accountLeaseInvalid))
+            return
+        }
+
+        lock.lock()
+        let invitation = pendingInvitation
+        let generation = admissionGeneration
+        lock.unlock()
+        guard let invitation else {
+            completion(.failure(PublicationVisitorAccessError.sessionUnavailable))
+            return
+        }
+
+        let sessionCredential = Self.makeSessionCredential()
+        client.admitVisitor(
+            invitation: invitation,
+            sessionCredential: sessionCredential,
+            accountLease: accountLease
+        ) { [weak self] result in
+            guard let self else { return }
+            self.lock.lock()
+            let isCurrent = self.admissionGeneration == generation
+            self.lock.unlock()
+            guard isCurrent,
+                  self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(PublicationVisitorAccessError.accountLeaseInvalid))
+                return
+            }
+
+            switch result {
+            case .success(let admission):
+                guard admission.grantID == invitation.grantID,
+                      let scope = admission.sessionScope(
+                        sessionCredential: sessionCredential,
+                        accountLease: accountLease
+                      ),
+                      self.sessionCoordinator.activate(scope) else {
+                    self.clear(reason: .responseScopeMismatch)
+                    completion(.failure(PublicationVisitorAccessError.malformedResponse))
+                    return
+                }
+                self.lock.lock()
+                if self.admissionGeneration == generation {
+                    self.pendingInvitation = nil
+                }
+                self.lock.unlock()
+                completion(.success(scope))
+            case .failure(let error):
+                let mapped = Self.admissionError(error)
+                self.clear(reason: mapped.reason)
+                completion(.failure(mapped.error))
+            }
+        }
+    }
+
+    func makeReadUseCase(
+        client: PublicationVisitorReaderClient = DreamJourneyBackendClient.shared
+    ) -> PublicationVisitorReadUseCase {
+        PublicationVisitorReadUseCase(client: client, sessionCoordinator: sessionCoordinator)
+    }
+
+    func clear(reason: PublicationVisitorSessionInvalidationReason) {
+        lock.lock()
+        pendingInvitation = nil
+        admissionGeneration = UUID()
+        lock.unlock()
+        sessionCoordinator.invalidate(reason)
+    }
+
+    func snapshot() -> PublicationVisitorRuntimeSnapshot {
+        PublicationVisitorRuntimeSnapshot(
+            hasPendingInvitation: hasPendingInvitation,
+            session: sessionCoordinator.snapshot()
+        )
+    }
+
+    private static func makeSessionCredential() -> String {
+        UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+            + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+    }
+
+    private static func admissionError(
+        _ error: Error
+    ) -> (reason: PublicationVisitorSessionInvalidationReason, error: Error) {
+        guard case let DreamJourneyBackendClient.ClientError.backendError(_, context) = error else {
+            return (.sessionUnavailable, error)
+        }
+        switch context.code {
+        case "publicationVisitorAdultVerificationRequired":
+            return (.sessionUnavailable, PublicationVisitorAccessError.adultVerificationRequired)
+        case "publicationVisitorAccessDenied", "publicationVisitorAccessUnavailable":
+            return (.accessRevoked, PublicationVisitorAccessError.accessRevoked)
+        default:
+            return (.sessionUnavailable, error)
+        }
     }
 }
 

@@ -657,7 +657,37 @@ enum DJFeature: String, CaseIterable {
     case voiceCloneShell
     case digitalHumanLivePanel
     case publicationVisitorM2
+    case publicationGrantManagementM2
     case publicationManagementM2
+}
+
+extension DJFeature {
+    /// The iOS feature names intentionally describe product surfaces, while
+    /// the backend policy uses the stable M2 authority names. Keep this map
+    /// explicit so a client-only rename cannot silently change server policy.
+    var backendReleasePolicyFeature: String {
+        switch self {
+        case .publicationManagementM2:
+            return "publication"
+        case .publicationGrantManagementM2, .publicationVisitorM2:
+            return "visitorAccess"
+        default:
+            return rawValue
+        }
+    }
+
+    var backendReleasePolicyAudience: String {
+        switch self {
+        case .publicationVisitorM2:
+            return "visitor"
+        default:
+            return "owner"
+        }
+    }
+
+    var backendReleasePolicyCohort: String {
+        "closedPilotAdultSelf"
+    }
 }
 
 final class FeatureFlagService {
@@ -697,6 +727,7 @@ final class FeatureFlagService {
         .voiceCloneShell,
         .digitalHumanLivePanel,
         .publicationVisitorM2,
+        .publicationGrantManagementM2,
         .publicationManagementM2,
     ]
 
