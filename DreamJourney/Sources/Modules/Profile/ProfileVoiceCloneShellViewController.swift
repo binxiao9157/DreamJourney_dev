@@ -561,6 +561,10 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     private func performAcceptVoiceQuality() {
         guard validateViewOperation(at: .request) else { return }
+        guard voiceCloneRuntimeCapability.canPerform(.accept) else {
+            finishBusy(feedback: "当前服务未开放音色确认，请刷新能力状态后重试。")
+            return
+        }
         guard let receipt = currentQualityPreviewReceipt else {
             finishBusy(feedback: "请先生成并试听复刻音频后再确认。")
             return
@@ -736,6 +740,10 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     private func performDisableVoice() {
         guard validateViewOperation(at: .request) else { return }
+        guard voiceCloneRuntimeCapability.canPerform(.pause) else {
+            feedbackLabel?.text = "当前服务未开放音色暂停，请刷新能力状态后重试。"
+            return
+        }
         guard hasVoiceProfile, snapshot.canDisableRemotely else {
             feedbackLabel?.text = "还没有可禁用的音色。"
             return
@@ -760,6 +768,10 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     private func performDeleteVoice() {
         guard validateViewOperation(at: .request) else { return }
+        guard voiceCloneRuntimeCapability.canPerform(.delete) else {
+            feedbackLabel?.text = "当前服务未开放音色删除，请刷新能力状态后重试。"
+            return
+        }
         guard hasVoiceProfile, snapshot.canDeleteRemotely else {
             feedbackLabel?.text = "还没有可删除的音色。"
             return
@@ -880,7 +892,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     private var canPreviewVoice: Bool {
         hasVoiceProfile
             && snapshot.canPreviewQuality
-            && voiceCloneRuntimeCapability.canSynthesize
+            && voiceCloneRuntimeCapability.canPerform(.preview)
     }
 
     private var canSubmitVoiceTraining: Bool {
@@ -910,7 +922,9 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private var canAcceptVoiceQuality: Bool {
-        snapshot.canAcceptQuality && currentQualityPreviewReceipt != nil
+        voiceCloneRuntimeCapability.canPerform(.accept)
+            && snapshot.canAcceptQuality
+            && currentQualityPreviewReceipt != nil
     }
 
     private var currentQualityPreviewReceipt: QualityPreviewReceipt? {
@@ -936,8 +950,16 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             && hasVoiceProfile
             && canRefreshVoiceTrainingStatus
             && (!snapshot.isUseRevoked || snapshot.canRefreshExitState)
-        disableButton?.isEnabled = hasValidLease && !isBusy && hasVoiceProfile && snapshot.canDisableRemotely
-        deleteButton?.isEnabled = hasValidLease && !isBusy && hasVoiceProfile && snapshot.canDeleteRemotely
+        disableButton?.isEnabled = hasValidLease
+            && !isBusy
+            && hasVoiceProfile
+            && snapshot.canDisableRemotely
+            && voiceCloneRuntimeCapability.canPerform(.pause)
+        deleteButton?.isEnabled = hasValidLease
+            && !isBusy
+            && hasVoiceProfile
+            && snapshot.canDeleteRemotely
+            && voiceCloneRuntimeCapability.canPerform(.delete)
         previewButton?.isHidden = !canPreviewVoice
         acceptQualityButton?.isHidden = !canAcceptVoiceQuality
         [refreshButton, disableButton, deleteButton].forEach { button in

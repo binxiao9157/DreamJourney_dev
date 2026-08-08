@@ -915,6 +915,123 @@ struct VoiceCloneTencentAudioDriveCapability {
     }
 }
 
+enum VoiceCloneOperation: String, CaseIterable {
+    case train
+    case query
+    case preview
+    case accept
+    case synthesize
+    case pause
+    case delete
+}
+
+struct VoiceCloneOperationCapability {
+    let available: Bool
+    let executionOwner: String
+    let providerCapability: String
+    let providerCompletionAvailable: Bool
+    let completionMode: String
+    let reasonCode: String
+    let endpointTemplate: String
+    let requiredProfileStates: Set<String>
+
+    fileprivate init?(json: [String: Any]?) {
+        guard let json,
+              let available = json["available"] as? Bool,
+              let executionOwner = json["executionOwner"] as? String,
+              let providerCapability = json["providerCapability"] as? String,
+              let providerCompletionAvailable = json["providerCompletionAvailable"] as? Bool,
+              let completionMode = json["completionMode"] as? String,
+              let reasonCode = json["reasonCode"] as? String,
+              let endpointTemplate = json["endpointTemplate"] as? String,
+              endpointTemplate.hasPrefix("/voice/"),
+              let requiredProfileStates = json["requiredProfileStates"] as? [String],
+              !executionOwner.isEmpty,
+              !providerCapability.isEmpty,
+              !completionMode.isEmpty,
+              !reasonCode.isEmpty else {
+            return nil
+        }
+        self.available = available
+        self.executionOwner = executionOwner
+        self.providerCapability = providerCapability
+        self.providerCompletionAvailable = providerCompletionAvailable
+        self.completionMode = completionMode
+        self.reasonCode = reasonCode
+        self.endpointTemplate = endpointTemplate
+        self.requiredProfileStates = Set(requiredProfileStates)
+    }
+}
+
+struct VoiceCloneOperationCapabilityMatrix {
+    let schemaVersion: Int
+    let trainingProvider: String
+    let synthesisProvider: String
+    let operations: [VoiceCloneOperation: VoiceCloneOperationCapability]
+
+    var isComplete: Bool {
+        schemaVersion == 1 && operations.count == VoiceCloneOperation.allCases.count
+    }
+
+    func capability(for operation: VoiceCloneOperation) -> VoiceCloneOperationCapability? {
+        operations[operation]
+    }
+
+    static let unavailable = VoiceCloneOperationCapabilityMatrix(
+        schemaVersion: 0,
+        trainingProvider: "unavailable",
+        synthesisProvider: "unavailable",
+        operations: [:]
+    )
+
+    init(json: [String: Any]?) {
+        guard let json,
+              Self.intValue(json["schemaVersion"]) == 1,
+              let trainingProvider = json["trainingProvider"] as? String,
+              let synthesisProvider = json["synthesisProvider"] as? String,
+              !trainingProvider.isEmpty,
+              !synthesisProvider.isEmpty,
+              let rawOperations = json["operations"] as? [String: Any] else {
+            self = .unavailable
+            return
+        }
+
+        var parsedOperations: [VoiceCloneOperation: VoiceCloneOperationCapability] = [:]
+        for operation in VoiceCloneOperation.allCases {
+            guard let rawCapability = rawOperations[operation.rawValue] as? [String: Any],
+                  let capability = VoiceCloneOperationCapability(json: rawCapability) else {
+                self = .unavailable
+                return
+            }
+            parsedOperations[operation] = capability
+        }
+
+        schemaVersion = 1
+        self.trainingProvider = trainingProvider
+        self.synthesisProvider = synthesisProvider
+        operations = parsedOperations
+    }
+
+    private init(
+        schemaVersion: Int,
+        trainingProvider: String,
+        synthesisProvider: String,
+        operations: [VoiceCloneOperation: VoiceCloneOperationCapability]
+    ) {
+        self.schemaVersion = schemaVersion
+        self.trainingProvider = trainingProvider
+        self.synthesisProvider = synthesisProvider
+        self.operations = operations
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+}
+
 struct VoiceCloneRuntimeCapability {
     let enabled: Bool
     let provider: String
@@ -940,22 +1057,36 @@ struct VoiceCloneRuntimeCapability {
     let voiceClone2TrialReady: Bool
     let fallbackMode: String
     let tencentAudioDrive: VoiceCloneTencentAudioDriveCapability
+    let operationMatrix: VoiceCloneOperationCapabilityMatrix
     let contractVersion: Int
     let axisSnapshot: RuntimeCapabilitySnapshot
 
     var canTrain: Bool {
-        axisSnapshot.isRuntimeContractUsable
+        canPerform(.train)
             && realProviderReady
             && identityEligibilityProviderReady
             && trainingAdmissionEnabled
     }
 
     var canQuery: Bool {
-        axisSnapshot.isRuntimeContractUsable && realProviderReady
+        canPerform(.query) && realProviderReady
     }
 
     var canSynthesize: Bool {
-        axisSnapshot.isRuntimeContractUsable && synthesisProviderReady
+        canPerform(.synthesize) && synthesisProviderReady
+    }
+
+    func canPerform(_ operation: VoiceCloneOperation) -> Bool {
+        guard operationMatrix.isComplete,
+              operationMatrix.capability(for: operation)?.available == true else {
+            return false
+        }
+        switch operation {
+        case .accept, .pause, .delete:
+            return true
+        case .train, .query, .preview, .synthesize:
+            return axisSnapshot.isRuntimeContractUsable
+        }
     }
 
     static func localFallback(isBackendConfigured: Bool) -> VoiceCloneRuntimeCapability {
@@ -1003,6 +1134,7 @@ struct VoiceCloneRuntimeCapability {
         voiceClone2TrialReady = json?["voiceClone2TrialReady"] as? Bool ?? false
         fallbackMode = json?["fallbackMode"] as? String ?? "hiddenContract"
         tencentAudioDrive = VoiceCloneTencentAudioDriveCapability(json: json?["tencentAudioDrive"] as? [String: Any])
+        operationMatrix = VoiceCloneOperationCapabilityMatrix(json: json?["operationMatrix"] as? [String: Any])
         contractVersion = Self.intValue(json?["contractVersion"]) ?? 1
         self.axisSnapshot = axisSnapshot ?? RuntimeCapabilitySnapshot.conservativeLegacy(
             capability: RuntimeCapabilityID.voiceCloneShell.rawValue,
