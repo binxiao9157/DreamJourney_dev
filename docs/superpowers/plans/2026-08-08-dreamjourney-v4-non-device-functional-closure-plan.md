@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余非真机功能闭环计划
 
 日期：2026-08-08  
-状态：`ACTIVE_R0_BASELINE`  
+状态：`ACTIVE_R1_EFFECT_RECONCILIATION`
 日常非真机开发唯一入口：本文件
 
 ## 1. 目标
@@ -68,6 +68,15 @@
 ## 6. R1：M0 数据权利闭环
 
 ### ND-R1-01 ExportJob 与 CopyExportManifest
+
+**执行状态**：`COMPLETE`（2026-08-08）
+
+**实现证据**
+
+- 后端：`main@fbd484f`，已推送并部署；数据库迁移头为 `0084`。
+- iOS：`feature/prd-stitch-ui-adaptation@cf1993e6`。
+- 已验证异步状态机、幂等 request key、owner 隔离、部分导出清单、失败重试、过期清理和账号租约隔离。
+- 后端相关 78 项测试、部署态 Postgres smoke、iOS 合同检查、release QA 检查和 workspace 模拟器构建均通过。
 
 **现有实现**
 
@@ -223,6 +232,7 @@
 
 ## 14. 当前交接点
 
-- 当前 Work Item：`ND-R0-01`
-- 完成后：`ND-R1-01 ExportJob 与 CopyExportManifest`
+- 已完成：`ND-R0-01`、`ND-R1-01`
+- 当前 Work Item：`ND-R1-02 删除与外部 effect 对账`
+- 后续 Work Item：`ND-R2-01 能力级 cohort admission`
 - 任何外部 Gate 缺失均不得暂停可继续的非真机任务。
