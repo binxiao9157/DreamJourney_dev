@@ -9425,6 +9425,136 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(try store.loadPendingContent(for: prepared.taskID, accountLease: lease), content)
     }
 
+    func testAccountDataExportJobStatusStoreIsOwnerScopedAndResumable() throws {
+        let suiteName = "AccountDataExportJobStatusStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let job = try AccountDataExportJobContract(json: [
+            "schemaVersion": 1,
+            "jobId": "dej_000000000000000000000001",
+            "status": "running",
+            "attempt": 1,
+            "failureCode": NSNull(),
+            "createdAt": "2026-08-08T00:00:00Z",
+            "updatedAt": "2026-08-08T00:00:01Z",
+            "expiresAt": "2026-08-09T00:00:00Z",
+            "readyAt": NSNull(),
+            "downloadAvailable": false,
+        ])
+
+        let snapshot = try AccountDataExportJobStatusStore.write(
+            job,
+            accountLease: lease,
+            defaults: defaults,
+            accountLeaseRuntime: runtime
+        )
+        XCTAssertEqual(snapshot.jobId, job.jobId)
+        XCTAssertEqual(snapshot.statusSubtitle, "数据副本生成中")
+        XCTAssertEqual(
+            AccountDataExportJobStatusStore.load(
+                accountLease: lease,
+                defaults: defaults,
+                accountLeaseRuntime: runtime
+            ),
+            snapshot
+        )
+
+        XCTAssertTrue(AccountDataExportJobStatusStore.teardownForAccountLifecycle(
+            oldAccountLease: lease,
+            defaults: defaults
+        ))
+        XCTAssertNil(AccountDataExportJobStatusStore.load(
+            accountLease: lease,
+            defaults: defaults,
+            accountLeaseRuntime: runtime
+        ))
+
+        _ = try AccountDataExportJobStatusStore.write(
+            job,
+            accountLease: lease,
+            defaults: defaults,
+            accountLeaseRuntime: runtime
+        )
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000202")!
+        ))
+        let ownerBLease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-b"))
+        XCTAssertNil(AccountDataExportJobStatusStore.load(
+            accountLease: lease,
+            defaults: defaults,
+            accountLeaseRuntime: runtime
+        ))
+        XCTAssertNil(AccountDataExportJobStatusStore.load(
+            accountLease: ownerBLease,
+            defaults: defaults,
+            accountLeaseRuntime: runtime
+        ))
+    }
+
+    func testAccountDataExportJobStatusPresentationKeepsFailuresExplicit() throws {
+        let failedJob = try AccountDataExportJobContract(json: [
+            "schemaVersion": 1,
+            "jobId": "dej_000000000000000000000002",
+            "status": "failed",
+            "attempt": 2,
+            "failureCode": "providerUnavailable",
+            "createdAt": "2026-08-08T00:00:00Z",
+            "updatedAt": "2026-08-08T00:00:02Z",
+            "expiresAt": "2026-08-09T00:00:00Z",
+            "readyAt": NSNull(),
+            "downloadAvailable": false,
+        ])
+        let snapshot = AccountDataExportJobStatusSnapshot(job: failedJob)
+
+        XCTAssertEqual(snapshot.status, "failed")
+        XCTAssertEqual(snapshot.statusSubtitle, "生成失败，可重试")
+        XCTAssertFalse(snapshot.downloadAvailable)
+        XCTAssertEqual(snapshot.failureCode, "providerUnavailable")
+    }
+
+    func testAccountDataExportRemainsDefaultOffAndFailsClosedWithoutServerPolicy() {
+        XCTAssertFalse(FeatureFlagService.shared.isEnabled(.accountDataExport))
+        let evaluator = FeatureGateEvaluator()
+        let unavailablePolicy = FeatureGatePolicySnapshot.unavailable(
+            accessMode: .deny,
+            reason: "releasePolicyMissing"
+        )
+        let releaseDecision = evaluator.capture(
+            feature: .accountDataExport,
+            risk: .ownerTextCore,
+            purpose: .route,
+            localEnabled: true,
+            qaSyntheticOverride: false,
+            accountGeneration: "owner-a:1",
+            policy: unavailablePolicy
+        )
+        XCTAssertFalse(releaseDecision.allowed)
+        XCTAssertEqual(releaseDecision.reason, "releasePolicyMissing")
+
+        let qaRoute = evaluator.capture(
+            feature: .accountDataExport,
+            risk: .ownerTextCore,
+            purpose: .route,
+            localEnabled: true,
+            qaSyntheticOverride: true,
+            accountGeneration: "owner-a:1",
+            policy: unavailablePolicy
+        )
+        XCTAssertTrue(qaRoute.allowed)
+        let requestDecision = evaluator.revalidateForRequest(
+            captured: qaRoute,
+            localEnabled: true,
+            accountGeneration: "owner-a:1",
+            currentPolicy: unavailablePolicy
+        )
+        XCTAssertFalse(requestDecision.allowed)
+        XCTAssertEqual(requestDecision.reason, "releasePolicyMissing")
+    }
+
     func testOwnerTruthMediaTaskPresentationKeepsUploadAndProcessingFailuresDistinct() {
         let sourceObjectID = UUID(uuidString: "00000000-0000-0000-0000-000000000b40")!
         let uploadFailure = OwnerTruthMediaTaskPresentation(

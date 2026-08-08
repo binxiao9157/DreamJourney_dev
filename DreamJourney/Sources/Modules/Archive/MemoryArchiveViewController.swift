@@ -583,10 +583,234 @@ private final class InAppMessageCell: UITableViewCell {
     }
 }
 
+final class OwnerTruthMediaTaskDetailViewController: UIViewController {
+    private let presentation: OwnerTruthMediaTaskPresentation
+    private let actionsEnabled: Bool
+    private let onRetry: ((OwnerTruthMediaTaskPresentation) -> Void)?
+    private let onCandidateHandoff: ((OwnerTruthMediaTaskPresentation) -> Void)?
+
+    private let scrollView = UIScrollView()
+    private let contentStack = UIStackView()
+    private weak var unavailableLabel: UILabel?
+    private weak var retryButton: UIButton?
+
+    init(
+        presentation: OwnerTruthMediaTaskPresentation,
+        actionsEnabled: Bool,
+        onRetry: ((OwnerTruthMediaTaskPresentation) -> Void)? = nil,
+        onCandidateHandoff: ((OwnerTruthMediaTaskPresentation) -> Void)? = nil
+    ) {
+        self.presentation = presentation
+        self.actionsEnabled = actionsEnabled
+        self.onRetry = onRetry
+        self.onCandidateHandoff = onCandidateHandoff
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "素材状态"
+        view.backgroundColor = DJDesignTokens.Color.background
+        configureLayout()
+        buildContent()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+    }
+
+    func uiqaSnapshot() -> [String: Any] {
+        [
+            "detailVisible": viewIfLoaded?.window != nil,
+            "stateTitle": presentation.stateTitle,
+            "fileNameVisible": true,
+            "providerIdentifierVisible": false,
+            "retryVisible": retryButton?.isHidden == false && retryButton?.window != nil,
+            "unavailableReasonVisible": unavailableLabel?.isHidden == false
+                && unavailableLabel?.window != nil,
+            "actionsEnabled": actionsEnabled,
+        ]
+    }
+
+    private func configureLayout() {
+        scrollView.alwaysBounceVertical = true
+        scrollView.backgroundColor = .clear
+        contentStack.axis = .vertical
+        contentStack.spacing = 16
+        contentStack.isLayoutMarginsRelativeArrangement = true
+        contentStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 20,
+            leading: DJDesignTokens.Spacing.page,
+            bottom: 32,
+            trailing: DJDesignTokens.Spacing.page
+        )
+
+        view.addSubview(scrollView)
+        scrollView.addSubview(contentStack)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+        ])
+    }
+
+    private func buildContent() {
+        let heading = UILabel()
+        heading.text = presentation.mediaTitle
+        heading.font = DJDesignTokens.Font.title(26)
+        heading.textColor = DJDesignTokens.Color.textPrimary
+        heading.accessibilityIdentifier = "owner-truth-media-detail-title"
+        contentStack.addArrangedSubview(heading)
+
+        let card = DJComponentFactory.cardView(radius: DJDesignTokens.Radius.large)
+        card.layer.borderWidth = 1
+        card.layer.borderColor = DJDesignTokens.Color.divider.withAlphaComponent(0.5).cgColor
+        let cardStack = UIStackView()
+        cardStack.axis = .vertical
+        cardStack.spacing = 14
+
+        let stateLabel = PaddingLabel(horizontalInset: 10, verticalInset: 6)
+        stateLabel.text = presentation.stateTitle
+        stateLabel.font = DJDesignTokens.Font.label(12)
+        stateLabel.textColor = statusTint
+        stateLabel.backgroundColor = statusTint.withAlphaComponent(0.12)
+        stateLabel.layer.cornerRadius = 11
+        stateLabel.layer.masksToBounds = true
+        stateLabel.accessibilityIdentifier = "owner-truth-media-detail-state"
+        stateLabel.setContentHuggingPriority(.required, for: .horizontal)
+
+        let stateRow = UIStackView(arrangedSubviews: [stateLabel, UIView()])
+        stateRow.axis = .horizontal
+        stateRow.alignment = .center
+        cardStack.addArrangedSubview(stateRow)
+        cardStack.addArrangedSubview(makeValueBlock(title: "文件", value: presentation.fileName))
+        cardStack.addArrangedSubview(makeValueBlock(title: "当前状态", value: presentation.detail))
+        cardStack.addArrangedSubview(
+            makeValueBlock(title: "最近更新", value: Self.dateFormatter.string(from: presentation.updatedAt))
+        )
+
+        card.addSubview(cardStack)
+        cardStack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            cardStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
+            cardStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
+            cardStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
+            cardStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
+        ])
+        contentStack.addArrangedSubview(card)
+
+        if presentation.retryAction != nil, !actionsEnabled {
+            let label = UILabel()
+            label.text = "当前服务暂不可用，状态已保留"
+            label.font = DJDesignTokens.Font.body(13)
+            label.textColor = DJDesignTokens.Color.textSecondary
+            label.numberOfLines = 0
+            label.accessibilityIdentifier = "owner-truth-media-detail-unavailable-reason"
+            unavailableLabel = label
+            contentStack.addArrangedSubview(label)
+        }
+
+        if actionsEnabled, presentation.retryAction != nil,
+           let retryTitle = presentation.retryTitle {
+            let button = makeActionButton(
+                title: retryTitle,
+                identifier: "owner-truth-media-detail-retry-button"
+            )
+            button.addTarget(self, action: #selector(retryTapped), for: .touchUpInside)
+            retryButton = button
+            contentStack.addArrangedSubview(button)
+        }
+
+        if presentation.candidateHandoffAvailable,
+           let candidateTitle = presentation.candidateHandoffTitle {
+            let button = makeActionButton(
+                title: candidateTitle,
+                identifier: "owner-truth-media-detail-candidate-button"
+            )
+            button.addTarget(self, action: #selector(candidateHandoffTapped), for: .touchUpInside)
+            contentStack.addArrangedSubview(button)
+        }
+    }
+
+    private var statusTint: UIColor {
+        switch presentation.tone {
+        case .neutral:
+            return DJDesignTokens.Color.accentDeep
+        case .progress:
+            return .systemBlue
+        case .warning:
+            return .systemOrange
+        case .failure:
+            return DJDesignTokens.Color.danger
+        }
+    }
+
+    private func makeValueBlock(title: String, value: String) -> UIView {
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = DJDesignTokens.Font.label(12)
+        titleLabel.textColor = DJDesignTokens.Color.textTertiary
+
+        let valueLabel = UILabel()
+        valueLabel.text = value
+        valueLabel.font = DJDesignTokens.Font.body(15)
+        valueLabel.textColor = DJDesignTokens.Color.textPrimary
+        valueLabel.numberOfLines = 0
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, valueLabel])
+        stack.axis = .vertical
+        stack.spacing = 5
+        return stack
+    }
+
+    private func makeActionButton(title: String, identifier: String) -> UIButton {
+        let button = UIButton(type: .system)
+        var configuration = UIButton.Configuration.filled()
+        configuration.title = title
+        configuration.baseBackgroundColor = DJDesignTokens.Color.accentDeep
+        configuration.baseForegroundColor = .white
+        configuration.cornerStyle = .medium
+        button.configuration = configuration
+        button.titleLabel?.font = DJDesignTokens.Font.label(15)
+        button.accessibilityIdentifier = identifier
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
+        return button
+    }
+
+    @objc private func retryTapped() {
+        onRetry?(presentation)
+    }
+
+    @objc private func candidateHandoffTapped() {
+        onCandidateHandoff?(presentation)
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy年M月d日 HH:mm"
+        return formatter
+    }()
+}
+
 final class MemoryArchiveViewController: UIViewController {
     private let repository: MemoryArchiveRepository
     private let ownerTruthMediaTaskStore: OwnerTruthMediaTaskStore
     private let ownerTruthMediaTaskPresentationOverride: [OwnerTruthMediaTaskPresentation]?
+    private let ownerTruthMediaTaskActionsEnabledOverride: Bool?
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
     private let mediaStore = ArchiveMediaStore.shared
     private lazy var delayedReplyInboxAnswerReader = EchoDelayedReplyInboxAnswerReader(
@@ -660,8 +884,12 @@ final class MemoryArchiveViewController: UIViewController {
     private var isOwnerTruthTextCaptureClosedPilotEnabled: Bool {
         FeatureGateService.shared
             .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTextCaptureV1)
-            && FeatureGateService.shared
-                .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
+            && isOwnerTruthCandidateReviewClosedPilotEnabled
+    }
+
+    private var isOwnerTruthCandidateReviewClosedPilotEnabled: Bool {
+        FeatureGateService.shared
+            .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
     }
 
     private var isOwnerTruthMediaCaptureClosedPilotEnabled: Bool {
@@ -672,7 +900,12 @@ final class MemoryArchiveViewController: UIViewController {
 
     private var shouldShowOwnerTruthMediaTaskStatus: Bool {
         ownerTruthMediaTaskPresentationOverride != nil
-            || (isSelfAutobiographyMode && isOwnerTruthMediaCaptureClosedPilotEnabled)
+            || isSelfAutobiographyMode
+    }
+
+    private var areOwnerTruthMediaTaskActionsEnabled: Bool {
+        ownerTruthMediaTaskActionsEnabledOverride
+            ?? isOwnerTruthMediaCaptureClosedPilotEnabled
     }
 
     private var archivePersonaName: String {
@@ -753,11 +986,13 @@ final class MemoryArchiveViewController: UIViewController {
     init(
         repository: MemoryArchiveRepository = .shared,
         ownerTruthMediaTaskStore: OwnerTruthMediaTaskStore = .shared,
-        ownerTruthMediaTaskPresentationOverride: [OwnerTruthMediaTaskPresentation]? = nil
+        ownerTruthMediaTaskPresentationOverride: [OwnerTruthMediaTaskPresentation]? = nil,
+        ownerTruthMediaTaskActionsEnabledOverride: Bool? = nil
     ) {
         self.repository = repository
         self.ownerTruthMediaTaskStore = ownerTruthMediaTaskStore
         self.ownerTruthMediaTaskPresentationOverride = ownerTruthMediaTaskPresentationOverride
+        self.ownerTruthMediaTaskActionsEnabledOverride = ownerTruthMediaTaskActionsEnabledOverride
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -991,10 +1226,14 @@ final class MemoryArchiveViewController: UIViewController {
             return lhs.updatedAt > rhs.updatedAt
         }
         let active = sorted.filter { $0.phase != .processed && $0.phase != .deleted }
-        let latestTerminal = sorted.first { $0.phase == .processed || $0.phase == .deleted }
+        let latestProcessed = sorted.first { $0.phase == .processed }
+        let latestDeleted = sorted.first { $0.phase == .deleted }
         var visible = Array(active.prefix(3))
-        if visible.count < 3, let latestTerminal {
-            visible.append(latestTerminal)
+        for terminal in [latestProcessed, latestDeleted].compactMap({ $0 }) {
+            guard visible.count < 4, !visible.contains(where: { $0.taskID == terminal.taskID }) else {
+                continue
+            }
+            visible.append(terminal)
         }
 
         let titleLabel = UILabel()
@@ -1073,6 +1312,7 @@ final class MemoryArchiveViewController: UIViewController {
         stack.addArrangedSubview(detailLabel)
 
         if let action = presentation.retryAction,
+           areOwnerTruthMediaTaskActionsEnabled,
            let retryTitle = presentation.retryTitle {
             let retryButton = UIButton(type: .system)
             var configuration = UIButton.Configuration.plain()
@@ -1098,6 +1338,14 @@ final class MemoryArchiveViewController: UIViewController {
                 for: .touchUpInside
             )
             stack.addArrangedSubview(retryButton)
+        } else if presentation.retryAction != nil {
+            let unavailableLabel = UILabel()
+            unavailableLabel.text = "当前服务暂不可用，状态已保留"
+            unavailableLabel.font = DJDesignTokens.Font.body(12)
+            unavailableLabel.textColor = DJDesignTokens.Color.textTertiary
+            unavailableLabel.numberOfLines = 0
+            unavailableLabel.accessibilityIdentifier = "owner-truth-media-action-unavailable"
+            stack.addArrangedSubview(unavailableLabel)
         }
 
         if presentation.candidateHandoffAvailable,
@@ -1131,6 +1379,32 @@ final class MemoryArchiveViewController: UIViewController {
             stack.addArrangedSubview(handoffButton)
         }
 
+        let detailButton = UIButton(type: .system)
+        var detailConfiguration = UIButton.Configuration.plain()
+        detailConfiguration.title = "查看状态详情"
+        detailConfiguration.image = UIImage(systemName: "chevron.right")
+        detailConfiguration.imagePlacement = .trailing
+        detailConfiguration.imagePadding = 6
+        detailConfiguration.baseForegroundColor = DJDesignTokens.Color.textSecondary
+        detailConfiguration.contentInsets = NSDirectionalEdgeInsets(
+            top: 7,
+            leading: 0,
+            bottom: 7,
+            trailing: 0
+        )
+        detailButton.configuration = detailConfiguration
+        detailButton.contentHorizontalAlignment = .leading
+        detailButton.titleLabel?.font = DJDesignTokens.Font.label(12)
+        detailButton.accessibilityIdentifier = "owner-truth-media-status-detail-button"
+        detailButton.accessibilityLabel = "查看\(presentation.mediaTitle)状态详情"
+        detailButton.accessibilityValue = presentation.taskID.uuidString
+        detailButton.addTarget(
+            self,
+            action: #selector(ownerTruthMediaTaskDetailTapped(_:)),
+            for: .touchUpInside
+        )
+        stack.addArrangedSubview(detailButton)
+
         card.addSubview(stack)
         stack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -1161,11 +1435,20 @@ final class MemoryArchiveViewController: UIViewController {
         guard let taskIDRaw = sender.accessibilityValue,
               let taskID = UUID(uuidString: taskIDRaw),
               let presentation = ownerTruthMediaTaskPresentations.first(where: { $0.taskID == taskID }),
-              let action = presentation.retryAction,
-              let accountLease = captureMediaAccountLease(),
-              isOwnerTruthMediaCaptureClosedPilotEnabled else {
+              presentation.retryAction != nil else {
             return
         }
+        performOwnerTruthMediaRetry(presentation)
+    }
+
+    private func performOwnerTruthMediaRetry(_ presentation: OwnerTruthMediaTaskPresentation) {
+        guard areOwnerTruthMediaTaskActionsEnabled,
+              let action = presentation.retryAction,
+              let accountLease = captureMediaAccountLease() else {
+            showToast("当前服务暂不可用，状态已保留", type: .info)
+            return
+        }
+        let taskID = presentation.taskID
 
         switch action {
         case .resumeUpload:
@@ -1215,12 +1498,52 @@ final class MemoryArchiveViewController: UIViewController {
         }
     }
 
+    @objc private func ownerTruthMediaTaskDetailTapped(_ sender: UIButton) {
+        guard let taskIDRaw = sender.accessibilityValue,
+              let taskID = UUID(uuidString: taskIDRaw),
+              let presentation = ownerTruthMediaTaskPresentations.first(where: { $0.taskID == taskID }) else {
+            return
+        }
+        showOwnerTruthMediaTaskDetail(presentation)
+    }
+
+    private func showOwnerTruthMediaTaskDetail(
+        _ presentation: OwnerTruthMediaTaskPresentation
+    ) {
+        let detail = OwnerTruthMediaTaskDetailViewController(
+            presentation: presentation,
+            actionsEnabled: areOwnerTruthMediaTaskActionsEnabled,
+            onRetry: { [weak self] presentation in
+                guard let self else { return }
+                self.navigationController?.popViewController(animated: true)
+                self.performOwnerTruthMediaRetry(presentation)
+            },
+            onCandidateHandoff: { [weak self] presentation in
+                guard let self else { return }
+                self.navigationController?.popViewController(animated: true)
+                self.performOwnerTruthMediaCandidateHandoff(presentation)
+            }
+        )
+        navigationController?.pushViewController(detail, animated: true)
+    }
+
     @objc private func ownerTruthMediaCandidateHandoffTapped(_ sender: UIButton) {
         guard let taskID = ownerTruthMediaCandidateHandoffTaskIDs[sender.tag],
               let presentation = ownerTruthMediaTaskPresentations.first(where: { $0.taskID == taskID }),
-              presentation.candidateHandoffAvailable,
+              presentation.candidateHandoffAvailable else {
+            return
+        }
+        performOwnerTruthMediaCandidateHandoff(presentation)
+    }
+
+    private func performOwnerTruthMediaCandidateHandoff(
+        _ presentation: OwnerTruthMediaTaskPresentation
+    ) {
+        let taskID = presentation.taskID
+        guard presentation.candidateHandoffAvailable,
               let accountLease = captureMediaAccountLease(),
-              isOwnerTruthMediaCaptureClosedPilotEnabled else {
+              isOwnerTruthCandidateReviewClosedPilotEnabled else {
+            showToast("待确认记忆当前暂不可用", type: .info)
             return
         }
 
@@ -1258,7 +1581,15 @@ final class MemoryArchiveViewController: UIViewController {
             ownerTruthMediaTaskStatusStack.bounds,
             to: scrollView
         )
-        scrollView.scrollRectToVisible(statusFrame.insetBy(dx: 0, dy: -12), animated: false)
+        scrollView.scrollRectToVisible(
+            CGRect(
+                x: statusFrame.minX,
+                y: max(0, statusFrame.minY - 12),
+                width: statusFrame.width,
+                height: 1
+            ),
+            animated: false
+        )
         DispatchQueue.main.async {
             let statusTitles = self.ownerTruthMediaTaskPresentations.map(\.stateTitle)
             let retryActions = self.ownerTruthMediaTaskPresentations.compactMap(\.retryAction).map(\.rawValue)
@@ -1266,6 +1597,15 @@ final class MemoryArchiveViewController: UIViewController {
                 "statusStackVisible": self.ownerTruthMediaTaskStatusStack.isHidden == false,
                 "statusTitles": statusTitles,
                 "retryActions": retryActions,
+                "actionsEnabled": self.areOwnerTruthMediaTaskActionsEnabled,
+                "unavailableReasonVisible": self.viewTreeContainsAccessibilityIdentifier(
+                    "owner-truth-media-action-unavailable",
+                    in: self.ownerTruthMediaTaskStatusStack
+                ),
+                "detailButtonVisible": self.viewTreeContainsAccessibilityIdentifier(
+                    "owner-truth-media-status-detail-button",
+                    in: self.ownerTruthMediaTaskStatusStack
+                ),
                 "uploadRetryVisible": self.ownerTruthMediaTaskPresentations.contains {
                     $0.retryAction == .resumeUpload
                 },
@@ -1281,6 +1621,45 @@ final class MemoryArchiveViewController: UIViewController {
                 "backendNetworkStarted": false,
                 "persistentOwnerTruthWriteStarted": false,
             ])
+        }
+    }
+
+    func runUIQAOwnerTruthMediaTaskDeletionDetailSmoke(
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        guard let presentation = ownerTruthMediaTaskPresentations.first(where: {
+            $0.phase == .deleted && $0.retryAction == .retryDeletion
+        }) else {
+            completion([
+                "detailVisible": false,
+                "failureReason": "deletionPresentationMissing",
+            ])
+            return
+        }
+        showOwnerTruthMediaTaskDetail(presentation)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let detail = self?.navigationController?.topViewController
+                as? OwnerTruthMediaTaskDetailViewController else {
+                completion([
+                    "detailVisible": false,
+                    "failureReason": "detailNavigationFailed",
+                ])
+                return
+            }
+            detail.view.layoutIfNeeded()
+            completion(detail.uiqaSnapshot())
+        }
+    }
+
+    private func viewTreeContainsAccessibilityIdentifier(
+        _ identifier: String,
+        in rootView: UIView
+    ) -> Bool {
+        if rootView.accessibilityIdentifier == identifier {
+            return true
+        }
+        return rootView.subviews.contains {
+            viewTreeContainsAccessibilityIdentifier(identifier, in: $0)
         }
     }
 

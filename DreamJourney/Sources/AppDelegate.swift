@@ -364,7 +364,13 @@ private extension AppDelegate {
         case .profileCareEscalationBoundarySmoke:
             scheduleUIQAScenario(scenario) { $0.runProfileCareEscalationBoundarySmoke() }
         case .profileFamilyPersonaReleaseSmoke:
-            scheduleUIQAScenario(scenario) { $0.runProfileFamilyPersonaReleaseSmoke() }
+            scheduleUIQAScenario(scenario) { appDelegate in
+                if ProcessInfo.processInfo.arguments.contains("DJProfileDataExportStatusSmoke") {
+                    appDelegate.runProfileDataExportStatusSmoke()
+                } else {
+                    appDelegate.runProfileFamilyPersonaReleaseSmoke()
+                }
+            }
         case .publicationManagementM2Smoke:
             scheduleUIQAScenario(scenario) { $0.runPublicationManagementM2Smoke() }
         case .publicationLifecycleM2Smoke:
@@ -1574,6 +1580,77 @@ private extension AppDelegate {
             "familyMemberCount=\(familyMembers.count) " +
             "backendFamilyDigitalHumanMode=\(backendFamilyMember?.digitalHumanMode.rawValue ?? "missing") " +
             "backendVoiceProfileId=\(backendVoiceSnapshot?.voiceProfileId ?? "missing")"
+        )
+    }
+
+    func runProfileDataExportStatusSmoke(retryCount: Int = 0) {
+        guard let profileNavigationController = profileNavigationControllerForPublicationManagementSmoke(),
+              let profile = profileNavigationController.viewControllers.first as? ProfileViewController else {
+            QAScenarioResultWriter.writeAndLog(
+                [
+                    "completed": false,
+                    "failureReason": "profileRootUnavailable",
+                ],
+                fileName: "profile-data-export-status-smoke-result.json",
+                smokeName: "ProfileDataExportStatusSmoke"
+            )
+            return
+        }
+        profile.loadViewIfNeeded()
+        guard profile.view.window != nil else {
+            guard retryCount < 20 else {
+                QAScenarioResultWriter.writeAndLog(
+                    [
+                        "completed": false,
+                        "failureReason": "profileWindowAttachmentTimedOut",
+                    ],
+                    fileName: "profile-data-export-status-smoke-result.json",
+                    smokeName: "ProfileDataExportStatusSmoke"
+                )
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.runProfileDataExportStatusSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+        let jobJSON: [String: Any] = [
+            "schemaVersion": 1,
+            "jobId": "dej_uiqa_profile_export_status_0001",
+            "status": "running",
+            "attempt": 1,
+            "failureCode": NSNull(),
+            "createdAt": "2026-08-08T00:00:00Z",
+            "updatedAt": "2026-08-08T00:00:01Z",
+            "expiresAt": "2026-08-09T00:00:00Z",
+            "readyAt": NSNull(),
+            "downloadAvailable": false,
+        ]
+        guard let job = try? AccountDataExportJobContract(json: jobJSON) else {
+            QAScenarioResultWriter.writeAndLog(
+                [
+                    "completed": false,
+                    "failureReason": "exportJobFixtureInvalid",
+                ],
+                fileName: "profile-data-export-status-smoke-result.json",
+                smokeName: "ProfileDataExportStatusSmoke"
+            )
+            return
+        }
+        var result = profile.runUIQAAccountDataExportStatusSmoke(job: job)
+        let completed = (result["rowVisible"] as? Bool) == true
+            && (result["rowSubtitle"] as? String) == "数据副本生成中"
+            && (result["renderedRowSubtitle"] as? String) == "数据副本生成中"
+            && (result["hiddenBranchesEnabled"] as? Bool) == true
+            && (result["profileAttachedToWindow"] as? Bool) == true
+            && (result["backendNetworkStarted"] as? Bool) == false
+            && (result["persistentExportJobStarted"] as? Bool) == false
+        result["completed"] = completed
+        result["launchScenario"] = QALaunchScenario.profileFamilyPersonaReleaseSmoke.rawValue
+        QAScenarioResultWriter.writeAndLog(
+            result,
+            fileName: "profile-data-export-status-smoke-result.json",
+            smokeName: "ProfileDataExportStatusSmoke"
         )
     }
 
@@ -3922,6 +3999,9 @@ private extension AppDelegate {
         }
 
         let sourceObjectID = UUID(uuidString: "00000000-0000-0000-0000-000000000b30")!
+        let isDeletionDetailSmoke = ProcessInfo.processInfo.arguments.contains(
+            "DJOwnerMediaTaskDeletionDetailSmoke"
+        )
         let samplePresentations = [
             OwnerTruthMediaTaskPresentation(
                 taskID: UUID(uuidString: "00000000-0000-0000-0000-000000000b31")!,
@@ -3950,15 +4030,47 @@ private extension AppDelegate {
                 hasCandidateHandoffSource: true,
                 updatedAt: Date(timeIntervalSince1970: 1_786_000_100)
             ),
+            OwnerTruthMediaTaskPresentation(
+                taskID: UUID(uuidString: "00000000-0000-0000-0000-000000000b34")!,
+                mediaKind: .video,
+                fileName: "family-movie.mp4",
+                phase: .deleted,
+                allowExternalProcessing: true,
+                sourceObjectID: sourceObjectID,
+                deletionStatus: .partial,
+                deletionRetryable: true,
+                updatedAt: Date(timeIntervalSince1970: 1_786_000_250)
+            ),
         ]
         let archive = MemoryArchiveViewController(
-            ownerTruthMediaTaskPresentationOverride: samplePresentations
+            ownerTruthMediaTaskPresentationOverride: samplePresentations,
+            ownerTruthMediaTaskActionsEnabledOverride: !isDeletionDetailSmoke
         )
-        keyWindow.rootViewController = archive
+        let navigationController = UINavigationController(rootViewController: archive)
+        keyWindow.rootViewController = navigationController
         keyWindow.makeKeyAndVisible()
         archive.loadViewIfNeeded()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            if isDeletionDetailSmoke {
+                archive.runUIQAOwnerTruthMediaTaskDeletionDetailSmoke { payload in
+                    let completed = (payload["detailVisible"] as? Bool) == true
+                        && (payload["stateTitle"] as? String) == "访问已撤销"
+                        && (payload["retryVisible"] as? Bool) == false
+                        && (payload["unavailableReasonVisible"] as? Bool) == true
+                        && (payload["actionsEnabled"] as? Bool) == false
+                        && (payload["providerIdentifierVisible"] as? Bool) == false
+                    var result = payload
+                    result["completed"] = completed
+                    result["launchScenario"] = QALaunchScenario.ownerMediaTaskStatusSmoke.rawValue
+                    QAScenarioResultWriter.writeAndLog(
+                        result,
+                        fileName: "owner-media-task-deletion-detail-smoke-result.json",
+                        smokeName: "OwnerMediaTaskDeletionDetailSmoke"
+                    )
+                }
+                return
+            }
             archive.runUIQAOwnerTruthMediaTaskStatusSmoke { payload in
                 let statuses = payload["statusTitles"] as? [String] ?? []
                 let actions = payload["retryActions"] as? [String] ?? []
@@ -3967,13 +4079,19 @@ private extension AppDelegate {
                         "云端文件未同步",
                         "文件已同步，处理暂不可用",
                         "已处理",
+                        "访问已撤销",
                     ]
                     && actions.sorted() == [
                         OwnerTruthMediaTaskRetryAction.resumeUpload.rawValue,
+                        OwnerTruthMediaTaskRetryAction.retryDeletion.rawValue,
                         OwnerTruthMediaTaskRetryAction.retryProcessing.rawValue,
                     ]
+                    && (payload["actionsEnabled"] as? Bool) == true
+                    && (payload["unavailableReasonVisible"] as? Bool) == false
+                    && (payload["detailButtonVisible"] as? Bool) == true
                     && (payload["uploadRetryVisible"] as? Bool) == true
                     && (payload["processingRetryVisible"] as? Bool) == true
+                    && (payload["deletionRetryVisible"] as? Bool) == true
                     && (payload["candidateHandoffVisible"] as? Bool) == true
                     && (payload["backendNetworkStarted"] as? Bool) == false
                     && (payload["persistentOwnerTruthWriteStarted"] as? Bool) == false

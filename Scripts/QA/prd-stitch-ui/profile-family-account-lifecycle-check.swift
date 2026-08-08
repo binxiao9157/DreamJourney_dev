@@ -36,6 +36,10 @@ let familyModel = app("DreamJourney/Sources/Services/MemoryModel.swift")
 let familyRepository = app("DreamJourney/Sources/Services/FamilyRepository.swift")
 let familyView = app("DreamJourney/Sources/Modules/Family/FamilyCircleViewController.swift")
 let profileView = app("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
+let accountLifecycleRegistry = app("DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift")
+let ownerTruthTests = app("DreamJourneyTests/OwnerTruthContractsTests.swift")
+let appDelegate = app("DreamJourney/Sources/AppDelegate.swift")
+let ownerExportDeletionUIQA = app("Scripts/QA/product-v4/run-ios-owner-export-deletion-surface-uiqa-smoke.sh")
 let timeLetterEntry = app("DreamJourney/Sources/Modules/Archive/MemoryArchiveTextEntryViewController.swift")
 let backendMain = backend("app/main.py")
 let backendStore = backend("app/services/in_memory_store.py")
@@ -116,11 +120,48 @@ for required in [
     "确认注销账户",
     "DreamJourneyBackendClient.shared.softDeleteAccount",
     "externalCleanupDomainStates",
+    "isAccountDataExportVisible",
+    "isServerPolicyManagedClosedPilotRouteAllowed(.accountDataExport)",
+    "AccountDataExportJobStatusSnapshot",
+    "AccountDataExportJobStatusStore",
+    "resumeAccountDataExportJob",
+    "statusSubtitle",
 ] {
     assertContains(profileView, required, "Profile should implement two-step account deletion UI \(required)")
 }
 assertNotContains(profileView, "提交注销申请（未开放）", "Account deletion should no longer be blocked shell")
 assertNotContains(profileView, "不支持数据导出", "V4 data-rights UI should not retain the superseded no-export copy")
+assertNotContains(
+    profileView,
+    "if isFeatureRouteAllowed(.accountDeletion, risk: .ownerTextCore) {\n            rows.append(.dataExport)",
+    "Data export must not reuse the account-deletion visibility gate"
+)
+assertContains(
+    accountLifecycleRegistry,
+    "AccountDataExportJobStatusStore.teardownForAccountLifecycle",
+    "Account lifecycle must clear the owner-scoped export resume state"
+)
+for testName in [
+    "testAccountDataExportJobStatusStoreIsOwnerScopedAndResumable",
+    "testAccountDataExportJobStatusPresentationKeepsFailuresExplicit",
+    "testAccountDataExportRemainsDefaultOffAndFailsClosedWithoutServerPolicy",
+] {
+    assertContains(ownerTruthTests, testName, "iOS tests should cover export resume state \(testName)")
+}
+for required in [
+    "runProfileDataExportStatusSmoke",
+    "DJProfileDataExportStatusSmoke",
+    "profile-data-export-status-smoke-result.json",
+] {
+    assertContains(appDelegate, required, "Profile data-export UIQA harness should keep \(required)")
+}
+for required in [
+    "DJEnableProfileHiddenBranches",
+    "数据副本生成中",
+    "03-profile-data-export-status.png",
+] {
+    assertContains(ownerExportDeletionUIQA, required, "Profile data-export UIQA should keep \(required)")
+}
 
 assertContains(
     timeLetterEntry,

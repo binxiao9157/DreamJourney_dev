@@ -53,9 +53,9 @@ def main() -> None:
         "archive must render status from the durable task receipt",
     )
     require(
-        "isOwnerTruthMediaCaptureClosedPilotEnabled" in archive
-        and "shouldShowOwnerTruthMediaTaskStatus" in archive,
-        "media status must remain scoped to the server-authorized closed pilot",
+        "ownerTruthMediaTaskPresentationOverride != nil\n            || isSelfAutobiographyMode" in archive
+        and "areOwnerTruthMediaTaskActionsEnabled" in archive,
+        "existing owner-scoped media status must remain readable when provider actions close",
     )
     require(
         "OwnerTruthMediaTaskRecoveryCoordinator.shared.restore" in archive
@@ -68,6 +68,15 @@ def main() -> None:
         )[0],
         "ordinary status UI must not render SourceObject IDs",
     )
+    for required in (
+        "OwnerTruthMediaTaskDetailViewController",
+        "查看状态详情",
+        "当前服务暂不可用，状态已保留",
+        "owner-truth-media-detail-unavailable-reason",
+        "runUIQAOwnerTruthMediaTaskDeletionDetailSmoke",
+        "providerIdentifierVisible",
+    ):
+        require(required in archive, f"media task detail/degradation contract missing: {required}")
 
     for required in (
         'case ownerMediaTaskStatusSmoke = "DJRunOwnerMediaTaskStatusSmoke"',
@@ -79,6 +88,8 @@ def main() -> None:
         "func runOwnerMediaTaskStatusSmoke(",
         '"persistentOwnerTruthWriteStarted": false',
         '"backendNetworkStarted": false',
+        '"DJOwnerMediaTaskDeletionDetailSmoke"',
+        '"owner-media-task-deletion-detail-smoke-result.json"',
     ):
         require(required in app_delegate, f"B3 UIQA harness missing: {required}")
     for test_name in (
@@ -94,6 +105,8 @@ def main() -> None:
         "DJRunOwnerMediaTaskStatusSmoke",
         "owner-media-task-status-smoke-result.json",
         "01-owner-media-task-status.png",
+        "02-owner-media-task-deletion-detail.png",
+        "owner-media-task-deletion-detail-smoke-result.json",
     ):
         require(required in uiqa_smoke, f"B3 UIQA script missing: {required}")
 

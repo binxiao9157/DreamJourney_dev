@@ -91,6 +91,137 @@ enum AccountDataRightsReceiptStore {
     }
 }
 
+enum AccountDataExportJobStatusStoreError: LocalizedError {
+    case ownerScopeMismatch
+    case cannotSerialize
+
+    var errorDescription: String? {
+        switch self {
+        case .ownerScopeMismatch:
+            return "账号状态已变化，未保留导出任务状态"
+        case .cannotSerialize:
+            return "导出任务状态格式无效"
+        }
+    }
+}
+
+/// Value-minimized, owner-scoped resume state for the backend ExportJob. The
+/// downloaded package remains temporary and is never copied into UserDefaults.
+struct AccountDataExportJobStatusSnapshot: Codable, Equatable {
+    static let schemaVersion = 1
+
+    let schemaVersion: Int
+    let jobId: String
+    let status: String
+    let attempt: Int
+    let failureCode: String?
+    let createdAt: String
+    let updatedAt: String
+    let expiresAt: String
+    let readyAt: String?
+    let downloadAvailable: Bool
+    let packageStatus: String?
+
+    init(job: AccountDataExportJobContract) {
+        schemaVersion = Self.schemaVersion
+        jobId = job.jobId
+        status = job.status
+        attempt = job.attempt
+        failureCode = job.failureCode
+        createdAt = job.createdAt
+        updatedAt = job.updatedAt
+        expiresAt = job.expiresAt
+        readyAt = job.readyAt
+        downloadAvailable = job.downloadAvailable
+        packageStatus = job.manifest?.packageStatus
+    }
+
+    var statusSubtitle: String {
+        switch status {
+        case "queued", "running":
+            return "数据副本生成中"
+        case "ready":
+            return "数据副本已就绪"
+        case "partial":
+            return "部分数据已就绪"
+        case "failed":
+            return "生成失败，可重试"
+        case "expired":
+            return "副本已过期，可重新生成"
+        default:
+            return "状态待确认"
+        }
+    }
+}
+
+enum AccountDataExportJobStatusStore {
+    private static let storageKeyPrefix = "dj.accountDataExportJobStatus.v1."
+    private static let legacyStorageKey = "dj.accountDataExportJobStatus.v1"
+
+    @discardableResult
+    static func write(
+        _ job: AccountDataExportJobContract,
+        accountLease: AccountLease,
+        defaults: UserDefaults = .standard,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+    ) throws -> AccountDataExportJobStatusSnapshot {
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            throw AccountDataExportJobStatusStoreError.ownerScopeMismatch
+        }
+        let snapshot = AccountDataExportJobStatusSnapshot(job: job)
+        let data: Data
+        do {
+            data = try JSONEncoder().encode(snapshot)
+        } catch {
+            throw AccountDataExportJobStatusStoreError.cannotSerialize
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            throw AccountDataExportJobStatusStoreError.ownerScopeMismatch
+        }
+        let key = scopedStorageKey(for: accountLease)
+        defaults.set(data, forKey: key)
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            defaults.removeObject(forKey: key)
+            throw AccountDataExportJobStatusStoreError.ownerScopeMismatch
+        }
+        return snapshot
+    }
+
+    static func load(
+        accountLease: AccountLease,
+        defaults: UserDefaults = .standard,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+    ) -> AccountDataExportJobStatusSnapshot? {
+        guard accountLeaseRuntime.validate(accountLease, at: .ui).allowed,
+              let data = defaults.data(forKey: scopedStorageKey(for: accountLease)),
+              let snapshot = try? JSONDecoder().decode(
+                  AccountDataExportJobStatusSnapshot.self,
+                  from: data
+              ),
+              snapshot.schemaVersion == AccountDataExportJobStatusSnapshot.schemaVersion,
+              snapshot.jobId.hasPrefix("dej_") else {
+            return nil
+        }
+        return snapshot
+    }
+
+    @discardableResult
+    static func teardownForAccountLifecycle(
+        oldAccountLease: AccountLease?,
+        defaults: UserDefaults = .standard
+    ) -> Bool {
+        defaults.removeObject(forKey: legacyStorageKey)
+        if let oldAccountLease {
+            defaults.removeObject(forKey: scopedStorageKey(for: oldAccountLease))
+        }
+        return true
+    }
+
+    private static func scopedStorageKey(for accountLease: AccountLease) -> String {
+        storageKeyPrefix + AccountLeaseScopeDigest.value(for: accountLease)
+    }
+}
+
 /// Account exports are transient private artifacts. They are scoped to the
 /// captured lease so a later account cannot enumerate or delete another
 /// account's export while handling a lifecycle transition.
@@ -301,6 +432,8 @@ final class ProfileViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
     private weak var careRetryButton: UIButton?
+    private weak var dataExportRow: ProfileActionRow?
+    private var accountDataExportStatusSnapshot: AccountDataExportJobStatusSnapshot?
 
     private var isProfileHiddenBranchesEnabled: Bool {
         #if UI_QA_SIMULATOR && targetEnvironment(simulator)
@@ -323,6 +456,14 @@ final class ProfileViewController: UIViewController {
 
     private var isPublicationManagementQAEntryVisible: Bool {
         PublicationManagementM2QAGate.isEnabled
+    }
+
+    private var isAccountDataExportVisible: Bool {
+        if isProfileHiddenBranchesEnabled {
+            return true
+        }
+        return FeatureGateService.shared
+            .isServerPolicyManagedClosedPilotRouteAllowed(.accountDataExport)
     }
 
     private func isFeatureRouteAllowed(
@@ -363,6 +504,7 @@ final class ProfileViewController: UIViewController {
         view.backgroundColor = DJDesignTokens.Color.background
         observeDigitalHumanContext()
         configureScrollView()
+        restoreAccountDataExportStatus()
         buildContent()
         loadCareSnapshot()
         loadRuntimeCapabilitySnapshots()
@@ -375,6 +517,8 @@ final class ProfileViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: animated)
+        restoreAccountDataExportStatus()
+        updateAccountDataExportRow()
     }
 
     override func viewDidLayoutSubviews() {
@@ -810,7 +954,17 @@ final class ProfileViewController: UIViewController {
         stack.spacing = 0
 
         for (index, action) in rows.enumerated() {
-            let row = ProfileActionRow(action: action, isLast: index == rows.count - 1)
+            let subtitle = action == .dataExport
+                ? accountDataExportStatusSnapshot?.statusSubtitle
+                : nil
+            let row = ProfileActionRow(
+                action: action,
+                subtitle: subtitle,
+                isLast: index == rows.count - 1
+            )
+            if action == .dataExport {
+                dataExportRow = row
+            }
             row.addTarget(self, action: #selector(settingRowTapped(_:)), for: .touchUpInside)
             stack.addArrangedSubview(row)
         }
@@ -847,7 +1001,7 @@ final class ProfileViewController: UIViewController {
         if isFeatureRouteAllowed(.legalCenter, risk: .ownerTextCore) {
             rows.append(.legalCenter)
         }
-        if isFeatureRouteAllowed(.accountDeletion, risk: .ownerTextCore) {
+        if isAccountDataExportVisible {
             rows.append(.dataExport)
         }
         rows.append(.logout)
@@ -1085,6 +1239,10 @@ final class ProfileViewController: UIViewController {
     }
 
     private func showAccountDataExport() {
+        guard isAccountDataExportVisible else {
+            showToast("当前账号暂未开放个人数据导出", type: .info)
+            return
+        }
         guard DreamJourneyBackendClient.shared.isAccountDataExportConfigured else {
             showToast("后端账号服务未配置，暂时无法导出", type: .error)
             return
@@ -1093,6 +1251,17 @@ final class ProfileViewController: UIViewController {
               let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id),
               AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
             showToast("账号状态已变化，请重新登录后再试", type: .info)
+            return
+        }
+
+        if let snapshot = AccountDataExportJobStatusStore.load(accountLease: accountLease) {
+            accountDataExportStatusSnapshot = snapshot
+            updateAccountDataExportRow()
+            resumeAccountDataExportJob(
+                jobId: snapshot.jobId,
+                user: user,
+                accountLease: accountLease
+            )
             return
         }
 
@@ -1106,6 +1275,64 @@ final class ProfileViewController: UIViewController {
             self?.requestAccountDataExport(user: user, accountLease: accountLease)
         })
         present(alert, animated: true)
+    }
+
+    private func restoreAccountDataExportStatus() {
+        guard let user = UserManager.shared.currentUser,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id) else {
+            accountDataExportStatusSnapshot = nil
+            return
+        }
+        accountDataExportStatusSnapshot = AccountDataExportJobStatusStore.load(
+            accountLease: accountLease
+        )
+    }
+
+    private func updateAccountDataExportRow() {
+        dataExportRow?.updateSubtitle(accountDataExportStatusSnapshot?.statusSubtitle)
+    }
+
+    private func persistAccountDataExportJobStatus(
+        _ job: AccountDataExportJobContract,
+        accountLease: AccountLease
+    ) {
+        do {
+            accountDataExportStatusSnapshot = try AccountDataExportJobStatusStore.write(
+                job,
+                accountLease: accountLease
+            )
+            updateAccountDataExportRow()
+        } catch {
+            print("[AccountDataExport] status cache unavailable: \(error.localizedDescription)")
+        }
+    }
+
+    private func resumeAccountDataExportJob(
+        jobId: String,
+        user: UserModel,
+        accountLease: AccountLease
+    ) {
+        showToast("正在读取个人数据副本状态", type: .info)
+        DreamJourneyBackendClient.shared.readAccountDataExportJob(
+            userId: user.id,
+            jobId: jobId
+        ) { [weak self] result in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+                return
+            }
+            switch result {
+            case .success(let job):
+                self.handleAccountDataExportJob(
+                    job,
+                    user: user,
+                    accountLease: accountLease,
+                    remainingPolls: 30
+                )
+            case .failure(let error):
+                self.showToast("导出状态读取失败：\(error.localizedDescription)", type: .error)
+            }
+        }
     }
 
     private func requestAccountDataExport(user: UserModel, accountLease: AccountLease) {
@@ -1141,6 +1368,7 @@ final class ProfileViewController: UIViewController {
         guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
             return
         }
+        persistAccountDataExportJobStatus(job, accountLease: accountLease)
 
         if job.downloadAvailable {
             downloadAccountDataExportJob(
@@ -1442,6 +1670,30 @@ struct ProfileCareBackendStateSmokeCase {
 }
 
 extension ProfileViewController {
+    func runUIQAAccountDataExportStatusSmoke(
+        job: AccountDataExportJobContract
+    ) -> [String: Any] {
+        accountDataExportStatusSnapshot = AccountDataExportJobStatusSnapshot(job: job)
+        rebuildContent()
+        view.layoutIfNeeded()
+        if let dataExportRow {
+            let rowFrame = dataExportRow.convert(dataExportRow.bounds, to: scrollView)
+            scrollView.scrollRectToVisible(
+                CGRect(x: rowFrame.minX, y: max(0, rowFrame.minY - 16), width: rowFrame.width, height: 1),
+                animated: false
+            )
+        }
+        return [
+            "rowVisible": dataExportRow != nil && dataExportRow?.isHidden == false,
+            "profileAttachedToWindow": viewIfLoaded?.window != nil,
+            "rowSubtitle": accountDataExportStatusSnapshot?.statusSubtitle ?? "",
+            "renderedRowSubtitle": dataExportRow?.displayedSubtitle ?? "",
+            "hiddenBranchesEnabled": isProfileHiddenBranchesEnabled,
+            "backendNetworkStarted": false,
+            "persistentExportJobStarted": false,
+        ]
+    }
+
     func setUIQACareSnapshot(_ snapshot: ProfileCareSnapshot) {
         careSnapshot = snapshot
         rebuildContent()
@@ -1644,7 +1896,7 @@ extension ProfileViewController {
 }
 #endif
 
-private enum ProfileRowAction {
+private enum ProfileRowAction: Equatable {
     case profileSettings
     case familyManagement
     case voiceClone
@@ -1733,13 +1985,19 @@ private final class ProfileActionRow: UIControl {
     let action: ProfileRowAction
 
     private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
     private let trailingIconView = UIImageView()
     private let dividerView = UIView()
+    private var minimumHeightConstraint: NSLayoutConstraint?
 
-    init(action: ProfileRowAction, isLast: Bool) {
+    var displayedSubtitle: String? {
+        subtitleLabel.isHidden ? nil : subtitleLabel.text
+    }
+
+    init(action: ProfileRowAction, subtitle: String? = nil, isLast: Bool) {
         self.action = action
         super.init(frame: .zero)
-        setupView(isLast: isLast)
+        setupView(subtitle: subtitle, isLast: isLast)
     }
 
     required init?(coder: NSCoder) {
@@ -1752,7 +2010,17 @@ private final class ProfileActionRow: UIControl {
         }
     }
 
-    private func setupView(isLast: Bool) {
+    func updateSubtitle(_ subtitle: String?) {
+        let normalized = subtitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        subtitleLabel.text = normalized
+        subtitleLabel.isHidden = normalized?.isEmpty != false
+        accessibilityValue = subtitleLabel.isHidden ? nil : normalized
+        minimumHeightConstraint?.constant = subtitleLabel.isHidden
+            ? ProfileLayout.settingsRowMinHeight
+            : 68
+    }
+
+    private func setupView(subtitle: String?, isLast: Bool) {
         accessibilityIdentifier = action.accessibilityIdentifier
         accessibilityTraits = .button
         accessibilityLabel = action.title
@@ -1762,6 +2030,15 @@ private final class ProfileActionRow: UIControl {
         titleLabel.textColor = action.isDestructive
             ? DJDesignTokens.Color.danger
             : DJDesignTokens.Color.textPrimary
+
+        subtitleLabel.font = DJDesignTokens.Font.label(12)
+        subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
+        subtitleLabel.numberOfLines = 1
+        subtitleLabel.lineBreakMode = .byTruncatingTail
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        textStack.axis = .vertical
+        textStack.alignment = .leading
+        textStack.spacing = 3
 
         let trailingConfig = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
         trailingIconView.image = UIImage(systemName: action.iconName, withConfiguration: trailingConfig)
@@ -1773,28 +2050,33 @@ private final class ProfileActionRow: UIControl {
         dividerView.backgroundColor = DJDesignTokens.Color.divider.withAlphaComponent(0.6)
         dividerView.isHidden = isLast
 
-        [titleLabel, trailingIconView, dividerView].forEach {
+        [textStack, trailingIconView, dividerView].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             addSubview($0)
         }
 
+        let minimumHeightConstraint = heightAnchor.constraint(
+            greaterThanOrEqualToConstant: ProfileLayout.settingsRowMinHeight
+        )
+        self.minimumHeightConstraint = minimumHeightConstraint
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(greaterThanOrEqualToConstant: ProfileLayout.settingsRowMinHeight),
+            minimumHeightConstraint,
 
-            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
-            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingIconView.leadingAnchor, constant: -8),
+            textStack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            textStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            textStack.trailingAnchor.constraint(lessThanOrEqualTo: trailingIconView.leadingAnchor, constant: -8),
 
             trailingIconView.trailingAnchor.constraint(equalTo: trailingAnchor),
             trailingIconView.centerYAnchor.constraint(equalTo: centerYAnchor),
             trailingIconView.widthAnchor.constraint(equalToConstant: 18),
             trailingIconView.heightAnchor.constraint(equalToConstant: 18),
 
-            dividerView.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            dividerView.leadingAnchor.constraint(equalTo: textStack.leadingAnchor),
             dividerView.trailingAnchor.constraint(equalTo: trailingAnchor),
             dividerView.bottomAnchor.constraint(equalTo: bottomAnchor),
             dividerView.heightAnchor.constraint(equalToConstant: 0.5),
         ])
+        updateSubtitle(subtitle)
     }
 }
 
