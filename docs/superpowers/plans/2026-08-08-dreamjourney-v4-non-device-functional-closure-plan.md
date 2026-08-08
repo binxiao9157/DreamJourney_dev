@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余非真机功能闭环计划
 
 日期：2026-08-08  
-状态：`ACTIVE_R3_PRODUCT_SURFACE`
+状态：`ACTIVE_R4_PROVIDER_CONTRACT`
 日常非真机开发唯一入口：本文件
 
 ## 1. 目标
@@ -194,6 +194,17 @@
 
 ### ND-R3-02 导出、删除和能力状态
 
+**执行状态**：`COMPLETE`（2026-08-09）
+
+**已完成证据**
+
+- iOS：`feature/prd-stitch-ui-adaptation@a68e6ea2`，将个人数据导出从账号注销 Gate 中拆出，由服务端 closed-pilot policy 独立控制；新增账号租约隔离的导出任务状态恢复，覆盖生成中、就绪、部分就绪、失败和过期状态。
+- 档案页在媒体能力关闭后仍可读取 Owner 自有历史任务状态；上传、处理、删除部分完成和删除失败均使用明确状态，只有能力可用时才显示重试，不再展示假成功或不可执行动作。
+- 新增脱敏的素材状态详情，仅展示用户可理解的类型、文件名、状态和时间，不暴露 SourceObject、Provider 或内部标识；账号退出/切换时同步清理导出恢复状态。
+- 组合 Gate `Scripts/QA/product-v4/run-ios-owner-export-deletion-surface-gate.sh` 已通过 5 项针对性 XCTest、Profile/Archive 静态检查和 `git diff --check`；默认关闭且无服务端策略时，导出路由和请求均 fail-closed。
+- 模拟器 UIQA 已通过导出状态、素材任务状态和删除详情三条路径；证据位于 `tmp/visual-qa/product-v4/owner-export-deletion-surface-smoke/20260809-024941/`。
+- 公开 M0 release regression 与 generic iPhoneOS Release build 已通过；证据位于 `tmp/qa/r3-02-public-release-scope/20260809-r3-02-public-scope/`，公开三 Tab、隐藏入口探测和现有 Stitch 视觉均未改变。
+
 1. 将 R1 状态接入“我的”和档案详情。
 2. Provider 不可用时隐藏动作或展示明确不可用原因，不展示假成功。
 3. 保持现有视觉密度、背景、卡片和三 Tab 结构。
@@ -287,7 +298,7 @@
 
 ## 14. 当前交接点
 
-- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`
-- 当前 Work Item：`ND-R3-02 导出、删除和能力状态`
-- 后续 Work Item：`ND-R4-01 COS/扫描器部署前矩阵`
+- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`
+- 当前 Work Item：`ND-R4-01 COS/扫描器部署前矩阵`
+- 后续 Work Item：`ND-R4-02 OTP Provider 合同`
 - 任何外部 Gate 缺失均不得暂停可继续的非真机任务。
