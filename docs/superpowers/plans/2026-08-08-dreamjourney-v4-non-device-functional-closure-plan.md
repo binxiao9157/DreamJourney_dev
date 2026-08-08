@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余非真机功能闭环计划
 
 日期：2026-08-08  
-状态：`ACTIVE_R2_SYNTHETIC_E2E`
+状态：`ACTIVE_R3_PRODUCT_SURFACE`
 日常非真机开发唯一入口：本文件
 
 ## 1. 目标
@@ -152,6 +152,15 @@
 
 ### ND-R2-03 合成账户 E2E
 
+**执行状态**：`COMPLETE`（2026-08-09）
+
+**实现证据**
+
+- 后端 Gate：`main@a155b8b`，能力绑定修正 `46dbb4c`，异步导出事务修复 `019235a`，下载边界与处理能力凭据修正 `175e4dd / 1177fae`；均已推送并部署。
+- 部署态 Postgres Gate 已通过，数据库迁移头为 `0084`，同一合成账户完整经过 Source、Processing、Candidate、Decision、MemoryVersion、Context、Export、Delete 和 Reconcile。
+- Gate 同时证明默认关闭、跨 Owner 拒绝、fake Provider 外部媒体边界保持 `partial`、删除后 Context 不再选择撤权媒体、Provider 删除回执和物理删除完成。
+- 后端完整 1953 项测试、相关合同测试与 `git diff --check` 通过；证据文件位于服务器 API 容器 `/app/tmp/qa/v4-synthetic-account-e2e/result.json`。
+
 固定一条不使用真实用户数据的组合 Gate：
 
 `Source -> Processing -> Candidate -> Decision -> MemoryVersion -> Context -> Export -> Delete/Reconcile`
@@ -261,7 +270,7 @@
 
 ## 14. 当前交接点
 
-- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`
-- 当前 Work Item：`ND-R2-02 自动停用与恢复`
-- 后续 Work Item：`ND-R2-03 合成账户 E2E`
+- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`
+- 当前 Work Item：`ND-R3-01 Candidate/Memory 审核面`
+- 后续 Work Item：`ND-R3-02 导出、删除和能力状态`
 - 任何外部 Gate 缺失均不得暂停可继续的非真机任务。
