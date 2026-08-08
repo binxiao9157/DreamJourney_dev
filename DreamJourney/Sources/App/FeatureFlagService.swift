@@ -637,6 +637,7 @@ enum DJFeature: String, CaseIterable {
     case ownerTruthCandidateReview
     case ownerTextCaptureV1
     case ownerMediaCaptureV1
+    case ownerMediaProcessingV1
     case echoImageInput
     case timeLetters
     case profileSettings
@@ -649,6 +650,7 @@ enum DJFeature: String, CaseIterable {
     case familySpace
     case legalCenter
     case accountDeletion
+    case accountDataExport
     case accountPasswordChange
     case careDashboard
     case careDoctorContact
@@ -679,6 +681,7 @@ final class FeatureFlagService {
         .ownerTruthCandidateReview,
         .ownerTextCaptureV1,
         .ownerMediaCaptureV1,
+        .ownerMediaProcessingV1,
         .timeLetters,
         .personaSettings,
         .archiveAudioUpload,
@@ -687,6 +690,7 @@ final class FeatureFlagService {
         .archiveLocalAnalysis,
         .familyManagement,
         .familySpace,
+        .accountDataExport,
         .accountPasswordChange,
         .careDashboard,
         .careDoctorContact,

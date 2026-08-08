@@ -163,6 +163,8 @@ struct BackendReleasePolicyFeatureDecision: Equatable {
     let audience: String
     let cohort: String
     let requiredGates: [String]
+    let requiredCapability: String?
+    let capabilityReady: Bool
     let reason: String
 
     init?(_ json: [String: Any]) {
@@ -181,6 +183,8 @@ struct BackendReleasePolicyFeatureDecision: Equatable {
         self.audience = audience
         self.cohort = cohort
         self.requiredGates = requiredGates
+        requiredCapability = json["requiredCapability"] as? String
+        capabilityReady = json["capabilityReady"] as? Bool ?? (requiredCapability == nil)
         self.reason = reason
     }
 
@@ -191,6 +195,8 @@ struct BackendReleasePolicyFeatureDecision: Equatable {
         audience = "unknown"
         cohort = "unknown"
         requiredGates = ["G0"]
+        requiredCapability = nil
+        capabilityReady = false
         self.reason = reason
     }
 
@@ -359,7 +365,7 @@ extension BackendCachedReleasePolicyEvaluation {
 final class FeatureGateService {
     static let shared = FeatureGateService()
 
-    /// These M0 routes remain default-off, but their release authority comes
+    /// These closed-pilot routes remain default-off, but their release authority comes
     /// exclusively from the cached server policy. A local flag cannot enable
     /// either route; this narrow allowlist only prevents a local default-off
     /// flag from blocking an already server-authorized closed-pilot account.
@@ -369,7 +375,9 @@ final class FeatureGateService {
         .ownerTruthLifeMap,
         .ownerTextCaptureV1,
         .ownerMediaCaptureV1,
+        .ownerMediaProcessingV1,
         .ownerTruthCandidateReview,
+        .accountDataExport,
     ]
 
     private let evaluator = FeatureGateEvaluator()
@@ -590,6 +598,14 @@ final class FeatureGateService {
            pathComponents[3] == "source-capture-state" {
             return .ownerTextCaptureV1
         }
+        if method == .post,
+           pathComponents.count == 6,
+           pathComponents[0] == "v2",
+           pathComponents[1] == "vaults",
+           pathComponents[3] == "source-objects",
+           pathComponents[5] == "processing-retries" {
+            return .ownerMediaProcessingV1
+        }
         if pathComponents.count >= 5,
            pathComponents[0] == "v2",
            pathComponents[1] == "vaults",
@@ -693,7 +709,7 @@ final class FeatureGateService {
         if normalizedPath == "/auth/password" { return .accountPasswordChange }
         if normalizedPath == "/auth/data-export"
             || normalizedPath.hasPrefix("/auth/data-export/jobs") {
-            return .accountDeletion
+            return .accountDataExport
         }
         if normalizedPath == "/auth/delete" || normalizedPath == "/auth/restore" {
             return .accountDeletion
@@ -769,11 +785,12 @@ final class FeatureGateService {
              .ownerTextCaptureV1,
              .profileSettings,
              .legalCenter,
-             .accountDeletion:
+             .accountDeletion,
+             .accountDataExport:
             return .ownerTextCore
         case .voiceCloneShell, .digitalHumanLivePanel, .archiveRemoteFetch:
             return .providerEffect
-        case .ownerMediaCaptureV1:
+        case .ownerMediaCaptureV1, .ownerMediaProcessingV1:
             return .providerEffect
         default:
             return .futureBeta
@@ -6702,11 +6719,14 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             }
             return
         }
-        let decision = requestFeatureDecision(for: .ownerMediaCaptureV1)
+        let feature: DJFeature = pathSuffix == "/processing-retries"
+            ? .ownerMediaProcessingV1
+            : .ownerMediaCaptureV1
+        let decision = requestFeatureDecision(for: feature)
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
-                    feature: DJFeature.ownerMediaCaptureV1.rawValue,
+                    feature: feature.rawValue,
                     reason: decision.reason
                 )))
             }

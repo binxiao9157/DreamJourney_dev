@@ -483,6 +483,7 @@ let requiredScripts = [
     "Scripts/QA/product-v4/stage0_readiness_artifact_adapter_check.py",
     "Scripts/QA/product-v4/run-stage0-readiness-artifact-gate.sh",
     "Scripts/QA/prd-stitch-ui/release-policy-shadow-contract-check.swift",
+    "Scripts/QA/prd-stitch-ui/release-policy-capability-cohort-check.swift",
     "DreamJourney/Sources/Services/ReleasePolicyStore.swift",
     "Scripts/QA/prd-stitch-ui/release-policy-cache-model-smoke.swift",
     "Scripts/QA/prd-stitch-ui/run-release-policy-cache-model-smoke.sh",

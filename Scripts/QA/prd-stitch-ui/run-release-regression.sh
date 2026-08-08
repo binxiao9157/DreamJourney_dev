@@ -656,6 +656,7 @@ run_step "Owner Truth candidate proposal status handoff guard" "$STATIC_LOG_DIR/
 
 for guard in \
   release-policy-shadow-contract-check.swift \
+  release-policy-capability-cohort-check.swift \
   release-policy-cache-contract-check.swift \
   captured-feature-policy-gate-check.swift \
   runtime-capability-axis-integration-check.swift \
