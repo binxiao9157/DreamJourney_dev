@@ -243,6 +243,8 @@ assertContains(releaseRegression, "REQUIRE_STAGE0_ECHO_MANIFEST=1", "readiness a
 assertContains(releaseRegression, "STAGE0_READINESS_STRICT=1", "readiness artifact gate should fail closed when enabled")
 assertContains(releaseRegression, "RUN_DIGITAL_HUMAN_TTS_VISEME_GATE", "release regression should expose optional digital-human TTS/viseme gate")
 assertContains(releaseRegression, "run-digital-human-tts-viseme-gate.sh", "release regression should call digital-human TTS/viseme gate")
+assertContains(releaseRegression, "RUN_VOICE_CLONE_C1_C2_NON_DEVICE_GATE", "release regression should expose the optional voice-clone C1/C2 lifecycle gate")
+assertContains(releaseRegression, "run-voice-clone-c1-c2-non-device-gate.sh", "release regression should call the voice-clone C1/C2 lifecycle gate")
 assertContains(releaseRegression, "RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE", "release regression should expose optional Tencent backend PCM-drive mock smoke")
 assertContains(releaseRegression, "run-tencent-backend-pcm-drive-mock-smoke.sh", "release regression should call Tencent backend PCM-drive mock smoke")
 assertContains(releaseRegression, "RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE", "release regression should expose optional Tencent digital-human Phase 1 non-device gate")
@@ -250,7 +252,8 @@ assertContains(releaseRegression, "run-tencent-digital-human-phase1-non-device-g
 assertContains(releaseRegression, "RUN_DIGITAL_HUMAN_SESSION_LEASE_GATE", "release regression should expose optional digital-human session lease gate")
 assertContains(releaseRegression, "run-digital-human-session-lease-gate.sh", "release regression should call digital-human session lease gate")
 assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION", "release regression should expose public MVP Profile care P0 gate")
-assertContains(releaseRegression, "RUN_P0_PROFILE_CARE_REGRESSION forces RUN_PROFILE_CARE_STATE_SMOKE and RUN_PROFILE_CARE_BACKEND_STATE_SMOKE", "Profile care P0 gate should force local and deployed backend care smokes")
+assertContains(releaseRegression, "RUN_PROFILE_CARE_STATE_SMOKE=1", "Profile care P0 gate should force its local state smoke")
+assertContains(releaseRegression, "deployed backend fixture requires the default-off careDashboard closed-pilot", "Profile care deployed fixture should remain an explicit opt-in gate")
 assertContains(releaseRegression, "RUN_KNOWLEDGE_V2_SYNC_GATE", "release regression should expose the knowledge V2 cross-repository gate")
 assertContains(releaseRegression, "run-knowledge-three-way-merge-model-smoke.sh", "release regression should always run the knowledge three-way merge model")
 assertContains(releaseRegression, "run-knowledge-semantic-cache-isolation-model-smoke.sh", "release regression should always model semantic cache account isolation")
@@ -683,6 +686,7 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-backend-archive-image-analysis-smoke.sh",
     "Scripts/QA/prd-stitch-ui/voice-clone-shell-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/voice-clone-exit-receipt-check.swift",
+    "Scripts/QA/prd-stitch-ui/voice-clone-c1-c2-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/voice-clone-stale-ready-state-check.swift",
     "Scripts/QA/prd-stitch-ui/voice-clone-backend-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/family-digital-human-hidden-contract-check.swift",
@@ -698,6 +702,7 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-voice-clone-profile-selection-smoke.sh",
     "Scripts/QA/prd-stitch-ui/voice-clone-synthesis-runtime-smoke-check.swift",
     "Scripts/QA/prd-stitch-ui/run-voice-clone-synthesis-runtime-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/run-voice-clone-c1-c2-non-device-gate.sh",
     "Scripts/QA/prd-stitch-ui/tencent-backend-pcm-drive-mock-smoke-check.swift",
     "Scripts/QA/prd-stitch-ui/run-tencent-backend-pcm-drive-mock-smoke.sh",
     "Scripts/QA/prd-stitch-ui/digital-human-voice-clone-combo-gate-check.swift",

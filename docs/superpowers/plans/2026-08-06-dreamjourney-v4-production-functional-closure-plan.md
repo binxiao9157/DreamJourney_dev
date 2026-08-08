@@ -235,6 +235,13 @@ flowchart LR
 **完成定义**：试听与 accepted profile 可被服务端确认，删除状态可追踪，不存在“页面可用但实际默认音色”的假阳性。
 **阻断输入**：真实声音 Provider 训练/删除能力、可用 slot、测试身份和适用同意文本。
 
+**执行状态（2026-08-08）**：`CODE_COMPLETE_NON_DEVICE_VERIFIED / DEFAULT_OFF`
+
+- 已补独立的 revocation-first Provider 删除 worker：本地删除立即阻断合成；worker 只在显式环境开关启用后消费已接受的 outbox，且 Provider 完成、失败、未知与不支持都分别收敛，绝不把本地 tombstone 伪装成云端已删除。
+- 当前火山训练/查询 Adapter 没有经评审的删除 API，明确回报 `unsupported/partial`，不会猜测 URL 或发出未受支持的删除请求。真实删除 Provider 接入前 worker 保持关闭。
+- `run-voice-clone-c1-c2-non-device-gate.sh` 使用 fake Provider 覆盖完成、失败、未知、不支持、幂等、stale generation 和删除期间合成拒绝；不消耗真实样本或 slot。
+- 未关闭项：真实成年人身份/活体、真实训练/试听接受、Provider 删除/对账、保留策略和真机听感仍为独立外部门。
+
 ### C2：Echo 使用本人 accepted profile 的单一路径
 
 **工作项**
@@ -247,6 +254,12 @@ flowchart LR
 **验收**：非真机 PCM/trace 组合 gate、角色/账户切换、取消/重试、Provider error、缓存过期测试；随后进入独立真机听感 Gate。
 **完成定义**：有 accepted profile 时 Echo 必须使用该 profile；无 profile 或失败时明确回退，绝不冒充复刻成功。
 **真机 Gate**：实际声音一致性、音频路由、打断、麦克风恢复和数字人配额必须在设备上验收。
+
+**执行状态（2026-08-08）**：`CODE_COMPLETE_NON_DEVICE_VERIFIED / TRUE_DEVICE_PENDING`
+
+- iOS 只接受与当前 owner、voiceProfile、角色、purpose、output mode 和 audio owner 全部绑定的 `tencentAudioDrive` PCM；格式或 binding 不匹配会进入明确失败，不会静默改用默认音色。
+- C1/C2 组合 Gate 将严格 profile eligibility、删除撤权、PCM 格式和 Echo 路由静态合同与后端 fake-provider lifecycle smoke 合并，默认不纳入公开 MVP 回归。
+- 未关闭项：真实 accepted profile 的试听音色与 Echo 数字人音色一致性、真实 Provider 故障、音频路由、打断和麦克风恢复必须在真机单独验收。
 
 ## 8. Phase D：M2 成年授权 Publication / Visitor / 在世数字人
 
