@@ -2259,6 +2259,10 @@ private extension AppDelegate {
 
     func runVoiceCloneSynthesisRuntimeSmoke() {
         let voiceProfileId = uiqaArgumentValue(prefix: "DJVoiceCloneProbeProfileId=") ?? "S_uiqa_voice_clone_probe_required"
+        let profileVersion = uiqaArgumentValue(prefix: "DJVoiceCloneProbeProfileVersion=")
+            .flatMap { Int($0) }
+            .flatMap { $0 > 0 ? $0 : nil }
+            ?? 1
         let userId = uiqaArgumentValue(prefix: "DJVoiceCloneProbeUserId=")
             ?? UserManager.shared.currentUser?.id
             ?? "voice_clone_ios_uiqa"
@@ -2319,7 +2323,8 @@ private extension AppDelegate {
                         roleKey: "personalOwner",
                         roleSubjectId: userId,
                         personaScope: "personal",
-                        digitalHumanId: userId
+                        digitalHumanId: userId,
+                        expectedProfileVersion: profileVersion
                     ) { [weak self] synthesisResult in
                         DispatchQueue.main.async {
                             guard let self else { return }

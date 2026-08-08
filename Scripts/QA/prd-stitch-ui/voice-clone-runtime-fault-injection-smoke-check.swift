@@ -69,6 +69,8 @@ for required in [
     "invalidPCMRejected",
     "providerFailureRejected",
     "evidenceRedacted",
+    "bindingResult",
+    "textHash",
     "providerLogId\": \"redacted\"",
     "rawAudioOmitted\": true",
     "setEchoAudioOwner(.fallbackMuted",
@@ -114,6 +116,8 @@ for required in [
     "evidenceRedacted",
     "rawAudioOmitted",
     "providerLogId",
+    "bindingResult",
+    "textHash",
     "01-voice-clone-runtime-fault-injection-smoke.png",
 ] {
     require(runner.contains(required), "runtime fault-injection runner must verify \(required)")

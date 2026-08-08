@@ -2692,6 +2692,8 @@ struct VoiceCloneProfileContract {
 }
 
 struct VoiceCloneSynthesisBinding {
+    static let currentSchemaVersion = "voice-synthesis-binding-v2"
+
     let schemaVersion: String
     let ownerUserId: String
     let voiceProfileId: String
@@ -2703,10 +2705,12 @@ struct VoiceCloneSynthesisBinding {
     let requestPurpose: String
     let outputMode: String
     let audioOwner: String
+    let textHash: String
 
     init?(json: [String: Any]?) {
         guard let json,
               let schemaVersion = Self.normalized(json["schemaVersion"]),
+              schemaVersion == Self.currentSchemaVersion,
               let ownerUserId = Self.normalized(json["ownerUserId"]),
               let voiceProfileId = Self.normalized(json["voiceProfileId"]),
               let profileVersion = Self.intValue(json["profileVersion"]),
@@ -2717,7 +2721,8 @@ struct VoiceCloneSynthesisBinding {
               let digitalHumanId = Self.normalized(json["digitalHumanId"]),
               let requestPurpose = Self.normalized(json["requestPurpose"]),
               let outputMode = Self.normalized(json["outputMode"]),
-              let audioOwner = Self.normalized(json["audioOwner"]) else {
+              let audioOwner = Self.normalized(json["audioOwner"]),
+              let textHash = Self.normalizedSHA256(json["textHash"]) else {
             return nil
         }
         self.schemaVersion = schemaVersion
@@ -2731,18 +2736,21 @@ struct VoiceCloneSynthesisBinding {
         self.requestPurpose = requestPurpose
         self.outputMode = outputMode
         self.audioOwner = audioOwner
+        self.textHash = textHash
     }
 
     func matches(
         ownerUserId: String,
         voiceProfileId: String,
+        profileVersion: Int,
         roleSubjectId: String,
         roleKey: String,
         personaScope: String,
         digitalHumanId: String,
         requestPurpose: String,
         outputMode: String,
-        audioOwner: String
+        audioOwner: String,
+        textHash: String
     ) -> Bool {
         guard let expectedOwnerUserId = Self.normalized(ownerUserId),
               let expectedVoiceProfileId = Self.normalized(voiceProfileId),
@@ -2752,11 +2760,14 @@ struct VoiceCloneSynthesisBinding {
               let expectedDigitalHumanId = Self.normalized(digitalHumanId),
               let expectedRequestPurpose = Self.normalized(requestPurpose),
               let expectedOutputMode = Self.normalized(outputMode),
-              let expectedAudioOwner = Self.normalized(audioOwner) else {
+              let expectedAudioOwner = Self.normalized(audioOwner),
+              let expectedTextHash = Self.normalizedSHA256(textHash),
+              profileVersion > 0 else {
             return false
         }
         return self.ownerUserId == expectedOwnerUserId
             && self.voiceProfileId == expectedVoiceProfileId
+            && self.profileVersion == profileVersion
             && self.roleSubjectId == expectedRoleSubjectId
             && self.roleKey == expectedRoleKey
             && self.personaScope == expectedPersonaScope
@@ -2764,6 +2775,13 @@ struct VoiceCloneSynthesisBinding {
             && self.requestPurpose == expectedRequestPurpose
             && self.outputMode == expectedOutputMode
             && self.audioOwner == expectedAudioOwner
+            && self.textHash == expectedTextHash
+    }
+
+    static func textHash(for text: String) -> String {
+        SHA256.hash(data: Data(text.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 
     private static func normalized(_ value: Any?) -> String? {
@@ -2778,6 +2796,17 @@ struct VoiceCloneSynthesisBinding {
         if let value = value as? NSNumber { return value.intValue }
         if let value = value as? String { return Int(value) }
         return nil
+    }
+
+    private static func normalizedSHA256(_ value: Any?) -> String? {
+        guard let normalized = normalized(value)?.lowercased(),
+              normalized.count == 64,
+              normalized.unicodeScalars.allSatisfy({
+                  CharacterSet(charactersIn: "0123456789abcdef").contains($0)
+              }) else {
+            return nil
+        }
+        return normalized
     }
 }
 
@@ -2853,24 +2882,28 @@ struct VoiceCloneSynthesisResult {
     func isBound(
         toOwnerUserId ownerUserId: String,
         voiceProfileId: String,
+        profileVersion: Int,
         roleSubjectId: String,
         roleKey: String,
         personaScope: String,
         digitalHumanId: String,
         requestPurpose: String,
         outputMode: String,
-        audioOwner: String
+        audioOwner: String,
+        textHash: String
     ) -> Bool {
         synthesisBinding?.matches(
             ownerUserId: ownerUserId,
             voiceProfileId: voiceProfileId,
+            profileVersion: profileVersion,
             roleSubjectId: roleSubjectId,
             roleKey: roleKey,
             personaScope: personaScope,
             digitalHumanId: digitalHumanId,
             requestPurpose: requestPurpose,
             outputMode: outputMode,
-            audioOwner: audioOwner
+            audioOwner: audioOwner,
+            textHash: textHash
         ) == true
     }
 
@@ -4445,6 +4478,11 @@ struct EchoVoiceSynthesisEvidenceSummary: Codable {
     let ownerUserId: String
     let status: String
     let voiceProfileId: String?
+    let profileVersion: Int?
+    let bindingSchemaVersion: String?
+    let textHash: String?
+    let bindingResult: String
+    let audioOwner: String?
     let providerMode: String?
     let outputMode: String?
     let audioFormat: String?
@@ -4464,6 +4502,11 @@ struct EchoVoiceSynthesisEvidenceSummary: Codable {
         self.ownerUserId = ownerUserId
         self.status = "ready"
         self.voiceProfileId = synthesis.voiceProfileId
+        self.profileVersion = synthesis.synthesisBinding?.profileVersion
+        self.bindingSchemaVersion = synthesis.synthesisBinding?.schemaVersion
+        self.textHash = synthesis.synthesisBinding?.textHash
+        self.bindingResult = synthesis.synthesisBinding == nil ? "missing" : "matched"
+        self.audioOwner = synthesis.synthesisBinding?.audioOwner
         self.providerMode = synthesis.providerMode
         self.outputMode = synthesis.outputMode
         self.audioFormat = synthesis.audioFormat
@@ -4540,6 +4583,11 @@ struct EchoVoiceSynthesisEvidenceSummary: Codable {
         self.ownerUserId = ownerUserId
         self.status = status
         self.voiceProfileId = voiceProfileId
+        self.profileVersion = nil
+        self.bindingSchemaVersion = nil
+        self.textHash = nil
+        self.bindingResult = status == "failed" ? "rejected" : "unavailable"
+        self.audioOwner = nil
         self.providerMode = nil
         self.outputMode = outputMode
         self.audioFormat = nil
@@ -6272,6 +6320,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         roleSubjectId: String? = nil,
         personaScope: String? = nil,
         digitalHumanId: String? = nil,
+        expectedProfileVersion: Int? = nil,
         completion: @escaping (Result<VoiceCloneSynthesisResult, Error>) -> Void
     ) {
         #if DEBUG || UI_QA_SIMULATOR
@@ -6280,11 +6329,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
            let mockSynthesis = makeTencentBackendPCMDriveMockSynthesis(
                userId: userId,
                voiceProfileId: voiceProfileId,
+               text: text,
                roleKey: roleKey,
                roleSubjectId: roleSubjectId,
                personaScope: personaScope,
                digitalHumanId: digitalHumanId,
-               requestPurpose: requestPurpose
+               requestPurpose: requestPurpose,
+               expectedProfileVersion: expectedProfileVersion
            ) {
             DispatchQueue.main.async {
                 completion(.success(mockSynthesis))
@@ -6320,6 +6371,9 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         if let digitalHumanId, !digitalHumanId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             payload["digitalHumanId"] = digitalHumanId
         }
+        if let expectedProfileVersion, expectedProfileVersion > 0 {
+            payload["expectedProfileVersion"] = expectedProfileVersion
+        }
         requestJSON(
             path: "/voice/synthesis",
             method: .post,
@@ -6343,11 +6397,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
     private func makeTencentBackendPCMDriveMockSynthesis(
         userId: String,
         voiceProfileId: String,
+        text: String,
         roleKey: String?,
         roleSubjectId: String?,
         personaScope: String?,
         digitalHumanId: String?,
-        requestPurpose: String?
+        requestPurpose: String?,
+        expectedProfileVersion: Int?
     ) -> VoiceCloneSynthesisResult? {
         let pcmData = Data(repeating: 0x18, count: 3_200)
         return VoiceCloneSynthesisResult(json: [
@@ -6364,9 +6420,9 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 "durationSeconds": 0.1,
             ],
             "synthesisBinding": [
-                "schemaVersion": "voice-synthesis-binding-v1",
+                "schemaVersion": VoiceCloneSynthesisBinding.currentSchemaVersion,
                 "voiceProfileId": voiceProfileId,
-                "profileVersion": 1,
+                "profileVersion": expectedProfileVersion ?? 1,
                 "ownerUserId": userId,
                 "roleSubjectId": roleSubjectId ?? userId,
                 "roleKey": roleKey ?? "personalOwner",
@@ -6375,6 +6431,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 "requestPurpose": requestPurpose ?? "echo",
                 "outputMode": "tencentAudioDrive",
                 "audioOwner": "tencentDigitalHuman",
+                "textHash": VoiceCloneSynthesisBinding.textHash(for: text),
             ],
         ])
     }

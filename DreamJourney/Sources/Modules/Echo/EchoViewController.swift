@@ -831,6 +831,24 @@ final class EchoViewController: UIViewController {
         #endif
     }
 
+    private var tencentBackendPCMDriveProfileVersion: Int? {
+        #if DEBUG || UI_QA_SIMULATOR
+        if let rawValue = launchArgumentValue(prefix: "DJTencentBackendPCMDriveProfileVersion="),
+           let value = Int(rawValue),
+           value > 0 {
+            return value
+        }
+        let snapshot = VoiceCloneService.shared.voiceCloneShellSnapshot()
+        guard snapshot.voiceProfileId == tencentBackendPCMDriveVoiceProfileId,
+              snapshot.profileVersion > 0 else {
+            return nil
+        }
+        return snapshot.profileVersion
+        #else
+        return nil
+        #endif
+    }
+
     private var tencentBackendPCMDriveUserId: String {
         #if DEBUG || UI_QA_SIMULATOR
         launchArgumentValue(prefix: "DJTencentBackendPCMDriveUserId=")
@@ -4658,7 +4676,8 @@ final class EchoViewController: UIViewController {
             roleKey: roleKey,
             roleSubjectId: userId,
             personaScope: "personal",
-            digitalHumanId: userId
+            digitalHumanId: userId,
+            expectedProfileVersion: voiceCloneUseTicket.profileVersion
         ) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -4707,13 +4726,15 @@ final class EchoViewController: UIViewController {
                           synthesis.isBound(
                             toOwnerUserId: userId,
                             voiceProfileId: voiceProfileId,
+                            profileVersion: voiceCloneUseTicket.profileVersion,
                             roleSubjectId: userId,
                             roleKey: roleKey,
                             personaScope: "personal",
                             digitalHumanId: userId,
                             requestPurpose: "echo",
                             outputMode: "tencentAudioDrive",
-                            audioOwner: "tencentDigitalHuman"
+                            audioOwner: "tencentDigitalHuman",
+                            textHash: VoiceCloneSynthesisBinding.textHash(for: normalizedText)
                           ),
                           synthesis.isTencentAudioDrivePCMCompatible,
                           let signal = self.makeTencentDigitalHumanPCMDriveSignal(from: synthesis) else {
@@ -4729,13 +4750,15 @@ final class EchoViewController: UIViewController {
                                 && synthesis.isBound(
                                     toOwnerUserId: userId,
                                     voiceProfileId: voiceProfileId,
+                                    profileVersion: voiceCloneUseTicket.profileVersion,
                                     roleSubjectId: userId,
                                     roleKey: roleKey,
                                     personaScope: "personal",
                                     digitalHumanId: userId,
                                     requestPurpose: "echo",
                                     outputMode: "tencentAudioDrive",
-                                    audioOwner: "tencentDigitalHuman"
+                                    audioOwner: "tencentDigitalHuman",
+                                    textHash: VoiceCloneSynthesisBinding.textHash(for: normalizedText)
                                 ) ? "incompatibleAudioFormat" : "synthesisBindingMismatch",
                             detail: "Echo only accepts a PCM response bound to the current owner, profile, role, purpose, and output mode.",
                             lifecycleToken: lifecycleToken,
@@ -6604,6 +6627,17 @@ final class EchoViewController: UIViewController {
             print("[TencentDigitalHuman][QA] backend PCM-drive smoke failed reason=missingVoiceProfileId")
             return
         }
+        guard let profileVersion = tencentBackendPCMDriveProfileVersion else {
+            let message = "复刻音色版本不可用，无法运行腾讯数智人 PCM 真机链路。"
+            viewModel.receiveAIReply(message)
+            trueDeviceBackendPCMDriveTrace.markFailure(
+                reason: "missingVoiceProfileVersion",
+                detail: "No accepted profile version or launch override was available"
+            )
+            emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "missingVoiceProfileVersion")
+            print("[TencentDigitalHuman][QA] backend PCM-drive smoke failed reason=missingVoiceProfileVersion")
+            return
+        }
 
         let text = tencentBackendPCMDriveText
         let userId = tencentBackendPCMDriveUserId
@@ -6633,13 +6667,36 @@ final class EchoViewController: UIViewController {
             roleKey: "personalOwner",
             roleSubjectId: userId,
             personaScope: "personal",
-            digitalHumanId: userId
+            digitalHumanId: userId,
+            expectedProfileVersion: profileVersion
         ) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
                 switch result {
                 case .success(let synthesis):
                     self.trueDeviceBackendPCMDriveTrace.markSynthesis(synthesis)
+                    guard synthesis.isBound(
+                        toOwnerUserId: userId,
+                        voiceProfileId: voiceProfileId,
+                        profileVersion: profileVersion,
+                        roleSubjectId: userId,
+                        roleKey: "personalOwner",
+                        personaScope: "personal",
+                        digitalHumanId: userId,
+                        requestPurpose: "echo",
+                        outputMode: "tencentAudioDrive",
+                        audioOwner: "tencentDigitalHuman",
+                        textHash: VoiceCloneSynthesisBinding.textHash(for: text)
+                    ) else {
+                        self.renderVoiceStatus(text: nil, isVisible: false)
+                        self.viewModel.receiveAIReply("后端复刻音频与当前音色或文本不匹配，已拒绝播放。")
+                        self.trueDeviceBackendPCMDriveTrace.markFailure(
+                            reason: "synthesisBindingMismatch",
+                            detail: "The synthesis response was not bound to the active profile version and text hash"
+                        )
+                        self.emitTencentBackendPCMDriveTrueDeviceQAResult(reason: "synthesisBindingMismatch")
+                        return
+                    }
                     guard synthesis.isTencentAudioDrivePCMCompatible else {
                         self.renderVoiceStatus(text: nil, isVisible: false)
                         self.viewModel.receiveAIReply("后端复刻音频格式不兼容腾讯数智人，已回到普通回响。")
@@ -9989,7 +10046,8 @@ extension EchoViewController {
 
         func mockSynthesis(
             bindingAudioOwner: String = "tencentDigitalHuman",
-            audioFormat: String = "pcm16kMono"
+            audioFormat: String = "pcm16kMono",
+            text: String = "UIQA voice clone runtime fault"
         ) -> VoiceCloneSynthesisResult? {
             let pcmData = Data(repeating: 23, count: 3_200)
             return VoiceCloneSynthesisResult(json: [
@@ -10008,7 +10066,7 @@ extension EchoViewController {
                     "durationSeconds": 0.1,
                 ],
                 "synthesisBinding": [
-                    "schemaVersion": "voice-synthesis-binding-v1",
+                    "schemaVersion": VoiceCloneSynthesisBinding.currentSchemaVersion,
                     "ownerUserId": ownerUserId,
                     "voiceProfileId": profileId,
                     "profileVersion": 1,
@@ -10019,6 +10077,7 @@ extension EchoViewController {
                     "requestPurpose": "echo",
                     "outputMode": "tencentAudioDrive",
                     "audioOwner": bindingAudioOwner,
+                    "textHash": VoiceCloneSynthesisBinding.textHash(for: text),
                 ],
             ])
         }
@@ -10094,13 +10153,15 @@ extension EchoViewController {
         let bindingMismatchRejected = mockSynthesis(bindingAudioOwner: "volcengineLocalTTS")?.isBound(
             toOwnerUserId: ownerUserId,
             voiceProfileId: profileId,
+            profileVersion: acceptedTicket.profileVersion,
             roleSubjectId: ownerUserId,
             roleKey: "personalOwner",
             personaScope: "personal",
             digitalHumanId: ownerUserId,
             requestPurpose: "echo",
             outputMode: "tencentAudioDrive",
-            audioOwner: "tencentDigitalHuman"
+            audioOwner: "tencentDigitalHuman",
+            textHash: VoiceCloneSynthesisBinding.textHash(for: "UIQA voice clone runtime fault")
         ) == false
         let invalidPCMRejected = mockSynthesis(audioFormat: "wav")?.isTencentAudioDrivePCMCompatible == false
 
@@ -10391,16 +10452,20 @@ extension EchoViewController {
                             && self.lastVoiceSynthesisEvidenceSummary?.status == "failed"
                         let evidencePayload: [String: Any] = [
                             "voiceProfileId": profileId,
-                            "profileVersion": 8,
+                            "profileVersion": acceptedTicket.profileVersion,
                             "role": "personalOwner",
                             "outputMode": "tencentAudioDrive",
                             "audioOwner": self.currentEchoAudioOwner.rawValue,
                             "fallbackReason": self.lastEchoRuntimeFallbackReason ?? "none",
+                            "textHash": VoiceCloneSynthesisBinding.textHash(for: "UIQA provider timeout"),
+                            "bindingResult": bindingMismatchRejected ? "mismatchRejected" : "unknown",
                             "providerLogId": "redacted",
                             "rawAudioOmitted": true,
                         ]
                         let evidenceRedacted = (evidencePayload["providerLogId"] as? String) == "redacted"
                             && (evidencePayload["rawAudioOmitted"] as? Bool) == true
+                            && (evidencePayload["textHash"] as? String)?.count == 64
+                            && (evidencePayload["bindingResult"] as? String) == "mismatchRejected"
                         let completed = pausedPCMRejected
                             && deletedTicketRejected
                             && expiredTicketRejected
@@ -10569,7 +10634,8 @@ extension EchoViewController {
                         roleKey: "personalOwner",
                         roleSubjectId: userId,
                         personaScope: "personal",
-                        digitalHumanId: userId
+                        digitalHumanId: userId,
+                        expectedProfileVersion: 1
                     ) { [weak self] synthesisResult in
                         DispatchQueue.main.async {
                             guard let self,
@@ -10590,13 +10656,15 @@ extension EchoViewController {
                                 guard synthesis.isBound(
                                     toOwnerUserId: userId,
                                     voiceProfileId: voiceProfileId,
+                                    profileVersion: 1,
                                     roleSubjectId: userId,
                                     roleKey: "personalOwner",
                                     personaScope: "personal",
                                     digitalHumanId: userId,
                                     requestPurpose: "echo",
                                     outputMode: "tencentAudioDrive",
-                                    audioOwner: "tencentDigitalHuman"
+                                    audioOwner: "tencentDigitalHuman",
+                                    textHash: VoiceCloneSynthesisBinding.textHash(for: text)
                                 ) else {
                                     completion([
                                         "completed": false,

@@ -122,6 +122,11 @@ if not isinstance(evidence.get("profileVersion"), int) or evidence["profileVersi
     raise SystemExit(f"{path}: expected positive profile version")
 if evidence.get("providerLogId") != "redacted" or evidence.get("rawAudioOmitted") is not True:
     raise SystemExit(f"{path}: evidence must redact provider IDs and omit raw audio")
+if evidence.get("bindingResult") != "mismatchRejected":
+    raise SystemExit(f"{path}: expected the mismatched synthesis binding to be rejected")
+text_hash = evidence.get("textHash")
+if not isinstance(text_hash, str) or len(text_hash) != 64:
+    raise SystemExit(f"{path}: expected a SHA-256 text hash without raw reply text")
 if not isinstance(evidence.get("audioOwner"), str) or not evidence["audioOwner"]:
     raise SystemExit(f"{path}: expected final audio owner evidence")
 if not isinstance(evidence.get("fallbackReason"), str) or not evidence["fallbackReason"]:

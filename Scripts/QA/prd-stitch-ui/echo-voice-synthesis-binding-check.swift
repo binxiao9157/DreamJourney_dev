@@ -59,6 +59,7 @@ for required in [
     "let ownerUserId: String",
     "let voiceProfileId: String",
     "let profileVersion: Int",
+    "let textHash: String",
     "let roleSubjectId: String",
     "let roleKey: String",
     "let personaScope: String",
@@ -69,6 +70,10 @@ for required in [
     "let synthesisBinding: VoiceCloneSynthesisBinding?",
     "VoiceCloneSynthesisBinding(json: json[\"synthesisBinding\"] as? [String: Any])",
     "func isBound(",
+    "voice-synthesis-binding-v2",
+    "static func textHash(for text: String)",
+    "expectedProfileVersion: Int? = nil",
+    "payload[\"expectedProfileVersion\"] = expectedProfileVersion",
     "roleKey: String? = nil",
     "payload[\"roleKey\"] = roleKey",
     "roleSubjectId: String? = nil",
@@ -77,6 +82,9 @@ for required in [
     "payload[\"personaScope\"] = personaScope",
     "digitalHumanId: String? = nil",
     "payload[\"digitalHumanId\"] = digitalHumanId",
+    "let bindingResult: String",
+    "let bindingSchemaVersion: String?",
+    "self.bindingResult = synthesis.synthesisBinding == nil ? \"missing\" : \"matched\"",
 ] {
     require(client.contains(required), "iOS synthesis client should bind \(required)")
 }
@@ -94,6 +102,8 @@ for required in [
     "\"requestPurpose\": VOICE_CLONE_ECHO_SYNTHESIS_PURPOSE",
     "\"outputMode\": \"tencentAudioDrive\"",
     "\"audioOwner\": VOICE_SYNTHESIS_TENCENT_AUDIO_OWNER",
+    "\"textHash\": hashlib.sha256(text.encode(\"utf-8\")).hexdigest()",
+    "VOICE_SYNTHESIS_BINDING_SCHEMA_VERSION = \"voice-synthesis-binding-v2\"",
 ] {
     require(backend.contains(required), "backend synthesis response should bind \(required)")
 }
@@ -102,12 +112,15 @@ let pcmDrive = functionBody(named: "sendEchoReplyViaTencentVoiceClonePCMDrive", 
 for required in [
     "let roleKey = voiceSelection.source.rawValue",
     "requestPurpose: \"echo\"",
+    "expectedProfileVersion: voiceCloneUseTicket.profileVersion",
     "roleKey: roleKey",
     "roleSubjectId: userId",
     "personaScope: \"personal\"",
     "digitalHumanId: userId",
     "synthesis.voiceProfileId == voiceProfileId",
     "synthesis.isBound(",
+    "profileVersion: voiceCloneUseTicket.profileVersion",
+    "textHash: VoiceCloneSynthesisBinding.textHash(for: normalizedText)",
     "audioOwner: \"tencentDigitalHuman\"",
     "\"synthesisBindingMismatch\"",
 ] {
