@@ -106,6 +106,7 @@ def main() -> None:
         "private static func explicitDraftDisposition(",
     )
     for call in (
+        "OwnerTruthMediaTaskRecoveryCoordinator.shared.cancelForAccountLifecycle()",
         "purgeLocalArchiveDataForAccountDeletion",
         "purgeAccountDataForAccountDeletion",
         "MemoirRepository.shared.purgeLocalDataForAccountDeletion",

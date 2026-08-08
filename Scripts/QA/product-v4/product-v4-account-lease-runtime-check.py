@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[3]
 LEASE = ROOT / "DreamJourney/Sources/App/AccountLease.swift"
 ACTOR = ROOT / "DreamJourney/Sources/App/AccountSessionActor.swift"
 COORDINATOR = ROOT / "DreamJourney/Sources/App/AppCoordinator.swift"
+USER_MANAGER = ROOT / "DreamJourney/Sources/Services/UserManager.swift"
 BACKEND_CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 MODEL = ROOT / "Scripts/QA/product-v4/account-lease-runtime-model-smoke.swift"
 RUNNER = ROOT / "Scripts/QA/product-v4/run-account-lease-runtime-gate.sh"
@@ -17,11 +18,36 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def function_body(source: str, signature: str) -> str:
+    start = source.find(signature)
+    require(start >= 0, f"missing function: {signature}")
+    opening = source.find("{", start)
+    require(opening >= 0, f"missing function body: {signature}")
+    depth = 0
+    for index in range(opening, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[opening + 1 : index]
+    raise AssertionError(f"unterminated function: {signature}")
+
+
+def require_ordered(body: str, snippets: tuple[str, ...], message: str) -> None:
+    cursor = -1
+    for snippet in snippets:
+        index = body.find(snippet, cursor + 1)
+        require(index >= 0, f"{message}: missing {snippet}")
+        cursor = index
+
+
 def main() -> None:
     require(LEASE.is_file(), "AccountLease production file is missing")
     lease = LEASE.read_text()
     actor = ACTOR.read_text()
     coordinator = COORDINATOR.read_text()
+    user_manager = USER_MANAGER.read_text()
     backend_client = BACKEND_CLIENT.read_text()
     model = MODEL.read_text()
     runner = RUNNER.read_text()
@@ -60,9 +86,31 @@ def main() -> None:
         "        )" in coordinator,
         "AppCoordinator must seed AccountLease authority epoch before account bootstrap",
     )
+    logout = function_body(user_manager, "func logout()")
+    suspend_private_access = function_body(user_manager, "func suspendPrivateAccess(")
+    for body, label in (
+        (logout, "logout"),
+        (suspend_private_access, "private-access suspension"),
+    ):
+        require_ordered(
+            body,
+            (
+                "AccountLeaseRuntime.shared.capture(",
+                "AccountLeaseRuntime.shared.publish(session: nil)",
+                "AccountLifecycleTransitionController.shared.perform",
+            ),
+            f"{label} must synchronously fence AccountLease before async teardown",
+        )
     require(
-        coordinator.count("AccountLeaseRuntime.shared.publish(session: nil)") >= 2,
-        "logout and private-access suspension must revoke AccountLease synchronously",
+        "AccountLeaseRuntime.shared.publish(session: nil)" not in function_body(
+            coordinator,
+            "private func handleLogout()",
+        )
+        and "AccountLeaseRuntime.shared.publish(session: nil)" not in function_body(
+            coordinator,
+            "private func handlePrivateAccessSuspended()",
+        ),
+        "AppCoordinator must not duplicate the UserManager lifecycle fence",
     )
     require(
         "accountLeaseRuntime.updateAuthorityEpoch(policy.authorityEpoch)" in backend_client,

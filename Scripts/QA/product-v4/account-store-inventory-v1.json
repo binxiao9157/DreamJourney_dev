@@ -180,15 +180,15 @@
     {
       "catalogId": "S04",
       "surfaceId": "S04.archive-media-staging",
-      "dataClass": "private photo, audio, video, thumbnail, and time-letter image staging files",
+      "dataClass": "private photo, audio, video, thumbnail, time-letter image staging files, and resumable Owner Truth media task manifests with scoped upload credentials",
       "ownerScope": "archive media uses authenticated subject plus vault plus archive owner; Home photos and temporary conversation recordings use authenticated subject plus vault",
       "storage": "scoped Application Support originals and scoped Caches thumbnails/staging; Home legacy files are quarantined or discarded with durable receipts",
-      "pathOrKey": "DreamJourney/Archive/v2/<scopeDigest>/<UUID>; DreamJourney/AccountPrivateMedia/v1/<scopeDigest>/photo-staging/<UUID>; DreamJourney/AccountPrivateMedia/v1/<scopeDigest>/photos/<UUID>; DreamJourney/AccountPrivateMedia/v1/<scopeDigest>/recording-staging/<UUID>; DreamJourney/AccountPrivateMedia/legacy-retirement/v1",
-      "writer": "Archive entry controllers, AIRecordingViewController, and QA fixture paths in AppDelegate",
-      "readers": "MemoryArchiveItem, Archive UI, upload pipeline, Echo context",
-      "cleanup": "remove scoped archive media on item deletion; stale Home staging is discarded on lease change; account-wide scoped purge remains WI-S0-01-08",
-      "migration": "legacy archive files require allowlisted canonical path and verified owner binding; Home Documents/photos are quarantined and temporary TGSessionRecordings are discarded with deterministic receipts",
-      "retention": "draft retention decision DR-041; Home temporary recordings are session-only; quarantined files follow migration retention policy",
+      "pathOrKey": "DreamJourney/Archive/v2/<scopeDigest>/<UUID>; DreamJourney/AccountPrivateMedia/v1/<scopeDigest>/photo-staging/<UUID>; DreamJourney/AccountPrivateMedia/v1/<scopeDigest>/photos/<UUID>; DreamJourney/AccountPrivateMedia/v1/<scopeDigest>/recording-staging/<UUID>; DreamJourney/OwnerTruthMediaTasks/v1/<scopeDigest>/<UUID>/{manifest.json,payload.bin}; Keychain com.dreamjourney.owner-truth-media-upload/<scopeDigest>:<taskId>; DreamJourney/AccountPrivateMedia/legacy-retirement/v1",
+      "writer": "Archive entry controllers, AIRecordingViewController, OwnerTruthMediaTaskStore, and QA fixture paths in AppDelegate",
+      "readers": "MemoryArchiveItem, Archive UI, owner-scoped media recovery/upload pipeline, and Echo context",
+      "cleanup": "remove scoped archive media on item deletion; lifecycle cancels old-owner media recovery callbacks before unmount; stale Home staging is discarded on lease change; account-wide scoped purge removes Owner Truth task files and Keychain upload credentials on deletion",
+      "migration": "legacy archive files require allowlisted canonical path and verified owner binding; Owner Truth task manifests are only rebound within the same subject/vault scope and never mounted by another account; Home Documents/photos are quarantined and temporary TGSessionRecordings are discarded with deterministic receipts",
+      "retention": "draft retention decision DR-041; Owner Truth task payloads remain owner-locked until upload/processing completes or account deletion; Home temporary recordings are session-only; quarantined files follow migration retention policy",
       "testOwner": "WI-S0-01-05 for archive media; WI-S0-01-06 for Home account-private media; WI-S0-01-08 for account-wide purge",
       "status": "REGISTERED_OWNER_SCOPED_WITH_LEGACY_RETIREMENT_ACCOUNT_PURGE_PENDING",
       "nextWorkItem": "WI-S0-01-08",
@@ -201,7 +201,8 @@
         "DreamJourney/Sources/Modules/Archive/MemoryArchiveTextEntryViewController.swift",
         "DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift",
         "DreamJourney/Sources/Modules/Home/AIRecordingViewController.swift",
-        "DreamJourney/Sources/Services/AccountPrivateMediaStore.swift"
+        "DreamJourney/Sources/Services/AccountPrivateMediaStore.swift",
+        "DreamJourney/Sources/Services/OwnerTruthMediaTaskRecovery.swift"
       ],
       "sourceAnchors": [
         {
@@ -218,6 +219,15 @@
             "AccountPrivateMediaArtifact",
             "AccountPrivateMediaLegacyReceipt",
             "retireLegacyGlobalMedia"
+          ]
+        },
+        {
+          "path": "DreamJourney/Sources/Services/OwnerTruthMediaTaskRecovery.swift",
+          "contains": [
+            "OwnerTruthMediaTaskStore",
+            "OwnerTruthMediaTaskRecoveryCoordinator",
+            "cancelForAccountLifecycle",
+            "purgeAccountDataForAccountDeletion"
           ]
         }
       ],

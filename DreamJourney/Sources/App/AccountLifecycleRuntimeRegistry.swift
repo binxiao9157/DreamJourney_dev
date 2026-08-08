@@ -618,6 +618,7 @@ enum AccountLifecycleRuntimeRegistry {
         context: AccountLifecycleContext,
         requestedOutcome: AccountLifecycleModuleOutcome
     ) -> AccountLifecycleModuleResult {
+        OwnerTruthMediaTaskRecoveryCoordinator.shared.cancelForAccountLifecycle()
         guard context.event == .accountDeletion else {
             return .completed(
                 requestedOutcome,

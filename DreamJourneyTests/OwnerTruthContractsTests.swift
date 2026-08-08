@@ -9010,6 +9010,80 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(handoffPresentation.candidateHandoffTitle, "查看待确认记忆")
     }
 
+    @MainActor
+    func testMediaTaskRecoveryLifecycleCancellationDropsDeferredUploadCallback() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-media-lifecycle-cancel-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let secretStore = OwnerTruthMediaUploadSecretStoreSpy()
+        let content = Data(repeating: 0x57, count: 128)
+        let command = try OwnerTruthMediaUploadIntentCommand(
+            commandID: UUID(uuidString: "00000000-0000-0000-0000-0000000000c1")!,
+            expectedAuthorityEpoch: 0,
+            mediaKind: .document,
+            fileName: "owner-a.txt",
+            contentType: "text/plain",
+            content: content,
+            allowExternalProcessing: false
+        )
+        let sourceObjectID = recordID("00000000-0000-0000-0000-0000000000c2")
+        let token = try XCTUnwrap(
+            OwnerTruthMediaUploadToken("one-time-owner-media-upload-token-000c1")
+        )
+        let store = OwnerTruthMediaTaskStore(
+            rootDirectory: rootURL,
+            secretStore: secretStore,
+            accountLeaseRuntime: runtime
+        )
+        let prepared = try store.prepare(
+            accountLease: lease,
+            command: command,
+            content: content
+        )
+        _ = try store.apply(
+            uploadIntentReceipt: try mediaUploadIntentReceipt(
+                vaultID: vaultID,
+                command: command,
+                sourceObjectID: sourceObjectID,
+                token: token
+            ),
+            to: prepared.taskID,
+            accountLease: lease
+        )
+
+        let client = OwnerTruthMediaCaptureClientSpy()
+        client.defersUploadCompletion = true
+        let recovery = OwnerTruthMediaTaskRecoveryCoordinator(
+            store: store,
+            client: client,
+            accountLeaseRuntime: runtime
+        )
+        let staleCompletion = expectation(description: "cancelled recovery must not complete")
+        staleCompletion.isInverted = true
+        recovery.restore(accountLease: lease) { _ in
+            staleCompletion.fulfill()
+        }
+        XCTAssertEqual(client.uploadRequests.count, 1)
+
+        recovery.cancelForAccountLifecycle()
+        client.completeDeferredUpload(with: .success(try mediaSourceObjectResponse(
+            vaultID: vaultID,
+            command: command,
+            sourceObjectID: sourceObjectID,
+            state: .verified,
+            processingStatus: .queued,
+            status: .uploaded
+        )))
+        wait(for: [staleCompletion], timeout: 0.2)
+
+        let receipt = try XCTUnwrap(store.recoverableTasks(for: lease).first)
+        XCTAssertEqual(receipt.phase, .uploading)
+        XCTAssertNotNil(try store.uploadToken(for: prepared.taskID, accountLease: lease))
+        XCTAssertEqual(try store.loadPendingContent(for: prepared.taskID, accountLease: lease), content)
+    }
+
     func testOwnerTruthMediaTaskPresentationKeepsUploadAndProcessingFailuresDistinct() {
         let sourceObjectID = UUID(uuidString: "00000000-0000-0000-0000-000000000b40")!
         let uploadFailure = OwnerTruthMediaTaskPresentation(
@@ -9878,6 +9952,7 @@ private final class OwnerTruthMediaUploadSecretStoreSpy: OwnerTruthMediaUploadSe
 private final class OwnerTruthMediaCaptureClientSpy: OwnerTruthMediaCaptureClient {
     var createIntentResult: Result<OwnerTruthMediaUploadIntentReceipt, Error>?
     var uploadResult: Result<OwnerTruthMediaSourceObjectResponse, Error>?
+    var defersUploadCompletion = false
     var fetchResult: Result<OwnerTruthMediaSourceObjectResponse, Error>?
     var retryResult: Result<OwnerTruthMediaSourceObjectResponse, Error>?
     var deletionResult: Result<OwnerTruthMediaDeletionReceipt, Error>?
@@ -9888,6 +9963,7 @@ private final class OwnerTruthMediaCaptureClientSpy: OwnerTruthMediaCaptureClien
     private(set) var retryRequests: [OwnerTruthRecordID] = []
     private(set) var deletionRequests: [OwnerTruthRecordID] = []
     private(set) var deletionRetryRequests: [OwnerTruthRecordID] = []
+    private var deferredUploadCompletion: ((Result<OwnerTruthMediaSourceObjectResponse, Error>) -> Void)?
 
     func createOwnerTruthMediaUploadIntent(
         accountLease: AccountLease,
@@ -9908,7 +9984,17 @@ private final class OwnerTruthMediaCaptureClientSpy: OwnerTruthMediaCaptureClien
         completion: @escaping (Result<OwnerTruthMediaSourceObjectResponse, Error>) -> Void
     ) {
         uploadRequests.append((uploadIntentID, content))
+        if defersUploadCompletion {
+            deferredUploadCompletion = completion
+            return
+        }
         completion(uploadResult ?? .failure(OwnerTruthMediaCaptureClientSpyError.missingResult))
+    }
+
+    func completeDeferredUpload(with result: Result<OwnerTruthMediaSourceObjectResponse, Error>) {
+        let completion = deferredUploadCompletion
+        deferredUploadCompletion = nil
+        completion?(result)
     }
 
     func fetchOwnerTruthMediaSourceObject(

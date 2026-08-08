@@ -949,6 +949,12 @@ final class OwnerTruthMediaTaskRecoveryCoordinator: @unchecked Sendable {
         self.accountLeaseRuntime = accountLeaseRuntime
     }
 
+    /// Invalidates all in-flight callbacks before an account lifecycle transition
+    /// unmounts the old owner's durable media task store.
+    func cancelForAccountLifecycle() {
+        _ = beginOperation()
+    }
+
     func restore(
         accountLease: AccountLease,
         completion: @escaping (OwnerTruthMediaTaskRecoveryReport) -> Void

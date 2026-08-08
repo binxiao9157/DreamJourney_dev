@@ -9,6 +9,7 @@ cd "$ROOT_DIR"
 
 python3 Scripts/QA/product-v4/product-v4-account-session-actor-check.py
 swiftc \
+  DreamJourney/Sources/App/AccountLease.swift \
   DreamJourney/Sources/App/AccountSessionActor.swift \
   Scripts/QA/product-v4/account-session-actor-model-smoke.swift \
   -o "$BUILD_DIR/account-session-actor-model-smoke"

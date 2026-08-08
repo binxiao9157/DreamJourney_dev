@@ -83,6 +83,7 @@ def main() -> None:
         require(required in app_delegate, f"B3 UIQA harness missing: {required}")
     for test_name in (
         "func testMediaTaskRecoveryResumesUploadAndRefreshesProcessingAfterRestart()",
+        "func testMediaTaskRecoveryLifecycleCancellationDropsDeferredUploadCallback() throws",
         "func testRealHTTPMediaSourceObjectDropsResponseAfterAccountLeaseSwitch() throws",
         "func testOwnerTruthMediaTaskPresentationKeepsUploadAndProcessingFailuresDistinct()",
         "func testMediaTaskProcessingRetryUsesExistingSourceWithoutRepickingContent()",

@@ -7,11 +7,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 ACTOR = ROOT / "DreamJourney/Sources/App/AccountSessionActor.swift"
 COORDINATOR = ROOT / "DreamJourney/Sources/App/AppCoordinator.swift"
+LIFECYCLE_TRANSITION_CONTROLLER = ROOT / "DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift"
 USER_MANAGER = ROOT / "DreamJourney/Sources/Services/UserManager.swift"
 BACKEND_CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
-APP_DELEGATE = ROOT / "DreamJourney/Sources/AppDelegate.swift"
 PROJECT = ROOT / "DreamJourney.xcodeproj/project.pbxproj"
 INVENTORY = ROOT / "Scripts/QA/product-v4/account-store-inventory-v1.json"
+RUNNER = ROOT / "Scripts/QA/product-v4/run-account-session-actor-gate.sh"
 
 
 def require(condition: bool, message: str) -> None:
@@ -38,11 +39,12 @@ def function_body(source: str, signature: str) -> str:
 def main() -> None:
     actor = ACTOR.read_text()
     coordinator = COORDINATOR.read_text()
+    lifecycle_transition_controller = LIFECYCLE_TRANSITION_CONTROLLER.read_text()
     user_manager = USER_MANAGER.read_text()
     backend_client = BACKEND_CLIENT.read_text()
-    app_delegate = APP_DELEGATE.read_text()
     project = PROJECT.read_text()
     inventory = json.loads(INVENTORY.read_text())
+    runner = RUNNER.read_text()
 
     for snippet in (
         "actor AccountSessionActor",
@@ -100,10 +102,28 @@ def main() -> None:
         "accountSessionActor.activateVerifiedLogin(",
         "accountSessionReceipt?.state == .active",
         "accountSessionReceipt?.rootRoute == .privateUI",
-        "accountSessionActor.signOut(",
-        "accountSessionActor.suspend(",
     ):
         require(snippet in coordinator, f"root composition is missing actor boundary: {snippet}")
+    require(
+        "accountSessionActor.signOut(" not in coordinator
+        and "accountSessionActor.suspend(" not in coordinator,
+        "AppCoordinator must delegate terminal transitions to the serialized lifecycle controller",
+    )
+    for snippet in (
+        "actor AccountLifecycleTransitionController",
+        "accountSessionActor.beginSwitch(",
+        "accountSessionActor.signOut(",
+        "accountSessionActor.suspend(",
+        "AccountLifecycleRuntimeRegistry.registrations()",
+    ):
+        require(
+            snippet in lifecycle_transition_controller,
+            f"serialized lifecycle controller is missing actor boundary: {snippet}",
+        )
+    require(
+        "AccountLifecycleTransitionController.shared.perform" in coordinator,
+        "root composition must route private suspension through the serialized lifecycle controller",
+    )
 
     require(
         "func accountSessionCredentialSnapshot() -> AccountSessionCredentialSnapshot?" in user_manager,
@@ -142,11 +162,29 @@ def main() -> None:
         "validated session subject must rebuild the display profile before private UI activation",
     )
 
-    reconcile_offset = app_delegate.index("UserManager.shared.reconcilePrivateAccessSession()")
-    private_store_offset = app_delegate.index("let currentKnowledgeUserId = UserManager.shared.canEnterPrivateUI")
-    require(reconcile_offset < private_store_offset, "session reconciliation must precede private store mount")
+    launch_preparer = function_body(coordinator, "func prepareForProcessLaunch()")
+    reconcile_offset = launch_preparer.index("reconcilePrivateAccessSession()")
+    knowledge_user_offset = launch_preparer.index("synchronizeKnowledgeUser(subjectID)")
+    kblite_user_offset = launch_preparer.index("switchKBLiteUser(subjectID)")
+    require(
+        reconcile_offset < knowledge_user_offset < kblite_user_offset,
+        "session reconciliation must precede private knowledge-store mounting",
+    )
+    require_ordered = (
+        start_body.index("appComposition.prepareForProcessLaunch()")
+        < start_body.index("bootstrapAccountSession()")
+    )
+    require(
+        require_ordered,
+        "root bootstrap must finish launch reconciliation before AccountSessionActor routing",
+    )
 
     require("AccountSessionActor.swift in Sources" in project, "AccountSessionActor must belong to the app target")
+    require(
+        "DreamJourney/Sources/App/AccountLease.swift" in runner
+        and "DreamJourney/Sources/App/AccountSessionActor.swift" in runner,
+        "AccountSessionActor smoke must compile its AccountLease runtime dependency",
+    )
     actor_inventory = next(
         surface
         for surface in inventory["surfaces"]

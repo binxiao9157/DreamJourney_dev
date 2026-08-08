@@ -192,6 +192,14 @@ flowchart LR
 **完成定义**：M0 的私人文字问答在异常、退出和撤权时可预测地回落，不泄露前一账户/人物状态。
 **阻断输入**：无；M2/M3 所需联系人、地区资源和演练另列为后续 Gate。
 
+**执行状态（2026-08-08）**：`CODE_COMPLETE_NON_DEVICE_VERIFIED`
+
+- 已补齐 Owner Truth 媒体恢复器的账号生命周期 fence：账号切换、退出、私有访问暂停和账号注销进入既有 `LM-08-owner-explicit-draft-stores` 前，会先使旧 Owner 的异步上传/状态刷新回调失效。旧回调即使稍后返回，也不能写入、完成或唤醒旧账号的本地任务。
+- 这不是新增第二套清理流程。普通退出/切换仍保留 Owner-locked 草稿；仅账号注销才按既有契约清除 Owner Truth 任务 manifest、待上传字节和 Keychain 一次性上传凭据。
+- 已将 `OwnerTruthMediaTasks/v1/<scopeDigest>` 与受 scope 绑定的 Keychain 上传凭据写入 Account Store Inventory；AppCoordinator 不再重复发布空 lease，`UserManager` 仍是同步 fence 的唯一入口，避免 teardown 顺序竞争。
+- 验证：账号生命周期入口、module registry、lease runtime、私有媒体、账号删除 gates 以及新增的 iOS 媒体任务恢复 gate 全部通过。后者覆盖强杀/重启恢复、旧账号回调丢弃、上传/处理失败与重试、真实 HTTP 回调后的 lease 切换。公开发布态的 Release artifact、深链接负向、离线/过期/紧急 policy 模型与模拟器回归也已通过；本轮未重跑 deployed G2 命令 gate。
+- 非声明：本项不替代真实 COS 读写、真实 closed-pilot 用户、真机权限或 M2/M3 风险演练；A1 的 Provider 配置仍是 A3 受控 cohort 前的外部前置。
+
 ## 7. Phase C：M1 在世成年人本人私有声音
 
 ### C0：M1 真实启用前 Gate 固化

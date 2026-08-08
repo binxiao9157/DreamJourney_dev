@@ -11,6 +11,7 @@ xcodebuild test \
   -configuration Debug \
   -destination "$IOS_TEST_DESTINATION" \
   -only-testing:DreamJourneyTests/OwnerTruthContractsTests/testMediaTaskRecoveryResumesUploadAndRefreshesProcessingAfterRestart \
+  -only-testing:DreamJourneyTests/OwnerTruthContractsTests/testMediaTaskRecoveryLifecycleCancellationDropsDeferredUploadCallback \
   -only-testing:DreamJourneyTests/OwnerTruthContractsTests/testRealHTTPMediaSourceObjectDropsResponseAfterAccountLeaseSwitch \
   -only-testing:DreamJourneyTests/OwnerTruthContractsTests/testOwnerTruthMediaTaskPresentationKeepsUploadAndProcessingFailuresDistinct \
   -only-testing:DreamJourneyTests/OwnerTruthContractsTests/testMediaTaskProcessingRetryUsesExistingSourceWithoutRepickingContent \
