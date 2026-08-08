@@ -12,6 +12,8 @@ INSTALL_OUTPUT_DIR="$OUTPUT_DIR/install"
 RUNTIME_LOG="$OUTPUT_DIR/runtime.log"
 OS_LOG="$OUTPUT_DIR/oslog.log"
 SCREENSHOT_PATH="$OUTPUT_DIR/01-owner-truth-candidate-inbox.png"
+DETAIL_SCREENSHOT_PATH="$OUTPUT_DIR/02-owner-truth-candidate-structured-detail.png"
+DETAIL_RUNTIME_LOG="$OUTPUT_DIR/detail-runtime.log"
 RESULT_COPY_PATH="$OUTPUT_DIR/owner-truth-candidate-inbox-uiqa-result.json"
 COMPLETION_PATTERN="OwnerTruthCandidateInboxSmoke completed"
 LOG_WAIT_TIMEOUT="${LOG_WAIT_TIMEOUT:-45}"
@@ -39,10 +41,14 @@ RESULT_FILE="$DATA_CONTAINER/Documents/owner-truth-candidate-inbox-uiqa-result.j
 rm -f "$RESULT_FILE"
 
 CONSOLE_PID=""
+DETAIL_CONSOLE_PID=""
 OSLOG_PID=""
 cleanup() {
   if [[ -n "$CONSOLE_PID" ]]; then
     kill "$CONSOLE_PID" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$DETAIL_CONSOLE_PID" ]]; then
+    kill "$DETAIL_CONSOLE_PID" >/dev/null 2>&1 || true
   fi
   if [[ -n "$OSLOG_PID" ]]; then
     kill "$OSLOG_PID" >/dev/null 2>&1 || true
@@ -82,6 +88,9 @@ grep -Eq '"completed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Cand
 grep -Eq '"qaGateEnabled"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "QA gate should be enabled."
 grep -Eq '"candidateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate row should render."
 grep -Eq '"candidatePreviewVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate preview should render."
+grep -Eq '"candidateDetailVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate structured detail should render."
+grep -Eq '"structuredPrimaryFieldVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate primary field should use the typed ontology."
+grep -Eq '"sourceReferenceDetailsVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate source reference details should render."
 grep -Eq '"reviewActionsAvailable"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Review actions should be available."
 grep -Eq '"reviewSubmitted"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate review should submit."
 grep -Eq '"reviewAction"[[:space:]]*:[[:space:]]*"acceptBatch"' "$RESULT_FILE" || fail "Candidate review action should be acceptBatch."
@@ -106,8 +115,24 @@ grep -Eq '"launchArgument"[[:space:]]*:[[:space:]]*"DJEnableOwnerTruthCandidateR
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null
 xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
 
+echo "[owner-truth-candidate-inbox-smoke] Capturing structured Candidate detail..."
+xcrun simctl launch --console "$SIMULATOR_UDID" "$BUNDLE_ID" \
+  DJUITestBypassLogin \
+  DJEnableOwnerTruthCandidateReviewQA \
+  DJRunOwnerTruthCandidateInboxSmoke \
+  DJOwnerTruthCandidateInboxUIQAHoldAtDetail > "$DETAIL_RUNTIME_LOG" 2>&1 &
+DETAIL_CONSOLE_PID="$!"
+
+# The hold launch argument leaves the harness on the structured detail screen.
+# simctl launch output is buffered on some runtimes, so a bounded render wait is
+# more reliable than waiting for a console marker that may not be flushed.
+sleep 3
+xcrun simctl io "$SIMULATOR_UDID" screenshot "$DETAIL_SCREENSHOT_PATH" >/dev/null
+xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
+
 echo "[owner-truth-candidate-inbox-smoke] Build log: $INSTALL_OUTPUT_DIR/build.log"
 echo "[owner-truth-candidate-inbox-smoke] Runtime log: $RUNTIME_LOG"
 echo "[owner-truth-candidate-inbox-smoke] OS log: $OS_LOG"
 echo "[owner-truth-candidate-inbox-smoke] Result: $RESULT_COPY_PATH"
 echo "[owner-truth-candidate-inbox-smoke] Screenshot: $SCREENSHOT_PATH"
+echo "[owner-truth-candidate-inbox-smoke] Candidate detail screenshot: $DETAIL_SCREENSHOT_PATH"

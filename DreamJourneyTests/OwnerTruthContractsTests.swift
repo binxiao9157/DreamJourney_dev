@@ -825,7 +825,10 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
 
         useCase.send(.refresh)
-        useCase.send(.correct(candidateID: candidateID, correctedSummary: "实际是在外祖父的院子里听故事"))
+        useCase.send(.correct(
+            candidateID: candidateID,
+            correctedPrimaryValue: "实际是在外祖父的院子里听故事"
+        ))
 
         let command = try XCTUnwrap(client.reviewedCommands.first)
         XCTAssertEqual(command.action, .correct)
@@ -835,6 +838,132 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(command.correctedValueSchemaVersion, "owner-truth-candidate-content-v1")
         XCTAssertEqual(useCase.viewState.notice, .candidateCorrected)
         XCTAssertEqual(useCase.viewState.latestReceipt?.decision, .corrected)
+    }
+
+    func testCandidateReviewUseCaseMapsStructuredKnowledgeCorrectionAndSources() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000052")
+        let sourceID = "00000000-0000-0000-0000-000000000053"
+        let supportingSourceID = "00000000-0000-0000-0000-000000000054"
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try OwnerTruthCandidateInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "candidates": [[
+                    "candidateId": candidateID.rawValue.uuidString.lowercased(),
+                    "sourceId": sourceID,
+                    "memoryKind": OwnerTruthMemoryKind.knowledge.rawValue,
+                    "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+                    "epistemicStatus": OwnerTruthEpistemicStatus.observed.rawValue,
+                    "sensitivity": OwnerTruthSensitivityLevel.standard.rawValue,
+                    "contentSchemaVersion": "owner-truth-v1",
+                    "content": [
+                        "claim": "外祖父最喜欢在院子里讲故事",
+                        "context": "夏日晚饭后",
+                    ],
+                    "contentHash": "knowledge-content-hash",
+                    "sourceRefs": [
+                        [
+                            "sourceId": sourceID,
+                            "sourceVersion": 2,
+                            "span": ["start": 4, "end": 18],
+                        ],
+                        [
+                            "sourceId": supportingSourceID,
+                            "sourceVersion": 1,
+                        ],
+                    ],
+                    "reviewMode": "single",
+                    "candidateVersion": 3,
+                ]],
+            ],
+            expectedVaultID: vaultID
+        ))
+        client.reviewResult = .success(try decisionResult(
+            candidateID: candidateID,
+            decision: .corrected
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "candidate-review-knowledge-correct-001" }
+        )
+
+        useCase.send(.refresh)
+
+        let item = try XCTUnwrap(useCase.viewState.items.first)
+        XCTAssertEqual(item.primaryField, .claim)
+        XCTAssertEqual(item.primaryFieldTitle, "观点内容")
+        XCTAssertEqual(item.primaryValue, "外祖父最喜欢在院子里讲故事")
+        XCTAssertEqual(item.proposalPreview, item.primaryValue)
+        XCTAssertEqual(item.sourceReferences.count, 2)
+        XCTAssertEqual(item.sourceReferences[0].ordinal, 1)
+        XCTAssertEqual(item.sourceReferences[0].sourceVersion, 2)
+        XCTAssertEqual(item.sourceReferences[0].spanStart, 4)
+        XCTAssertEqual(item.sourceReferences[0].spanEnd, 18)
+        XCTAssertEqual(item.sourceReferences[1].ordinal, 2)
+        XCTAssertNil(item.sourceReferences[1].spanStart)
+        XCTAssertNil(item.sourceReferences[1].spanEnd)
+
+        useCase.send(.correct(
+            candidateID: candidateID,
+            correctedPrimaryValue: "外祖父喜欢在廊下讲家乡故事"
+        ))
+
+        let command = try XCTUnwrap(client.reviewedCommands.first)
+        XCTAssertEqual(
+            command.correctedValue?["claim"],
+            .string("外祖父喜欢在廊下讲家乡故事")
+        )
+        XCTAssertEqual(command.correctedValue?["context"], .string("夏日晚饭后"))
+        XCTAssertNil(command.correctedValue?["summary"])
+        XCTAssertEqual(command.correctedValueSchemaVersion, "owner-truth-v1")
+    }
+
+    func testCandidateReviewUseCaseMapsEmotionLabelAsPrimaryField() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000055")
+        let sourceID = "00000000-0000-0000-0000-000000000056"
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try OwnerTruthCandidateInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "candidates": [[
+                    "candidateId": candidateID.rawValue.uuidString.lowercased(),
+                    "sourceId": sourceID,
+                    "memoryKind": OwnerTruthMemoryKind.emotion.rawValue,
+                    "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+                    "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
+                    "sensitivity": OwnerTruthSensitivityLevel.standard.rawValue,
+                    "contentSchemaVersion": "owner-truth-v1",
+                    "content": ["label": "安心"],
+                    "contentHash": "emotion-content-hash",
+                    "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                    "reviewMode": "single",
+                    "candidateVersion": 1,
+                ]],
+            ],
+            expectedVaultID: vaultID
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.refresh)
+
+        let item = try XCTUnwrap(useCase.viewState.items.first)
+        XCTAssertEqual(item.primaryField, .label)
+        XCTAssertEqual(item.primaryFieldTitle, "感受标签")
+        XCTAssertEqual(item.primaryValue, "安心")
     }
 
     func testCandidateReviewUseCaseRejectsStaleCompletionAfterAccountSwitch() throws {

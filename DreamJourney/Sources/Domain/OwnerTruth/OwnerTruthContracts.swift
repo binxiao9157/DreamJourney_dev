@@ -447,6 +447,31 @@ struct OwnerTruthCandidateEvidenceReference: Codable, Equatable, Sendable {
     }
 }
 
+enum OwnerTruthCandidatePrimaryField: String, Codable, Equatable, Sendable {
+    case summary
+    case claim
+    case label
+
+    init(memoryKind: OwnerTruthMemoryKind) {
+        switch memoryKind {
+        case .experience:
+            self = .summary
+        case .knowledge:
+            self = .claim
+        case .emotion:
+            self = .label
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .summary: return "记忆描述"
+        case .claim: return "观点内容"
+        case .label: return "感受标签"
+        }
+    }
+}
+
 struct OwnerTruthCandidateInboxItem: Codable, Equatable, Sendable, Identifiable {
     let id: OwnerTruthRecordID
     let vaultID: OwnerTruthVaultID
@@ -490,6 +515,14 @@ struct OwnerTruthCandidateInboxItem: Codable, Equatable, Sendable, Identifiable 
             content[key] = parsed
         }
 
+        let primaryField = OwnerTruthCandidatePrimaryField(memoryKind: memoryKind)
+        guard case .string(let rawPrimaryValue)? = content[primaryField.rawValue],
+              !rawPrimaryValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "candidate content misses the required \(primaryField.rawValue) field"
+            )
+        }
+
         let sourceReferences = try sourceReferenceObjects.map(OwnerTruthCandidateEvidenceReference.init(backendJSONObject:))
         guard sourceReferences.contains(where: { $0.sourceID == sourceID }) else {
             throw OwnerTruthRemoteContractError.invalidInbox("candidate sourceId is absent from sourceRefs")
@@ -509,6 +542,17 @@ struct OwnerTruthCandidateInboxItem: Codable, Equatable, Sendable, Identifiable 
         self.reviewMode = reviewMode
         self.candidateVersion = candidateVersion
         self.createdAt = try Self.date(object["createdAt"])
+    }
+
+    var primaryField: OwnerTruthCandidatePrimaryField {
+        OwnerTruthCandidatePrimaryField(memoryKind: memoryKind)
+    }
+
+    var primaryValue: String {
+        guard case .string(let rawValue)? = content[primaryField.rawValue] else {
+            return ""
+        }
+        return rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func nonEmptyString(_ value: Any?) -> String? {
@@ -12309,7 +12353,7 @@ enum OwnerTruthCandidateReviewIntent: Equatable, Sendable {
     case refresh
     case accept(candidateID: OwnerTruthRecordID)
     case acceptBatch(candidateIDs: [OwnerTruthRecordID])
-    case correct(candidateID: OwnerTruthRecordID, correctedSummary: String)
+    case correct(candidateID: OwnerTruthRecordID, correctedPrimaryValue: String)
     case reject(candidateID: OwnerTruthRecordID)
 }
 
@@ -12347,15 +12391,28 @@ enum OwnerTruthCandidateInboxNotice: Equatable, Sendable {
 struct OwnerTruthCandidateInboxItemViewState: Equatable, Sendable, Identifiable {
     let id: OwnerTruthRecordID
     let proposalPreview: String
+    let primaryField: OwnerTruthCandidatePrimaryField
+    let primaryFieldTitle: String
+    let primaryValue: String
     let memoryKind: OwnerTruthMemoryKind
     let perspective: OwnerTruthPerspectiveType
     let epistemicStatus: OwnerTruthEpistemicStatus
     let sensitivity: OwnerTruthSensitivityLevel
     let evidenceCount: Int
+    let sourceReferences: [OwnerTruthCandidateSourceReferenceViewState]
     let reviewMode: String
     let candidateVersion: Int
     let supportsCorrection: Bool
     let supportsBatchAcceptance: Bool
+}
+
+struct OwnerTruthCandidateSourceReferenceViewState: Equatable, Sendable, Identifiable {
+    let ordinal: Int
+    let sourceVersion: Int
+    let spanStart: Int?
+    let spanEnd: Int?
+
+    var id: Int { ordinal }
 }
 
 struct OwnerTruthCandidateReviewReceiptViewState: Equatable, Sendable {
@@ -12456,13 +12513,17 @@ final class OwnerTruthCandidateReviewUseCase {
         case .refresh:
             refresh()
         case .accept(let candidateID):
-            submit(candidateID: candidateID, action: .accept, correctedSummary: nil)
+            submit(candidateID: candidateID, action: .accept, correctedPrimaryValue: nil)
         case .acceptBatch(let candidateIDs):
             submitBatch(candidateIDs: candidateIDs)
-        case .correct(let candidateID, let correctedSummary):
-            submit(candidateID: candidateID, action: .correct, correctedSummary: correctedSummary)
+        case .correct(let candidateID, let correctedPrimaryValue):
+            submit(
+                candidateID: candidateID,
+                action: .correct,
+                correctedPrimaryValue: correctedPrimaryValue
+            )
         case .reject(let candidateID):
-            submit(candidateID: candidateID, action: .reject, correctedSummary: nil)
+            submit(candidateID: candidateID, action: .reject, correctedPrimaryValue: nil)
         }
     }
 
@@ -12485,7 +12546,7 @@ final class OwnerTruthCandidateReviewUseCase {
     private func submit(
         candidateID: OwnerTruthRecordID,
         action: OwnerTruthCandidateReviewAction,
-        correctedSummary: String?
+        correctedPrimaryValue: String?
     ) {
         guard let vaultID = beginRequestOrFail() else { return }
         guard let candidate = candidatesByID[candidateID] else {
@@ -12495,7 +12556,7 @@ final class OwnerTruthCandidateReviewUseCase {
         guard let command = makeCommand(
             candidate: candidate,
             action: action,
-            correctedSummary: correctedSummary
+            correctedPrimaryValue: correctedPrimaryValue
         ) else {
             return
         }
@@ -12591,7 +12652,7 @@ final class OwnerTruthCandidateReviewUseCase {
         guard let command = makeCommand(
             candidate: candidate,
             action: .accept,
-            correctedSummary: nil,
+            correctedPrimaryValue: nil,
             commandID: commandID
         ) else {
             return
@@ -12699,7 +12760,7 @@ final class OwnerTruthCandidateReviewUseCase {
     private func makeCommand(
         candidate: OwnerTruthCandidateInboxItem,
         action: OwnerTruthCandidateReviewAction,
-        correctedSummary: String?,
+        correctedPrimaryValue: String?,
         commandID: String? = nil
     ) -> OwnerTruthCandidateReviewCommand? {
         do {
@@ -12720,13 +12781,14 @@ final class OwnerTruthCandidateReviewUseCase {
                     reasonCode: "ownerReviewed"
                 )
             case .correct:
-                let normalizedSummary = correctedSummary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                guard !normalizedSummary.isEmpty else {
+                let normalizedValue = correctedPrimaryValue?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard !normalizedValue.isEmpty else {
                     transitionFailure(.correctionRequired)
                     return nil
                 }
                 var correctedValue = candidate.content
-                correctedValue[Self.correctionTextKey(for: candidate)] = .string(normalizedSummary)
+                correctedValue[candidate.primaryField.rawValue] = .string(normalizedValue)
                 return try OwnerTruthCandidateReviewCommand(
                     commandID: stableCommandID,
                     expectedCandidateVersion: candidate.candidateVersion,
@@ -12836,12 +12898,23 @@ final class OwnerTruthCandidateReviewUseCase {
             guard let candidate = candidatesByID[candidateID] else { return nil }
             return OwnerTruthCandidateInboxItemViewState(
                 id: candidate.id,
-                proposalPreview: Self.proposalPreview(for: candidate),
+                proposalPreview: candidate.primaryValue,
+                primaryField: candidate.primaryField,
+                primaryFieldTitle: candidate.primaryField.title,
+                primaryValue: candidate.primaryValue,
                 memoryKind: candidate.memoryKind,
                 perspective: candidate.perspective,
                 epistemicStatus: candidate.epistemicStatus,
                 sensitivity: candidate.sensitivity,
                 evidenceCount: candidate.sourceReferences.count,
+                sourceReferences: candidate.sourceReferences.enumerated().map { index, reference in
+                    OwnerTruthCandidateSourceReferenceViewState(
+                        ordinal: index + 1,
+                        sourceVersion: reference.sourceVersion,
+                        spanStart: reference.span?.start,
+                        spanEnd: reference.span?.end
+                    )
+                },
                 reviewMode: candidate.reviewMode,
                 candidateVersion: candidate.candidateVersion,
                 supportsCorrection: true,
@@ -12971,26 +13044,6 @@ final class OwnerTruthCandidateReviewUseCase {
         case .retryable:
             return .requestFailed
         }
-    }
-
-    private static func proposalPreview(for candidate: OwnerTruthCandidateInboxItem) -> String {
-        for key in ["summary", "title", "text"] {
-            guard case .string(let rawValue)? = candidate.content[key] else { continue }
-            let normalized = rawValue
-                .replacingOccurrences(of: "\n", with: " ")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !normalized.isEmpty {
-                return String(normalized.prefix(160))
-            }
-        }
-        return "待确认记忆"
-    }
-
-    private static func correctionTextKey(for candidate: OwnerTruthCandidateInboxItem) -> String {
-        for key in ["summary", "title", "text"] where candidate.content[key] != nil {
-            return key
-        }
-        return "summary"
     }
 
     private static func successNotice(

@@ -6334,53 +6334,34 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         present(alert, animated: true)
     }
 
-    private func showActions(for item: OwnerTruthCandidateInboxItemViewState, sourceView: UIView) {
-        let alert = UIAlertController(
-            title: "审核候选记忆",
-            message: "你的确认会生成可追溯的正式记忆版本。",
-            preferredStyle: .actionSheet
-        )
-        alert.addAction(UIAlertAction(title: "确认", style: .default) { [weak self] _ in
+    private func openCandidateDetail(_ item: OwnerTruthCandidateInboxItemViewState) {
+        let controller = OwnerTruthCandidateDetailViewController(item: item)
+        controller.onAccept = { [weak self, weak controller] in
+            controller?.navigationController?.popViewController(animated: true)
             self?.useCase.send(.accept(candidateID: item.id))
-        })
-        if item.supportsCorrection {
-            alert.addAction(UIAlertAction(title: "更正后确认", style: .default) { [weak self] _ in
-                self?.presentCorrectionAlert(for: item)
-            })
         }
-        alert.addAction(UIAlertAction(title: "拒绝", style: .destructive) { [weak self] _ in
-            self?.useCase.send(.reject(candidateID: item.id))
-        })
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-        if let popover = alert.popoverPresentationController {
-            popover.sourceView = sourceView
-            popover.sourceRect = sourceView.bounds
-        }
-        present(alert, animated: true)
-    }
-
-    private func presentCorrectionAlert(for item: OwnerTruthCandidateInboxItemViewState) {
-        let alert = UIAlertController(
-            title: "更正候选记忆",
-            message: "确认后将保留原候选内容并以更正后的摘要生成新版本。",
-            preferredStyle: .alert
-        )
-        alert.addTextField { textField in
-            textField.text = item.proposalPreview
-            textField.clearButtonMode = .whileEditing
-            textField.accessibilityIdentifier = "owner-truth-candidate-correction-input"
-        }
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-        alert.addAction(UIAlertAction(title: "提交更正", style: .default) { [weak self, weak alert] _ in
+        controller.onCorrect = { [weak self, weak controller] correctedValue in
+            controller?.navigationController?.popViewController(animated: true)
             self?.useCase.send(.correct(
                 candidateID: item.id,
-                correctedSummary: alert?.textFields?.first?.text ?? ""
+                correctedPrimaryValue: correctedValue
             ))
-        })
-        present(alert, animated: true)
+        }
+        controller.onReject = { [weak self, weak controller] in
+            controller?.navigationController?.popViewController(animated: true)
+            self?.useCase.send(.reject(candidateID: item.id))
+        }
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        controller.onRenderedForUIQA = { [weak self, weak controller] renderedItem in
+            guard let controller else { return }
+            self?.onCandidateDetailRenderedForUIQA?(renderedItem, controller)
+        }
+        #endif
+        navigationController?.pushViewController(controller, animated: true)
     }
 
     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+    var onCandidateDetailRenderedForUIQA: ((OwnerTruthCandidateInboxItemViewState, OwnerTruthCandidateDetailViewController) -> Void)?
     var onHistoryViewStateRenderedForUIQA: ((OwnerTruthCandidateReviewHistoryViewState, OwnerTruthCandidateReviewHistoryViewController) -> Void)?
     var onMemoryVersionHistoryViewStateRenderedForUIQA: ((OwnerTruthMemoryVersionHistoryViewState) -> Void)?
 
@@ -6407,6 +6388,14 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
             .map(\.id)
         guard !candidateIDs.isEmpty else { return }
         useCase.send(.acceptBatch(candidateIDs: candidateIDs))
+    }
+
+    func runUIQAOpenFirstCandidateDetail() {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled,
+              let item = renderedState.items.first else {
+            return
+        }
+        openCandidateDetail(item)
     }
 
     func runUIQAOpenHistory() {
@@ -6448,9 +6437,8 @@ extension OwnerTruthCandidateInboxViewController: UITableViewDataSource, UITable
             updateBatchNavigation(isSubmitting: false)
             return
         }
-        guard let cell = tableView.cellForRow(at: indexPath) else { return }
         tableView.deselectRow(at: indexPath, animated: true)
-        showActions(for: item, sourceView: cell)
+        openCandidateDetail(item)
     }
 
     func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
@@ -6475,6 +6463,409 @@ extension OwnerTruthCandidateInboxViewController: UITableViewDataSource, UITable
             return nil
         }
         return indexPath
+    }
+}
+
+final class OwnerTruthCandidateDetailViewController: UIViewController {
+    private let item: OwnerTruthCandidateInboxItemViewState
+    private let scrollView = UIScrollView()
+    private let contentStack = UIStackView()
+    private let correctionCard = UIView()
+    private let correctionTextView = UITextView()
+    private let correctionErrorLabel = UILabel()
+    private var didEmitRenderedForUIQA = false
+
+    var onAccept: (() -> Void)?
+    var onCorrect: ((String) -> Void)?
+    var onReject: (() -> Void)?
+    #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+    var onRenderedForUIQA: ((OwnerTruthCandidateInboxItemViewState) -> Void)?
+    #endif
+
+    init(item: OwnerTruthCandidateInboxItemViewState) {
+        self.item = item
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "候选记忆"
+        view.backgroundColor = DJDesignTokens.Color.background
+        configureLayout()
+        configureContent()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        guard !didEmitRenderedForUIQA else { return }
+        didEmitRenderedForUIQA = true
+        onRenderedForUIQA?(item)
+        #endif
+    }
+
+    private func configureLayout() {
+        scrollView.alwaysBounceVertical = true
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.keyboardDismissMode = .interactive
+
+        contentStack.axis = .vertical
+        contentStack.spacing = 14
+        contentStack.isLayoutMarginsRelativeArrangement = true
+        contentStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 18,
+            leading: DJDesignTokens.Spacing.page,
+            bottom: 32,
+            trailing: DJDesignTokens.Spacing.page
+        )
+
+        view.addSubview(scrollView)
+        scrollView.addSubview(contentStack)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+        ])
+    }
+
+    private func configureContent() {
+        let heading = UILabel()
+        heading.text = "确认这段记忆"
+        heading.font = DJDesignTokens.Font.title(24)
+        heading.textColor = DJDesignTokens.Color.textPrimary
+
+        let introduction = UILabel()
+        introduction.text = "核对内容和来源后再确认。更正只会修改下方标明的权威字段，原候选与来源记录会保留。"
+        introduction.font = DJDesignTokens.Font.body(14)
+        introduction.textColor = DJDesignTokens.Color.textTertiary
+        introduction.numberOfLines = 0
+
+        contentStack.addArrangedSubview(heading)
+        contentStack.addArrangedSubview(introduction)
+        contentStack.addArrangedSubview(makePrimaryContentCard())
+        contentStack.addArrangedSubview(makeMetadataCard())
+        contentStack.addArrangedSubview(makeSourcesCard())
+        configureCorrectionCard()
+        correctionCard.isHidden = true
+        contentStack.addArrangedSubview(correctionCard)
+        contentStack.addArrangedSubview(makeActions())
+    }
+
+    private func makePrimaryContentCard() -> UIView {
+        let titleLabel = sectionTitle(item.primaryFieldTitle)
+        let valueLabel = UILabel()
+        valueLabel.text = item.primaryValue
+        valueLabel.font = DJDesignTokens.Font.body(17)
+        valueLabel.textColor = DJDesignTokens.Color.textPrimary
+        valueLabel.numberOfLines = 0
+        valueLabel.accessibilityIdentifier = "owner-truth-candidate-primary-value"
+
+        let versionLabel = UILabel()
+        versionLabel.text = "候选第 \(item.candidateVersion) 版"
+        versionLabel.font = DJDesignTokens.Font.label(12)
+        versionLabel.textColor = DJDesignTokens.Color.textTertiary
+
+        return card(containing: [titleLabel, valueLabel, versionLabel])
+    }
+
+    private func makeMetadataCard() -> UIView {
+        let rows = [
+            metadataRow(title: "记忆类型", value: memoryKindText(item.memoryKind)),
+            metadataRow(title: "叙述视角", value: perspectiveText(item.perspective)),
+            metadataRow(title: "确定程度", value: epistemicText(item.epistemicStatus)),
+            metadataRow(title: "敏感程度", value: sensitivityText(item.sensitivity)),
+        ]
+        return card(containing: [sectionTitle("候选属性")] + rows)
+    }
+
+    private func makeSourcesCard() -> UIView {
+        var views: [UIView] = [sectionTitle("来源依据")]
+        for reference in item.sourceReferences {
+            let sourceLabel = UILabel()
+            sourceLabel.font = DJDesignTokens.Font.body(14)
+            sourceLabel.textColor = DJDesignTokens.Color.textPrimary
+            sourceLabel.numberOfLines = 0
+            let spanText: String
+            if let start = reference.spanStart, let end = reference.spanEnd {
+                spanText = " · 对应原内容第 \(start + 1)–\(max(start + 1, end)) 字符"
+            } else {
+                spanText = " · 引用整段素材"
+            }
+            sourceLabel.text = "来源 \(reference.ordinal) · 素材第 \(reference.sourceVersion) 版\(spanText)"
+            sourceLabel.accessibilityIdentifier = "owner-truth-candidate-source-reference"
+            views.append(sourceLabel)
+        }
+        let noteLabel = UILabel()
+        noteLabel.text = "来源仅用于核对和追溯，不会向其他账号展示内部标识。"
+        noteLabel.font = DJDesignTokens.Font.label(12)
+        noteLabel.textColor = DJDesignTokens.Color.textTertiary
+        noteLabel.numberOfLines = 0
+        views.append(noteLabel)
+        return card(containing: views)
+    }
+
+    private func configureCorrectionCard() {
+        correctionCard.backgroundColor = DJDesignTokens.Color.surface
+        correctionCard.layer.cornerRadius = 18
+        correctionCard.layer.borderWidth = 1
+        correctionCard.layer.borderColor = DJDesignTokens.Color.accent.withAlphaComponent(0.28).cgColor
+        correctionCard.accessibilityIdentifier = "owner-truth-candidate-correction-card"
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 10
+
+        let titleLabel = sectionTitle("更正\(item.primaryFieldTitle)")
+        let helpLabel = UILabel()
+        helpLabel.text = "其他结构化内容和来源引用会保持不变。"
+        helpLabel.font = DJDesignTokens.Font.label(12)
+        helpLabel.textColor = DJDesignTokens.Color.textTertiary
+        helpLabel.numberOfLines = 0
+
+        correctionTextView.text = item.primaryValue
+        correctionTextView.font = DJDesignTokens.Font.body(16)
+        correctionTextView.textColor = DJDesignTokens.Color.textPrimary
+        correctionTextView.backgroundColor = DJDesignTokens.Color.background
+        correctionTextView.layer.cornerRadius = 12
+        correctionTextView.textContainerInset = UIEdgeInsets(top: 12, left: 10, bottom: 12, right: 10)
+        correctionTextView.accessibilityIdentifier = "owner-truth-candidate-correction-input"
+        correctionTextView.heightAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
+
+        correctionErrorLabel.font = DJDesignTokens.Font.label(12)
+        correctionErrorLabel.textColor = .systemRed
+        correctionErrorLabel.numberOfLines = 0
+        correctionErrorLabel.isHidden = true
+
+        let submitButton = actionButton(
+            title: "提交更正并确认",
+            backgroundColor: DJDesignTokens.Color.accent,
+            foregroundColor: DJDesignTokens.Color.accentDeep,
+            selector: #selector(submitCorrectionTapped)
+        )
+        submitButton.accessibilityIdentifier = "owner-truth-candidate-correction-submit"
+
+        let cancelButton = actionButton(
+            title: "取消更正",
+            backgroundColor: .clear,
+            foregroundColor: DJDesignTokens.Color.textSecondary,
+            selector: #selector(cancelCorrectionTapped)
+        )
+
+        [titleLabel, helpLabel, correctionTextView, correctionErrorLabel, submitButton, cancelButton]
+            .forEach(stack.addArrangedSubview)
+        correctionCard.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: correctionCard.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: correctionCard.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: correctionCard.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: correctionCard.bottomAnchor, constant: -16),
+        ])
+    }
+
+    private func makeActions() -> UIView {
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 10
+
+        let acceptButton = actionButton(
+            title: "确认并纳入正式记忆",
+            backgroundColor: DJDesignTokens.Color.accent,
+            foregroundColor: DJDesignTokens.Color.accentDeep,
+            selector: #selector(acceptTapped)
+        )
+        acceptButton.accessibilityIdentifier = "owner-truth-candidate-detail-accept"
+        stack.addArrangedSubview(acceptButton)
+
+        if item.supportsCorrection {
+            let correctionButton = actionButton(
+                title: "更正后确认",
+                backgroundColor: DJDesignTokens.Color.surface,
+                foregroundColor: DJDesignTokens.Color.accentDeep,
+                selector: #selector(showCorrectionTapped)
+            )
+            correctionButton.layer.borderWidth = 1
+            correctionButton.layer.borderColor = DJDesignTokens.Color.accent.withAlphaComponent(0.32).cgColor
+            correctionButton.accessibilityIdentifier = "owner-truth-candidate-detail-correct"
+            stack.addArrangedSubview(correctionButton)
+        }
+
+        let rejectButton = actionButton(
+            title: "拒绝这条候选记忆",
+            backgroundColor: .clear,
+            foregroundColor: .systemRed,
+            selector: #selector(rejectTapped)
+        )
+        rejectButton.accessibilityIdentifier = "owner-truth-candidate-detail-reject"
+        stack.addArrangedSubview(rejectButton)
+        return stack
+    }
+
+    private func card(containing views: [UIView]) -> UIView {
+        let cardView = UIView()
+        cardView.backgroundColor = DJDesignTokens.Color.surface
+        cardView.layer.cornerRadius = 18
+        cardView.layer.borderWidth = 1
+        cardView.layer.borderColor = DJDesignTokens.Color.textTertiary.withAlphaComponent(0.16).cgColor
+
+        let stack = UIStackView(arrangedSubviews: views)
+        stack.axis = .vertical
+        stack.spacing = 10
+        cardView.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -16),
+        ])
+        return cardView
+    }
+
+    private func sectionTitle(_ text: String) -> UILabel {
+        let label = UILabel()
+        label.text = text
+        label.font = DJDesignTokens.Font.title(17)
+        label.textColor = DJDesignTokens.Color.textPrimary
+        return label
+    }
+
+    private func metadataRow(title: String, value: String) -> UIView {
+        let row = UIStackView()
+        row.axis = .horizontal
+        row.spacing = 12
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = DJDesignTokens.Font.body(14)
+        titleLabel.textColor = DJDesignTokens.Color.textTertiary
+        let valueLabel = UILabel()
+        valueLabel.text = value
+        valueLabel.font = DJDesignTokens.Font.body(14)
+        valueLabel.textColor = DJDesignTokens.Color.textPrimary
+        valueLabel.textAlignment = .right
+        row.addArrangedSubview(titleLabel)
+        row.addArrangedSubview(valueLabel)
+        titleLabel.setContentHuggingPriority(.required, for: .horizontal)
+        return row
+    }
+
+    private func actionButton(
+        title: String,
+        backgroundColor: UIColor,
+        foregroundColor: UIColor,
+        selector: Selector
+    ) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: .normal)
+        button.setTitleColor(foregroundColor, for: .normal)
+        button.titleLabel?.font = DJDesignTokens.Font.label(15)
+        button.backgroundColor = backgroundColor
+        button.layer.cornerRadius = 12
+        button.heightAnchor.constraint(equalToConstant: 48).isActive = true
+        button.addTarget(self, action: selector, for: .touchUpInside)
+        return button
+    }
+
+    @objc private func showCorrectionTapped() {
+        correctionCard.isHidden = false
+        correctionErrorLabel.isHidden = true
+        correctionTextView.becomeFirstResponder()
+        scrollView.scrollRectToVisible(correctionCard.frame.insetBy(dx: 0, dy: -20), animated: true)
+    }
+
+    @objc private func cancelCorrectionTapped() {
+        correctionTextView.text = item.primaryValue
+        correctionErrorLabel.isHidden = true
+        correctionCard.isHidden = true
+        view.endEditing(true)
+    }
+
+    @objc private func submitCorrectionTapped() {
+        let value = correctionTextView.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else {
+            correctionErrorLabel.text = "请填写更正后的\(item.primaryFieldTitle)。"
+            correctionErrorLabel.isHidden = false
+            return
+        }
+        view.endEditing(true)
+        onCorrect?(value)
+    }
+
+    @objc private func acceptTapped() {
+        presentConfirmation(
+            title: "确认纳入正式记忆",
+            message: "确认后会生成可追溯的正式记忆版本。",
+            actionTitle: "确认"
+        ) { [weak self] in self?.onAccept?() }
+    }
+
+    @objc private func rejectTapped() {
+        presentConfirmation(
+            title: "拒绝候选记忆",
+            message: "拒绝结果会保留在审核记录中，但不会进入正式记忆或回响。",
+            actionTitle: "拒绝",
+            actionStyle: .destructive
+        ) { [weak self] in self?.onReject?() }
+    }
+
+    private func presentConfirmation(
+        title: String,
+        message: String,
+        actionTitle: String,
+        actionStyle: UIAlertAction.Style = .default,
+        completion: @escaping () -> Void
+    ) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: actionTitle, style: actionStyle) { _ in completion() })
+        present(alert, animated: true)
+    }
+
+    private func memoryKindText(_ value: OwnerTruthMemoryKind) -> String {
+        switch value {
+        case .experience: return "经历"
+        case .knowledge: return "知识"
+        case .emotion: return "感受"
+        }
+    }
+
+    private func perspectiveText(_ value: OwnerTruthPerspectiveType) -> String {
+        switch value {
+        case .firstPerson: return "本人视角"
+        case .reported: return "转述"
+        case .inferred: return "推断"
+        }
+    }
+
+    private func epistemicText(_ value: OwnerTruthEpistemicStatus) -> String {
+        switch value {
+        case .observed: return "亲历或观察"
+        case .recalled: return "本人回忆"
+        case .reported: return "他人转述"
+        case .inferred: return "系统推断"
+        case .uncertain: return "尚不确定"
+        }
+    }
+
+    private func sensitivityText(_ value: OwnerTruthSensitivityLevel) -> String {
+        switch value {
+        case .standard: return "标准"
+        case .sensitive: return "敏感"
+        case .restricted: return "严格受限"
+        }
     }
 }
 
@@ -7869,6 +8260,9 @@ struct OwnerTruthCandidateInboxUIQASmokeResult: Codable {
     let qaGateEnabled: Bool
     let candidateVisible: Bool
     let candidatePreviewVisible: Bool
+    let candidateDetailVisible: Bool
+    let structuredPrimaryFieldVisible: Bool
+    let sourceReferenceDetailsVisible: Bool
     let reviewActionsAvailable: Bool
     let reviewSubmitted: Bool
     let reviewAction: String?
@@ -7918,6 +8312,13 @@ enum OwnerTruthCandidateInboxUIQASmoke {
         controller.onViewStateRendered = { [weak controller] state in
             scenario.consume(state, controller: controller)
         }
+        controller.onCandidateDetailRenderedForUIQA = { [weak controller] item, detailController in
+            scenario.consumeCandidateDetail(
+                item,
+                detailController: detailController,
+                inboxController: controller
+            )
+        }
         controller.onHistoryViewStateRenderedForUIQA = { state, historyController in
             scenario.consumeHistory(state, controller: historyController)
         }
@@ -7933,6 +8334,9 @@ enum OwnerTruthCandidateInboxUIQASmoke {
             qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
             candidateVisible: false,
             candidatePreviewVisible: false,
+            candidateDetailVisible: false,
+            structuredPrimaryFieldVisible: false,
+            sourceReferenceDetailsVisible: false,
             reviewActionsAvailable: false,
             reviewSubmitted: false,
             reviewAction: nil,
@@ -7969,6 +8373,9 @@ private final class CandidateInboxUIQAScenario {
     private var didSubmit = false
     private var candidateVisible = false
     private var candidatePreviewVisible = false
+    private var candidateDetailVisible = false
+    private var structuredPrimaryFieldVisible = false
+    private var sourceReferenceDetailsVisible = false
     private var reviewActionsAvailable = false
     private var batchCandidateCount = 0
     private var didOpenHistory = false
@@ -7981,6 +8388,10 @@ private final class CandidateInboxUIQAScenario {
     private var reviewHistoryCount = 0
     private var reviewHistoryTerminalStatesVisible = false
     private var reviewHistoryMemoryStateVisible = false
+    private var didRequestCandidateDetail = false
+    private let holdAtCandidateDetail = ProcessInfo.processInfo.arguments.contains(
+        "DJOwnerTruthCandidateInboxUIQAHoldAtDetail"
+    )
 
     func consume(
         _ state: OwnerTruthCandidateInboxViewState,
@@ -7999,9 +8410,10 @@ private final class CandidateInboxUIQAScenario {
                 didWrite = true
                 return
             }
-            didSubmit = true
+            guard !didRequestCandidateDetail else { return }
+            didRequestCandidateDetail = true
             DispatchQueue.main.async { [weak controller] in
-                controller?.runUIQAAcceptAllBatchCandidates()
+                controller?.runUIQAOpenFirstCandidateDetail()
             }
             return
         }
@@ -8027,6 +8439,36 @@ private final class CandidateInboxUIQAScenario {
         batchSequenceCompleted = batchSummary.pendingCandidateIDs.isEmpty
         DispatchQueue.main.async { [weak controller] in
             controller?.runUIQAOpenHistory()
+        }
+    }
+
+    func consumeCandidateDetail(
+        _ item: OwnerTruthCandidateInboxItemViewState,
+        detailController: OwnerTruthCandidateDetailViewController,
+        inboxController: OwnerTruthCandidateInboxViewController?
+    ) {
+        guard !didWrite, !didSubmit else { return }
+        candidateDetailVisible = true
+        structuredPrimaryFieldVisible = !item.primaryFieldTitle.isEmpty
+            && !item.primaryValue.isEmpty
+            && item.proposalPreview == item.primaryValue
+        sourceReferenceDetailsVisible = !item.sourceReferences.isEmpty
+            && item.sourceReferences.enumerated().allSatisfy { index, reference in
+                reference.ordinal == index + 1 && reference.sourceVersion > 0
+            }
+        guard structuredPrimaryFieldVisible, sourceReferenceDetailsVisible else {
+            didWrite = true
+            OwnerTruthCandidateInboxUIQASmoke.writeFailure("candidateDetailContractMismatch")
+            return
+        }
+        if holdAtCandidateDetail {
+            print("[UI_QA] OwnerTruthCandidateInboxSmoke holding at structured detail")
+            return
+        }
+        didSubmit = true
+        detailController.navigationController?.popViewController(animated: false)
+        DispatchQueue.main.async { [weak inboxController] in
+            inboxController?.runUIQAAcceptAllBatchCandidates()
         }
     }
 
@@ -8083,6 +8525,9 @@ private final class CandidateInboxUIQAScenario {
                 && didSubmit
                 && candidateVisible
                 && candidatePreviewVisible
+                && candidateDetailVisible
+                && structuredPrimaryFieldVisible
+                && sourceReferenceDetailsVisible
                 && reviewActionsAvailable
                 && batchAcceptedCount == batchCandidateCount
                 && formalMemoryPresentationVisible
@@ -8092,6 +8537,9 @@ private final class CandidateInboxUIQAScenario {
             qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
             candidateVisible: candidateVisible,
             candidatePreviewVisible: candidatePreviewVisible,
+            candidateDetailVisible: candidateDetailVisible,
+            structuredPrimaryFieldVisible: structuredPrimaryFieldVisible,
+            sourceReferenceDetailsVisible: sourceReferenceDetailsVisible,
             reviewActionsAvailable: reviewActionsAvailable,
             reviewSubmitted: didSubmit,
             reviewAction: "acceptBatch",
@@ -8326,6 +8774,7 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
             "sourceRefs": [[
                 "sourceId": "00000000-0000-0000-0000-000000000152",
                 "sourceVersion": 1,
+                "span": ["start": 0, "end": 14],
             ]],
             "reviewMode": "batch",
             "candidateVersion": 1,
