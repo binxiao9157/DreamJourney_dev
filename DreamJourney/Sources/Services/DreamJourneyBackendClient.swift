@@ -1532,11 +1532,52 @@ enum AccountDeletionAcceptanceContractError: LocalizedError {
 /// finished physical cleanup. Keep that distinction explicit in the client so
 /// future status UI cannot turn a soft-delete receipt into a completion claim.
 enum AccountDataRightsExternalCleanupState: String, Codable, Equatable {
+    case completed
     case pendingExternalEvidence
     case partial
     case unsupported
     case failed
     case unknown
+}
+
+struct AccountDataRightsExternalDomainSnapshot: Codable, Equatable {
+    let domain: String
+    let status: String
+    let requiresFollowUp: Bool
+
+    var displayName: String {
+        switch domain {
+        case "objectStorage": return "媒体存储"
+        case "providerVoice": return "声音服务"
+        case "providerDigitalHuman": return "数字人服务"
+        case "notificationDelivery": return "通知服务"
+        case "backupRetention": return "备份保留"
+        default: return "外部服务"
+        }
+    }
+
+    var displayStatus: String {
+        switch status {
+        case "completed": return "已完成"
+        case "unsupported": return "不适用"
+        case "failed": return "需要人工处理"
+        case "partial": return "部分完成"
+        case "pending": return "处理中"
+        default: return "待确认"
+        }
+    }
+
+    init?(json: [String: Any]) {
+        guard let domain = json["domain"] as? String,
+              !domain.isEmpty,
+              let status = json["status"] as? String,
+              !status.isEmpty else {
+            return nil
+        }
+        self.domain = domain
+        self.status = status
+        requiresFollowUp = (json["requiresFollowUp"] as? Bool) ?? (status == "pending")
+    }
 }
 
 struct AccountDataRightsStatusSnapshot: Codable, Equatable {
@@ -1556,6 +1597,29 @@ struct AccountDataRightsStatusSnapshot: Codable, Equatable {
     let dataExportState: String
     let externalCleanupState: AccountDataRightsExternalCleanupState
     let externalCleanupVerified: Bool
+    let externalCleanupDomainCount: Int?
+    let externalCleanupUncompletedDomainCount: Int?
+    let externalCleanupDomainStates: [AccountDataRightsExternalDomainSnapshot]?
+
+    var externalCleanupSummaryMessage: String {
+        if externalCleanupVerified {
+            return "外部数据清理已核对完成"
+        }
+        switch externalCleanupState {
+        case .completed:
+            return "外部数据清理已核对完成"
+        case .pendingExternalEvidence:
+            return "账号访问已停用，外部数据仍在处理中"
+        case .partial:
+            return "部分外部数据已处理，其余仍在核对"
+        case .unsupported:
+            return "部分外部服务不提供删除回执"
+        case .failed:
+            return "外部数据处理需要人工跟进"
+        case .unknown:
+            return "外部数据处理状态待确认"
+        }
+    }
 
     init?(json: [String: Any]) {
         guard let deletion = json["deletion"] as? [String: Any],
@@ -1593,11 +1657,25 @@ struct AccountDataRightsStatusSnapshot: Codable, Equatable {
         self.restoreBySamePhone = restoreBySamePhone
         self.dataExportSupported = dataExportSupported
         self.dataExportState = dataExportState
-        self.externalCleanupState = Self.externalCleanupState(for: requestStatus)
-        // `/auth/delete` only returns a compact request summary. It never
-        // carries provider/object/backup evidence, so this receipt cannot
-        // certify physical cleanup.
-        self.externalCleanupVerified = false
+        let externalCleanup = rights["externalCleanup"] as? [String: Any]
+        let externalStatus = externalCleanup?["status"] as? String
+        self.externalCleanupState = externalStatus == "completed"
+            ? .completed
+            : Self.externalCleanupState(for: externalStatus ?? requestStatus)
+        externalCleanupDomainCount = Self.intValue(externalCleanup?["domainCount"])
+        externalCleanupUncompletedDomainCount = Self.intValue(
+            externalCleanup?["uncompletedDomainCount"]
+        )
+        externalCleanupDomainStates = (
+            externalCleanup?["domains"] as? [[String: Any]]
+        )?.compactMap(AccountDataRightsExternalDomainSnapshot.init(json:))
+        // Completion is accepted only when the backend explicitly projects
+        // Provider/object evidence after the access-revocation fence.
+        externalCleanupVerified = (
+            externalCleanup?["verifiedComplete"] as? Bool == true
+            && externalStatus == "completed"
+            && externalCleanup?["accessState"] as? String == "revoked"
+        )
     }
 
     private static func externalCleanupState(

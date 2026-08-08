@@ -1345,6 +1345,14 @@ final class ProfileViewController: UIViewController {
                     return
                 }
                 if let snapshot = deletionAcceptance.dataRightsStatusSnapshot {
+                    let externalCleanupDomainStates = snapshot.externalCleanupDomainStates ?? []
+                    let domainSummary = externalCleanupDomainStates
+                        .map { "\($0.displayName):\($0.displayStatus)" }
+                        .joined(separator: ",")
+                    print(
+                        "[AccountDataRights] \(snapshot.externalCleanupSummaryMessage)"
+                            + (domainSummary.isEmpty ? "" : " domains=\(domainSummary)")
+                    )
                     do {
                         try AccountDataRightsReceiptStore.write(
                             snapshot,

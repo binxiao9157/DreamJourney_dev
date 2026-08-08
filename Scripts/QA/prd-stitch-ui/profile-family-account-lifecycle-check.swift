@@ -41,6 +41,7 @@ let backendMain = backend("app/main.py")
 let backendStore = backend("app/services/in_memory_store.py")
 let backendPostgres = backend("app/services/postgres_store.py")
 let backendTests = backend("tests/test_core_services.py")
+let backendExternalEffectReconciler = backend("app/services/data_rights_external_effect_reconciler.py")
 let releaseRegression = app("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 
 assertContains(flags, "private static let currentStorageVersion", "feature flag schema should keep a migration version without pinning a stale exact value")
@@ -58,6 +59,8 @@ for required in [
     "AccountDataExportContract",
     "AccountDataExportJobContract",
     "AccountDataExportPackageContract",
+    "AccountDataRightsExternalDomainSnapshot",
+    "externalCleanupSummaryMessage",
     "func createAccountDataExportJob(",
     "func readAccountDataExportJob(",
     "func retryAccountDataExportJob(",
@@ -112,6 +115,7 @@ for required in [
     "恢复机会只有 1 次",
     "确认注销账户",
     "DreamJourneyBackendClient.shared.softDeleteAccount",
+    "externalCleanupDomainStates",
 ] {
     assertContains(profileView, required, "Profile should implement two-step account deletion UI \(required)")
 }
@@ -183,8 +187,25 @@ for required in [
 }
 
 for required in [
+    "class DataRightsExternalEffectReconciler",
+    "blockedAccessNotRevoked",
+    "externalEffectManualReviewRequired",
+    "record_manual_resolution",
+] {
+    assertContains(backendExternalEffectReconciler, required, "Backend should reconcile external deletion effects safely \(required)")
+}
+
+for required in [
+    "externalCleanup",
+    "verifiedComplete",
+] {
+    assertContains(backendMain, required, "Backend account deletion response should expose only redacted cleanup evidence \(required)")
+}
+
+for required in [
     "backend-family-account-lifecycle-smoke.py",
     "RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE",
+    "RUN_BACKEND_DATA_RIGHTS_EXTERNAL_EFFECT_RECEIPTS_POSTGRES_SMOKE",
 ] {
     assertContains(releaseRegression, required, "Release regression should include optional family/account lifecycle gate \(required)")
 }

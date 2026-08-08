@@ -62,6 +62,7 @@ RUN_TIME_LETTER_DISPATCH_REMINDER_SMOKE="${RUN_TIME_LETTER_DISPATCH_REMINDER_SMO
 RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE="${RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE:-0}"
 RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE="${RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE:-0}"
 RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE="${RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE:-0}"
+RUN_BACKEND_DATA_RIGHTS_EXTERNAL_EFFECT_RECEIPTS_POSTGRES_SMOKE="${RUN_BACKEND_DATA_RIGHTS_EXTERNAL_EFFECT_RECEIPTS_POSTGRES_SMOKE:-0}"
 RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE="${RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE:-0}"
 RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE="${RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE:-0}"
 RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE="${RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE:-0}"
@@ -244,6 +245,7 @@ Run ID: \`$RUN_ID\`
 - Backend family/voice contract smoke: \`$RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE\`
 - Backend family/account lifecycle smoke: \`$RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE\`
 - Backend delegated access Postgres smoke: \`$RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE\`
+- Backend data-rights external-effect Postgres smoke: \`$RUN_BACKEND_DATA_RIGHTS_EXTERNAL_EFFECT_RECEIPTS_POSTGRES_SMOKE\`
 - Backend digital-human session smoke: \`$RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE\`
 - Backend voice clone deployed smoke: \`$RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE\`
 - Voice clone profile selection UIQA smoke: \`$RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE\`
@@ -313,6 +315,7 @@ Run ID: \`$RUN_ID\`
 - Optional deployed backend family/voice contract smoke when \`RUN_BACKEND_FAMILY_VOICE_CONTRACT_SMOKE=1\`; this verifies hidden family digital-human modes and voice profile lifecycle contracts.
 - Optional deployed backend family/account lifecycle smoke when \`RUN_BACKEND_FAMILY_ACCOUNT_LIFECYCLE_SMOKE=1\`; this verifies phone invitation, blocked family removal, account soft delete, one-time restore, and no-export retention policy.
 - Optional deployed backend delegated access Postgres smoke when \`RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE=1\`; this verifies relationship lifecycle, explicit scoped grants, expiry/revocation, event receipts, and cross-owner care/time-letter authorization against the deployed API and Postgres store.
+- Optional backend data-rights external-effect Postgres smoke when \`RUN_BACKEND_DATA_RIGHTS_EXTERNAL_EFFECT_RECEIPTS_POSTGRES_SMOKE=1\`; this verifies access-first reconciliation, idempotent Provider receipts, bounded retries, manual-review evidence, and redacted projections against Postgres.
 - Optional deployed backend digital-human session smoke when \`RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE=1\`; this verifies \`/config/runtime.digitalHuman\` and \`/digital-human/sessions\` have switched to Tencent \`cloudRender\` with backend-issued appkey/accesstoken and asset/project identity.
 - Optional deployed backend voice clone smoke when \`RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE=1\`; this verifies \`/config/runtime.voiceClone\`, ready \`S_\` synthesis, and Tencent audio-drive compatible \`pcm16kMono\` without printing raw audio.
 - Optional voice clone profile selection UIQA smoke when \`RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE=1\`; this verifies ready \`S_\` profiles win over pending/deleted profiles and pending backend replies do not overwrite a usable ready voice.
@@ -381,6 +384,7 @@ append_report_footer() {
 - Backend family/voice contract smoke: \`backend-family-voice-contract-smoke/$RUN_ID/\`
 - Backend family/account lifecycle smoke: \`backend-family-account-lifecycle-smoke/$RUN_ID/\`
 - Backend delegated access Postgres smoke: \`backend-delegated-access-postgres-smoke/$RUN_ID/\`
+- Backend data-rights external-effect Postgres smoke: \`backend-data-rights-external-effect-postgres-smoke/$RUN_ID/\`
 - Backend digital-human session smoke: \`backend-digital-human-session-smoke/$RUN_ID/\`
 - Backend voice clone deployed smoke: \`backend-voice-clone-deployed-smoke/$RUN_ID/\`
 - Voice clone profile selection UIQA smoke: \`voice-clone-profile-selection-smoke/$RUN_ID/\`
@@ -1281,6 +1285,20 @@ if [[ "$RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/backend-delegated-access-postgres-smoke/$RUN_ID"
   echo "Skipped by RUN_BACKEND_DELEGATED_ACCESS_POSTGRES_SMOKE=0" > "$OUTPUT_DIR/backend-delegated-access-postgres-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_BACKEND_DATA_RIGHTS_EXTERNAL_EFFECT_RECEIPTS_POSTGRES_SMOKE" == "1" ]]; then
+  [[ -n "${DATABASE_URL:-}" ]] || {
+    echo "DATABASE_URL is required for RUN_BACKEND_DATA_RIGHTS_EXTERNAL_EFFECT_RECEIPTS_POSTGRES_SMOKE=1" >&2
+    exit 1
+  }
+  mkdir -p "$OUTPUT_DIR/backend-data-rights-external-effect-postgres-smoke/$RUN_ID"
+  DATABASE_URL="$DATABASE_URL" \
+    "$BACKEND_ROOT/scripts/run-backend-data-rights-external-effect-receipts-postgres-smoke.sh" \
+      | tee "$OUTPUT_DIR/backend-data-rights-external-effect-postgres-smoke/$RUN_ID/result.log"
+else
+  mkdir -p "$OUTPUT_DIR/backend-data-rights-external-effect-postgres-smoke/$RUN_ID"
+  echo "Skipped by RUN_BACKEND_DATA_RIGHTS_EXTERNAL_EFFECT_RECEIPTS_POSTGRES_SMOKE=0" > "$OUTPUT_DIR/backend-data-rights-external-effect-postgres-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_BACKEND_DIGITAL_HUMAN_SESSION_SMOKE" == "1" ]]; then
