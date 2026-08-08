@@ -45,8 +45,12 @@ normalize_xcconfig_url() {
 fail() {
   local reason="$1"
   local token_status="not configured"
+  local user_token_status="not configured"
   if [[ -n "${BACKEND_API_TOKEN:-}" ]]; then
     token_status="configured, value intentionally omitted"
+  fi
+  if [[ -n "${BACKEND_USER_ACCESS_TOKEN:-}" ]]; then
+    user_token_status="configured, value intentionally omitted"
   fi
   cat > "$REPORT_PATH" <<EOF
 # Backend Voice Clone Deployed Smoke
@@ -62,6 +66,7 @@ Reason: $reason
 - Backend root: \`$BACKEND_ROOT\`
 - Backend base URL: \`${BACKEND_BASE_URL:-not configured}\`
 - Backend API token: $token_status
+- Backend user access token: $user_token_status
 - Ready voice profile: \`${VOICE_CLONE_READY_PROFILE_ID:-not configured}\`
 - Ready voice profile owner: \`${VOICE_CLONE_READY_PROFILE_USER_ID:-not configured}\`
 - Non-ready diagnostic voice profile: \`${VOICE_CLONE_NON_READY_PROFILE_ID:-not configured}\`
@@ -136,12 +141,14 @@ BACKEND_API_TOKEN="${BACKEND_API_TOKEN:-${XCCONFIG_API_TOKEN:-$DOC_API_TOKEN}}"
 [[ -n "$BACKEND_BASE_URL" ]] || fail "BACKEND_BASE_URL is required. Export it, configure Backend.local.xcconfig, or provide deployed-backend-access.md."
 [[ -n "$BACKEND_API_TOKEN" ]] || fail "BACKEND_API_TOKEN is required. Export it, configure Backend.local.xcconfig, or provide deployed-backend-access.md."
 [[ "$BACKEND_API_TOKEN" != YOUR_* ]] || fail "BACKEND_API_TOKEN is still a placeholder."
+[[ -n "${BACKEND_USER_ACCESS_TOKEN:-}" ]] || fail "BACKEND_USER_ACCESS_TOKEN is required. Use a short-lived access token for VOICE_CLONE_READY_PROFILE_USER_ID; the machine token cannot authorize user-owned voice routes."
 [[ -n "${VOICE_CLONE_READY_PROFILE_ID:-}" ]] || fail "VOICE_CLONE_READY_PROFILE_ID is required because trial voice slots can expire or exhaust training attempts."
 [[ -n "${VOICE_CLONE_READY_PROFILE_USER_ID:-}" ]] || fail "VOICE_CLONE_READY_PROFILE_USER_ID is required because synthesis now enforces persisted profile ownership."
 
 log "Running deployed backend voice clone smoke against $BACKEND_BASE_URL..."
 if ! BACKEND_BASE_URL="$BACKEND_BASE_URL" \
     BACKEND_API_TOKEN="$BACKEND_API_TOKEN" \
+    BACKEND_USER_ACCESS_TOKEN="$BACKEND_USER_ACCESS_TOKEN" \
     VOICE_CLONE_READY_PROFILE_ID="$VOICE_CLONE_READY_PROFILE_ID" \
     VOICE_CLONE_READY_PROFILE_USER_ID="$VOICE_CLONE_READY_PROFILE_USER_ID" \
     VOICE_CLONE_NON_READY_PROFILE_ID="${VOICE_CLONE_NON_READY_PROFILE_ID:-}" \
@@ -177,6 +184,7 @@ Status: passed
 
 - Backend base URL: `{base_url}`
 - Backend API token: configured, value intentionally omitted
+- Backend user access token: configured, value intentionally omitted
 - Backend store: `{health.get("store")}`
 - User ID: `{user_id}`
 

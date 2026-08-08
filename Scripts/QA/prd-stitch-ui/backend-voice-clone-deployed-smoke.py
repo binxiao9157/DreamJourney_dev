@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import base64
+import hashlib
 import json
 import os
 import re
@@ -17,6 +18,7 @@ if len(sys.argv) < 4:
 APP_ROOT = Path(sys.argv[1])
 BASE_URL = os.environ.get("BACKEND_BASE_URL", "").rstrip("/")
 API_TOKEN = os.environ.get("BACKEND_API_TOKEN", "")
+USER_ACCESS_TOKEN = os.environ.get("BACKEND_USER_ACCESS_TOKEN", "")
 USER_ID = sys.argv[2]
 MARKER = re.sub(r"[^A-Za-z0-9_-]", "_", sys.argv[3])
 READY_VOICE_PROFILE_ID = os.environ.get("VOICE_CLONE_READY_PROFILE_ID", "").strip()
@@ -28,6 +30,8 @@ if not BASE_URL:
     raise SystemExit("BACKEND_BASE_URL is required")
 if not API_TOKEN:
     raise SystemExit("BACKEND_API_TOKEN is required")
+if not USER_ACCESS_TOKEN:
+    raise SystemExit("BACKEND_USER_ACCESS_TOKEN is required for user-owned voice routes")
 if not READY_VOICE_PROFILE_ID:
     raise SystemExit("VOICE_CLONE_READY_PROFILE_ID is required")
 if not READY_VOICE_PROFILE_USER_ID:
@@ -50,7 +54,7 @@ def request_json(
         headers["X-DreamJourney-Runtime-Contract-Version"] = "2"
         headers["X-DreamJourney-Client-Build"] = "9001"
     if auth:
-        headers["Authorization"] = f"Bearer {API_TOKEN}"
+        headers["Authorization"] = f"Bearer {USER_ACCESS_TOKEN}"
         headers["X-API-Token"] = API_TOKEN
     if payload is not None:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -103,26 +107,46 @@ def refresh_profile(user_id: str, voice_profile_id: str) -> Dict[str, Any]:
     return profile
 
 
-def synthesize(user_id: str, voice_profile_id: str, *, expected: Optional[int] = 200) -> Tuple[int, Dict[str, Any]]:
+def synthesize(
+    user_id: str,
+    voice_profile_id: str,
+    *,
+    profile_version: Optional[int] = None,
+    expected: Optional[int] = 200,
+) -> Tuple[int, Dict[str, Any]]:
+    text = "你好。"
+    payload: Dict[str, Any] = {
+        "userId": user_id,
+        "voiceProfileId": voice_profile_id,
+        "text": text,
+        "format": "wav",
+        "sampleRate": 16000,
+        "speechRate": -10,
+        "loudnessRate": 10,
+        "outputMode": "tencentAudioDrive",
+        "requestPurpose": "echo",
+        "roleKey": "personalOwner",
+        "roleSubjectId": user_id,
+        "personaScope": "personal",
+        "digitalHumanId": user_id,
+    }
+    if profile_version is not None:
+        payload["expectedProfileVersion"] = profile_version
     return request_json(
         "POST",
         "/voice/synthesis",
-        {
-            "userId": user_id,
-            "voiceProfileId": voice_profile_id,
-            "text": "你好。",
-            "format": "wav",
-            "sampleRate": 16000,
-            "speechRate": -10,
-            "loudnessRate": 10,
-            "outputMode": "tencentAudioDrive",
-        },
+        payload,
         expected=expected,
         timeout=75,
     )
 
 
-def validate_tencent_audio_drive(payload: Dict[str, Any], voice_profile_id: str) -> Dict[str, Any]:
+def validate_tencent_audio_drive(
+    payload: Dict[str, Any],
+    voice_profile_id: str,
+    user_id: str,
+    profile_version: int,
+) -> Dict[str, Any]:
     assert_equal(payload.get("status"), "synthesized", "synthesis status")
     assert_equal(payload.get("voiceProfileId"), voice_profile_id, "synthesis voiceProfileId")
     assert_equal(payload.get("outputMode"), "tencentAudioDrive", "synthesis outputMode")
@@ -141,6 +165,21 @@ def validate_tencent_audio_drive(payload: Dict[str, Any], voice_profile_id: str)
     assert_equal(len(audio_data), byte_count, "audio decoded byteCount")
     assert_true(len(audio_data) % 2 == 0, "pcm16 data should be 16-bit aligned")
     assert_true(not audio_data.startswith(b"RIFF"), "tencent audio-drive payload should be raw PCM, not WAV")
+    binding = payload.get("synthesisBinding")
+    if not isinstance(binding, dict):
+        raise AssertionError("synthesis response missing binding")
+    assert_equal(binding.get("schemaVersion"), "voice-synthesis-binding-v2", "binding schema")
+    assert_equal(binding.get("ownerUserId"), user_id, "binding owner")
+    assert_equal(binding.get("voiceProfileId"), voice_profile_id, "binding voiceProfileId")
+    assert_equal(binding.get("profileVersion"), profile_version, "binding profileVersion")
+    assert_equal(binding.get("roleKey"), "personalOwner", "binding roleKey")
+    assert_equal(binding.get("requestPurpose"), "echo", "binding requestPurpose")
+    assert_equal(binding.get("audioOwner"), "tencentDigitalHuman", "binding audioOwner")
+    assert_equal(
+        binding.get("textHash"),
+        hashlib.sha256("你好。".encode("utf-8")).hexdigest(),
+        "binding textHash",
+    )
     return {
         "status": payload.get("status"),
         "voiceProfileId": payload.get("voiceProfileId"),
@@ -151,6 +190,10 @@ def validate_tencent_audio_drive(payload: Dict[str, Any], voice_profile_id: str)
         "bitsPerSample": audio.get("bitsPerSample"),
         "channelCount": audio.get("channelCount"),
         "byteCount": byte_count,
+        "bindingSchemaVersion": binding.get("schemaVersion"),
+        "bindingProfileVersion": binding.get("profileVersion"),
+        "bindingTextHash": binding.get("textHash"),
+        "bindingResult": "matched",
         "audioDataOmitted": True,
     }
 
@@ -191,9 +234,21 @@ def main() -> None:
     assert_equal(ready_profile.get("isEnabled"), True, "ready isEnabled")
 
     assert_equal(ready_profile.get("qualityAcceptanceRequired"), False, "ready quality acceptance")
+    ready_profile_version = int(ready_profile.get("profileVersion") or 0)
+    assert_true(ready_profile_version > 0, "ready profileVersion should be positive")
 
-    _, ready_synthesis = synthesize(READY_VOICE_PROFILE_USER_ID, READY_VOICE_PROFILE_ID, expected=200)
-    ready_result = validate_tencent_audio_drive(ready_synthesis, READY_VOICE_PROFILE_ID)
+    _, ready_synthesis = synthesize(
+        READY_VOICE_PROFILE_USER_ID,
+        READY_VOICE_PROFILE_ID,
+        profile_version=ready_profile_version,
+        expected=200,
+    )
+    ready_result = validate_tencent_audio_drive(
+        ready_synthesis,
+        READY_VOICE_PROFILE_ID,
+        READY_VOICE_PROFILE_USER_ID,
+        ready_profile_version,
+    )
 
     non_ready_result: Dict[str, Any] = {"configured": bool(NON_READY_VOICE_PROFILE_ID)}
     if NON_READY_VOICE_PROFILE_ID:
@@ -208,7 +263,13 @@ def main() -> None:
         if non_ready_profile.get("sampleStatus") == "ready":
             non_ready_result["diagnosticFailure"] = "skipped because probe voice is now ready"
         else:
-            status, failure = synthesize(non_ready_owner, NON_READY_VOICE_PROFILE_ID, expected=None)
+            non_ready_version = int(non_ready_profile.get("profileVersion") or 0) or None
+            status, failure = synthesize(
+                non_ready_owner,
+                NON_READY_VOICE_PROFILE_ID,
+                profile_version=non_ready_version,
+                expected=None,
+            )
             if 200 <= status < 300:
                 raise AssertionError("non-ready voice unexpectedly synthesized successfully")
             non_ready_result.update(diagnostic_failure_payload(status, failure))

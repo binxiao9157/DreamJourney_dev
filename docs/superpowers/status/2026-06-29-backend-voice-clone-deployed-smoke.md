@@ -20,7 +20,7 @@ RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0 \
 ./Scripts/QA/prd-stitch-ui/run-backend-voice-clone-deployed-smoke.sh
 ```
 
-脚本优先读取环境变量 `BACKEND_BASE_URL` / `BACKEND_API_TOKEN`，其次读取 `DreamJourney/Config/Backend.local.xcconfig`，再尝试读取后端仓库的私密 `deployed-backend-access.md`。token 只用于请求，不会写入报告。
+脚本优先读取环境变量 `BACKEND_BASE_URL` / `BACKEND_API_TOKEN`，其次读取 `DreamJourney/Config/Backend.local.xcconfig`，再尝试读取后端仓库的私密 `deployed-backend-access.md`。此外必须显式提供短期 `BACKEND_USER_ACCESS_TOKEN`，且该用户必须是待验收 profile 的 owner。共享 `BACKEND_API_TOKEN` 是机器主体兼容凭据，不能代替用户身份访问 `/voice/profiles/...` 和 `/voice/synthesis`。两个 token 都只用于请求，不会写入报告。
 
 ## 当前探针音色
 
@@ -29,12 +29,15 @@ RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE=0 \
 示例：
 
 ```bash
+BACKEND_USER_ACCESS_TOKEN=<short-lived owner access token> \
 VOICE_CLONE_READY_PROFILE_ID=<ready logical profile id> \
 VOICE_CLONE_READY_PROFILE_USER_ID=<profile owner user id> \
 VOICE_CLONE_NON_READY_PROFILE_ID=<optional non-ready logical profile id> \
 VOICE_CLONE_NON_READY_PROFILE_USER_ID=<optional profile owner user id> \
 ./Scripts/QA/prd-stitch-ui/run-backend-voice-clone-deployed-smoke.sh
 ```
+
+如果当前没有该 owner 的短期用户访问令牌，部署态真实合成验收标记为 `WAITING_EXTERNAL_GATE`。不得使用共享机器 token 冒充用户、在后端新增绕过接口，或为了 smoke 放宽生产路由鉴权；这不会阻塞本地合同、mock PCM 和 runtime readiness Gate。
 
 2026-07-03 槽位更新：`S_PhXlHqB52` 已耗尽训练次数；服务器槽位池应切换为 `S_URAKGqB52,S_TRAKGqB52,S_SRAKGqB52`。新用户或重新训练会从新槽位池分配；已有旧音色不会自动迁移，需要重新训练并保存新的 ready `voiceProfileId`。
 
@@ -63,6 +66,7 @@ VOICE_CLONE_NON_READY_PROFILE_USER_ID=<optional profile owner user id> \
 - 不保存合成音频文件。
 - 报告只记录 `byteCount`、格式、状态、provider log id。
 - 不输出 `BACKEND_API_TOKEN`。
+- 不输出 `BACKEND_USER_ACCESS_TOKEN`。
 - 不创建、覆盖或删除真实已训练 profile。
 
 ## 产物路径

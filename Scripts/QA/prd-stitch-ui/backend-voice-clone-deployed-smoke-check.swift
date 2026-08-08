@@ -52,6 +52,7 @@ for required in [
     "BACKEND_VOICE_CLONE_DEPLOYED_SMOKE",
     "Backend.local.xcconfig",
     "deployed-backend-access.md",
+    "BACKEND_USER_ACCESS_TOKEN",
     "value intentionally omitted",
     "backend-voice-clone-deployed-smoke.py",
     "backend-voice-clone-deployed-smoke-result.json",
@@ -59,6 +60,7 @@ for required in [
     assertContains(runnerContent, required, "runner should include \(required)")
 }
 assertNotContains(runnerContent, "echo \"$BACKEND_API_TOKEN\"", "runner must not print raw token")
+assertNotContains(runnerContent, "echo \"$BACKEND_USER_ACCESS_TOKEN\"", "runner must not print raw user access token")
 assertNotContains(runnerContent, "cat \"$ACCESS_DOC\"", "runner must not print the private access doc")
 
 for required in [
@@ -72,16 +74,23 @@ for required in [
     "seed-icl-2.0",
     "VOICE_CLONE_READY_PROFILE_ID",
     "VOICE_CLONE_READY_PROFILE_USER_ID",
+    "BACKEND_USER_ACCESS_TOKEN",
     "VOICE_CLONE_NON_READY_PROFILE_ID",
     "pcm16kMono",
     "byteCount",
     "audioDataOmitted",
+    "expectedProfileVersion",
+    "voice-synthesis-binding-v2",
+    "bindingTextHash",
+    "bindingResult",
     "diagnosticFailure",
     "value intentionally omitted",
 ] {
     assertContains(pythonContent, required, "Python smoke should cover \(required)")
 }
 assertNotContains(pythonContent, "print(audio", "Python smoke must not print raw audio")
+assertContains(pythonContent, #"headers["Authorization"] = f"Bearer {USER_ACCESS_TOKEN}""#, "user-owned voice routes must use the owner access token")
+assertContains(pythonContent, #"headers["X-API-Token"] = API_TOKEN"#, "deployed requests should preserve the backend compatibility token separately")
 assertNotContains(pythonContent, "\"DELETE\"", "deployed smoke must not delete a real trained voice profile")
 assertContains(pythonContent, "/quality-acceptance", "deployed smoke should accept ready profile quality before synthesis when needed")
 assertNotContains(pythonContent, "S_PhXlHqB52", "Python smoke must not default to exhausted trial voice IDs")
@@ -126,6 +135,7 @@ for requiredPackageEntry in [
 }
 
 assertContains(status, "RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE=1", "status doc should show release regression flag")
+assertContains(status, "BACKEND_USER_ACCESS_TOKEN", "status doc should require a short-lived owner access token")
 assertContains(status, "VOICE_CLONE_READY_PROFILE_ID", "status doc should require explicit ready probe voice")
 assertContains(status, "S_PhXlHqB52` 已耗尽训练次数", "status doc should mark the exhausted voice slot explicitly")
 assertContains(status, "S_URAKGqB52,S_TRAKGqB52,S_SRAKGqB52", "status doc should document the replacement trial slot pool")
