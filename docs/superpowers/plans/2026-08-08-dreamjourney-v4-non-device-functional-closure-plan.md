@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余非真机功能闭环计划
 
 日期：2026-08-08  
-状态：`ACTIVE_R2_AUTOMATIC_DISABLE`
+状态：`ACTIVE_R2_SYNTHETIC_E2E`
 日常非真机开发唯一入口：本文件
 
 ## 1. 目标
@@ -135,6 +135,16 @@
 3. capability 缺失、owner/vault 不一致或策略版本过期时 fail-closed。
 
 ### ND-R2-02 自动停用与恢复
+
+**执行状态**：`COMPLETE`（2026-08-09）
+
+**实现证据**
+
+- 后端：`main@a806469`，已推送、部署并通过线上 `/config/runtime` smoke；数据库迁移头保持 `0084`。
+- iOS：`feature/prd-stitch-ui-adaptation@7e4bf602`。
+- 扫描器、Provider、typed media worker、媒体任务 backlog/dead-letter、对象存储删除对账和能力级 kill switch 已形成短时、无用户数据的运行控制证据。
+- 能力受阻或证据过期时会 fail-closed；恢复后签发新 readiness epoch，客户端不会沿用中断前缓存。
+- 已通过后端 66 项自动停用 Gate、队列语义测试、iOS typed snapshot/UIQA、release QA package、`git diff --check` 和 workspace 模拟器构建。
 
 1. 复用 worker readiness、backlog、dead-letter 和 kill switch。
 2. 扫描器不可用、Provider 不健康、队列积压、删除对账异常或预算超限时关闭对应能力。
