@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余生产功能闭环计划
 
 日期：2026-08-06
-状态：`A0_COMPLETE_A1_WAITING_EXTERNAL_INPUT`
+状态：`A0_COMPLETE_A1_CODE_COMPLETE_PROVIDER_CONFIGURATION_PENDING`
 日常开发唯一入口：本文件
 前置基线：`docs/superpowers/plans/2026-08-05-dreamjourney-v4-accelerated-functional-closure-plan.md` 已完成，作为非真机合同、默认关闭策略与证据基线，不再重复开发。
 
@@ -86,7 +86,7 @@ flowchart LR
 - iOS `e1048680`：新增 typed runtime consumer；媒体摄入入口必须同时满足服务端 capability、release policy 与完整合同，旧运行时响应保持保守关闭。
 - 验证：后端 9 项 runtime 单测、配置脱敏检查、iOS typed smoke、完整 iOS Debug 模拟器构建、统一非真机发布回归，以及已部署 `/config/runtime` smoke 均通过。
 - 部署证据：生产 API revision `f819c2e`；`scripts/run-backend-runtime-capability-deployed-smoke.sh` 已通过。详细字段与配置矩阵见后端 `docs/backend/2026-08-07-provider-runtime-capability-a0.md`。
-- 下一项：`A1`。它需要先确定唯一的首发对象存储 Provider、地域、bucket、加密/保留策略、最小权限服务端凭据和测试租户；在这些输入明确前不启用真实媒体入口。
+- 下一项：`A1`。首发 Provider 已确定为腾讯 COS，代码已就绪；在 bucket、region、SSE/保留策略、最小权限服务端凭据和测试租户配置前，真实媒体入口保持关闭。
 
 ### A1：真实私有对象存储 Adapter
 
@@ -102,7 +102,14 @@ flowchart LR
 
 **验收**：fake adapter 合同、MinIO/隔离环境 smoke、Postgres owner/vault 负向验证、部署 smoke、iOS upload state smoke。
 **完成定义**：一份真实对象可从授权上传到可读取/可删除，错误、超时、重试和撤权均有真实状态。
-**阻断输入**：需确定首发存储 Provider、地域、bucket、加密/保留策略、服务端最小权限凭据与测试租户。
+**阻断输入**：首发 Provider 已确定为腾讯 COS；仍需实际 bucket/region、SSE/保留策略、最小权限服务端凭据与 closed-pilot 测试租户。
+
+**执行状态（2026-08-08）**：`CODE_COMPLETE_PROVIDER_CONFIGURATION_PENDING`
+
+- 首发 Provider 已收敛为腾讯 COS；保留 S3-compatible transport 仅作为实现与隔离测试机制，不会同时启用第二个生产存储。
+- 后端已完成私有 COS Adapter 收敛：强制 HTTPS endpoint 和显式 SSE 配置、对象 `Content-Type`/SHA-256 metadata、写后 `HEAD` 校验、授权内容读取路由、撤权后拒绝读取，以及失败时不提交 `verified` 状态。
+- 已新增 `scripts/backend-owner-truth-media-cos-provider-smoke.py`：部署容器内以无用户数据的随机 probe 验证 `PUT -> HEAD -> readback -> delete`。脚本默认不执行，必须显式设置 `RUN_BACKEND_OWNER_TRUTH_MEDIA_COS_PROVIDER_SMOKE=1`。
+- 仍未达到真实 Provider 完成态：服务器尚无 COS bucket、region、HTTPS endpoint、最小权限 SecretId/SecretKey、SSE/保留策略和 closed-pilot 测试租户配置。未提供这些输入前，runtime 保持 fail-closed，不能将 A1 标记为已上线。
 
 ### A2：真实处理任务的最小可发布子集
 
@@ -306,7 +313,7 @@ flowchart LR
 | 顺序 | Work Item | 开始条件 | 结束条件 |
 | --- | --- | --- | --- |
 | 1 | `A0` Provider 能力注册与部署校验 | 无 | 已启用/未启用能力都能 fail-closed 且 iOS 可消费脱敏 capability。 |
-| 2 | `A1` 单一对象存储 Adapter | 选定存储 Provider | 真实上传、授权读取、删除回执和 owner/vault 隔离通过。 |
+| 2 | `A1` 单一对象存储 Adapter | 腾讯 COS 配置与测试租户 | 真实上传、授权读取、删除回执和 owner/vault 隔离通过。 |
 | 3 | `A2` 文档处理最小子集 | A1 可用 | 文本/PDF/DOCX 可产出可审核 Candidate。 |
 | 4 | `B1` 真实 OTP | 选定短信 Provider | 真实登录、限流、恢复和 fail-closed 通过。 |
 | 5 | `B2` 导出/删除真实 effect | A1 与已启用外部 Provider | 真实 receipt/对账闭环通过。 |
@@ -322,7 +329,7 @@ flowchart LR
 
 | Work Item | 需要确认/提供的内容 |
 | --- | --- |
-| A1 | 首发对象存储类型、地域、bucket、加密/保留期、最小权限服务端凭据、测试环境。 |
+| A1 | 腾讯 COS 的地域、bucket、SSE/保留期、最小权限服务端凭据、closed-pilot 测试环境。 |
 | A2 | 首发处理范围是否仅文字/PDF/DOCX；OCR/ASR/视觉 Provider 的数据边界、费用和启用顺序。 |
 | B1 | 短信 Provider、签名/模板、地域、测试号码和额度。 |
 | B2 | 备份保留/恢复/清理策略；每个已启用外部 Provider 的删除能力与回执规则。 |
