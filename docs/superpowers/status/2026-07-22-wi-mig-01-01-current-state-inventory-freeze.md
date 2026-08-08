@@ -86,6 +86,22 @@ the expected user, machine, and public authorization decisions. This confirms
 the source-freeze baseline is current; it does not convert the remaining G2,
 G3, or G4 evidence into completed gates.
 
+## 2026-08-08 Refresh
+
+The source-only manifest was deliberately refreshed after committed backend
+work added migrations through `0083` and extended the registered route
+inventory to `173`. The new checked-in static baseline is:
+
+- `routeAuditExpectedCount=173`
+- `migrationManifestCount=83`
+- `migrationHead=0083_publication_lifecycle_external_cleanup.json`
+- SHA-256 `712129a04d73633f4ff9f1ecdc3a3e7fb6ecad2503916e3c1c6b4a07c323cd12`
+
+This refresh followed the backend route registry/authentication verification
+and full local backend verification. It keeps C00 honest about the current
+checked-in source baseline; it does not execute a migration, claim deployed
+schema parity, or close G2/G3/G4.
+
 ## Next Boundary
 
 `WI-MIG-01-02 / C01` may be planned only around a real isolated backup and

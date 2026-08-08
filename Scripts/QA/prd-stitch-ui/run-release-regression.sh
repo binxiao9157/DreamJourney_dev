@@ -166,11 +166,14 @@ run_step() {
 
   echo "== $name ==" | tee -a "$COMMAND_LOG"
   echo "$*" >> "$COMMAND_LOG"
+  local exit_code=0
   if "$@" > "$log_path" 2>&1; then
     return 0
+  else
+    # Capture the command status inside the failed branch. Reading `$?` after
+    # the `if` statement can turn a failing guard into a false success.
+    exit_code=$?
   fi
-
-  local exit_code=$?
   # Swift's command-line interpreter has occasionally exited with SIGTRAP
   # after a guard already wrote its successful result. Retry only that
   # tool-level failure; a guard's own fatal assertion stays fail-closed.
@@ -290,7 +293,7 @@ Run ID: \`$RUN_ID\`
 - Optional deployed credential boundary smoke when \`RUN_BACKEND_CREDENTIAL_RESPONSE_BOUNDARY_SMOKE=1\`; release handoff forces this gate and verifies no-store, value-free realtime voice, and blocked digital-human broker contracts.
 - Optional backend auth session/ownership shadow smoke when \`RUN_BACKEND_AUTH_SESSION_SHADOW_SMOKE=1\`; this verifies opaque login tokens, refresh rotation/replay rejection, logout revocation, and principal-bound owner mismatch rejection while global mode remains shadow.
 - Optional backend cross-account authorization shadow smoke when \`RUN_BACKEND_CROSS_ACCOUNT_AUTH_SHADOW_SMOKE=1\`; this verifies owner/family/time-letter/invitation policy decisions, forged-viewer deny evidence, and retained production shadow mode without invoking global dispatch.
-- Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; this verifies 99 classified routes, zero omissions, owner path/body denial (including knowledge governance), system-only denial, and retained global shadow mode without invoking global dispatch.
+- Optional backend route ownership audit smoke when \`RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE=1\`; full mode requires two V2 OTP-authenticated test users and verifies 173 classified routes, zero omissions, owner path/body denial (including knowledge governance), system-only denial, and retained global shadow mode without invoking global dispatch. \`ROUTE_OWNERSHIP_AUDIT_MODE=runtimeOnly\` is a separate no-write readiness probe and does not close the cross-account gate.
 - Optional backend release-policy smoke when \`RUN_BACKEND_RELEASE_POLICY_SMOKE=1\`; release handoff forces this gate to verify the deployed typed shadow snapshot, no-store response, explicit Closed Pilot allowlist, unknown-feature deny, and version-downgrade rejection.
 - Optional backend evidence persistence smoke when \`RUN_BACKEND_EVIDENCE_PERSISTENCE_SMOKE=1\`; release handoff forces this gate to verify the deployed rollout writer uses the persistent append-only source. Restart continuity is verified by running the same smoke before and after an API restart with \`BASELINE_PATH\`.
 - Optional backend database request UoW smoke when \`RUN_BACKEND_DB_UOW_SMOKE=1\`; release handoff forces this gate to verify request-scoped checkouts, explicit success commits, error-response rollbacks, correlation IDs, and zero new pool/return failures. The direct Postgres smoke separately proves concurrent isolation, aborted-transaction recovery, and pool-exhaustion fail-closed behavior.

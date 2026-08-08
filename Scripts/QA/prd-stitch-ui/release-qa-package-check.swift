@@ -866,6 +866,8 @@ assertContains(releaseRegressionRunner, "RELEASE_HANDOFF_MODE", "release regress
 assertContains(releaseRegressionRunner, "RUN_RELEASE_QA_OVERRIDE_ARTIFACT_SCAN=1", "release handoff should force the QA override artifact scan")
 assertContains(releaseRegressionRunner, "RUN_PUBLIC_RELEASE_SCOPE_GATE=1", "release handoff should force the Public Release Scope gate")
 assertContains(releaseRegressionRunner, "RUN_RELEASE_POLICY_ROLLOUT_GATE=1", "release handoff should force the ReleasePolicy rollout gate")
+assertContains(releaseRegressionRunner, "else\n    # Capture the command status inside the failed branch.", "release regression runner should preserve a failed guard status")
+assertContains(releaseRegressionRunner, "exit_code=$?", "release regression runner should capture the failing command exit code")
 assertContains(releaseRegressionDoc, "Release Handoff Mode", "release regression docs should include handoff mode")
 
 print("Release QA package checks passed")

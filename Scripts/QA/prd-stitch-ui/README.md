@@ -45,8 +45,18 @@ Scripts/QA/prd-stitch-ui/run-backend-cross-account-authorization-shadow-smoke.sh
 
 ```bash
 DREAMJOURNEY_BACKEND_BASE_URL=https://your-backend.example.com \
-DREAMJOURNEY_BACKEND_API_TOKEN='YOUR_BACKEND_API_TOKEN' \
+DREAMJOURNEY_ROUTE_AUDIT_OWNER_ACCESS_TOKEN='V2_OWNER_ACCESS_TOKEN' \
+DREAMJOURNEY_ROUTE_AUDIT_OWNER_USER_ID='V2_OWNER_USER_ID' \
+DREAMJOURNEY_ROUTE_AUDIT_ATTACKER_ACCESS_TOKEN='V2_ATTACKER_ACCESS_TOKEN' \
 Scripts/QA/prd-stitch-ui/run-backend-route-ownership-audit-smoke.sh
 ```
 
-该脚本验证部署环境保持 `ownershipMode=shadow`，同时具备 54 条显式分类、0 条遗漏、owner path/body 越权 403 和 system-only user 403。报告只包含固定布尔值、计数和 policy 指纹，不输出 token、手机号或原始用户 ID，也不会主动运行全局 dispatch。
+完整模式只接受由已启用的 V2 OTP 流程签发的两个独立测试用户令牌；它不再调用已退休的 `/auth/login`，也不会用后端共享 token 冒充用户。它验证部署环境保持 `ownershipMode=shadow`、173 条显式分类、0 条遗漏、owner path/body 越权 403 和 system-only user 403。报告只包含固定布尔值、计数和 policy 指纹，不输出 token、手机号或原始用户 ID，也不会主动运行全局 dispatch。
+
+当前没有 OTP Provider 或尚未准备两名测试用户时，只能运行不写入业务数据的运行时审计；它不关闭跨账号 Gate：
+
+```bash
+ROUTE_OWNERSHIP_AUDIT_MODE=runtimeOnly \
+DREAMJOURNEY_BACKEND_BASE_URL=https://your-backend.example.com \
+Scripts/QA/prd-stitch-ui/run-backend-route-ownership-audit-smoke.sh
+```

@@ -1011,9 +1011,13 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     private func voiceStatusCaption(for snapshot: VoiceCloneProfileSnapshot) -> String {
         switch snapshot.lifecycleState {
         case .paused, .deleting, .deleted:
-            return snapshot.exitDisclosureText.isEmpty
+            let disclosure = snapshot.exitDisclosureText.isEmpty
                 ? "该音色已停止用于回响。"
                 : snapshot.exitDisclosureText
+            guard !snapshot.providerCleanupReceiptAvailable else {
+                return disclosure
+            }
+            return "\(disclosure) 在收到确认前，不会把第三方清理误报为完成。"
         default:
             break
         }

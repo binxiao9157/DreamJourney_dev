@@ -3,10 +3,10 @@
   "workItem": "WI-MIG-01-01",
   "scope": "C00 source-only current-state inventory and freeze. It hashes checked-in source evidence only; it does not inspect .env values, host processes, production data, object bytes, Provider payloads, or installed-client population.",
   "expectedBackendStatic": {
-    "migrationManifestCount": 78,
-    "migrationHead": "0078_data_rights_external_effect_receipts.json",
-    "migrationHeadSha256": "c86c41c4be388bd791754af16b658d3386de3864f77bfa064d7f159476d68da0",
-    "routeAuditExpectedCount": 161
+    "migrationManifestCount": 83,
+    "migrationHead": "0083_publication_lifecycle_external_cleanup.json",
+    "migrationHeadSha256": "712129a04d73633f4ff9f1ecdc3a3e7fb6ecad2503916e3c1c6b4a07c323cd12",
+    "routeAuditExpectedCount": 173
   },
   "requiredPlanes": ["W", "I", "P", "Q", "O", "V"],
   "requiredPackageIds": [

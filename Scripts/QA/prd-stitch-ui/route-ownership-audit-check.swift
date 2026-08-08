@@ -43,7 +43,7 @@ for category in [
 require(registry.contains("class RouteOwnershipRegistry"), "Route ownership registry is missing")
 require(registry.contains("owner_body_field=\"userId\""), "Body-owned routes must bind userId")
 require(registry.contains("owner_path_parameter=parameter"), "Path-owned routes must bind their owner parameter")
-require(registryTests.contains("self.assertEqual(len(app_routes), 161)"), "Route audit must pin the current route count")
+require(registryTests.contains("self.assertEqual(len(app_routes), 173)"), "Route audit must pin the current route count")
 require(registryTests.contains("self.assertEqual(registry_routes, app_routes)"), "Route audit must fail for unclassified routes")
 require(registryTests.contains("len(self.registry.rules), len(registry_routes)"), "Route audit must fail for duplicates")
 
@@ -69,7 +69,18 @@ require(
     releaseRegression.contains("RUN_BACKEND_ROUTE_OWNERSHIP_AUDIT_SMOKE"),
     "Release regression must expose the deployed ownership audit gate"
 )
-require(deployedSmoke.contains("routeCount\") == 161"), "Deployed ownership smoke must pin 161 routes")
+require(deployedSmoke.contains("EXPECTED_ROUTE_COUNT = 173"), "Deployed ownership smoke must pin 173 routes")
+require(
+    deployedSmoke.contains("audit.get(\"routeCount\") == EXPECTED_ROUTE_COUNT"),
+    "Deployed ownership smoke must validate its pinned route count"
+)
+require(!deployedSmoke.contains("\"/auth/login\""), "Deployed ownership smoke must not call the retired legacy login route")
+require(deployedSmoke.contains("ROUTE_OWNERSHIP_AUDIT_MODE"), "Deployed ownership smoke must distinguish runtime-only and full audit modes")
+require(deployedSmoke.contains("DREAMJOURNEY_ROUTE_AUDIT_OWNER_ACCESS_TOKEN"), "Full deployed ownership smoke must require a V2 owner token")
+require(deployedSmoke.contains("DREAMJOURNEY_ROUTE_AUDIT_ATTACKER_ACCESS_TOKEN"), "Full deployed ownership smoke must require a V2 attacker token")
+require(deployedSmoke.contains("DREAMJOURNEY_ROUTE_AUDIT_OWNER_USER_ID"), "Full deployed ownership smoke must require an owner identity")
+require(deployedSmoke.contains("identityChallengeUnavailable"), "Deployed ownership smoke must report unavailable V2 identity explicitly")
+require(deployedSmoke.contains("runtimeOnly"), "Deployed ownership smoke must retain a no-write runtime-only scope")
 require(
     registry.contains("/ops/release-policy/observations"),
     "ReleasePolicy observation endpoint must remain system-only classified"
