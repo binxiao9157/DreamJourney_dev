@@ -171,7 +171,7 @@
 
 ### ND-R3-01 Candidate/Memory 审核面
 
-**执行状态**：`IN_PROGRESS`（终态审核历史与正式记忆版本历史子闭环已完成，2026-08-09）
+**执行状态**：`COMPLETE`（2026-08-09）
 
 **已完成证据**
 
@@ -184,11 +184,9 @@
 - 部署态后端已运行 `b39de93`，数据库迁移头 `0084`、`/ready` 正常；Postgres Candidate route smoke 已验证确认后更正形成第 1 版已替代、第 2 版当前，以及跨 Vault/跨 Owner 拒绝、幂等和响应脱敏。
 - 本子闭环已通过后端完整 1954 项测试、57 项 Candidate closed-pilot Gate、iOS 合同/单测 Gate、generic iPhoneOS test build、模拟器 UIQA 和 `git diff --check`。
 - 最新模拟器证据：`tmp/visual-qa/product-v4/owner-truth-candidate-inbox-smoke/20260809-020332/`。
-
-**本项剩余**
-
-- 补齐结构化 Candidate 更正字段与来源引用的产品级展示，不允许只靠摘要字符串修改事实。
-- 结构化更正与来源展示完成后，重跑部署态 Postgres Candidate route smoke，再将本项标记 `COMPLETE`。
+- iOS：`feature/prd-stitch-ui-adaptation@3fa9ce44`，新增按 `experience.summary / knowledge.claim / emotion.label` 映射的权威字段、结构化 Candidate 详情、来源版本与原文区间展示，以及只修改对应权威字段的更正流程；不再使用摘要字符串猜测字段。
+- 最终 Gate 已通过：57 项 Candidate closed-pilot 测试、iOS Owner Truth 合同测试与 generic iPhoneOS test build、结构化详情模拟器 UIQA、`git diff --check`；部署态 Postgres smoke 再次证明 `schemaHead=0084`、审核与版本历史、幂等、跨 Owner/Vault 拒绝、Candidate 提取/投影/Context/引用更正全部正常。
+- 最终模拟器证据：`tmp/visual-qa/product-v4/owner-truth-candidate-inbox-smoke/20260809-022002/`。
 
 1. 盘点现有 Candidate 列表、详情、编辑、接受、拒绝和来源引用，只补真实路由或缺失状态。
 2. 处理中、待审核、已确认、已拒绝、已被新版本替代必须来自 typed contract。
@@ -289,7 +287,7 @@
 
 ## 14. 当前交接点
 
-- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`
-- 当前 Work Item：`ND-R3-01 Candidate/Memory 审核面`（终态审核历史和 MemoryVersion 历史已完成；继续结构化更正与来源展示）
-- 后续 Work Item：`ND-R3-02 导出、删除和能力状态`
+- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`
+- 当前 Work Item：`ND-R3-02 导出、删除和能力状态`
+- 后续 Work Item：`ND-R4-01 COS/扫描器部署前矩阵`
 - 任何外部 Gate 缺失均不得暂停可继续的非真机任务。
