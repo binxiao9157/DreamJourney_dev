@@ -109,8 +109,8 @@ flowchart LR
 - 首发 Provider 已收敛为腾讯 COS；保留 S3-compatible transport 仅作为实现与隔离测试机制，不会同时启用第二个生产存储。
 - 后端已完成私有 COS Adapter 收敛：强制 HTTPS endpoint 和显式 SSE 配置、对象 `Content-Type`/SHA-256 metadata、写后 `HEAD` 校验、授权内容读取路由、撤权后拒绝读取，以及失败时不提交 `verified` 状态。
 - 已新增 `scripts/backend-owner-truth-media-cos-provider-smoke.py`：部署容器内以无用户数据的随机 probe 验证 `PUT -> HEAD -> readback -> delete`。脚本默认不执行，必须显式设置 `RUN_BACKEND_OWNER_TRUTH_MEDIA_COS_PROVIDER_SMOKE=1`。
-- 后端 `f8cf209` 已将 ClamAV 纳入启动期本地依赖探测：即使误配置为 `clamav`，缺少可执行文件、可读签名库或探测失败时也会返回 `contentSafetyScannerUnavailable` 并拒绝开启采集。该探测不发送用户字节；生产容器内已验证其 fail-closed 行为。
-- 仍未达到真实 Provider 完成态：服务器尚无 COS bucket、region、HTTPS endpoint、最小权限 SecretId/SecretKey、SSE/保留策略和 closed-pilot 测试租户配置；当前 API/worker 镜像也尚未交付可用的 ClamAV 与签名库。未提供这些输入并完成扫描器运行条件前，runtime 保持 fail-closed，不能将 A1 标记为已上线。
+- 后端 `f8cf209` 已将 ClamAV 纳入启动期本地依赖探测：即使误配置为 `clamav`，缺少可执行文件、可读签名库或探测失败时也会返回 `contentSafetyScannerUnavailable` 并拒绝开启采集。该探测不发送用户字节；生产容器内已验证其 fail-closed 行为。后续 `A1.1` 将其收敛为默认关闭的内部 ClamAV sidecar profile：显式配置 `OWNER_TRUTH_MEDIA_CLAMAV_HOST=clamav` 后，API/Worker 通过 clamd `INSTREAM` 探测和扫描；离线、超时、签名库异常或未知响应均在对象存储写入前隔离上传。对应实现/运行说明在后端 `docs/backend/2026-08-08-owner-truth-media-clamav-sidecar-a1-1.md`。
+- 仍未达到真实 Provider 完成态：服务器尚无 COS bucket、region、HTTPS endpoint、最小权限 SecretId/SecretKey、SSE/保留策略和 closed-pilot 测试租户配置；ClamAV sidecar 也尚未在服务器常驻启用并完成 smoke。未提供这些输入并完成扫描器运行条件前，runtime 保持 fail-closed，不能将 A1 标记为已上线。
 
 ### A2：真实处理任务的最小可发布子集
 
