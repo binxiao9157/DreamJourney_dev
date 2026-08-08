@@ -56,6 +56,13 @@ for required in [
     "func exportAccountData(",
     "path: \"/auth/data-export\"",
     "AccountDataExportContract",
+    "AccountDataExportJobContract",
+    "AccountDataExportPackageContract",
+    "func createAccountDataExportJob(",
+    "func readAccountDataExportJob(",
+    "func retryAccountDataExportJob(",
+    "func downloadAccountDataExportJob(",
+    "path: \"/auth/data-export/jobs\"",
     "isAccountDeletionConfigured",
 ] {
     assertContains(backendClient, required, "iOS backend client should expose family/account lifecycle contract \(required)")
@@ -95,6 +102,9 @@ assertNotContains(familyView, "复制邀请邮票", "Family UI should not keep o
 for required in [
     "showAccountDataExport",
     "导出个人数据",
+    "pollAccountDataExportJob",
+    "showAccountDataExportRetry",
+    "部分外部数据未包含",
     "注销前可导出个人数据副本",
     "showFinalAccountDeletionConfirmation",
     "submitAccountDeletion",
@@ -118,6 +128,10 @@ for required in [
     "@app.post(\"/auth/delete\")",
     "@app.post(\"/auth/restore\")",
     "@app.post(\"/auth/purge-expired-deletions\")",
+    "@app.post(\"/auth/data-export/jobs\"",
+    "@app.get(\"/auth/data-export/jobs/{job_id}\")",
+    "@app.post(\"/auth/data-export/jobs/{job_id}/retry\"",
+    "@app.get(\"/auth/data-export/jobs/{job_id}/download\")",
     "ACCOUNT_DELETION_RETENTION_DAYS = 30",
     "ACCOUNT_RESTORE_LIMIT = 1",
     "family member removal is not supported",
@@ -129,6 +143,10 @@ for required in [
     "soft_delete_user",
     "restore_user",
     "purge_expired_deleted_users",
+    "create_data_export_job",
+    "complete_data_export_job",
+    "retry_data_export_job",
+    "expire_data_export_job",
     "\"dataExportSupported\"] = True",
     "\"dataExportState\"] = \"availableBeforeDeletionOnly\"",
     "\"restoreLimit\"] = 1",
@@ -144,6 +162,15 @@ for required in [
     "raw-device-token-should-not-export",
 ] {
     assertContains(backendDataRightsTests, required, "Backend data export tests should preserve the V4 privacy boundary \(required)")
+}
+
+let backendDataExportJobTests = backend("tests/test_data_export_jobs.py")
+for required in [
+    "test_job_is_owner_scoped_idempotent_and_downloads_partial_manifest",
+    "test_failed_job_can_retry_without_changing_job_identity",
+    "test_account_must_be_active_when_creating_job",
+] {
+    assertContains(backendDataExportJobTests, required, "Backend async export jobs should preserve lifecycle and owner boundaries \(required)")
 }
 
 for required in [

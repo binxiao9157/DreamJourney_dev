@@ -691,7 +691,8 @@ final class FeatureGateService {
         if normalizedPath == "/archive/image-analysis" { return .archiveLocalAnalysis }
         if normalizedPath == "/archive/photos" { return .archiveRemoteFetch }
         if normalizedPath == "/auth/password" { return .accountPasswordChange }
-        if normalizedPath == "/auth/data-export" {
+        if normalizedPath == "/auth/data-export"
+            || normalizedPath.hasPrefix("/auth/data-export/jobs") {
             return .accountDeletion
         }
         if normalizedPath == "/auth/delete" || normalizedPath == "/auth/restore" {
@@ -1784,6 +1785,158 @@ struct AccountDataExportContract {
         if let value = value as? String {
             return Int(value)
         }
+        return nil
+    }
+}
+
+struct AccountDataExportManifestContract {
+    let schemaVersion: Int
+    let jobId: String
+    let packageStatus: String
+    let generatedAt: String
+    let expiresAt: String
+    let dataHash: String
+    let moduleSummaryCount: Int
+    let externalBoundaryCount: Int
+
+    init(json: [String: Any], expectedJobId: String) throws {
+        guard let jobId = json["jobId"] as? String,
+              jobId == expectedJobId,
+              let packageStatus = json["packageStatus"] as? String,
+              ["ready", "partial"].contains(packageStatus),
+              let generatedAt = json["generatedAt"] as? String,
+              let expiresAt = json["expiresAt"] as? String,
+              let dataHash = json["dataHash"] as? String,
+              dataHash.count == 64,
+              let moduleSummaries = json["moduleSummaries"] as? [[String: Any]],
+              let externalBoundaries = json["externalBoundaries"] as? [[String: Any]] else {
+            throw AccountDataExportContractError.malformedResponse
+        }
+        schemaVersion = Self.intValue(json["schemaVersion"]) ?? 1
+        self.jobId = jobId
+        self.packageStatus = packageStatus
+        self.generatedAt = generatedAt
+        self.expiresAt = expiresAt
+        self.dataHash = dataHash
+        moduleSummaryCount = moduleSummaries.count
+        externalBoundaryCount = externalBoundaries.count
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+}
+
+struct AccountDataExportJobContract {
+    let schemaVersion: Int
+    let jobId: String
+    let status: String
+    let attempt: Int
+    let failureCode: String?
+    let createdAt: String
+    let updatedAt: String
+    let expiresAt: String
+    let readyAt: String?
+    let downloadAvailable: Bool
+    let manifest: AccountDataExportManifestContract?
+
+    var isPending: Bool { status == "queued" || status == "running" }
+    var isFailed: Bool { status == "failed" }
+    var isExpired: Bool { status == "expired" }
+
+    init(json: [String: Any]) throws {
+        guard let jobId = json["jobId"] as? String,
+              jobId.hasPrefix("dej_"),
+              let status = json["status"] as? String,
+              ["queued", "running", "ready", "partial", "failed", "expired"].contains(status),
+              let createdAt = json["createdAt"] as? String,
+              let updatedAt = json["updatedAt"] as? String,
+              let expiresAt = json["expiresAt"] as? String,
+              let downloadAvailable = json["downloadAvailable"] as? Bool else {
+            throw AccountDataExportContractError.malformedResponse
+        }
+        let parsedManifest: AccountDataExportManifestContract?
+        if let manifestJSON = json["manifest"] as? [String: Any] {
+            parsedManifest = try AccountDataExportManifestContract(
+                json: manifestJSON,
+                expectedJobId: jobId
+            )
+        } else {
+            parsedManifest = nil
+        }
+        if downloadAvailable != ["ready", "partial"].contains(status) {
+            throw AccountDataExportContractError.malformedResponse
+        }
+        if downloadAvailable, parsedManifest == nil {
+            throw AccountDataExportContractError.malformedResponse
+        }
+
+        schemaVersion = Self.intValue(json["schemaVersion"]) ?? 1
+        self.jobId = jobId
+        self.status = status
+        attempt = max(0, Self.intValue(json["attempt"]) ?? 0)
+        failureCode = json["failureCode"] as? String
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.expiresAt = expiresAt
+        readyAt = json["readyAt"] as? String
+        self.downloadAvailable = downloadAvailable
+        manifest = parsedManifest
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+}
+
+struct AccountDataExportPackageContract {
+    let schemaVersion: Int
+    let manifest: AccountDataExportManifestContract
+    let dataExport: AccountDataExportContract
+    private let rawJSONObject: [String: Any]
+
+    var ownerUserId: String { dataExport.ownerUserId }
+    var isPartial: Bool { manifest.packageStatus == "partial" }
+
+    init(json: [String: Any], expectedUserId: String, expectedJobId: String) throws {
+        guard let manifestJSON = json["manifest"] as? [String: Any],
+              let exportJSON = json["dataExport"] as? [String: Any] else {
+            throw AccountDataExportContractError.malformedResponse
+        }
+        let manifest = try AccountDataExportManifestContract(
+            json: manifestJSON,
+            expectedJobId: expectedJobId
+        )
+        let dataExport = try AccountDataExportContract(
+            json: exportJSON,
+            expectedUserId: expectedUserId
+        )
+        schemaVersion = Self.intValue(json["schemaVersion"]) ?? 1
+        self.manifest = manifest
+        self.dataExport = dataExport
+        rawJSONObject = json
+    }
+
+    func prettyPrintedJSONData() throws -> Data {
+        guard JSONSerialization.isValidJSONObject(rawJSONObject) else {
+            throw AccountDataExportContractError.cannotSerialize
+        }
+        return try JSONSerialization.data(
+            withJSONObject: rawJSONObject,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
         return nil
     }
 }
@@ -8619,6 +8772,114 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                         json: object,
                         expectedUserId: normalizedUserId
                     )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func createAccountDataExportJob(
+        userId: String,
+        requestKey: String,
+        completion: @escaping (Result<AccountDataExportJobContract, Error>) -> Void
+    ) {
+        requestAccountDataExportJob(
+            path: "/auth/data-export/jobs",
+            method: .post,
+            payload: ["requestKey": requestKey],
+            userId: userId,
+            completion: completion
+        )
+    }
+
+    func readAccountDataExportJob(
+        userId: String,
+        jobId: String,
+        completion: @escaping (Result<AccountDataExportJobContract, Error>) -> Void
+    ) {
+        requestAccountDataExportJob(
+            path: "/auth/data-export/jobs/\(jobId)",
+            method: .get,
+            payload: nil,
+            userId: userId,
+            completion: completion
+        )
+    }
+
+    func retryAccountDataExportJob(
+        userId: String,
+        jobId: String,
+        completion: @escaping (Result<AccountDataExportJobContract, Error>) -> Void
+    ) {
+        requestAccountDataExportJob(
+            path: "/auth/data-export/jobs/\(jobId)/retry",
+            method: .post,
+            payload: [:],
+            userId: userId,
+            completion: completion
+        )
+    }
+
+    func downloadAccountDataExportJob(
+        userId: String,
+        jobId: String,
+        completion: @escaping (Result<AccountDataExportPackageContract, Error>) -> Void
+    ) {
+        let normalizedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedUserId.isEmpty, jobId.hasPrefix("dej_") else {
+            completion(.failure(ClientError.accountScopeChanged))
+            return
+        }
+        requestJSON(
+            path: "/auth/data-export/jobs/\(jobId)/download",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            sessionUserId: normalizedUserId
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try AccountDataExportPackageContract(
+                        json: object,
+                        expectedUserId: normalizedUserId,
+                        expectedJobId: jobId
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    private func requestAccountDataExportJob(
+        path: String,
+        method: HTTPMethod,
+        payload: [String: Any]?,
+        userId: String,
+        completion: @escaping (Result<AccountDataExportJobContract, Error>) -> Void
+    ) {
+        let normalizedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedUserId.isEmpty else {
+            completion(.failure(ClientError.accountScopeChanged))
+            return
+        }
+        requestJSON(
+            path: path,
+            method: method,
+            payload: payload,
+            authPolicy: .userRequired,
+            sessionUserId: normalizedUserId
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try AccountDataExportJobContract(json: object)))
                 } catch {
                     completion(.failure(error))
                 }

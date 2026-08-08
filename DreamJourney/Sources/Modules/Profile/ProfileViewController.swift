@@ -104,7 +104,34 @@ enum AccountDataExportTemporaryStore {
         accountLease: AccountLease,
         fileManager: FileManager = .default
     ) throws -> URL {
-        guard export.ownerUserId == accountLease.subjectId,
+        try write(
+            ownerUserId: export.ownerUserId,
+            data: export.prettyPrintedJSONData(),
+            accountLease: accountLease,
+            fileManager: fileManager
+        )
+    }
+
+    static func write(
+        _ package: AccountDataExportPackageContract,
+        accountLease: AccountLease,
+        fileManager: FileManager = .default
+    ) throws -> URL {
+        try write(
+            ownerUserId: package.ownerUserId,
+            data: package.prettyPrintedJSONData(),
+            accountLease: accountLease,
+            fileManager: fileManager
+        )
+    }
+
+    private static func write(
+        ownerUserId: String,
+        data: Data,
+        accountLease: AccountLease,
+        fileManager: FileManager
+    ) throws -> URL {
+        guard ownerUserId == accountLease.subjectId,
               AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
             throw AccountDataExportContractError.ownerScopeMismatch
         }
@@ -132,7 +159,7 @@ enum AccountDataExportTemporaryStore {
             isDirectory: false
         )
         do {
-            try export.prettyPrintedJSONData().write(to: fileURL, options: .atomic)
+            try data.write(to: fileURL, options: .atomic)
             try fileManager.setAttributes(
                 [.protectionKey: FileProtectionType.complete],
                 ofItemAtPath: fileURL.path
@@ -1083,29 +1110,182 @@ final class ProfileViewController: UIViewController {
 
     private func requestAccountDataExport(user: UserModel, accountLease: AccountLease) {
         showToast("正在准备个人数据副本", type: .info)
-        DreamJourneyBackendClient.shared.exportAccountData(userId: user.id) { [weak self] result in
+        DreamJourneyBackendClient.shared.createAccountDataExportJob(
+            userId: user.id,
+            requestKey: UUID().uuidString
+        ) { [weak self] result in
             guard let self,
                   AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
                 return
             }
             switch result {
-            case .success(let export):
+            case .success(let job):
+                self.handleAccountDataExportJob(
+                    job,
+                    user: user,
+                    accountLease: accountLease,
+                    remainingPolls: 30
+                )
+            case .failure(let error):
+                self.showToast("导出失败：\(error.localizedDescription)", type: .error)
+            }
+        }
+    }
+
+    private func handleAccountDataExportJob(
+        _ job: AccountDataExportJobContract,
+        user: UserModel,
+        accountLease: AccountLease,
+        remainingPolls: Int
+    ) {
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+            return
+        }
+
+        if job.downloadAvailable {
+            downloadAccountDataExportJob(
+                job,
+                user: user,
+                accountLease: accountLease
+            )
+            return
+        }
+        if job.isFailed || job.isExpired || remainingPolls <= 0 {
+            showAccountDataExportRetry(
+                job: job,
+                user: user,
+                accountLease: accountLease
+            )
+            return
+        }
+        guard job.isPending else {
+            showToast("数据副本状态异常，请稍后重试", type: .error)
+            return
+        }
+        pollAccountDataExportJob(
+            jobId: job.jobId,
+            user: user,
+            accountLease: accountLease,
+            remainingPolls: remainingPolls - 1
+        )
+    }
+
+    private func pollAccountDataExportJob(
+        jobId: String,
+        user: UserModel,
+        accountLease: AccountLease,
+        remainingPolls: Int
+    ) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+                return
+            }
+            DreamJourneyBackendClient.shared.readAccountDataExportJob(
+                userId: user.id,
+                jobId: jobId
+            ) { [weak self] result in
+                guard let self,
+                      AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+                    return
+                }
+                switch result {
+                case .success(let job):
+                    self.handleAccountDataExportJob(
+                        job,
+                        user: user,
+                        accountLease: accountLease,
+                        remainingPolls: remainingPolls
+                    )
+                case .failure(let error):
+                    self.showToast("导出状态读取失败：\(error.localizedDescription)", type: .error)
+                }
+            }
+        }
+    }
+
+    private func downloadAccountDataExportJob(
+        _ job: AccountDataExportJobContract,
+        user: UserModel,
+        accountLease: AccountLease
+    ) {
+        DreamJourneyBackendClient.shared.downloadAccountDataExportJob(
+            userId: user.id,
+            jobId: job.jobId
+        ) { [weak self] result in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+                return
+            }
+            switch result {
+            case .success(let package):
                 do {
                     let fileURL = try self.writeAccountDataExport(
-                        export,
+                        package,
                         accountLease: accountLease
                     )
+                    if package.isPartial {
+                        self.showToast("数据副本已生成，部分外部数据未包含", type: .info)
+                    }
                     self.presentAccountDataExportShareSheet(
                         fileURL: fileURL,
                         accountLease: accountLease
                     )
                 } catch {
-                    self.showToast("导出失败：\(error.localizedDescription)", type: .error)
+                    self.showToast("导出文件生成失败：\(error.localizedDescription)", type: .error)
                 }
             case .failure(let error):
-                self.showToast("导出失败：\(error.localizedDescription)", type: .error)
+                self.showToast("导出下载失败：\(error.localizedDescription)", type: .error)
             }
         }
+    }
+
+    private func showAccountDataExportRetry(
+        job: AccountDataExportJobContract,
+        user: UserModel,
+        accountLease: AccountLease
+    ) {
+        let message = job.isExpired
+            ? "数据副本已过期，请重新生成。"
+            : "数据副本生成失败，可重试当前任务。"
+        let alert = UIAlertController(
+            title: "导出未完成",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "重新生成", style: .default) { [weak self] _ in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+                return
+            }
+            if job.isExpired {
+                self.requestAccountDataExport(user: user, accountLease: accountLease)
+                return
+            }
+            DreamJourneyBackendClient.shared.retryAccountDataExportJob(
+                userId: user.id,
+                jobId: job.jobId
+            ) { [weak self] result in
+                guard let self,
+                      AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+                    return
+                }
+                switch result {
+                case .success(let retriedJob):
+                    self.showToast("正在重新准备个人数据副本", type: .info)
+                    self.handleAccountDataExportJob(
+                        retriedJob,
+                        user: user,
+                        accountLease: accountLease,
+                        remainingPolls: 30
+                    )
+                case .failure(let error):
+                    self.showToast("重新生成失败：\(error.localizedDescription)", type: .error)
+                }
+            }
+        })
+        present(alert, animated: true)
     }
 
     private func writeAccountDataExport(
@@ -1113,6 +1293,13 @@ final class ProfileViewController: UIViewController {
         accountLease: AccountLease
     ) throws -> URL {
         try AccountDataExportTemporaryStore.write(export, accountLease: accountLease)
+    }
+
+    private func writeAccountDataExport(
+        _ package: AccountDataExportPackageContract,
+        accountLease: AccountLease
+    ) throws -> URL {
+        try AccountDataExportTemporaryStore.write(package, accountLease: accountLease)
     }
 
     private func presentAccountDataExportShareSheet(
