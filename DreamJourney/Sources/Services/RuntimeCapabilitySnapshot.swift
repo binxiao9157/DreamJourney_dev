@@ -25,6 +25,13 @@ enum RuntimeCapabilityReadiness: String, Codable {
     case ready
 }
 
+enum RuntimeCapabilityControlState: String, Codable {
+    case legacy
+    case ready
+    case blocked
+    case stale
+}
+
 struct RuntimeCapabilitySnapshot: Equatable {
     let schemaVersion: Int
     let capability: String
@@ -44,6 +51,11 @@ struct RuntimeCapabilitySnapshot: Equatable {
     let retentionPolicyVersion: String
     let configurationStatus: String
     let evidenceStatus: String
+    let controlState: RuntimeCapabilityControlState
+    let readinessEpoch: String?
+    let readinessObservedAt: Date?
+    let readinessExpiresAt: Date?
+    let controlContractComplete: Bool
     let providerMetadataComplete: Bool
     let contractComplete: Bool
 
@@ -56,6 +68,9 @@ struct RuntimeCapabilitySnapshot: Equatable {
             && implemented
             && enabled
             && reason != "externalEvidenceStale"
+            && controlState != .blocked
+            && controlState != .stale
+            && (controlState != .ready || isReadinessEpochUsable())
     }
 
     /// Provider-backed effects additionally require the provider to be ready.
@@ -102,10 +117,27 @@ struct RuntimeCapabilitySnapshot: Equatable {
             "retention=\(retentionPolicyVersion)",
             "configuration=\(configurationStatus)",
             "evidence=\(evidenceStatus)",
+            "control=\(controlState.rawValue)",
+            "readinessEpoch=\(readinessEpoch ?? "none")",
+            "readinessExpiresAt=\(readinessExpiresAt?.ISO8601Format() ?? "none")",
             "fallback=\(fallbackMode)",
             "reason=\(reason)",
             "contractComplete=\(contractComplete)",
         ].joined(separator: " ")
+    }
+
+    func isReadinessEpochUsable(at date: Date = Date()) -> Bool {
+        guard controlState == .ready else {
+            return controlState == .legacy
+        }
+        guard controlContractComplete,
+              let readinessEpoch,
+              !readinessEpoch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let readinessObservedAt,
+              let readinessExpiresAt else {
+            return false
+        }
+        return readinessObservedAt < readinessExpiresAt && date < readinessExpiresAt
     }
 
     init?(json: [String: Any]) {
@@ -139,6 +171,28 @@ struct RuntimeCapabilitySnapshot: Equatable {
         let parsedRetentionPolicyVersion = json["retentionPolicyVersion"] as? String
         let parsedConfigurationStatus = json["configurationStatus"] as? String
         let parsedEvidenceStatus = json["evidenceStatus"] as? String
+        let rawControlState = json["controlState"] as? String
+        if rawControlState != nil,
+           RuntimeCapabilityControlState(rawValue: rawControlState ?? "") == nil {
+            return nil
+        }
+        controlState = rawControlState.flatMap(RuntimeCapabilityControlState.init(rawValue:)) ?? .legacy
+        readinessEpoch = (json["readinessEpoch"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        readinessObservedAt = Self.dateValue(json["readinessObservedAt"])
+        readinessExpiresAt = Self.dateValue(json["readinessExpiresAt"])
+        switch controlState {
+        case .legacy:
+            controlContractComplete = true
+        case .ready:
+            controlContractComplete = readinessEpoch?.isEmpty == false
+                && readinessObservedAt != nil
+                && readinessExpiresAt != nil
+        case .blocked, .stale:
+            controlContractComplete = readinessEpoch == nil
+                && readinessObservedAt != nil
+                && readinessExpiresAt != nil
+        }
+        guard controlContractComplete else { return nil }
         providerKind = parsedProviderKind ?? "unknown"
         operation = parsedOperation ?? "unknown"
         dataClass = parsedDataClass ?? "unknown"
@@ -183,6 +237,11 @@ struct RuntimeCapabilitySnapshot: Equatable {
             retentionPolicyVersion: "unknown",
             configurationStatus: "unknown",
             evidenceStatus: "unknown",
+            controlState: .legacy,
+            readinessEpoch: nil,
+            readinessObservedAt: nil,
+            readinessExpiresAt: nil,
+            controlContractComplete: false,
             providerMetadataComplete: false,
             contractComplete: false
         )
@@ -207,6 +266,11 @@ struct RuntimeCapabilitySnapshot: Equatable {
         retentionPolicyVersion: String,
         configurationStatus: String,
         evidenceStatus: String,
+        controlState: RuntimeCapabilityControlState,
+        readinessEpoch: String?,
+        readinessObservedAt: Date?,
+        readinessExpiresAt: Date?,
+        controlContractComplete: Bool,
         providerMetadataComplete: Bool,
         contractComplete: Bool
     ) {
@@ -228,6 +292,11 @@ struct RuntimeCapabilitySnapshot: Equatable {
         self.retentionPolicyVersion = retentionPolicyVersion
         self.configurationStatus = configurationStatus
         self.evidenceStatus = evidenceStatus
+        self.controlState = controlState
+        self.readinessEpoch = readinessEpoch
+        self.readinessObservedAt = readinessObservedAt
+        self.readinessExpiresAt = readinessExpiresAt
+        self.controlContractComplete = controlContractComplete
         self.providerMetadataComplete = providerMetadataComplete
         self.contractComplete = contractComplete
     }

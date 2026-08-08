@@ -36,6 +36,57 @@ enum RuntimeCapabilitySnapshotModelSmoke {
         require(complete.readiness == .externalVerificationMissing, "missing G3/G4 evidence should be explicit")
         require(complete.providerMetadataComplete, "provider metadata should decode from a complete runtime contract")
         require(complete.providerKind == "voiceCloneAndSynthesis", "provider kind should remain typed")
+        require(complete.controlState == .legacy, "older schema-v1 payloads should remain legacy-compatible")
+
+        let controlledReadyJSON = completeJSON.merging([
+            "controlState": "ready",
+            "readinessEpoch": "rce-fixture-ready",
+            "readinessObservedAt": "2099-01-01T00:00:00Z",
+            "readinessExpiresAt": "2099-01-01T00:05:00Z",
+        ]) { _, new in new }
+        guard let controlledReady = RuntimeCapabilitySnapshot(json: controlledReadyJSON) else {
+            fatalError("controlled ready runtime snapshot failed to decode")
+        }
+        require(controlledReady.controlContractComplete, "controlled snapshot must include a complete epoch contract")
+        require(controlledReady.isReadinessEpochUsable(at: Date(timeIntervalSince1970: 4_070_908_860)), "fresh readiness epoch should be usable")
+        require(controlledReady.isProviderEffectAllowed, "fresh controlled provider should allow effects")
+
+        let controlledBlockedJSON = completeJSON.merging([
+            "providerReady": false,
+            "reason": "runtimeCapabilityBacklogExceeded",
+            "controlState": "blocked",
+            "readinessEpoch": NSNull(),
+            "readinessObservedAt": "2099-01-01T00:00:00Z",
+            "readinessExpiresAt": "2099-01-01T00:05:00Z",
+        ]) { _, new in new }
+        let controlledBlocked = RuntimeCapabilitySnapshot(json: controlledBlockedJSON)
+        require(controlledBlocked?.isRuntimeContractUsable == false, "blocked control state must fail closed")
+        require(controlledBlocked?.isProviderEffectAllowed == false, "blocked state must reject provider effects")
+        RuntimeCapabilitySnapshotStore.shared.replace(with: [
+            RuntimeCapabilityID.ownerTruthMediaStorage.rawValue: controlledReady,
+        ])
+        require(
+            RuntimeCapabilitySnapshotStore.shared.snapshot(for: .ownerTruthMediaStorage)?.readinessEpoch == "rce-fixture-ready",
+            "ready epoch should enter the snapshot cache"
+        )
+        if let controlledBlocked {
+            RuntimeCapabilitySnapshotStore.shared.replace(with: [
+                RuntimeCapabilityID.ownerTruthMediaStorage.rawValue: controlledBlocked,
+            ])
+        }
+        require(
+            RuntimeCapabilitySnapshotStore.shared.snapshot(for: .ownerTruthMediaStorage)?.readinessEpoch == nil,
+            "a blocked replacement must not retain the previous ready epoch"
+        )
+        RuntimeCapabilitySnapshotStore.shared.invalidate()
+
+        let malformedControlledJSON = completeJSON.merging([
+            "controlState": "ready",
+            "readinessEpoch": NSNull(),
+            "readinessObservedAt": "2099-01-01T00:00:00Z",
+            "readinessExpiresAt": "2099-01-01T00:05:00Z",
+        ]) { _, new in new }
+        require(RuntimeCapabilitySnapshot(json: malformedControlledJSON) == nil, "ready state without epoch must fail decoding")
 
         let legacy = RuntimeCapabilitySnapshot.conservativeLegacy(
             capability: "voiceCloneShell",

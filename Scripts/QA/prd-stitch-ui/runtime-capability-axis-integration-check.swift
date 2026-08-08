@@ -22,6 +22,7 @@ let profile = read("DreamJourney/Sources/Modules/Profile/ProfileFamilyPersonaRel
 let archive = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveMediaReleaseReadiness.swift")
 let echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
 let regression = read("Scripts/QA/prd-stitch-ui/run-release-regression.sh")
+let snapshot = read("DreamJourney/Sources/Services/RuntimeCapabilitySnapshot.swift")
 
 require(client, "let capabilitySnapshots: [String: RuntimeCapabilitySnapshot]", "runtime config must retain five-axis snapshots")
 require(client, "RuntimeCapabilitySnapshotStore.shared.replace", "successful runtime fetch must update the shared immutable snapshot cache")
@@ -30,6 +31,10 @@ require(client, "axisSnapshot.isRuntimeContractUsable", "operation-specific prov
 require(client, "axisSnapshot.isProviderEffectAllowed", "real digital-human sessions must reject unavailable providers")
 require(client, "var allowsClientSessionRequest: Bool", "QA mock sessions must use an explicit bounded contract path")
 require(client, "RuntimeCapabilitySnapshot.conservativeLegacy", "old bool aliases must dual-decode as conservative unknown")
+require(snapshot, "case blocked", "runtime capability contract must model automatic shutdown")
+require(snapshot, "case stale", "expired operational evidence must remain distinct")
+require(snapshot, "isReadinessEpochUsable", "recovered capabilities must require a fresh readiness epoch")
+require(snapshot, "controlState != .blocked", "blocked operational state must fail closed")
 require(echo, "failClosedDigitalHumanRuntimePreparation", "Echo must fail closed before opening an unavailable digital-human session")
 require(echo, "voiceCloneRuntimeCapabilityUnknown", "Echo must not synthesize through an unknown clone capability")
 require(profile, "snapshot?.isPubliclyAvailable == true", "profile release exposure must require all five axes")
