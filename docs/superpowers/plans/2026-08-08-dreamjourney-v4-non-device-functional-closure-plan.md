@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余非真机功能闭环计划
 
 日期：2026-08-08  
-状态：`ACTIVE_R5_PROVIDER_BOUNDARY`
+状态：`ACTIVE_R5_ECHO_BINDING`
 日常非真机开发唯一入口：本文件
 
 ## 1. 目标
@@ -255,6 +255,14 @@
 2. Provider 不支持删除时保持 `unsupported/partial`，禁止 UI 显示已删除。
 3. accepted profile 之外禁止进入 Echo；不得降级成腾讯默认音色并冒充复刻成功。
 
+**状态：`CODE_COMPLETE_NON_DEVICE_VERIFIED`（2026-08-09）**
+
+- 后端 `main@f58ecc9` 已推送、部署；`/config/runtime.voiceClone.operationMatrix` 以 schema v1 返回七项操作及执行 owner、Provider 能力、完成回执能力、原因码、应用路由和适用 profile 状态。
+- 当前火山训练 Provider 明确声明删除能力为 `unsupported`；应用侧删除/暂停仍可立即撤销使用权，但绝不宣称第三方数据已清理。
+- iOS `feature/prd-stitch-ui-adaptation@230b8e6e` 已严格解析完整矩阵，并让训练、查询、试听、接受、合成、暂停、删除逐项消费服务端能力；缺项或非法 schema 默认关闭。
+- `run-voice-clone-r5-provider-boundary-gate.sh`、45 项定向测试、1966 项后端全量测试、FastAPI/既有 Gate、iOS generic Simulator workspace build 均通过。
+- 线上 `/ready` 通过；部署态 voice runtime smoke 返回 `identityReady=false`、`trainingAdmissionEnabled=false`、`deleteProvider=unsupported`，符合强身份外部 Gate 缺失时的 fail-closed 预期。
+
 ### ND-R5-02 Echo 绑定与证据
 
 1. 继续强制 `owner + voiceProfileId + profileVersion + role + purpose + textHash + outputMode` 绑定。
@@ -320,7 +328,7 @@
 
 ## 14. 当前交接点
 
-- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`、`ND-R4-01`、`ND-R4-02`
-- 当前 Work Item：`ND-R5-01 真实 Provider 边界证明`
-- 后续 Work Item：`ND-R5-02 Echo 绑定与证据`
+- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`、`ND-R4-01`、`ND-R4-02`、`ND-R5-01`
+- 当前 Work Item：`ND-R5-02 Echo 绑定与证据`
+- 后续 Work Item：`ND-R6-01 闭测 API 收敛`
 - 任何外部 Gate 缺失均不得暂停可继续的非真机任务。
