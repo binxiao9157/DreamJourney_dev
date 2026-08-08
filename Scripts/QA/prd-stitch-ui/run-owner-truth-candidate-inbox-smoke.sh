@@ -94,6 +94,10 @@ grep -Eq '"candidateRemovedAfterReview"[[:space:]]*:[[:space:]]*true' "$RESULT_F
 grep -Eq '"batchCandidateCount"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Batch smoke should render two batch candidates."
 grep -Eq '"batchAcceptedCount"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Batch smoke should accept every selected candidate."
 grep -Eq '"batchSequenceCompleted"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Batch smoke should complete the sequential review path."
+grep -Eq '"reviewHistoryVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Review history should render after terminal decisions."
+grep -Eq '"reviewHistoryCount"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Review history should preserve both reviewed candidates."
+grep -Eq '"reviewHistoryTerminalStatesVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Review history should expose terminal decisions."
+grep -Eq '"reviewHistoryMemoryStateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Review history should expose formal memory activation state."
 grep -Eq '"launchArgument"[[:space:]]*:[[:space:]]*"DJEnableOwnerTruthCandidateReviewQA"' "$RESULT_FILE" || fail "QA launch argument drifted."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null

@@ -567,6 +567,185 @@ struct OwnerTruthCandidateInbox: Codable, Equatable, Sendable {
     }
 }
 
+enum OwnerTruthCandidateMemoryActivationStatus: String, Codable, Equatable, Sendable {
+    case current
+    case superseded
+    case pending
+    case notApplicable
+}
+
+struct OwnerTruthCandidateReviewHistoryMemoryActivation: Codable, Equatable, Sendable {
+    let status: OwnerTruthCandidateMemoryActivationStatus
+    let memoryID: OwnerTruthRecordID?
+    let memoryVersionID: OwnerTruthRecordID?
+    let memoryVersion: Int?
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let rawStatus = Self.nonEmptyString(object["status"]),
+              let status = OwnerTruthCandidateMemoryActivationStatus(rawValue: rawStatus) else {
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "review history memoryActivation.status is invalid"
+            )
+        }
+        let memoryID = try Self.optionalRecordID(object["memoryId"], field: "memoryId")
+        let memoryVersionID = try Self.optionalRecordID(
+            object["memoryVersionId"],
+            field: "memoryVersionId"
+        )
+        let memoryVersion: Int?
+        if object["memoryVersion"] == nil || object["memoryVersion"] is NSNull {
+            memoryVersion = nil
+        } else {
+            guard let parsed = OwnerTruthCandidateEvidenceReference.positiveInt(
+                object["memoryVersion"]
+            ) else {
+                throw OwnerTruthRemoteContractError.invalidInbox(
+                    "review history memoryVersion must be positive or null"
+                )
+            }
+            memoryVersion = parsed
+        }
+        switch status {
+        case .current, .superseded:
+            guard memoryID != nil, memoryVersionID != nil, memoryVersion != nil else {
+                throw OwnerTruthRemoteContractError.invalidInbox(
+                    "current or superseded review history requires a MemoryVersion"
+                )
+            }
+        case .pending, .notApplicable:
+            guard memoryID == nil, memoryVersionID == nil, memoryVersion == nil else {
+                throw OwnerTruthRemoteContractError.invalidInbox(
+                    "pending or notApplicable review history cannot claim a MemoryVersion"
+                )
+            }
+        }
+        self.status = status
+        self.memoryID = memoryID
+        self.memoryVersionID = memoryVersionID
+        self.memoryVersion = memoryVersion
+    }
+
+    private static func optionalRecordID(
+        _ value: Any?,
+        field: String
+    ) throws -> OwnerTruthRecordID? {
+        guard let value, !(value is NSNull) else { return nil }
+        guard let parsed = OwnerTruthCandidateEvidenceReference.recordID(value) else {
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "review history \(field) must be a UUID or null"
+            )
+        }
+        return parsed
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+}
+
+struct OwnerTruthCandidateReviewHistoryItem: Codable, Equatable, Sendable, Identifiable {
+    let candidate: OwnerTruthCandidateInboxItem
+    let decision: OwnerTruthCandidateDecision
+    let decidedAt: Date
+    let memoryActivation: OwnerTruthCandidateReviewHistoryMemoryActivation
+
+    var id: OwnerTruthRecordID { candidate.id }
+
+    init(backendJSONObject object: [String: Any], vaultID: OwnerTruthVaultID) throws {
+        guard let candidateObject = object["candidate"] as? [String: Any],
+              let rawDecision = Self.nonEmptyString(object["decision"]),
+              let decision = OwnerTruthCandidateDecision(rawValue: rawDecision),
+              decision.isTerminal,
+              let rawDecidedAt = Self.nonEmptyString(object["decidedAt"]),
+              let decidedAt = Self.date(rawDecidedAt),
+              let activationObject = object["memoryActivation"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "review history item misses a required typed field"
+            )
+        }
+        let candidate = try OwnerTruthCandidateInboxItem(
+            backendJSONObject: candidateObject,
+            vaultID: vaultID
+        )
+        let activation = try OwnerTruthCandidateReviewHistoryMemoryActivation(
+            backendJSONObject: activationObject
+        )
+        switch decision {
+        case .accepted, .corrected:
+            guard activation.status != .notApplicable else {
+                throw OwnerTruthRemoteContractError.invalidInbox(
+                    "accepted or corrected review cannot be notApplicable"
+                )
+            }
+        case .rejected, .invalidated:
+            guard activation.status == .notApplicable else {
+                throw OwnerTruthRemoteContractError.invalidInbox(
+                    "rejected or invalidated review cannot activate memory"
+                )
+            }
+        case .pending:
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "pending is not a review history decision"
+            )
+        }
+        self.candidate = candidate
+        self.decision = decision
+        self.decidedAt = decidedAt
+        self.memoryActivation = activation
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func date(_ value: String) -> Date? {
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let standardFormatter = ISO8601DateFormatter()
+        return fractionalFormatter.date(from: value) ?? standardFormatter.date(from: value)
+    }
+}
+
+struct OwnerTruthCandidateReviewHistory: Codable, Equatable, Sendable {
+    static let schemaVersion = "owner-truth-candidate-review-history-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let reviews: [OwnerTruthCandidateReviewHistoryItem]
+
+    init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID) throws {
+        guard Self.nonEmptyString(object["schemaVersion"]) == Self.schemaVersion,
+              Self.nonEmptyString(object["vaultId"]) == expectedVaultID.rawValue,
+              let reviewObjects = object["reviews"] as? [[String: Any]] else {
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "review history schemaVersion, vaultId or reviews is invalid"
+            )
+        }
+        let reviews = try reviewObjects.map {
+            try OwnerTruthCandidateReviewHistoryItem(
+                backendJSONObject: $0,
+                vaultID: expectedVaultID
+            )
+        }
+        guard Set(reviews.map(\.id)).count == reviews.count else {
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "review history contains duplicate candidates"
+            )
+        }
+        vaultID = expectedVaultID
+        self.reviews = reviews
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+}
+
 struct OwnerTruthCandidateReviewCommand: Equatable, Sendable {
     let commandID: String
     let expectedCandidateVersion: Int
@@ -2046,6 +2225,11 @@ protocol OwnerTruthCandidateReviewClient: AnyObject {
         candidateID: OwnerTruthRecordID,
         command: OwnerTruthCandidateReviewCommand,
         completion: @escaping (Result<OwnerTruthCandidateDecisionResult, Error>) -> Void
+    )
+
+    func fetchOwnerTruthCandidateReviewHistory(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthCandidateReviewHistory, Error>) -> Void
     )
 }
 
@@ -12711,6 +12895,152 @@ private enum OwnerTruthCandidateReviewFailureDisposition {
         } else {
             self = .retryable
         }
+    }
+}
+
+enum OwnerTruthCandidateReviewHistoryPhase: Equatable, Sendable {
+    case idle
+    case unavailable
+    case loading
+    case ready
+    case empty
+    case failed
+}
+
+struct OwnerTruthCandidateReviewHistoryItemViewState: Equatable, Sendable, Identifiable {
+    let id: OwnerTruthRecordID
+    let proposalPreview: String
+    let memoryKind: OwnerTruthMemoryKind
+    let sensitivity: OwnerTruthSensitivityLevel
+    let decision: OwnerTruthCandidateDecision
+    let decidedAt: Date
+    let memoryActivationStatus: OwnerTruthCandidateMemoryActivationStatus
+    let sourceCount: Int
+}
+
+struct OwnerTruthCandidateReviewHistoryViewState: Equatable, Sendable {
+    let phase: OwnerTruthCandidateReviewHistoryPhase
+    let items: [OwnerTruthCandidateReviewHistoryItemViewState]
+
+    static let idle = OwnerTruthCandidateReviewHistoryViewState(
+        phase: .idle,
+        items: []
+    )
+}
+
+final class OwnerTruthCandidateReviewHistoryUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let client: OwnerTruthCandidateReviewClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState = OwnerTruthCandidateReviewHistoryViewState.idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthCandidateReviewHistoryViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthCandidateReviewClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
+    ) {
+        self.accountLease = accountLease
+        self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
+    }
+
+    func refresh() {
+        guard qaGateEnabled(),
+              let vaultID,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            operationGeneration &+= 1
+            viewState = OwnerTruthCandidateReviewHistoryViewState(
+                phase: .unavailable,
+                items: []
+            )
+            return
+        }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthCandidateReviewHistoryViewState(
+            phase: .loading,
+            items: viewState.items
+        )
+        client.fetchOwnerTruthCandidateReviewHistory(vaultID: vaultID) { [weak self] result in
+            self?.receive(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthCandidateReviewHistory, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard qaGateEnabled(),
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            operationGeneration &+= 1
+            viewState = OwnerTruthCandidateReviewHistoryViewState(
+                phase: .unavailable,
+                items: []
+            )
+            return
+        }
+        switch result {
+        case .success(let history):
+            guard history.vaultID == vaultID,
+                  history.vaultID.rawValue == accountLease.vaultId else {
+                viewState = OwnerTruthCandidateReviewHistoryViewState(
+                    phase: .failed,
+                    items: []
+                )
+                return
+            }
+            let items = history.reviews.map(Self.makeViewState)
+            viewState = OwnerTruthCandidateReviewHistoryViewState(
+                phase: items.isEmpty ? .empty : .ready,
+                items: items
+            )
+        case .failure:
+            viewState = OwnerTruthCandidateReviewHistoryViewState(
+                phase: .failed,
+                items: viewState.items
+            )
+        }
+    }
+
+    private static func makeViewState(
+        _ item: OwnerTruthCandidateReviewHistoryItem
+    ) -> OwnerTruthCandidateReviewHistoryItemViewState {
+        OwnerTruthCandidateReviewHistoryItemViewState(
+            id: item.id,
+            proposalPreview: proposalPreview(for: item.candidate),
+            memoryKind: item.candidate.memoryKind,
+            sensitivity: item.candidate.sensitivity,
+            decision: item.decision,
+            decidedAt: item.decidedAt,
+            memoryActivationStatus: item.memoryActivation.status,
+            sourceCount: item.candidate.sourceReferences.count
+        )
+    }
+
+    private static func proposalPreview(for candidate: OwnerTruthCandidateInboxItem) -> String {
+        for key in ["summary", "title", "text", "claim", "label"] {
+            guard case .string(let rawValue)? = candidate.content[key] else { continue }
+            let normalized = rawValue
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !normalized.isEmpty {
+                return String(normalized.prefix(160))
+            }
+        }
+        return "已审核记忆"
     }
 }
 

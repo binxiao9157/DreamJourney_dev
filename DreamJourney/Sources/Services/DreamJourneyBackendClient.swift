@@ -6323,6 +6323,47 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         }
     }
 
+    func fetchOwnerTruthCandidateReviewHistory(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthCandidateReviewHistory, Error>) -> Void
+    ) {
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane
+            ? nil
+            : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthCandidateReview",
+                    reason: decision?.reason ?? "releasePolicyDisabled"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/candidate-review-history",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            featureDecision: decision,
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthCandidateReviewHistory(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func reviewOwnerTruthCandidate(
         vaultID: OwnerTruthVaultID,
         candidateID: OwnerTruthRecordID,

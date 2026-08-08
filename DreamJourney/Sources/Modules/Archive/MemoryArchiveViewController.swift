@@ -5889,6 +5889,9 @@ private final class OwnerTruthCandidateConfirmationCell: UITableViewCell {
 /// archive, KBLite or legacy-writer authority.
 final class OwnerTruthCandidateInboxViewController: UIViewController {
     private let accountLease: AccountLease
+    private let candidateClient: OwnerTruthCandidateReviewClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
     private let useCase: OwnerTruthCandidateReviewUseCase
     private let sourceIDFilter: OwnerTruthRecordID?
     private let tableView = UITableView(frame: .zero, style: .plain)
@@ -5908,6 +5911,12 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         style: .plain,
         target: self,
         action: #selector(batchSelectionTapped)
+    )
+    private lazy var historyButton = UIBarButtonItem(
+        title: "审核记录",
+        style: .plain,
+        target: self,
+        action: #selector(historyTapped)
     )
     private lazy var batchConfirmButton = UIBarButtonItem(
         title: "确认 0 条",
@@ -5939,6 +5948,9 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         sourceIDFilter: OwnerTruthRecordID? = nil
     ) {
         self.accountLease = accountLease
+        self.candidateClient = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
         self.sourceIDFilter = sourceIDFilter
         self.useCase = OwnerTruthCandidateReviewUseCase(
             accountLease: accountLease,
@@ -5961,6 +5973,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         view.backgroundColor = DJDesignTokens.Color.background
         refreshButton.accessibilityIdentifier = "owner-truth-candidate-inbox-refresh"
         batchSelectionButton.accessibilityIdentifier = "owner-truth-candidate-inbox-batch-select"
+        historyButton.accessibilityIdentifier = "owner-truth-candidate-review-history-open"
         batchConfirmButton.accessibilityIdentifier = "owner-truth-candidate-inbox-batch-confirm"
         cancelBatchSelectionButton.accessibilityIdentifier = "owner-truth-candidate-inbox-batch-cancel"
         configureHeader()
@@ -6200,6 +6213,22 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         useCase.send(.refresh)
     }
 
+    @objc private func historyTapped() {
+        guard sourceIDFilter == nil else { return }
+        let controller = OwnerTruthCandidateReviewHistoryViewController(
+            accountLease: accountLease,
+            client: candidateClient,
+            accountLeaseRuntime: accountLeaseRuntime,
+            qaGateEnabled: qaGateEnabled
+        )
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        controller.onViewStateRendered = { [weak self] state in
+            self?.onHistoryViewStateRenderedForUIQA?(state)
+        }
+        #endif
+        navigationController?.pushViewController(controller, animated: true)
+    }
+
     @objc private func batchSelectionTapped() {
         guard renderedState.items.contains(where: \.supportsBatchAcceptance) else { return }
         isSelectingBatch = true
@@ -6273,9 +6302,14 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         } else {
             tableView.setEditing(false, animated: false)
             navigationItem.leftBarButtonItem = nil
-            navigationItem.rightBarButtonItems = [refreshButton, batchSelectionButton]
+            var items = [refreshButton, batchSelectionButton]
+            if sourceIDFilter == nil {
+                items.append(historyButton)
+            }
+            navigationItem.rightBarButtonItems = items
             batchSelectionButton.isEnabled = !isSubmitting
                 && renderedState.items.contains(where: \.supportsBatchAcceptance)
+            historyButton.isEnabled = !isSubmitting
         }
     }
 
@@ -6343,6 +6377,8 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
     }
 
     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+    var onHistoryViewStateRenderedForUIQA: ((OwnerTruthCandidateReviewHistoryViewState) -> Void)?
+
     var formalMemoryNoticeVisibleForUIQA: Bool {
         !formalMemoryNoticeLabel.isHidden && !(formalMemoryNoticeLabel.text ?? "").isEmpty
     }
@@ -6366,6 +6402,11 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
             .map(\.id)
         guard !candidateIDs.isEmpty else { return }
         useCase.send(.acceptBatch(candidateIDs: candidateIDs))
+    }
+
+    func runUIQAOpenHistory() {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else { return }
+        historyTapped()
     }
     #endif
 }
@@ -6546,6 +6587,315 @@ private final class OwnerTruthCandidateInboxCell: UITableViewCell {
         case .reported: return "转述"
         case .inferred: return "推断"
         case .uncertain: return "待核实"
+        }
+    }
+
+    private func sensitivityText(_ value: OwnerTruthSensitivityLevel) -> String {
+        switch value {
+        case .standard: return "普通敏感度"
+        case .sensitive: return "敏感内容"
+        case .restricted: return "受限内容"
+        }
+    }
+}
+
+/// Owner-scoped audit surface for terminal Candidate decisions. Rejected
+/// candidates remain visible here but never become a MemoryVersion.
+final class OwnerTruthCandidateReviewHistoryViewController: UIViewController {
+    private let useCase: OwnerTruthCandidateReviewHistoryUseCase
+    private let headerStack = UIStackView()
+    private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let statusLabel = UILabel()
+    private let tableView = UITableView(frame: .zero, style: .plain)
+    private let emptyStateLabel = UILabel()
+    private lazy var refreshButton = UIBarButtonItem(
+        barButtonSystemItem: .refresh,
+        target: self,
+        action: #selector(refreshTapped)
+    )
+    private var renderedState = OwnerTruthCandidateReviewHistoryViewState.idle
+    var onViewStateRendered: ((OwnerTruthCandidateReviewHistoryViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthCandidateReviewClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
+    ) {
+        self.useCase = OwnerTruthCandidateReviewHistoryUseCase(
+            accountLease: accountLease,
+            client: client,
+            accountLeaseRuntime: accountLeaseRuntime,
+            qaGateEnabled: qaGateEnabled
+        )
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "审核记录"
+        view.backgroundColor = DJDesignTokens.Color.background
+        refreshButton.accessibilityIdentifier = "owner-truth-candidate-review-history-refresh"
+        navigationItem.rightBarButtonItem = refreshButton
+        configureHeader()
+        configureTableView()
+        useCase.onViewStateChange = { [weak self] state in
+            if Thread.isMainThread {
+                self?.render(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.render(state)
+                }
+            }
+        }
+        render(useCase.viewState)
+        useCase.refresh()
+    }
+
+    private func configureHeader() {
+        headerStack.axis = .vertical
+        headerStack.alignment = .fill
+        headerStack.spacing = 6
+        headerStack.isLayoutMarginsRelativeArrangement = true
+        headerStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 18,
+            leading: DJDesignTokens.Spacing.page,
+            bottom: 14,
+            trailing: DJDesignTokens.Spacing.page
+        )
+
+        titleLabel.text = "已审核记忆"
+        titleLabel.font = DJDesignTokens.Font.title(24)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+
+        subtitleLabel.text = "确认、更正和拒绝结果都会保留；只有已形成正式记忆的内容可用于回顾与回响。"
+        subtitleLabel.font = DJDesignTokens.Font.body(14)
+        subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
+        subtitleLabel.numberOfLines = 0
+
+        statusLabel.font = DJDesignTokens.Font.label(12)
+        statusLabel.textColor = DJDesignTokens.Color.textSecondary
+        statusLabel.numberOfLines = 0
+        statusLabel.accessibilityIdentifier = "owner-truth-candidate-review-history-status"
+
+        [titleLabel, subtitleLabel, statusLabel].forEach(headerStack.addArrangedSubview)
+    }
+
+    private func configureTableView() {
+        tableView.backgroundColor = .clear
+        tableView.separatorStyle = .none
+        tableView.alwaysBounceVertical = true
+        tableView.showsVerticalScrollIndicator = false
+        tableView.dataSource = self
+        tableView.register(
+            OwnerTruthCandidateReviewHistoryCell.self,
+            forCellReuseIdentifier: OwnerTruthCandidateReviewHistoryCell.reuseIdentifier
+        )
+        tableView.accessibilityIdentifier = "owner-truth-candidate-review-history-list"
+
+        emptyStateLabel.font = DJDesignTokens.Font.body(15)
+        emptyStateLabel.textColor = DJDesignTokens.Color.textTertiary
+        emptyStateLabel.textAlignment = .center
+        emptyStateLabel.numberOfLines = 0
+        emptyStateLabel.isHidden = true
+        emptyStateLabel.accessibilityIdentifier = "owner-truth-candidate-review-history-empty"
+        tableView.backgroundView = emptyStateLabel
+
+        view.addSubview(headerStack)
+        view.addSubview(tableView)
+        headerStack.translatesAutoresizingMaskIntoConstraints = false
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            headerStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            headerStack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            headerStack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.topAnchor.constraint(equalTo: headerStack.bottomAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+    }
+
+    private func render(_ state: OwnerTruthCandidateReviewHistoryViewState) {
+        renderedState = state
+        refreshButton.isEnabled = state.phase != .loading
+        switch state.phase {
+        case .idle:
+            statusLabel.text = "准备读取审核记录"
+            emptyStateLabel.text = nil
+        case .unavailable:
+            statusLabel.text = "当前账号暂不可查看审核记录"
+            emptyStateLabel.text = "账号或权限已变化，请重新进入。"
+        case .loading:
+            statusLabel.text = "正在读取审核记录"
+            emptyStateLabel.text = nil
+        case .ready:
+            statusLabel.text = "共保留 \(state.items.count) 条审核记录"
+            emptyStateLabel.text = nil
+        case .empty:
+            statusLabel.text = "暂无审核记录"
+            emptyStateLabel.text = "确认、更正或拒绝候选记忆后，结果会保留在这里。"
+        case .failed:
+            statusLabel.text = "审核记录加载失败"
+            emptyStateLabel.text = state.items.isEmpty
+                ? "暂时无法读取审核记录，请点右上角重新载入。"
+                : nil
+        }
+        statusLabel.accessibilityLabel = statusLabel.text
+        emptyStateLabel.isHidden = emptyStateLabel.text == nil
+        tableView.reloadData()
+        onViewStateRendered?(state)
+    }
+
+    @objc private func refreshTapped() {
+        useCase.refresh()
+    }
+}
+
+extension OwnerTruthCandidateReviewHistoryViewController: UITableViewDataSource {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        renderedState.items.count
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        cellForRowAt indexPath: IndexPath
+    ) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(
+            withIdentifier: OwnerTruthCandidateReviewHistoryCell.reuseIdentifier,
+            for: indexPath
+        ) as! OwnerTruthCandidateReviewHistoryCell
+        cell.configure(renderedState.items[indexPath.row])
+        return cell
+    }
+}
+
+private final class OwnerTruthCandidateReviewHistoryCell: UITableViewCell {
+    static let reuseIdentifier = "OwnerTruthCandidateReviewHistoryCell"
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy年M月d日 HH:mm"
+        return formatter
+    }()
+
+    private let cardView = UIView()
+    private let decisionLabel = PaddingLabel(horizontalInset: 8, verticalInset: 4)
+    private let summaryLabel = UILabel()
+    private let memoryStatusLabel = UILabel()
+    private let metadataLabel = UILabel()
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        selectionStyle = .none
+        backgroundColor = .clear
+        contentView.backgroundColor = .clear
+
+        cardView.backgroundColor = DJDesignTokens.Color.surface
+        cardView.layer.cornerRadius = 18
+        cardView.layer.borderWidth = 1
+        cardView.layer.borderColor = DJDesignTokens.Color.textTertiary.withAlphaComponent(0.16).cgColor
+
+        decisionLabel.font = DJDesignTokens.Font.label(11)
+        decisionLabel.layer.cornerRadius = 10
+        decisionLabel.layer.masksToBounds = true
+
+        summaryLabel.font = DJDesignTokens.Font.body(16)
+        summaryLabel.textColor = DJDesignTokens.Color.textPrimary
+        summaryLabel.numberOfLines = 3
+
+        memoryStatusLabel.font = DJDesignTokens.Font.label(13)
+        memoryStatusLabel.numberOfLines = 2
+
+        metadataLabel.font = DJDesignTokens.Font.label(12)
+        metadataLabel.textColor = DJDesignTokens.Color.textTertiary
+        metadataLabel.numberOfLines = 2
+
+        contentView.addSubview(cardView)
+        [decisionLabel, summaryLabel, memoryStatusLabel, metadataLabel].forEach {
+            cardView.addSubview($0)
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+        cardView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
+
+            decisionLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 14),
+            decisionLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
+            decisionLabel.trailingAnchor.constraint(lessThanOrEqualTo: cardView.trailingAnchor, constant: -16),
+
+            summaryLabel.topAnchor.constraint(equalTo: decisionLabel.bottomAnchor, constant: 10),
+            summaryLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
+            summaryLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
+
+            memoryStatusLabel.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 8),
+            memoryStatusLabel.leadingAnchor.constraint(equalTo: summaryLabel.leadingAnchor),
+            memoryStatusLabel.trailingAnchor.constraint(equalTo: summaryLabel.trailingAnchor),
+
+            metadataLabel.topAnchor.constraint(equalTo: memoryStatusLabel.bottomAnchor, constant: 6),
+            metadataLabel.leadingAnchor.constraint(equalTo: summaryLabel.leadingAnchor),
+            metadataLabel.trailingAnchor.constraint(equalTo: summaryLabel.trailingAnchor),
+            metadataLabel.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -16),
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(_ item: OwnerTruthCandidateReviewHistoryItemViewState) {
+        let decision = decisionText(item.decision)
+        let activation = memoryActivationText(item.memoryActivationStatus)
+        decisionLabel.text = decision
+        decisionLabel.textColor = item.decision == .rejected || item.decision == .invalidated
+            ? DJDesignTokens.Color.danger
+            : DJDesignTokens.Color.accentDeep
+        decisionLabel.backgroundColor = decisionLabel.textColor.withAlphaComponent(0.12)
+        summaryLabel.text = item.proposalPreview
+        memoryStatusLabel.text = activation
+        memoryStatusLabel.textColor = item.memoryActivationStatus == .notApplicable
+            ? DJDesignTokens.Color.textSecondary
+            : DJDesignTokens.Color.accentDeep
+        metadataLabel.text = "\(memoryKindText(item.memoryKind)) · \(sensitivityText(item.sensitivity)) · 来源 \(item.sourceCount) 条\n\(Self.dateFormatter.string(from: item.decidedAt))"
+        accessibilityIdentifier = "owner-truth-candidate-review-history-item"
+        accessibilityLabel = "\(decision)，\(item.proposalPreview)，\(activation)"
+    }
+
+    private func decisionText(_ decision: OwnerTruthCandidateDecision) -> String {
+        switch decision {
+        case .accepted: return "已确认"
+        case .corrected: return "已更正"
+        case .rejected: return "已拒绝"
+        case .invalidated: return "已失效"
+        case .pending: return "待确认"
+        }
+    }
+
+    private func memoryActivationText(
+        _ status: OwnerTruthCandidateMemoryActivationStatus
+    ) -> String {
+        switch status {
+        case .current: return "已形成正式记忆"
+        case .superseded: return "正式记忆已有新版本"
+        case .pending: return "等待形成正式记忆"
+        case .notApplicable: return "未写入正式记忆"
+        }
+    }
+
+    private func memoryKindText(_ value: OwnerTruthMemoryKind) -> String {
+        switch value {
+        case .experience: return "经历"
+        case .knowledge: return "知识"
+        case .emotion: return "感受"
         }
     }
 
@@ -7246,6 +7596,10 @@ struct OwnerTruthCandidateInboxUIQASmokeResult: Codable {
     let batchCandidateCount: Int
     let batchAcceptedCount: Int
     let batchSequenceCompleted: Bool
+    let reviewHistoryVisible: Bool
+    let reviewHistoryCount: Int
+    let reviewHistoryTerminalStatesVisible: Bool
+    let reviewHistoryMemoryStateVisible: Bool
     let launchArgument: String
     let failureReason: String?
 
@@ -7276,6 +7630,9 @@ enum OwnerTruthCandidateInboxUIQASmoke {
         controller.onViewStateRendered = { [weak controller] state in
             scenario.consume(state, controller: controller)
         }
+        controller.onHistoryViewStateRenderedForUIQA = { state in
+            scenario.consumeHistory(state)
+        }
         return controller
     }
 
@@ -7297,6 +7654,10 @@ enum OwnerTruthCandidateInboxUIQASmoke {
             batchCandidateCount: 0,
             batchAcceptedCount: 0,
             batchSequenceCompleted: false,
+            reviewHistoryVisible: false,
+            reviewHistoryCount: 0,
+            reviewHistoryTerminalStatesVisible: false,
+            reviewHistoryMemoryStateVisible: false,
             launchArgument: OwnerTruthCandidateReviewQAGate.launchArgument,
             failureReason: reason
         )
@@ -7316,6 +7677,13 @@ private final class CandidateInboxUIQAScenario {
     private var candidatePreviewVisible = false
     private var reviewActionsAvailable = false
     private var batchCandidateCount = 0
+    private var didOpenHistory = false
+    private var terminalDecision: String?
+    private var memoryVersionCreated = false
+    private var formalMemoryPresentationVisible = false
+    private var formalMemoryPresentationText: String?
+    private var batchAcceptedCount = 0
+    private var batchSequenceCompleted = false
 
     func consume(
         _ state: OwnerTruthCandidateInboxViewState,
@@ -7341,7 +7709,7 @@ private final class CandidateInboxUIQAScenario {
             return
         }
 
-        guard !didWrite else { return }
+        guard !didWrite, !didOpenHistory else { return }
         guard case .empty = state.phase,
               let receipt = state.latestReceipt,
               let batchSummary = state.latestBatchSummary,
@@ -7353,32 +7721,68 @@ private final class CandidateInboxUIQAScenario {
             return
         }
 
+        didOpenHistory = true
+        terminalDecision = receipt.decision.rawValue
+        memoryVersionCreated = receipt.createdMemoryVersion
+        formalMemoryPresentationVisible = controller?.formalMemoryNoticeVisibleForUIQA == true
+        formalMemoryPresentationText = controller?.formalMemoryNoticeTextForUIQA
+        batchAcceptedCount = batchSummary.acceptedCount
+        batchSequenceCompleted = batchSummary.pendingCandidateIDs.isEmpty
+        DispatchQueue.main.async { [weak controller] in
+            controller?.runUIQAOpenHistory()
+        }
+    }
+
+    func consumeHistory(_ state: OwnerTruthCandidateReviewHistoryViewState) {
+        guard !didWrite else { return }
+        if state.phase == .failed || state.phase == .unavailable {
+            didWrite = true
+            OwnerTruthCandidateInboxUIQASmoke.writeFailure("reviewHistoryUnavailable")
+            return
+        }
+        guard state.phase == .ready else { return }
+        let terminalStatesVisible = state.items.allSatisfy { $0.decision.isTerminal }
+        let memoryStateVisible = state.items.allSatisfy {
+            $0.memoryActivationStatus == .current
+        }
+        guard state.items.count == batchCandidateCount,
+              terminalStatesVisible,
+              memoryStateVisible else {
+            didWrite = true
+            OwnerTruthCandidateInboxUIQASmoke.writeFailure("reviewHistoryContractMismatch")
+            return
+        }
+
         didWrite = true
-        let formalMemoryPresentationVisible = controller?.formalMemoryNoticeVisibleForUIQA == true
-        let formalMemoryPresentationText = controller?.formalMemoryNoticeTextForUIQA
         let result = OwnerTruthCandidateInboxUIQASmokeResult(
             completed: OwnerTruthCandidateReviewQAGate.isEnabled
                 && didSubmit
                 && candidateVisible
                 && candidatePreviewVisible
                 && reviewActionsAvailable
-                && batchSummary.acceptedCount == batchCandidateCount
-                && formalMemoryPresentationVisible,
+                && batchAcceptedCount == batchCandidateCount
+                && formalMemoryPresentationVisible
+                && terminalStatesVisible
+                && memoryStateVisible,
             qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
             candidateVisible: candidateVisible,
             candidatePreviewVisible: candidatePreviewVisible,
             reviewActionsAvailable: reviewActionsAvailable,
             reviewSubmitted: didSubmit,
             reviewAction: "acceptBatch",
-            terminalDecision: receipt.decision.rawValue,
+            terminalDecision: terminalDecision,
             receiptConsumed: true,
-            memoryVersionCreated: receipt.createdMemoryVersion,
+            memoryVersionCreated: memoryVersionCreated,
             formalMemoryPresentationVisible: formalMemoryPresentationVisible,
             formalMemoryPresentationText: formalMemoryPresentationText,
-            candidateRemovedAfterReview: state.items.isEmpty,
+            candidateRemovedAfterReview: true,
             batchCandidateCount: batchCandidateCount,
-            batchAcceptedCount: batchSummary.acceptedCount,
-            batchSequenceCompleted: batchSummary.pendingCandidateIDs.isEmpty,
+            batchAcceptedCount: batchAcceptedCount,
+            batchSequenceCompleted: batchSequenceCompleted,
+            reviewHistoryVisible: true,
+            reviewHistoryCount: state.items.count,
+            reviewHistoryTerminalStatesVisible: terminalStatesVisible,
+            reviewHistoryMemoryStateVisible: memoryStateVisible,
             launchArgument: OwnerTruthCandidateReviewQAGate.launchArgument,
             failureReason: nil
         )
@@ -7397,6 +7801,7 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
         "00000000-0000-0000-0000-000000000151",
         "00000000-0000-0000-0000-000000000156",
     ]
+    private var reviewedCandidateIDs: [String] = []
 
     init(vaultID: OwnerTruthVaultID?) {
         self.vaultID = vaultID
@@ -7415,34 +7820,52 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
                 backendJSONObject: [
                     "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
                     "vaultId": vaultID.rawValue,
-                    "candidates": pendingCandidateIDs.enumerated().map { index, candidateID in
-                        [
-                            "candidateId": candidateID,
-                            "sourceId": "00000000-0000-0000-0000-000000000152",
-                            "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
-                            "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
-                            "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
-                            "sensitivity": OwnerTruthSensitivityLevel.standard.rawValue,
-                            "contentSchemaVersion": "owner-truth-candidate-content-v1",
-                            "content": [
-                                "summary": index == 0
-                                    ? "小时候在院子里听家人讲故事"
-                                    : "夏天在院子里一起乘凉",
-                                "confidence": 0.92,
+                    "candidates": pendingCandidateIDs.map(candidateObject),
+                ],
+                expectedVaultID: vaultID
+            )
+            completion(.success(inbox))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func fetchOwnerTruthCandidateReviewHistory(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthCandidateReviewHistory, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID else {
+            completion(.failure(CandidateInboxUIQAClientError.invalidVault))
+            return
+        }
+        do {
+            let history = try OwnerTruthCandidateReviewHistory(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthCandidateReviewHistory.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "reviews": reviewedCandidateIDs.map { candidateID -> [String: Any] in
+                        let isFirstCandidate = candidateID
+                            == "00000000-0000-0000-0000-000000000151"
+                        return [
+                            "candidate": candidateObject(candidateID),
+                            "decision": OwnerTruthCandidateDecision.accepted.rawValue,
+                            "decidedAt": "2026-08-08T10:30:00Z",
+                            "memoryActivation": [
+                                "status": OwnerTruthCandidateMemoryActivationStatus.current.rawValue,
+                                "memoryId": isFirstCandidate
+                                    ? "00000000-0000-0000-0000-000000000154"
+                                    : "00000000-0000-0000-0000-000000000158",
+                                "memoryVersionId": isFirstCandidate
+                                    ? "00000000-0000-0000-0000-000000000155"
+                                    : "00000000-0000-0000-0000-000000000159",
+                                "memoryVersion": 1,
                             ],
-                            "contentHash": "uiqa-owner-truth-candidate-hash-\(index)",
-                            "sourceRefs": [[
-                                "sourceId": "00000000-0000-0000-0000-000000000152",
-                                "sourceVersion": 1,
-                            ]],
-                            "reviewMode": "batch",
-                            "candidateVersion": 1,
                         ]
                     },
                 ],
                 expectedVaultID: vaultID
             )
-            completion(.success(inbox))
+            completion(.success(history))
         } catch {
             completion(.failure(error))
         }
@@ -7465,6 +7888,7 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
         }
 
         pendingCandidateIDs.remove(at: pendingIndex)
+        reviewedCandidateIDs.append(candidateID.rawValue.uuidString.lowercased())
         let isFirstCandidate = candidateID.rawValue.uuidString.lowercased()
             == "00000000-0000-0000-0000-000000000151"
         let receiptID = isFirstCandidate
@@ -7503,6 +7927,35 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
         } catch {
             completion(.failure(error))
         }
+    }
+
+    private func candidateObject(_ candidateID: String) -> [String: Any] {
+        let isFirstCandidate = candidateID
+            == "00000000-0000-0000-0000-000000000151"
+        return [
+            "candidateId": candidateID,
+            "sourceId": "00000000-0000-0000-0000-000000000152",
+            "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
+            "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+            "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
+            "sensitivity": OwnerTruthSensitivityLevel.standard.rawValue,
+            "contentSchemaVersion": "owner-truth-candidate-content-v1",
+            "content": [
+                "summary": isFirstCandidate
+                    ? "小时候在院子里听家人讲故事"
+                    : "夏天在院子里一起乘凉",
+                "confidence": 0.92,
+            ],
+            "contentHash": isFirstCandidate
+                ? "uiqa-owner-truth-candidate-hash-0"
+                : "uiqa-owner-truth-candidate-hash-1",
+            "sourceRefs": [[
+                "sourceId": "00000000-0000-0000-0000-000000000152",
+                "sourceVersion": 1,
+            ]],
+            "reviewMode": "batch",
+            "candidateVersion": 1,
+        ]
     }
 }
 

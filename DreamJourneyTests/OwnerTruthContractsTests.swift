@@ -451,6 +451,105 @@ final class OwnerTruthContractsTests: XCTestCase {
         }
     }
 
+    func testCandidateReviewHistoryDecodesTerminalAuditAndMemoryState() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-owner-a"))
+        let acceptedID = "00000000-0000-0000-0000-000000000012"
+        let rejectedID = "00000000-0000-0000-0000-000000000013"
+        let sourceID = "00000000-0000-0000-0000-000000000011"
+        func candidate(_ candidateID: String, summary: String) -> [String: Any] {
+            [
+                "candidateId": candidateID,
+                "sourceId": sourceID,
+                "memoryKind": "experience",
+                "perspectiveType": "firstPerson",
+                "epistemicStatus": "recalled",
+                "sensitivity": "standard",
+                "contentSchemaVersion": "owner-truth-candidate-content-v1",
+                "content": ["summary": summary],
+                "contentHash": "history-\(candidateID)",
+                "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                "reviewMode": "single",
+                "candidateVersion": 2,
+            ]
+        }
+        let history = try OwnerTruthCandidateReviewHistory(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateReviewHistory.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "reviews": [
+                    [
+                        "candidate": candidate(acceptedID, summary: "确认后的童年记忆"),
+                        "decision": "accepted",
+                        "decidedAt": "2026-08-08T10:30:00Z",
+                        "memoryActivation": [
+                            "status": "current",
+                            "memoryId": "00000000-0000-0000-0000-000000000014",
+                            "memoryVersionId": "00000000-0000-0000-0000-000000000015",
+                            "memoryVersion": 1,
+                        ],
+                    ],
+                    [
+                        "candidate": candidate(rejectedID, summary: "不准确的候选记忆"),
+                        "decision": "rejected",
+                        "decidedAt": "2026-08-08T10:20:00Z",
+                        "memoryActivation": [
+                            "status": "notApplicable",
+                            "memoryId": NSNull(),
+                            "memoryVersionId": NSNull(),
+                            "memoryVersion": NSNull(),
+                        ],
+                    ],
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+
+        XCTAssertEqual(history.reviews.map(\.decision), [.accepted, .rejected])
+        XCTAssertEqual(history.reviews[0].memoryActivation.status, .current)
+        XCTAssertEqual(history.reviews[0].memoryActivation.memoryVersion, 1)
+        XCTAssertEqual(history.reviews[1].memoryActivation.status, .notApplicable)
+        XCTAssertNil(history.reviews[1].memoryActivation.memoryID)
+    }
+
+    func testCandidateReviewHistoryUseCaseMapsOwnerAuditAndFencesAccountSwitch() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000016")
+        let client = CandidateReviewClientSpy()
+        client.historyResult = .success(try candidateReviewHistory(
+            vaultID: lease.vaultId,
+            candidateID: candidateID
+        ))
+        let useCase = OwnerTruthCandidateReviewHistoryUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.refresh()
+
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.items.first?.decision, .accepted)
+        XCTAssertEqual(useCase.viewState.items.first?.memoryActivationStatus, .current)
+        XCTAssertEqual(useCase.viewState.items.first?.proposalPreview, "小时候在院子里听父亲讲故事")
+
+        client.deferHistory = true
+        useCase.refresh()
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000117")!
+        ))
+        client.completeDeferredHistory(.success(try candidateReviewHistory(
+            vaultID: lease.vaultId,
+            candidateID: candidateID
+        )))
+
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertTrue(useCase.viewState.items.isEmpty)
+    }
+
     func testCorrectReviewCommandRequiresValueAndProducesOnlyCorrectPayload() throws {
         XCTAssertThrowsError(
             try OwnerTruthCandidateReviewCommand(
@@ -6718,6 +6817,48 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private func candidateReviewHistory(
+        vaultID: String,
+        candidateID: OwnerTruthRecordID
+    ) throws -> OwnerTruthCandidateReviewHistory {
+        let expectedVaultID = try XCTUnwrap(OwnerTruthVaultID(vaultID))
+        let sourceID = "00000000-0000-0000-0000-000000000045"
+        return try OwnerTruthCandidateReviewHistory(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateReviewHistory.schemaVersion,
+                "vaultId": vaultID,
+                "reviews": [[
+                    "candidate": [
+                        "candidateId": candidateID.rawValue.uuidString.lowercased(),
+                        "sourceId": sourceID,
+                        "memoryKind": "experience",
+                        "perspectiveType": "firstPerson",
+                        "epistemicStatus": "recalled",
+                        "sensitivity": "standard",
+                        "contentSchemaVersion": "owner-truth-candidate-content-v1",
+                        "content": [
+                            "summary": "小时候在院子里听父亲讲故事",
+                            "confidence": 0.92,
+                        ],
+                        "contentHash": "history-content-hash",
+                        "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                        "reviewMode": "single",
+                        "candidateVersion": 2,
+                    ],
+                    "decision": "accepted",
+                    "decidedAt": "2026-08-08T10:30:00Z",
+                    "memoryActivation": [
+                        "status": "current",
+                        "memoryId": "00000000-0000-0000-0000-000000000047",
+                        "memoryVersionId": "00000000-0000-0000-0000-000000000048",
+                        "memoryVersion": 1,
+                    ],
+                ]],
+            ],
+            expectedVaultID: expectedVaultID
+        )
+    }
+
     private func decisionResult(
         candidateID: OwnerTruthRecordID,
         decision: OwnerTruthCandidateDecision
@@ -10073,10 +10214,13 @@ private final class KBLiteCompatibilityClientSpy: OwnerTruthKBLiteCompatibilityC
 
 private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
     var inboxResult: Result<OwnerTruthCandidateInbox, Error>?
+    var historyResult: Result<OwnerTruthCandidateReviewHistory, Error>?
     var reviewResult: Result<OwnerTruthCandidateDecisionResult, Error>?
     var reviewResults: [Result<OwnerTruthCandidateDecisionResult, Error>] = []
     var deferInbox = false
+    var deferHistory = false
     private var deferredInboxCompletion: ((Result<OwnerTruthCandidateInbox, Error>) -> Void)?
+    private var deferredHistoryCompletion: ((Result<OwnerTruthCandidateReviewHistory, Error>) -> Void)?
     private(set) var reviewedCommands: [OwnerTruthCandidateReviewCommand] = []
 
     func fetchOwnerTruthCandidateInbox(
@@ -10088,6 +10232,17 @@ private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
             return
         }
         completion(inboxResult ?? .failure(CandidateReviewClientSpyError.missingInboxResult))
+    }
+
+    func fetchOwnerTruthCandidateReviewHistory(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthCandidateReviewHistory, Error>) -> Void
+    ) {
+        if deferHistory {
+            deferredHistoryCompletion = completion
+            return
+        }
+        completion(historyResult ?? .failure(CandidateReviewClientSpyError.missingHistoryResult))
     }
 
     func reviewOwnerTruthCandidate(
@@ -10109,10 +10264,19 @@ private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
         deferredInboxCompletion = nil
         completion?(result)
     }
+
+    func completeDeferredHistory(
+        _ result: Result<OwnerTruthCandidateReviewHistory, Error>
+    ) {
+        let completion = deferredHistoryCompletion
+        deferredHistoryCompletion = nil
+        completion?(result)
+    }
 }
 
 private enum CandidateReviewClientSpyError: Error {
     case missingInboxResult
+    case missingHistoryResult
     case missingReviewResult
 }
 

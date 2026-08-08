@@ -50,6 +50,9 @@ def main() -> None:
         "indirect enum OwnerTruthJSONValue",
         "struct OwnerTruthCandidateInboxItem",
         "struct OwnerTruthCandidateInbox",
+        "struct OwnerTruthCandidateReviewHistory",
+        "struct OwnerTruthCandidateReviewHistoryItem",
+        "enum OwnerTruthCandidateMemoryActivationStatus",
         "struct OwnerTruthCandidateReviewCommand",
         "struct OwnerTruthCandidateDecisionResult",
         "enum OwnerTruthCandidateReviewQAGate",
@@ -57,6 +60,7 @@ def main() -> None:
         "enum OwnerTruthCandidateReviewIntent",
         "struct OwnerTruthCandidateInboxViewState",
         "final class OwnerTruthCandidateReviewUseCase",
+        "final class OwnerTruthCandidateReviewHistoryUseCase",
         'static let launchArgument = "DJEnableOwnerTruthCandidateReviewQA"',
         "#if DEBUG || UI_QA_SIMULATOR",
         'return ProcessInfo.processInfo.arguments.contains(launchArgument)',
@@ -97,9 +101,14 @@ def main() -> None:
     )
 
     inbox_body = function_body(client, "fetchOwnerTruthCandidateInbox")
+    history_body = function_body(client, "fetchOwnerTruthCandidateReviewHistory")
     decision_body = function_body(client, "reviewOwnerTruthCandidate")
     for body, path in (
         (inbox_body, 'path: "/v2/vaults/\\(pathComponent(vaultID.rawValue))/candidates"'),
+        (
+            history_body,
+            'path: "/v2/vaults/\\(pathComponent(vaultID.rawValue))/candidate-review-history"',
+        ),
         (
             decision_body,
             'path: "/v2/vaults/\\(pathComponent(vaultID.rawValue))/candidates/\\(pathComponent(candidateID.rawValue.uuidString))/decisions"',
@@ -138,6 +147,14 @@ def main() -> None:
         "func testAcceptedDecisionRejectsMissingMemoryVersionActivation()" in tests,
         "accepted Candidate activation negative test missing",
     )
+    require(
+        "func testCandidateReviewHistoryDecodesTerminalAuditAndMemoryState()" in tests,
+        "Candidate terminal review history parsing test missing",
+    )
+    require(
+        "func testCandidateReviewHistoryUseCaseMapsOwnerAuditAndFencesAccountSwitch()" in tests,
+        "Candidate review history lease-fencing test missing",
+    )
     for test_name in (
         "func testCandidateReviewUseCaseMapsInboxAndAcceptsThroughTypedReceipt()",
         "func testCandidateReviewUseCasePreservesCandidateContentForCorrection()",
@@ -167,6 +184,12 @@ def main() -> None:
         "candidateRemovedAfterReview",
         "supportsBatchAcceptance",
         "batchSequenceCompleted",
+        "final class OwnerTruthCandidateReviewHistoryViewController",
+        "owner-truth-candidate-review-history-open",
+        "owner-truth-candidate-review-history-list",
+        "reviewHistoryVisible",
+        "reviewHistoryTerminalStatesVisible",
+        "reviewHistoryMemoryStateVisible",
     ):
         require(required in archive, f"Candidate Inbox QA UI missing: {required}")
     require(
