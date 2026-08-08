@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余非真机功能闭环计划
 
 日期：2026-08-08  
-状态：`ACTIVE_R4_PROVIDER_CONTRACT`
+状态：`ACTIVE_R5_PROVIDER_BOUNDARY`
 日常非真机开发唯一入口：本文件
 
 ## 1. 目标
@@ -232,6 +232,17 @@
 
 ### ND-R4-02 OTP Provider 合同
 
+**执行状态**：`COMPLETE_NON_DEVICE`（2026-08-09）
+
+**已完成证据**
+
+- 后端：`main@d436e01`，已推送、部署，迁移 `0085` 已应用并验证到最新 head。
+- 已建立 provider-neutral 的发送受理、送达状态、限流、回执哈希、恢复查询、重放拒绝和失败收敛合同；原始手机号、验证码与 Provider 回执不进入公开状态响应。
+- iOS：`feature/prd-stitch-ui-adaptation@2d487e4f`，已消费 challenge、attempt、retryAfter、delivery/recovery 状态，并保留旧创建响应兼容。
+- 后端 1960 项全量测试、28 项 OTP 定向测试、66 项认证/路由测试、FastAPI 与全部既有 Gate 通过；iOS R4 client gate 和 workspace 模拟器构建通过。
+- 部署态 `/ready`、runtime capability、OTP fail-closed smoke 通过；服务器容器内临时 Postgres 发送、恢复、持久化和迁移 smoke 通过。
+- 真实短信 Provider、签名、模板、测试号码和真实送达回执继续标记 `WAITING_EXTERNAL_GATE`，不阻断 R5。
+
 1. 保留 synthetic adapter，仅完善真实 adapter port 的发送、受理、送达回执、限流、重放和恢复状态。
 2. 未选定真实短信 Provider 前不编造 SDK 字段；以 provider-neutral contract 完成非真机 Gate。
 3. iOS 只消费 challenge/attempt/retryAfter/recovery 状态。
@@ -309,7 +320,7 @@
 
 ## 14. 当前交接点
 
-- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`、`ND-R4-01`
-- 当前 Work Item：`ND-R4-02 OTP Provider 合同`
-- 后续 Work Item：`ND-R5-01 真实 Provider 边界证明`
+- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`、`ND-R4-01`、`ND-R4-02`
+- 当前 Work Item：`ND-R5-01 真实 Provider 边界证明`
+- 后续 Work Item：`ND-R5-02 Echo 绑定与证据`
 - 任何外部 Gate 缺失均不得暂停可继续的非真机任务。
