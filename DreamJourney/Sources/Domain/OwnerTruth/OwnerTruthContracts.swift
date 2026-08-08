@@ -746,6 +746,137 @@ struct OwnerTruthCandidateReviewHistory: Codable, Equatable, Sendable {
     }
 }
 
+enum OwnerTruthMemoryVersionHistoryStatus: String, Codable, Equatable, Sendable {
+    case current
+    case superseded
+}
+
+struct OwnerTruthMemoryVersionHistoryItem: Codable, Equatable, Sendable, Identifiable {
+    let versionNumber: Int
+    let status: OwnerTruthMemoryVersionHistoryStatus
+    let decision: OwnerTruthCandidateDecision
+    let contentSchemaVersion: String
+    let content: [String: OwnerTruthJSONValue]
+    let sourceCount: Int
+    let createdAt: Date
+
+    var id: Int { versionNumber }
+
+    init(backendJSONObject object: [String: Any]) throws {
+        let forbiddenKeys: Set<String> = [
+            "memoryId",
+            "memoryVersionId",
+            "contentHash",
+            "actorSubjectId",
+            "decisionReceiptId",
+        ]
+        guard forbiddenKeys.isDisjoint(with: object.keys),
+              let versionNumber = OwnerTruthCandidateEvidenceReference.positiveInt(
+                object["versionNumber"]
+              ),
+              let rawStatus = Self.nonEmptyString(object["status"]),
+              let status = OwnerTruthMemoryVersionHistoryStatus(rawValue: rawStatus),
+              let rawDecision = Self.nonEmptyString(object["decision"]),
+              let decision = OwnerTruthCandidateDecision(rawValue: rawDecision),
+              decision == .accepted || decision == .corrected,
+              let contentSchemaVersion = Self.nonEmptyString(object["contentSchemaVersion"]),
+              let contentObject = object["content"] as? [String: Any],
+              !contentObject.isEmpty,
+              let sourceCount = OwnerTruthCandidateEvidenceReference.positiveInt(
+                object["sourceCount"]
+              ),
+              let rawCreatedAt = Self.nonEmptyString(object["createdAt"]),
+              let createdAt = Self.date(rawCreatedAt) else {
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "MemoryVersion history item is invalid or leaks internal metadata"
+            )
+        }
+        var content: [String: OwnerTruthJSONValue] = [:]
+        for (key, value) in contentObject {
+            guard let parsed = OwnerTruthJSONValue(backendJSONObject: value) else {
+                throw OwnerTruthRemoteContractError.invalidInbox(
+                    "MemoryVersion history content is invalid"
+                )
+            }
+            content[key] = parsed
+        }
+        self.versionNumber = versionNumber
+        self.status = status
+        self.decision = decision
+        self.contentSchemaVersion = contentSchemaVersion
+        self.content = content
+        self.sourceCount = sourceCount
+        self.createdAt = createdAt
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func date(_ value: String) -> Date? {
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let standardFormatter = ISO8601DateFormatter()
+        return fractionalFormatter.date(from: value) ?? standardFormatter.date(from: value)
+    }
+}
+
+struct OwnerTruthMemoryVersionHistory: Codable, Equatable, Sendable {
+    static let schemaVersion = "owner-truth-memory-version-history-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let memoryKind: OwnerTruthMemoryKind
+    let perspective: OwnerTruthPerspectiveType
+    let epistemicStatus: OwnerTruthEpistemicStatus
+    let sensitivity: OwnerTruthSensitivityLevel
+    let memoryStatus: String
+    let versions: [OwnerTruthMemoryVersionHistoryItem]
+
+    init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID) throws {
+        guard Self.nonEmptyString(object["schemaVersion"]) == Self.schemaVersion,
+              Self.nonEmptyString(object["vaultId"]) == expectedVaultID.rawValue,
+              let rawMemoryKind = Self.nonEmptyString(object["memoryKind"]),
+              let memoryKind = OwnerTruthMemoryKind(rawValue: rawMemoryKind),
+              let rawPerspective = Self.nonEmptyString(object["perspectiveType"]),
+              let perspective = OwnerTruthPerspectiveType(rawValue: rawPerspective),
+              let rawEpistemicStatus = Self.nonEmptyString(object["epistemicStatus"]),
+              let epistemicStatus = OwnerTruthEpistemicStatus(rawValue: rawEpistemicStatus),
+              let rawSensitivity = Self.nonEmptyString(object["sensitivity"]),
+              let sensitivity = OwnerTruthSensitivityLevel(rawValue: rawSensitivity),
+              Self.nonEmptyString(object["memoryStatus"]) == "active",
+              let versionObjects = object["versions"] as? [[String: Any]],
+              !versionObjects.isEmpty else {
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "MemoryVersion history metadata is invalid"
+            )
+        }
+        let versions = try versionObjects.map(OwnerTruthMemoryVersionHistoryItem.init)
+        guard Set(versions.map(\.versionNumber)).count == versions.count,
+              versions == versions.sorted(by: { $0.versionNumber > $1.versionNumber }),
+              versions.filter({ $0.status == .current }).count == 1,
+              versions.first?.status == .current else {
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "MemoryVersion history ordering or current state is invalid"
+            )
+        }
+        vaultID = expectedVaultID
+        self.memoryKind = memoryKind
+        self.perspective = perspective
+        self.epistemicStatus = epistemicStatus
+        self.sensitivity = sensitivity
+        memoryStatus = "active"
+        self.versions = versions
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+}
+
 struct OwnerTruthCandidateReviewCommand: Equatable, Sendable {
     let commandID: String
     let expectedCandidateVersion: Int
@@ -2230,6 +2361,12 @@ protocol OwnerTruthCandidateReviewClient: AnyObject {
     func fetchOwnerTruthCandidateReviewHistory(
         vaultID: OwnerTruthVaultID,
         completion: @escaping (Result<OwnerTruthCandidateReviewHistory, Error>) -> Void
+    )
+
+    func fetchOwnerTruthMemoryVersionHistory(
+        vaultID: OwnerTruthVaultID,
+        memoryID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthMemoryVersionHistory, Error>) -> Void
     )
 }
 
@@ -12915,6 +13052,7 @@ struct OwnerTruthCandidateReviewHistoryItemViewState: Equatable, Sendable, Ident
     let decision: OwnerTruthCandidateDecision
     let decidedAt: Date
     let memoryActivationStatus: OwnerTruthCandidateMemoryActivationStatus
+    let memoryID: OwnerTruthRecordID?
     let sourceCount: Int
 }
 
@@ -13026,6 +13164,7 @@ final class OwnerTruthCandidateReviewHistoryUseCase {
             decision: item.decision,
             decidedAt: item.decidedAt,
             memoryActivationStatus: item.memoryActivation.status,
+            memoryID: item.memoryActivation.memoryID,
             sourceCount: item.candidate.sourceReferences.count
         )
     }
@@ -13041,6 +13180,162 @@ final class OwnerTruthCandidateReviewHistoryUseCase {
             }
         }
         return "已审核记忆"
+    }
+}
+
+enum OwnerTruthMemoryVersionHistoryPhase: Equatable, Sendable {
+    case idle
+    case unavailable
+    case loading
+    case ready
+    case failed
+}
+
+struct OwnerTruthMemoryVersionHistoryItemViewState: Equatable, Sendable, Identifiable {
+    let versionNumber: Int
+    let status: OwnerTruthMemoryVersionHistoryStatus
+    let decision: OwnerTruthCandidateDecision
+    let summary: String
+    let sourceCount: Int
+    let createdAt: Date
+
+    var id: Int { versionNumber }
+}
+
+struct OwnerTruthMemoryVersionHistoryViewState: Equatable, Sendable {
+    let phase: OwnerTruthMemoryVersionHistoryPhase
+    let memoryKind: OwnerTruthMemoryKind?
+    let items: [OwnerTruthMemoryVersionHistoryItemViewState]
+
+    static let idle = OwnerTruthMemoryVersionHistoryViewState(
+        phase: .idle,
+        memoryKind: nil,
+        items: []
+    )
+}
+
+final class OwnerTruthMemoryVersionHistoryUseCase {
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let memoryID: OwnerTruthRecordID
+    private let client: OwnerTruthCandidateReviewClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
+    private var operationGeneration: UInt = 0
+
+    private(set) var viewState = OwnerTruthMemoryVersionHistoryViewState.idle {
+        didSet { onViewStateChange?(viewState) }
+    }
+
+    var onViewStateChange: ((OwnerTruthMemoryVersionHistoryViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        memoryID: OwnerTruthRecordID,
+        client: OwnerTruthCandidateReviewClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
+    ) {
+        self.accountLease = accountLease
+        self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.memoryID = memoryID
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
+    }
+
+    func refresh() {
+        guard qaGateEnabled(),
+              let vaultID,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            operationGeneration &+= 1
+            viewState = OwnerTruthMemoryVersionHistoryViewState(
+                phase: .unavailable,
+                memoryKind: nil,
+                items: []
+            )
+            return
+        }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthMemoryVersionHistoryViewState(
+            phase: .loading,
+            memoryKind: viewState.memoryKind,
+            items: viewState.items
+        )
+        client.fetchOwnerTruthMemoryVersionHistory(
+            vaultID: vaultID,
+            memoryID: memoryID
+        ) { [weak self] result in
+            self?.receive(result, vaultID: vaultID, generation: generation)
+        }
+    }
+
+    private func receive(
+        _ result: Result<OwnerTruthMemoryVersionHistory, Error>,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard qaGateEnabled(),
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            operationGeneration &+= 1
+            viewState = OwnerTruthMemoryVersionHistoryViewState(
+                phase: .unavailable,
+                memoryKind: nil,
+                items: []
+            )
+            return
+        }
+        switch result {
+        case .success(let history):
+            guard history.vaultID == vaultID,
+                  history.vaultID.rawValue == accountLease.vaultId else {
+                viewState = OwnerTruthMemoryVersionHistoryViewState(
+                    phase: .failed,
+                    memoryKind: nil,
+                    items: []
+                )
+                return
+            }
+            viewState = OwnerTruthMemoryVersionHistoryViewState(
+                phase: .ready,
+                memoryKind: history.memoryKind,
+                items: history.versions.map(Self.makeViewState)
+            )
+        case .failure:
+            viewState = OwnerTruthMemoryVersionHistoryViewState(
+                phase: .failed,
+                memoryKind: viewState.memoryKind,
+                items: viewState.items
+            )
+        }
+    }
+
+    private static func makeViewState(
+        _ item: OwnerTruthMemoryVersionHistoryItem
+    ) -> OwnerTruthMemoryVersionHistoryItemViewState {
+        OwnerTruthMemoryVersionHistoryItemViewState(
+            versionNumber: item.versionNumber,
+            status: item.status,
+            decision: item.decision,
+            summary: summary(for: item.content),
+            sourceCount: item.sourceCount,
+            createdAt: item.createdAt
+        )
+    }
+
+    private static func summary(for content: [String: OwnerTruthJSONValue]) -> String {
+        for key in ["summary", "title", "text", "claim", "label"] {
+            guard case .string(let rawValue)? = content[key] else { continue }
+            let normalized = rawValue
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !normalized.isEmpty {
+                return String(normalized.prefix(240))
+            }
+        }
+        return "正式记忆版本"
     }
 }
 

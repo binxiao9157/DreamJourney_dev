@@ -6222,8 +6222,12 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
             qaGateEnabled: qaGateEnabled
         )
         #if UI_QA_SIMULATOR && targetEnvironment(simulator)
-        controller.onViewStateRendered = { [weak self] state in
-            self?.onHistoryViewStateRenderedForUIQA?(state)
+        controller.onViewStateRendered = { [weak self, weak controller] state in
+            guard let controller else { return }
+            self?.onHistoryViewStateRenderedForUIQA?(state, controller)
+        }
+        controller.onMemoryVersionHistoryViewStateRenderedForUIQA = { [weak self] state in
+            self?.onMemoryVersionHistoryViewStateRenderedForUIQA?(state)
         }
         #endif
         navigationController?.pushViewController(controller, animated: true)
@@ -6377,7 +6381,8 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
     }
 
     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
-    var onHistoryViewStateRenderedForUIQA: ((OwnerTruthCandidateReviewHistoryViewState) -> Void)?
+    var onHistoryViewStateRenderedForUIQA: ((OwnerTruthCandidateReviewHistoryViewState, OwnerTruthCandidateReviewHistoryViewController) -> Void)?
+    var onMemoryVersionHistoryViewStateRenderedForUIQA: ((OwnerTruthMemoryVersionHistoryViewState) -> Void)?
 
     var formalMemoryNoticeVisibleForUIQA: Bool {
         !formalMemoryNoticeLabel.isHidden && !(formalMemoryNoticeLabel.text ?? "").isEmpty
@@ -6602,6 +6607,10 @@ private final class OwnerTruthCandidateInboxCell: UITableViewCell {
 /// Owner-scoped audit surface for terminal Candidate decisions. Rejected
 /// candidates remain visible here but never become a MemoryVersion.
 final class OwnerTruthCandidateReviewHistoryViewController: UIViewController {
+    private let accountLease: AccountLease
+    private let candidateClient: OwnerTruthCandidateReviewClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
     private let useCase: OwnerTruthCandidateReviewHistoryUseCase
     private let headerStack = UIStackView()
     private let titleLabel = UILabel()
@@ -6616,6 +6625,7 @@ final class OwnerTruthCandidateReviewHistoryViewController: UIViewController {
     )
     private var renderedState = OwnerTruthCandidateReviewHistoryViewState.idle
     var onViewStateRendered: ((OwnerTruthCandidateReviewHistoryViewState) -> Void)?
+    var onMemoryVersionHistoryViewStateRenderedForUIQA: ((OwnerTruthMemoryVersionHistoryViewState) -> Void)?
 
     init(
         accountLease: AccountLease,
@@ -6623,6 +6633,10 @@ final class OwnerTruthCandidateReviewHistoryViewController: UIViewController {
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
     ) {
+        self.accountLease = accountLease
+        self.candidateClient = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
         self.useCase = OwnerTruthCandidateReviewHistoryUseCase(
             accountLease: accountLease,
             client: client,
@@ -6693,6 +6707,7 @@ final class OwnerTruthCandidateReviewHistoryViewController: UIViewController {
         tableView.alwaysBounceVertical = true
         tableView.showsVerticalScrollIndicator = false
         tableView.dataSource = self
+        tableView.delegate = self
         tableView.register(
             OwnerTruthCandidateReviewHistoryCell.self,
             forCellReuseIdentifier: OwnerTruthCandidateReviewHistoryCell.reuseIdentifier
@@ -6756,6 +6771,31 @@ final class OwnerTruthCandidateReviewHistoryViewController: UIViewController {
     @objc private func refreshTapped() {
         useCase.refresh()
     }
+
+    func runUIQAOpenFirstMemoryVersionHistory() {
+        guard let index = renderedState.items.firstIndex(where: { $0.memoryID != nil }) else {
+            return
+        }
+        openMemoryVersionHistory(at: IndexPath(row: index, section: 0), animated: false)
+    }
+
+    private func openMemoryVersionHistory(at indexPath: IndexPath, animated: Bool) {
+        guard renderedState.items.indices.contains(indexPath.row),
+              let memoryID = renderedState.items[indexPath.row].memoryID else {
+            return
+        }
+        let controller = OwnerTruthMemoryVersionHistoryViewController(
+            accountLease: accountLease,
+            memoryID: memoryID,
+            client: candidateClient,
+            accountLeaseRuntime: accountLeaseRuntime,
+            qaGateEnabled: qaGateEnabled
+        )
+        controller.onViewStateRendered = { [weak self] state in
+            self?.onMemoryVersionHistoryViewStateRenderedForUIQA?(state)
+        }
+        navigationController?.pushViewController(controller, animated: animated)
+    }
 }
 
 extension OwnerTruthCandidateReviewHistoryViewController: UITableViewDataSource {
@@ -6773,6 +6813,13 @@ extension OwnerTruthCandidateReviewHistoryViewController: UITableViewDataSource 
         ) as! OwnerTruthCandidateReviewHistoryCell
         cell.configure(renderedState.items[indexPath.row])
         return cell
+    }
+}
+
+extension OwnerTruthCandidateReviewHistoryViewController: UITableViewDelegate {
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        openMemoryVersionHistory(at: indexPath, animated: true)
     }
 }
 
@@ -6866,8 +6913,10 @@ private final class OwnerTruthCandidateReviewHistoryCell: UITableViewCell {
             ? DJDesignTokens.Color.textSecondary
             : DJDesignTokens.Color.accentDeep
         metadataLabel.text = "\(memoryKindText(item.memoryKind)) · \(sensitivityText(item.sensitivity)) · 来源 \(item.sourceCount) 条\n\(Self.dateFormatter.string(from: item.decidedAt))"
+        selectionStyle = item.memoryID == nil ? .none : .default
+        accessoryType = item.memoryID == nil ? .none : .disclosureIndicator
         accessibilityIdentifier = "owner-truth-candidate-review-history-item"
-        accessibilityLabel = "\(decision)，\(item.proposalPreview)，\(activation)"
+        accessibilityLabel = "\(decision)，\(item.proposalPreview)，\(activation)\(item.memoryID == nil ? "" : "，可查看版本历史")"
     }
 
     private func decisionText(_ decision: OwnerTruthCandidateDecision) -> String {
@@ -6905,6 +6954,242 @@ private final class OwnerTruthCandidateReviewHistoryCell: UITableViewCell {
         case .sensitive: return "敏感内容"
         case .restricted: return "受限内容"
         }
+    }
+}
+
+final class OwnerTruthMemoryVersionHistoryViewController: UIViewController {
+    private let useCase: OwnerTruthMemoryVersionHistoryUseCase
+    private let headerStack = UIStackView()
+    private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let statusLabel = UILabel()
+    private let tableView = UITableView(frame: .zero, style: .plain)
+    private lazy var refreshButton = UIBarButtonItem(
+        barButtonSystemItem: .refresh,
+        target: self,
+        action: #selector(refreshTapped)
+    )
+    private var renderedState = OwnerTruthMemoryVersionHistoryViewState.idle
+    var onViewStateRendered: ((OwnerTruthMemoryVersionHistoryViewState) -> Void)?
+
+    init(
+        accountLease: AccountLease,
+        memoryID: OwnerTruthRecordID,
+        client: OwnerTruthCandidateReviewClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
+    ) {
+        self.useCase = OwnerTruthMemoryVersionHistoryUseCase(
+            accountLease: accountLease,
+            memoryID: memoryID,
+            client: client,
+            accountLeaseRuntime: accountLeaseRuntime,
+            qaGateEnabled: qaGateEnabled
+        )
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "版本记录"
+        view.backgroundColor = DJDesignTokens.Color.background
+        refreshButton.accessibilityIdentifier = "owner-truth-memory-version-history-refresh"
+        navigationItem.rightBarButtonItem = refreshButton
+        configureHeader()
+        configureTableView()
+        useCase.onViewStateChange = { [weak self] state in
+            if Thread.isMainThread {
+                self?.render(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in self?.render(state) }
+            }
+        }
+        render(useCase.viewState)
+        useCase.refresh()
+    }
+
+    private func configureHeader() {
+        headerStack.axis = .vertical
+        headerStack.spacing = 6
+        headerStack.isLayoutMarginsRelativeArrangement = true
+        headerStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 18,
+            leading: DJDesignTokens.Spacing.page,
+            bottom: 14,
+            trailing: DJDesignTokens.Spacing.page
+        )
+
+        titleLabel.text = "正式记忆版本"
+        titleLabel.font = DJDesignTokens.Font.title(24)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+
+        subtitleLabel.text = "当前版本用于回顾与回响；历史版本只保留更正轨迹，不会再次进入上下文。"
+        subtitleLabel.font = DJDesignTokens.Font.body(14)
+        subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
+        subtitleLabel.numberOfLines = 0
+
+        statusLabel.font = DJDesignTokens.Font.label(12)
+        statusLabel.textColor = DJDesignTokens.Color.textSecondary
+        statusLabel.numberOfLines = 0
+        statusLabel.accessibilityIdentifier = "owner-truth-memory-version-history-status"
+
+        [titleLabel, subtitleLabel, statusLabel].forEach(headerStack.addArrangedSubview)
+    }
+
+    private func configureTableView() {
+        tableView.backgroundColor = .clear
+        tableView.separatorStyle = .none
+        tableView.alwaysBounceVertical = true
+        tableView.showsVerticalScrollIndicator = false
+        tableView.dataSource = self
+        tableView.register(
+            OwnerTruthMemoryVersionHistoryCell.self,
+            forCellReuseIdentifier: OwnerTruthMemoryVersionHistoryCell.reuseIdentifier
+        )
+        tableView.accessibilityIdentifier = "owner-truth-memory-version-history-list"
+
+        view.addSubview(headerStack)
+        view.addSubview(tableView)
+        headerStack.translatesAutoresizingMaskIntoConstraints = false
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            headerStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            headerStack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            headerStack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.topAnchor.constraint(equalTo: headerStack.bottomAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+    }
+
+    private func render(_ state: OwnerTruthMemoryVersionHistoryViewState) {
+        renderedState = state
+        refreshButton.isEnabled = state.phase != .loading
+        switch state.phase {
+        case .idle:
+            statusLabel.text = "准备读取版本记录"
+        case .unavailable:
+            statusLabel.text = "当前账号暂不可查看版本记录"
+        case .loading:
+            statusLabel.text = "正在读取版本记录"
+        case .ready:
+            statusLabel.text = "共 \(state.items.count) 个版本"
+        case .failed:
+            statusLabel.text = "版本记录加载失败，请稍后重试"
+        }
+        statusLabel.accessibilityLabel = statusLabel.text
+        tableView.reloadData()
+        onViewStateRendered?(state)
+    }
+
+    @objc private func refreshTapped() {
+        useCase.refresh()
+    }
+}
+
+extension OwnerTruthMemoryVersionHistoryViewController: UITableViewDataSource {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        renderedState.items.count
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        cellForRowAt indexPath: IndexPath
+    ) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(
+            withIdentifier: OwnerTruthMemoryVersionHistoryCell.reuseIdentifier,
+            for: indexPath
+        ) as! OwnerTruthMemoryVersionHistoryCell
+        cell.configure(renderedState.items[indexPath.row])
+        return cell
+    }
+}
+
+private final class OwnerTruthMemoryVersionHistoryCell: UITableViewCell {
+    static let reuseIdentifier = "OwnerTruthMemoryVersionHistoryCell"
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy年M月d日 HH:mm"
+        return formatter
+    }()
+
+    private let cardView = UIView()
+    private let stateLabel = PaddingLabel(horizontalInset: 8, verticalInset: 4)
+    private let summaryLabel = UILabel()
+    private let metadataLabel = UILabel()
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        selectionStyle = .none
+        backgroundColor = .clear
+        contentView.backgroundColor = .clear
+
+        cardView.backgroundColor = DJDesignTokens.Color.surface
+        cardView.layer.cornerRadius = 18
+        cardView.layer.borderWidth = 1
+        cardView.layer.borderColor = DJDesignTokens.Color.textTertiary.withAlphaComponent(0.16).cgColor
+
+        stateLabel.font = DJDesignTokens.Font.label(11)
+        stateLabel.layer.cornerRadius = 10
+        stateLabel.layer.masksToBounds = true
+
+        summaryLabel.font = DJDesignTokens.Font.body(16)
+        summaryLabel.textColor = DJDesignTokens.Color.textPrimary
+        summaryLabel.numberOfLines = 0
+
+        metadataLabel.font = DJDesignTokens.Font.label(12)
+        metadataLabel.textColor = DJDesignTokens.Color.textTertiary
+        metadataLabel.numberOfLines = 2
+
+        contentView.addSubview(cardView)
+        [stateLabel, summaryLabel, metadataLabel].forEach {
+            cardView.addSubview($0)
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+        cardView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
+
+            stateLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 14),
+            stateLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
+
+            summaryLabel.topAnchor.constraint(equalTo: stateLabel.bottomAnchor, constant: 10),
+            summaryLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
+            summaryLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
+
+            metadataLabel.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 8),
+            metadataLabel.leadingAnchor.constraint(equalTo: summaryLabel.leadingAnchor),
+            metadataLabel.trailingAnchor.constraint(equalTo: summaryLabel.trailingAnchor),
+            metadataLabel.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -16),
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(_ item: OwnerTruthMemoryVersionHistoryItemViewState) {
+        let isCurrent = item.status == .current
+        stateLabel.text = isCurrent ? "当前版本" : "历史版本"
+        stateLabel.textColor = isCurrent
+            ? DJDesignTokens.Color.accentDeep
+            : DJDesignTokens.Color.textSecondary
+        stateLabel.backgroundColor = stateLabel.textColor.withAlphaComponent(0.12)
+        summaryLabel.text = item.summary
+        let decision = item.decision == .corrected ? "本人更正" : "本人确认"
+        metadataLabel.text = "第 \(item.versionNumber) 版 · \(decision) · 来源 \(item.sourceCount) 条\n\(Self.dateFormatter.string(from: item.createdAt))"
+        accessibilityIdentifier = "owner-truth-memory-version-history-item"
+        accessibilityLabel = "\(stateLabel.text ?? "版本")，第 \(item.versionNumber) 版，\(item.summary)"
     }
 }
 
@@ -7600,6 +7885,9 @@ struct OwnerTruthCandidateInboxUIQASmokeResult: Codable {
     let reviewHistoryCount: Int
     let reviewHistoryTerminalStatesVisible: Bool
     let reviewHistoryMemoryStateVisible: Bool
+    let memoryVersionHistoryVisible: Bool
+    let memoryVersionHistoryCount: Int
+    let memoryVersionHistoryCurrentStateVisible: Bool
     let launchArgument: String
     let failureReason: String?
 
@@ -7630,8 +7918,11 @@ enum OwnerTruthCandidateInboxUIQASmoke {
         controller.onViewStateRendered = { [weak controller] state in
             scenario.consume(state, controller: controller)
         }
-        controller.onHistoryViewStateRenderedForUIQA = { state in
-            scenario.consumeHistory(state)
+        controller.onHistoryViewStateRenderedForUIQA = { state, historyController in
+            scenario.consumeHistory(state, controller: historyController)
+        }
+        controller.onMemoryVersionHistoryViewStateRenderedForUIQA = { state in
+            scenario.consumeMemoryVersionHistory(state)
         }
         return controller
     }
@@ -7658,6 +7949,9 @@ enum OwnerTruthCandidateInboxUIQASmoke {
             reviewHistoryCount: 0,
             reviewHistoryTerminalStatesVisible: false,
             reviewHistoryMemoryStateVisible: false,
+            memoryVersionHistoryVisible: false,
+            memoryVersionHistoryCount: 0,
+            memoryVersionHistoryCurrentStateVisible: false,
             launchArgument: OwnerTruthCandidateReviewQAGate.launchArgument,
             failureReason: reason
         )
@@ -7684,6 +7978,9 @@ private final class CandidateInboxUIQAScenario {
     private var formalMemoryPresentationText: String?
     private var batchAcceptedCount = 0
     private var batchSequenceCompleted = false
+    private var reviewHistoryCount = 0
+    private var reviewHistoryTerminalStatesVisible = false
+    private var reviewHistoryMemoryStateVisible = false
 
     func consume(
         _ state: OwnerTruthCandidateInboxViewState,
@@ -7733,7 +8030,10 @@ private final class CandidateInboxUIQAScenario {
         }
     }
 
-    func consumeHistory(_ state: OwnerTruthCandidateReviewHistoryViewState) {
+    func consumeHistory(
+        _ state: OwnerTruthCandidateReviewHistoryViewState,
+        controller: OwnerTruthCandidateReviewHistoryViewController?
+    ) {
         guard !didWrite else { return }
         if state.phase == .failed || state.phase == .unavailable {
             didWrite = true
@@ -7753,6 +8053,30 @@ private final class CandidateInboxUIQAScenario {
             return
         }
 
+        reviewHistoryCount = state.items.count
+        reviewHistoryTerminalStatesVisible = terminalStatesVisible
+        reviewHistoryMemoryStateVisible = memoryStateVisible
+        DispatchQueue.main.async { [weak controller] in
+            controller?.runUIQAOpenFirstMemoryVersionHistory()
+        }
+    }
+
+    func consumeMemoryVersionHistory(_ state: OwnerTruthMemoryVersionHistoryViewState) {
+        guard !didWrite else { return }
+        if state.phase == .failed || state.phase == .unavailable {
+            didWrite = true
+            OwnerTruthCandidateInboxUIQASmoke.writeFailure("memoryVersionHistoryUnavailable")
+            return
+        }
+        guard state.phase == .ready else { return }
+        let currentStateVisible = state.items.first?.status == .current
+            && state.items.filter({ $0.status == .current }).count == 1
+        guard !state.items.isEmpty, currentStateVisible else {
+            didWrite = true
+            OwnerTruthCandidateInboxUIQASmoke.writeFailure("memoryVersionHistoryContractMismatch")
+            return
+        }
+
         didWrite = true
         let result = OwnerTruthCandidateInboxUIQASmokeResult(
             completed: OwnerTruthCandidateReviewQAGate.isEnabled
@@ -7762,8 +8086,9 @@ private final class CandidateInboxUIQAScenario {
                 && reviewActionsAvailable
                 && batchAcceptedCount == batchCandidateCount
                 && formalMemoryPresentationVisible
-                && terminalStatesVisible
-                && memoryStateVisible,
+                && reviewHistoryTerminalStatesVisible
+                && reviewHistoryMemoryStateVisible
+                && currentStateVisible,
             qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
             candidateVisible: candidateVisible,
             candidatePreviewVisible: candidatePreviewVisible,
@@ -7780,9 +8105,12 @@ private final class CandidateInboxUIQAScenario {
             batchAcceptedCount: batchAcceptedCount,
             batchSequenceCompleted: batchSequenceCompleted,
             reviewHistoryVisible: true,
-            reviewHistoryCount: state.items.count,
-            reviewHistoryTerminalStatesVisible: terminalStatesVisible,
-            reviewHistoryMemoryStateVisible: memoryStateVisible,
+            reviewHistoryCount: reviewHistoryCount,
+            reviewHistoryTerminalStatesVisible: reviewHistoryTerminalStatesVisible,
+            reviewHistoryMemoryStateVisible: reviewHistoryMemoryStateVisible,
+            memoryVersionHistoryVisible: true,
+            memoryVersionHistoryCount: state.items.count,
+            memoryVersionHistoryCurrentStateVisible: currentStateVisible,
             launchArgument: OwnerTruthCandidateReviewQAGate.launchArgument,
             failureReason: nil
         )
@@ -7862,6 +8190,52 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
                             ],
                         ]
                     },
+                ],
+                expectedVaultID: vaultID
+            )
+            completion(.success(history))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func fetchOwnerTruthMemoryVersionHistory(
+        vaultID: OwnerTruthVaultID,
+        memoryID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthMemoryVersionHistory, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID,
+              reviewedCandidateIDs.count == 2 else {
+            completion(.failure(CandidateInboxUIQAClientError.invalidVault))
+            return
+        }
+        let allowedMemoryIDs: Set<String> = [
+            "00000000-0000-0000-0000-000000000154",
+            "00000000-0000-0000-0000-000000000158",
+        ]
+        guard allowedMemoryIDs.contains(memoryID.rawValue.uuidString.lowercased()) else {
+            completion(.failure(CandidateInboxUIQAClientError.invalidReview))
+            return
+        }
+        do {
+            let history = try OwnerTruthMemoryVersionHistory(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthMemoryVersionHistory.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
+                    "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+                    "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
+                    "sensitivity": OwnerTruthSensitivityLevel.standard.rawValue,
+                    "memoryStatus": "active",
+                    "versions": [[
+                        "versionNumber": 1,
+                        "status": OwnerTruthMemoryVersionHistoryStatus.current.rawValue,
+                        "decision": OwnerTruthCandidateDecision.accepted.rawValue,
+                        "contentSchemaVersion": "owner-truth-candidate-content-v1",
+                        "content": ["summary": "小时候在院子里听家人讲故事"],
+                        "sourceCount": 1,
+                        "createdAt": "2026-08-08T10:30:00Z",
+                    ]],
                 ],
                 expectedVaultID: vaultID
             )

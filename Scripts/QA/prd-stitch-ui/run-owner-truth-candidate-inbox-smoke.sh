@@ -98,6 +98,9 @@ grep -Eq '"reviewHistoryVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" ||
 grep -Eq '"reviewHistoryCount"[[:space:]]*:[[:space:]]*2' "$RESULT_FILE" || fail "Review history should preserve both reviewed candidates."
 grep -Eq '"reviewHistoryTerminalStatesVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Review history should expose terminal decisions."
 grep -Eq '"reviewHistoryMemoryStateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Review history should expose formal memory activation state."
+grep -Eq '"memoryVersionHistoryVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Activated review history should open formal MemoryVersion history."
+grep -Eq '"memoryVersionHistoryCount"[[:space:]]*:[[:space:]]*1' "$RESULT_FILE" || fail "MemoryVersion history should preserve the current version."
+grep -Eq '"memoryVersionHistoryCurrentStateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "MemoryVersion history should identify exactly one current version."
 grep -Eq '"launchArgument"[[:space:]]*:[[:space:]]*"DJEnableOwnerTruthCandidateReviewQA"' "$RESULT_FILE" || fail "QA launch argument drifted."
 
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null

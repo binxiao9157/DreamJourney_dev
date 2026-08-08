@@ -53,6 +53,9 @@ def main() -> None:
         "struct OwnerTruthCandidateReviewHistory",
         "struct OwnerTruthCandidateReviewHistoryItem",
         "enum OwnerTruthCandidateMemoryActivationStatus",
+        "struct OwnerTruthMemoryVersionHistory",
+        "struct OwnerTruthMemoryVersionHistoryItem",
+        "enum OwnerTruthMemoryVersionHistoryStatus",
         "struct OwnerTruthCandidateReviewCommand",
         "struct OwnerTruthCandidateDecisionResult",
         "enum OwnerTruthCandidateReviewQAGate",
@@ -61,6 +64,7 @@ def main() -> None:
         "struct OwnerTruthCandidateInboxViewState",
         "final class OwnerTruthCandidateReviewUseCase",
         "final class OwnerTruthCandidateReviewHistoryUseCase",
+        "final class OwnerTruthMemoryVersionHistoryUseCase",
         'static let launchArgument = "DJEnableOwnerTruthCandidateReviewQA"',
         "#if DEBUG || UI_QA_SIMULATOR",
         'return ProcessInfo.processInfo.arguments.contains(launchArgument)',
@@ -102,12 +106,17 @@ def main() -> None:
 
     inbox_body = function_body(client, "fetchOwnerTruthCandidateInbox")
     history_body = function_body(client, "fetchOwnerTruthCandidateReviewHistory")
+    memory_history_body = function_body(client, "fetchOwnerTruthMemoryVersionHistory")
     decision_body = function_body(client, "reviewOwnerTruthCandidate")
     for body, path in (
         (inbox_body, 'path: "/v2/vaults/\\(pathComponent(vaultID.rawValue))/candidates"'),
         (
             history_body,
             'path: "/v2/vaults/\\(pathComponent(vaultID.rawValue))/candidate-review-history"',
+        ),
+        (
+            memory_history_body,
+            'path: "/v2/vaults/\\(pathComponent(vaultID.rawValue))/memories/\\(pathComponent(memoryID.rawValue.uuidString))/versions"',
         ),
         (
             decision_body,
@@ -155,6 +164,10 @@ def main() -> None:
         "func testCandidateReviewHistoryUseCaseMapsOwnerAuditAndFencesAccountSwitch()" in tests,
         "Candidate review history lease-fencing test missing",
     )
+    require(
+        "func testMemoryVersionHistoryMapsCurrentAndSupersededVersionsWithLeaseFence()" in tests,
+        "MemoryVersion history parser and lease-fencing test missing",
+    )
     for test_name in (
         "func testCandidateReviewUseCaseMapsInboxAndAcceptsThroughTypedReceipt()",
         "func testCandidateReviewUseCasePreservesCandidateContentForCorrection()",
@@ -190,6 +203,12 @@ def main() -> None:
         "reviewHistoryVisible",
         "reviewHistoryTerminalStatesVisible",
         "reviewHistoryMemoryStateVisible",
+        "final class OwnerTruthMemoryVersionHistoryViewController",
+        "owner-truth-memory-version-history-list",
+        "当前版本",
+        "历史版本",
+        "memoryVersionHistoryVisible",
+        "memoryVersionHistoryCurrentStateVisible",
     ):
         require(required in archive, f"Candidate Inbox QA UI missing: {required}")
     require(
