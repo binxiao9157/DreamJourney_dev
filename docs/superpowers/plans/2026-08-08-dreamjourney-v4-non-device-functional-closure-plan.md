@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余非真机功能闭环计划
 
 日期：2026-08-08  
-状态：`ACTIVE_R1_EFFECT_RECONCILIATION`
+状态：`ACTIVE_R2_COHORT_ADMISSION`
 日常非真机开发唯一入口：本文件
 
 ## 1. 目标
@@ -98,6 +98,15 @@
 - 后端 fake/Postgres smoke、iOS model/UIQA、generic build。
 
 ### ND-R1-02 删除与外部 effect 对账
+
+**执行状态**：`COMPLETE`（2026-08-09）
+
+**实现证据**
+
+- 后端：`main@67bbbbe`，已推送并部署；数据库迁移头仍为 `0084`。
+- iOS：`feature/prd-stitch-ui-adaptation@dc00d61a`。
+- 已实现 access-first 五域对账、逻辑回执幂等、Provider 超时与失败脱敏、有限重试、人工复核证据和恢复后外部资产不复活边界。
+- 已通过后端相关 97 项测试、部署态 Postgres smoke、iOS 合同检查、release QA 检查和 workspace 模拟器构建。
 
 1. 复用现有 provider-effect receipt，统一对象存储、声音、数字人、通知和备份的 `pending / completed / failed / unsupported / unknown`。
 2. 权限撤销必须先于外部删除；Provider 未确认不得显示“已删除完成”。
@@ -232,7 +241,7 @@
 
 ## 14. 当前交接点
 
-- 已完成：`ND-R0-01`、`ND-R1-01`
-- 当前 Work Item：`ND-R1-02 删除与外部 effect 对账`
-- 后续 Work Item：`ND-R2-01 能力级 cohort admission`
+- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`
+- 当前 Work Item：`ND-R2-01 能力级 cohort admission`
+- 后续 Work Item：`ND-R2-02 自动停用与恢复`
 - 任何外部 Gate 缺失均不得暂停可继续的非真机任务。
