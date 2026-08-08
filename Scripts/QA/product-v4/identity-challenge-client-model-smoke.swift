@@ -16,6 +16,10 @@ enum IdentityChallengeClientModelSmoke {
             "clientFlowEnabled": true,
             "challengeEndpoint": "/v2/auth/challenges",
             "verifyEndpointTemplate": "/v2/auth/challenges/{challengeId}/verify",
+            "statusEndpointTemplate": "/v2/auth/challenges/{challengeId}",
+            "stateContractVersion": 1,
+            "deliveryReceiptSupported": true,
+            "deliveryRecoverySupported": true,
             "contractVersion": 1,
         ])
         precondition(synthetic.enabled)
@@ -23,6 +27,7 @@ enum IdentityChallengeClientModelSmoke {
         precondition(!synthetic.productionReady)
         precondition(synthetic.clientFlowEnabled)
         precondition(synthetic.canStartClientFlow)
+        precondition(synthetic.canReadChallengeState)
 
         let challenge = BackendIdentityChallengeContract(json: [
             "status": "accepted",
@@ -30,15 +35,52 @@ enum IdentityChallengeClientModelSmoke {
                 "challengeId": "challenge_test",
                 "purpose": "login",
                 "deliveryMode": "acceptedOnly",
+                "challengeState": "active",
+                "deliveryState": "accepted",
+                "attempt": 0,
+                "maxAttempts": 5,
+                "remainingAttempts": 5,
                 "expiresAt": "2030-07-17T06:00:00.123456+00:00",
                 "retryAfterSeconds": 30,
+                "recoveryState": "available",
+                "recoveryAttempt": 0,
+                "statusEndpoint": "/v2/auth/challenges/challenge_test",
                 "productionReady": false,
+                "stateContractVersion": 1,
                 "contractVersion": 1,
             ],
         ])
         precondition(challenge?.challengeId == "challenge_test")
         precondition(challenge?.retryAfterSeconds == 30)
         precondition(challenge?.productionReady == false)
+        precondition(challenge?.deliveryState == .accepted)
+        precondition(challenge?.remainingAttempts == 5)
+        precondition(challenge?.recoveryState == .available)
+
+        let recovered = BackendIdentityChallengeStateContract(json: [
+            "status": "available",
+            "challenge": [
+                "challengeId": "challenge_test",
+                "purpose": "login",
+                "deliveryMode": "acceptedOnly",
+                "challengeState": "active",
+                "deliveryState": "delivered",
+                "attempt": 1,
+                "maxAttempts": 5,
+                "remainingAttempts": 4,
+                "retryAfterSeconds": 30,
+                "recoveryState": "notRequired",
+                "recoveryAttempt": 1,
+                "statusEndpoint": "/v2/auth/challenges/challenge_test",
+                "expiresAt": "2030-07-17T06:00:00.123456+00:00",
+                "productionReady": true,
+                "stateContractVersion": 1,
+                "contractVersion": 1,
+            ],
+        ])
+        precondition(recovered?.state.deliveryState == .delivered)
+        precondition(recovered?.state.attempt == 1)
+        precondition(recovered?.state.recoveryAttempt == 1)
 
         let verified = BackendIdentityVerificationContract(json: [
             "status": "verified",
@@ -62,6 +104,26 @@ enum IdentityChallengeClientModelSmoke {
                 "purpose": "login",
                 "deliveryMode": "acceptedOnly",
                 "expiresAt": "2030-07-17T06:00:00Z",
+                "contractVersion": 1,
+            ],
+        ]) == nil)
+        precondition(BackendIdentityChallengeStateContract(json: [
+            "status": "available",
+            "challenge": [
+                "challengeId": "challenge_test",
+                "purpose": "login",
+                "deliveryMode": "acceptedOnly",
+                "challengeState": "active",
+                "deliveryState": "delivered",
+                "attempt": 1,
+                "maxAttempts": 5,
+                "remainingAttempts": 4,
+                "retryAfterSeconds": 30,
+                "recoveryState": "available",
+                "recoveryAttempt": 1,
+                "statusEndpoint": "/v2/auth/challenges/challenge_test",
+                "expiresAt": "2030-07-17T06:00:00Z",
+                "stateContractVersion": 1,
                 "contractVersion": 1,
             ],
         ]) == nil)

@@ -5264,11 +5264,18 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
     struct BackendErrorContext: Equatable {
         let code: String?
         let operationId: String?
+        let retryAfterSeconds: Int?
         let detail: String
 
-        init(code: String? = nil, operationId: String? = nil, detail: String) {
+        init(
+            code: String? = nil,
+            operationId: String? = nil,
+            retryAfterSeconds: Int? = nil,
+            detail: String
+        ) {
             self.code = code
             self.operationId = operationId
+            self.retryAfterSeconds = retryAfterSeconds
             self.detail = detail
         }
     }
@@ -8763,6 +8770,28 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         }
     }
 
+    func fetchIdentityChallengeState(
+        challengeId: String,
+        recoverDelivery: Bool = false,
+        completion: @escaping (Result<BackendIdentityChallengeStateContract, Error>) -> Void
+    ) {
+        let suffix = recoverDelivery ? "?recover=true" : ""
+        requestJSON(
+            path: "/v2/auth/challenges/\(pathComponent(challengeId))\(suffix)",
+            method: .get,
+            payload: nil,
+            authPolicy: .publicRequest,
+            allowsRefresh: false
+        ) { result in
+            completion(result.flatMap { object in
+                guard let state = BackendIdentityChallengeStateContract(json: object) else {
+                    return .failure(ClientError.invalidJSONResponse)
+                }
+                return .success(state)
+            })
+        }
+    }
+
     func verifyIdentityChallenge(
         challengeId: String,
         verificationCode: String,
@@ -10776,6 +10805,9 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             if let detail = object["detail"] as? [String: Any] {
                 let code = normalizedBackendErrorString(detail["code"])
                 let operationId = normalizedBackendErrorString(detail["operationId"])
+                let retryAfterSeconds = normalizedBackendErrorInt(
+                    detail["retryAfterSeconds"]
+                )
                 let message = normalizedBackendErrorString(detail["message"])
                     ?? normalizedBackendErrorString(detail["error"])
                     ?? code
@@ -10783,6 +10815,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 return BackendErrorContext(
                     code: code,
                     operationId: operationId,
+                    retryAfterSeconds: retryAfterSeconds,
                     detail: message
                 )
             }
@@ -10809,6 +10842,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         guard let value = value as? String else { return nil }
         let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func normalizedBackendErrorInt(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
     }
 
     private func authHeaders(

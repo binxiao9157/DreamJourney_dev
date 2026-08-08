@@ -246,7 +246,10 @@ final class LoginViewController: UIViewController {
                     capability: capability
                 )
             case .failure(let error):
-                self.showLoginAlert(title: "身份验证失败", message: error.localizedDescription)
+                self.showLoginAlert(
+                    title: "身份验证失败",
+                    message: self.identityChallengeFailureMessage(error)
+                )
             }
         }
     }
@@ -260,9 +263,27 @@ final class LoginViewController: UIViewController {
             showLoginAlert(title: "验证已过期", message: "请重新发起身份验证。")
             return
         }
-        let verificationMessage = capability.providerMode == "synthetic"
-            ? "请输入测试环境验证码完成身份验证。"
-            : "请输入验证码完成身份验证。"
+        let verificationMessage: String
+        if capability.providerMode == "synthetic" {
+            verificationMessage = "请输入测试环境验证码完成身份验证。"
+        } else {
+            switch challenge.deliveryState {
+            case .delivered:
+                verificationMessage = "验证码已送达，请输入验证码完成身份验证。"
+            case .accepted:
+                verificationMessage = challenge.recoveryState == .available
+                    ? "验证码请求已受理；若暂未收到，请稍后重试。"
+                    : "验证码请求已受理，请输入验证码完成身份验证。"
+            case .unknown:
+                verificationMessage = "验证码送达状态暂未确认，请稍后查看。"
+            case .undeliverable:
+                showLoginAlert(
+                    title: "验证码未送达",
+                    message: "本次验证无法继续，请稍后重新发起。"
+                )
+                return
+            }
+        }
         let alert = UIAlertController(
             title: "验证手机号",
             message: verificationMessage,
@@ -317,6 +338,17 @@ final class LoginViewController: UIViewController {
             }
         })
         present(alert, animated: true)
+    }
+
+    private func identityChallengeFailureMessage(_ error: Error) -> String {
+        guard let clientError = error as? DreamJourneyBackendClient.ClientError,
+              let context = clientError.backendErrorContext,
+              context.code == "identity_challenge_rate_limited",
+              let retryAfterSeconds = context.retryAfterSeconds,
+              retryAfterSeconds > 0 else {
+            return error.localizedDescription
+        }
+        return "请求过于频繁，请在 \(retryAfterSeconds) 秒后重试。"
     }
 
     private func handleBackendLoginSuccess(_ response: [String: Any], phone: String) {

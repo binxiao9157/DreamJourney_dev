@@ -10,6 +10,7 @@ LOGIN = ROOT / "DreamJourney/Sources/Modules/Auth/LoginViewController.swift"
 CONTRACT = ROOT / "DreamJourney/Sources/Services/BackendIdentityChallenge.swift"
 PROJECT = ROOT / "DreamJourney.xcodeproj/project.pbxproj"
 MODEL_RUNNER = ROOT / "Scripts/QA/product-v4/run-identity-challenge-client-model-smoke.sh"
+R4_GATE = ROOT / "Scripts/QA/product-v4/run-identity-challenge-r4-client-gate.sh"
 
 
 def require(condition: bool, message: str) -> None:
@@ -20,6 +21,7 @@ def require(condition: bool, message: str) -> None:
 def main() -> None:
     require(CONTRACT.is_file(), "typed identity challenge contract is missing")
     require(MODEL_RUNNER.is_file(), "identity challenge model smoke runner is missing")
+    require(R4_GATE.is_file(), "identity challenge R4 client gate is missing")
     contract = CONTRACT.read_text(encoding="utf-8")
     client = CLIENT.read_text(encoding="utf-8")
     login = LOGIN.read_text(encoding="utf-8")
@@ -29,6 +31,7 @@ def main() -> None:
     for symbol in (
         "BackendIdentityChallengeCapability",
         "BackendIdentityChallengeContract",
+        "BackendIdentityChallengeStateContract",
         "BackendIdentityVerificationContract",
     ):
         require(f"struct {symbol}" in contract, f"missing typed contract: {symbol}")
@@ -41,6 +44,10 @@ def main() -> None:
         "subjectId",
         "bindingId",
         "proofReceiptId",
+        "deliveryState",
+        "recoveryState",
+        "remainingAttempts",
+        "stateContractVersion",
     ):
         require(field in contract, f"identity contract field missing: {field}")
 
@@ -48,6 +55,8 @@ def main() -> None:
     require("func createIdentityChallenge(" in client, "identity challenge request use case is missing")
     require("path: \"/v2/auth/challenges\"" in client, "identity challenge endpoint drift")
     require("func verifyIdentityChallenge(" in client, "identity verification use case is missing")
+    require("func fetchIdentityChallengeState(" in client, "identity state recovery use case is missing")
+    require("?recover=true" in client, "identity delivery recovery query is missing")
     require("/v2/auth/challenges/\(pathComponent(challengeId))/verify" in client, "identity verify endpoint drift")
     require("guard try self.adoptAuthSession(from: object) else" in client, "verified identity must yield a valid user session")
     require('"identityType": "phone"' in client, "challenge request must use the typed phone identity field")
