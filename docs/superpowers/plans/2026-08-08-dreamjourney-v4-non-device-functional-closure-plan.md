@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余非真机功能闭环计划
 
 日期：2026-08-08  
-状态：`ACTIVE_R5_ECHO_BINDING`
+状态：`ACTIVE_R6_CLOSED_BETA_API`
 日常非真机开发唯一入口：本文件
 
 ## 1. 目标
@@ -265,6 +265,16 @@
 
 ### ND-R5-02 Echo 绑定与证据
 
+**执行状态**：`COMPLETE_NON_DEVICE_VERIFIED`（2026-08-09）
+
+**实现证据**
+
+- 后端：`main@47a9ff6`，已推送、部署且 `/ready` 正常；`tencentAudioDrive` 合成强制使用 `voice-synthesis-binding-v2`，在 Provider 调用前校验正整数且精确匹配的 `expectedProfileVersion`，并绑定 owner、profile、角色、用途、输出模式、audio owner 和规范化文本 SHA-256。
+- iOS：`feature/prd-stitch-ui-adaptation@8d576257`，只接受 binding v2；账号/角色切换、停止、过期、旧 generation、绑定不匹配、非法 PCM 和 Provider 失败均拒绝旧音频进入 Echo。
+- 部署态 smoke 鉴权修正：`feature/prd-stitch-ui-adaptation@3a2de529`。用户拥有的 profile 路由必须使用该 owner 的短期 `BACKEND_USER_ACCESS_TOKEN`；共享机器 token 不再被 smoke 当作用户身份。缺少短期 owner token 的真实合成探针标记 `WAITING_EXTERNAL_GATE`，不降低生产鉴权。
+- 已通过后端 29 项定向 Gate、1967 项全量测试、FastAPI 与既有 Gate、iOS runtime fault injection、公开 release regression、generic build、release QA package、`git diff --check`。
+- 非真机证据证明 `audioOwner=fallbackMuted` 在取消/失败后收敛、provider log id 脱敏、原始文本和 PCM 不进入证据包；真实音色听感、扬声器、口型、打断和麦克风恢复继续属于真机 Gate。
+
 1. 继续强制 `owner + voiceProfileId + profileVersion + role + purpose + textHash + outputMode` 绑定。
 2. 角色/账号切换、停止、过期和旧回调必须被 generation token 丢弃。
 3. 证据包保持脱敏，输出 `audioOwner / fallbackReason / providerLogId hash / binding result`。
@@ -328,7 +338,7 @@
 
 ## 14. 当前交接点
 
-- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`、`ND-R4-01`、`ND-R4-02`、`ND-R5-01`
-- 当前 Work Item：`ND-R5-02 Echo 绑定与证据`
-- 后续 Work Item：`ND-R6-01 闭测 API 收敛`
+- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`、`ND-R4-01`、`ND-R4-02`、`ND-R5-01`、`ND-R5-02`
+- 当前 Work Item：`ND-R6-01 闭测 API 收敛`
+- 后续 Work Item：`ND-R6-02 iOS default-off 壳层`
 - 任何外部 Gate 缺失均不得暂停可继续的非真机任务。
