@@ -215,6 +215,17 @@
 
 ### ND-R4-01 COS/扫描器部署前矩阵
 
+**执行状态**：`COMPLETE_WAITING_EXTERNAL_GATE`（2026-08-09）
+
+**已完成证据**
+
+- 后端：`main@e48c3af`，在建立 COS 客户端前校验 endpoint 主机与 region 一致；缺配置、HTTP endpoint、缺 SSE、错误 region 或 KMS 组合错误均保持 `providerConfigurationIncomplete`。
+- COS 删除只有在 Provider 返回 2xx 回执且后续 HEAD 明确证明对象不存在时才记录完成；未知回执、HEAD 不可用或对象仍存在均 fail-closed，由现有删除 worker 保持 `partial/retryable`。
+- 组合 Gate `scripts/run-backend-owner-truth-media-provider-matrix-gate.sh` 已纳入标准 `scripts/verify_backend.sh`，使用 fake Provider 覆盖 ClamAV clean/EICAR、离线、超时、签名库错误，以及 COS 配置、加密、HEAD 校验和删除不确定状态。
+- 已通过 44 项 R4 定向测试、185+33 项 Stage 2 Gate、标准后端 1955 项测试及全部既有合同/smoke、FastAPI smoke、`git diff --check`。
+- 后端 `e48c3af` 已部署；部署态 `/ready`、runtime capability smoke 与容器内 COS region Gate 通过。服务器未配置真实 COS/ClamAV，`ownerTruthMediaStorage` 继续 fail-closed，未开放公开媒体入口。
+- 真实 `PUT -> HEAD -> readback -> DELETE -> HEAD 404` 与真实 ClamAV sidecar smoke 标记为 `WAITING_EXTERNAL_GATE`，等待私有 bucket、最小权限凭据和 sidecar 容量；不阻断后续非真机任务。
+
 1. 保持腾讯 COS 为唯一首发存储，不新增第二生产 adapter。
 2. 完成缺配置、错误 region、SSE 缺失、扫描器离线/超时、EICAR、删除未知回执的组合 Gate。
 3. 真实配置继续标记 `WAITING_EXTERNAL_GATE`，不在仓库保存凭据。
@@ -298,7 +309,7 @@
 
 ## 14. 当前交接点
 
-- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`
-- 当前 Work Item：`ND-R4-01 COS/扫描器部署前矩阵`
-- 后续 Work Item：`ND-R4-02 OTP Provider 合同`
+- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`、`ND-R4-01`
+- 当前 Work Item：`ND-R4-02 OTP Provider 合同`
+- 后续 Work Item：`ND-R5-01 真实 Provider 边界证明`
 - 任何外部 Gate 缺失均不得暂停可继续的非真机任务。
