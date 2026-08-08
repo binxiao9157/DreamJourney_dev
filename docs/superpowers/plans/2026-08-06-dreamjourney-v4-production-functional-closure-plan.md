@@ -1,8 +1,9 @@
 # DreamJourney V4 剩余生产功能闭环计划
 
 日期：2026-08-06
-状态：`A0_COMPLETE_A1_PROVIDER_CONFIGURATION_PENDING_A2_CODE_AND_ISOLATED_E2E_COMPLETE_C0_C2_NON_DEVICE_VERIFIED`
-日常开发唯一入口：本文件
+状态：`PRODUCTION_PROVIDER_AND_TRUE_DEVICE_GATE_REFERENCE`
+用途：保留真实 Provider、部署、真机和分层发布 Gate；不再作为日常非真机开发入口。
+日常非真机开发唯一入口：`docs/superpowers/plans/2026-08-08-dreamjourney-v4-non-device-functional-closure-plan.md`
 前置基线：`docs/superpowers/plans/2026-08-05-dreamjourney-v4-accelerated-functional-closure-plan.md` 已完成，作为非真机合同、默认关闭策略与证据基线，不再重复开发。
 
 ## 1. 目标与口径
