@@ -32,7 +32,7 @@
 
 - iOS：`feature/prd-stitch-ui-adaptation@1d4d51f2`
 - 后端：`main@23ba7a7`
-- 已部署后端：此前记录为 `f819c2e`，健康检查、Postgres readiness 与 A0 runtime capability smoke 已验证；本轮本地后端安全修复尚未推送或部署。
+- 已部署后端：`23ba7a7`，2026-08-08 已完成 API 重建、migration `0083` apply/verify、容器 `/ready`、公网 readiness 与 runtime capability smoke；本轮未改变任何真实 Provider 的启用状态。
 - 完整非真机证据：`docs/superpowers/status/2026-08-06-v4-unified-non-device-evidence-p3-s2.md`。
 
 ## 3. 执行原则
@@ -261,7 +261,7 @@ flowchart LR
 - C1/C2 组合 Gate 将严格 profile eligibility、删除撤权、PCM 格式和 Echo 路由静态合同与后端 fake-provider lifecycle smoke 合并，默认不纳入公开 MVP 回归。
 - C2 runtime fault-injection Gate 额外在模拟器运行时注入 accepted profile 暂停、删除、过期、角色 generation 失效、账户 lease 切换、停止、Provider 超时、binding 不匹配和 PCM 格式错误；所有旧分片必须被丢弃，音频 owner 收敛为 `fallbackMuted`，且 trace 仅导出脱敏 profile/version/role/output/fallback 证据。
 - 2026-08-08 已将该 Gate 纳入统一最小发布回归，并重新完成模拟器运行时故障注入、audio-owner 协调和连续对话 smoke。回归 runner 现在会保留失败命令的真实退出码，删除回执未确认时的状态卡会明确说明不把第三方清理误报为完成。
-- 本轮本地后端还补齐了明确不具资格的客户端草稿 hard deny 与 voice-profile 测试存储隔离；提交为 `23ba7a7`，需在下一次后端部署时一并上线。
+- 后端已补齐明确不具资格的客户端草稿 hard deny 与 voice-profile 测试存储隔离；提交 `23ba7a7` 已于 2026-08-08 部署。线上 route runtime-only 审计确认 173 条路由全部分类、无未分类项且全局模式仍为 `shadow`；该无写入探针不替代缺少 V2 OTP 测试凭据时的跨账号完整审计。
 - 未关闭项：真实 accepted profile 的试听音色与 Echo 数字人音色一致性、真实 Provider 故障、音频路由、打断和麦克风恢复必须在真机单独验收。
 
 ## 8. Phase D：M2 成年授权 Publication / Visitor / 在世数字人
