@@ -214,6 +214,14 @@ flowchart LR
 **完成定义**：只有满足 V4 条件的本人可申请训练，所有绕过路径都在服务端拒绝。
 **阻断输入**：成年人强身份/活体 Provider、声音 Provider 生产权限、数据处理/保留批准。
 
+**执行状态（2026-08-08）**：`CODE_COMPLETE_NON_DEVICE_VERIFIED / DEFAULT_OFF`
+
+- 后端新增独立的强身份/活体 Provider port。`/voice/profiles` 不再信任 iOS 的 `subjectEligibility`、同意版本或授权文案；只有服务端签发的样本授权回执与当前、同账号绑定的“在世成年人 + 活体”回执同时存在时，才会调用训练 Provider。
+- 未配置身份/活体 Provider 时，训练返回明确的 `voice_identity_verification_unavailable`，不会因声音 Provider 已配置而开放；跨账号、family、未成年人、逝者、未知状态和活体失败均在 Provider 调用前 hard deny。
+- `/config/runtime.voiceClone` 新增 `identityEligibilityProviderReady`、`trainingAdmissionEnabled` 及原因字段。iOS typed consumer 和旧 profile 投影均 fail-closed：缺少 `consent.source=serverReceipt` 的历史 profile 不会再被视为可用于 Echo。
+- 后端 `538cdf5` 已部署到生产 Postgres API；C0 Gate、声音 lifecycle/sample/synthesis 回归、iOS runtime 静态检查和 Debug 模拟器构建均已通过。部署态 smoke 已确认 `/ready=200`，且未配置身份 Provider 时保持关闭。实现与部署说明见后端 `docs/backend/2026-08-08-voice-clone-c0-admission-gate.md`。
+- 本项不关闭 M1 发布 Gate：仍需要经过审批的成年人强身份/活体 Provider、声音 Provider 生产权限与删除/保留规则、真实训练/试听/Echo/真机验收及独立发布批准。
+
 ### C1：真实训练、试听接受与删除回执
 
 **工作项**

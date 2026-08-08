@@ -901,6 +901,11 @@ struct VoiceCloneRuntimeCapability {
     let enabled: Bool
     let provider: String
     let realProviderReady: Bool
+    let identityEligibilityProviderReady: Bool
+    let identityEligibilityProvider: String
+    let trainingAdmissionEnabled: Bool
+    let trainingAdmissionReason: String
+    let trainingAdmissionContractVersion: Int
     let trainEndpoint: String
     let queryEndpoint: String
     let synthesisEndpoint: String
@@ -921,7 +926,10 @@ struct VoiceCloneRuntimeCapability {
     let axisSnapshot: RuntimeCapabilitySnapshot
 
     var canTrain: Bool {
-        axisSnapshot.isRuntimeContractUsable && realProviderReady
+        axisSnapshot.isRuntimeContractUsable
+            && realProviderReady
+            && identityEligibilityProviderReady
+            && trainingAdmissionEnabled
     }
 
     var canQuery: Bool {
@@ -937,6 +945,11 @@ struct VoiceCloneRuntimeCapability {
             "enabled": isBackendConfigured,
             "provider": "localFallback",
             "realProviderReady": isBackendConfigured,
+            "identityEligibilityProviderReady": false,
+            "identityEligibilityProvider": "unavailable",
+            "trainingAdmissionEnabled": false,
+            "trainingAdmissionReason": "identityLivenessProviderUnavailable",
+            "trainingAdmissionContractVersion": 1,
             "synthesisProviderReady": isBackendConfigured,
             "fallbackMode": isBackendConfigured ? "backendConfigured" : "backendNotConfigured",
             "tencentAudioDrive": [
@@ -951,6 +964,11 @@ struct VoiceCloneRuntimeCapability {
         enabled = json?["enabled"] as? Bool ?? false
         provider = json?["provider"] as? String ?? "unknown"
         realProviderReady = json?["realProviderReady"] as? Bool ?? false
+        identityEligibilityProviderReady = json?["identityEligibilityProviderReady"] as? Bool ?? false
+        identityEligibilityProvider = json?["identityEligibilityProvider"] as? String ?? "unavailable"
+        trainingAdmissionEnabled = json?["trainingAdmissionEnabled"] as? Bool ?? false
+        trainingAdmissionReason = json?["trainingAdmissionReason"] as? String ?? "identityLivenessProviderUnavailable"
+        trainingAdmissionContractVersion = Self.intValue(json?["trainingAdmissionContractVersion"]) ?? 1
         trainEndpoint = json?["trainEndpoint"] as? String ?? "/voice/profiles"
         queryEndpoint = json?["queryEndpoint"] as? String ?? "/voice/profiles/{user_id}/{voice_profile_id}/refresh"
         synthesisEndpoint = json?["synthesisEndpoint"] as? String ?? "/voice/synthesis"
@@ -2080,12 +2098,14 @@ enum VoiceProfileLifecycleState: String, Codable {
 struct VoiceCloneProfileConsentContract {
     let purpose: String?
     let version: String?
+    let source: String?
     let state: String
     let expiresAt: String?
 
     init(json: [String: Any]?) {
         purpose = (json?["purpose"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         version = (json?["version"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        source = (json?["source"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         state = (json?["state"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "missing"
         expiresAt = (json?["expiresAt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -2095,7 +2115,7 @@ struct VoiceCloneProfileConsentContract {
     }
 
     var grantsPrivateSynthesis: Bool {
-        isActive && purpose == "private_synthesis"
+        isActive && source == "serverReceipt" && purpose == "private_synthesis"
     }
 }
 

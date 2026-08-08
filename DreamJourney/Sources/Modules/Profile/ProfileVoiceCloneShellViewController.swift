@@ -367,9 +367,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     @objc private func authorizationChanged() {
-        let message = authorizationSwitch.isOn
-            ? "已确认授权，可以选择音频样本提交训练。"
-            : "确认授权后才能提交声音样本。"
+        let message = voiceTrainingAdmissionHint()
         authorizationHintLabel?.text = message
         feedbackLabel?.text = message
         updateActionAvailability()
@@ -830,6 +828,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
                 if case .success(let capability) = result {
                     self.voiceCloneRuntimeCapability = capability
                 }
+                self.authorizationHintLabel?.text = self.voiceTrainingAdmissionHint()
                 self.synthesisStatusValueLabel?.text = self.voiceSynthesisStatusText(for: self.snapshot)
                 self.updateActionAvailability()
             }
@@ -887,6 +886,23 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     private var canSubmitVoiceTraining: Bool {
         guard voiceCloneRuntimeCapability.canTrain else { return false }
         return snapshot.sampleStatus != .failed || snapshot.canRetryTraining
+    }
+
+    private func voiceTrainingAdmissionHint() -> String {
+        guard authorizationSwitch.isOn else {
+            return "确认授权后才能提交声音样本。"
+        }
+        guard voiceCloneRuntimeCapability.canTrain else {
+            switch voiceCloneRuntimeCapability.trainingAdmissionReason {
+            case "identityLivenessProviderUnavailable":
+                return "身份与活体核验服务尚未完成配置，暂不能提交训练。"
+            case "voiceCloneProviderUnavailable":
+                return "音色训练服务暂不可用，请稍后再试。"
+            default:
+                return "当前暂不能提交训练，请稍后刷新服务状态。"
+            }
+        }
+        return "已确认授权，可以选择音频样本提交训练。"
     }
 
     private var canRefreshVoiceTrainingStatus: Bool {
