@@ -155,6 +155,8 @@ let requiredDocs = [
     "docs/plans/task_16_p1-knowledge-governance-source-cascade.md",
     "docs/superpowers/status/2026-07-11-knowledge-governance-source-cascade.md",
     "docs/superpowers/status/2026-07-11-knowledge-operation-receipt-minimization.md",
+    "docs/superpowers/status/2026-08-09-v4-non-device-functional-closure-handoff.md",
+    "docs/superpowers/status/2026-08-09-v4-non-device-functional-closure-manifest.json",
 ]
 
 for doc in requiredDocs {

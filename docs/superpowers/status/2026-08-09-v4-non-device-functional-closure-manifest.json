@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "dreamjourney-v4-non-device-functional-closure-handoff-v1",
+  "generatedAt": "2026-08-08T21:51:39.020471+00:00",
+  "iosRevision": "f481c2f26a852e220048b7cab6023eaf77888414",
+  "backendRevision": "e8eacc5c84fb9863d1b5d35266a9e3945ec7016e",
+  "executionStatus": "passed",
+  "commandCount": 26,
+  "passedCommandCount": 26,
+  "releaseDecision": "NO_GO",
+  "conclusions": {
+    "nonDevice": "NON_DEVICE_CODE_COMPLETE",
+    "externalProvider": "WAITING_EXTERNAL_PROVIDER",
+    "trueDevice": "WAITING_TRUE_DEVICE"
+  },
+  "lanes": [
+    {
+      "id": "m0",
+      "commandCount": 7,
+      "status": "passed"
+    },
+    {
+      "id": "stage2",
+      "commandCount": 5,
+      "status": "passed"
+    },
+    {
+      "id": "m1",
+      "commandCount": 7,
+      "status": "passed"
+    },
+    {
+      "id": "m2",
+      "commandCount": 7,
+      "status": "passed"
+    }
+  ],
+  "externalGates": [
+    "realIdentityProvider",
+    "mediaStorageAndProcessingProvider",
+    "voiceTrainingAndDeletionReceipts",
+    "publicationIndexAndProviderCleanupReceipts",
+    "adultIdentitySafetyAndRegulatoryReleaseGate"
+  ],
+  "trueDeviceGates": [
+    "m0PhysicalDeviceAcceptance",
+    "mediaCaptureAndLargeFileAcceptance",
+    "voiceQualityAndAudioRouteAcceptance",
+    "visitorAndDigitalHumanLongSessionAcceptance"
+  ],
+  "evidencePath": "tmp/qa/v4-unified-non-device-evidence/20260809-final-non-device/manifest.json"
+}

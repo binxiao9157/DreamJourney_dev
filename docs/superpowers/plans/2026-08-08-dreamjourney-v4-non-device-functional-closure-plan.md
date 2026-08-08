@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余非真机功能闭环计划
 
 日期：2026-08-08  
-状态：`ACTIVE_R7_UNIFIED_NON_DEVICE_GATE`
+状态：`COMPLETE_NON_DEVICE`（2026-08-09）
 日常非真机开发唯一入口：本文件
 
 ## 1. 目标
@@ -322,6 +322,14 @@
 
 ### ND-R7-01 组合 runner
 
+**执行状态**：`COMPLETE`（2026-08-09）
+
+**实现证据**
+
+- iOS：`feature/prd-stitch-ui-adaptation@f481c2f2`，统一 registry 扩展为 4 条 lane、26 个命令；覆盖 M0 Owner Truth/导出删除/能力控制、Stage 2 媒体与 OTP fail-closed、M1 声音复刻与数字人运行时、M2 Publication/Visitor 默认关闭合同。
+- runner 对命令输出进行环境值脱敏，保留逐命令日志、仓库 revision、lane 状态和 remaining Gate；非真机证据固定保持 `releaseDecision=NO_GO`，不会替代外部 Provider、产品法律或真机验收。
+- runner 合同检查、release QA package 和四条 lane 分别执行通过；干净提交上的最终全量执行为 `26/26` 通过。
+
 统一运行并生成脱敏 manifest：
 
 1. M0 Source/Candidate/Memory/Context。
@@ -333,6 +341,15 @@
 7. iOS 相关静态检查、模拟器 UIQA 和 generic build。
 
 ### ND-R7-02 最终交接
+
+**执行状态**：`COMPLETE`（2026-08-09）
+
+**最终证据**
+
+- 状态文档：`docs/superpowers/status/2026-08-09-v4-non-device-functional-closure-handoff.md`。
+- 脱敏摘要：`docs/superpowers/status/2026-08-09-v4-non-device-functional-closure-manifest.json`。
+- 本地完整证据：`tmp/qa/v4-unified-non-device-evidence/20260809-final-non-device/manifest.json` 及同目录逐 lane 日志/UIQA 产物。
+- 结论严格拆分为 `NON_DEVICE_CODE_COMPLETE`、`WAITING_EXTERNAL_PROVIDER`、`WAITING_TRUE_DEVICE`；M1/M2 和外部依赖能力继续保持 fail-closed/default-off。
 
 输出三份互不混淆的结论：
 
@@ -358,6 +375,6 @@
 ## 14. 当前交接点
 
 - 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`、`ND-R4-01`、`ND-R4-02`、`ND-R5-01`、`ND-R5-02`、`ND-R6-01`
-- 当前 Work Item：`ND-R7-01 统一非真机组合 runner`
-- 后续 Work Item：`ND-R7-02 最终交接`
+- 当前 Work Item：无；本计划可独立实施的非真机任务已完成。
+- 后续：按最终交接清单分别补外部 Provider、产品/法律和真实设备证据，不得回写为本计划代码缺口。
 - 任何外部 Gate 缺失均不得暂停可继续的非真机任务。
