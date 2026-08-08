@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余非真机功能闭环计划
 
 日期：2026-08-08  
-状态：`ACTIVE_R2_COHORT_ADMISSION`
+状态：`ACTIVE_R2_AUTOMATIC_DISABLE`
 日常非真机开发唯一入口：本文件
 
 ## 1. 目标
@@ -119,6 +119,16 @@
 ## 7. R2：M0 受控 cohort 与运行控制
 
 ### ND-R2-01 能力级 cohort admission
+
+**执行状态**：`COMPLETE`（2026-08-09）
+
+**实现证据**
+
+- 后端功能：`main@cf07c61`；部署态 smoke 修正：`main@3546043`。均已推送，服务器代码已同步，API 已按 `cf07c61` 重建，数据库迁移头保持 `0084`。
+- iOS：`feature/prd-stitch-ui-adaptation@460d1b47`。
+- 媒体采集、媒体处理和数据导出已使用独立 feature decision；采集绑定 `ownerTruthMediaStorage`，处理绑定 `ownerTruthMediaProcessing`，能力不可用时返回 `capabilityUnavailable`。
+- 客户端传入 `cohort=closedPilotAdultSelf` 不能自入组；服务端仍返回 `unassigned`，只有服务端 allowlist 能授予 cohort。
+- 已通过后端相关 165 项测试、线上 release-policy/runtime capability smoke、新增 iOS 静态组合 Gate、release QA package、`git diff --check` 和 workspace 模拟器构建。
 
 1. 复用现有 release policy 和 `closedPilotAdultSelf`，为媒体摄入、处理、Candidate、导出和删除分别判定。
 2. cohort 只能由服务端审批，客户端 launch arg 不能获得真实能力。
@@ -241,7 +251,7 @@
 
 ## 14. 当前交接点
 
-- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`
-- 当前 Work Item：`ND-R2-01 能力级 cohort admission`
-- 后续 Work Item：`ND-R2-02 自动停用与恢复`
+- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`
+- 当前 Work Item：`ND-R2-02 自动停用与恢复`
+- 后续 Work Item：`ND-R2-03 合成账户 E2E`
 - 任何外部 Gate 缺失均不得暂停可继续的非真机任务。
