@@ -259,6 +259,7 @@ flowchart LR
 
 - iOS 只接受与当前 owner、voiceProfile、角色、purpose、output mode 和 audio owner 全部绑定的 `tencentAudioDrive` PCM；格式或 binding 不匹配会进入明确失败，不会静默改用默认音色。
 - C1/C2 组合 Gate 将严格 profile eligibility、删除撤权、PCM 格式和 Echo 路由静态合同与后端 fake-provider lifecycle smoke 合并，默认不纳入公开 MVP 回归。
+- C2 runtime fault-injection Gate 额外在模拟器运行时注入 accepted profile 暂停、删除、过期、角色 generation 失效、账户 lease 切换、停止、Provider 超时、binding 不匹配和 PCM 格式错误；所有旧分片必须被丢弃，音频 owner 收敛为 `fallbackMuted`，且 trace 仅导出脱敏 profile/version/role/output/fallback 证据。
 - 未关闭项：真实 accepted profile 的试听音色与 Echo 数字人音色一致性、真实 Provider 故障、音频路由、打断和麦克风恢复必须在真机单独验收。
 
 ## 8. Phase D：M2 成年授权 Publication / Visitor / 在世数字人

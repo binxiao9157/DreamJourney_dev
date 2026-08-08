@@ -252,7 +252,10 @@ struct VoiceCloneProfileSnapshot {
             && isEnabled
             && realCloneProviderReady
             && eligibilityAllowed
-            && consentState == "active"
+            && VoiceCloneConsentValidity.isActiveAndUnexpired(
+                state: consentState,
+                expiresAt: consentExpiresAt
+            )
             && consentPurpose == "private_synthesis"
             && allowedOperations.contains("synthesize")
     }
@@ -296,6 +299,79 @@ struct VoiceCloneProfileSnapshot {
             return "火山声音复刻资源未授权。请在服务器确认音色模式：预付费/免费音色需配置 consoleSpeakerId 和控制台生成的 S_ 音色 ID；后付费自定义音色需开通 volc.megatts.timbre 资源权限。"
         }
         return trimmed
+    }
+}
+
+/// A short-lived local proof that an Echo synthesis request was issued while a
+/// specific personal voice profile was still accepted. The backend remains the
+/// authority for every synthesis request; this ticket only fences late local
+/// callbacks and PCM chunks after an account/profile state change.
+struct VoiceCloneSynthesisUseTicket: Equatable {
+    let ownerUserId: String
+    let accountLease: AccountLease
+    let voiceProfileId: String
+    let profileVersion: Int
+    let retryGeneration: Int
+    let sampleStatus: VoiceCloneSampleStatus
+    let lifecycleState: VoiceProfileLifecycleState?
+    let consentState: String
+    let consentPurpose: String?
+    let consentExpiresAt: String?
+    let allowedOperations: Set<String>
+
+    init?(
+        ownerUserId: String,
+        accountLease: AccountLease,
+        snapshot: VoiceCloneProfileSnapshot
+    ) {
+        let normalizedOwnerUserId = ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedVoiceProfileId = snapshot.voiceProfileId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedOwnerUserId.isEmpty,
+              !normalizedVoiceProfileId.isEmpty,
+              snapshot.profileVersion > 0,
+              snapshot.isReadyForUse else {
+            return nil
+        }
+        self.ownerUserId = normalizedOwnerUserId
+        self.accountLease = accountLease
+        self.voiceProfileId = normalizedVoiceProfileId
+        self.profileVersion = snapshot.profileVersion
+        self.retryGeneration = snapshot.retryGeneration
+        self.sampleStatus = snapshot.sampleStatus
+        self.lifecycleState = snapshot.lifecycleState
+        self.consentState = snapshot.consentState
+        self.consentPurpose = snapshot.consentPurpose
+        self.consentExpiresAt = snapshot.consentExpiresAt
+        self.allowedOperations = snapshot.allowedOperations
+    }
+
+    func matchesCurrentSnapshot(_ snapshot: VoiceCloneProfileSnapshot) -> Bool {
+        snapshot.isReadyForUse
+            && VoiceCloneConsentValidity.isActiveAndUnexpired(
+                state: consentState,
+                expiresAt: consentExpiresAt
+            )
+            && snapshot.voiceProfileId.trimmingCharacters(in: .whitespacesAndNewlines) == voiceProfileId
+            && snapshot.profileVersion == profileVersion
+            && snapshot.retryGeneration == retryGeneration
+            && snapshot.sampleStatus == sampleStatus
+            && snapshot.lifecycleState == lifecycleState
+            && snapshot.consentState == consentState
+            && snapshot.consentPurpose == consentPurpose
+            && snapshot.consentExpiresAt == consentExpiresAt
+            && snapshot.allowedOperations == allowedOperations
+    }
+}
+
+private enum VoiceCloneConsentValidity {
+    static func isActiveAndUnexpired(state: String, expiresAt: String?) -> Bool {
+        guard state == "active",
+              let rawExpiry = expiresAt?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawExpiry.isEmpty,
+              let expiry = ISO8601DateFormatter().date(from: rawExpiry) else {
+            return false
+        }
+        return expiry > Date()
     }
 }
 
@@ -1081,6 +1157,55 @@ final class VoiceCloneService {
         )
         guard snapshot.isReadyForUse else { return nil }
         return normalizedVoiceProfileId(snapshot.voiceProfileId)
+    }
+
+    /// Captures the exact accepted personal-profile revision permitted to enter
+    /// the current Echo synthesis request. A later pause, deletion, expiry,
+    /// account transition, or profile revision invalidates this ticket.
+    func capturePersonalSynthesisUseTicket(
+        forOwnerId ownerId: String
+    ) -> VoiceCloneSynthesisUseTicket? {
+        let normalizedOwnerId = ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedOwnerId.isEmpty,
+              UserManager.shared.currentUser?.id == normalizedOwnerId,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: normalizedOwnerId),
+              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+            return nil
+        }
+        let target = VoiceClonePersonaTarget(
+            userId: normalizedOwnerId,
+            personaScope: "personal",
+            digitalHumanId: normalizedOwnerId,
+            familyMemberId: nil
+        )
+        return VoiceCloneSynthesisUseTicket(
+            ownerUserId: normalizedOwnerId,
+            accountLease: accountLease,
+            snapshot: voiceCloneShellSnapshot(accountLease: accountLease, target: target)
+        )
+    }
+
+    /// Re-checks the ticket at every asynchronous Echo boundary. This is local
+    /// fail-closed protection only; the server separately validates the same
+    /// owner/profile/consent contract before it produces synthesis output.
+    func validatesPersonalSynthesisUseTicket(
+        _ ticket: VoiceCloneSynthesisUseTicket
+    ) -> Bool {
+        guard UserManager.shared.currentUser?.id == ticket.ownerUserId,
+              accountLeaseRuntime.validate(ticket.accountLease, at: .runtime).allowed,
+              let currentLease = accountLeaseRuntime.capture(forSubjectId: ticket.ownerUserId),
+              currentLease == ticket.accountLease else {
+            return false
+        }
+        let target = VoiceClonePersonaTarget(
+            userId: ticket.ownerUserId,
+            personaScope: "personal",
+            digitalHumanId: ticket.ownerUserId,
+            familyMemberId: nil
+        )
+        return ticket.matchesCurrentSnapshot(
+            voiceCloneShellSnapshot(accountLease: currentLease, target: target)
+        )
     }
 
     func handleAccountLifecycle(

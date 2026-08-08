@@ -67,6 +67,7 @@ RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE="${RUN_BACKEND_VOICE_CLONE_DEPLOYED_SMOKE
 RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE="${RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE:-0}"
 RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE="${RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE:-0}"
 RUN_VOICE_CLONE_C1_C2_NON_DEVICE_GATE="${RUN_VOICE_CLONE_C1_C2_NON_DEVICE_GATE:-0}"
+RUN_VOICE_CLONE_C2_RUNTIME_FAULT_INJECTION_GATE="${RUN_VOICE_CLONE_C2_RUNTIME_FAULT_INJECTION_GATE:-0}"
 RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE="${RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE:-0}"
 RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE="${RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE:-0}"
 RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE="${RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE:-0}"
@@ -245,6 +246,7 @@ Run ID: \`$RUN_ID\`
 - Voice clone profile selection UIQA smoke: \`$RUN_VOICE_CLONE_PROFILE_SELECTION_SMOKE\`
 - Voice clone synthesis runtime UIQA smoke: \`$RUN_VOICE_CLONE_SYNTHESIS_RUNTIME_SMOKE\`
 - Voice clone C1/C2 lifecycle + accepted PCM non-device gate: \`$RUN_VOICE_CLONE_C1_C2_NON_DEVICE_GATE\`
+- Voice clone C2 runtime fault-injection gate: \`$RUN_VOICE_CLONE_C2_RUNTIME_FAULT_INJECTION_GATE\`
 - Tencent backend PCM-drive mock UIQA smoke: \`$RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE\`
 - Digital-human + voice-clone combo gate: \`$RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE\`
 - Tencent digital-human Phase 1 non-device gate: \`$RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE\`
@@ -318,6 +320,7 @@ Run ID: \`$RUN_ID\`
 - Optional digital-human session lease gate when \`RUN_DIGITAL_HUMAN_SESSION_LEASE_GATE=1\`; this verifies lease reuse, heartbeat, release, expiry, capacity arbitration, stale callback cleanup, and simulator create-heartbeat-release without true-device validation.
 - Optional digital-human TTS/viseme combo gate when \`RUN_DIGITAL_HUMAN_TTS_VISEME_GATE=1\`; this verifies backend mock synthesis \`visemeTimeline\`, iOS provider timeline UIQA, and \`AVAudioPlayer\` metering fallback UIQA.
 - Optional voice clone C1/C2 non-device gate when \`RUN_VOICE_CLONE_C1_C2_NON_DEVICE_GATE=1\`; this uses a fake deletion Provider to verify revocation-first lifecycle, completed/failed/unknown/unsupported receipts, stale generation fencing, accepted-profile synthesis binding, and Tencent PCM contract without a real sample, slot, simulator, or device.
+- Optional voice clone C2 runtime fault-injection gate when \`RUN_VOICE_CLONE_C2_RUNTIME_FAULT_INJECTION_GATE=1\`; this injects profile pause/deletion/expiry, stale lifecycle, stop, binding, PCM and provider failures into the simulator Tencent Runtime Stub, then verifies audio-owner release, continuous-turn recovery and redacted evidence without a real provider or device.
 - Optional digital-human runtime stub gate when \`RUN_DIGITAL_HUMAN_RUNTIME_STUB_GATE=1\`; this verifies backend \`/digital-human/sessions\`, iOS \`TencentDigitalHumanRuntimeStub\`, and \`AudioOnlyDigitalHumanRuntime\` fallback without connecting the real Tencent SDK.
 - Optional archive detail failed-analysis retry UIQA smoke when \`RUN_ARCHIVE_FAILED_ANALYSIS_RETRY_SMOKE=1\`.
 - Optional hidden media/time-letter shell UIQA smoke when \`RUN_ARCHIVE_HIDDEN_SHELL_SMOKE=1\`.
@@ -767,6 +770,7 @@ for guard in \
   voice-clone-shell-contract-check.swift \
   voice-clone-exit-receipt-check.swift \
   voice-clone-c1-c2-contract-check.swift \
+  voice-clone-runtime-fault-injection-smoke-check.swift \
   voice-clone-stale-ready-state-check.swift \
   voice-clone-status-feedback-check.swift \
   voice-clone-runtime-capability-check.swift \
@@ -1332,6 +1336,15 @@ if [[ "$RUN_VOICE_CLONE_C1_C2_NON_DEVICE_GATE" == "1" ]]; then
 else
   mkdir -p "$OUTPUT_DIR/voice-clone-c1-c2-non-device-gate/$RUN_ID"
   echo "Skipped by RUN_VOICE_CLONE_C1_C2_NON_DEVICE_GATE=0" > "$OUTPUT_DIR/voice-clone-c1-c2-non-device-gate/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_VOICE_CLONE_C2_RUNTIME_FAULT_INJECTION_GATE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/voice-clone-c2-runtime-fault-injection-gate" \
+  "$SCRIPT_DIR/run-voice-clone-c2-runtime-fault-injection-gate.sh"
+else
+  mkdir -p "$OUTPUT_DIR/voice-clone-c2-runtime-fault-injection-gate/$RUN_ID"
+  echo "Skipped by RUN_VOICE_CLONE_C2_RUNTIME_FAULT_INJECTION_GATE=0" > "$OUTPUT_DIR/voice-clone-c2-runtime-fault-injection-gate/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_DIGITAL_HUMAN_VOICE_CLONE_COMBO_GATE" == "1" ]]; then

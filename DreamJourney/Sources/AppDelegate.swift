@@ -343,6 +343,8 @@ private extension AppDelegate {
             }
         case .tencentBackendPCMDriveMockSmoke:
             scheduleUIQAScenario(scenario) { $0.runTencentBackendPCMDriveMockSmoke() }
+        case .voiceCloneRuntimeFaultInjectionSmoke:
+            scheduleUIQAScenario(scenario) { $0.runVoiceCloneRuntimeFaultInjectionSmoke() }
         case .echoTraceExportSmoke:
             scheduleUIQAScenario(scenario) { $0.runEchoTraceExportSmoke() }
         case .echoRuntimeDiagnosticsExportSmoke:
@@ -5091,6 +5093,35 @@ private extension AppDelegate {
                     "completed=\(result["completed"] as? Bool == true) " +
                     "chunks=\(result["pcmChunkCount"] as? Int ?? 0) " +
                     "final=\(result["finalChunkObserved"] as? Bool == true)"
+                )
+            }
+        )
+    }
+
+    func runVoiceCloneRuntimeFaultInjectionSmoke(retryCount: Int = 0) {
+        QAEchoScenarioRunner.run(
+            retryCount: retryCount,
+            smokeName: "VoiceCloneRuntimeFaultInjectionSmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runVoiceCloneRuntimeFaultInjectionSmoke(retryCount: nextRetryCount)
+            },
+            writeResult: { result in
+                QAScenarioResultWriter.writeAndLog(
+                    result,
+                    fileName: "voice-clone-runtime-fault-injection-smoke-result.json",
+                    smokeName: "VoiceCloneRuntimeFaultInjectionSmoke"
+                )
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQAVoiceCloneRuntimeFaultInjectionSmoke(completion: completion)
+            },
+            completionLog: { result in
+                print(
+                    "[UI_QA] VoiceCloneRuntimeFaultInjectionSmoke completed " +
+                    "completed=\(result["completed"] as? Bool == true) " +
+                    "pause=\(result["pausedPCMRejected"] as? Bool == true) " +
+                    "stale=\(result["staleGenerationPCMRejected"] as? Bool == true) " +
+                    "timeout=\(result["providerFailureRejected"] as? Bool == true)"
                 )
             }
         )

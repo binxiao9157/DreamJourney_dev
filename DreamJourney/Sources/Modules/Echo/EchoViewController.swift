@@ -736,6 +736,7 @@ final class EchoViewController: UIViewController {
             || configuration.contains("DJRunTencentDigitalHumanPCMDriveSmoke")
             || configuration.contains("DJRunTencentDigitalHumanBackendPCMDriveSmoke")
             || configuration.contains("DJRunTencentBackendPCMDriveMockSmoke")
+            || configuration.contains("DJRunVoiceCloneRuntimeFaultInjectionSmoke")
         #else
         return false
         #endif
@@ -800,6 +801,14 @@ final class EchoViewController: UIViewController {
     private var shouldRunTencentBackendPCMDriveMockSmoke: Bool {
         #if DEBUG || UI_QA_SIMULATOR
         return QALaunchConfiguration.shared.contains("DJRunTencentBackendPCMDriveMockSmoke")
+        #else
+        return false
+        #endif
+    }
+
+    private var shouldRunVoiceCloneRuntimeFaultInjectionSmoke: Bool {
+        #if DEBUG || UI_QA_SIMULATOR
+        return QALaunchConfiguration.shared.contains("DJRunVoiceCloneRuntimeFaultInjectionSmoke")
         #else
         return false
         #endif
@@ -2904,7 +2913,9 @@ final class EchoViewController: UIViewController {
         guard let digitalHumanRuntime,
               digitalHumanRuntimeLifecycleGeneration == digitalHumanLifecycle.generation,
               digitalHumanRuntime is TencentDigitalHumanCloudRuntime
-                || (shouldRunTencentBackendPCMDriveMockSmoke && digitalHumanRuntime is TencentDigitalHumanRuntimeStub),
+                || ((shouldRunTencentBackendPCMDriveMockSmoke
+                    || shouldRunVoiceCloneRuntimeFaultInjectionSmoke)
+                    && digitalHumanRuntime is TencentDigitalHumanRuntimeStub),
               digitalHumanRuntime.profile != nil else {
             return false
         }
@@ -2921,7 +2932,9 @@ final class EchoViewController: UIViewController {
               let digitalHumanRuntime,
               digitalHumanRuntimeLifecycleGeneration == digitalHumanLifecycle.generation,
               digitalHumanRuntime is TencentDigitalHumanCloudRuntime
-                || (shouldRunTencentBackendPCMDriveMockSmoke && digitalHumanRuntime is TencentDigitalHumanRuntimeStub),
+                || ((shouldRunTencentBackendPCMDriveMockSmoke
+                    || shouldRunVoiceCloneRuntimeFaultInjectionSmoke)
+                    && digitalHumanRuntime is TencentDigitalHumanRuntimeStub),
               digitalHumanRuntime.profile != nil,
               tencentCloudRenderProvidesAudibleTTS else {
             return false
@@ -4472,6 +4485,26 @@ final class EchoViewController: UIViewController {
             recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneRoleOwnerMismatch")
             return true
         }
+        guard let voiceCloneUseTicket = VoiceCloneService.shared.capturePersonalSynthesisUseTicket(
+            forOwnerId: userId
+        ),
+        voiceCloneUseTicket.voiceProfileId == voiceProfileId else {
+            renderVoiceStatus(
+                text: "复刻声音授权状态已变化，本轮不会使用默认音色",
+                isVisible: true,
+                accessibilityIdentifier: "echoVoiceClonePCMDriveStatus"
+            )
+            lastVoiceCloneProviderLogId = nil
+            lastVoiceCloneProviderRequestId = nil
+            lastVoiceCloneProviderMode = nil
+            lastVoiceSynthesisEvidenceSummary = .unavailable(
+                ownerUserId: currentEchoEvidenceOwnerUserId,
+                reason: "voiceCloneUseTicketUnavailable"
+            )
+            lastEchoRuntimeFallbackReason = "voiceCloneUseTicketUnavailable"
+            recordEchoRuntimeDiagnosticsSnapshot(reason: "voiceCloneUseTicketUnavailable")
+            return true
+        }
         let roleKey = voiceSelection.source.rawValue
         guard DreamJourneyBackendClient.shared.isVoiceCloneSynthesisConfigured else {
             renderVoiceStatus(text: "复刻声音服务暂不可用", isVisible: true, accessibilityIdentifier: "echoVoiceClonePCMDriveStatus")
@@ -4654,6 +4687,20 @@ final class EchoViewController: UIViewController {
                     return
                 }
 
+                guard !self.rejectInvalidVoiceCloneSynthesisUseTicketIfNeeded(
+                    voiceCloneUseTicket,
+                    requestID: requestID,
+                    turnID: turnID,
+                    outputMode: "tencentAudioDrive",
+                    providerLogId: nil,
+                    providerRequestId: nil,
+                    lifecycleToken: lifecycleToken,
+                    runtimeInteractionCallback: runtimeInteractionCallback,
+                    source: "voiceClonePCMDriveResponse"
+                ) else {
+                    return
+                }
+
                 switch result {
                 case .success(let synthesis):
                     guard synthesis.voiceProfileId == voiceProfileId,
@@ -4729,10 +4776,12 @@ final class EchoViewController: UIViewController {
                     self.startPCMDriveSignalToDigitalHumanRuntime(
                         signal: signal,
                         requestID: requestID,
+                        turnID: turnID,
                         contextKey: contextKey,
                         source: "voiceClonePCMDrive",
                         lifecycleToken: lifecycleToken,
-                        runtimeInteractionCallback: runtimeInteractionCallback
+                        runtimeInteractionCallback: runtimeInteractionCallback,
+                        voiceCloneUseTicket: voiceCloneUseTicket
                     )
                     PrivacySafeDiagnostics.log(
                         subsystem: "TencentDigitalHuman",
@@ -5490,6 +5539,55 @@ final class EchoViewController: UIViewController {
         )
     }
 
+    /// A synthesis response may arrive after the user has paused, deleted, or
+    /// otherwise lost access to the selected profile. Do not let that late
+    /// response, or any of its queued PCM chunks, enter the Tencent runtime.
+    @discardableResult
+    private func rejectInvalidVoiceCloneSynthesisUseTicketIfNeeded(
+        _ ticket: VoiceCloneSynthesisUseTicket?,
+        requestID: String,
+        turnID: String,
+        outputMode: String,
+        providerLogId: String?,
+        providerRequestId: String?,
+        lifecycleToken: DigitalHumanLifecycleToken,
+        runtimeInteractionCallback: EchoRuntimeCallbackToken?,
+        source: String
+    ) -> Bool {
+        guard let ticket,
+              !VoiceCloneService.shared.validatesPersonalSynthesisUseTicket(ticket) else {
+            return false
+        }
+        handleVoiceClonePCMDriveFailureWithoutDefaultVoice(
+            requestID: requestID,
+            turnID: turnID,
+            voiceProfileId: ticket.voiceProfileId,
+            outputMode: outputMode,
+            providerLogId: providerLogId,
+            providerRequestId: providerRequestId,
+            ownerUserId: ticket.ownerUserId,
+            reason: "voiceCloneUseTicketRevoked",
+            detail: "The accepted voice-profile revision changed before the queued synthesis audio could be delivered.",
+            lifecycleToken: lifecycleToken,
+            runtimeInteractionCallback: runtimeInteractionCallback
+        )
+        PrivacySafeDiagnostics.log(
+            subsystem: "TencentDigitalHuman",
+            event: "voiceClonePCMDriveUseTicketRejected",
+            states: [
+                "audioOwner": currentEchoAudioOwner.rawValue,
+                "outputMode": outputMode,
+                "source": source,
+            ],
+            correlations: [
+                "request": requestID,
+                "turn": turnID,
+                "voiceProfile": ticket.voiceProfileId,
+            ]
+        )
+        return true
+    }
+
     private func handleVoiceClonePCMDriveFailureWithoutDefaultVoice(
         requestID: String,
         turnID: String,
@@ -5510,6 +5608,11 @@ final class EchoViewController: UIViewController {
         }
         let runtimeSessionCallback = echoRuntimeSessionCoordinator.currentSessionCallbackToken()
         stopDigitalHumanAudioLevelMetering()
+        releaseEchoAudioOwnerLease(
+            expectedOwner: .tencentDigitalHumanPlayback,
+            reason: "voiceClonePCMDriveFailed:\(reason)"
+        )
+        setEchoAudioOwner(.fallbackMuted, reason: "voiceClonePCMDriveFailed:\(reason)")
         markEchoReplyDelivered()
         lastVoiceCloneProviderLogId = providerLogId
         lastVoiceCloneProviderRequestId = providerRequestId
@@ -6769,10 +6872,12 @@ final class EchoViewController: UIViewController {
         startPCMDriveSignalToDigitalHumanRuntime(
             signal: signal,
             requestID: requestID,
+            turnID: turnID,
             contextKey: currentDigitalHumanRuntimeContextKey(),
             source: source,
             lifecycleToken: lifecycleToken,
-            runtimeInteractionCallback: runtimeInteractionCallback
+            runtimeInteractionCallback: runtimeInteractionCallback,
+            voiceCloneUseTicket: nil
         )
 
         if shouldRunTencentDigitalHumanPCMDriveStopProbe {
@@ -6820,10 +6925,12 @@ final class EchoViewController: UIViewController {
     private func startPCMDriveSignalToDigitalHumanRuntime(
         signal: TencentPCMDriveTestSignal,
         requestID: String,
+        turnID: String,
         contextKey: String,
         source: String,
         lifecycleToken: DigitalHumanLifecycleToken,
-        runtimeInteractionCallback: EchoRuntimeCallbackToken?
+        runtimeInteractionCallback: EchoRuntimeCallbackToken?,
+        voiceCloneUseTicket: VoiceCloneSynthesisUseTicket?
     ) {
         guard isCurrentDigitalHumanLifecycleToken(
             lifecycleToken,
@@ -6839,10 +6946,12 @@ final class EchoViewController: UIViewController {
         scheduleTencentDigitalHumanPCMDriveChunks(
             signal: signal,
             requestID: requestID,
+            turnID: turnID,
             contextKey: contextKey,
             source: source,
             lifecycleToken: lifecycleToken,
-            runtimeInteractionCallback: runtimeInteractionCallback
+            runtimeInteractionCallback: runtimeInteractionCallback,
+            voiceCloneUseTicket: voiceCloneUseTicket
         )
         PrivacySafeDiagnostics.log(
             subsystem: "TencentDigitalHuman",
@@ -6865,10 +6974,12 @@ final class EchoViewController: UIViewController {
     private func scheduleTencentDigitalHumanPCMDriveChunks(
         signal: TencentPCMDriveTestSignal,
         requestID: String,
+        turnID: String,
         contextKey: String,
         source: String,
         lifecycleToken: DigitalHumanLifecycleToken,
-        runtimeInteractionCallback: EchoRuntimeCallbackToken?
+        runtimeInteractionCallback: EchoRuntimeCallbackToken?,
+        voiceCloneUseTicket: VoiceCloneSynthesisUseTicket?
     ) {
         let chunks = signal.chunks()
         for (index, chunk) in chunks.enumerated() {
@@ -6888,6 +6999,19 @@ final class EchoViewController: UIViewController {
                       self.digitalHumanConversation.activeRequestID == requestID,
                       self.currentDigitalHumanRuntimeContextKey() == contextKey,
                       let digitalHumanRuntime = self.digitalHumanRuntime else {
+                    return
+                }
+                guard !self.rejectInvalidVoiceCloneSynthesisUseTicketIfNeeded(
+                    voiceCloneUseTicket,
+                    requestID: requestID,
+                    turnID: turnID,
+                    outputMode: "tencentAudioDrive",
+                    providerLogId: nil,
+                    providerRequestId: nil,
+                    lifecycleToken: lifecycleToken,
+                    runtimeInteractionCallback: runtimeInteractionCallback,
+                    source: "pcmChunk:\(source):\(sequence)"
+                ) else {
                     return
                 }
                 do {
@@ -6950,6 +7074,19 @@ final class EchoViewController: UIViewController {
                   self.digitalHumanConversation.activeRequestID == requestID,
                   self.currentDigitalHumanRuntimeContextKey() == contextKey,
                   let digitalHumanRuntime = self.digitalHumanRuntime else {
+                return
+            }
+            guard !self.rejectInvalidVoiceCloneSynthesisUseTicketIfNeeded(
+                voiceCloneUseTicket,
+                requestID: requestID,
+                turnID: turnID,
+                outputMode: "tencentAudioDrive",
+                providerLogId: nil,
+                providerRequestId: nil,
+                lifecycleToken: lifecycleToken,
+                runtimeInteractionCallback: runtimeInteractionCallback,
+                source: "pcmFinal:\(source)"
+            ) else {
                 return
             }
             do {
@@ -9783,6 +9920,567 @@ extension EchoViewController {
                 "error": "redacted",
             ])
         }
+    }
+
+    func runUIQAVoiceCloneRuntimeFaultInjectionSmoke(
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+        guard let accountLease = echoAccountLease ?? captureEchoAccountLease(
+            reason: "uiqaVoiceCloneRuntimeFault"
+        ),
+        validateEchoAccountLease(
+            at: .request,
+            expected: accountLease,
+            reason: "uiqaVoiceCloneRuntimeFault"
+        ) else {
+            completion([
+                "completed": false,
+                "failureReason": "accountLeaseUnavailable",
+            ])
+            return
+        }
+
+        let ownerUserId = accountLease.subjectId
+        let originalSnapshot = VoiceCloneService.shared.voiceCloneShellSnapshot()
+        let profileId = "S_uiqa_voice_runtime_fault"
+
+        func profileSnapshot(
+            lifecycleState: VoiceProfileLifecycleState,
+            sampleStatus: VoiceCloneSampleStatus,
+            profileVersion: Int,
+            expiresAt: String,
+            isEnabled: Bool,
+            allowedOperations: Set<String>
+        ) -> VoiceCloneProfileSnapshot {
+            VoiceCloneProfileSnapshot(
+                voiceProfileId: profileId,
+                sampleStatus: sampleStatus,
+                authorizationCopy: "UIQA only: runtime fault-injection voice profile.",
+                isEnabled: isEnabled,
+                realCloneProviderReady: lifecycleState == .accepted,
+                qualityAcceptanceRequired: false,
+                disableContract: "",
+                deleteContract: "",
+                providerMode: "mockProvider",
+                providerStatus: lifecycleState.rawValue,
+                providerMessage: "",
+                contractVersion: 2,
+                defaultReleaseVisible: false,
+                exitState: lifecycleState == .deleted ? "partial" : "active",
+                accessRevoked: lifecycleState == .paused || lifecycleState == .deleted,
+                localCleanupState: lifecycleState == .deleted ? "tombstoned" : "notRequested",
+                providerCleanupState: "notRequested",
+                providerCleanupReceiptAvailable: false,
+                lifecycleSchemaVersion: "voice-profile-lifecycle-v1",
+                lifecycleState: lifecycleState,
+                profileVersion: profileVersion,
+                retryGeneration: 0,
+                stateChangedAt: "2026-08-08T00:00:00Z",
+                eligibilityAllowed: lifecycleState == .accepted,
+                eligibilityReasonCode: lifecycleState == .accepted
+                    ? "eligibleLivingAdultSelf"
+                    : "profileUnavailable",
+                consentPurpose: "private_synthesis",
+                consentState: "active",
+                consentExpiresAt: expiresAt,
+                allowedOperations: allowedOperations
+            )
+        }
+
+        func mockSynthesis(
+            bindingAudioOwner: String = "tencentDigitalHuman",
+            audioFormat: String = "pcm16kMono"
+        ) -> VoiceCloneSynthesisResult? {
+            let pcmData = Data(repeating: 23, count: 3_200)
+            return VoiceCloneSynthesisResult(json: [
+                "voiceProfileId": profileId,
+                "providerMode": "mockVoiceCloneProvider",
+                "outputMode": "tencentAudioDrive",
+                "providerLogIdHash": "redacted-uiqa-provider-log",
+                "providerRequestIdHash": "redacted-uiqa-provider-request",
+                "audio": [
+                    "data": pcmData.base64EncodedString(),
+                    "format": audioFormat,
+                    "byteCount": pcmData.count,
+                    "sampleRate": 16_000,
+                    "bitsPerSample": 16,
+                    "channelCount": 1,
+                    "durationSeconds": 0.1,
+                ],
+                "synthesisBinding": [
+                    "schemaVersion": "voice-synthesis-binding-v1",
+                    "ownerUserId": ownerUserId,
+                    "voiceProfileId": profileId,
+                    "profileVersion": 1,
+                    "roleSubjectId": ownerUserId,
+                    "roleKey": "personalOwner",
+                    "personaScope": "personal",
+                    "digitalHumanId": ownerUserId,
+                    "requestPurpose": "echo",
+                    "outputMode": "tencentAudioDrive",
+                    "audioOwner": bindingAudioOwner,
+                ],
+            ])
+        }
+
+        func installStubRuntime(
+            _ label: String
+        ) -> (stub: TencentDigitalHumanRuntimeStub, token: DigitalHumanLifecycleToken)? {
+            invalidateDigitalHumanLifecycle(reason: "uiqaVoiceCloneRuntimeFault:\(label)")
+            releaseDigitalHumanRuntime(
+                reason: "uiqaVoiceCloneRuntimeFault:\(label)",
+                resetsAudioOwnerToOrdinaryEcho: true
+            )
+            let token = captureDigitalHumanLifecycleToken(
+                reason: "uiqaVoiceCloneRuntimeFault:\(label):bind"
+            )
+            let stub = TencentDigitalHumanRuntimeStub(contentView: UIView())
+            let profile = DigitalHumanProfile(
+                provider: "tencent",
+                personaId: "uiqa_voice_runtime_fault",
+                displayName: "UIQA 运行时故障注入",
+                lifecycleMode: .sunlight,
+                driveMode: "pcmAudio",
+                alphaEnabled: true,
+                smartActionEnabled: false,
+                assetKey: "uiqa-voice-runtime-fault"
+            )
+            do {
+                try stub.configure(profile)
+                try stub.open()
+            } catch {
+                return nil
+            }
+            digitalHumanRuntime = stub
+            digitalHumanRuntimeContextKey = currentDigitalHumanRuntimeContextKey()
+            digitalHumanRuntimeLifecycleGeneration = token.generation
+            hasRequestedCloudDigitalHumanRuntime = true
+            digitalHumanLivePanelView?.hostProviderView(stub.contentView)
+            applyEchoAudioRoutePolicy()
+            return (stub, token)
+        }
+
+        func finish(_ result: [String: Any]) {
+            VoiceCloneService.shared.persistSnapshot(originalSnapshot)
+            releaseDigitalHumanRuntime(
+                reason: "uiqaVoiceCloneRuntimeFaultFinished",
+                resetsAudioOwnerToOrdinaryEcho: true
+            )
+            completion(result)
+        }
+
+        let acceptedSnapshot = profileSnapshot(
+            lifecycleState: .accepted,
+            sampleStatus: .ready,
+            profileVersion: 1,
+            expiresAt: "2099-01-01T00:00:00Z",
+            isEnabled: true,
+            allowedOperations: ["preview", "synthesize", "pause", "delete"]
+        )
+        VoiceCloneService.shared.persistSnapshot(acceptedSnapshot)
+        guard let acceptedTicket = VoiceCloneService.shared.capturePersonalSynthesisUseTicket(
+            forOwnerId: ownerUserId
+        ),
+        let validSynthesis = mockSynthesis(),
+        let signal = makeTencentDigitalHumanPCMDriveSignal(from: validSynthesis),
+        let pausedRuntime = installStubRuntime("paused") else {
+            finish([
+                "completed": false,
+                "failureReason": "faultRuntimeSetupFailed",
+            ])
+            return
+        }
+
+        let bindingMismatchRejected = mockSynthesis(bindingAudioOwner: "volcengineLocalTTS")?.isBound(
+            toOwnerUserId: ownerUserId,
+            voiceProfileId: profileId,
+            roleSubjectId: ownerUserId,
+            roleKey: "personalOwner",
+            personaScope: "personal",
+            digitalHumanId: ownerUserId,
+            requestPurpose: "echo",
+            outputMode: "tencentAudioDrive",
+            audioOwner: "tencentDigitalHuman"
+        ) == false
+        let invalidPCMRejected = mockSynthesis(audioFormat: "wav")?.isTencentAudioDrivePCMCompatible == false
+
+        let pauseRequestID = "uiqa-voice-runtime-pause"
+        let pauseTurnID = ensureCurrentEchoTurnID()
+        digitalHumanConversation.beginProviderRequest(
+            requestID: pauseRequestID,
+            replyText: "UIQA pause fence",
+            turnID: pauseTurnID,
+            keepsPendingReply: routeEchoAudioThroughDigitalHuman
+        )
+        startPCMDriveSignalToDigitalHumanRuntime(
+            signal: signal,
+            requestID: pauseRequestID,
+            turnID: pauseTurnID,
+            contextKey: currentDigitalHumanRuntimeContextKey(),
+            source: "uiqaVoiceClonePaused",
+            lifecycleToken: pausedRuntime.token,
+            runtimeInteractionCallback: nil,
+            voiceCloneUseTicket: acceptedTicket
+        )
+        VoiceCloneService.shared.persistSnapshot(profileSnapshot(
+            lifecycleState: .paused,
+            sampleStatus: .disabled,
+            profileVersion: 2,
+            expiresAt: "2099-01-01T00:00:00Z",
+            isEnabled: false,
+            allowedOperations: ["delete"]
+        ))
+
+        let pausedStub = pausedRuntime.stub
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { [weak self, weak pausedStub] in
+            guard let self,
+                  let pausedStub else {
+                return
+            }
+            let pausedPCMRejected = pausedStub.sentPCMChunks.isEmpty
+                && self.digitalHumanConversation.activeRequestID == nil
+                && self.lastEchoRuntimeFallbackReason == "voiceCloneUseTicketRevoked"
+                && self.currentEchoAudioOwner == .fallbackMuted
+
+            VoiceCloneService.shared.persistSnapshot(self.profileSnapshotForVoiceCloneRuntimeFault(
+                voiceProfileId: profileId,
+                lifecycleState: .accepted,
+                sampleStatus: .ready,
+                profileVersion: 3,
+                expiresAt: "2099-01-01T00:00:00Z",
+                isEnabled: true,
+                allowedOperations: ["preview", "synthesize", "pause", "delete"]
+            ))
+            let deletedTicket = VoiceCloneService.shared.capturePersonalSynthesisUseTicket(
+                forOwnerId: ownerUserId
+            )
+            VoiceCloneService.shared.persistSnapshot(self.profileSnapshotForVoiceCloneRuntimeFault(
+                voiceProfileId: profileId,
+                lifecycleState: .deleted,
+                sampleStatus: .deleted,
+                profileVersion: 4,
+                expiresAt: "2099-01-01T00:00:00Z",
+                isEnabled: false,
+                allowedOperations: []
+            ))
+            let deletedTicketRejected = deletedTicket.map {
+                !VoiceCloneService.shared.validatesPersonalSynthesisUseTicket($0)
+            } ?? false
+
+            VoiceCloneService.shared.persistSnapshot(self.profileSnapshotForVoiceCloneRuntimeFault(
+                voiceProfileId: profileId,
+                lifecycleState: .accepted,
+                sampleStatus: .ready,
+                profileVersion: 5,
+                expiresAt: "2099-01-01T00:00:00Z",
+                isEnabled: true,
+                allowedOperations: ["preview", "synthesize", "pause", "delete"]
+            ))
+            let expiringTicket = VoiceCloneService.shared.capturePersonalSynthesisUseTicket(
+                forOwnerId: ownerUserId
+            )
+            VoiceCloneService.shared.persistSnapshot(self.profileSnapshotForVoiceCloneRuntimeFault(
+                voiceProfileId: profileId,
+                lifecycleState: .accepted,
+                sampleStatus: .ready,
+                profileVersion: 5,
+                expiresAt: "2000-01-01T00:00:00Z",
+                isEnabled: true,
+                allowedOperations: ["preview", "synthesize", "pause", "delete"]
+            ))
+            let expiredTicketRejected = expiringTicket.map {
+                !VoiceCloneService.shared.validatesPersonalSynthesisUseTicket($0)
+            } ?? false
+
+            VoiceCloneService.shared.persistSnapshot(self.profileSnapshotForVoiceCloneRuntimeFault(
+                voiceProfileId: profileId,
+                lifecycleState: .accepted,
+                sampleStatus: .ready,
+                profileVersion: 6,
+                expiresAt: "2099-01-01T00:00:00Z",
+                isEnabled: true,
+                allowedOperations: ["preview", "synthesize", "pause", "delete"]
+            ))
+            guard let staleTicket = VoiceCloneService.shared.capturePersonalSynthesisUseTicket(
+                forOwnerId: ownerUserId
+            ),
+            let staleRuntime = installStubRuntime("roleSwitch") else {
+                finish([
+                    "completed": false,
+                    "failureReason": "staleRuntimeSetupFailed",
+                ])
+                return
+            }
+            let staleRequestID = "uiqa-voice-runtime-stale"
+            let staleTurnID = self.ensureCurrentEchoTurnID()
+            self.digitalHumanConversation.beginProviderRequest(
+                requestID: staleRequestID,
+                replyText: "UIQA stale generation",
+                turnID: staleTurnID,
+                keepsPendingReply: self.routeEchoAudioThroughDigitalHuman
+            )
+            self.startPCMDriveSignalToDigitalHumanRuntime(
+                signal: signal,
+                requestID: staleRequestID,
+                turnID: staleTurnID,
+                contextKey: self.currentDigitalHumanRuntimeContextKey(),
+                source: "uiqaVoiceCloneRoleSwitch",
+                lifecycleToken: staleRuntime.token,
+                runtimeInteractionCallback: nil,
+                voiceCloneUseTicket: staleTicket
+            )
+            self.invalidateDigitalHumanLifecycle(reason: "uiqaVoiceCloneRoleSwitch")
+            self.digitalHumanConversation.clearProviderRequestAndResumeState()
+
+            let staleStub = staleRuntime.stub
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self, weak staleStub] in
+                guard let self,
+                      let staleStub else {
+                    return
+                }
+                let staleGenerationPCMRejected = staleStub.sentPCMChunks.isEmpty
+
+                let accountSwitchSnapshot = self.profileSnapshotForVoiceCloneRuntimeFault(
+                    voiceProfileId: profileId,
+                    lifecycleState: .accepted,
+                    sampleStatus: .ready,
+                    profileVersion: 7,
+                    expiresAt: "2099-01-01T00:00:00Z",
+                    isEnabled: true,
+                    allowedOperations: ["preview", "synthesize", "pause", "delete"]
+                )
+                VoiceCloneService.shared.persistSnapshot(accountSwitchSnapshot)
+                let switchedAccountLease = AccountLease(
+                    subjectId: ownerUserId,
+                    vaultId: staleTicket.accountLease.vaultId,
+                    sessionId: "uiqa-voice-runtime-switched-account",
+                    generation: staleTicket.accountLease.generation + 1,
+                    generationId: UUID(),
+                    authorityEpoch: staleTicket.accountLease.authorityEpoch
+                )
+                guard let accountSwitchTicket = VoiceCloneSynthesisUseTicket(
+                    ownerUserId: ownerUserId,
+                    accountLease: switchedAccountLease,
+                    snapshot: accountSwitchSnapshot
+                ),
+                let accountSwitchRuntime = installStubRuntime("accountSwitch") else {
+                    finish([
+                        "completed": false,
+                        "failureReason": "accountSwitchRuntimeSetupFailed",
+                    ])
+                    return
+                }
+                let accountSwitchRequestID = "uiqa-voice-runtime-account-switch"
+                let accountSwitchTurnID = self.ensureCurrentEchoTurnID()
+                self.digitalHumanConversation.beginProviderRequest(
+                    requestID: accountSwitchRequestID,
+                    replyText: "UIQA account switch fence",
+                    turnID: accountSwitchTurnID,
+                    keepsPendingReply: self.routeEchoAudioThroughDigitalHuman
+                )
+                self.startPCMDriveSignalToDigitalHumanRuntime(
+                    signal: signal,
+                    requestID: accountSwitchRequestID,
+                    turnID: accountSwitchTurnID,
+                    contextKey: self.currentDigitalHumanRuntimeContextKey(),
+                    source: "uiqaVoiceCloneAccountSwitch",
+                    lifecycleToken: accountSwitchRuntime.token,
+                    runtimeInteractionCallback: nil,
+                    voiceCloneUseTicket: accountSwitchTicket
+                )
+
+                let accountSwitchStub = accountSwitchRuntime.stub
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self, weak accountSwitchStub] in
+                    guard let self,
+                          let accountSwitchStub else {
+                        return
+                    }
+                    let accountSwitchPCMRejected = accountSwitchStub.sentPCMChunks.isEmpty
+                        && self.digitalHumanConversation.activeRequestID == nil
+                        && self.lastEchoRuntimeFallbackReason == "voiceCloneUseTicketRevoked"
+                        && self.currentEchoAudioOwner == .fallbackMuted
+
+                    VoiceCloneService.shared.persistSnapshot(self.profileSnapshotForVoiceCloneRuntimeFault(
+                        voiceProfileId: profileId,
+                        lifecycleState: .accepted,
+                        sampleStatus: .ready,
+                        profileVersion: 8,
+                        expiresAt: "2099-01-01T00:00:00Z",
+                        isEnabled: true,
+                        allowedOperations: ["preview", "synthesize", "pause", "delete"]
+                    ))
+                guard let stopTicket = VoiceCloneService.shared.capturePersonalSynthesisUseTicket(
+                    forOwnerId: ownerUserId
+                ),
+                let stopRuntime = installStubRuntime("stop") else {
+                    finish([
+                        "completed": false,
+                        "failureReason": "stopRuntimeSetupFailed",
+                    ])
+                    return
+                }
+                let stopRequestID = "uiqa-voice-runtime-stop"
+                let stopTurnID = self.ensureCurrentEchoTurnID()
+                self.digitalHumanConversation.beginProviderRequest(
+                    requestID: stopRequestID,
+                    replyText: "UIQA stop fence",
+                    turnID: stopTurnID,
+                    keepsPendingReply: self.routeEchoAudioThroughDigitalHuman
+                )
+                self.startPCMDriveSignalToDigitalHumanRuntime(
+                    signal: signal,
+                    requestID: stopRequestID,
+                    turnID: stopTurnID,
+                    contextKey: self.currentDigitalHumanRuntimeContextKey(),
+                    source: "uiqaVoiceCloneStop",
+                    lifecycleToken: stopRuntime.token,
+                    runtimeInteractionCallback: nil,
+                    voiceCloneUseTicket: stopTicket
+                )
+                _ = self.interruptDigitalHumanPlayback(reason: "uiqaVoiceCloneRuntimeFaultStop")
+
+                let stopStub = stopRuntime.stub
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self, weak stopStub] in
+                    guard let self,
+                          let stopStub else {
+                        return
+                    }
+                    let stoppedPCMRejected = stopStub.sentPCMChunks.isEmpty
+                        && stopStub.interruptCount == 1
+                        && self.digitalHumanConversation.activeRequestID == nil
+
+                    guard let timeoutRuntime = installStubRuntime("providerTimeout") else {
+                        finish([
+                            "completed": false,
+                            "failureReason": "timeoutRuntimeSetupFailed",
+                        ])
+                        return
+                    }
+                    let timeoutRequestID = "uiqa-voice-runtime-timeout"
+                    let timeoutTurnID = self.ensureCurrentEchoTurnID()
+                    self.digitalHumanConversation.beginProviderRequest(
+                        requestID: timeoutRequestID,
+                        replyText: "UIQA provider timeout",
+                        turnID: timeoutTurnID,
+                        keepsPendingReply: self.routeEchoAudioThroughDigitalHuman
+                    )
+                    self.handleVoiceClonePCMDriveFailureWithoutDefaultVoice(
+                        requestID: timeoutRequestID,
+                        turnID: timeoutTurnID,
+                        voiceProfileId: profileId,
+                        outputMode: "tencentAudioDrive",
+                        providerLogId: nil,
+                        providerRequestId: nil,
+                        ownerUserId: ownerUserId,
+                        reason: "providerTimeout",
+                        detail: "UIQA injected provider timeout",
+                        lifecycleToken: timeoutRuntime.token,
+                        runtimeInteractionCallback: nil
+                    )
+
+                    let timeoutStub = timeoutRuntime.stub
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self, weak timeoutStub] in
+                        guard let self,
+                              let timeoutStub else {
+                            return
+                        }
+                        let providerFailureRejected = timeoutStub.sentPCMChunks.isEmpty
+                            && self.digitalHumanConversation.activeRequestID == nil
+                            && self.lastEchoRuntimeFallbackReason == "providerTimeout"
+                            && self.currentEchoAudioOwner == .fallbackMuted
+                            && self.lastVoiceSynthesisEvidenceSummary?.status == "failed"
+                        let evidencePayload: [String: Any] = [
+                            "voiceProfileId": profileId,
+                            "profileVersion": 8,
+                            "role": "personalOwner",
+                            "outputMode": "tencentAudioDrive",
+                            "audioOwner": self.currentEchoAudioOwner.rawValue,
+                            "fallbackReason": self.lastEchoRuntimeFallbackReason ?? "none",
+                            "providerLogId": "redacted",
+                            "rawAudioOmitted": true,
+                        ]
+                        let evidenceRedacted = (evidencePayload["providerLogId"] as? String) == "redacted"
+                            && (evidencePayload["rawAudioOmitted"] as? Bool) == true
+                        let completed = pausedPCMRejected
+                            && deletedTicketRejected
+                            && expiredTicketRejected
+                            && staleGenerationPCMRejected
+                            && accountSwitchPCMRejected
+                            && stoppedPCMRejected
+                            && bindingMismatchRejected
+                            && invalidPCMRejected
+                            && providerFailureRejected
+                            && evidenceRedacted
+                        self.renderVoiceStatus(
+                            text: completed ? "复刻声音运行时故障注入校验完成" : "复刻声音运行时故障注入校验失败",
+                            isVisible: true,
+                            accessibilityIdentifier: "echoVoiceCloneRuntimeFaultStatus"
+                        )
+                        finish([
+                            "completed": completed,
+                            "pausedPCMRejected": pausedPCMRejected,
+                            "deletedTicketRejected": deletedTicketRejected,
+                            "expiredTicketRejected": expiredTicketRejected,
+                            "staleGenerationPCMRejected": staleGenerationPCMRejected,
+                            "accountSwitchPCMRejected": accountSwitchPCMRejected,
+                            "stoppedPCMRejected": stoppedPCMRejected,
+                            "bindingMismatchRejected": bindingMismatchRejected,
+                            "invalidPCMRejected": invalidPCMRejected,
+                            "providerFailureRejected": providerFailureRejected,
+                            "evidenceRedacted": evidenceRedacted,
+                            "evidence": evidencePayload,
+                            "audioOwner": self.currentEchoAudioOwner.rawValue,
+                            "voiceStatusText": self.voiceStatusLabel.text ?? "",
+                        ])
+                    }
+                }
+                }
+            }
+        }
+    }
+
+    private func profileSnapshotForVoiceCloneRuntimeFault(
+        voiceProfileId: String,
+        lifecycleState: VoiceProfileLifecycleState,
+        sampleStatus: VoiceCloneSampleStatus,
+        profileVersion: Int,
+        expiresAt: String,
+        isEnabled: Bool,
+        allowedOperations: Set<String>
+    ) -> VoiceCloneProfileSnapshot {
+        VoiceCloneProfileSnapshot(
+            voiceProfileId: voiceProfileId,
+            sampleStatus: sampleStatus,
+            authorizationCopy: "UIQA only: runtime fault-injection voice profile.",
+            isEnabled: isEnabled,
+            realCloneProviderReady: lifecycleState == .accepted,
+            qualityAcceptanceRequired: false,
+            disableContract: "",
+            deleteContract: "",
+            providerMode: "mockProvider",
+            providerStatus: lifecycleState.rawValue,
+            providerMessage: "",
+            contractVersion: 2,
+            defaultReleaseVisible: false,
+            exitState: lifecycleState == .deleted ? "partial" : "active",
+            accessRevoked: lifecycleState == .paused || lifecycleState == .deleted,
+            localCleanupState: lifecycleState == .deleted ? "tombstoned" : "notRequested",
+            providerCleanupState: "notRequested",
+            providerCleanupReceiptAvailable: false,
+            lifecycleSchemaVersion: "voice-profile-lifecycle-v1",
+            lifecycleState: lifecycleState,
+            profileVersion: profileVersion,
+            retryGeneration: 0,
+            stateChangedAt: "2026-08-08T00:00:00Z",
+            eligibilityAllowed: lifecycleState == .accepted,
+            eligibilityReasonCode: lifecycleState == .accepted
+                ? "eligibleLivingAdultSelf"
+                : "profileUnavailable",
+            consentPurpose: "private_synthesis",
+            consentState: "active",
+            consentExpiresAt: expiresAt,
+            allowedOperations: allowedOperations
+        )
     }
 
     func runUIQATencentBackendPCMDriveMockSmoke(

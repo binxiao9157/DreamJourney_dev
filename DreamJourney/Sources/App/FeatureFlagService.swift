@@ -94,6 +94,7 @@ enum QALaunchScenario: String, CaseIterable {
     case voiceCloneSynthesisRuntimeSmoke = "DJRunVoiceCloneSynthesisRuntimeSmoke"
     case voiceCloneOwnerScopeSmoke = "DJRunVoiceCloneOwnerScopeSmoke"
     case tencentBackendPCMDriveMockSmoke = "DJRunTencentBackendPCMDriveMockSmoke"
+    case voiceCloneRuntimeFaultInjectionSmoke = "DJRunVoiceCloneRuntimeFaultInjectionSmoke"
     case echoTraceExportSmoke = "DJRunEchoTraceExportSmoke"
     case echoRuntimeDiagnosticsExportSmoke = "DJRunEchoRuntimeDiagnosticsExportSmoke"
     case echoTraceEvidencePackageExportSmoke = "DJRunEchoTraceEvidencePackageExportSmoke"
@@ -156,6 +157,7 @@ enum QALaunchScenario: String, CaseIterable {
         .voiceCloneSynthesisRuntimeSmoke,
         .voiceCloneOwnerScopeSmoke,
         .tencentBackendPCMDriveMockSmoke,
+        .voiceCloneRuntimeFaultInjectionSmoke,
         .echoTraceExportSmoke,
         .echoRuntimeDiagnosticsExportSmoke,
         .echoTraceEvidencePackageExportSmoke,
@@ -229,6 +231,7 @@ enum QALaunchScenario: String, CaseIterable {
             return .login
         case .voiceCloneProfileSelectionSmoke,
              .voiceCloneSynthesisRuntimeSmoke,
+             .voiceCloneRuntimeFaultInjectionSmoke,
              .profileCareBackendFailureRetrySmoke,
              .profileCareBackendStateSmoke,
              .profileCareStateSmoke,
@@ -264,7 +267,8 @@ enum QALaunchScenario: String, CaseIterable {
         case .digitalHumanLivePanelSmoke,
              .echoDigitalHumanLifecycleSmoke,
              .digitalHumanRuntimeStubSmoke,
-             .tencentBackendPCMDriveMockSmoke:
+             .tencentBackendPCMDriveMockSmoke,
+             .voiceCloneRuntimeFaultInjectionSmoke:
             return true
         default:
             return false
@@ -301,6 +305,7 @@ enum QALaunchScenario: String, CaseIterable {
              .echoContinuousTurnSmoke,
              .digitalHumanRuntimeStubSmoke,
              .tencentBackendPCMDriveMockSmoke,
+             .voiceCloneRuntimeFaultInjectionSmoke,
              .echoTraceExportSmoke,
              .echoRuntimeDiagnosticsExportSmoke,
              .echoTraceEvidencePackageExportSmoke,

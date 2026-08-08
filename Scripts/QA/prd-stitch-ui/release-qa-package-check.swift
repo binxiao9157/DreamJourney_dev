@@ -245,6 +245,8 @@ assertContains(releaseRegression, "RUN_DIGITAL_HUMAN_TTS_VISEME_GATE", "release 
 assertContains(releaseRegression, "run-digital-human-tts-viseme-gate.sh", "release regression should call digital-human TTS/viseme gate")
 assertContains(releaseRegression, "RUN_VOICE_CLONE_C1_C2_NON_DEVICE_GATE", "release regression should expose the optional voice-clone C1/C2 lifecycle gate")
 assertContains(releaseRegression, "run-voice-clone-c1-c2-non-device-gate.sh", "release regression should call the voice-clone C1/C2 lifecycle gate")
+assertContains(releaseRegression, "RUN_VOICE_CLONE_C2_RUNTIME_FAULT_INJECTION_GATE", "release regression should expose the optional voice-clone C2 runtime fault-injection gate")
+assertContains(releaseRegression, "run-voice-clone-c2-runtime-fault-injection-gate.sh", "release regression should call the voice-clone C2 runtime fault-injection gate")
 assertContains(releaseRegression, "RUN_TENCENT_BACKEND_PCM_DRIVE_MOCK_SMOKE", "release regression should expose optional Tencent backend PCM-drive mock smoke")
 assertContains(releaseRegression, "run-tencent-backend-pcm-drive-mock-smoke.sh", "release regression should call Tencent backend PCM-drive mock smoke")
 assertContains(releaseRegression, "RUN_TENCENT_DIGITAL_HUMAN_PHASE1_NON_DEVICE_GATE", "release regression should expose optional Tencent digital-human Phase 1 non-device gate")
@@ -687,6 +689,7 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/voice-clone-shell-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/voice-clone-exit-receipt-check.swift",
     "Scripts/QA/prd-stitch-ui/voice-clone-c1-c2-contract-check.swift",
+    "Scripts/QA/prd-stitch-ui/voice-clone-runtime-fault-injection-smoke-check.swift",
     "Scripts/QA/prd-stitch-ui/voice-clone-stale-ready-state-check.swift",
     "Scripts/QA/prd-stitch-ui/voice-clone-backend-contract-check.swift",
     "Scripts/QA/prd-stitch-ui/family-digital-human-hidden-contract-check.swift",
@@ -703,6 +706,8 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/voice-clone-synthesis-runtime-smoke-check.swift",
     "Scripts/QA/prd-stitch-ui/run-voice-clone-synthesis-runtime-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-voice-clone-c1-c2-non-device-gate.sh",
+    "Scripts/QA/prd-stitch-ui/run-voice-clone-runtime-fault-injection-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/run-voice-clone-c2-runtime-fault-injection-gate.sh",
     "Scripts/QA/prd-stitch-ui/tencent-backend-pcm-drive-mock-smoke-check.swift",
     "Scripts/QA/prd-stitch-ui/run-tencent-backend-pcm-drive-mock-smoke.sh",
     "Scripts/QA/prd-stitch-ui/digital-human-voice-clone-combo-gate-check.swift",
