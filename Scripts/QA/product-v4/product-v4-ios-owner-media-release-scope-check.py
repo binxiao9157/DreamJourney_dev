@@ -67,9 +67,9 @@ def main() -> None:
         "func runUIQAOwnerTruthMediaTaskStatusSmoke",
     )
     require(
-        "isOwnerTruthMediaCaptureClosedPilotEnabled" in handoff
+        "isOwnerTruthCandidateReviewClosedPilotEnabled" in handoff
         and "OwnerTruthCandidateInboxViewController(" in handoff,
-        "media-to-Candidate handoff must remain closed-pilot gated",
+        "media-to-Candidate handoff must remain server-policy closed-pilot gated",
     )
 
     candidate_surface = section(

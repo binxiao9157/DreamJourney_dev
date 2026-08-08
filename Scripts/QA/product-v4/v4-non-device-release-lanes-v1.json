@@ -6,18 +6,70 @@
       "title": "M0 owner truth",
       "defaultState": "publicCore",
       "defaultOff": false,
-      "requiredEnvironment": [
-        "BACKEND_EVIDENCE_PATH"
-      ],
+      "requiredEnvironment": [],
       "commands": [
         {
-          "id": "ios-m0-non-device-release",
+          "id": "backend-full-contract",
+          "repo": "backend",
+          "argv": [
+            "bash",
+            "scripts/verify_backend.sh"
+          ],
+          "timeoutSeconds": 7200
+        },
+        {
+          "id": "backend-provider-effect-reconciliation",
+          "repo": "backend",
+          "argv": [
+            "bash",
+            "scripts/run-backend-provider-effect-reconciliation-contract-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "backend-runtime-auto-disable",
+          "repo": "backend",
+          "argv": [
+            "bash",
+            "scripts/run-backend-runtime-capability-auto-disable-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "ios-owner-export-deletion",
           "repo": "ios",
           "argv": [
             "bash",
-            "Scripts/QA/product-v4/run-v4-m0-non-device-release-gate.sh"
+            "Scripts/QA/product-v4/run-ios-owner-export-deletion-surface-gate.sh"
           ],
-          "timeoutSeconds": 3600
+          "timeoutSeconds": 1800
+        },
+        {
+          "id": "ios-owner-candidate-client",
+          "repo": "ios",
+          "argv": [
+            "bash",
+            "Scripts/QA/product-v4/run-ios-owner-truth-candidate-client-gate.sh"
+          ],
+          "timeoutSeconds": 1800
+        },
+        {
+          "id": "ios-owner-context-citation",
+          "repo": "ios",
+          "argv": [
+            "bash",
+            "Scripts/QA/product-v4/run-ios-owner-truth-context-citation-gate.sh"
+          ],
+          "timeoutSeconds": 1800
+        },
+        {
+          "id": "ios-generic-iphoneos-build",
+          "repo": "ios",
+          "argv": [
+            "bash",
+            "Scripts/QA/prd-stitch-ui/run-iphoneos-generic-build.sh"
+          ],
+          "timeoutSeconds": 1800
         }
       ],
       "remainingGates": [
@@ -46,6 +98,33 @@
             "scripts/run-backend-owner-truth-media-processing-gate.sh"
           ],
           "timeoutSeconds": 900
+        },
+        {
+          "id": "backend-media-provider-matrix",
+          "repo": "backend",
+          "argv": [
+            "bash",
+            "scripts/run-backend-owner-truth-media-provider-matrix-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "backend-otp-provider-boundary",
+          "repo": "backend",
+          "argv": [
+            "bash",
+            "scripts/run-backend-identity-challenge-provider-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "ios-media-task-status",
+          "repo": "ios",
+          "argv": [
+            "bash",
+            "Scripts/QA/product-v4/run-ios-owner-media-task-status-gate.sh"
+          ],
+          "timeoutSeconds": 1800
         },
         {
           "id": "ios-media-stage2-uiqa",
@@ -85,11 +164,47 @@
           "timeoutSeconds": 900
         },
         {
+          "id": "backend-voice-clone-provider-lifecycle",
+          "repo": "backend",
+          "argv": [
+            "bash",
+            "scripts/run-backend-voice-clone-r5-provider-boundary-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "backend-voice-clone-echo-binding",
+          "repo": "backend",
+          "argv": [
+            "bash",
+            "scripts/run-backend-voice-clone-r5-echo-binding-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
           "id": "ios-voice-dh-readiness",
           "repo": "ios",
           "argv": [
             "bash",
             "Scripts/QA/product-v4/run-ios-voice-dh-readiness-evidence-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "ios-voice-clone-provider-lifecycle",
+          "repo": "ios",
+          "argv": [
+            "bash",
+            "Scripts/QA/product-v4/run-voice-clone-r5-provider-boundary-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "ios-voice-clone-echo-binding",
+          "repo": "ios",
+          "argv": [
+            "bash",
+            "Scripts/QA/product-v4/run-voice-clone-r5-echo-binding-gate.sh"
           ],
           "timeoutSeconds": 900
         },
@@ -122,6 +237,24 @@
       "requiredEnvironment": [],
       "commands": [
         {
+          "id": "backend-publication-formal-api",
+          "repo": "backend",
+          "argv": [
+            "bash",
+            "scripts/run-backend-publication-closed-beta-formal-api-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "backend-publication-visitor-access",
+          "repo": "backend",
+          "argv": [
+            "bash",
+            "scripts/run-backend-publication-visitor-access-gate.sh"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
           "id": "backend-publication-lifecycle-propagation",
           "repo": "backend",
           "argv": [
@@ -129,6 +262,15 @@
             "scripts/run-backend-publication-lifecycle-propagation-g0-gate.sh"
           ],
           "timeoutSeconds": 900
+        },
+        {
+          "id": "ios-publication-default-off-shell",
+          "repo": "ios",
+          "argv": [
+            "bash",
+            "Scripts/QA/product-v4/run-ios-publication-default-off-shell-gate.sh"
+          ],
+          "timeoutSeconds": 1800
         },
         {
           "id": "backend-publication-external-cleanup",

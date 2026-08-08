@@ -261,6 +261,8 @@ assertContains(releaseRegression, "run-knowledge-three-way-merge-model-smoke.sh"
 assertContains(releaseRegression, "run-knowledge-semantic-cache-isolation-model-smoke.sh", "release regression should always model semantic cache account isolation")
 assertContains(releaseRegression, "run-release-policy-cache-model-smoke.sh", "release regression should always model release-policy cache scope and TTL behavior")
 assertContains(releaseRegression, "release-policy-cache-contract-check.swift", "release regression should always guard release-policy cache wiring")
+assertContains(releaseRegression, "v4-non-device-release-lanes-check.py", "release regression should guard the V4 unified non-device runner")
+assertContains(releaseRegression, "publication-default-off-shell-gate-check.swift", "release regression should guard the M2 default-off shell")
 assertContains(releaseRegression, "RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE", "release regression should expose deployed release-policy cache G2 evidence")
 assertContains(releaseRegression, "run-feature-gate-evaluator-model-smoke.sh", "release regression should always model captured route/request policy behavior")
 assertContains(releaseRegression, "captured-feature-policy-gate-check.swift", "release regression should guard cross-repository captured policy wiring")
@@ -466,6 +468,12 @@ if fileExists("\(releaseStateBase)/report.md") {
 
 let requiredScripts = [
     "Scripts/doctor-ios.sh",
+    "Scripts/QA/product-v4/v4-non-device-release-lanes-v1.json",
+    "Scripts/QA/product-v4/v4_non_device_release_lanes.py",
+    "Scripts/QA/product-v4/v4-non-device-release-lanes-check.py",
+    "Scripts/QA/product-v4/run-v4-unified-non-device-evidence.sh",
+    "Scripts/QA/product-v4/publication-default-off-shell-gate-check.swift",
+    "Scripts/QA/product-v4/run-ios-publication-default-off-shell-gate.sh",
     "Scripts/QA/product-v4/product-v4-credential-response-boundary-check.py",
     "Scripts/QA/product-v4/product-v4-mobile-credential-path-retirement-check.py",
     "Scripts/QA/product-v4/product-v4-ios-client-auth-boundary-check.py",

@@ -392,6 +392,27 @@ def build_evidence(
         if "blocked" in statuses and "failed" not in statuses
         else "failed"
     )
+    remaining_gates = [
+        gate
+        for lane in lane_results
+        for gate in lane["remainingGates"]
+    ]
+    external_gates = [
+        gate
+        for gate in remaining_gates
+        if gate["kind"] in {"EXTERNAL_PROVIDER_REQUIRED", "PRODUCT_OR_LEGAL_REQUIRED"}
+    ]
+    device_gates = [gate for gate in remaining_gates if gate["kind"] == "DEVICE_REQUIRED"]
+    non_device_status = (
+        "NON_DEVICE_CODE_COMPLETE"
+        if execute and execution_status == "passed"
+        else "NON_DEVICE_NOT_RUN"
+        if not execute
+        else "NON_DEVICE_GATE_BLOCKED"
+        if execution_status == "blocked"
+        else "NON_DEVICE_GATE_FAILED"
+    )
+    command_results = [command for lane in lane_results for command in lane["commands"]]
     payload = {
         "schemaVersion": EVIDENCE_SCHEMA_VERSION,
         "runId": run_id,
@@ -403,6 +424,22 @@ def build_evidence(
         # A non-device evidence bundle is never a public-release approval.
         "releaseDecision": "NO_GO",
         "releaseDecisionReason": "nonDeviceEvidenceCannotCloseExternalOrDeviceGates",
+        "commandCount": len(command_results),
+        "passedCommandCount": sum(command.get("status") == "passed" for command in command_results),
+        "conclusions": {
+            "nonDevice": {
+                "status": non_device_status,
+                "scope": "repositoryCodeTestsSmokesSimulatorUIQAGenericBuild",
+            },
+            "externalProvider": {
+                "status": "WAITING_EXTERNAL_PROVIDER" if external_gates else "NOT_REQUIRED",
+                "gates": external_gates,
+            },
+            "trueDevice": {
+                "status": "WAITING_TRUE_DEVICE" if device_gates else "NOT_REQUIRED",
+                "gates": device_gates,
+            },
+        },
         "lanes": lane_results,
     }
     manifest_path = output_dir / "manifest.json"
@@ -416,6 +453,9 @@ def build_evidence(
         f"- Run ID: `{run_id}`",
         f"- Mode: `{payload['mode']}`",
         f"- Execution: `{execution_status}`",
+        f"- Non-device conclusion: `{non_device_status}`",
+        f"- External conclusion: `{payload['conclusions']['externalProvider']['status']}`",
+        f"- True-device conclusion: `{payload['conclusions']['trueDevice']['status']}`",
         "- Release decision: `NO_GO` (non-device evidence cannot close external or device gates).",
         "",
         "## Lanes",
@@ -424,7 +464,16 @@ def build_evidence(
         report_lines.append(
             f"- `{lane['id']}`: `{lane['executionStatus']}`, default state `{lane['defaultState']}`."
         )
-    report_lines.extend(["", "- Manifest: `manifest.json`"])
+    report_lines.extend([
+        "",
+        "## Remaining external gates",
+        *[f"- `{gate['kind']}`: `{gate['id']}`" for gate in external_gates],
+        "",
+        "## Remaining true-device gates",
+        *[f"- `{gate['id']}`" for gate in device_gates],
+        "",
+        "- Manifest: `manifest.json`",
+    ])
     (output_dir / "report.md").write_text("\n".join(report_lines) + "\n", encoding="utf-8")
     return manifest_path, payload
 

@@ -794,6 +794,12 @@ done
 run_step "Swift guard publication lifecycle iOS scope gate" "$STATIC_LOG_DIR/publication-lifecycle-ios-scope-gate-check.log" \
   swift "$ROOT_DIR/Scripts/QA/product-v4/publication-lifecycle-ios-scope-gate-check.swift" "$ROOT_DIR"
 
+run_step "Swift guard publication default-off shell" "$STATIC_LOG_DIR/publication-default-off-shell-gate-check.log" \
+  swift "$ROOT_DIR/Scripts/QA/product-v4/publication-default-off-shell-gate-check.swift" "$ROOT_DIR"
+
+run_step "V4 unified non-device runner contract" "$STATIC_LOG_DIR/v4-non-device-release-lanes-check.log" \
+  python3 "$ROOT_DIR/Scripts/QA/product-v4/v4-non-device-release-lanes-check.py"
+
 run_step "iOS git diff --check" "$STATIC_LOG_DIR/ios-diff-check.log" \
   git diff --check
 

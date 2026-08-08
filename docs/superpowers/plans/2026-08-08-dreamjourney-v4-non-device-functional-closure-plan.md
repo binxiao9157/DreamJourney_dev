@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余非真机功能闭环计划
 
 日期：2026-08-08  
-状态：`ACTIVE_R6_IOS_DEFAULT_OFF_SHELL`
+状态：`ACTIVE_R7_UNIFIED_NON_DEVICE_GATE`
 日常非真机开发唯一入口：本文件
 
 ## 1. 目标
@@ -302,6 +302,16 @@
 
 ### ND-R6-02 iOS default-off 壳层
 
+**执行状态**：`COMPLETE_NON_DEVICE_DEFAULT_OFF`（2026-08-09）
+
+**实现证据**
+
+- iOS：`feature/prd-stitch-ui-adaptation@b07c3b8f`，正式 Publication 管理、grant 管理和 Visitor 分别绑定服务端 `publication(owner)`、`visitorAccess(owner)`、`visitorAccess(visitor)` 策略；三项均为非持久化、默认关闭能力。
+- 管理与受邀阅读入口仅位于“我的”现有 Tab；受邀深链必须经过严格 grant/credential 解析、账号租约、服务端 visitor policy 和 generation fence，未新增第四 Tab，也不会回落到私人 Echo、Voice 或 Digital Human。
+- Visitor credential、session 和 projection 仅保存在进程内；过期、撤回、策略拒绝、账号切换和账户 teardown 会同时清除访客内容及 owner/visitor 两套策略缓存。
+- 后端：`main@e8eacc5` 已推送、部署，登录用户可显式请求独立 `audience=visitor` 策略；`family/other` 自声明仍被归一为 owner，避免客户端自提升权限。
+- 19 项 iOS 定向测试、R6 默认关闭组合 Gate、release-policy cache model、generic simulator build、后端 formal API Gate、部署态 release policy smoke、合成账号 visitor policy Postgres smoke 和双仓 `git diff --check` 均通过。
+
 1. 发布管理与 Visitor 入口只允许位于“我的”受控区域，不新增 Tab。
 2. 未成年、匿名、无 grant、过期、撤回和账户切换均立即清除会话与缓存。
 3. Voice/DH 不可用时只能回退 M2 中性文字 Visitor，不能回到私人 Echo。
@@ -348,6 +358,6 @@
 ## 14. 当前交接点
 
 - 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`、`ND-R4-01`、`ND-R4-02`、`ND-R5-01`、`ND-R5-02`、`ND-R6-01`
-- 当前 Work Item：`ND-R6-02 iOS default-off 壳层`
-- 后续 Work Item：`ND-R7-01 统一非真机组合 runner`
+- 当前 Work Item：`ND-R7-01 统一非真机组合 runner`
+- 后续 Work Item：`ND-R7-02 最终交接`
 - 任何外部 Gate 缺失均不得暂停可继续的非真机任务。
