@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余生产功能闭环计划
 
 日期：2026-08-06
-状态：`A0_COMPLETE_A1_CODE_COMPLETE_PROVIDER_CONFIGURATION_PENDING`
+状态：`A0_COMPLETE_A1_PROVIDER_CONFIGURATION_PENDING_A2_CODE_AND_ISOLATED_E2E_COMPLETE`
 日常开发唯一入口：本文件
 前置基线：`docs/superpowers/plans/2026-08-05-dreamjourney-v4-accelerated-functional-closure-plan.md` 已完成，作为非真机合同、默认关闭策略与证据基线，不再重复开发。
 
@@ -128,6 +128,14 @@ flowchart LR
 **验收**：格式矩阵、损坏/伪装 MIME、超时、删除竞争、重复任务、跨 owner、Candidate 来源引用、iOS typed-state/UIQA、部署 Postgres smoke。
 **完成定义**：受支持文档可真实完成 `Source -> Processing -> Candidate -> 人工确认`，且失败不污染 Context。
 **阻断输入**：本地/容器 parser 可先实施；OCR/ASR/视觉 Provider 的真实启用需要供应商、数据处理边界和费用批准。
+
+**执行状态（2026-08-08）**：`CODE_COMPLETE_ISOLATED_E2E_COMPLETE_A1_PROVIDER_CONFIGURATION_PENDING`
+
+- 现有后端已具备本 Slice 所需的受控 Worker：它仅在同一 Vault/Owner、对象未撤权且存储版本仍有效时读取私有字节；`text/plain`、PDF、DOCX 由本地解析器产生私有 `import` Source，再由既有 Candidate Worker 创建待人工确认的 Candidate。任何步骤都不会直接写入 MemoryVersion 或 Echo Context。
+- `media_source_object_processing_results` 已记录处理器标识/版本、处理代次、尝试次数、结果哈希、提取文本哈希、失败码与派生 Source 绑定；图片 OCR、音频 ASR 仍显式 default-off，视频保持 storage-only/notApplicable，均不伪造线索。
+- 2026-08-08 已重新通过后端 Stage 2 Gate（172 tests）、部署容器 disposable Postgres smoke，以及 iOS Candidate handoff UIQA。部署 smoke 验证 Owner 绑定上传、跨 Owner 拒绝、文本处理、派生 Source、pending Candidate、人工确认后才创建 MemoryVersion、删除后从 Context 排除及响应脱敏。
+- A2 的真实 COS 生产 E2E 仍等待 A1 的 bucket/region/HTTPS endpoint/最小权限凭据/SSE 与内容安全配置；该输入到位后只补真实对象存储读写的部署态验收，不重做本地解析或 Candidate 链路。
+- 下一条不依赖 A1 的开发项：`B3`，M0 安全与退出最小运行闭环。
 
 ### A3：M0 受控 cohort 运行开关
 
