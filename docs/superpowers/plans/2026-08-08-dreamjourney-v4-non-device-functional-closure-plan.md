@@ -1,7 +1,7 @@
 # DreamJourney V4 剩余非真机功能闭环计划
 
 日期：2026-08-08  
-状态：`ACTIVE_R6_CLOSED_BETA_API`
+状态：`ACTIVE_R6_IOS_DEFAULT_OFF_SHELL`
 日常非真机开发唯一入口：本文件
 
 ## 1. 目标
@@ -287,6 +287,15 @@
 
 ### ND-R6-01 闭测 API 收敛
 
+**执行状态**：`COMPLETE_NON_DEVICE_DEFAULT_OFF`（2026-08-09）
+
+**实现证据**
+
+- 后端：`main@9fddecb`，已推送、部署；新增 11 条与内部 QA 路由分离的正式闭测合同，全部要求用户会话、隐藏于 OpenAPI，并由服务端 D0 策略返回 `publicationVisitorNotApproved`。
+- 正式路由复用现有 PublicationAuthority、PublicationLifecycle、ShareGrant、Visitor session/reader 服务；Publication 仍只能由 active/confirmed MemoryVersion 创建独立脱敏副本，未复制第二套业务实现。
+- 路由鉴权 inventory 从 180 更新为 191；部署态 Postgres route-auth smoke 证明匿名与机器主体不能访问用户业务路由，正式 Publication 路由对合成用户仍为 403 默认关闭。
+- 后端 1972 项全量测试、全部既有 Publication G0 Gate、新增 formal closed-beta API Gate、FastAPI smoke、`git diff --check` 和线上 `/ready` 均通过；数据库迁移头未变化。
+
 1. 复用现有 PublicationVersion、ShareGrant、Visitor reader 和 cleanup contract。
 2. 明确正式闭测路由与 QA-only 路由边界，所有正式路由继续受 D0 Gate 和 cohort 拒绝。
 3. Publication 只能来自 active/confirmed MemoryVersion 的独立脱敏副本。
@@ -338,7 +347,7 @@
 
 ## 14. 当前交接点
 
-- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`、`ND-R4-01`、`ND-R4-02`、`ND-R5-01`、`ND-R5-02`
-- 当前 Work Item：`ND-R6-01 闭测 API 收敛`
-- 后续 Work Item：`ND-R6-02 iOS default-off 壳层`
+- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`、`ND-R4-01`、`ND-R4-02`、`ND-R5-01`、`ND-R5-02`、`ND-R6-01`
+- 当前 Work Item：`ND-R6-02 iOS default-off 壳层`
+- 后续 Work Item：`ND-R7-01 统一非真机组合 runner`
 - 任何外部 Gate 缺失均不得暂停可继续的非真机任务。
