@@ -267,6 +267,7 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 ### A2 账号恢复和注销生产验证
 
 依赖：A1。
+状态：`CODE_READY / TIMER_ACTIVATION_APPROVAL_REQUIRED / REAL_OTP_E2E_PENDING (2026-08-09)`
 
 开发内容：
 
@@ -277,10 +278,19 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 
 完成定义：注销、恢复一次、第二次拒绝、超期清理和跨账号负向均通过。
 
+当前证据：
+
+- 30 天 `softDeleted`、包含截止日的一次恢复、保留令和终态 tombstone 已由共享状态机与 Postgres 实现。
+- 后端 `c2ce275` 增加服务器时钟驱动、脱敏输出、重复执行幂等的终态清理作业及 systemd timer；全量 1978 项测试通过。
+- 部署容器使用临时 PostgreSQL 数据库通过终态清理 smoke，确认不修改生产业务数据；迁移 head 为 `0085`。
+- systemd 单元已安装并通过校验，timer 保持 `disabled`；启用会触发真实生产数据不可逆删除，必须先取得审批。
+- 新 OTP `subjectId` 与 legacy 账号恢复仍遵循显式 identity promotion 边界，不允许自动认领旧手机号账号；真实同手机号恢复和 iOS 恢复/超期状态仍等待 A1 Provider 与受控迁移证据。
+
 ### A3 Ownership shadow -> enforce
 
 依赖：A1 的真实身份和部署 shadow evidence。
 当前：route auth 已 enforce，191 路由已分类；ownership 仍 shadow。
+状态：`SHADOW_EVIDENCE_READY / WAITING_A1_FOR_ENFORCE (2026-08-09)`
 
 开发内容：
 
@@ -291,6 +301,13 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 5. 保留 kill switch 和审计回退，不允许客户端选择 shadow/enforce。
 
 完成定义：无未解释 shadow mismatch，所有跨账号请求稳定拒绝。
+
+当前证据：
+
+- route ownership registry 已覆盖 191 条路由，`unclassifiedCount=0`。
+- 部署态 Postgres resource-authorization smoke 已验证 Owner 派生、嵌套/显式 Owner 伪造、跨账号读写、资源 ID 碰撞、数据库 Owner 不可变和隔离记录过滤。
+- principal-bound Owner 路由即使在全局 `shadow` 下也会拒绝明确跨账号请求；线上 `AUTH_OWNERSHIP_MODE` 未提前切为 `enforce`。
+- 全局 enforce 与 closed-pilot 观察窗仍依赖 A1 真实 OTP、正式 pilot 账户和无未解释 mismatch 证据。
 
 ## 8. Phase 2：M0 真实私有媒体
 
@@ -661,7 +678,11 @@ M2 完成定义：只对批准 cohort 开放；未批准账户仍保持当前 M0
 
 ## 17. 下一执行点
 
-Phase 0 的 F0-01、F0-02、F0-03 已完成。A1 的代码与全部非真机 Gate 已完成，状态为 `CODE_READY / WAITING_EXTERNAL_CONFIGURATION`；线上继续 fail-closed，不以 synthetic adapter 冒充生产完成。代码主线继续审计 **A2 账号恢复和注销** 的 Provider 无关部分，真实账号恢复验收仍等待 A1 短信配置。
+Phase 0 的 F0-01、F0-02、F0-03 已完成。A1 的代码与全部非真机 Gate 已完成，状态为 `CODE_READY / WAITING_EXTERNAL_CONFIGURATION`；线上继续 fail-closed，不以 synthetic adapter 冒充生产完成。
+
+A2 的 Provider-independent 状态机、终态清理作业、部署态临时 PostgreSQL Gate 和 systemd 单元已经完成。timer 已安装但保持 `disabled`，必须取得生产不可逆删除审批后才可启用。A3 已取得 191 路由零漏分和部署态 A/B 资源授权证据，仍等待 A1 真实 OTP 后才能进入 closed-pilot enforce。
+
+当前可执行关键路径停在 **B1 腾讯 COS 私有对象闭环**：线上 ClamAV 可用，但 storage provider、bucket、region、endpoint 与最小权限凭据均未配置，`OWNER_TRUTH_MEDIA_CAPTURE_ENABLED=false`、媒体 Worker 关闭。B1 外部配置完成前不得启用 B2 或把已有本地/临时处理 Gate 标记为真实媒体闭环。
 
 外部准备同时启动：
 
