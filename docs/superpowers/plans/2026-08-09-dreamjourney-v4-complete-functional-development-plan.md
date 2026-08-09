@@ -337,7 +337,7 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 ### B2 Worker 生产启用
 
 依赖：B1。
-状态：`CODE_READY / DEPLOYMENT_DISABLED / WAITING_B1 (2026-08-09)`
+状态：`CODE_DEPLOYED / WORKERS_DISABLED / WAITING_B1 (2026-08-09)`
 
 实施顺序：
 
@@ -366,6 +366,8 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 - `/config/runtime` 的 async-effect 状态已接入 live store readiness，不再永久返回 `asyncEffectSchemaNotReady`。
 - 媒体删除增加独立环境开关，Compose profile 误启动时会在领取任务前 fail-closed。
 - Worker 专项 15 项、Stage 2 媒体处理 186 项、Provider matrix 44 项及后端全量 1986 项测试通过。
+- 后端 `main@113d2ea` 已部署，migration head 保持 `0085`，公网 readiness 全部通过；部署态 smoke 证明四类 Worker 在 B1 未完成时均以 `asyncEffectV1Disabled` 拒绝启动。
+- 公网 capability 继续保持媒体采集、媒体处理和 async-effect 为关闭；部署没有误开放真实媒体入口，也没有启动任何 Worker profile。
 - 该证据仅表示 B2 可安全部署；B1 真实 COS E2E 通过前，生产 Worker 和媒体采集仍不得启用。
 
 ### B3 文本/PDF/DOCX 真实处理
@@ -690,7 +692,7 @@ Phase 0 的 F0-01、F0-02、F0-03 已完成。A1 的代码与全部非真机 Gat
 
 A2 的 Provider-independent 状态机、终态清理作业、部署态临时 PostgreSQL Gate 和 systemd 单元已经完成。生产不可逆删除已获授权，timer 已启用；首轮生产执行成功且 `purgedCount=0`。A2 剩余外部缺口是 A1 真实 OTP 恢复证据和第三方 Provider/备份删除回执。A3 已取得 191 路由零漏分和部署态 A/B 资源授权证据，仍等待 A1 真实 OTP 后才能进入 closed-pilot enforce。
 
-当前可执行关键路径停在 **B1 腾讯 COS 私有对象闭环**：线上 ClamAV 可用，但 storage provider、bucket、region、endpoint 与最小权限凭据均未配置，`OWNER_TRUTH_MEDIA_CAPTURE_ENABLED=false`、媒体 Worker 关闭。B2 的启动预检和部署安全代码已经完成，但 B1 外部配置完成前不得启用 Worker 或把已有本地/临时处理 Gate 标记为真实媒体闭环。
+当前可执行关键路径停在 **B1 腾讯 COS 私有对象闭环**：线上 ClamAV 可用，但 storage provider、bucket、region、endpoint 与最小权限凭据均未配置，`OWNER_TRUTH_MEDIA_CAPTURE_ENABLED=false`、媒体 Worker 关闭。B2 的启动预检和部署安全代码已部署并通过 fail-closed smoke，但 B1 外部配置完成前不得启用 Worker 或把已有本地/临时处理 Gate 标记为真实媒体闭环。
 
 外部准备同时启动：
 
