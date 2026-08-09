@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 PROFILE = ROOT / "DreamJourney/Sources/Modules/Profile/ProfileViewController.swift"
+BACKEND_CLIENT = ROOT / "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"
 LIFECYCLE_REGISTRY = ROOT / "DreamJourney/Sources/App/AccountLifecycleRuntimeRegistry.swift"
 INVENTORY = ROOT / "Scripts/QA/product-v4/account-store-inventory-v1.json"
 
@@ -20,6 +21,7 @@ def require(condition: bool, message: str) -> None:
 
 def main() -> None:
     profile = PROFILE.read_text(encoding="utf-8")
+    backend_client = BACKEND_CLIENT.read_text(encoding="utf-8")
     lifecycle_registry = LIFECYCLE_REGISTRY.read_text(encoding="utf-8")
     inventory = json.loads(INVENTORY.read_text(encoding="utf-8"))
 
@@ -39,8 +41,25 @@ def main() -> None:
         "FileProtectionType.complete",
         "options: .atomic",
         "retireLegacyUnscopedExports",
+        "issueAccountDataExportDownloadCredential(",
+        "credential.downloadToken",
     ):
         require(marker in profile, f"account export owner-scope marker missing: {marker}")
+
+    for marker in (
+        "struct AccountDataExportDownloadCredentialContract",
+        'path: "/auth/data-export/jobs/\\(jobId)/download-credential"',
+        'additionalHeaders: ["X-DreamJourney-Export-Token": normalizedToken]',
+    ):
+        require(marker in backend_client, f"account export credential marker missing: {marker}")
+    status_snapshot = profile[
+        profile.index("struct AccountDataExportJobStatusSnapshot"):
+        profile.index("enum AccountDataExportJobStatusStore")
+    ]
+    require(
+        "downloadToken" not in status_snapshot,
+        "plaintext export credentials must never persist in the resumable status snapshot",
+    )
 
     require(
         "writeAccountDataExport(\n        _ export: AccountDataExportContract,\n        accountLease: AccountLease" in profile,

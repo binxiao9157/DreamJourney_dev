@@ -1844,7 +1844,12 @@ struct AccountDataRightsStatusSnapshot: Codable, Equatable {
         self.dataExportState = dataExportState
         let externalCleanup = rights["externalCleanup"] as? [String: Any]
         let externalStatus = externalCleanup?["status"] as? String
-        self.externalCleanupState = externalStatus == "completed"
+        let verifiedExternalCleanup = (
+            externalCleanup?["verifiedComplete"] as? Bool == true
+            && externalStatus == "completed"
+            && externalCleanup?["accessState"] as? String == "revoked"
+        )
+        self.externalCleanupState = verifiedExternalCleanup
             ? .completed
             : Self.externalCleanupState(for: externalStatus ?? requestStatus)
         externalCleanupDomainCount = Self.intValue(externalCleanup?["domainCount"])
@@ -1856,11 +1861,7 @@ struct AccountDataRightsStatusSnapshot: Codable, Equatable {
         )?.compactMap(AccountDataRightsExternalDomainSnapshot.init(json:))
         // Completion is accepted only when the backend explicitly projects
         // Provider/object evidence after the access-revocation fence.
-        externalCleanupVerified = (
-            externalCleanup?["verifiedComplete"] as? Bool == true
-            && externalStatus == "completed"
-            && externalCleanup?["accessState"] as? String == "revoked"
-        )
+        externalCleanupVerified = verifiedExternalCleanup
     }
 
     private static func externalCleanupState(
@@ -2059,6 +2060,8 @@ struct AccountDataExportManifestContract {
     let generatedAt: String
     let expiresAt: String
     let dataHash: String
+    let permissionManifestHash: String?
+    let permissionResourceCount: Int
     let moduleSummaryCount: Int
     let externalBoundaryCount: Int
 
@@ -2081,6 +2084,15 @@ struct AccountDataExportManifestContract {
         self.generatedAt = generatedAt
         self.expiresAt = expiresAt
         self.dataHash = dataHash
+        if let hash = json["permissionManifestHash"] as? String {
+            guard hash.count == 64, hash.allSatisfy({ $0.isHexDigit }) else {
+                throw AccountDataExportContractError.malformedResponse
+            }
+            permissionManifestHash = hash
+        } else {
+            permissionManifestHash = nil
+        }
+        permissionResourceCount = max(0, Self.intValue(json["permissionResourceCount"]) ?? 0)
         moduleSummaryCount = moduleSummaries.count
         externalBoundaryCount = externalBoundaries.count
     }
@@ -2148,6 +2160,36 @@ struct AccountDataExportJobContract {
         readyAt = json["readyAt"] as? String
         self.downloadAvailable = downloadAvailable
         manifest = parsedManifest
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+}
+
+struct AccountDataExportDownloadCredentialContract {
+    let schemaVersion: Int
+    let jobId: String
+    let downloadToken: String
+    let expiresAt: String
+
+    init(json: [String: Any], expectedJobId: String) throws {
+        guard let jobId = json["jobId"] as? String,
+              jobId == expectedJobId,
+              let downloadToken = json["downloadToken"] as? String,
+              downloadToken.hasPrefix("dec_"),
+              downloadToken.count <= 128,
+              let expiresAt = json["expiresAt"] as? String,
+              !expiresAt.isEmpty else {
+            throw AccountDataExportContractError.malformedResponse
+        }
+        schemaVersion = Self.intValue(json["schemaVersion"]) ?? 1
+        self.jobId = jobId
+        self.downloadToken = downloadToken
+        self.expiresAt = expiresAt
     }
 
     private static func intValue(_ value: Any?) -> Int? {
@@ -9374,13 +9416,51 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         )
     }
 
-    func downloadAccountDataExportJob(
+    func issueAccountDataExportDownloadCredential(
         userId: String,
         jobId: String,
-        completion: @escaping (Result<AccountDataExportPackageContract, Error>) -> Void
+        completion: @escaping (Result<AccountDataExportDownloadCredentialContract, Error>) -> Void
     ) {
         let normalizedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedUserId.isEmpty, jobId.hasPrefix("dej_") else {
+            completion(.failure(ClientError.accountScopeChanged))
+            return
+        }
+        requestJSON(
+            path: "/auth/data-export/jobs/\(jobId)/download-credential",
+            method: .post,
+            payload: [:],
+            authPolicy: .userRequired,
+            sessionUserId: normalizedUserId
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try AccountDataExportDownloadCredentialContract(
+                        json: object,
+                        expectedJobId: jobId
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func downloadAccountDataExportJob(
+        userId: String,
+        jobId: String,
+        downloadToken: String,
+        completion: @escaping (Result<AccountDataExportPackageContract, Error>) -> Void
+    ) {
+        let normalizedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedToken = downloadToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedUserId.isEmpty,
+              jobId.hasPrefix("dej_"),
+              normalizedToken.hasPrefix("dec_"),
+              normalizedToken.count <= 128 else {
             completion(.failure(ClientError.accountScopeChanged))
             return
         }
@@ -9389,7 +9469,8 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             method: .get,
             payload: nil,
             authPolicy: .userRequired,
-            sessionUserId: normalizedUserId
+            sessionUserId: normalizedUserId,
+            additionalHeaders: ["X-DreamJourney-Export-Token": normalizedToken]
         ) { result in
             switch result {
             case .success(let object):

@@ -1456,9 +1456,45 @@ final class ProfileViewController: UIViewController {
         user: UserModel,
         accountLease: AccountLease
     ) {
-        DreamJourneyBackendClient.shared.downloadAccountDataExportJob(
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            return
+        }
+        DreamJourneyBackendClient.shared.issueAccountDataExportDownloadCredential(
             userId: user.id,
             jobId: job.jobId
+        ) { [weak self] result in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+                return
+            }
+            switch result {
+            case .success(let credential):
+                self.downloadAccountDataExportJob(
+                    job,
+                    credential: credential,
+                    user: user,
+                    accountLease: accountLease
+                )
+            case .failure(let error):
+                self.showToast("导出凭据获取失败：\(error.localizedDescription)", type: .error)
+            }
+        }
+    }
+
+    private func downloadAccountDataExportJob(
+        _ job: AccountDataExportJobContract,
+        credential: AccountDataExportDownloadCredentialContract,
+        user: UserModel,
+        accountLease: AccountLease
+    ) {
+        guard credential.jobId == job.jobId,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            return
+        }
+        DreamJourneyBackendClient.shared.downloadAccountDataExportJob(
+            userId: user.id,
+            jobId: job.jobId,
+            downloadToken: credential.downloadToken
         ) { [weak self] result in
             guard let self,
                   AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {

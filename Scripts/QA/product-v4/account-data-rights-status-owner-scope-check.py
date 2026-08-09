@@ -32,14 +32,17 @@ def main() -> None:
         'let dataExportState = policy["dataExportState"] as? String',
         "externalCleanupState",
         "case pendingExternalEvidence",
-        "self.externalCleanupVerified = false",
+        'externalCleanup?["verifiedComplete"] as? Bool == true',
+        'externalCleanup?["accessState"] as? String == "revoked"',
+        "self.externalCleanupState = verifiedExternalCleanup",
+        "externalCleanupVerified = verifiedExternalCleanup",
         "dataRightsStatusSnapshot = AccountDataRightsStatusSnapshot(json: json)",
     ):
         require(marker in client, f"data rights client contract marker missing: {marker}")
 
     require(
-        "case completed" not in client[client.index("enum AccountDataRightsExternalCleanupState"):client.index("struct AccountDataRightsStatusSnapshot")],
-        "client must not expose a completed external cleanup state from /auth/delete summary",
+        "case completed" in client[client.index("enum AccountDataRightsExternalCleanupState"):client.index("struct AccountDataRightsStatusSnapshot")],
+        "client must expose completed only for verified external cleanup evidence",
     )
     require(
         'case "pending", "dispatched", "accepted", "completed":\n            return .pendingExternalEvidence' in client,

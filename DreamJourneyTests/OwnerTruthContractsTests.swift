@@ -9425,6 +9425,45 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(try store.loadPendingContent(for: prepared.taskID, accountLease: lease), content)
     }
 
+    func testAccountDataRightsCompletionRequiresVerifiedRevokedExternalEvidence() throws {
+        var payload: [String: Any] = [
+            "contractVersion": 1,
+            "deletion": ["deletionState": "softDeleted", "accessState": "revoked"],
+            "accessRevocation": ["status": "completed"],
+            "policy": [
+                "retentionDays": 30,
+                "restoreLimit": 1,
+                "restoreBySamePhone": true,
+                "dataExportSupported": true,
+                "dataExportState": "availableBeforeDeletion",
+            ],
+            "rights": [
+                "requestId": "rights-request-1",
+                "status": "completed",
+                "contractVersion": 1,
+                "executionCount": 1,
+                "receiptCount": 1,
+                "externalCleanup": [
+                    "status": "completed",
+                    "verifiedComplete": false,
+                    "accessState": "revoked",
+                ],
+            ],
+        ]
+        let unverified = try XCTUnwrap(AccountDataRightsStatusSnapshot(json: payload))
+        XCTAssertFalse(unverified.externalCleanupVerified)
+        XCTAssertEqual(unverified.externalCleanupState, .pendingExternalEvidence)
+
+        var rights = try XCTUnwrap(payload["rights"] as? [String: Any])
+        var cleanup = try XCTUnwrap(rights["externalCleanup"] as? [String: Any])
+        cleanup["verifiedComplete"] = true
+        rights["externalCleanup"] = cleanup
+        payload["rights"] = rights
+        let verified = try XCTUnwrap(AccountDataRightsStatusSnapshot(json: payload))
+        XCTAssertTrue(verified.externalCleanupVerified)
+        XCTAssertEqual(verified.externalCleanupState, .completed)
+    }
+
     func testAccountDataExportJobStatusStoreIsOwnerScopedAndResumable() throws {
         let suiteName = "AccountDataExportJobStatusStoreTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -9514,6 +9553,24 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(snapshot.statusSubtitle, "生成失败，可重试")
         XCTAssertFalse(snapshot.downloadAvailable)
         XCTAssertEqual(snapshot.failureCode, "providerUnavailable")
+    }
+
+    func testAccountDataExportDownloadCredentialIsStrictAndEphemeral() throws {
+        let credential = try AccountDataExportDownloadCredentialContract(json: [
+            "schemaVersion": 1,
+            "jobId": "dej_000000000000000000000003",
+            "downloadToken": "dec_0123456789abcdefghijklmnopqrstuvwxyz",
+            "expiresAt": "2026-08-08T00:01:00Z",
+        ], expectedJobId: "dej_000000000000000000000003")
+
+        XCTAssertEqual(credential.jobId, "dej_000000000000000000000003")
+        XCTAssertTrue(credential.downloadToken.hasPrefix("dec_"))
+        XCTAssertThrowsError(try AccountDataExportDownloadCredentialContract(json: [
+            "schemaVersion": 1,
+            "jobId": "dej_000000000000000000000003",
+            "downloadToken": "permanent-object-url",
+            "expiresAt": "2026-08-08T00:01:00Z",
+        ], expectedJobId: "dej_000000000000000000000003"))
     }
 
     func testAccountDataExportRemainsDefaultOffAndFailsClosedWithoutServerPolicy() {

@@ -738,7 +738,7 @@
       "dataClass": "release policy, recovery runtime policy, runtime capability, and QA feature override",
       "ownerScope": "policy scope includes subject/cohort/build; feature override is global QA-only",
       "storage": "standard UserDefaults",
-      "pathOrKey": "dj.releasePolicy.cache.v1.<scope>; dj.recovery.runtime.policy.v1; dj.featureFlags.enabled; dj.featureFlags.schemaVersion",
+      "pathOrKey": "dj.releasePolicy.cache.v2.<scope>; dj.recovery.runtime.policy.v1; dj.featureFlags.enabled; dj.featureFlags.schemaVersion",
       "writer": "ReleasePolicyStore, RecoveryRuntimePolicyStore, FeatureFlagService, DreamJourneyBackendClient",
       "readers": "all feature and runtime gates",
       "cleanup": "invalidate on TTL, subject/cohort/build, authority epoch, or stricter local fallback",
@@ -762,7 +762,7 @@
         {
           "path": "DreamJourney/Sources/Services/ReleasePolicyStore.swift",
           "contains": [
-            "dj.releasePolicy.cache.v1",
+            "dj.releasePolicy.cache.v2",
             "dj.recovery.runtime.policy.v1"
           ]
         }
