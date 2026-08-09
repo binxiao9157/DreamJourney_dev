@@ -218,6 +218,7 @@ for static_check in \
   Scripts/QA/product-v4/product-v4-ios-owner-media-task-status-check.py \
   Scripts/QA/product-v4/product-v4-ios-owner-media-candidate-handoff-check.py \
   Scripts/QA/product-v4/product-v4-ios-owner-media-release-scope-check.py \
+  Scripts/QA/product-v4/family-contribution-export-package-check.py \
   Scripts/QA/product-v4/product-v4-ios-owner-truth-answer-correction-check.py \
   Scripts/QA/product-v4/product-v4-ios-owner-truth-context-citation-check.py \
   Scripts/QA/product-v4/owner-truth-guided-recommendation-activation-static-check.py

@@ -228,7 +228,6 @@ enum AccountDataExportJobStatusStore {
 enum AccountDataExportTemporaryStore {
     private static let rootDirectoryName = "DreamJourneyDataExports"
     private static let fileNamePrefix = "dreamjourney-personal-data-"
-    private static let fileExtension = "json"
 
     static func write(
         _ export: AccountDataExportContract,
@@ -238,6 +237,7 @@ enum AccountDataExportTemporaryStore {
         try write(
             ownerUserId: export.ownerUserId,
             data: export.prettyPrintedJSONData(),
+            fileExtension: "json",
             accountLease: accountLease,
             fileManager: fileManager
         )
@@ -251,6 +251,21 @@ enum AccountDataExportTemporaryStore {
         try write(
             ownerUserId: package.ownerUserId,
             data: package.prettyPrintedJSONData(),
+            fileExtension: "json",
+            accountLease: accountLease,
+            fileManager: fileManager
+        )
+    }
+
+    static func writeArchive(
+        _ archive: AccountDataExportArchiveContract,
+        accountLease: AccountLease,
+        fileManager: FileManager = .default
+    ) throws -> URL {
+        try write(
+            ownerUserId: accountLease.subjectId,
+            data: archive.data,
+            fileExtension: "zip",
             accountLease: accountLease,
             fileManager: fileManager
         )
@@ -259,6 +274,7 @@ enum AccountDataExportTemporaryStore {
     private static func write(
         ownerUserId: String,
         data: Data,
+        fileExtension: String,
         accountLease: AccountLease,
         fileManager: FileManager
     ) throws -> URL {
@@ -317,7 +333,7 @@ enum AccountDataExportTemporaryStore {
         let normalizedFileURL = fileURL.standardizedFileURL
         guard normalizedFileURL.deletingLastPathComponent() == scopedDirectory,
               normalizedFileURL.lastPathComponent.hasPrefix(fileNamePrefix),
-              normalizedFileURL.pathExtension == fileExtension else {
+              ["json", "zip"].contains(normalizedFileURL.pathExtension) else {
             return
         }
         try? fileManager.removeItem(at: normalizedFileURL)
@@ -377,7 +393,7 @@ enum AccountDataExportTemporaryStore {
             let resourceValues = try itemURL.resourceValues(forKeys: [.isDirectoryKey])
             guard resourceValues.isDirectory != true,
                   itemURL.lastPathComponent.hasPrefix(fileNamePrefix),
-                  itemURL.pathExtension == fileExtension else {
+                  ["json", "zip"].contains(itemURL.pathExtension) else {
                 continue
             }
             try fileManager.removeItem(at: itemURL)
@@ -1472,7 +1488,6 @@ final class ProfileViewController: UIViewController {
                 self.downloadAccountDataExportJob(
                     job,
                     credential: credential,
-                    user: user,
                     accountLease: accountLease
                 )
             case .failure(let error):
@@ -1484,15 +1499,14 @@ final class ProfileViewController: UIViewController {
     private func downloadAccountDataExportJob(
         _ job: AccountDataExportJobContract,
         credential: AccountDataExportDownloadCredentialContract,
-        user: UserModel,
         accountLease: AccountLease
     ) {
         guard credential.jobId == job.jobId,
               AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
             return
         }
-        DreamJourneyBackendClient.shared.downloadAccountDataExportJob(
-            userId: user.id,
+        DreamJourneyBackendClient.shared.downloadAccountDataExportArchive(
+            accountLease: accountLease,
             jobId: job.jobId,
             downloadToken: credential.downloadToken
         ) { [weak self] result in
@@ -1501,13 +1515,13 @@ final class ProfileViewController: UIViewController {
                 return
             }
             switch result {
-            case .success(let package):
+            case .success(let archive):
                 do {
-                    let fileURL = try self.writeAccountDataExport(
-                        package,
+                    let fileURL = try AccountDataExportTemporaryStore.writeArchive(
+                        archive,
                         accountLease: accountLease
                     )
-                    if package.isPartial {
+                    if job.manifest?.packageStatus == "partial" {
                         self.showToast("数据副本已生成，部分外部数据未包含", type: .info)
                     }
                     self.presentAccountDataExportShareSheet(
@@ -1576,13 +1590,6 @@ final class ProfileViewController: UIViewController {
         accountLease: AccountLease
     ) throws -> URL {
         try AccountDataExportTemporaryStore.write(export, accountLease: accountLease)
-    }
-
-    private func writeAccountDataExport(
-        _ package: AccountDataExportPackageContract,
-        accountLease: AccountLease
-    ) throws -> URL {
-        try AccountDataExportTemporaryStore.write(package, accountLease: accountLease)
     }
 
     private func presentAccountDataExportShareSheet(

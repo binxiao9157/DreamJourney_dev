@@ -9573,6 +9573,74 @@ final class OwnerTruthContractsTests: XCTestCase {
         ], expectedJobId: "dej_000000000000000000000003"))
     }
 
+    func testAccountDataExportArchiveRequiresZIPSignature() throws {
+        let archive = try AccountDataExportArchiveContract(
+            data: Data([0x50, 0x4B, 0x03, 0x04, 0x00, 0x00])
+        )
+        XCTAssertEqual(archive.data.count, 6)
+        XCTAssertThrowsError(
+            try AccountDataExportArchiveContract(data: Data("not-a-zip".utf8))
+        )
+    }
+
+    func testFamilyContributionContractsKeepMaterialAndOwnerScopeStrict() throws {
+        let grant = try FamilyContributionGrantContract(json: [
+            "grantId": "grant-1",
+            "vaultId": "vault-a",
+            "ownerSubjectId": "owner-a",
+            "contributorSubjectId": "member-a",
+            "relationshipId": "relationship-a",
+            "admissionMode": "closedPilot",
+            "status": "active",
+            "rowVersion": 1,
+        ])
+        XCTAssertTrue(grant.isActive)
+
+        let text = try FamilyContributionSubmissionContract(json: [
+            "submissionId": "submission-text-1",
+            "vaultId": "vault-a",
+            "grantId": grant.grantId,
+            "contributorSubjectId": "member-a",
+            "relationshipId": "relationship-a",
+            "materialKind": "text",
+            "status": "pendingReview",
+            "rowVersion": 1,
+            "text": "家人贡献的一段记忆",
+            "sourceObjectId": NSNull(),
+            "materialIncluded": true,
+        ])
+        XCTAssertTrue(text.isPendingReview)
+        XCTAssertEqual(text.text, "家人贡献的一段记忆")
+
+        let image = try FamilyContributionSubmissionContract(json: [
+            "submissionId": "submission-image-1",
+            "vaultId": "vault-a",
+            "grantId": grant.grantId,
+            "contributorSubjectId": "member-a",
+            "relationshipId": "relationship-a",
+            "materialKind": "image",
+            "status": "accepted",
+            "rowVersion": 2,
+            "text": NSNull(),
+            "sourceObjectId": "source-object-1",
+            "materialIncluded": true,
+        ])
+        XCTAssertEqual(image.sourceObjectId, "source-object-1")
+
+        XCTAssertThrowsError(try FamilyContributionSubmissionContract(json: [
+            "submissionId": "submission-invalid-1",
+            "vaultId": "vault-a",
+            "grantId": grant.grantId,
+            "contributorSubjectId": "member-a",
+            "relationshipId": "relationship-a",
+            "materialKind": "text",
+            "status": "pendingReview",
+            "rowVersion": 1,
+            "text": "",
+            "materialIncluded": true,
+        ]))
+    }
+
     func testAccountDataExportRemainsDefaultOffAndFailsClosedWithoutServerPolicy() {
         XCTAssertFalse(FeatureFlagService.shared.isEnabled(.accountDataExport))
         let evaluator = FeatureGateEvaluator()

@@ -1,3 +1,4 @@
+import PhotosUI
 import UIKit
 
 private enum FamilyCircleLayout {
@@ -220,6 +221,43 @@ final class FamilyCircleViewController: UIViewController {
         return tv
     }()
 
+    private lazy var contributeMemoryButton: UIButton = {
+        var configuration = UIButton.Configuration.tinted()
+        configuration.image = UIImage(systemName: "square.and.pencil")
+        configuration.imagePadding = 7
+        configuration.title = "贡献家庭记忆"
+        configuration.baseForegroundColor = .warmAccent
+        configuration.cornerStyle = .medium
+        let button = UIButton(configuration: configuration)
+        button.isHidden = true
+        button.accessibilityIdentifier = "familyContributionCreateButton"
+        button.addTarget(self, action: #selector(contributeMemoryTapped), for: .touchUpInside)
+        return button
+    }()
+
+    private lazy var reviewContributionsButton: UIButton = {
+        var configuration = UIButton.Configuration.tinted()
+        configuration.image = UIImage(systemName: "tray.full")
+        configuration.imagePadding = 7
+        configuration.title = "待审核贡献"
+        configuration.baseForegroundColor = .warmAccent
+        configuration.cornerStyle = .medium
+        let button = UIButton(configuration: configuration)
+        button.isHidden = true
+        button.accessibilityIdentifier = "familyContributionReviewButton"
+        button.addTarget(self, action: #selector(reviewContributionsTapped), for: .touchUpInside)
+        return button
+    }()
+
+    private lazy var contributionActionsStack: UIStackView = {
+        let stack = UIStackView(arrangedSubviews: [contributeMemoryButton, reviewContributionsButton])
+        stack.axis = .horizontal
+        stack.distribution = .fillEqually
+        stack.spacing = 10
+        stack.isHidden = true
+        return stack
+    }()
+
     // MARK: - UI：底部 slogan
     private let sloganLabel: UILabel = {
         let l = UILabel()
@@ -237,6 +275,9 @@ final class FamilyCircleViewController: UIViewController {
         [.selfAssistant] + members.map { .familyMember($0) }
     }
     private var tableHeightConstraint: NSLayoutConstraint?
+    private var contributionActionsHeightConstraint: NSLayoutConstraint?
+    private var contributorGrants: [FamilyContributionGrantContract] = []
+    private var pendingOwnerContributionCount = 0
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -256,6 +297,7 @@ final class FamilyCircleViewController: UIViewController {
             navigationController?.setNavigationBarHidden(true, animated: animated)
         }
         updateMemberListUI()
+        refreshFamilyContributionState()
         guard let userId = UserManager.shared.currentUser?.id else { return }
         FamilyRepository.shared.refreshFromBackend(userId: userId) { [weak self] result in
             guard case .success = result else { return }
@@ -306,13 +348,14 @@ final class FamilyCircleViewController: UIViewController {
             searchField.centerYAnchor.constraint(equalTo: searchContainer.centerYAnchor),
         ])
 
-        [titleLabel, addButton, inviteSectionLabel, searchContainer, inviteButton,
+        [titleLabel, addButton, inviteSectionLabel, searchContainer, inviteButton, contributionActionsStack,
          circleHeaderLabel, memberCountLabel, membersTableView, sloganLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview($0)
         }
 
         tableHeightConstraint = membersTableView.heightAnchor.constraint(equalToConstant: tableHeight)
+        contributionActionsHeightConstraint = contributionActionsStack.heightAnchor.constraint(equalToConstant: 0)
 
         NSLayoutConstraint.activate([
             // 标题行
@@ -339,7 +382,12 @@ final class FamilyCircleViewController: UIViewController {
             inviteButton.heightAnchor.constraint(equalToConstant: 56),
 
             // 亲友圈列表
-            circleHeaderLabel.topAnchor.constraint(equalTo: inviteButton.bottomAnchor, constant: 28),
+            contributionActionsStack.topAnchor.constraint(equalTo: inviteButton.bottomAnchor, constant: 14),
+            contributionActionsStack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            contributionActionsStack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            contributionActionsHeightConstraint!,
+
+            circleHeaderLabel.topAnchor.constraint(equalTo: contributionActionsStack.bottomAnchor, constant: 24),
             circleHeaderLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
 
             memberCountLabel.centerYAnchor.constraint(equalTo: circleHeaderLabel.centerYAnchor),
@@ -369,6 +417,59 @@ final class FamilyCircleViewController: UIViewController {
         view.layoutIfNeeded()
     }
 
+    private func refreshFamilyContributionState() {
+        guard let user = UserManager.shared.currentUser,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id) else {
+            contributorGrants = []
+            pendingOwnerContributionCount = 0
+            updateFamilyContributionActions()
+            return
+        }
+
+        DreamJourneyBackendClient.shared.listContributorFamilyContributionGrants(
+            accountLease: accountLease
+        ) { [weak self] result in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else { return }
+            if case .success(let grants) = result {
+                self.contributorGrants = grants.filter(\.isActive)
+            } else {
+                self.contributorGrants = []
+            }
+            self.updateFamilyContributionActions()
+        }
+
+        FeatureGateService.shared.refreshPolicy(for: .ownerTruthFamilyContribution) { [weak self] _ in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed,
+                  FeatureGateService.shared.isServerPolicyManagedClosedPilotRouteAllowed(
+                    .ownerTruthFamilyContribution
+                  ) else {
+                self?.pendingOwnerContributionCount = 0
+                self?.updateFamilyContributionActions()
+                return
+            }
+            DreamJourneyBackendClient.shared.listOwnerFamilyContributionSubmissions(
+                accountLease: accountLease
+            ) { [weak self] result in
+                guard let self,
+                      AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else { return }
+                self.pendingOwnerContributionCount = (try? result.get())?
+                    .filter(\.isPendingReview).count ?? 0
+                self.updateFamilyContributionActions()
+            }
+        }
+    }
+
+    private func updateFamilyContributionActions() {
+        contributeMemoryButton.isHidden = contributorGrants.isEmpty
+        reviewContributionsButton.isHidden = pendingOwnerContributionCount == 0
+        reviewContributionsButton.configuration?.title = "待审核贡献 \(pendingOwnerContributionCount)"
+        contributionActionsStack.isHidden = contributeMemoryButton.isHidden
+            && reviewContributionsButton.isHidden
+        contributionActionsHeightConstraint?.constant = contributionActionsStack.isHidden ? 0 : 44
+    }
+
     private func isCurrentPersona(_ option: FamilyPersonaOption) -> Bool {
         let current = DigitalHumanContextStore.shared.current
         switch option {
@@ -387,6 +488,59 @@ final class FamilyCircleViewController: UIViewController {
 
     @objc private func copyInviteTapped() {
         presentFamilyInviteSheet(prefilledPhone: searchField.text)
+    }
+
+    @objc private func contributeMemoryTapped() {
+        guard let user = UserManager.shared.currentUser,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id),
+              !contributorGrants.isEmpty else {
+            showToast("当前没有可用的家庭贡献授权", type: .info)
+            return
+        }
+        let openComposer: (FamilyContributionGrantContract) -> Void = { [weak self] grant in
+            let composer = FamilyContributionComposerViewController(
+                grant: grant,
+                accountLease: accountLease
+            )
+            composer.onSubmissionUpdated = { [weak self] in
+                self?.refreshFamilyContributionState()
+            }
+            self?.navigationController?.pushViewController(composer, animated: true)
+        }
+        if contributorGrants.count == 1, let grant = contributorGrants.first {
+            openComposer(grant)
+            return
+        }
+        let sheet = UIAlertController(
+            title: "选择要贡献给的家人",
+            message: nil,
+            preferredStyle: .actionSheet
+        )
+        for grant in contributorGrants {
+            let relationship = members.first { $0.relationshipId == grant.relationshipId }
+            let title = relationship?.name ?? "家人 \(grant.ownerSubjectId.suffix(4))"
+            sheet.addAction(UIAlertAction(title: title, style: .default) { _ in
+                openComposer(grant)
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = contributeMemoryButton
+            popover.sourceRect = contributeMemoryButton.bounds
+        }
+        present(sheet, animated: true)
+    }
+
+    @objc private func reviewContributionsTapped() {
+        guard let user = UserManager.shared.currentUser,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id) else {
+            return
+        }
+        let review = FamilyContributionReviewViewController(accountLease: accountLease)
+        review.onReviewUpdated = { [weak self] in
+            self?.refreshFamilyContributionState()
+        }
+        navigationController?.pushViewController(review, animated: true)
     }
 
     private func selectPersona(option: FamilyPersonaOption) {
@@ -618,6 +772,20 @@ final class FamilyMemberDetailViewController: UIViewController {
         return button
     }()
 
+    private lazy var contributionAccessButton: UIButton = {
+        var configuration = UIButton.Configuration.tinted()
+        configuration.image = UIImage(systemName: "person.crop.circle.badge.plus")
+        configuration.imagePadding = 8
+        configuration.title = "允许此家人贡献记忆"
+        configuration.baseForegroundColor = .warmAccent
+        configuration.cornerStyle = .medium
+        let button = UIButton(configuration: configuration)
+        button.isHidden = true
+        button.accessibilityIdentifier = "familyContributionAccessButton"
+        button.addTarget(self, action: #selector(contributionAccessTapped), for: .touchUpInside)
+        return button
+    }()
+
     private let boundarySection: UIView = {
         let view = UIView()
         view.backgroundColor = UIColor.white.withAlphaComponent(0.84)
@@ -668,6 +836,9 @@ final class FamilyMemberDetailViewController: UIViewController {
         return label
     }()
 
+    private var familyContributionGrant: FamilyContributionGrantContract?
+    private var contributionAccessHeightConstraint: NSLayoutConstraint?
+
     init(member: FamilyMember) {
         self.member = member
         super.init(nibName: nil, bundle: nil)
@@ -690,6 +861,7 @@ final class FamilyMemberDetailViewController: UIViewController {
             member = refreshedMember
             updateContent()
         }
+        refreshContributionAccess()
     }
 
     private func setupLayout() {
@@ -709,7 +881,8 @@ final class FamilyMemberDetailViewController: UIViewController {
         boundarySection.addSubview(starSwitch)
         boundarySection.addSubview(irreversibleNoticeLabel)
 
-        [avatarView, nameLabel, relationLabel, updatedLabel, voiceStatusLabel, selectButton, boundarySection].forEach {
+        [avatarView, nameLabel, relationLabel, updatedLabel, voiceStatusLabel, selectButton,
+         contributionAccessButton, boundarySection].forEach {
             content.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
@@ -717,6 +890,7 @@ final class FamilyMemberDetailViewController: UIViewController {
          starSwitch, irreversibleNoticeLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
+        contributionAccessHeightConstraint = contributionAccessButton.heightAnchor.constraint(equalToConstant: 0)
 
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -761,7 +935,12 @@ final class FamilyMemberDetailViewController: UIViewController {
             selectButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
             selectButton.heightAnchor.constraint(equalToConstant: 48),
 
-            boundarySection.topAnchor.constraint(equalTo: selectButton.bottomAnchor, constant: 20),
+            contributionAccessButton.topAnchor.constraint(equalTo: selectButton.bottomAnchor, constant: 12),
+            contributionAccessButton.leadingAnchor.constraint(equalTo: selectButton.leadingAnchor),
+            contributionAccessButton.trailingAnchor.constraint(equalTo: selectButton.trailingAnchor),
+            contributionAccessHeightConstraint!,
+
+            boundarySection.topAnchor.constraint(equalTo: contributionAccessButton.bottomAnchor, constant: 20),
             boundarySection.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             boundarySection.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
             boundarySection.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -40),
@@ -813,8 +992,110 @@ final class FamilyMemberDetailViewController: UIViewController {
         starSwitch.accessibilityIdentifier = "familyMemberStarSwitch.\(member.id)"
     }
 
+    private func refreshContributionAccess() {
+        guard member.isAcceptedFamilyRelationship,
+              !member.relationshipId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !member.memberSubjectId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let user = UserManager.shared.currentUser,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id) else {
+            contributionAccessButton.isHidden = true
+            contributionAccessHeightConstraint?.constant = 0
+            return
+        }
+        FeatureGateService.shared.refreshPolicy(for: .ownerTruthFamilyContribution) { [weak self] _ in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed,
+                  FeatureGateService.shared.isServerPolicyManagedClosedPilotRouteAllowed(
+                    .ownerTruthFamilyContribution
+                  ) else {
+                self?.contributionAccessButton.isHidden = true
+                self?.contributionAccessHeightConstraint?.constant = 0
+                return
+            }
+            DreamJourneyBackendClient.shared.listOwnerFamilyContributionGrants(
+                accountLease: accountLease
+            ) { [weak self] result in
+                guard let self,
+                      AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else { return }
+                self.familyContributionGrant = (try? result.get())?.first {
+                    $0.relationshipId == self.member.relationshipId
+                        && $0.contributorSubjectId == self.member.memberSubjectId
+                        && $0.isActive
+                }
+                self.contributionAccessButton.isHidden = false
+                self.contributionAccessHeightConstraint?.constant = 44
+                self.contributionAccessButton.configuration?.title = self.familyContributionGrant == nil
+                    ? "允许此家人贡献记忆"
+                    : "撤销记忆贡献权限"
+                self.contributionAccessButton.configuration?.image = UIImage(
+                    systemName: self.familyContributionGrant == nil
+                        ? "person.crop.circle.badge.plus"
+                        : "person.crop.circle.badge.minus"
+                )
+            }
+        }
+    }
+
     @objc private func selectPersonaTapped() {
         onSelectPersona?(member)
+    }
+
+    @objc private func contributionAccessTapped() {
+        guard let user = UserManager.shared.currentUser,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id) else {
+            return
+        }
+        if let grant = familyContributionGrant {
+            let alert = UIAlertController(
+                title: "撤销贡献权限？",
+                message: "撤销后，此家人之前提交但尚未接受的内容会立即隐藏，不能继续提交。",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+            alert.addAction(UIAlertAction(title: "确认撤销", style: .destructive) { [weak self] _ in
+                self?.setContributionAccess(accountLease: accountLease, existingGrant: grant)
+            })
+            present(alert, animated: true)
+        } else {
+            setContributionAccess(accountLease: accountLease, existingGrant: nil)
+        }
+    }
+
+    private func setContributionAccess(
+        accountLease: AccountLease,
+        existingGrant: FamilyContributionGrantContract?
+    ) {
+        contributionAccessButton.isEnabled = false
+        let completion: (Result<FamilyContributionGrantContract, Error>) -> Void = { [weak self] result in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else { return }
+            self.contributionAccessButton.isEnabled = true
+            switch result {
+            case .success(let grant):
+                self.familyContributionGrant = grant.isActive ? grant : nil
+                self.showToast(
+                    grant.isActive ? "已允许此家人贡献记忆" : "贡献权限已撤销",
+                    type: .success
+                )
+                self.refreshContributionAccess()
+            case .failure(let error):
+                self.showToast("操作失败：\(error.localizedDescription)", type: .error)
+            }
+        }
+        if let existingGrant {
+            DreamJourneyBackendClient.shared.revokeOwnerFamilyContributionGrant(
+                accountLease: accountLease,
+                grant: existingGrant,
+                completion: completion
+            )
+        } else {
+            DreamJourneyBackendClient.shared.createOwnerFamilyContributionGrant(
+                accountLease: accountLease,
+                relationshipId: member.relationshipId,
+                contributorSubjectId: member.memberSubjectId,
+                completion: completion
+            )
+        }
     }
 
     @objc private func starSwitchChanged(_ sender: UISwitch) {
@@ -850,6 +1131,511 @@ final class FamilyMemberDetailViewController: UIViewController {
         updateContent()
         let message = mode == .star ? "已开启星辰陪伴" : "已关闭星辰陪伴"
         showToast(message, type: .success)
+    }
+}
+
+// MARK: - FamilyContributionComposerViewController
+final class FamilyContributionComposerViewController: UIViewController, PHPickerViewControllerDelegate {
+    var onSubmissionUpdated: (() -> Void)?
+
+    private let grant: FamilyContributionGrantContract
+    private let accountLease: AccountLease
+    private var selectedImageData: Data?
+    private var selectedImageFileName = "family-memory.jpg"
+
+    private let materialControl: UISegmentedControl = {
+        let control = UISegmentedControl(items: ["文字", "图片"])
+        control.selectedSegmentIndex = 0
+        control.accessibilityIdentifier = "familyContributionMaterialControl"
+        return control
+    }()
+
+    private let textView: UITextView = {
+        let view = UITextView()
+        view.font = .systemFont(ofSize: 17)
+        view.textColor = UIColor(red: 0.15, green: 0.12, blue: 0.10, alpha: 1)
+        view.backgroundColor = UIColor.white.withAlphaComponent(0.88)
+        view.layer.cornerRadius = 12
+        view.layer.borderWidth = 0.5
+        view.layer.borderColor = UIColor(white: 0.86, alpha: 1).cgColor
+        view.textContainerInset = UIEdgeInsets(top: 14, left: 12, bottom: 14, right: 12)
+        view.accessibilityIdentifier = "familyContributionTextView"
+        return view
+    }()
+
+    private let imagePreview: UIImageView = {
+        let imageView = UIImageView()
+        imageView.contentMode = .scaleAspectFit
+        imageView.backgroundColor = UIColor.white.withAlphaComponent(0.72)
+        imageView.layer.cornerRadius = 12
+        imageView.layer.masksToBounds = true
+        imageView.isHidden = true
+        imageView.accessibilityIdentifier = "familyContributionImagePreview"
+        return imageView
+    }()
+
+    private lazy var chooseImageButton: UIButton = {
+        var configuration = UIButton.Configuration.tinted()
+        configuration.title = "选择一张图片"
+        configuration.image = UIImage(systemName: "photo.on.rectangle")
+        configuration.imagePadding = 8
+        configuration.baseForegroundColor = .warmAccent
+        configuration.cornerStyle = .medium
+        let button = UIButton(configuration: configuration)
+        button.isHidden = true
+        button.accessibilityIdentifier = "familyContributionChooseImageButton"
+        button.addTarget(self, action: #selector(chooseImageTapped), for: .touchUpInside)
+        return button
+    }()
+
+    private let statusLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 13)
+        label.textColor = UIColor(white: 0.46, alpha: 1)
+        label.numberOfLines = 0
+        label.text = "提交后需由档案所有者审核；接受前不会进入记忆或回响。"
+        label.accessibilityIdentifier = "familyContributionSubmitStatus"
+        return label
+    }()
+
+    private lazy var submitButton: UIButton = {
+        var configuration = UIButton.Configuration.filled()
+        configuration.title = "提交审核"
+        configuration.image = UIImage(systemName: "paperplane.fill")
+        configuration.imagePadding = 8
+        configuration.baseBackgroundColor = .warmAccent
+        configuration.baseForegroundColor = .white
+        configuration.cornerStyle = .medium
+        let button = UIButton(configuration: configuration)
+        button.accessibilityIdentifier = "familyContributionSubmitButton"
+        button.addTarget(self, action: #selector(submitTapped), for: .touchUpInside)
+        return button
+    }()
+
+    init(grant: FamilyContributionGrantContract, accountLease: AccountLease) {
+        self.grant = grant
+        self.accountLease = accountLease
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "贡献家庭记忆"
+        view.backgroundColor = .warmBackground
+        showPreviousLevelNavigationIfNeeded(animated: false)
+        setupLayout()
+        materialControl.addTarget(self, action: #selector(materialChanged), for: .valueChanged)
+    }
+
+    private func setupLayout() {
+        let recipientLabel = UILabel()
+        recipientLabel.text = "提交给家人 · \(grant.ownerSubjectId.suffix(4))"
+        recipientLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        recipientLabel.textColor = UIColor(red: 0.30, green: 0.24, blue: 0.18, alpha: 1)
+
+        let stack = UIStackView(arrangedSubviews: [
+            recipientLabel,
+            materialControl,
+            textView,
+            chooseImageButton,
+            imagePreview,
+            statusLabel,
+            submitButton,
+        ])
+        stack.axis = .vertical
+        stack.spacing = 14
+        view.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
+            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            textView.heightAnchor.constraint(equalToConstant: 190),
+            imagePreview.heightAnchor.constraint(equalToConstant: 230),
+            chooseImageButton.heightAnchor.constraint(equalToConstant: 48),
+            submitButton.heightAnchor.constraint(equalToConstant: 50),
+        ])
+    }
+
+    @objc private func materialChanged() {
+        let usesImage = materialControl.selectedSegmentIndex == 1
+        textView.isHidden = usesImage
+        chooseImageButton.isHidden = !usesImage
+        imagePreview.isHidden = !usesImage || selectedImageData == nil
+        statusLabel.text = usesImage
+            ? "图片会先安全上传，档案所有者接受前不会分析或进入回响。"
+            : "提交后需由档案所有者审核；接受前不会进入记忆或回响。"
+    }
+
+    @objc private func chooseImageTapped() {
+        var configuration = PHPickerConfiguration(photoLibrary: .shared())
+        configuration.selectionLimit = 1
+        configuration.filter = .images
+        let picker = PHPickerViewController(configuration: configuration)
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+        guard let result = results.first,
+              result.itemProvider.canLoadObject(ofClass: UIImage.self) else { return }
+        result.itemProvider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
+            guard let self, let image = object as? UIImage else { return }
+            let data = image.jpegData(compressionQuality: 0.86)
+            DispatchQueue.main.async {
+                guard let data, data.count <= 8 * 1024 * 1024 else {
+                    self.showToast("图片过大，请选择较小的图片", type: .error)
+                    return
+                }
+                self.selectedImageData = data
+                self.selectedImageFileName = "family-memory-\(UUID().uuidString.prefix(8)).jpg"
+                self.imagePreview.image = image
+                self.imagePreview.isHidden = false
+                self.chooseImageButton.configuration?.title = "重新选择图片"
+                self.statusLabel.text = "图片已选择，等待提交审核。"
+            }
+        }
+    }
+
+    @objc private func submitTapped() {
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            showToast("账号状态已变化，请重新进入", type: .error)
+            return
+        }
+        setSubmitting(true)
+        let completion: (Result<FamilyContributionSubmissionContract, Error>) -> Void = { [weak self] result in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(self.accountLease, at: .ui).allowed else { return }
+            self.setSubmitting(false)
+            switch result {
+            case .success:
+                self.statusLabel.text = "已提交，等待档案所有者审核。"
+                self.statusLabel.textColor = UIColor(red: 0.24, green: 0.50, blue: 0.30, alpha: 1)
+                self.submitButton.configuration?.title = "已提交"
+                self.submitButton.isEnabled = false
+                self.onSubmissionUpdated?()
+            case .failure(let error):
+                self.statusLabel.text = "提交失败：\(error.localizedDescription)。内容仍保留，可重新提交。"
+                self.statusLabel.textColor = .systemRed
+                self.submitButton.configuration?.title = "重新提交"
+            }
+        }
+        if materialControl.selectedSegmentIndex == 0 {
+            let text = textView.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else {
+                setSubmitting(false)
+                showToast("请输入要贡献的记忆", type: .info)
+                return
+            }
+            DreamJourneyBackendClient.shared.submitFamilyContributionText(
+                accountLease: accountLease,
+                grant: grant,
+                text: text,
+                completion: completion
+            )
+        } else {
+            guard let selectedImageData else {
+                setSubmitting(false)
+                showToast("请先选择图片", type: .info)
+                return
+            }
+            DreamJourneyBackendClient.shared.submitFamilyContributionImage(
+                accountLease: accountLease,
+                grant: grant,
+                fileName: selectedImageFileName,
+                contentType: "image/jpeg",
+                content: selectedImageData,
+                completion: completion
+            )
+        }
+    }
+
+    private func setSubmitting(_ submitting: Bool) {
+        submitButton.isEnabled = !submitting
+        materialControl.isEnabled = !submitting
+        textView.isEditable = !submitting
+        chooseImageButton.isEnabled = !submitting
+        submitButton.configuration?.showsActivityIndicator = submitting
+        if submitting {
+            submitButton.configuration?.title = "正在提交"
+            statusLabel.text = "正在安全提交，请稍候。"
+            statusLabel.textColor = UIColor(white: 0.46, alpha: 1)
+        }
+    }
+}
+
+// MARK: - FamilyContributionReviewViewController
+final class FamilyContributionReviewViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
+    var onReviewUpdated: (() -> Void)?
+
+    private let accountLease: AccountLease
+    private var submissions: [FamilyContributionSubmissionContract] = []
+    private let tableView = UITableView(frame: .zero, style: .insetGrouped)
+    private let emptyLabel: UILabel = {
+        let label = UILabel()
+        label.text = "暂无待审核的家庭贡献"
+        label.font = .systemFont(ofSize: 15)
+        label.textColor = UIColor(white: 0.52, alpha: 1)
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        return label
+    }()
+
+    init(accountLease: AccountLease) {
+        self.accountLease = accountLease
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "家庭贡献审核"
+        view.backgroundColor = .warmBackground
+        showPreviousLevelNavigationIfNeeded(animated: false)
+        tableView.backgroundColor = .clear
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.accessibilityIdentifier = "familyContributionReviewList"
+        view.addSubview(tableView)
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .refresh,
+            target: self,
+            action: #selector(refreshTapped)
+        )
+        loadSubmissions()
+    }
+
+    @objc private func refreshTapped() {
+        loadSubmissions()
+    }
+
+    private func loadSubmissions() {
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else { return }
+        navigationItem.rightBarButtonItem?.isEnabled = false
+        DreamJourneyBackendClient.shared.listOwnerFamilyContributionSubmissions(
+            accountLease: accountLease
+        ) { [weak self] result in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(self.accountLease, at: .ui).allowed else { return }
+            self.navigationItem.rightBarButtonItem?.isEnabled = true
+            switch result {
+            case .success(let rows):
+                self.submissions = rows
+                    .filter { $0.status != "withdrawn" }
+                    .sorted { lhs, rhs in
+                        if lhs.isPendingReview != rhs.isPendingReview { return lhs.isPendingReview }
+                        return lhs.submissionId < rhs.submissionId
+                    }
+                self.tableView.backgroundView = self.submissions.isEmpty ? self.emptyLabel : nil
+                self.tableView.reloadData()
+            case .failure(let error):
+                self.emptyLabel.text = "加载失败：\(error.localizedDescription)\n可点击右上角重试"
+                self.tableView.backgroundView = self.emptyLabel
+            }
+        }
+    }
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        submissions.count
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let reuseIdentifier = "familyContributionReviewCell"
+        let cell = tableView.dequeueReusableCell(withIdentifier: reuseIdentifier)
+            ?? UITableViewCell(style: .subtitle, reuseIdentifier: reuseIdentifier)
+        let item = submissions[indexPath.row]
+        cell.textLabel?.text = item.materialKind == "text"
+            ? (item.text ?? "文字记忆")
+            : "图片记忆"
+        cell.textLabel?.numberOfLines = 2
+        cell.detailTextLabel?.text = Self.statusText(item.status)
+        cell.accessoryType = item.isPendingReview ? .disclosureIndicator : .none
+        cell.selectionStyle = item.isPendingReview ? .default : .none
+        cell.accessibilityIdentifier = "familyContributionReviewItem.\(item.submissionId)"
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        let item = submissions[indexPath.row]
+        guard item.isPendingReview else { return }
+        if item.materialKind == "image" {
+            showImageReview(item)
+        } else {
+            showReviewDecision(item, image: nil)
+        }
+    }
+
+    private func showImageReview(_ submission: FamilyContributionSubmissionContract) {
+        showToast("正在读取图片", type: .info)
+        DreamJourneyBackendClient.shared.readOwnerFamilyContributionImage(
+            accountLease: accountLease,
+            submission: submission
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let data):
+                guard let image = UIImage(data: data) else {
+                    self.showToast("图片格式无法读取", type: .error)
+                    return
+                }
+                self.showReviewDecision(submission, image: image)
+            case .failure(let error):
+                self.showToast("图片读取失败：\(error.localizedDescription)", type: .error)
+            }
+        }
+    }
+
+    private func showReviewDecision(
+        _ submission: FamilyContributionSubmissionContract,
+        image: UIImage?
+    ) {
+        let review = FamilyContributionDecisionViewController(
+            submission: submission,
+            image: image
+        )
+        review.onDecision = { [weak self, weak review] accepted in
+            review?.setSubmitting(true)
+            self?.decide(submission, accepted: accepted) { success in
+                review?.setSubmitting(false)
+                if success {
+                    review?.dismiss(animated: true)
+                }
+            }
+        }
+        present(review, animated: true)
+    }
+
+    private func decide(
+        _ submission: FamilyContributionSubmissionContract,
+        accepted: Bool,
+        completion: @escaping (Bool) -> Void
+    ) {
+        DreamJourneyBackendClient.shared.reviewOwnerFamilyContributionSubmission(
+            accountLease: accountLease,
+            submission: submission,
+            accepted: accepted
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success:
+                self.showToast(accepted ? "已接受，等待生成正式记忆" : "已拒绝此贡献", type: .success)
+                self.onReviewUpdated?()
+                self.loadSubmissions()
+                completion(true)
+            case .failure(let error):
+                self.showToast("审核失败：\(error.localizedDescription)", type: .error)
+                completion(false)
+            }
+        }
+    }
+
+    private static func statusText(_ status: String) -> String {
+        switch status {
+        case "pendingReview": return "等待审核"
+        case "accepted": return "已接受"
+        case "rejected": return "已拒绝"
+        default: return "已撤回"
+        }
+    }
+}
+
+private final class FamilyContributionDecisionViewController: UIViewController {
+    var onDecision: ((Bool) -> Void)?
+
+    private let submission: FamilyContributionSubmissionContract
+    private let image: UIImage?
+    private lazy var acceptButton = makeButton(
+        title: "接受并进入候选记忆",
+        style: .filled(),
+        accepted: true
+    )
+    private lazy var rejectButton = makeButton(title: "拒绝", style: .tinted(), accepted: false)
+
+    init(submission: FamilyContributionSubmissionContract, image: UIImage?) {
+        self.submission = submission
+        self.image = image
+        super.init(nibName: nil, bundle: nil)
+        modalPresentationStyle = .pageSheet
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .warmBackground
+        let titleLabel = UILabel()
+        titleLabel.text = "审核家庭贡献"
+        titleLabel.font = .systemFont(ofSize: 22, weight: .bold)
+
+        let contentView: UIView
+        if let image {
+            let imageView = UIImageView(image: image)
+            imageView.contentMode = .scaleAspectFit
+            imageView.layer.cornerRadius = 10
+            imageView.layer.masksToBounds = true
+            contentView = imageView
+        } else {
+            let label = UILabel()
+            label.text = submission.text
+            label.font = .systemFont(ofSize: 17)
+            label.numberOfLines = 0
+            label.backgroundColor = UIColor.white.withAlphaComponent(0.82)
+            label.layer.cornerRadius = 10
+            label.layer.masksToBounds = true
+            contentView = label
+        }
+        let notice = UILabel()
+        notice.text = "接受后内容才会进入候选记忆，仍需按正式记忆流程确认。"
+        notice.font = .systemFont(ofSize: 13)
+        notice.textColor = UIColor(white: 0.48, alpha: 1)
+        notice.numberOfLines = 0
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, contentView, notice, acceptButton, rejectButton])
+        stack.axis = .vertical
+        stack.spacing = 14
+        view.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
+            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 180),
+            acceptButton.heightAnchor.constraint(equalToConstant: 48),
+            rejectButton.heightAnchor.constraint(equalToConstant: 48),
+        ])
+    }
+
+    func setSubmitting(_ submitting: Bool) {
+        acceptButton.isEnabled = !submitting
+        rejectButton.isEnabled = !submitting
+        acceptButton.configuration?.showsActivityIndicator = submitting
+    }
+
+    private func makeButton(
+        title: String,
+        style: UIButton.Configuration,
+        accepted: Bool
+    ) -> UIButton {
+        var configuration = style
+        configuration.title = title
+        configuration.baseBackgroundColor = accepted ? .warmAccent : nil
+        configuration.baseForegroundColor = accepted ? .white : .warmAccent
+        configuration.cornerStyle = .medium
+        let button = UIButton(configuration: configuration)
+        button.addAction(UIAction { [weak self] _ in self?.onDecision?(accepted) }, for: .touchUpInside)
+        return button
     }
 }
 

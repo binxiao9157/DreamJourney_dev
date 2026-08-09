@@ -743,3 +743,41 @@ A2 的 Provider-independent 状态机、终态清理作业、部署态临时 Pos
 4. 选择成年人强身份/活体 Provider。
 
 外部参数到位顺序决定 A1、B1、B4、E1 何时从 `CONFIG_MISSING` 进入真实部署。缺失配置不阻断 F0、Worker 部署模板、V2 切换保护和证据更新，但对应能力不得标记完成或开放。
+
+## 18. 2026-08-09 非真机功能收敛增量
+
+以下能力已完成代码与本地/模拟器合同闭环，统一保持 default-off 或 synthetic-only，不代表真实 Provider 和真机验收完成：
+
+1. **C4 家庭贡献闭环**
+   - 后端提供 Owner 授权、家人文字/图片贡献、待审核列表、接受/拒绝和撤权即时隐藏合同。
+   - 图片使用既有私有媒体适配器；Owner 读取时再次执行 Vault 与状态授权，贡献者不能借贡献权限读取 Vault。
+   - iOS 已提供家人选择、文字/图片提交、提交失败重试、Owner 审核与授权撤销入口；功能由服务端 closed-pilot policy 决定，公开版本默认不展示。
+   - schema head 新增 `0087_owner_truth_family_contribution_review`，为 additive/default-off 迁移。
+
+2. **D1 完整导出包生成器**
+   - 现有 Owner-scoped 导出作业可生成 ZIP，包含 `data-export.json`、`permissions.json`、`package-manifest.json` 和授权媒体字节。
+   - 生成过程校验 owner、对象状态、大小和 SHA-256；支持大小上限与取消回调，失败及响应结束后清理临时文件。
+   - 下载继续使用一次性短期 credential，不暴露对象 key 或永久 URL；iOS 以受保护临时 ZIP 分享并在生命周期切换时清理。
+   - 当前使用本地对象 Adapter 完成字节验证；腾讯 COS 配置到位后仍须补真实对象 readback E2E。
+
+3. **D2 外部删除执行框架**
+   - 对象存储、声音、数字人、通知、备份统一进入五域 Provider registry。
+   - `completed / partial / unknown / unsupported`、超时、幂等、dead-letter/人工复核均由持久化 receipt 收敛；原始 Provider 错误和值不进入公开证据。
+   - fake Provider 单测及可选 PostgreSQL smoke 已纳入组合 Gate；真实 Provider 删除回执仍按各 Provider 能力验收。
+
+4. **D3 closed-pilot 发布控制工具**
+   - synthetic allowlist、单功能逐步启用、readiness、kill switch、显式回滚和脱敏审计摘要已固化为 dry-run planner。
+   - 工具只生成授权计划，不直接改生产环境或开放真实流量。
+
+5. **APNs 后端基础能力**
+   - 已固定 device token 注册、topic/environment 隔离、任务幂等、失败重试和 delivery receipt 合同。
+   - 当前仅提供 ephemeral token vault 与 fake Provider，`/config/runtime` 明确返回 `realProviderReady=false`；默认关闭，不宣称 Apple 已接收或真机已到达。
+
+统一验证入口：
+
+- 后端：`scripts/run-backend-v4-family-rights-pilot-notification-gate.sh`
+- D2 PostgreSQL：`RUN_POSTGRES_EXTERNAL_DELETION_SMOKE=1 scripts/run-backend-data-rights-external-deletion-executor-gate.sh`
+- iOS C4/D1：`Scripts/QA/product-v4/run-ios-family-contribution-export-package-gate.sh`
+- iOS 统一门：`Scripts/QA/product-v4/run-v4-m0-non-device-release-gate.sh`
+
+本增量剩余外部条件：腾讯 COS 私有 bucket/region/最小权限/SSE、真实 APNs Provider 凭据与真机送达、各第三方删除能力及回执。上述条件缺失不阻断代码提交，但对应能力继续 fail-closed。

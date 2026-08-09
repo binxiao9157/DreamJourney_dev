@@ -376,6 +376,7 @@ final class FeatureGateService {
         .ownerTextCaptureV1,
         .ownerMediaCaptureV1,
         .ownerMediaProcessingV1,
+        .ownerTruthFamilyContribution,
         .ownerTruthCandidateReview,
         .accountDataExport,
         .publicationManagementM2,
@@ -818,6 +819,7 @@ final class FeatureGateService {
              .ownerTruthLifeMap,
              .ownerTruthMemorySearch,
              .ownerTruthCandidateReview,
+             .ownerTruthFamilyContribution,
              .ownerTextCaptureV1,
              .profileSettings,
              .legalCenter,
@@ -2243,6 +2245,149 @@ struct AccountDataExportPackageContract {
         if let value = value as? NSNumber { return value.intValue }
         if let value = value as? String { return Int(value) }
         return nil
+    }
+}
+
+enum FamilyContributionContractError: LocalizedError {
+    case malformedResponse
+    case ownerScopeMismatch
+    case invalidMaterial
+
+    var errorDescription: String? {
+        switch self {
+        case .malformedResponse:
+            return "家庭贡献数据格式无效"
+        case .ownerScopeMismatch:
+            return "家庭贡献授权与当前账号不一致"
+        case .invalidMaterial:
+            return "请选择有效的文字或图片"
+        }
+    }
+}
+
+struct FamilyContributionGrantContract: Equatable, Identifiable {
+    let grantId: String
+    let vaultId: String
+    let ownerSubjectId: String
+    let contributorSubjectId: String
+    let relationshipId: String
+    let admissionMode: String
+    let status: String
+    let rowVersion: Int
+
+    var id: String { grantId }
+    var isActive: Bool { status == "active" }
+
+    init(json: [String: Any]) throws {
+        guard let grantId = Self.identifier(json["grantId"]),
+              let vaultId = Self.identifier(json["vaultId"]),
+              let ownerSubjectId = Self.identifier(json["ownerSubjectId"]),
+              let contributorSubjectId = Self.identifier(json["contributorSubjectId"]),
+              let relationshipId = Self.identifier(json["relationshipId"]),
+              let admissionMode = json["admissionMode"] as? String,
+              let status = json["status"] as? String,
+              ["active", "revoked"].contains(status),
+              let rowVersion = Self.intValue(json["rowVersion"]),
+              rowVersion > 0 else {
+            throw FamilyContributionContractError.malformedResponse
+        }
+        self.grantId = grantId
+        self.vaultId = vaultId
+        self.ownerSubjectId = ownerSubjectId
+        self.contributorSubjectId = contributorSubjectId
+        self.relationshipId = relationshipId
+        self.admissionMode = admissionMode
+        self.status = status
+        self.rowVersion = rowVersion
+    }
+
+    private static func identifier(_ value: Any?) -> String? {
+        let normalized = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        return nil
+    }
+}
+
+struct FamilyContributionSubmissionContract: Equatable, Identifiable {
+    let submissionId: String
+    let vaultId: String
+    let grantId: String
+    let contributorSubjectId: String
+    let relationshipId: String
+    let materialKind: String
+    let status: String
+    let rowVersion: Int
+    let text: String?
+    let sourceObjectId: String?
+    let materialIncluded: Bool
+
+    var id: String { submissionId }
+    var isPendingReview: Bool { status == "pendingReview" }
+
+    init(json: [String: Any]) throws {
+        guard let submissionId = Self.identifier(json["submissionId"]),
+              let vaultId = Self.identifier(json["vaultId"]),
+              let grantId = Self.identifier(json["grantId"]),
+              let contributorSubjectId = Self.identifier(json["contributorSubjectId"]),
+              let relationshipId = Self.identifier(json["relationshipId"]),
+              let materialKind = json["materialKind"] as? String,
+              ["text", "image"].contains(materialKind),
+              let status = json["status"] as? String,
+              ["pendingReview", "accepted", "rejected", "withdrawn"].contains(status),
+              let rowVersion = Self.intValue(json["rowVersion"]),
+              rowVersion > 0,
+              let materialIncluded = json["materialIncluded"] as? Bool else {
+            throw FamilyContributionContractError.malformedResponse
+        }
+        let text = (json["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sourceObjectId = Self.identifier(json["sourceObjectId"])
+        if materialKind == "text", materialIncluded, text?.isEmpty != false {
+            throw FamilyContributionContractError.malformedResponse
+        }
+        if materialKind == "image", sourceObjectId == nil {
+            throw FamilyContributionContractError.malformedResponse
+        }
+        self.submissionId = submissionId
+        self.vaultId = vaultId
+        self.grantId = grantId
+        self.contributorSubjectId = contributorSubjectId
+        self.relationshipId = relationshipId
+        self.materialKind = materialKind
+        self.status = status
+        self.rowVersion = rowVersion
+        self.text = text
+        self.sourceObjectId = sourceObjectId
+        self.materialIncluded = materialIncluded
+    }
+
+    private static func identifier(_ value: Any?) -> String? {
+        let normalized = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        return nil
+    }
+}
+
+struct AccountDataExportArchiveContract {
+    let data: Data
+
+    init(data: Data) throws {
+        guard data.count >= 4,
+              data[0] == 0x50,
+              data[1] == 0x4B,
+              [0x03, 0x05, 0x07].contains(data[2]) else {
+            throw AccountDataExportContractError.malformedResponse
+        }
+        self.data = data
     }
 }
 
@@ -9489,6 +9634,80 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         }
     }
 
+    func downloadAccountDataExportArchive(
+        accountLease: AccountLease,
+        jobId: String,
+        downloadToken: String,
+        completion: @escaping (Result<AccountDataExportArchiveContract, Error>) -> Void
+    ) {
+        let normalizedToken = downloadToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard jobId.hasPrefix("dej_"),
+              normalizedToken.hasPrefix("dec_"),
+              normalizedToken.count <= 128,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed,
+              let session = currentAuthenticatedSession,
+              session.userId == accountLease.subjectId else {
+            completion(.failure(ClientError.accountScopeChanged))
+            return
+        }
+        let decision = requestFeatureDecision(for: .accountDataExport)
+        guard decision.allowed else {
+            completion(.failure(ClientError.featurePolicyDenied(
+                feature: DJFeature.accountDataExport.rawValue,
+                reason: decision.reason
+            )))
+            return
+        }
+
+        let path = "/auth/data-export/jobs/\(jobId)/download?format=zip"
+        let endpoint = EndpointDescriptor(
+            path: path,
+            method: .get,
+            authPolicy: .userRequired,
+            payload: nil,
+            sessionUserId: accountLease.subjectId
+        )
+        guard var headers = authHeaders(for: endpoint.authPolicy, session: session) else {
+            completion(.failure(ClientError.userAuthenticationRequired))
+            return
+        }
+        headers.add(name: "X-DreamJourney-Export-Token", value: normalizedToken)
+        headers.add(name: "X-DreamJourney-Client-Build", value: String(FeatureGateService.shared.clientBuild))
+        headers.add(name: "X-DreamJourney-Auth-Contract-Version", value: String(session.contractVersion))
+        headers.add(name: "X-DreamJourney-Request-Purpose", value: endpoint.purpose)
+        headers.add(name: "X-DreamJourney-Owner-Binding", value: endpoint.ownerBinding)
+        for (name, value) in FeatureGateService.shared.metadataHeaders(for: decision) {
+            headers.add(name: name, value: value)
+        }
+
+        transportSession.request(
+            "\(baseURL)\(path)",
+            method: .get,
+            headers: headers
+        )
+        .validate(statusCode: 200..<300)
+        .responseData(queue: .global(qos: .utility)) { response in
+            guard AccountLeaseRuntime.shared.validate(accountLease, at: .commit).allowed,
+                  self.currentAuthenticatedSession?.matchesCASIdentity(session) == true else {
+                DispatchQueue.main.async {
+                    completion(.failure(ClientError.accountScopeChanged))
+                }
+                return
+            }
+            let result: Result<AccountDataExportArchiveContract, Error>
+            switch response.result {
+            case .success(let data):
+                do { result = .success(try AccountDataExportArchiveContract(data: data)) }
+                catch { result = .failure(error) }
+            case .failure(let error):
+                result = .failure(error)
+            }
+            DispatchQueue.main.async {
+                completion(result)
+            }
+        }
+    }
+
     private func requestAccountDataExportJob(
         path: String,
         method: HTTPMethod,
@@ -9986,6 +10205,507 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             case .failure(let error):
                 completion(.failure(error))
             }
+        }
+    }
+
+    func listOwnerFamilyContributionGrants(
+        accountLease: AccountLease,
+        completion: @escaping (Result<[FamilyContributionGrantContract], Error>) -> Void
+    ) {
+        let decision = requestFeatureDecision(for: .ownerTruthFamilyContribution)
+        guard decision.allowed else {
+            completion(.failure(ClientError.featurePolicyDenied(
+                feature: DJFeature.ownerTruthFamilyContribution.rawValue,
+                reason: decision.reason
+            )))
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(accountLease.vaultId))/family-contribution/grants",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision
+        ) { result in
+            completion(result.flatMap { object in
+                Self.parseFamilyContributionGrants(object, expectedVaultId: accountLease.vaultId)
+            })
+        }
+    }
+
+    func listContributorFamilyContributionGrants(
+        accountLease: AccountLease,
+        completion: @escaping (Result<[FamilyContributionGrantContract], Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/v2/family-contribution/grants",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId
+        ) { result in
+            completion(result.flatMap { object in
+                Self.parseFamilyContributionGrants(object, expectedContributorId: accountLease.subjectId)
+            })
+        }
+    }
+
+    func createOwnerFamilyContributionGrant(
+        accountLease: AccountLease,
+        relationshipId: String,
+        contributorSubjectId: String,
+        completion: @escaping (Result<FamilyContributionGrantContract, Error>) -> Void
+    ) {
+        let decision = requestFeatureDecision(for: .ownerTruthFamilyContribution)
+        guard decision.allowed else {
+            completion(.failure(ClientError.featurePolicyDenied(
+                feature: DJFeature.ownerTruthFamilyContribution.rawValue,
+                reason: decision.reason
+            )))
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(accountLease.vaultId))/family-contribution/grants",
+            method: .post,
+            payload: [
+                "commandId": UUID().uuidString.lowercased(),
+                "relationshipId": relationshipId,
+                "contributorSubjectId": contributorSubjectId,
+            ],
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision
+        ) { result in
+            completion(result.flatMap { object in
+                guard let json = object["grant"] as? [String: Any] else {
+                    return .failure(FamilyContributionContractError.malformedResponse)
+                }
+                do {
+                    let grant = try FamilyContributionGrantContract(json: json)
+                    guard grant.vaultId == accountLease.vaultId,
+                          grant.ownerSubjectId == accountLease.subjectId else {
+                        return .failure(FamilyContributionContractError.ownerScopeMismatch)
+                    }
+                    return .success(grant)
+                } catch {
+                    return .failure(error)
+                }
+            })
+        }
+    }
+
+    func revokeOwnerFamilyContributionGrant(
+        accountLease: AccountLease,
+        grant: FamilyContributionGrantContract,
+        completion: @escaping (Result<FamilyContributionGrantContract, Error>) -> Void
+    ) {
+        guard grant.vaultId == accountLease.vaultId,
+              grant.ownerSubjectId == accountLease.subjectId else {
+            completion(.failure(FamilyContributionContractError.ownerScopeMismatch))
+            return
+        }
+        let decision = requestFeatureDecision(for: .ownerTruthFamilyContribution)
+        guard decision.allowed else {
+            completion(.failure(ClientError.featurePolicyDenied(
+                feature: DJFeature.ownerTruthFamilyContribution.rawValue,
+                reason: decision.reason
+            )))
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(grant.vaultId))/family-contribution/grants/\(pathComponent(grant.grantId))/revoke",
+            method: .post,
+            payload: [
+                "commandId": UUID().uuidString.lowercased(),
+                "expectedVersion": grant.rowVersion,
+                "reason": "ownerRequested",
+            ],
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision
+        ) { result in
+            completion(result.flatMap { object in
+                guard let json = object["grant"] as? [String: Any] else {
+                    return .failure(FamilyContributionContractError.malformedResponse)
+                }
+                do { return .success(try FamilyContributionGrantContract(json: json)) }
+                catch { return .failure(error) }
+            })
+        }
+    }
+
+    func listOwnerFamilyContributionSubmissions(
+        accountLease: AccountLease,
+        completion: @escaping (Result<[FamilyContributionSubmissionContract], Error>) -> Void
+    ) {
+        let decision = requestFeatureDecision(for: .ownerTruthFamilyContribution)
+        guard decision.allowed else {
+            completion(.failure(ClientError.featurePolicyDenied(
+                feature: DJFeature.ownerTruthFamilyContribution.rawValue,
+                reason: decision.reason
+            )))
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(accountLease.vaultId))/family-contribution/submissions",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision
+        ) { result in
+            completion(result.flatMap { object in
+                Self.parseFamilyContributionSubmissions(object, expectedVaultId: accountLease.vaultId)
+            })
+        }
+    }
+
+    func listContributorFamilyContributionSubmissions(
+        accountLease: AccountLease,
+        completion: @escaping (Result<[FamilyContributionSubmissionContract], Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/v2/family-contribution/submissions",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId
+        ) { result in
+            completion(result.flatMap { object in
+                Self.parseFamilyContributionSubmissions(
+                    object,
+                    expectedContributorId: accountLease.subjectId
+                )
+            })
+        }
+    }
+
+    func submitFamilyContributionText(
+        accountLease: AccountLease,
+        grant: FamilyContributionGrantContract,
+        text: String,
+        completion: @escaping (Result<FamilyContributionSubmissionContract, Error>) -> Void
+    ) {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard grant.isActive,
+              grant.contributorSubjectId == accountLease.subjectId,
+              !normalized.isEmpty else {
+            completion(.failure(FamilyContributionContractError.invalidMaterial))
+            return
+        }
+        let submissionId = UUID().uuidString.lowercased()
+        submitFamilyContributionMaterial(
+            accountLease: accountLease,
+            grant: grant,
+            submissionId: submissionId,
+            payload: [
+                "commandId": UUID().uuidString.lowercased(),
+                "submissionId": submissionId,
+                "expectedGrantVersion": grant.rowVersion,
+                "materialKind": "text",
+                "text": normalized,
+            ],
+            completion: completion
+        )
+    }
+
+    func submitFamilyContributionImage(
+        accountLease: AccountLease,
+        grant: FamilyContributionGrantContract,
+        fileName: String,
+        contentType: String,
+        content: Data,
+        completion: @escaping (Result<FamilyContributionSubmissionContract, Error>) -> Void
+    ) {
+        guard grant.isActive,
+              grant.contributorSubjectId == accountLease.subjectId,
+              !content.isEmpty else {
+            completion(.failure(FamilyContributionContractError.invalidMaterial))
+            return
+        }
+        guard let vaultID = OwnerTruthVaultID(grant.vaultId) else {
+            completion(.failure(FamilyContributionContractError.ownerScopeMismatch))
+            return
+        }
+        let command: OwnerTruthMediaUploadIntentCommand
+        do {
+            command = try OwnerTruthMediaUploadIntentCommand(
+                expectedAuthorityEpoch: 0,
+                mediaKind: .image,
+                fileName: fileName,
+                contentType: contentType,
+                content: content,
+                purpose: "familyContributionImage"
+            )
+        } catch {
+            completion(.failure(error))
+            return
+        }
+        let intentPath = "/v2/vaults/\(pathComponent(grant.vaultId))/family-contribution/grants/\(pathComponent(grant.grantId))/image-upload-intents"
+        requestJSON(
+            path: intentPath,
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId
+        ) { result in
+            switch result {
+            case .failure(let error):
+                completion(.failure(error))
+            case .success(let object):
+                do {
+                    let receipt = try OwnerTruthMediaUploadIntentReceipt(
+                        backendJSONObject: Self.familyMediaEnvelope(object),
+                        expectedVaultID: vaultID
+                    )
+                    guard let token = receipt.uploadIntent.uploadToken else {
+                        throw FamilyContributionContractError.malformedResponse
+                    }
+                    let uploadPath = "\(intentPath)/\(self.pathComponent(receipt.uploadIntent.uploadIntentID.rawValue.uuidString))/content"
+                    self.requestJSON(
+                        path: uploadPath,
+                        method: .put,
+                        payload: nil,
+                        bodyData: content,
+                        authPolicy: .userRequired,
+                        applicationLease: accountLease,
+                        sessionUserId: accountLease.subjectId,
+                        additionalHeaders: [
+                            "Content-Type": contentType,
+                            "X-DreamJourney-Upload-Token": token.rawValue,
+                        ]
+                    ) { uploadResult in
+                        switch uploadResult {
+                        case .failure(let error):
+                            completion(.failure(error))
+                        case .success(let uploadObject):
+                            do {
+                                let uploaded = try OwnerTruthMediaSourceObjectResponse(
+                                    backendJSONObject: Self.familyMediaEnvelope(uploadObject),
+                                    expectedVaultID: vaultID,
+                                    expectedSourceObjectID: receipt.sourceObject.sourceObjectID
+                                )
+                                let submissionId = UUID().uuidString.lowercased()
+                                self.submitFamilyContributionMaterial(
+                                    accountLease: accountLease,
+                                    grant: grant,
+                                    submissionId: submissionId,
+                                    payload: [
+                                        "commandId": UUID().uuidString.lowercased(),
+                                        "submissionId": submissionId,
+                                        "expectedGrantVersion": grant.rowVersion,
+                                        "materialKind": "image",
+                                        "sourceObjectId": uploaded.sourceObject.sourceObjectID.rawValue.uuidString.lowercased(),
+                                    ],
+                                    completion: completion
+                                )
+                            } catch {
+                                completion(.failure(error))
+                            }
+                        }
+                    }
+                } catch {
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+
+    func reviewOwnerFamilyContributionSubmission(
+        accountLease: AccountLease,
+        submission: FamilyContributionSubmissionContract,
+        accepted: Bool,
+        completion: @escaping (Result<FamilyContributionSubmissionContract, Error>) -> Void
+    ) {
+        guard submission.vaultId == accountLease.vaultId else {
+            completion(.failure(FamilyContributionContractError.ownerScopeMismatch))
+            return
+        }
+        let decision = requestFeatureDecision(for: .ownerTruthFamilyContribution)
+        guard decision.allowed else {
+            completion(.failure(ClientError.featurePolicyDenied(
+                feature: DJFeature.ownerTruthFamilyContribution.rawValue,
+                reason: decision.reason
+            )))
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(submission.vaultId))/family-contribution/submissions/\(pathComponent(submission.submissionId))/decisions",
+            method: .post,
+            payload: [
+                "commandId": UUID().uuidString.lowercased(),
+                "expectedVersion": submission.rowVersion,
+                "decision": accepted ? "accepted" : "rejected",
+                "reason": accepted ? "ownerAccepted" : "ownerRejected",
+            ],
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision
+        ) { result in
+            completion(result.flatMap { object in
+                guard let json = object["submission"] as? [String: Any] else {
+                    return .failure(FamilyContributionContractError.malformedResponse)
+                }
+                do { return .success(try FamilyContributionSubmissionContract(json: json)) }
+                catch { return .failure(error) }
+            })
+        }
+    }
+
+    func readOwnerFamilyContributionImage(
+        accountLease: AccountLease,
+        submission: FamilyContributionSubmissionContract,
+        completion: @escaping (Result<Data, Error>) -> Void
+    ) {
+        guard submission.vaultId == accountLease.vaultId,
+              submission.materialKind == "image",
+              submission.sourceObjectId != nil,
+              let session = currentAuthenticatedSession,
+              session.userId == accountLease.subjectId,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            completion(.failure(FamilyContributionContractError.ownerScopeMismatch))
+            return
+        }
+        let decision = requestFeatureDecision(for: .ownerTruthFamilyContribution)
+        guard decision.allowed else {
+            completion(.failure(ClientError.featurePolicyDenied(
+                feature: DJFeature.ownerTruthFamilyContribution.rawValue,
+                reason: decision.reason
+            )))
+            return
+        }
+        let path = "/v2/vaults/\(pathComponent(submission.vaultId))/family-contribution/submissions/\(pathComponent(submission.submissionId))/content"
+        let endpoint = EndpointDescriptor(
+            path: path,
+            method: .get,
+            authPolicy: .userRequired,
+            payload: nil,
+            sessionUserId: accountLease.subjectId
+        )
+        guard var headers = authHeaders(for: endpoint.authPolicy, session: session) else {
+            completion(.failure(ClientError.userAuthenticationRequired))
+            return
+        }
+        headers.add(name: "X-DreamJourney-Client-Build", value: String(FeatureGateService.shared.clientBuild))
+        headers.add(name: "X-DreamJourney-Auth-Contract-Version", value: String(session.contractVersion))
+        headers.add(name: "X-DreamJourney-Request-Purpose", value: endpoint.purpose)
+        headers.add(name: "X-DreamJourney-Owner-Binding", value: endpoint.ownerBinding)
+        for (name, value) in FeatureGateService.shared.metadataHeaders(for: decision) {
+            headers.add(name: name, value: value)
+        }
+        transportSession.request("\(baseURL)\(path)", method: .get, headers: headers)
+            .validate(statusCode: 200..<300)
+            .responseData(queue: .global(qos: .utility)) { response in
+                guard AccountLeaseRuntime.shared.validate(accountLease, at: .commit).allowed,
+                      self.currentAuthenticatedSession?.matchesCASIdentity(session) == true else {
+                    DispatchQueue.main.async {
+                        completion(.failure(ClientError.accountScopeChanged))
+                    }
+                    return
+                }
+                let result: Result<Data, Error>
+                switch response.result {
+                case .success(let data) where !data.isEmpty && data.count <= 12 * 1024 * 1024:
+                    result = .success(data)
+                case .success:
+                    result = .failure(FamilyContributionContractError.malformedResponse)
+                case .failure(let error):
+                    result = .failure(error)
+                }
+                DispatchQueue.main.async { completion(result) }
+            }
+    }
+
+    private func submitFamilyContributionMaterial(
+        accountLease: AccountLease,
+        grant: FamilyContributionGrantContract,
+        submissionId: String,
+        payload: [String: Any],
+        completion: @escaping (Result<FamilyContributionSubmissionContract, Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(grant.vaultId))/family-contribution/grants/\(pathComponent(grant.grantId))/submissions",
+            method: .post,
+            payload: payload,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId
+        ) { result in
+            completion(result.flatMap { object in
+                guard let json = object["submission"] as? [String: Any] else {
+                    return .failure(FamilyContributionContractError.malformedResponse)
+                }
+                do {
+                    let submission = try FamilyContributionSubmissionContract(json: json)
+                    guard submission.submissionId == submissionId,
+                          submission.grantId == grant.grantId,
+                          submission.contributorSubjectId == accountLease.subjectId else {
+                        return .failure(FamilyContributionContractError.ownerScopeMismatch)
+                    }
+                    return .success(submission)
+                } catch {
+                    return .failure(error)
+                }
+            })
+        }
+    }
+
+    private static func parseFamilyContributionGrants(
+        _ object: [String: Any],
+        expectedVaultId: String? = nil,
+        expectedContributorId: String? = nil
+    ) -> Result<[FamilyContributionGrantContract], Error> {
+        guard let rows = object["grants"] as? [[String: Any]] else {
+            return .failure(FamilyContributionContractError.malformedResponse)
+        }
+        do {
+            let grants = try rows.map(FamilyContributionGrantContract.init(json:))
+            guard grants.allSatisfy({ grant in
+                (expectedVaultId == nil || grant.vaultId == expectedVaultId)
+                    && (expectedContributorId == nil || grant.contributorSubjectId == expectedContributorId)
+            }) else {
+                return .failure(FamilyContributionContractError.ownerScopeMismatch)
+            }
+            return .success(grants)
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private static func parseFamilyContributionSubmissions(
+        _ object: [String: Any],
+        expectedVaultId: String? = nil,
+        expectedContributorId: String? = nil
+    ) -> Result<[FamilyContributionSubmissionContract], Error> {
+        guard let rows = object["submissions"] as? [[String: Any]] else {
+            return .failure(FamilyContributionContractError.malformedResponse)
+        }
+        do {
+            let submissions = try rows.map(FamilyContributionSubmissionContract.init(json:))
+            guard submissions.allSatisfy({ submission in
+                (expectedVaultId == nil || submission.vaultId == expectedVaultId)
+                    && (expectedContributorId == nil || submission.contributorSubjectId == expectedContributorId)
+            }) else {
+                return .failure(FamilyContributionContractError.ownerScopeMismatch)
+            }
+            return .success(submissions)
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private static func familyMediaEnvelope(_ object: [String: Any]) -> [String: Any] {
+        object.filter { key, _ in
+            ["schemaVersion", "status", "vaultId", "sourceObject", "uploadIntent"].contains(key)
         }
     }
 
