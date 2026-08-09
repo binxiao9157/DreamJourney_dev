@@ -31,15 +31,15 @@
 
 | 仓库 | 分支 / 提交 | 状态 |
 | --- | --- | --- |
-| iOS | `feature/prd-stitch-ui-adaptation@dfd55c82` | 与远端一致，工作区干净 |
-| 后端 | `main@8a61720` | 与远端一致，工作区干净 |
-| 服务器运行代码 | `e8eacc5` | API 运行代码；与仓库头的差异为后续文档提交，不影响当前 API 行为 |
+| iOS | `feature/prd-stitch-ui-adaptation@98018ede` | 与远端一致，工作区干净 |
+| 后端 | `main@5a77c62` | 与远端一致，工作区干净 |
+| 服务器运行代码 | `5a77c62` | API 已重建并健康运行；与后端远端一致 |
 
 ### 2.2 实际验证结果
 
 1. iOS workspace XCTest：296 项通过，0 失败。
 2. iOS generic iPhoneOS Debug 构建：通过。
-3. 后端 unittest：1973 项通过，0 失败。
+3. 后端 unittest：2040 项通过，0 失败；V4 完整功能代码 Gate 通过。
 4. 统一非真机闭环：26/26 命令通过，M0、Stage 2、M1、M2 四条 lane 均通过。
 5. 线上 `/ready`：数据库读写、迁移 head、认证配置和 incident 状态均为 ready。
 6. 两仓库 `git diff --check` 基线无差异。
@@ -89,6 +89,7 @@ Compose 已定义但服务器当前未启动：
 | 声音复刻合成 | Provider ready | accepted profile 可合成；训练仍被身份/活体 Gate 阻断 |
 | 声音复刻删除 | Provider 不支持真实删除回执 | 可先撤销使用权，但不能宣称第三方已删除 |
 | 腾讯数智人 | blocked | 缺少可验证的 scoped/TTL/audience/revocation 会话 credential 合同 |
+| APNs | 生产 Provider 代码已部署、runtime disabled | Apple token HTTP/2、加密 token vault、Outbox 与回执已实现；缺服务器凭据、Worker 启用和真机送达证据 |
 | Async effect | disabled | 外部副作用无法形成生产级自动完成与对账 |
 | M0 closed-pilot cohort | 无实际入组用户 | 客户端不能自行开启，当前 V4 入口保持关闭 |
 
@@ -139,7 +140,7 @@ Compose 已定义但服务器当前未启动：
 
 ### 5.1 已完成的基础能力
 
-- FastAPI、PostgreSQL、Redis 和迁移体系稳定，当前 migration head 为 `0085`。
+- FastAPI、PostgreSQL、Redis 和迁移体系稳定，当前 migration head 为 `0088`。
 - 认证路由覆盖、Owner/Vault 合同、Source/Candidate/MemoryVersion、Context、数据导出/删除均有实现。
 - Provider adapter、runtime capability、release policy、kill switch、outbox、dead-letter、replay、receipt 已建立。
 - 文本、PDF、DOCX 本地解析器已实现；OCR/ASR 使用 provider-neutral port。
@@ -200,7 +201,7 @@ Compose 已定义但服务器当前未启动：
 
 #### P0-02 Ownership 从 shadow 切到 enforce
 
-当前：191 条认证路由已有覆盖，但 cross-account ownership 仍是 shadow，`productionEnforceReady=false`。
+当前：201 条认证路由已有覆盖且 0 条未分类，但 cross-account ownership 仍是 shadow，`productionEnforceReady=false`。
 
 需要开发：
 

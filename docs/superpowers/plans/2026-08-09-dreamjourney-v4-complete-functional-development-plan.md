@@ -1,7 +1,7 @@
 # DreamJourney V4 完整功能开发与生产闭环计划
 
 日期：2026-08-09
-状态：`READY_FOR_EXECUTION / EXTERNAL_CONFIGURATION_REQUIRED / RELEASE_NO_GO`
+状态：`CODE_CLOSURE_COMPLETE / EXTERNAL_CONFIGURATION_REQUIRED / RELEASE_NO_GO`
 扫描基线：`docs/superpowers/status/2026-08-09-v4-full-engineering-gap-scan.md`
 前置非真机计划：`docs/superpowers/plans/2026-08-08-dreamjourney-v4-non-device-functional-closure-plan.md` 已完成，不重复开发。
 
@@ -26,10 +26,10 @@
 
 | 项目 | 当前事实 |
 | --- | --- |
-| iOS | `feature/prd-stitch-ui-adaptation@dfd55c82`，与远端一致 |
-| 后端 | `main@8a61720`，与远端一致 |
-| 数据库 | PostgreSQL，迁移 head `0085` |
-| 自动测试 | iOS 296 项、后端 1973 项通过 |
+| iOS | `feature/prd-stitch-ui-adaptation@98018ede`，与远端一致 |
+| 后端 | `main@5a77c62`，已推送并部署 |
+| 数据库 | PostgreSQL，迁移 head `0088` |
+| 自动测试 | iOS 既有 296 项基线；后端 2040 项及 V4 完整功能代码 Gate 通过 |
 | 非真机计划 | 26/26 Gate 通过，结论为 `NON_DEVICE_CODE_COMPLETE` |
 | 线上服务 | API、PostgreSQL、Redis、ClamAV 运行正常 |
 | 发布判断 | `NO_GO` |
@@ -162,7 +162,7 @@ flowchart LR
 | 腾讯资产/配额 | `VERIFY_REQUIRED` | 确认 virtualmanKey/projectId、并发、有效期和测试账户 |
 | Publication 外部索引 | `PROVIDER_REQUIRED` | 选择存储/索引并定义撤回、过期和清理回执 |
 | Visitor 身份 | `PROVIDER_REQUIRED` | 成年身份与邀请 session receipt |
-| APNs | `PROVIDER_REQUIRED` | 当前后端没有完整 APNs Provider 配置合同；需先设计 server key、topic、environment 和 delivery receipt |
+| APNs | `CODE_COMPLETE / CONFIG_MISSING` | Apple token Provider、加密 token vault、PostgreSQL Outbox、HTTP/2 发送、重试/终态回执和长驻 Worker 已实现并部署；仍需 Team ID、Key ID、服务器 `.p8`、topic/environment、真机与 Apple 接收回执，运行时保持关闭 |
 | 法律/安全 | `DECISION_REQUIRED` | 地域、分包商、跨境、保留、AI 标识、第三方材料、用户协议和成本止损线 |
 
 所有 Secret、Token、AccessKey、手机号和测试音频均不得写入本计划或 Git。
@@ -746,7 +746,7 @@ Phase 0 的 F0-01、F0-02、F0-03 已完成。A1 的代码与全部非真机 Gat
 
 A2 的 Provider-independent 状态机、终态清理作业、部署态临时 PostgreSQL Gate 和 systemd 单元已经完成。生产不可逆删除已获授权，timer 已启用；首轮生产执行成功且 `purgedCount=0`。A2 剩余外部缺口是 A1 真实 OTP 恢复证据和第三方 Provider/备份删除回执。A3 已取得 191 路由零漏分和部署态 A/B 资源授权证据，仍等待 A1 真实 OTP 后才能进入 closed-pilot enforce。
 
-当前后端已部署到 `main@b651d88`，migration head 为 `0088`；iOS 当前基线为 `feature/prd-stitch-ui-adaptation@b9e60fe9`。D4、B3、C1–C4、D1、D2、D3 和 APNs 持久化 Outbox 的非真机代码闭环已完成，其中 C4、D1、D2 与 APNs Outbox 已取得部署态临时 PostgreSQL 证据。所有涉及真实媒体、V4 Context 切流、家庭贡献、完整导出、外部删除和通知投递的新能力继续 default-off/fail-closed，没有提前开放生产流量。
+当前后端已部署到 `main@5a77c62`，migration head 为 `0088`；iOS 当前基线为 `feature/prd-stitch-ui-adaptation@98018ede`。D4、B3、C1–C4、D1、D2、D3、APNs 持久化 Outbox 与 Apple token Provider 的非真机代码闭环已完成，其中 C4、D1、D2 与 APNs Outbox 已取得部署态临时 PostgreSQL 证据。所有涉及真实媒体、V4 Context 切流、家庭贡献、完整导出、外部删除、Apple 通知投递和 M2 的新能力继续 default-off/fail-closed，没有提前开放生产流量。
 
 当前可执行关键路径仍停在 **B1 腾讯 COS 私有对象闭环**：线上 ClamAV 可用，但 storage provider、bucket、region、endpoint 与最小权限凭据均未配置，`OWNER_TRUTH_MEDIA_CAPTURE_ENABLED=false`、媒体 Worker 关闭。B2/B3 已具备启动预检、部署安全和文档处理代码，D1 已具备 metadata/permission manifest 与一次性下载凭据；B1 外部配置完成前不得启用 Worker、导出媒体字节或把本地 Adapter Gate 标记为真实媒体闭环。
 
@@ -761,7 +761,7 @@ A2 的 Provider-independent 状态机、终态清理作业、部署态临时 Pos
 
 ## 18. 2026-08-09 非真机功能收敛增量
 
-以下能力已完成代码与本地/模拟器合同闭环；后端 `main@b651d88` 已部署，migration head 为 `0088`，iOS 基线为 `feature/prd-stitch-ui-adaptation@b9e60fe9`。这些能力统一保持 default-off 或 synthetic-only，不代表真实 Provider 和真机验收完成：
+以下能力已完成代码与本地/模拟器合同闭环；后端 `main@5a77c62` 已部署，migration head 为 `0088`，iOS 基线为 `feature/prd-stitch-ui-adaptation@98018ede`。这些能力统一保持 default-off 或 synthetic-only，不代表真实 Provider 和真机验收完成：
 
 1. **C4 家庭贡献闭环**
    - 后端提供 Owner 授权、家人文字/图片贡献、待审核列表、接受/拒绝和撤权即时隐藏合同。
@@ -789,13 +789,17 @@ A2 的 Provider-independent 状态机、终态清理作业、部署态临时 Pos
 5. **APNs 后端基础能力**
    - 已固定 device token 注册、topic/environment 隔离、任务幂等、失败重试和 append-only delivery receipt 合同。
    - migration `0088` 提供 Fernet 加密 token vault、PostgreSQL Outbox、`SKIP LOCKED` worker lease、设备 token generation fence 与重启恢复；明文 token 只在 dispatch 边界短暂解密。
-   - 当前 Provider 仍为 fake；部署态 `/config/runtime` 已确认 APNs 关闭，Outbox timer 未启用。不得宣称 Apple 已接收或真机已到达。
+   - 后端 `bcc9360` 新增正式 Apple token Provider：使用服务器 `.p8` 生成短期 ES256 JWT，通过 HTTP/2 调用 sandbox/production APNs，并将 accepted/retryable/terminal 结果收敛为脱敏回执；长驻 Worker 复用连接和 Provider token。
+   - 后端 `5a77c62` 已部署，但服务器尚未配置 Team ID、Key ID、私钥文件、topic/environment 和外部验收标记；部署态 `/config/runtime` 正确保持 APNs 关闭，Outbox Worker 未启用。不得宣称 Apple 已接收或真机已到达。
 
 部署证据摘要：
 
 - 部署前预检通过，Git/配置备份/数据库备份边界符合 runbook；迁移前、迁移后加密备份均成功。
 - migration dry-run/apply/verify 均返回 `expectedHead=appliedHead=0088`、无 pending migration。
 - 公网 `/ready` 与 deployed readiness smoke 均通过，database/schema/auth/incident 全部为 ready。
+- 部署态路由鉴权 smoke 通过：201 条路由、0 条未分类，匿名、用户和 machine principal 权限边界符合合同。
+- 部署态 ClamAV sidecar smoke 通过：正常探针为 clean，EICAR 探针被阻断；未触碰用户媒体或 COS。
+- 生产 readiness 报告合同通过并返回 `blocked/noGo`，准确反映 OTP、COS、APNs 等外部条件未齐，而非误报可发布。
 - C4 Source -> Candidate -> MemoryVersion 正式 PostgreSQL smoke、APNs 加密 Outbox PostgreSQL smoke 与 D1 ExportJob PostgreSQL smoke 已在部署容器的一次性数据库中通过，未修改生产业务记录。
 
 统一验证入口：
@@ -805,5 +809,24 @@ A2 的 Provider-independent 状态机、终态清理作业、部署态临时 Pos
 - D2 PostgreSQL：`RUN_POSTGRES_EXTERNAL_DELETION_SMOKE=1 scripts/run-backend-data-rights-external-deletion-executor-gate.sh`
 - iOS C4/D1：`Scripts/QA/product-v4/run-ios-family-contribution-export-package-gate.sh`
 - iOS 统一门：`Scripts/QA/product-v4/run-v4-m0-non-device-release-gate.sh`
+- 后端 V4 完整代码门：`scripts/run-v4-complete-functional-code-gate.sh`；当前 2040 项测试及身份、媒体、Worker、Ownership、Context、导出/删除、closed-pilot、APNs、声音和 M2 default-off 子门全部通过。
 
 本增量剩余外部条件：腾讯 COS 私有 bucket/region/最小权限/SSE、真实 APNs Provider 凭据与真机送达、各第三方删除能力及回执。上述条件缺失不阻断代码提交，但对应能力继续 fail-closed。
+
+## 19. 2026-08-09 完整功能代码 Gate 收口
+
+本轮将“先修验证，再依次收敛身份/媒体、Worker/Ownership/Context、数据权利、closed-pilot、通知、声音与 M2 边界”固化为单一可重复 Gate：
+
+1. 修复当前路由清单、认证统计、家庭贡献导出投影和 legacy timer 清单共 8 个验证回归；后端标准验证恢复全绿。
+2. OTP 与 COS 保持单一生产 Adapter、配置脱敏和 fail-closed；外部配置缺失不会阻断其他代码开发，也不会伪造成功。
+3. Worker 启用预检、Ownership cutover、V4 Context authority、导出/删除、closed-pilot、声音复刻和 Publication/Visitor canary Gate 已纳入统一执行。
+4. APNs 从 fake-only 推进到正式 Apple token Provider 代码边界；在服务器凭据和真机证据到位前保持 runtime disabled。
+5. `RUN_ID=20260809-final scripts/run-v4-complete-functional-code-gate.sh` 已通过，生成脱敏 manifest/report；该结论为 `passedCodeGate`，不是生产发布 `GO`。
+
+当前代码开发主线已经收口。下一执行点只允许从以下外部门中选择，不再重复增加 mock 或平行合同：
+
+1. 配置真实 OTP Provider并跑登录、恢复、限流和跨账号 E2E。
+2. 配置腾讯 COS并跑 `PUT -> HEAD -> readback -> ClamAV -> revoke -> DELETE`，通过后分阶段启用媒体 Worker。
+3. 配置 APNs token 认证并跑 sandbox/production topic 隔离与真机送达。
+4. 配置强身份/活体和正式声音资源，完成 M1 Provider/真机验收。
+5. 关闭 M2 成年身份、法律、安全、运营与成本 Gate 后，才可建立真实 cohort；否则继续 default-off。
