@@ -21,11 +21,11 @@ SCAN = (
 CURRENT_MARKERS = (
     "版本：V1.5 Current Engineering Refresh",
     "更新日期：2026-08-09",
-    "feature/prd-stitch-ui-adaptation@dfd55c82",
-    "Backend `main@8a61720`",
-    "migration head `0085`",
-    "workspace 296 项通过",
-    "1973 项通过",
+    "feature/prd-stitch-ui-adaptation@fa5d76b3",
+    "Backend `main@90f9e4e`",
+    "migration head `0086`",
+    "既有 workspace 296 项基线通过",
+    "全量 `verify_backend.sh` 通过",
     "26/26 通过",
     "`RELEASE_NO_GO`",
     "configured but broker blocked",
@@ -42,7 +42,7 @@ EXPECTED_REQUIREMENTS = {
     "FR-PRIV-004": ("IMPLEMENTED", "M0 Data Rights", "真实媒体字节等待 COS"),
     "FR-VOICE-001": ("PARTIAL", "M1 Living Self Voice", "identityLivenessProviderUnavailable"),
     "FR-PUB-001": ("IMPLEMENTED", "M2 Publication/Visitor", "发布政策仍 externalBlocked"),
-    "FR-OPS-001": ("IMPLEMENTED", "Cross-cutting Operations", "生产 Worker/scheduler disabled"),
+    "FR-OPS-001": ("IMPLEMENTED", "Cross-cutting Operations", "生产 Worker/scheduler 仍 disabled"),
 }
 
 
@@ -101,7 +101,7 @@ def main() -> None:
 
     print(
         "Product V4 current evidence baseline check passed: "
-        f"{len(rows)} requirements at iOS dfd55c82 / backend 8a61720"
+        f"{len(rows)} requirements at iOS fa5d76b3 / backend 90f9e4e"
     )
 
 

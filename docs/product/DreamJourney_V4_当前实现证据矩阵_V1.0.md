@@ -4,7 +4,7 @@
 初版日期：2026-07-12
 更新日期：2026-08-09
 状态：已同步当前代码、统一非真机证据和线上 runtime；非真机合同已关闭，真实 Provider、V4 主链路切换、真机和发布 Gate 仍开放
-工程基线：iOS `feature/prd-stitch-ui-adaptation@dfd55c82`；Backend `main@8a61720`；服务器 API runtime `e8eacc5`（后续差异为文档提交）
+工程基线：iOS `feature/prd-stitch-ui-adaptation@fa5d76b3`；Backend `main@90f9e4e`；服务器 API runtime `90f9e4e`，migration head `0086`
 评审控制面：[DreamJourney V4 评审与验收清单](./DreamJourney_V4_评审与验收清单_V1.0.md)
 当前执行计划：[DreamJourney V4 完整功能开发与生产闭环计划](../superpowers/plans/2026-08-09-dreamjourney-v4-complete-functional-development-plan.md)
 定稿边界：矩阵中的成熟度仍以当前代码证据为准；26/26 非真机 Gate 通过不表示真实 Provider、G2-G4 或发布批准已经完成。
@@ -15,11 +15,12 @@
 
 | 证据域 | 当前结果 | 能证明 | 不能证明 |
 | --- | --- | --- | --- |
-| iOS XCTest | workspace 296 项通过，0 失败 | 当前 typed contract、状态机和账号隔离回归 | 真实权限、网络、音频和通知 |
+| iOS XCTest/build-for-testing | 既有 workspace 296 项基线通过；本轮 generic iPhoneOS build-for-testing 与新增静态 Gate 通过 | 当前 typed contract、状态机、账号隔离和新增客户端合同可编译 | 真实权限、网络、音频和通知 |
 | iOS generic device build | Debug 构建通过 | iPhoneOS 编译、依赖和签名前置有效 | 真机体验和 App Store 发布 |
-| Backend tests | 1973 项通过，0 失败 | API、持久化、权限、任务和 Provider 合同 | 未启用 Worker/Provider 的生产效果 |
+| Backend tests | 全量 `verify_backend.sh` 通过 | API、持久化、权限、任务和 Provider 合同 | 未启用 Worker/Provider 的生产效果 |
 | 统一非真机 Gate | 26/26 通过，M0/Stage 2/M1/M2 lane passed | 代码/合同/default-off 边界完整 | 真实 Provider、真机和发布批准 |
-| 线上 `/ready` | database/schema/auth/incident ready | API、数据库、迁移和认证配置健康 | 业务 capability 已开放 |
+| 线上 `/ready` | database/schema/auth/incident ready，migration head `0086` | API、数据库、迁移和认证配置健康 | 业务 capability 已开放 |
+| 线上 production readiness | `blocked / noGo`，value-free Gate 通过 | COS/OTP/Worker 等外部缺口被统一识别，kill switch 和恢复边界可观测 | 产品已达到发布条件 |
 | 线上 runtime | OTP、媒体、Worker、数字人关闭或阻断 | fail-closed 生效 | 用户已经能使用 V4 主链路 |
 
 证据入口：
@@ -41,7 +42,7 @@
 
 | 能力 | 线上状态 | 当前结论 |
 | --- | --- | --- |
-| Route authentication | `enforce`，191 路由全部分类 | `IMPLEMENTED` |
+| Route authentication | `enforce`，192 路由全部分类 | `IMPLEMENTED` |
 | Cross-account ownership | `shadow` | `PARTIAL`，等待真实 SMS 身份与部署 shadow evidence |
 | OTP identity challenge | provider-neutral code、Postgres 与 iOS 模拟器 Gate 已通过；线上 disabled/unavailable | `CODE_READY / CONFIG_MISSING` |
 | Owner Truth media storage | disabled | `CONFIG_MISSING`，等待腾讯 COS |

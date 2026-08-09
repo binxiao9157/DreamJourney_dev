@@ -373,6 +373,7 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 ### B3 文本/PDF/DOCX 真实处理
 
 依赖：B1、B2。
+状态：`CODE_READY / DEPLOYED_DEFAULT_OFF / WAITING_COS_E2E (2026-08-09)`
 
 开发内容：
 
@@ -390,6 +391,13 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 - iOS Stage 2 UIQA
 
 完成定义：真实文档完成 Source -> Processing -> Candidate -> 人工确认。
+
+当前完成证据：
+
+- 后端 `7f49cc5` 已实现 TXT/PDF/DOCX 解析隔离、资源上限、MIME/扩展名校验、输入版本与输出 hash、来源片段和 Candidate handoff。
+- 损坏文件、伪装 MIME、解析超时、删除竞争、重复任务和失败重试均由本地对象 Adapter 与 Stage 2 Gate 覆盖。
+- 部署态 disposable PostgreSQL smoke 已在 schema `0086` 通过 Source -> Processing -> Candidate -> Memory -> Context，并保持媒体采集、Worker 和真实 COS 默认关闭。
+- 尚未完成的只是 B1 外部配置后的真实 COS 字节读取 E2E；当前不得将本地 Adapter 证据解释为生产媒体闭环。
 
 ### B4 OCR/ASR 与视频边界
 
@@ -424,6 +432,8 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 
 ### C2 旧档案迁移与 retirement
 
+状态：`CODE_READY / SHADOW_DEFAULT_OFF (2026-08-09)`
+
 开发内容：
 
 1. 建立 legacy record -> Source/Candidate 的迁移 manifest。
@@ -434,9 +444,15 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 
 完成定义：满足 parity 的旧路径才进入只读/retirement；不得一次性删除旧数据。
 
+当前完成证据：
+
+- 后端 `68ad0e4` 将 backfill、parity、canary、lane activation、retirement candidate 和 removal authorization 收敛为一个 C2/C3 Gate。
+- 迁移仍为 shadow/default-off；没有删除旧档案，也没有把未达 parity 的记录切为只读权威。
+
 ### C3 V4 Context 主路径切换
 
 依赖：C1、C2。
+状态：`CODE_READY / CLOSED_PILOT_DEFAULT_OFF (2026-08-09)`
 
 配置：`OWNER_TRUTH_CONTEXT_AUTHORITY_CLOSED_PILOT_ENABLED=true`，仅对服务端 allowlist 生效。
 
@@ -457,6 +473,12 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 
 完成定义：V4 cohort 的 Echo 只使用 V4 权威 Context，且可解释来源与过滤原因。
 
+当前完成证据：
+
+- 后端 `68ad0e4` 固定 cohort=`closedPilotAdultSelf`、fallback=`failClosedNoLegacy`、authority generation 和权威 schema。
+- iOS `f762df31` 在 strict V4 cohort 下禁止本地 KBLite/legacy timeout fallback，并通过 generation token 丢弃旧权威回调，防止同一回答混用两套 Context。
+- 后端 C2/C3 组合 Gate、iOS generic iPhoneOS test build 和静态检查通过；生产开关保持关闭，尚未切真实流量。
+
 ### C4 静态家庭贡献边界
 
 开发内容：
@@ -473,6 +495,7 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 ### D1 真实导出
 
 依赖：B1、C1。
+状态：`FOUNDATION_COMPLETE / MEDIA_BYTES_WAITING_COS (2026-08-09)`
 
 开发内容：
 
@@ -483,6 +506,13 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 5. iOS 分享完成后清理临时文件。
 
 完成定义：同一 Owner 可以获得完整可读导出；其他用户、注销中和过期任务不能读取。
+
+当前完成证据：
+
+- 后端 `bf9689c`、修复提交 `90f9e4e` 与 iOS `fa5d76b3` 已实现文本/元数据/权限清单导出，以及短期、Owner-scoped、一次性下载凭据。
+- 明文凭据只返回一次，PostgreSQL 仅保存 hash；跨账号、注销中、过期、重复消费均 fail-closed，iOS 不把下载 token 写入恢复状态。
+- 部署态 PostgreSQL smoke 已验证幂等、Owner fence、partial manifest、一次性下载和过期失效；route authentication 共 192 路由通过。
+- COS 媒体字节仍以 `unsupported/partial` 明确报告，等待 B1 配置后补入 ExportJob，不生成永久对象 URL。
 
 ### D2 真实删除与外部 effect 对账
 
@@ -517,6 +547,8 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 
 ### D4 生产可观测与恢复
 
+状态：`CODE_READY / DEPLOYED (2026-08-09)`
+
 开发内容：
 
 1. Worker backlog、dead-letter、Provider latency/error、ClamAV 签名和删除 partial 告警。
@@ -525,6 +557,13 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 4. kill switch 和回滚 runbook。
 
 完成定义：故障可定位、可停用、可恢复，不依赖截图猜测。
+
+当前完成证据：
+
+- 后端 `b191e2a` 新增 value-free production readiness report，统一 Worker activation、backlog/dead-letter、Provider/ClamAV、Context、Export/Delete、kill switch 和恢复状态。
+- 线上 Gate 返回 `productionReadinessState=blocked`、`releaseDecision=noGo`，准确反映 COS/OTP 等外部条件未齐，而不是误开放能力。
+- schema `0086` 迁移、API readiness、生产 readiness、Stage 2 deployed smoke 和迁移后加密备份均通过。
+- 部署 runbook 已修正为迁移前先备份当前 schema、迁移后再备份新 schema，避免代码 head 领先数据库时产生备份误报。
 
 ## 11. Phase 5：M0 真机和发布 Gate
 
@@ -692,7 +731,9 @@ Phase 0 的 F0-01、F0-02、F0-03 已完成。A1 的代码与全部非真机 Gat
 
 A2 的 Provider-independent 状态机、终态清理作业、部署态临时 PostgreSQL Gate 和 systemd 单元已经完成。生产不可逆删除已获授权，timer 已启用；首轮生产执行成功且 `purgedCount=0`。A2 剩余外部缺口是 A1 真实 OTP 恢复证据和第三方 Provider/备份删除回执。A3 已取得 191 路由零漏分和部署态 A/B 资源授权证据，仍等待 A1 真实 OTP 后才能进入 closed-pilot enforce。
 
-当前可执行关键路径停在 **B1 腾讯 COS 私有对象闭环**：线上 ClamAV 可用，但 storage provider、bucket、region、endpoint 与最小权限凭据均未配置，`OWNER_TRUTH_MEDIA_CAPTURE_ENABLED=false`、媒体 Worker 关闭。B2 的启动预检和部署安全代码已部署并通过 fail-closed smoke，但 B1 外部配置完成前不得启用 Worker 或把已有本地/临时处理 Gate 标记为真实媒体闭环。
+当前后端已部署到 `main@90f9e4e`，migration head 为 `0086`；D4、B3、C2/C3 和 D1 的非真机代码闭环及部署态证据已完成。所有涉及真实媒体、V4 Context 切流和导出的新能力继续 default-off/fail-closed，没有提前开放生产流量。
+
+当前可执行关键路径仍停在 **B1 腾讯 COS 私有对象闭环**：线上 ClamAV 可用，但 storage provider、bucket、region、endpoint 与最小权限凭据均未配置，`OWNER_TRUTH_MEDIA_CAPTURE_ENABLED=false`、媒体 Worker 关闭。B2/B3 已具备启动预检、部署安全和文档处理代码，D1 已具备 metadata/permission manifest 与一次性下载凭据；B1 外部配置完成前不得启用 Worker、导出媒体字节或把本地 Adapter Gate 标记为真实媒体闭环。
 
 外部准备同时启动：
 
