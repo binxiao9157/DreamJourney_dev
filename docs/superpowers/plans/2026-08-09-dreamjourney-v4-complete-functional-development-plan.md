@@ -419,6 +419,7 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 ### C1 统一“封存新记忆”到 V2
 
 依赖：A3、B1–B3。
+状态：`CODE_COMPLETE / CLOSED_PILOT_FAIL_CLOSED (2026-08-09)`
 
 开发内容：
 
@@ -429,6 +430,12 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 5. capability 不可用时显示明确不可用，不静默回到旧写路径制造双权威。
 
 完成定义：新数据只有一个 Source/Candidate/Memory 权威链路，旧记录仍可读。
+
+当前完成证据：
+
+- 后端 `f772a0d` 对已进入 `ownerTextCaptureV1` closed-pilot 的 Owner 拒绝新的 legacy 文字、图片、音频和视频权威写入，返回 `legacyArchiveAuthorityRetired` 与 V2 Source 路由；时间信件继续使用独立生命周期合同。
+- iOS `b9e60fe9` 在 V2 权威开启后不再回退旧创建路径；Provider capability 不可用时保留入口但明确禁用，并说明不可用原因。
+- 旧 `/archive/items` 记录保持只读兼容，没有迁移或删除生产数据；真实媒体仍受 B1/COS capability 阻断，不伪造成功。
 
 ### C2 旧档案迁移与 retirement
 
@@ -481,6 +488,8 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 
 ### C4 静态家庭贡献边界
 
+状态：`CODE_COMPLETE / DEPLOYED_POSTGRES_EVIDENCE (2026-08-09)`
+
 开发内容：
 
 1. 仅接受明确授权、已接受关系的静态 Source 贡献。
@@ -489,6 +498,12 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 4. Owner 审核确认后才形成 MemoryVersion。
 
 完成定义：贡献者只能提交，不能读取 Owner 私人库；撤权后 Context 不再使用相关内容。
+
+当前完成证据：
+
+- 后端 `b651d88` 已将 Owner 接受后的贡献串到 Source -> Candidate -> MemoryVersion，并在 Owner projection 返回 `ownerReviewPending / candidatePendingReview / memoryCurrent / rejected / withdrawn` 等最小 handoff 状态。
+- iOS `b9e60fe9` 消费 typed handoff；Candidate 待确认时进入既有 Owner Candidate Inbox，贡献者 projection 不返回正文、Candidate ID 或 Memory ID。
+- 部署态一次性 PostgreSQL smoke 已证明：贡献必须先经 Owner 审核，异步提取只生成待确认 Candidate，Owner 再确认后才激活 `memoryCurrent`；撤权、跨账号与 Vault 私读继续 fail-closed。
 
 ## 10. Phase 4：M0 数据权利、运行态与 closed-pilot
 
@@ -731,7 +746,7 @@ Phase 0 的 F0-01、F0-02、F0-03 已完成。A1 的代码与全部非真机 Gat
 
 A2 的 Provider-independent 状态机、终态清理作业、部署态临时 PostgreSQL Gate 和 systemd 单元已经完成。生产不可逆删除已获授权，timer 已启用；首轮生产执行成功且 `purgedCount=0`。A2 剩余外部缺口是 A1 真实 OTP 恢复证据和第三方 Provider/备份删除回执。A3 已取得 191 路由零漏分和部署态 A/B 资源授权证据，仍等待 A1 真实 OTP 后才能进入 closed-pilot enforce。
 
-当前后端已部署到 `main@bff5eb5`，migration head 为 `0087`；iOS 当前基线为 `feature/prd-stitch-ui-adaptation@62dbba94`。D4、B3、C2/C3、C4、D1、D2、D3 和 APNs 基础能力的非真机代码闭环已完成，其中 C4、D1、D2 已取得部署态临时 PostgreSQL 证据。所有涉及真实媒体、V4 Context 切流、家庭贡献、完整导出、外部删除和通知投递的新能力继续 default-off/fail-closed，没有提前开放生产流量。
+当前后端已部署到 `main@b651d88`，migration head 为 `0088`；iOS 当前基线为 `feature/prd-stitch-ui-adaptation@b9e60fe9`。D4、B3、C1–C4、D1、D2、D3 和 APNs 持久化 Outbox 的非真机代码闭环已完成，其中 C4、D1、D2 与 APNs Outbox 已取得部署态临时 PostgreSQL 证据。所有涉及真实媒体、V4 Context 切流、家庭贡献、完整导出、外部删除和通知投递的新能力继续 default-off/fail-closed，没有提前开放生产流量。
 
 当前可执行关键路径仍停在 **B1 腾讯 COS 私有对象闭环**：线上 ClamAV 可用，但 storage provider、bucket、region、endpoint 与最小权限凭据均未配置，`OWNER_TRUTH_MEDIA_CAPTURE_ENABLED=false`、媒体 Worker 关闭。B2/B3 已具备启动预检、部署安全和文档处理代码，D1 已具备 metadata/permission manifest 与一次性下载凭据；B1 外部配置完成前不得启用 Worker、导出媒体字节或把本地 Adapter Gate 标记为真实媒体闭环。
 
@@ -746,7 +761,7 @@ A2 的 Provider-independent 状态机、终态清理作业、部署态临时 Pos
 
 ## 18. 2026-08-09 非真机功能收敛增量
 
-以下能力已完成代码与本地/模拟器合同闭环；后端 `main@bff5eb5` 已部署，migration head 为 `0087`，iOS 基线为 `feature/prd-stitch-ui-adaptation@62dbba94`。这些能力统一保持 default-off 或 synthetic-only，不代表真实 Provider 和真机验收完成：
+以下能力已完成代码与本地/模拟器合同闭环；后端 `main@b651d88` 已部署，migration head 为 `0088`，iOS 基线为 `feature/prd-stitch-ui-adaptation@b9e60fe9`。这些能力统一保持 default-off 或 synthetic-only，不代表真实 Provider 和真机验收完成：
 
 1. **C4 家庭贡献闭环**
    - 后端提供 Owner 授权、家人文字/图片贡献、待审核列表、接受/拒绝和撤权即时隐藏合同。
@@ -772,19 +787,21 @@ A2 的 Provider-independent 状态机、终态清理作业、部署态临时 Pos
    - 工具只生成授权计划，不直接改生产环境或开放真实流量。
 
 5. **APNs 后端基础能力**
-   - 已固定 device token 注册、topic/environment 隔离、任务幂等、失败重试和 delivery receipt 合同。
-   - 当前仅提供 ephemeral token vault 与 fake Provider；部署态 `/config/runtime` 已确认 APNs 关闭、`realProviderReady=false` 且未泄露配置值。默认关闭，不宣称 Apple 已接收或真机已到达。
+   - 已固定 device token 注册、topic/environment 隔离、任务幂等、失败重试和 append-only delivery receipt 合同。
+   - migration `0088` 提供 Fernet 加密 token vault、PostgreSQL Outbox、`SKIP LOCKED` worker lease、设备 token generation fence 与重启恢复；明文 token 只在 dispatch 边界短暂解密。
+   - 当前 Provider 仍为 fake；部署态 `/config/runtime` 已确认 APNs 关闭，Outbox timer 未启用。不得宣称 Apple 已接收或真机已到达。
 
 部署证据摘要：
 
 - 部署前预检通过，Git/配置备份/数据库备份边界符合 runbook；迁移前、迁移后加密备份均成功。
-- migration dry-run/apply/verify 均返回 `expectedHead=appliedHead=0087`、无 pending migration。
+- migration dry-run/apply/verify 均返回 `expectedHead=appliedHead=0088`、无 pending migration。
 - 公网 `/ready` 与 deployed readiness smoke 均通过，database/schema/auth/incident 全部为 ready。
-- C4 正式 PostgreSQL smoke 与 D1 ExportJob PostgreSQL smoke 已在部署容器的一次性数据库中通过，未修改生产业务记录。
+- C4 Source -> Candidate -> MemoryVersion 正式 PostgreSQL smoke、APNs 加密 Outbox PostgreSQL smoke 与 D1 ExportJob PostgreSQL smoke 已在部署容器的一次性数据库中通过，未修改生产业务记录。
 
 统一验证入口：
 
 - 后端：`scripts/run-backend-v4-family-rights-pilot-notification-gate.sh`
+- APNs Outbox：`scripts/run-backend-apns-postgres-outbox-gate.sh`；部署容器直接运行 `scripts/backend-apns-postgres-outbox-smoke.py`
 - D2 PostgreSQL：`RUN_POSTGRES_EXTERNAL_DELETION_SMOKE=1 scripts/run-backend-data-rights-external-deletion-executor-gate.sh`
 - iOS C4/D1：`Scripts/QA/product-v4/run-ios-family-contribution-export-package-gate.sh`
 - iOS 统一门：`Scripts/QA/product-v4/run-v4-m0-non-device-release-gate.sh`
