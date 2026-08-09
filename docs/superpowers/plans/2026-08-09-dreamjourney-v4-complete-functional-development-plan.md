@@ -212,7 +212,7 @@ Gate：296 项 XCTest、generic build、Swift 6 actor warning 消失。
 
 ### F0-03 部署账号与恢复 runbook
 
-状态：`READY`
+状态：`COMPLETE (2026-08-09)`
 
 开发/运维内容：
 
@@ -222,6 +222,14 @@ Gate：296 项 XCTest、generic build、Swift 6 actor warning 消失。
 4. 为 `.env.backup*` 建立私密保留/隔离/销毁规则；不在未批准时直接删除。
 
 Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复演练有脱敏证据。
+
+完成证据：
+
+- 后端 `main@51c0267` 已建立权威部署/回滚/恢复 runbook 和 live preflight。
+- SSH 统一从 `ubuntu` 发起，Git 固定使用 `miao` 服务账户，Docker/配置/备份保持受限 sudo 边界；root 不持有 Git 私钥。
+- 42 份历史 `.env.backup*` 已迁入 root-only 隔离目录，权限收敛为目录 `0700`、文件 `0600`，未删除任何备份。
+- 服务器 preflight、readiness、migration `0085/0085` 和连续两份当前 head 加密 backup Gate 通过。
+- 现有恢复记录保持 `cutoverDecision=NO_GO`，明确阻止 receipt/root authority 未齐时自动切流；脱敏证据见后端 `docs/backend/2026-08-09-deployment-account-recovery-evidence.md`。
 
 ## 7. Phase 1：M0 真实身份与权限
 
@@ -645,7 +653,7 @@ M2 完成定义：只对批准 cohort 开放；未批准账户仍保持当前 M0
 
 ## 17. 下一执行点
 
-F0-01、F0-02 已完成。代码主线当前进入 **F0-03 部署账号与恢复 runbook**。
+Phase 0 的 F0-01、F0-02、F0-03 已完成。代码主线下一顺序项为 **A1 真实 OTP Adapter**；当前仍为 `CONFIG_MISSING / PROVIDER_REQUIRED`，不得以 synthetic adapter 冒充生产完成。
 
 外部准备同时启动：
 
