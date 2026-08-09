@@ -731,7 +731,7 @@ Phase 0 的 F0-01、F0-02、F0-03 已完成。A1 的代码与全部非真机 Gat
 
 A2 的 Provider-independent 状态机、终态清理作业、部署态临时 PostgreSQL Gate 和 systemd 单元已经完成。生产不可逆删除已获授权，timer 已启用；首轮生产执行成功且 `purgedCount=0`。A2 剩余外部缺口是 A1 真实 OTP 恢复证据和第三方 Provider/备份删除回执。A3 已取得 191 路由零漏分和部署态 A/B 资源授权证据，仍等待 A1 真实 OTP 后才能进入 closed-pilot enforce。
 
-当前后端已部署到 `main@90f9e4e`，migration head 为 `0086`；D4、B3、C2/C3 和 D1 的非真机代码闭环及部署态证据已完成。所有涉及真实媒体、V4 Context 切流和导出的新能力继续 default-off/fail-closed，没有提前开放生产流量。
+当前后端已部署到 `main@bff5eb5`，migration head 为 `0087`；iOS 当前基线为 `feature/prd-stitch-ui-adaptation@62dbba94`。D4、B3、C2/C3、C4、D1、D2、D3 和 APNs 基础能力的非真机代码闭环已完成，其中 C4、D1、D2 已取得部署态临时 PostgreSQL 证据。所有涉及真实媒体、V4 Context 切流、家庭贡献、完整导出、外部删除和通知投递的新能力继续 default-off/fail-closed，没有提前开放生产流量。
 
 当前可执行关键路径仍停在 **B1 腾讯 COS 私有对象闭环**：线上 ClamAV 可用，但 storage provider、bucket、region、endpoint 与最小权限凭据均未配置，`OWNER_TRUTH_MEDIA_CAPTURE_ENABLED=false`、媒体 Worker 关闭。B2/B3 已具备启动预检、部署安全和文档处理代码，D1 已具备 metadata/permission manifest 与一次性下载凭据；B1 外部配置完成前不得启用 Worker、导出媒体字节或把本地 Adapter Gate 标记为真实媒体闭环。
 
@@ -746,24 +746,26 @@ A2 的 Provider-independent 状态机、终态清理作业、部署态临时 Pos
 
 ## 18. 2026-08-09 非真机功能收敛增量
 
-以下能力已完成代码与本地/模拟器合同闭环，统一保持 default-off 或 synthetic-only，不代表真实 Provider 和真机验收完成：
+以下能力已完成代码与本地/模拟器合同闭环；后端 `main@bff5eb5` 已部署，migration head 为 `0087`，iOS 基线为 `feature/prd-stitch-ui-adaptation@62dbba94`。这些能力统一保持 default-off 或 synthetic-only，不代表真实 Provider 和真机验收完成：
 
 1. **C4 家庭贡献闭环**
    - 后端提供 Owner 授权、家人文字/图片贡献、待审核列表、接受/拒绝和撤权即时隐藏合同。
    - 图片使用既有私有媒体适配器；Owner 读取时再次执行 Vault 与状态授权，贡献者不能借贡献权限读取 Vault。
    - iOS 已提供家人选择、文字/图片提交、提交失败重试、Owner 审核与授权撤销入口；功能由服务端 closed-pilot policy 决定，公开版本默认不展示。
    - schema head 新增 `0087_owner_truth_family_contribution_review`，为 additive/default-off 迁移。
+   - 部署态临时 PostgreSQL smoke 已验证：默认关闭、贡献先进入 `pendingReview`、Owner 接受后才生成 Source、贡献者不能读取 Vault、跨账号提交被拒绝、撤权后既有贡献立即变为 `withdrawn` 且不再向贡献者返回材料正文。
 
 2. **D1 完整导出包生成器**
    - 现有 Owner-scoped 导出作业可生成 ZIP，包含 `data-export.json`、`permissions.json`、`package-manifest.json` 和授权媒体字节。
    - 生成过程校验 owner、对象状态、大小和 SHA-256；支持大小上限与取消回调，失败及响应结束后清理临时文件。
    - 下载继续使用一次性短期 credential，不暴露对象 key 或永久 URL；iOS 以受保护临时 ZIP 分享并在生命周期切换时清理。
    - 当前使用本地对象 Adapter 完成字节验证；腾讯 COS 配置到位后仍须补真实对象 readback E2E。
+   - 部署态临时 PostgreSQL smoke 已验证导出作业幂等、Owner fence、partial manifest、一次性下载和到期失效；该证据不包含尚未接入 COS 的真实媒体字节。
 
 3. **D2 外部删除执行框架**
    - 对象存储、声音、数字人、通知、备份统一进入五域 Provider registry。
    - `completed / partial / unknown / unsupported`、超时、幂等、dead-letter/人工复核均由持久化 receipt 收敛；原始 Provider 错误和值不进入公开证据。
-   - fake Provider 单测及可选 PostgreSQL smoke 已纳入组合 Gate；真实 Provider 删除回执仍按各 Provider 能力验收。
+   - fake Provider 单测及 PostgreSQL smoke 已纳入组合 Gate并通过，覆盖五域统一执行、Owner fence、幂等重放、append-only receipt、unknown/unsupported reconciliation 和脱敏；真实 Provider 删除回执仍按各 Provider 能力验收。
 
 4. **D3 closed-pilot 发布控制工具**
    - synthetic allowlist、单功能逐步启用、readiness、kill switch、显式回滚和脱敏审计摘要已固化为 dry-run planner。
@@ -771,7 +773,14 @@ A2 的 Provider-independent 状态机、终态清理作业、部署态临时 Pos
 
 5. **APNs 后端基础能力**
    - 已固定 device token 注册、topic/environment 隔离、任务幂等、失败重试和 delivery receipt 合同。
-   - 当前仅提供 ephemeral token vault 与 fake Provider，`/config/runtime` 明确返回 `realProviderReady=false`；默认关闭，不宣称 Apple 已接收或真机已到达。
+   - 当前仅提供 ephemeral token vault 与 fake Provider；部署态 `/config/runtime` 已确认 APNs 关闭、`realProviderReady=false` 且未泄露配置值。默认关闭，不宣称 Apple 已接收或真机已到达。
+
+部署证据摘要：
+
+- 部署前预检通过，Git/配置备份/数据库备份边界符合 runbook；迁移前、迁移后加密备份均成功。
+- migration dry-run/apply/verify 均返回 `expectedHead=appliedHead=0087`、无 pending migration。
+- 公网 `/ready` 与 deployed readiness smoke 均通过，database/schema/auth/incident 全部为 ready。
+- C4 正式 PostgreSQL smoke 与 D1 ExportJob PostgreSQL smoke 已在部署容器的一次性数据库中通过，未修改生产业务记录。
 
 统一验证入口：
 
