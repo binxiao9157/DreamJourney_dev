@@ -69,7 +69,7 @@ bash Scripts/QA/product-v4/run-v4-unified-non-device-evidence.sh \
 以下项目不再属于可独立完成的非真机代码缺口：
 
 - `realIdentityProvider`：真实短信/身份 Provider、签名、模板和送达回执。
-- `mediaStorageAndProcessingProvider`：私有 COS bucket、最小权限凭据、SSE/保留策略和真实 ClamAV sidecar。
+- `mediaStorageAndProcessingProvider`：真实 ClamAV sidecar 已于 2026-08-09 部署并通过 clean/EICAR；仍需私有 COS bucket、最小权限凭据、SSE/保留策略和真实对象生命周期 E2E。
 - `voiceTrainingAndDeletionReceipts`：生产音色槽、训练/查询/删除及 Provider 完成回执。
 - `publicationIndexAndProviderCleanupReceipts`：M2 外部索引和 Provider 清理完成回执。
 - `adultIdentitySafetyAndRegulatoryReleaseGate`：成年校验、隐私/安全/法律评估和 closed-beta cohort 批准。

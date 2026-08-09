@@ -223,8 +223,9 @@
 - COS 删除只有在 Provider 返回 2xx 回执且后续 HEAD 明确证明对象不存在时才记录完成；未知回执、HEAD 不可用或对象仍存在均 fail-closed，由现有删除 worker 保持 `partial/retryable`。
 - 组合 Gate `scripts/run-backend-owner-truth-media-provider-matrix-gate.sh` 已纳入标准 `scripts/verify_backend.sh`，使用 fake Provider 覆盖 ClamAV clean/EICAR、离线、超时、签名库错误，以及 COS 配置、加密、HEAD 校验和删除不确定状态。
 - 已通过 44 项 R4 定向测试、185+33 项 Stage 2 Gate、标准后端 1955 项测试及全部既有合同/smoke、FastAPI smoke、`git diff --check`。
-- 后端 `e48c3af` 已部署；部署态 `/ready`、runtime capability smoke 与容器内 COS region Gate 通过。服务器未配置真实 COS/ClamAV，`ownerTruthMediaStorage` 继续 fail-closed，未开放公开媒体入口。
-- 真实 `PUT -> HEAD -> readback -> DELETE -> HEAD 404` 与真实 ClamAV sidecar smoke 标记为 `WAITING_EXTERNAL_GATE`，等待私有 bucket、最小权限凭据和 sidecar 容量；不阻断后续非真机任务。
+- 后端 `e48c3af` 已部署；部署态 `/ready`、runtime capability smoke 与容器内 COS region Gate 通过。`ownerTruthMediaStorage` 继续 fail-closed，未开放公开媒体入口。
+- 2026-08-09 已在生产服务器部署官方 ClamAV sidecar，真实 clean/EICAR smoke 通过；API、数据库和 Redis 保持健康。服务器已显式配置内部扫描器，但媒体采集、存储和 Worker 仍保持关闭。
+- 真实 `PUT -> HEAD -> readback -> DELETE -> HEAD 404` 继续标记为 `WAITING_EXTERNAL_GATE`，等待专用私有 COS bucket、region、SSE 策略和最小权限凭据；不阻断后续非真机任务。
 
 1. 保持腾讯 COS 为唯一首发存储，不新增第二生产 adapter。
 2. 完成缺配置、错误 region、SSE 缺失、扫描器离线/超时、EICAR、删除未知回执的组合 Gate。
@@ -374,7 +375,7 @@
 
 ## 14. 当前交接点
 
-- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`、`ND-R4-01`、`ND-R4-02`、`ND-R5-01`、`ND-R5-02`、`ND-R6-01`
+- 已完成：`ND-R0-01`、`ND-R1-01`、`ND-R1-02`、`ND-R2-01`、`ND-R2-02`、`ND-R2-03`、`ND-R3-01`、`ND-R3-02`、`ND-R4-01`、`ND-R4-02`、`ND-R5-01`、`ND-R5-02`、`ND-R6-01`、`ND-R6-02`、`ND-R7-01`、`ND-R7-02`
 - 当前 Work Item：无；本计划可独立实施的非真机任务已完成。
 - 后续：按最终交接清单分别补外部 Provider、产品/法律和真实设备证据，不得回写为本计划代码缺口。
 - 任何外部 Gate 缺失均不得暂停可继续的非真机任务。
