@@ -107,6 +107,14 @@ def main() -> None:
         "contextPacketAuthorityInvalidated" in context_build,
         "authority-invalidated Context packets must not reach local fallback submission",
     )
+    require(
+        "if !strictOwnerTruthAuthorityRequired {" in context_build,
+        "strict Owner Truth turns must not schedule the local KBLite timeout fallback",
+    )
+    require(
+        "strictOwnerTruthAuthorityRequired: gate.strictOwnerTruthAuthorityRequired" in view_controller,
+        "all local KBLite fallback attempts must enforce the strict authority decision",
+    )
 
     for test_name in (
         "func testContextBuildLeaseSupersedesEarlierRequest()",
@@ -117,6 +125,8 @@ def main() -> None:
         "func testCoordinatorDoesNotStartWhenContextTransportIsUnavailable()",
         "func testCoordinatorClassifiesIdentityMismatchedPacketBeforeControllerDelivery()",
         "func testCoordinatorRejectsLateContextPacketAfterAuthorityEpochChanges()",
+        "func testStrictOwnerTruthCohortForbidsLocalKBLiteFallback()",
+        "func testOwnerTruthContextAuthorityEnvelopeRequiresNoLegacyOrMixedAuthority()",
     ):
         require(test_name in tests, f"Echo application coordinator test missing: {test_name}")
 

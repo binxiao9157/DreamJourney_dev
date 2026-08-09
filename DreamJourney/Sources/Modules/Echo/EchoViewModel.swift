@@ -416,6 +416,22 @@ protocol EchoContextBuildTransport {
         viewerFamilyMemberID: String?,
         completion: @escaping (Result<EchoContextPacket, Error>) -> Void
     )
+
+    func requiresStrictOwnerTruthContextAuthority(
+        userId: String,
+        personaScope: String,
+        digitalHumanId: String
+    ) -> Bool
+}
+
+extension EchoContextBuildTransport {
+    func requiresStrictOwnerTruthContextAuthority(
+        userId _: String,
+        personaScope _: String,
+        digitalHumanId _: String
+    ) -> Bool {
+        false
+    }
 }
 
 extension DreamJourneyBackendClient: EchoContextBuildTransport {}
@@ -962,6 +978,14 @@ final class EchoApplicationCoordinator {
         self.accountLeaseValidator = accountLeaseValidator
         self.ownerTruthContextCitationQAEnabled = ownerTruthContextCitationQAEnabled
         self.ownerTruthMigrationParityQAEnabled = ownerTruthMigrationParityQAEnabled
+    }
+
+    func requiresStrictContextAuthority(for identity: EchoKnowledgeContextIdentity) -> Bool {
+        contextBuildTransport.requiresStrictOwnerTruthContextAuthority(
+            userId: identity.userId,
+            personaScope: identity.personaScope,
+            digitalHumanId: identity.digitalHumanId
+        )
     }
 
     @discardableResult

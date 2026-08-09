@@ -764,6 +764,42 @@ final class EchoViewModelTurnAdmissionTests: XCTestCase {
 }
 
 final class EchoApplicationCoordinatorTests: XCTestCase {
+    func testStrictOwnerTruthCohortForbidsLocalKBLiteFallback() {
+        let transport = DeferredEchoContextBuildTransport()
+        transport.strictOwnerTruthAuthorityRequired = true
+        let coordinator = EchoApplicationCoordinator(
+            contextBuildTransport: transport,
+            accountLeaseValidator: allowedAccountLeaseValidation
+        )
+        let identity = EchoKnowledgeContextIdentity(
+            userId: "owner-1",
+            personaScope: "personal",
+            digitalHumanId: "owner-1"
+        )
+
+        XCTAssertTrue(coordinator.requiresStrictContextAuthority(for: identity))
+        XCTAssertFalse(
+            EchoKnowledgeContextPolicy.allowsLocalKBLiteFallback(
+                for: identity,
+                strictOwnerTruthAuthorityRequired: true
+            )
+        )
+        XCTAssertTrue(EchoKnowledgeContextPolicy.allowsLocalKBLiteFallback(for: identity))
+    }
+
+    func testOwnerTruthContextAuthorityEnvelopeRequiresNoLegacyOrMixedAuthority() {
+        let packet = makeEchoContextPacket(
+            userId: "owner-1",
+            personaScope: "personal",
+            digitalHumanId: "owner-1",
+            strictOwnerTruthAuthority: true
+        )
+
+        XCTAssertTrue(packet.contextAuthority?.isStrictOwnerTruthAuthority == true)
+        XCTAssertEqual(packet.contextAuthority?.cohort, "closedPilotAdultSelf")
+        XCTAssertEqual(packet.contextAuthority?.authorityGeneration.count, 64)
+    }
+
     func testContextBuildLeaseSupersedesEarlierRequest() {
         let coordinator = EchoApplicationCoordinator()
         let identity = EchoKnowledgeContextIdentity(
@@ -2381,6 +2417,7 @@ private final class DeferredEchoContextBuildTransport: EchoContextBuildTransport
     }
 
     var isContextBuildConfigured = true
+    var strictOwnerTruthAuthorityRequired = false
     private(set) var completions: [(Result<EchoContextPacket, Error>) -> Void] = []
 
     func buildEchoContextPacket(
@@ -2397,6 +2434,14 @@ private final class DeferredEchoContextBuildTransport: EchoContextBuildTransport
 
     func complete(at index: Int, result: Result<EchoContextPacket, Error>) {
         completions[index](result)
+    }
+
+    func requiresStrictOwnerTruthContextAuthority(
+        userId _: String,
+        personaScope _: String,
+        digitalHumanId _: String
+    ) -> Bool {
+        strictOwnerTruthAuthorityRequired
     }
 }
 
@@ -2479,7 +2524,8 @@ private func makeEchoContextPacket(
     userId: String,
     personaScope: String,
     digitalHumanId: String,
-    requestQuery: String? = nil
+    requestQuery: String? = nil,
+    strictOwnerTruthAuthority: Bool = false
 ) -> EchoContextPacket {
     var json: [String: Any] = [
         "traceId": "trace-id",
@@ -2495,6 +2541,17 @@ private func makeEchoContextPacket(
             "intent": "echo_chat",
             "queryHash": fingerprint.hash as Any,
             "queryLength": fingerprint.length,
+        ]
+    }
+    if strictOwnerTruthAuthority {
+        json["contextAuthority"] = [
+            "schemaVersion": EchoContextAuthorityEnvelope.schemaVersion,
+            "mode": EchoContextAuthorityEnvelope.strictMode,
+            "cohort": EchoContextAuthorityEnvelope.strictCohort,
+            "fallbackPolicy": EchoContextAuthorityEnvelope.strictFallbackPolicy,
+            "authorityGeneration": String(repeating: "a", count: 64),
+            "legacyContextRead": false,
+            "mixedAuthorityAllowed": false,
         ]
     }
     guard let packet = EchoContextPacket(json: json) else {

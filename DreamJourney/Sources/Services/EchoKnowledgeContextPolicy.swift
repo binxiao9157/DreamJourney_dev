@@ -223,8 +223,11 @@ enum EchoKnowledgeContextPolicy {
         return identity.digitalHumanId
     }
 
-    static func allowsLocalKBLiteFallback(for identity: EchoKnowledgeContextIdentity) -> Bool {
-        identity.isPersonal
+    static func allowsLocalKBLiteFallback(
+        for identity: EchoKnowledgeContextIdentity,
+        strictOwnerTruthAuthorityRequired: Bool = false
+    ) -> Bool {
+        identity.isPersonal && !strictOwnerTruthAuthorityRequired
     }
 
     static func responseIdentityMatches(

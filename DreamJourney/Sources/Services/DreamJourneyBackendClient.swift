@@ -3046,6 +3046,68 @@ struct EchoContextPacketRequestCorrelation: Equatable {
     }
 }
 
+struct EchoContextAuthorityEnvelope: Equatable {
+    static let schemaVersion = "owner-truth-context-authority-v1"
+    static let strictMode = "ownerTruthConfirmedProjection"
+    static let strictCohort = "closedPilotAdultSelf"
+    static let strictFallbackPolicy = "failClosedNoLegacy"
+
+    let mode: String
+    let cohort: String
+    let fallbackPolicy: String
+    let authorityGeneration: String
+    let legacyContextRead: Bool
+    let mixedAuthorityAllowed: Bool
+
+    init?(json: [String: Any]) {
+        guard json["schemaVersion"] as? String == Self.schemaVersion,
+              let mode = Self.nonEmptyString(json["mode"]),
+              let cohort = Self.nonEmptyString(json["cohort"]),
+              let fallbackPolicy = Self.nonEmptyString(json["fallbackPolicy"]),
+              let authorityGeneration = Self.sha256(json["authorityGeneration"]),
+              let legacyContextRead = Self.boolValue(json["legacyContextRead"]),
+              let mixedAuthorityAllowed = Self.boolValue(json["mixedAuthorityAllowed"]) else {
+            return nil
+        }
+        self.mode = mode
+        self.cohort = cohort
+        self.fallbackPolicy = fallbackPolicy
+        self.authorityGeneration = authorityGeneration
+        self.legacyContextRead = legacyContextRead
+        self.mixedAuthorityAllowed = mixedAuthorityAllowed
+    }
+
+    var isStrictOwnerTruthAuthority: Bool {
+        mode == Self.strictMode
+            && cohort == Self.strictCohort
+            && fallbackPolicy == Self.strictFallbackPolicy
+            && !legacyContextRead
+            && !mixedAuthorityAllowed
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func sha256(_ value: Any?) -> String? {
+        guard let normalized = nonEmptyString(value),
+              normalized.count == 64,
+              normalized == normalized.lowercased(),
+              normalized.allSatisfy({ $0.isHexDigit }) else {
+            return nil
+        }
+        return normalized
+    }
+
+    private static func boolValue(_ value: Any?) -> Bool? {
+        if let value = value as? Bool { return value }
+        if let value = value as? NSNumber { return value.boolValue }
+        return nil
+    }
+}
+
 struct EchoContextPacket {
     let schemaVersion: Int
     let contextVersion: String
@@ -3053,6 +3115,7 @@ struct EchoContextPacket {
     let intent: String
     let userId: String
     let requestCorrelation: EchoContextPacketRequestCorrelation?
+    let contextAuthority: EchoContextAuthorityEnvelope?
     let personaScope: String?
     let digitalHumanId: String?
     let archiveItemsAvailable: Int
@@ -3101,6 +3164,8 @@ struct EchoContextPacket {
         } else {
             self.requestCorrelation = nil
         }
+        self.contextAuthority = (json["contextAuthority"] as? [String: Any])
+            .flatMap(EchoContextAuthorityEnvelope.init(json:))
         let persona = json["persona"] as? [String: Any]
         self.personaScope = Self.nonEmptyString(persona?["personaScope"])
             ?? Self.nonEmptyString(json["personaScope"])
@@ -6547,6 +6612,22 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 completion(.failure(error))
             }
         }
+    }
+
+    func requiresStrictOwnerTruthContextAuthority(
+        userId: String,
+        personaScope: String,
+        digitalHumanId: String
+    ) -> Bool {
+        let normalizedUserID = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedDigitalHumanID = digitalHumanId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard hasExplicitBaseURL,
+              KBPersonaIdentity.canonicalPersonaScope(personaScope) == "personal",
+              !normalizedUserID.isEmpty,
+              normalizedDigitalHumanID == normalizedUserID else {
+            return false
+        }
+        return requestFeatureDecision(for: .ownerTruthCandidateReview).allowed
     }
 
     func fetchOwnerTruthCandidateInbox(

@@ -217,6 +217,7 @@ private final class EchoTurnKnowledgeContextGate {
     let expectedPersonaScope: String
     let expectedDigitalHumanID: String
     let lifecycleToken: DigitalHumanLifecycleToken
+    let strictOwnerTruthAuthorityRequired: Bool
     var didSubmit = false
     var didFinishWithoutContext = false
     var failedSubmissionCount = 0
@@ -226,13 +227,15 @@ private final class EchoTurnKnowledgeContextGate {
     init(
         turnID: String,
         expectedIdentity: EchoKnowledgeContextIdentity,
-        lifecycleToken: DigitalHumanLifecycleToken
+        lifecycleToken: DigitalHumanLifecycleToken,
+        strictOwnerTruthAuthorityRequired: Bool
     ) {
         self.turnID = turnID
         self.expectedUserID = expectedIdentity.userId
         self.expectedPersonaScope = expectedIdentity.personaScope
         self.expectedDigitalHumanID = expectedIdentity.digitalHumanId
         self.lifecycleToken = lifecycleToken
+        self.strictOwnerTruthAuthorityRequired = strictOwnerTruthAuthorityRequired
     }
 
     var expectedIdentity: EchoKnowledgeContextIdentity {
@@ -4964,26 +4967,31 @@ final class EchoViewController: UIViewController {
         }
         let gate: EchoTurnKnowledgeContextGate?
         if allowsGeneration {
+            let strictOwnerTruthAuthorityRequired = echoApplicationCoordinator
+                .requiresStrictContextAuthority(for: expectedIdentity)
             let turnGate = EchoTurnKnowledgeContextGate(
                 turnID: turnID,
                 expectedIdentity: expectedIdentity,
-                lifecycleToken: lifecycleToken
+                lifecycleToken: lifecycleToken,
+                strictOwnerTruthAuthorityRequired: strictOwnerTruthAuthorityRequired
             )
             gate = turnGate
             activeEchoTurnKnowledgeContextGate = turnGate
-            let timeoutWorkItem = DispatchWorkItem { [weak self, weak turnGate] in
-                guard let self, let turnGate else { return }
-                self.submitLocalEchoTurnKnowledgeContext(
-                    text: text,
-                    gate: turnGate,
-                    source: "localKBLiteTimeout"
+            if !strictOwnerTruthAuthorityRequired {
+                let timeoutWorkItem = DispatchWorkItem { [weak self, weak turnGate] in
+                    guard let self, let turnGate else { return }
+                    self.submitLocalEchoTurnKnowledgeContext(
+                        text: text,
+                        gate: turnGate,
+                        source: "localKBLiteTimeout"
+                    )
+                }
+                turnGate.timeoutWorkItem = timeoutWorkItem
+                DispatchQueue.main.asyncAfter(
+                    deadline: .now() + Self.echoTurnKnowledgeTimeout,
+                    execute: timeoutWorkItem
                 )
             }
-            turnGate.timeoutWorkItem = timeoutWorkItem
-            DispatchQueue.main.asyncAfter(
-                deadline: .now() + Self.echoTurnKnowledgeTimeout,
-                execute: timeoutWorkItem
-            )
         } else {
             gate = nil
         }
@@ -5384,7 +5392,8 @@ final class EchoViewController: UIViewController {
             return
         }
         guard EchoKnowledgeContextPolicy.allowsLocalKBLiteFallback(
-            for: gate.expectedIdentity
+            for: gate.expectedIdentity,
+            strictOwnerTruthAuthorityRequired: gate.strictOwnerTruthAuthorityRequired
         ) else {
             gate.finishWithoutContext()
             if activeEchoTurnKnowledgeContextGate === gate {
