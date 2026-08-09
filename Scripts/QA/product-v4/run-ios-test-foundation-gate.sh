@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOSTED_BUILD_DESTINATION="${DJ_IOS_TEST_BUILD_DESTINATION:-generic/platform=iOS}"
 
+python3 "$ROOT/Scripts/QA/product-v4/product-v4-ios-workspace-ci-contract-check.py"
+python3 "$ROOT/Scripts/QA/product-v4/product-v4-ios-lifecycle-event-forwarding-check.py"
+swift "$ROOT/Scripts/QA/prd-stitch-ui/iphoneos-generic-build-check.swift" "$ROOT"
+swift "$ROOT/Scripts/QA/prd-stitch-ui/installable-simulator-uiqa-bundle-guard-check.swift" "$ROOT"
 python3 "$ROOT/Scripts/QA/product-v4/product-v4-ios-test-foundation-check.py"
 swift test \
   --package-path "$ROOT" \

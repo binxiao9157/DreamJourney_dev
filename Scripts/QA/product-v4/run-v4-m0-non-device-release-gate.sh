@@ -209,6 +209,8 @@ fi
 run_step "ios-git-diff-check" git diff --check
 
 for static_check in \
+  Scripts/QA/product-v4/product-v4-ios-workspace-ci-contract-check.py \
+  Scripts/QA/product-v4/product-v4-ios-lifecycle-event-forwarding-check.py \
   Scripts/QA/product-v4/owner-truth-interview-product-boundary-surface-check.py \
   Scripts/QA/product-v4/product-v4-ios-owner-truth-closed-pilot-candidate-review-check.py \
   Scripts/QA/product-v4/product-v4-ios-owner-truth-text-source-capture-check.py \
@@ -222,6 +224,11 @@ for static_check in \
 do
   run_step "$(basename "${static_check%.py}")" python3 "$static_check"
 done
+
+run_step "iphoneos-generic-build-contract" swift \
+  Scripts/QA/prd-stitch-ui/iphoneos-generic-build-check.swift "$ROOT_DIR"
+run_step "installable-bundle-team-guard" swift \
+  Scripts/QA/prd-stitch-ui/installable-simulator-uiqa-bundle-guard-check.swift "$ROOT_DIR"
 
 run_step "account-lease-runtime" bash Scripts/QA/product-v4/run-account-lease-runtime-gate.sh
 

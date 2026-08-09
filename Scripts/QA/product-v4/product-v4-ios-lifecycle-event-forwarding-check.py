@@ -41,6 +41,7 @@ def main() -> None:
 
     for required in (
         "final class AppLifecycleEventForwarder",
+        "typealias PrivateForegroundRefresh = @MainActor (AppFeatureRuntimeContext) -> Void",
         "func handleSceneLifecycleEvent(_ event: AppLifecycleEvent)",
         "private func currentFeatureRuntimeContext()",
         "AccountLeaseRuntime.shared.validate(",
@@ -79,7 +80,8 @@ def main() -> None:
     )
     print(
         "Product V4 iOS lifecycle event forwarding check passed: SceneDelegate forwards "
-        "only, while AppCoordinator validates the active lease before foreground effects"
+        "only, while AppCoordinator preserves MainActor and validates the active lease "
+        "before foreground effects"
     )
 
 

@@ -64,6 +64,8 @@ def main() -> None:
         '"App/AccountLease.swift"',
         '"App/AudioOwnerLeaseModel.swift"',
         'path: "DreamJourneyTests"',
+        '"PublicationManagementAccessTests.swift"',
+        '"PublicationVisitorAccessTests.swift"',
     ):
         require(required in package, f"unhosted XCTest package contract missing: {required}")
 

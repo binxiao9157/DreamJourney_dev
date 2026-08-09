@@ -53,6 +53,8 @@ let package = Package(
                 "AudioOwnerLeaseModelTests.swift",
                 "AccountLeaseRuntimeTests.swift",
                 "OwnerTruthContractsTests.swift",
+                "PublicationManagementAccessTests.swift",
+                "PublicationVisitorAccessTests.swift",
                 "TestDoubles.swift",
             ],
             sources: [

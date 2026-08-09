@@ -825,7 +825,7 @@ final class AppComposition {
 /// later lifecycle migration slices.
 @MainActor
 final class AppLifecycleEventForwarder {
-    typealias PrivateForegroundRefresh = (AppFeatureRuntimeContext) -> Void
+    typealias PrivateForegroundRefresh = @MainActor (AppFeatureRuntimeContext) -> Void
 
     private let privateForegroundRefresh: PrivateForegroundRefresh
     private var nextSequence: UInt64 = 0

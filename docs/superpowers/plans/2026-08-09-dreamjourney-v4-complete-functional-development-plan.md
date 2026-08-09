@@ -191,7 +191,7 @@ Gate：矩阵可由脚本核对提交、迁移和 runtime capability；不得再
 
 ### F0-02 iOS 构建与 Swift 6 前置修复
 
-状态：`READY`
+状态：`COMPLETE (2026-08-09)`
 
 开发内容：
 
@@ -201,6 +201,14 @@ Gate：矩阵可由脚本核对提交、迁移和 runtime capability；不得再
 4. 其他废弃 warning 仅按触碰模块逐步处理。
 
 Gate：296 项 XCTest、generic build、Swift 6 actor warning 消失。
+
+完成证据：
+
+- `PrivateForegroundRefresh` 已显式保留 `@MainActor`，原 actor 丢失 warning 已从构建日志消失。
+- `product-v4-ios-workspace-ci-contract-check.py` 已阻止 `xcodebuild -project` 回归，并核对 workspace、Bundle ID、Team 与 generic iPhoneOS 边界。
+- `run-ios-test-foundation-gate.sh` 和 M0 非真机发布 Gate 已接入上述静态约束。
+- Swift Package 7 项、workspace hosted XCTest 296 项、generic iPhoneOS Debug build 全部通过。
+- 剩余构建 warning 来自 Pods/腾讯二进制头文件或系统 metadata 工具，不在本任务修改第三方源码。
 
 ### F0-03 部署账号与恢复 runbook
 
@@ -637,7 +645,7 @@ M2 完成定义：只对批准 cohort 开放；未批准账户仍保持当前 M0
 
 ## 17. 下一执行点
 
-F0-01 已完成。代码主线当前进入 **F0-02 Swift 6/CI 前置修复**，随后完成 **F0-03 部署账号与恢复 runbook**。
+F0-01、F0-02 已完成。代码主线当前进入 **F0-03 部署账号与恢复 runbook**。
 
 外部准备同时启动：
 
