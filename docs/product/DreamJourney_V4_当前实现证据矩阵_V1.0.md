@@ -228,7 +228,7 @@
 | FR-PRIV-002 | P0 | `IMPLEMENTED` privacy/disclosure surfaces | `IMPLEMENTED` scope/consent/policy contracts | CONFIRMED: DR-004; OPEN: DR-035; EXTERNAL: DR-036 | 隐私/法律评审 | CROSS_CUTTING | `PARTIAL` | M0 Data Rights | 数据分类和 fail-closed 已实现，跨域 Provider/法律证据未完整 |
 | FR-PRIV-003 | P0 | `IMPLEMENTED` family authorization UI | `IMPLEMENTED` family contribution/hard-deny policy | CONFIRMED: DR-003/004; EXTERNAL: DR-022/036 | 关系证明、第三方权利 | CROSS_CUTTING | `PARTIAL` | M0 Family Contribution | 静态贡献可控且不授予 Vault 读取；争议冻结/近亲属权利仍是后续门 |
 | FR-PRIV-004 | P0 | `IMPLEMENTED` export job/status/share | `IMPLEMENTED` ExportJob/CopyExportManifest | CONFIRMED: DR-005/039; OPEN: DR-035 | 真实 COS 字节、格式/裁剪验收 | HIDDEN_QA | `IMPLEMENTED` | M0 Data Rights | 异步状态、过期和部分清单完成；真实媒体字节等待 COS |
-| FR-PRIV-005 | P0 | `IMPLEMENTED` delete/restore UI | `IMPLEMENTED` soft delete/purge/effect reconcile；定时作业已部署但未启用 | CONFIRMED: DR-011/039; OPEN: DR-035 | 生产不可逆删除审批、Provider/备份删除、真实 OTP 恢复 | PUBLIC_PARTIAL | `IMPLEMENTED` | M0 Data Rights | 30 日和一次恢复已实现；临时 Postgres 终态清理 Gate 已通过，真实外部删除回执仍 partial/unsupported |
+| FR-PRIV-005 | P0 | `IMPLEMENTED` delete/restore UI | `IMPLEMENTED` soft delete/purge/effect reconcile；生产定时作业已启用 | CONFIRMED: DR-011/039; OPEN: DR-035 | Provider/备份删除回执、真实 OTP 恢复 | PUBLIC_PARTIAL | `IMPLEMENTED` | M0 Data Rights | 30 日和一次恢复已实现；终态清理 timer 已启用，首轮生产执行 `purgedCount=0`；真实外部删除回执仍 partial/unsupported |
 | FR-PRIV-006 | P0 | `IMPLEMENTED` voice/DH scope states | `IMPLEMENTED` eligibility/consent/hard deny | CONFIRMED: DR-004/037; EXTERNAL: DR-031/036 | 强身份、Provider、监管、真机 | BETA_UNVERIFIED | `PARTIAL` | M1 Living Self Voice | M1 仅在世成年人本人；逝者、未成年人和家人代录服务端拒绝 |
 | FR-SAFE-001 | P0 | `IMPLEMENTED` disclosure/exit/fallback states | `IMPLEMENTED` safety/eligibility policies | CONFIRMED: DR-025; EXTERNAL: DR-026/036 | 联系人、地区资源、安全评估/备案 | CROSS_CUTTING | `PARTIAL` | M0 Owner Truth | M0 中性回退与高风险硬拒绝存在；M2/M3 危机演练和地区资源未关闭 |
 | FR-SAFE-002 | P0 | `HIDDEN_QA` Visitor abuse UX | `IMPLEMENTED` Visitor limiter/exit/report contracts | CONFIRMED: DR-010/038 | 成年身份、压测、公网、投诉演练 | DISABLED | `IMPLEMENTED` | M2 Publication/Visitor | default-off，只有外部安全门关闭后才能 beta |
@@ -335,7 +335,7 @@ Round 3C2A 只冻结设备内身份/数据边界，不表示后端强身份、`/
 1. 生产身份非强证明：手机号可直接建立/恢复账号；`BACKEND_API_TOKEN` 为空时业务 route 对 anonymous fail-open，客户端 system token 兼容路径进一步扩大越权后果。
 2. 部分通用 upsert 在全局 ID 冲突时可能改变 owner，需要逐表改为 owner-bound conflict rejection。
 3. `/config/runtime`、realtime token 和 digital-human session 合同仍可能向客户端返回长期供应商凭据，不符合短期凭证/服务端代理边界。
-4. 账号终态清理、session 撤销和脱敏 tombstone 已有实现与部署态临时库证据；定时器尚待生产不可逆删除审批，对象/索引/provider 删除回执仍未完整闭环。
+4. 账号终态清理、session 撤销和脱敏 tombstone 已有实现与部署态临时库证据；生产不可逆删除已获授权，定时器已启用且首轮执行成功，对象/索引/provider 删除回执仍未完整闭环。
 5. API 广泛接受 `Dict[str, Any]`，Archive sanitizer 可保留额外字段；缺 typed schema、请求大小上限和 JSONB allowlist。
 6. `PostgresStore` 缓存单一 psycopg connection 供同步请求复用，commit/rollback/advisory lock 可能跨请求相互影响；`/health` 不探测数据库。
 7. TimeLetter 先提交 delivered 再写 mailbox reminder，Echo/Voice 也没有统一 job/outbox；故障可形成状态成功但副作用丢失。
