@@ -29,20 +29,15 @@ ALLOWED_EXPOSURE = {
     "CROSS_CUTTING",
 }
 ALLOWED_PRIMARY_STAGES = {
-    "Stage 0 安全止损",
-    "Stage 0 + Family MVP",
-    "Stage 1 Owner 核心",
-    "Stage 1 + Family MVP",
-    "Stage 1 + DFX",
-    "Stage 1/2",
-    "Stage 1 Data Rights",
-    "Stage 1 Foundation",
-    "Stage 2 摄入与质量",
-    "MVP-P",
-    "Voice MVP",
-    "Voice MVP / DH Beta",
-    "Voice MVP after MVP-P",
-    "Stage 4 认知增强",
+    "M0 Identity",
+    "M0 Family Contribution",
+    "M0 Stage 2 Media",
+    "M0 Data Rights",
+    "M0 Owner Truth",
+    "M1 Living Self Voice",
+    "M2 Publication/Visitor",
+    "M3/M4 Deferred",
+    "Cross-cutting Operations",
 }
 
 
