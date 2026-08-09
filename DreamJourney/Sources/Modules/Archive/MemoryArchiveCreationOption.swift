@@ -34,30 +34,40 @@ struct MemoryArchiveCreationOption: Equatable {
         isOwnerTruthTextCaptureEnabled: Bool = false,
         isOwnerTruthMediaCaptureEnabled: Bool = false
     ) -> [MemoryArchiveCreationOption] {
+        if isOwnerTruthTextCaptureEnabled {
+            var options: [MemoryArchiveCreationOption] = [.ownerTruthTextCapture]
+            if isOwnerTruthMediaCaptureEnabled {
+                options.append(contentsOf: [
+                    .ownerTruthPhotoCapture,
+                    .ownerTruthAudioCapture,
+                    .ownerTruthDocumentCapture,
+                    .ownerTruthVideoCapture,
+                ])
+            } else {
+                options.append(contentsOf: [
+                    .ownerTruthPhotoUnavailable,
+                    .ownerTruthAudioUnavailable,
+                    .ownerTruthDocumentUnavailable,
+                    .ownerTruthVideoUnavailable,
+                ])
+            }
+            if isTimeLettersEnabled {
+                options.append(.timeLetter)
+            }
+            return options
+        }
+
         var options: [MemoryArchiveCreationOption] = [
             .text,
             .photo,
         ]
 
-        if isOwnerTruthTextCaptureEnabled {
-            options[0] = .ownerTruthTextCapture
+        if isAudioUploadEnabled {
+            options.append(.audio)
         }
 
-        if isOwnerTruthMediaCaptureEnabled {
-            options[1] = .ownerTruthPhotoCapture
-            options.append(contentsOf: [
-                .ownerTruthAudioCapture,
-                .ownerTruthDocumentCapture,
-                .ownerTruthVideoCapture,
-            ])
-        } else {
-            if isAudioUploadEnabled {
-                options.append(.audio)
-            }
-
-            if isVideoUploadEnabled {
-                options.append(.video)
-            }
+        if isVideoUploadEnabled {
+            options.append(.video)
         }
 
         if isTimeLettersEnabled {
@@ -129,6 +139,50 @@ struct MemoryArchiveCreationOption: Equatable {
         isAvailable: true,
         route: .ownerTruthMedia(.video)
     )
+
+    private static let ownerTruthPhotoUnavailable = unavailableOwnerTruthMediaOption(
+        kind: .photo,
+        mediaKind: .image,
+        title: "选择图片",
+        iconName: "photo.on.rectangle.angled"
+    )
+
+    private static let ownerTruthAudioUnavailable = unavailableOwnerTruthMediaOption(
+        kind: .audio,
+        mediaKind: .audio,
+        title: "选择音频",
+        iconName: "waveform"
+    )
+
+    private static let ownerTruthDocumentUnavailable = unavailableOwnerTruthMediaOption(
+        kind: .text,
+        mediaKind: .document,
+        title: "选择文档",
+        iconName: "doc.text"
+    )
+
+    private static let ownerTruthVideoUnavailable = unavailableOwnerTruthMediaOption(
+        kind: .video,
+        mediaKind: .video,
+        title: "选择视频",
+        iconName: "video"
+    )
+
+    private static func unavailableOwnerTruthMediaOption(
+        kind: MemoryArchiveItemKind,
+        mediaKind: OwnerTruthMediaKind,
+        title: String,
+        iconName: String
+    ) -> MemoryArchiveCreationOption {
+        MemoryArchiveCreationOption(
+            kind: kind,
+            title: title,
+            subtitle: "安全存储服务暂不可用，请稍后再试。",
+            iconName: iconName,
+            isAvailable: false,
+            route: .ownerTruthMedia(mediaKind)
+        )
+    }
 
     private static let audio = MemoryArchiveCreationOption(
         kind: .audio,

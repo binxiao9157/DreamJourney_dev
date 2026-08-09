@@ -1459,9 +1459,10 @@ final class FamilyContributionReviewViewController: UIViewController, UITableVie
             ? (item.text ?? "文字记忆")
             : "图片记忆"
         cell.textLabel?.numberOfLines = 2
-        cell.detailTextLabel?.text = Self.statusText(item.status)
-        cell.accessoryType = item.isPendingReview ? .disclosureIndicator : .none
-        cell.selectionStyle = item.isPendingReview ? .default : .none
+        cell.detailTextLabel?.text = Self.statusText(item)
+        let canOpen = item.isPendingReview || item.handoff.canOpenCandidateReview
+        cell.accessoryType = canOpen ? .disclosureIndicator : .none
+        cell.selectionStyle = canOpen ? .default : .none
         cell.accessibilityIdentifier = "familyContributionReviewItem.\(item.submissionId)"
         return cell
     }
@@ -1469,6 +1470,10 @@ final class FamilyContributionReviewViewController: UIViewController, UITableVie
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let item = submissions[indexPath.row]
+        if item.handoff.canOpenCandidateReview {
+            openCandidateReview(item)
+            return
+        }
         guard item.isPendingReview else { return }
         if item.materialKind == "image" {
             showImageReview(item)
@@ -1541,12 +1546,31 @@ final class FamilyContributionReviewViewController: UIViewController, UITableVie
         }
     }
 
-    private static func statusText(_ status: String) -> String {
-        switch status {
-        case "pendingReview": return "等待审核"
-        case "accepted": return "已接受"
-        case "rejected": return "已拒绝"
-        default: return "已撤回"
+    private func openCandidateReview(_ submission: FamilyContributionSubmissionContract) {
+        guard let sourceId = submission.handoff.sourceId,
+              let sourceUUID = UUID(uuidString: sourceId) else {
+            showToast("候选记忆尚未准备完成", type: .info)
+            return
+        }
+        let inbox = OwnerTruthCandidateInboxViewController(
+            accountLease: accountLease,
+            sourceIDFilter: OwnerTruthRecordID(rawValue: sourceUUID)
+        )
+        navigationController?.pushViewController(inbox, animated: true)
+    }
+
+    private static func statusText(_ submission: FamilyContributionSubmissionContract) -> String {
+        switch submission.handoff.status {
+        case .ownerReviewPending: return "等待审核"
+        case .ownerRejected: return "已拒绝"
+        case .withdrawn: return "授权已撤回"
+        case .mediaProcessing: return "图片处理中"
+        case .mediaProcessingFailed: return "图片处理失败，可稍后重试"
+        case .candidateExtractionRequested: return "正在整理候选记忆"
+        case .candidatePendingReview: return "候选记忆待确认"
+        case .candidateRejected: return "候选记忆未采纳"
+        case .memoryActivationPending: return "正式记忆生成中"
+        case .memoryCurrent: return "已成为正式记忆"
         }
     }
 }

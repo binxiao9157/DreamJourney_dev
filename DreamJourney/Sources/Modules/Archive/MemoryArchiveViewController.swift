@@ -11122,6 +11122,10 @@ extension MemoryArchiveViewController: MemoryArchiveCreationSheetViewControllerD
         _ viewController: MemoryArchiveCreationSheetViewController,
         didSelect option: MemoryArchiveCreationOption
     ) {
+        guard option.isAvailable else {
+            showToast("安全存储服务暂不可用，请稍后再试", type: .info)
+            return
+        }
         guard isSelfAutobiographyMode else {
             viewController.dismiss(animated: true) { [weak self] in
                 self?.showReadOnlyArchiveToast()

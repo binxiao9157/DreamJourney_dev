@@ -2324,7 +2324,9 @@ struct FamilyContributionSubmissionContract: Equatable, Identifiable {
     let rowVersion: Int
     let text: String?
     let sourceObjectId: String?
+    let sourceId: String?
     let materialIncluded: Bool
+    let handoff: FamilyContributionHandoffContract
 
     var id: String { submissionId }
     var isPendingReview: Bool { status == "pendingReview" }
@@ -2346,6 +2348,7 @@ struct FamilyContributionSubmissionContract: Equatable, Identifiable {
         }
         let text = (json["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let sourceObjectId = Self.identifier(json["sourceObjectId"])
+        let sourceId = Self.identifier(json["sourceId"])
         if materialKind == "text", materialIncluded, text?.isEmpty != false {
             throw FamilyContributionContractError.malformedResponse
         }
@@ -2362,7 +2365,13 @@ struct FamilyContributionSubmissionContract: Equatable, Identifiable {
         self.rowVersion = rowVersion
         self.text = text
         self.sourceObjectId = sourceObjectId
+        self.sourceId = sourceId
         self.materialIncluded = materialIncluded
+        self.handoff = try FamilyContributionHandoffContract(
+            json: json["handoff"] as? [String: Any],
+            submissionStatus: status,
+            sourceId: sourceId
+        )
     }
 
     private static func identifier(_ value: Any?) -> String? {
@@ -2374,6 +2383,80 @@ struct FamilyContributionSubmissionContract: Equatable, Identifiable {
         if let value = value as? Int { return value }
         if let value = value as? NSNumber { return value.intValue }
         return nil
+    }
+}
+
+struct FamilyContributionHandoffContract: Equatable {
+    enum Status: String {
+        case ownerReviewPending
+        case ownerRejected
+        case withdrawn
+        case mediaProcessing
+        case mediaProcessingFailed
+        case candidateExtractionRequested
+        case candidatePendingReview
+        case candidateRejected
+        case memoryActivationPending
+        case memoryCurrent
+    }
+
+    let status: Status
+    let sourceId: String?
+    let candidateId: String?
+    let memoryId: String?
+    let memoryVersionId: String?
+    let processingStatus: String?
+    let retryable: Bool
+
+    var canOpenCandidateReview: Bool {
+        status == .candidatePendingReview && sourceId != nil && candidateId != nil
+    }
+
+    init(
+        json: [String: Any]?,
+        submissionStatus: String,
+        sourceId: String?
+    ) throws {
+        guard let json else {
+            switch submissionStatus {
+            case "pendingReview": status = .ownerReviewPending
+            case "rejected": status = .ownerRejected
+            case "withdrawn": status = .withdrawn
+            default: status = .candidateExtractionRequested
+            }
+            self.sourceId = sourceId
+            candidateId = nil
+            memoryId = nil
+            memoryVersionId = nil
+            processingStatus = nil
+            retryable = false
+            return
+        }
+        guard let rawStatus = json["status"] as? String,
+              let status = Status(rawValue: rawStatus),
+              let retryable = json["retryable"] as? Bool else {
+            throw FamilyContributionContractError.malformedResponse
+        }
+        self.status = status
+        self.sourceId = Self.identifier(json["sourceId"]) ?? sourceId
+        candidateId = Self.identifier(json["candidateId"])
+        memoryId = Self.identifier(json["memoryId"])
+        memoryVersionId = Self.identifier(json["memoryVersionId"])
+        processingStatus = Self.identifier(json["processingStatus"])
+        self.retryable = retryable
+        if status == .candidatePendingReview,
+           (self.sourceId == nil || candidateId == nil) {
+            throw FamilyContributionContractError.malformedResponse
+        }
+        if status == .memoryCurrent,
+           (memoryId == nil || memoryVersionId == nil) {
+            throw FamilyContributionContractError.malformedResponse
+        }
+    }
+
+    private static func identifier(_ value: Any?) -> String? {
+        let normalized = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return normalized.isEmpty ? nil : normalized
     }
 }
 

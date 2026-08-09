@@ -99,12 +99,15 @@ final class MemoryArchiveCreationSheetViewController: UIViewController {
 
     private func makeOptionButton(_ option: MemoryArchiveCreationOption) -> UIControl {
         let control = MemoryArchiveCreationOptionControl(option: option)
-        control.addTarget(self, action: #selector(optionTapped(_:)), for: .touchUpInside)
+        if option.isAvailable {
+            control.addTarget(self, action: #selector(optionTapped(_:)), for: .touchUpInside)
+        }
         return control
     }
 
     @objc private func optionTapped(_ sender: MemoryArchiveCreationOptionControl) {
         let option = sender.option
+        guard option.isAvailable else { return }
         let delegate = delegate
         dismiss(animated: true) {
             delegate?.memoryArchiveCreationSheet(self, didSelect: option)
@@ -136,8 +139,10 @@ private final class MemoryArchiveCreationOptionControl: UIControl {
     }
 
     private func setupView() {
-        accessibilityTraits = .button
+        isEnabled = option.isAvailable
+        accessibilityTraits = option.isAvailable ? .button : [.button, .notEnabled]
         accessibilityLabel = option.title
+        accessibilityValue = option.isAvailable ? nil : "暂不可用"
 
         cardView.backgroundColor = DJDesignTokens.Color.surface
         cardView.layer.cornerRadius = DJDesignTokens.Radius.large
@@ -174,6 +179,11 @@ private final class MemoryArchiveCreationOptionControl: UIControl {
         chevron.tintColor = DJDesignTokens.Color.textTertiary
         chevron.contentMode = .scaleAspectFit
         chevron.setContentHuggingPriority(.required, for: .horizontal)
+        chevron.isHidden = !option.isAvailable
+
+        if !option.isAvailable {
+            cardView.alpha = 0.58
+        }
 
         let rowStack = UIStackView(arrangedSubviews: [iconContainer, textStack, chevron])
         rowStack.alignment = .center

@@ -54,11 +54,15 @@ def main() -> None:
     )
     for required in (
         "isOwnerTruthMediaCaptureEnabled: Bool = false",
-        "options[0] = .ownerTruthTextCapture",
-        "options[1] = .ownerTruthPhotoCapture",
+        "var options: [MemoryArchiveCreationOption] = [.ownerTruthTextCapture]",
         ".ownerTruthAudioCapture",
         ".ownerTruthDocumentCapture",
         ".ownerTruthVideoCapture",
+        ".ownerTruthPhotoUnavailable",
+        ".ownerTruthAudioUnavailable",
+        ".ownerTruthDocumentUnavailable",
+        ".ownerTruthVideoUnavailable",
+        'subtitle: "安全存储服务暂不可用，请稍后再试。"',
         'title: "记录文字"',
         'title: "选择图片"',
         'title: "选择音频"',
@@ -126,6 +130,11 @@ def main() -> None:
     require(
         "options.count > 4 ? [.large()] : [.medium(), .large()]" in sheet,
         "five-option unified creator must open at the large detent",
+    )
+    require(
+        "isEnabled = option.isAvailable" in sheet
+        and "guard option.isAvailable else { return }" in sheet,
+        "unavailable V2 media options must be visibly disabled and non-interactive",
     )
     for required in (
         'case ownerMediaUnifiedCreationSmoke = "DJRunOwnerMediaUnifiedCreationSmoke"',

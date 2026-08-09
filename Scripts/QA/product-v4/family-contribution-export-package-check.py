@@ -46,6 +46,9 @@ def main() -> None:
         (
             "struct FamilyContributionGrantContract",
             "struct FamilyContributionSubmissionContract",
+            "struct FamilyContributionHandoffContract",
+            "case candidatePendingReview",
+            "case memoryCurrent",
             "func listOwnerFamilyContributionGrants(",
             "func listContributorFamilyContributionGrants(",
             "func createOwnerFamilyContributionGrant(",
@@ -75,6 +78,8 @@ def main() -> None:
             '可点击右上角重试',
             "readOwnerFamilyContributionImage(",
             "reviewOwnerFamilyContributionSubmission(",
+            "openCandidateReview(",
+            'case .memoryCurrent: return "已成为正式记忆"',
         ),
         "family UI",
     )

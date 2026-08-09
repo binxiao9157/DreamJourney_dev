@@ -327,6 +327,13 @@ final class OwnerTruthContractsTests: XCTestCase {
             isOwnerTruthTextCaptureEnabled: true,
             isOwnerTruthMediaCaptureEnabled: true
         )
+        let textOnlyAuthorityOptions = MemoryArchiveCreationOption.availableOptions(
+            isAudioUploadEnabled: true,
+            isVideoUploadEnabled: true,
+            isTimeLettersEnabled: false,
+            isOwnerTruthTextCaptureEnabled: true,
+            isOwnerTruthMediaCaptureEnabled: false
+        )
 
         XCTAssertEqual(defaultOptions.map(\.title), ["添加文字描述", "选择照片"])
         XCTAssertFalse(defaultOptions.contains(where: \.submitsOwnerTruthSource))
@@ -338,6 +345,20 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(
             closedPilotOptions.compactMap(\.ownerTruthMediaKind),
             [.image, .audio, .document, .video]
+        )
+        XCTAssertEqual(
+            textOnlyAuthorityOptions.map(\.title),
+            ["记录文字", "选择图片", "选择音频", "选择文档", "选择视频"]
+        )
+        XCTAssertEqual(
+            textOnlyAuthorityOptions.map(\.isAvailable),
+            [true, false, false, false, false]
+        )
+        XCTAssertFalse(
+            textOnlyAuthorityOptions.contains {
+                if case .archive = $0.route { return true }
+                return false
+            }
         )
     }
 
@@ -9607,10 +9628,21 @@ final class OwnerTruthContractsTests: XCTestCase {
             "rowVersion": 1,
             "text": "家人贡献的一段记忆",
             "sourceObjectId": NSNull(),
+            "sourceId": "7D42D36A-8C2E-4C8C-B134-06CA30F48672",
             "materialIncluded": true,
+            "handoff": [
+                "status": "candidatePendingReview",
+                "sourceId": "7D42D36A-8C2E-4C8C-B134-06CA30F48672",
+                "candidateId": "E5EE9C0D-3C50-44D4-85B8-F6B8F40628AB",
+                "memoryId": NSNull(),
+                "memoryVersionId": NSNull(),
+                "retryable": false,
+            ],
         ])
         XCTAssertTrue(text.isPendingReview)
         XCTAssertEqual(text.text, "家人贡献的一段记忆")
+        XCTAssertTrue(text.handoff.canOpenCandidateReview)
+        XCTAssertEqual(text.handoff.status, .candidatePendingReview)
 
         let image = try FamilyContributionSubmissionContract(json: [
             "submissionId": "submission-image-1",
@@ -9624,8 +9656,18 @@ final class OwnerTruthContractsTests: XCTestCase {
             "text": NSNull(),
             "sourceObjectId": "source-object-1",
             "materialIncluded": true,
+            "handoff": [
+                "status": "mediaProcessing",
+                "sourceId": NSNull(),
+                "candidateId": NSNull(),
+                "memoryId": NSNull(),
+                "memoryVersionId": NSNull(),
+                "processingStatus": "queued",
+                "retryable": false,
+            ],
         ])
         XCTAssertEqual(image.sourceObjectId, "source-object-1")
+        XCTAssertEqual(image.handoff.status, .mediaProcessing)
 
         XCTAssertThrowsError(try FamilyContributionSubmissionContract(json: [
             "submissionId": "submission-invalid-1",
