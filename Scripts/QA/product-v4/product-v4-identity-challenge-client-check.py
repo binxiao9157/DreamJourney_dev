@@ -11,6 +11,9 @@ CONTRACT = ROOT / "DreamJourney/Sources/Services/BackendIdentityChallenge.swift"
 PROJECT = ROOT / "DreamJourney.xcodeproj/project.pbxproj"
 MODEL_RUNNER = ROOT / "Scripts/QA/product-v4/run-identity-challenge-client-model-smoke.sh"
 R4_GATE = ROOT / "Scripts/QA/product-v4/run-identity-challenge-r4-client-gate.sh"
+UIQA_RUNNER = ROOT / "Scripts/QA/product-v4/run-identity-challenge-login-recovery-uiqa-smoke.sh"
+FEATURE_FLAGS = ROOT / "DreamJourney/Sources/App/FeatureFlagService.swift"
+APP_DELEGATE = ROOT / "DreamJourney/Sources/AppDelegate.swift"
 
 
 def require(condition: bool, message: str) -> None:
@@ -22,11 +25,15 @@ def main() -> None:
     require(CONTRACT.is_file(), "typed identity challenge contract is missing")
     require(MODEL_RUNNER.is_file(), "identity challenge model smoke runner is missing")
     require(R4_GATE.is_file(), "identity challenge R4 client gate is missing")
+    require(UIQA_RUNNER.is_file(), "identity challenge login/recovery UIQA runner is missing")
     contract = CONTRACT.read_text(encoding="utf-8")
     client = CLIENT.read_text(encoding="utf-8")
     login = LOGIN.read_text(encoding="utf-8")
     project = PROJECT.read_text(encoding="utf-8")
     model_runner = MODEL_RUNNER.read_text(encoding="utf-8")
+    uiqa_runner = UIQA_RUNNER.read_text(encoding="utf-8")
+    feature_flags = FEATURE_FLAGS.read_text(encoding="utf-8")
+    app_delegate = APP_DELEGATE.read_text(encoding="utf-8")
 
     for symbol in (
         "BackendIdentityChallengeCapability",
@@ -70,6 +77,31 @@ def main() -> None:
     require("BackendIdentityChallenge.swift in Sources" in project, "identity contract is not part of the app target")
     require("-parse-as-library" in model_runner, "identity model smoke must compile production model as a library")
     require("BackendIdentityChallenge.swift" in model_runner, "identity model smoke must exercise the production typed model")
+    require(
+        "DJRunIdentityChallengeLoginRecoverySmoke" in feature_flags,
+        "identity challenge login/recovery scenario is not registered",
+    )
+    require(
+        "runIdentityChallengeLoginRecoverySmoke" in app_delegate,
+        "identity challenge login/recovery UIQA flow is missing",
+    )
+    for boundary in (
+        "fetchRuntimeConfig",
+        "createIdentityChallenge",
+        "fetchIdentityChallengeState",
+        "recoverDelivery: true",
+        "verifyIdentityChallenge",
+        "logoutAuthSession",
+    ):
+        require(boundary in app_delegate, f"identity UIQA boundary missing: {boundary}")
+    require(
+        "IDENTITY_CHALLENGE_ADAPTER=synthetic" in uiqa_runner,
+        "identity UIQA runner must use the local synthetic adapter",
+    )
+    require(
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG UI_QA_SIMULATOR'" in uiqa_runner,
+        "identity UIQA runner must remain simulator-only",
+    )
 
     print("Product V4 identity challenge client check passed")
 

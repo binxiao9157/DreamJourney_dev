@@ -320,6 +320,8 @@ private extension AppDelegate {
         )
 
         switch scenario {
+        case .identityChallengeLoginRecoverySmoke:
+            scheduleUIQAScenario(scenario) { $0.runIdentityChallengeLoginRecoverySmoke() }
         case .digitalHumanLivePanelSmoke:
             scheduleUIQAScenario(scenario) { $0.runDigitalHumanLivePanelSmoke() }
         case .echoDigitalHumanLifecycleSmoke:
@@ -478,6 +480,109 @@ private extension AppDelegate {
             expectedUserId: userId,
             completion: completion
         )
+    }
+
+    func runIdentityChallengeLoginRecoverySmoke() {
+        let smokeName = "IdentityChallengeLoginRecoverySmoke"
+        let resultFileName = "identity-challenge-login-recovery-smoke-result.json"
+        let phone = "13800009999"
+        let nickname = "Identity UIQA"
+
+        func finish(_ result: [String: Any]) {
+            QAScenarioResultWriter.writeAndLog(
+                result,
+                fileName: resultFileName,
+                smokeName: smokeName
+            )
+            print("[UI_QA] \(smokeName) completed")
+        }
+
+        func fail(_ stage: String) {
+            finish([
+                "completed": false,
+                "failureStage": stage,
+            ])
+        }
+
+        guard let verificationCode = uiqaArgumentValue(prefix: "DJUIQAIdentityChallengeCode="),
+              !verificationCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            fail("missingVerificationCode")
+            return
+        }
+
+        DreamJourneyBackendClient.shared.fetchRuntimeConfig { runtimeResult in
+            switch runtimeResult {
+            case .failure:
+                fail("runtimeConfig")
+            case .success(let runtime):
+                let capability = runtime.identityChallenge
+                guard capability.canStartClientFlow,
+                      capability.canReadChallengeState else {
+                    fail("runtimeCapability")
+                    return
+                }
+                DreamJourneyBackendClient.shared.createIdentityChallenge(
+                    phone: phone,
+                    purpose: "login"
+                ) { challengeResult in
+                    switch challengeResult {
+                    case .failure:
+                        fail("createChallenge")
+                    case .success(let challenge):
+                        DreamJourneyBackendClient.shared.fetchIdentityChallengeState(
+                            challengeId: challenge.challengeId,
+                            recoverDelivery: true
+                        ) { stateResult in
+                            switch stateResult {
+                            case .failure:
+                                fail("recoverChallengeState")
+                            case .success(let recovered):
+                                let state = recovered.state
+                                guard state.challengeId == challenge.challengeId,
+                                      state.challengeState == .active,
+                                      state.contractVersion == 1,
+                                      state.stateContractVersion == 1 else {
+                                    fail("recoveredStateContract")
+                                    return
+                                }
+                                DreamJourneyBackendClient.shared.verifyIdentityChallenge(
+                                    challengeId: challenge.challengeId,
+                                    verificationCode: verificationCode,
+                                    nickname: nickname
+                                ) { verificationResult in
+                                    switch verificationResult {
+                                    case .failure:
+                                        fail("verifyChallenge")
+                                    case .success(let response):
+                                        guard let verification = BackendIdentityVerificationContract(
+                                            json: response
+                                        ),
+                                              BackendAuthSessionStore.shared.currentSession?.userId
+                                                == verification.subjectId else {
+                                            fail("adoptAuthSession")
+                                            return
+                                        }
+                                        DreamJourneyBackendClient.shared.logoutAuthSession()
+                                        let authSessionCleared = BackendAuthSessionStore.shared.currentSession == nil
+                                        finish([
+                                            "completed": authSessionCleared,
+                                            "providerMode": capability.providerMode,
+                                            "challengeState": state.challengeState.rawValue,
+                                            "deliveryState": state.deliveryState.rawValue,
+                                            "recoveryState": state.recoveryState.rawValue,
+                                            "stateContractVersion": state.stateContractVersion,
+                                            "contractVersion": verification.contractVersion,
+                                            "authSessionAdopted": true,
+                                            "authSessionCleared": authSessionCleared,
+                                        ])
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     func activateUIQAAuthenticatedBackendProfileSession(

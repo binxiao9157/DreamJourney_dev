@@ -85,6 +85,7 @@ enum QALaunchFeature: String, CaseIterable {
 /// legacy AppDelegate if/else priority: when more than one argument is present,
 /// the earliest registered scenario is the sole scenario that runs.
 enum QALaunchScenario: String, CaseIterable {
+    case identityChallengeLoginRecoverySmoke = "DJRunIdentityChallengeLoginRecoverySmoke"
     case digitalHumanLivePanelSmoke = "DJRunDigitalHumanLivePanelSmoke"
     case echoDigitalHumanLifecycleSmoke = "DJRunEchoDigitalHumanLifecycleSmoke"
     case echoAudioOwnerCoordinatorSmoke = "DJRunEchoAudioOwnerCoordinatorSmoke"
@@ -148,6 +149,7 @@ enum QALaunchScenario: String, CaseIterable {
     case seedPendingArchiveAnalysis = "DJSeedPendingArchiveAnalysis"
 
     static let startupOrder: [QALaunchScenario] = [
+        .identityChallengeLoginRecoverySmoke,
         .digitalHumanLivePanelSmoke,
         .echoDigitalHumanLifecycleSmoke,
         .echoAudioOwnerCoordinatorSmoke,
@@ -217,7 +219,8 @@ enum QALaunchScenario: String, CaseIterable {
 
     var sessionPreparation: QALaunchScenarioSessionPreparation {
         switch self {
-        case .globalPrivateStoreRetirementSmoke,
+        case .identityChallengeLoginRecoverySmoke,
+             .globalPrivateStoreRetirementSmoke,
              .voiceCloneOwnerScopeSmoke,
              .backendEnvironmentSmoke,
              .seedEchoArchiveContext,

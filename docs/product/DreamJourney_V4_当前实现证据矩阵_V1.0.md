@@ -43,7 +43,7 @@
 | --- | --- | --- |
 | Route authentication | `enforce`，191 路由全部分类 | `IMPLEMENTED` |
 | Cross-account ownership | `shadow` | `PARTIAL`，等待真实 SMS 身份与部署 shadow evidence |
-| OTP identity challenge | disabled/unavailable | `CONFIG_MISSING` |
+| OTP identity challenge | provider-neutral code、Postgres 与 iOS 模拟器 Gate 已通过；线上 disabled/unavailable | `CODE_READY / CONFIG_MISSING` |
 | Owner Truth media storage | disabled | `CONFIG_MISSING`，等待腾讯 COS |
 | ClamAV | sidecar 运行，clean/EICAR smoke 通过 | `PROD_VERIFIED` 扫描器运行条件，不代表媒体闭环 |
 | Owner Truth media processing | worker disabled | `DEPLOYMENT_DISABLED` |
@@ -199,7 +199,7 @@
 
 | Requirement | PRD | iOS 实现 | 后端实现 | 决策门 | 外部门（未通过） | 当前暴露 | 实现成熟度 | 主交付阶段 | 主要证据/缺口 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| FR-ACC-001 | P0 | `IMPLEMENTED` v2 challenge/session client | `IMPLEMENTED` provider-neutral OTP/session contract | CONFIRMED: DR-023/024; OPEN: DR-035 | 真实 SMS、渗透、恢复真机 | PUBLIC_PARTIAL | `PARTIAL` | M0 Identity | 线上 OTP adapter disabled；legacy login 已关闭，真实新用户当前不能登录 |
+| FR-ACC-001 | P0 | `IMPLEMENTED` v2 challenge/session client；独立登录/恢复 UIQA smoke 已通过 | `IMPLEMENTED` provider-neutral OTP/session contract；Provider/Postgres/deployed fail-closed Gate 已通过 | CONFIRMED: DR-023/024; OPEN: DR-035 | 真实 SMS、渗透、恢复真机 | PUBLIC_PARTIAL | `PARTIAL` | M0 Identity | 代码已就绪；线上 OTP adapter disabled，真实新用户当前不能登录 |
 | FR-ACC-002 | P0 | `IMPLEMENTED` profile/family shell | `IMPLEMENTED` family/persona contracts | CONFIRMED: DR-003/004/023; EXTERNAL: DR-022/036 | 身份、关系证明、产品验收 | HIDDEN_QA | `PARTIAL` | M0 Family Contribution | 邀请/接受/静态贡献存在；家庭关系不授予 Vault、Voice、Persona 或 DH 自动读取权 |
 | FR-SRC-001 | P0 | `IMPLEMENTED` typed V2 capture/task state | `IMPLEMENTED` COS/SourceObject/scanner adapter | OPEN: DR-026/031 | COS bucket、SSE、删除回执 | HIDDEN_QA | `IMPLEMENTED` | M0 Stage 2 Media | 代码与 fake/ClamAV Gate 完成；线上 media storage disabled，等待真实腾讯 COS |
 | FR-SRC-002 | P0 | `IMPLEMENTED` unified media/file intake | `IMPLEMENTED` text/PDF/DOCX + OCR/ASR ports | OPEN: DR-026/031 | COS、OCR/ASR Provider、真机大文件 | HIDDEN_QA | `PARTIAL` | M0 Stage 2 Media | 本地 parser 与隔离 E2E 已过；OCR/ASR disabled，视频保持 storage-only |
@@ -242,7 +242,7 @@
 
 | 能力域 | 当前代码状态 | 当前产品状态 | 剩余主任务 |
 | --- | --- | --- | --- |
-| Account/Auth | v2 challenge/session typed client、refresh rotation、账号 lease 已实现 | 真实 OTP disabled | 接短信 Provider，真机登录/恢复 |
+| Account/Auth | v2 challenge/session typed client、refresh rotation、账号 lease、登录/恢复模拟器 Gate 已实现 | 真实 OTP disabled | 接短信 Provider，跑真实号码与真机登录/恢复 |
 | Archive/Owner Truth | V2 Source、媒体任务、Candidate、MemoryVersion、审核/更正 UI 已实现 | closed-pilot/default-off；旧 Archive 写路径仍在 | 真实 COS/Worker 后切 V2，旧路径只读 |
 | Echo/Context | Context V2、citation、trace、evidence 和 authority client 已实现 | 普通 Echo 仍使用旧 `/context/build` | closed-pilot 切 V4 authority，移除旧回答 fallback |
 | Data Rights | ExportJob、删除状态、账号租约和分享清理已实现 | 真实媒体字节/Provider receipt 不完整 | 接 COS/Provider 外部效果 |

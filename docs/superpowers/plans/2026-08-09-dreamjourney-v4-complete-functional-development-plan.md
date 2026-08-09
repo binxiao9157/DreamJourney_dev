@@ -236,7 +236,7 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 ### A1 真实 OTP Adapter
 
 前置：短信供应商、签名、模板、地域、测试号码和服务器 key。
-状态：`CONFIG_MISSING / PROVIDER_REQUIRED`
+状态：`CODE_READY / WAITING_EXTERNAL_CONFIGURATION (2026-08-09)`
 
 代码内容：
 
@@ -255,6 +255,14 @@ Gate：同一部署账号可拉取、构建、迁移、重启、回滚；恢复�
 - 真实测试号码端到端
 
 完成定义：真实手机号可注册、登录、刷新、退出和按规则恢复；错误不泄露号码是否存在。
+
+当前证据：
+
+- 后端 Provider 合同 Gate 28 项通过，覆盖 production fail-closed、受理/恢复、限流、错误次数、一次消费、重放拒绝和脱敏。
+- 部署服务器使用临时数据库完成 Postgres Provider smoke；迁移、受理、恢复、校验、重放拒绝和失败不落库均通过。
+- 线上 `IDENTITY_CHALLENGE_ADAPTER=disabled` 时 deployed smoke 通过，`/config/runtime` 与挑战接口保持 fail-closed。
+- iOS 新增独立 `run-identity-challenge-login-recovery-uiqa-smoke.sh`，在模拟器中完成 runtime capability、create、recover state、verify、auth session adoption 和 logout 清理；不再借用数字人 smoke 证明身份链路。
+- 仍缺短信 Provider、签名、模板、地域、测试号码和服务器 key；因此真实号码 E2E、生产启用和 A1 完成定义尚未关闭。
 
 ### A2 账号恢复和注销生产验证
 
@@ -653,7 +661,7 @@ M2 完成定义：只对批准 cohort 开放；未批准账户仍保持当前 M0
 
 ## 17. 下一执行点
 
-Phase 0 的 F0-01、F0-02、F0-03 已完成。代码主线下一顺序项为 **A1 真实 OTP Adapter**；当前仍为 `CONFIG_MISSING / PROVIDER_REQUIRED`，不得以 synthetic adapter 冒充生产完成。
+Phase 0 的 F0-01、F0-02、F0-03 已完成。A1 的代码与全部非真机 Gate 已完成，状态为 `CODE_READY / WAITING_EXTERNAL_CONFIGURATION`；线上继续 fail-closed，不以 synthetic adapter 冒充生产完成。代码主线继续审计 **A2 账号恢复和注销** 的 Provider 无关部分，真实账号恢复验收仍等待 A1 短信配置。
 
 外部准备同时启动：
 
