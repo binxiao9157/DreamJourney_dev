@@ -89,6 +89,13 @@ struct RuntimeCapabilitySnapshot: Equatable {
         isProviderOperational && releaseVisible && externalVerified
     }
 
+    /// A server-authorized closed pilot may use an internally operated feature
+    /// before public-release evidence has been completed. The account policy
+    /// remains the authority; this only describes runtime readiness.
+    var isClosedPilotAvailable: Bool {
+        isProviderOperational && releaseVisible
+    }
+
     var readiness: RuntimeCapabilityReadiness {
         guard contractComplete else { return .unknown }
         guard implemented else { return .notImplemented }

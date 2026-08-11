@@ -133,7 +133,7 @@ grep -Eq '"backendVoiceProviderMode"[[:space:]]*:[[:space:]]*"mockContract"' "$R
 grep -Eq '"backendVoiceDefaultReleaseVisible"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Backend-derived voice shell must stay hidden by default."
 grep -Eq '"backendVoiceShellRendered"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Backend-derived voice shell should render."
 grep -Eq '"hiddenBranchesArgument"[[:space:]]*:[[:space:]]*"DJEnableProfileHiddenBranches"' "$RESULT_FILE" || fail "Hidden launch argument changed."
-grep -Eq '"unavailableTitle"[[:space:]]*:[[:space:]]*"家人管理暂未开放"' "$RESULT_FILE" || fail "Unavailable copy changed."
+grep -Eq '"unavailableTitle"[[:space:]]*:[[:space:]]*"家人管理暂不可用"' "$RESULT_FILE" || fail "Unavailable copy changed."
 
 sleep 1
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$SCREENSHOT_PATH" >/dev/null

@@ -18,31 +18,23 @@ enum ProfileFamilyPersonaReleaseReadiness {
     #else
     static let hiddenBranchesLaunchArgument = ""
     #endif
-    static let unavailableTitle = "家人管理暂未开放"
-    static let unavailableMessage = "当前版本先保留入口，完整家人空间会在后续版本开放。"
+    static let unavailableTitle = "家人管理暂不可用"
+    static let unavailableMessage = "请确认已经登录并保持网络连接，然后重新进入家人管理。"
     static let voiceCloneUnavailableTitle = "音色复刻暂不可用"
     static let voiceCloneUnavailableMessage = "当前版本暂不公开音色复刻；内部验证仍通过后端代理执行训练、查询、合成、禁用和删除。"
 
     static let familyManagementCapability = Capability(
         title: "家人管理",
         feature: .familyManagement,
-        stage: .hiddenReady(
-            feature: .familyManagement,
-            qaLaunchArgument: hiddenBranchesLaunchArgument,
-            reason: "V4 Closed Pilot 暂不公开家庭关系写入；手机号邀请和状态合同保留供内部验证。"
-        ),
-        releaseCopy: "家人管理暂未开放"
+        stage: .publicReady(reason: "家人管理面向所有已登录用户开放。"),
+        releaseCopy: "登录后可管理与切换家人"
     )
 
     static let familySpaceCapability = Capability(
         title: "数字人切换",
         feature: .familySpace,
-        stage: .hiddenReady(
-            feature: .familySpace,
-            qaLaunchArgument: hiddenBranchesLaunchArgument,
-            reason: "家庭授权、角色切换和生命周期仍需后续 Gate，当前只保留 QA 壳层。"
-        ),
-        releaseCopy: "家人空间暂未开放"
+        stage: .publicReady(reason: "已登录用户可以在自己与已加入的家人之间切换。"),
+        releaseCopy: "可切换自己与已加入的家人"
     )
 
     static let passwordChangeCapability = Capability(

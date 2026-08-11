@@ -58,12 +58,16 @@ def main() -> None:
         require(required in client, f"server-managed closed-pilot guard missing: {required}")
 
     require(
-        "localEnabled: Self.serverPolicyManagedClosedPilotFeatures.contains(feature) ? true : nil" in client,
-        "only the explicit closed-pilot allowlist may override local default-off state",
+        "localEnabled: Self.serverPolicyManagedFeatures.contains(feature) ? true : nil" in client,
+        "only the explicit server-managed feature sets may override local default-off state",
     )
     require(
-        "localEnabled: Self.serverPolicyManagedClosedPilotFeatures.contains(captured.feature) ? true : nil" in client,
-        "request revalidation must retain the same narrow closed-pilot rule",
+        "localEnabled: Self.serverPolicyManagedFeatures.contains(captured.feature) ? true : nil" in client,
+        "request revalidation must retain the same bounded server-managed rule",
+    )
+    require(
+        ".union(serverPolicyManagedGeneralFeatures)" in client,
+        "general signed-in features must stay explicitly separated from Closed Pilot features",
     )
 
     natural_input_transport = function_body(client, "ownerTruthInterviewNaturalInputTransport")

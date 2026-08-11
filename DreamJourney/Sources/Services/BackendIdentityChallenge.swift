@@ -11,6 +11,8 @@ struct BackendIdentityChallengeCapability: Equatable {
     let stateContractVersion: Int
     let deliveryReceiptSupported: Bool
     let deliveryRecoverySupported: Bool
+    let testAccountFlowEnabled: Bool
+    let testAccountTargetRestricted: Bool
     let contractVersion: Int
     private let contractFieldsComplete: Bool
 
@@ -23,7 +25,10 @@ struct BackendIdentityChallengeCapability: Equatable {
               verifyEndpointTemplate == "/v2/auth/challenges/{challengeId}/verify" else {
             return false
         }
-        return productionReady || providerMode == "synthetic"
+        let restrictedTestAllowlist = providerMode == "testAllowlist"
+            && testAccountFlowEnabled
+            && testAccountTargetRestricted
+        return productionReady || providerMode == "synthetic" || restrictedTestAllowlist
     }
 
     var canReadChallengeState: Bool {
@@ -40,6 +45,8 @@ struct BackendIdentityChallengeCapability: Equatable {
         let parsedVerifyEndpoint = Self.string(json?["verifyEndpointTemplate"])
         let parsedStatusEndpoint = Self.string(json?["statusEndpointTemplate"])
         let parsedStateContractVersion = Self.int(json?["stateContractVersion"])
+        let parsedTestAccountFlowEnabled = Self.bool(json?["testAccountFlowEnabled"])
+        let parsedTestAccountTargetRestricted = Self.bool(json?["testAccountTargetRestricted"])
         let parsedContractVersion = Self.int(json?["contractVersion"])
         enabled = parsedEnabled ?? false
         providerMode = parsedProviderMode ?? "unavailable"
@@ -51,7 +58,11 @@ struct BackendIdentityChallengeCapability: Equatable {
         stateContractVersion = parsedStateContractVersion ?? 0
         deliveryReceiptSupported = Self.bool(json?["deliveryReceiptSupported"]) ?? false
         deliveryRecoverySupported = Self.bool(json?["deliveryRecoverySupported"]) ?? false
+        testAccountFlowEnabled = parsedTestAccountFlowEnabled ?? false
+        testAccountTargetRestricted = parsedTestAccountTargetRestricted ?? false
         contractVersion = parsedContractVersion ?? 0
+        let testAllowlistFieldsComplete = parsedProviderMode != "testAllowlist"
+            || (parsedTestAccountFlowEnabled != nil && parsedTestAccountTargetRestricted != nil)
         contractFieldsComplete = parsedEnabled != nil
             && parsedProviderMode != nil
             && parsedProductionReady != nil
@@ -59,6 +70,7 @@ struct BackendIdentityChallengeCapability: Equatable {
             && parsedChallengeEndpoint != nil
             && parsedVerifyEndpoint != nil
             && parsedContractVersion != nil
+            && testAllowlistFieldsComplete
     }
 
     private static func string(_ value: Any?) -> String? {

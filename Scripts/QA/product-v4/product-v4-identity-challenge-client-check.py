@@ -55,6 +55,8 @@ def main() -> None:
         "recoveryState",
         "remainingAttempts",
         "stateContractVersion",
+        "testAccountFlowEnabled",
+        "testAccountTargetRestricted",
     ):
         require(field in contract, f"identity contract field missing: {field}")
 
@@ -71,6 +73,12 @@ def main() -> None:
     require("password" not in verify_body, "typed identity verification must not transport an unused password")
 
     require("identityChallenge.canStartClientFlow" in login, "login must require a supported typed runtime capability")
+    require(
+        'providerMode == "testAllowlist"' in contract
+        and "testAccountFlowEnabled" in contract
+        and "testAccountTargetRestricted" in contract,
+        "test allowlist mode must require explicit server-side target restriction",
+    )
     require("beginIdentityChallengeLogin" in login, "login challenge use case is not wired")
     require("performLegacyLogin" not in login, "typed login must not fall back to legacy phone claim")
     require("UserManager.shared.login" not in login.split("guard DreamJourneyBackendClient.shared.isLoginSyncConfigured else {", 1)[1].split("}", 1)[0], "offline identity bypass returned")

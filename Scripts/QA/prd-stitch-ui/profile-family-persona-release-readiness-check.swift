@@ -30,7 +30,9 @@ assertContains(readiness, "static func isFamilyManagementRowVisible", "contract 
 assertContains(readiness, "static func canOpenFamilyPersonaSwitcher", "contract must own hidden persona route visibility")
 assertContains(readiness, "feature: .familyManagement", "family management row must stay behind familyManagement")
 assertContains(readiness, "feature: .familySpace", "family persona switcher must stay behind familySpace")
-assertContains(readiness, "家人管理暂未开放", "contract must retain safe unavailable copy")
+assertContains(readiness, "家人管理暂不可用", "contract must explain temporary runtime unavailability")
+assertContains(readiness, "家人管理面向所有已登录用户开放", "contract must retain the signed-in general product scope")
+assertContains(readiness, "isPubliclyAvailable", "family runtime gate must require the public internal-service contract")
 
 assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.hiddenBranchesLaunchArgument", "profile hidden branch arg should use shared family/persona contract")
 assertContains(profile, "ProfileFamilyPersonaReleaseReadiness.isFamilyManagementRowVisible", "profile row gate should use family/persona contract")

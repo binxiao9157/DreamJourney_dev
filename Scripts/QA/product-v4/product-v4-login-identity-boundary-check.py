@@ -32,18 +32,23 @@ def function_body(source: str, signature: str) -> str:
 
 def main() -> None:
     source = LOGIN.read_text(encoding="utf-8")
-    body = function_body(source, "@objc private func loginTapped()")
+    login_body = function_body(source, "@objc private func loginTapped()")
+    request_body = function_body(source, "private func requestIdentityChallenge(autoSubmitCode: String?)")
     guard_marker = "guard DreamJourneyBackendClient.shared.isLoginSyncConfigured else {"
-    guard_start = body.find(guard_marker)
+    guard_start = request_body.find(guard_marker)
     require(guard_start >= 0, "login must fail closed when backend identity is unavailable")
-    guard_body = function_body(body[guard_start:], guard_marker[:-1].rstrip())
+    guard_body = function_body(request_body[guard_start:], guard_marker[:-1].rstrip())
     require("showLoginAlert" in guard_body, "signed-out fallback must explain backend unavailability")
     require("return" in guard_body, "signed-out fallback must stop login")
     require("UserManager.shared.login" not in guard_body, "offline login must not create a private user")
     require("didLogin" not in guard_body, "offline login must not enter the private application")
     require("performLegacyLogin" not in source, "runtime capability failure must not fall back to legacy login")
-    require("identityChallenge.canStartClientFlow" in body, "login must require a supported typed challenge capability")
-    require("let submittedPhone = rawPhone" in body, "login must snapshot the submitted identity before async work")
+    require("identityChallenge.canStartClientFlow" in request_body, "login must require a supported typed challenge capability")
+    require("let submittedPhone = rawPhone" in request_body, "login must snapshot the submitted identity before async work")
+    require(
+        "requestIdentityChallenge(autoSubmitCode: verificationCode)" in login_body,
+        "login must create and continue a typed challenge when the user entered a code first",
+    )
 
     client = CLIENT.read_text(encoding="utf-8")
     upsert = function_body(client, "func upsertUser(")

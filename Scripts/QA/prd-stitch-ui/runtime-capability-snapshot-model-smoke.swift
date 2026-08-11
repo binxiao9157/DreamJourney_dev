@@ -33,6 +33,7 @@ enum RuntimeCapabilitySnapshotModelSmoke {
         require(complete.isProviderEffectAllowed, "ready provider should allow provider effects")
         require(complete.isProviderOperational, "configured provider should be operational")
         require(!complete.isPubliclyAvailable, "provider ready must not imply release/external ready")
+        require(!complete.isClosedPilotAvailable, "hidden capability must not enter a closed pilot")
         require(complete.readiness == .externalVerificationMissing, "missing G3/G4 evidence should be explicit")
         require(complete.providerMetadataComplete, "provider metadata should decode from a complete runtime contract")
         require(complete.providerKind == "voiceCloneAndSynthesis", "provider kind should remain typed")
@@ -50,6 +51,18 @@ enum RuntimeCapabilitySnapshotModelSmoke {
         require(controlledReady.controlContractComplete, "controlled snapshot must include a complete epoch contract")
         require(controlledReady.isReadinessEpochUsable(at: Date(timeIntervalSince1970: 4_070_908_860)), "fresh readiness epoch should be usable")
         require(controlledReady.isProviderEffectAllowed, "fresh controlled provider should allow effects")
+
+        let closedPilotJSON = controlledReadyJSON.merging([
+            "capability": "familyManagement",
+            "releaseVisible": true,
+            "externalVerified": false,
+            "provider": "internalFamilyService",
+        ]) { _, new in new }
+        guard let closedPilot = RuntimeCapabilitySnapshot(json: closedPilotJSON) else {
+            fatalError("closed-pilot runtime snapshot failed to decode")
+        }
+        require(closedPilot.isClosedPilotAvailable, "server-visible internal capability should be available to the closed pilot")
+        require(!closedPilot.isPubliclyAvailable, "closed-pilot availability must not imply public release evidence")
 
         let controlledBlockedJSON = completeJSON.merging([
             "providerReady": false,

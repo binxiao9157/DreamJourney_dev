@@ -29,6 +29,36 @@ enum IdentityChallengeClientModelSmoke {
         precondition(synthetic.canStartClientFlow)
         precondition(synthetic.canReadChallengeState)
 
+        let restrictedTestAllowlist = BackendIdentityChallengeCapability(json: [
+            "enabled": true,
+            "providerMode": "testAllowlist",
+            "productionReady": false,
+            "clientFlowEnabled": true,
+            "challengeEndpoint": "/v2/auth/challenges",
+            "verifyEndpointTemplate": "/v2/auth/challenges/{challengeId}/verify",
+            "statusEndpointTemplate": "/v2/auth/challenges/{challengeId}",
+            "stateContractVersion": 1,
+            "deliveryReceiptSupported": false,
+            "deliveryRecoverySupported": false,
+            "testAccountFlowEnabled": true,
+            "testAccountTargetRestricted": true,
+            "contractVersion": 1,
+        ])
+        precondition(restrictedTestAllowlist.canStartClientFlow)
+
+        let unrestrictedTestAllowlist = BackendIdentityChallengeCapability(json: [
+            "enabled": true,
+            "providerMode": "testAllowlist",
+            "productionReady": false,
+            "clientFlowEnabled": true,
+            "challengeEndpoint": "/v2/auth/challenges",
+            "verifyEndpointTemplate": "/v2/auth/challenges/{challengeId}/verify",
+            "testAccountFlowEnabled": true,
+            "testAccountTargetRestricted": false,
+            "contractVersion": 1,
+        ])
+        precondition(!unrestrictedTestAllowlist.canStartClientFlow)
+
         let challenge = BackendIdentityChallengeContract(json: [
             "status": "accepted",
             "challenge": [
@@ -140,6 +170,15 @@ enum IdentityChallengeClientModelSmoke {
         precondition(BackendIdentityChallengeCapability(json: [
             "enabled": true,
             "providerMode": "synthetic",
+            "clientFlowEnabled": true,
+            "challengeEndpoint": "/v2/auth/challenges",
+            "verifyEndpointTemplate": "/v2/auth/challenges/{challengeId}/verify",
+            "contractVersion": 1,
+        ]).canStartClientFlow == false)
+        precondition(BackendIdentityChallengeCapability(json: [
+            "enabled": true,
+            "providerMode": "testAllowlist",
+            "productionReady": false,
             "clientFlowEnabled": true,
             "challengeEndpoint": "/v2/auth/challenges",
             "verifyEndpointTemplate": "/v2/auth/challenges/{challengeId}/verify",

@@ -365,10 +365,10 @@ extension BackendCachedReleasePolicyEvaluation {
 final class FeatureGateService {
     static let shared = FeatureGateService()
 
-    /// These closed-pilot routes remain default-off, but their release authority comes
-    /// exclusively from the cached server policy. A local flag cannot enable
-    /// either route; this narrow allowlist only prevents a local default-off
-    /// flag from blocking an already server-authorized closed-pilot account.
+    /// These rollout routes remain locally default-off, but their release authority
+    /// comes exclusively from cached server policy. General signed-in features and
+    /// Closed Pilot features are kept separate so account allowlists cannot become
+    /// accidental product entitlements.
     private static let serverPolicyManagedClosedPilotFeatures: Set<DJFeature> = [
         .echoTextInput,
         .echoGuidedRecommendations,
@@ -383,6 +383,15 @@ final class FeatureGateService {
         .publicationGrantManagementM2,
         .publicationVisitorM2,
     ]
+
+    private static let serverPolicyManagedGeneralFeatures: Set<DJFeature> = [
+        .familyManagement,
+        .familySpace,
+        .careDashboard,
+    ]
+
+    private static let serverPolicyManagedFeatures = serverPolicyManagedClosedPilotFeatures
+        .union(serverPolicyManagedGeneralFeatures)
 
     private let evaluator = FeatureGateEvaluator()
     private let lock = NSLock()
@@ -510,7 +519,7 @@ final class FeatureGateService {
     ) -> FeatureDecision {
         requestDecision(
             for: feature,
-            localEnabled: Self.serverPolicyManagedClosedPilotFeatures.contains(feature) ? true : nil
+            localEnabled: Self.serverPolicyManagedFeatures.contains(feature) ? true : nil
         )
     }
 
@@ -522,7 +531,7 @@ final class FeatureGateService {
         captureRoute(
             feature: feature,
             risk: risk,
-            localEnabled: Self.serverPolicyManagedClosedPilotFeatures.contains(feature) ? true : nil
+            localEnabled: Self.serverPolicyManagedFeatures.contains(feature) ? true : nil
         )
     }
 
@@ -531,15 +540,20 @@ final class FeatureGateService {
     ) -> FeatureDecision {
         revalidateRequest(
             captured,
-            localEnabled: Self.serverPolicyManagedClosedPilotFeatures.contains(captured.feature) ? true : nil
+            localEnabled: Self.serverPolicyManagedFeatures.contains(captured.feature) ? true : nil
         )
     }
 
     func isServerPolicyManagedClosedPilotRouteAllowed(_ feature: DJFeature) -> Bool {
         isRouteAllowed(
             feature,
-            localEnabled: Self.serverPolicyManagedClosedPilotFeatures.contains(feature) ? true : nil
+            localEnabled: Self.serverPolicyManagedFeatures.contains(feature) ? true : nil
         )
+    }
+
+    func isServerPolicyManagedGeneralRouteAllowed(_ feature: DJFeature) -> Bool {
+        guard Self.serverPolicyManagedGeneralFeatures.contains(feature) else { return false }
+        return isRouteAllowed(feature, localEnabled: true)
     }
 
     func qaEvidenceSnapshot(features: [DJFeature]) -> [FeatureDecisionEvidenceSummary] {

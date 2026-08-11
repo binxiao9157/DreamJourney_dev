@@ -38,6 +38,7 @@ require(snapshot, "controlState != .blocked", "blocked operational state must fa
 require(echo, "failClosedDigitalHumanRuntimePreparation", "Echo must fail closed before opening an unavailable digital-human session")
 require(echo, "voiceCloneRuntimeCapabilityUnknown", "Echo must not synthesize through an unknown clone capability")
 require(profile, "snapshot?.isPubliclyAvailable == true", "profile release exposure must require all five axes")
+require(client, "serverPolicyManagedGeneralFeatures", "general family capabilities must be separate from Closed Pilot rollout features")
 require(archive, "snapshot?.isPubliclyAvailable == true", "archive release exposure must require all five axes")
 require(echo, "diagnosticSummary", "Echo QA diagnostics must explain the five capability axes")
 require(regression, "run-runtime-capability-snapshot-model-smoke.sh", "release regression must run the five-axis model smoke")

@@ -499,6 +499,14 @@ final class ProfileViewController: UIViewController {
         )
     }
 
+    private func isFamilyRouteAllowed(_ feature: DJFeature) -> Bool {
+        if isProfileHiddenBranchesEnabled {
+            return true
+        }
+        return FeatureGateService.shared
+            .isServerPolicyManagedGeneralRouteAllowed(feature)
+    }
+
     private static let warmTabBarFloatingBottomInset: CGFloat = 16
 
     private static func profileScrollBottomInset(safeAreaBottomInset: CGFloat) -> CGFloat {
@@ -528,7 +536,7 @@ final class ProfileViewController: UIViewController {
         restoreAccountDataExportStatus()
         buildContent()
         loadCareSnapshot()
-        loadRuntimeCapabilitySnapshots()
+        refreshReleasePolicyAndRuntimeCapabilities()
     }
 
     deinit {
@@ -618,6 +626,12 @@ final class ProfileViewController: UIViewController {
             DispatchQueue.main.async {
                 self?.rebuildContent()
             }
+        }
+    }
+
+    private func refreshReleasePolicyAndRuntimeCapabilities() {
+        FeatureGateService.shared.refreshPolicy { [weak self] _ in
+            self?.loadRuntimeCapabilitySnapshots()
         }
     }
 
@@ -821,7 +835,7 @@ final class ProfileViewController: UIViewController {
     }
 
     private func shouldShowCareDashboard(context: DigitalHumanContext) -> Bool {
-        guard isFeatureRouteAllowed(.careDashboard),
+        guard isFamilyRouteAllowed(.careDashboard),
               FamilyRepository.shared.hasStarModeMember else {
             return false
         }
@@ -1009,7 +1023,7 @@ final class ProfileViewController: UIViewController {
             rows.append(.profileSettings)
         }
         if ProfileFamilyPersonaReleaseReadiness.isFamilyManagementRowVisible(
-            isFamilyManagementEnabled: isFeatureRouteAllowed(.familyManagement),
+            isFamilyManagementEnabled: isFamilyRouteAllowed(.familyManagement),
             isHiddenBranchesEnabled: false
         ) {
             rows.append(.familyManagement)
@@ -1693,8 +1707,8 @@ final class ProfileViewController: UIViewController {
 
     private func openFamilyManagement() {
         guard ProfileFamilyPersonaReleaseReadiness.canOpenFamilyPersonaSwitcher(
-            isFamilyManagementEnabled: isFeatureRouteAllowed(.familyManagement),
-            isFamilySpaceEnabled: isFeatureRouteAllowed(.familySpace),
+            isFamilyManagementEnabled: isFamilyRouteAllowed(.familyManagement),
+            isFamilySpaceEnabled: isFamilyRouteAllowed(.familySpace),
             isHiddenBranchesEnabled: false
         ) else {
             showUnavailableAlert(
