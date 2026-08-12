@@ -36,16 +36,16 @@ enum PublicationManagementM2AccessGate {
         if PublicationManagementM2QAGate.isEnabled {
             return true
         }
-        return FeatureGateService.shared.isServerPolicyManagedClosedPilotRouteAllowed(
+        return FeatureGateService.shared.isServerPolicyManagedRouteAllowed(
             .publicationManagementM2
-        ) && FeatureGateService.shared.isServerPolicyManagedClosedPilotRouteAllowed(
+        ) && FeatureGateService.shared.isServerPolicyManagedRouteAllowed(
             .publicationGrantManagementM2
         )
     }
 
     static var isLifecycleRouteAllowed: Bool {
         PublicationLifecycleM2QAGate.isEnabled
-            || FeatureGateService.shared.isServerPolicyManagedClosedPilotRouteAllowed(
+            || FeatureGateService.shared.isServerPolicyManagedRouteAllowed(
                 .publicationManagementM2
             )
     }

@@ -93,6 +93,7 @@
 		A1A000000000000000000049 /* DigitalHumanConversationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000049 /* DigitalHumanConversationCoordinator.swift */; };
 		A1A000000000000000000050 /* InAppMessageCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000050 /* InAppMessageCenter.swift */; };
 		A1A000000000000000000051 /* EchoSafetyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000051 /* EchoSafetyPolicy.swift */; };
+		A1A000000000000000000052 /* EchoNativeSpeechCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000052 /* EchoNativeSpeechCapture.swift */; };
 		A1B2C3D4E5F60708090A0B0C /* ProfilePublicationVisitorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60708090A0B0D /* ProfilePublicationVisitorViewController.swift */; };
 		A33CD0C2C00B4D4844763CD8 /* Pods_DreamJourneyTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 38C3AF07FF62B21502A002E0 /* Pods_DreamJourneyTests.framework */; };
 		A45E9D7E5541F7288DD4141D /* ConversationMemoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D922D4C28AF76D7CB85DFF /* ConversationMemoryManager.swift */; };
@@ -316,6 +317,7 @@
 		B1B000000000000000000049 /* DigitalHumanConversationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalHumanConversationCoordinator.swift; sourceTree = "<group>"; };
 		B1B000000000000000000050 /* InAppMessageCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InAppMessageCenter.swift; sourceTree = "<group>"; };
 		B1B000000000000000000051 /* EchoSafetyPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoSafetyPolicy.swift; sourceTree = "<group>"; };
+		B1B000000000000000000052 /* EchoNativeSpeechCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoNativeSpeechCapture.swift; sourceTree = "<group>"; };
 		B1BA39C954DE93A9C6B92546 /* FamilyCircleViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyCircleViewController.swift; sourceTree = "<group>"; };
 		B274A4971D76C1D3BFEE4E9A /* WarmTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarmTabBarController.swift; sourceTree = "<group>"; };
 		B2BCB52701683AE3FAFABA6F /* MemoryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryRepository.swift; sourceTree = "<group>"; };
@@ -652,6 +654,7 @@
 				B1B000000000000000000049 /* DigitalHumanConversationCoordinator.swift */,
 				B1B000000000000000000046 /* DigitalHumanLivePanelView.swift */,
 				B1B000000000000000000051 /* EchoSafetyPolicy.swift */,
+				B1B000000000000000000052 /* EchoNativeSpeechCapture.swift */,
 				B1B000000000000000000004 /* EchoViewModel.swift */,
 				B1B000000000000000000005 /* EchoViewController.swift */,
 			);
@@ -1171,6 +1174,7 @@
 				D3A000000000000000000003 /* TencentDigitalHumanRuntimeStub.swift in Sources */,
 				A1A000000000000000000005 /* EchoViewController.swift in Sources */,
 				A1A000000000000000000051 /* EchoSafetyPolicy.swift in Sources */,
+				A1A000000000000000000052 /* EchoNativeSpeechCapture.swift in Sources */,
 				A1A000000000000000000004 /* EchoViewModel.swift in Sources */,
 				344DFB2063508315CC912EF7 /* KBExportPreviewViewController.swift in Sources */,
 				B5FB43CD45DAE4D507651704 /* KBGraphEdge.swift in Sources */,

@@ -690,7 +690,7 @@ extension DJFeature {
     }
 
     var backendReleasePolicyCohort: String {
-        "closedPilotAdultSelf"
+        "authenticatedOwner"
     }
 }
 

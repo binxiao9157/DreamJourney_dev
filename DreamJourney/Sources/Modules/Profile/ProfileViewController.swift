@@ -465,7 +465,8 @@ final class ProfileViewController: UIViewController {
 
     private var isVoiceCloneShellVisible: Bool {
         ProfileFamilyPersonaReleaseReadiness.isVoiceCloneVisible(
-            isVoiceCloneEnabled: isFeatureRouteAllowed(.voiceCloneShell, risk: .providerEffect),
+            isVoiceCloneEnabled: FeatureGateService.shared
+                .isServerPolicyManagedRouteAllowed(.voiceCloneShell),
             isHiddenBranchesEnabled: isProfileHiddenBranchesEnabled
         )
     }
@@ -484,7 +485,7 @@ final class ProfileViewController: UIViewController {
             return true
         }
         return FeatureGateService.shared
-            .isServerPolicyManagedClosedPilotRouteAllowed(.accountDataExport)
+            .isServerPolicyManagedRouteAllowed(.accountDataExport)
     }
 
     private func isFeatureRouteAllowed(

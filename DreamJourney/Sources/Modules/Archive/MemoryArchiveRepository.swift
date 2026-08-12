@@ -231,7 +231,11 @@ final class MemoryArchiveRepository {
     }
 
     @discardableResult
-    func add(_ item: MemoryArchiveItem, syncToBackend shouldSyncToBackend: Bool = true) -> Bool {
+    func add(
+        _ item: MemoryArchiveItem,
+        syncToBackend shouldSyncToBackend: Bool = true,
+        backendSyncCompletion: ((Result<Void, Error>) -> Void)? = nil
+    ) -> Bool {
         guard let lease = currentArchiveStorageLease,
               isCurrentArchiveStorageLease(lease, at: .request),
               item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines) == lease.archiveOwnerId else {
@@ -252,13 +256,23 @@ final class MemoryArchiveRepository {
         }
         scheduleTimeLetterReminderIfNeeded(itemForStorage)
         if shouldAttemptBackendSync {
-            syncToBackend(itemForStorage, lease: lease)
+            syncToBackend(
+                itemForStorage,
+                lease: lease,
+                completion: backendSyncCompletion
+            )
+        } else {
+            backendSyncCompletion?(.success(()))
         }
         return true
     }
 
     @discardableResult
-    func update(_ item: MemoryArchiveItem, syncToBackend shouldSyncToBackend: Bool = true) -> Bool {
+    func update(
+        _ item: MemoryArchiveItem,
+        syncToBackend shouldSyncToBackend: Bool = true,
+        backendSyncCompletion: ((Result<Void, Error>) -> Void)? = nil
+    ) -> Bool {
         guard let lease = currentArchiveStorageLease,
               isCurrentArchiveStorageLease(lease, at: .request),
               item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines) == lease.archiveOwnerId else {
@@ -286,7 +300,13 @@ final class MemoryArchiveRepository {
         )
         scheduleTimeLetterReminderIfNeeded(itemForStorage)
         if shouldAttemptBackendSync {
-            syncToBackend(itemForStorage, lease: lease)
+            syncToBackend(
+                itemForStorage,
+                lease: lease,
+                completion: backendSyncCompletion
+            )
+        } else {
+            backendSyncCompletion?(.success(()))
         }
         return true
     }
@@ -1263,21 +1283,25 @@ final class MemoryArchiveRepository {
 
     private func syncToBackend(
         _ item: MemoryArchiveItem,
-        lease: ArchiveStorageLease
+        lease: ArchiveStorageLease,
+        completion: ((Result<Void, Error>) -> Void)? = nil
     ) {
         guard DreamJourneyBackendClient.shared.isArchiveSyncConfigured else {
+            completion?(.failure(ArchiveRepositoryError.backendNotConfigured))
             return
         }
 
         // Media files remain device-local until a dedicated upload authority
         // is introduced. Do not let a future direct caller bypass add/update.
         guard item.isPublicBackendSyncEligible else {
+            completion?(.success(()))
             return
         }
 
         guard isCurrentArchiveStorageLease(lease, at: .request),
               item.ownerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
                 == lease.archiveOwnerId else {
+            completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
             return
         }
         let ownerId = lease.archiveOwnerId
@@ -1293,10 +1317,14 @@ final class MemoryArchiveRepository {
             payload
         ) { [weak self] result in
             guard let self else { return }
-            guard isCurrentArchiveStorageLease(lease, at: .commit) else { return }
+            guard isCurrentArchiveStorageLease(lease, at: .commit) else {
+                completion?(.failure(ArchiveRepositoryError.accountScopeChanged))
+                return
+            }
             switch result {
             case .success:
                 markBackendSyncState(item.id, state: .synced, lease: lease)
+                completion?(.success(()))
             case .failure(let error):
                 print("[Archive] backend sync failed: \(error.localizedDescription)")
                 markBackendSyncState(
@@ -1305,6 +1333,7 @@ final class MemoryArchiveRepository {
                     error: sanitizeBackendSyncError(error),
                     lease: lease
                 )
+                completion?(.failure(error))
             }
         }
     }

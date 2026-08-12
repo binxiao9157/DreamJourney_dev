@@ -524,11 +524,11 @@ final class EchoViewController: UIViewController {
     }()
 
     /// The product entry starts hidden and is shown only after a fresh
-    /// release-policy decision permits the owner-text write.
+    /// release-policy decision permits an Echo text turn.
     private lazy var ownerTruthInterviewNaturalInputProductEntryButton: UIButton = {
         var configuration = UIButton.Configuration.filled()
-        configuration.title = "今天想聊点什么？"
-        configuration.image = UIImage(systemName: "square.and.pencil")
+        configuration.title = "文字回响"
+        configuration.image = UIImage(systemName: "keyboard")
         configuration.imagePadding = 8
         configuration.baseBackgroundColor = DJDesignTokens.Color.surface.withAlphaComponent(0.94)
         configuration.baseForegroundColor = DJDesignTokens.Color.accentDeep
@@ -547,11 +547,11 @@ final class EchoViewController: UIViewController {
         button.layer.shadowRadius = 8
         button.isHidden = true
         button.alpha = 0
-        button.accessibilityLabel = "今天想聊点什么"
+        button.accessibilityLabel = "输入文字开始回响"
         button.accessibilityIdentifier = "ownerTruthInterviewNaturalInputProductEntryButton"
         button.addTarget(
             self,
-            action: #selector(ownerTruthInterviewNaturalInputProductEntryTapped),
+            action: #selector(echoTextQuestionTapped),
             for: .touchUpInside
         )
         return button
@@ -586,6 +586,10 @@ final class EchoViewController: UIViewController {
     private let digitalHumanLifecycle = DigitalHumanLifecycleCoordinator()
     private let echoRuntimeSessionCoordinator = EchoRuntimeSessionCoordinator()
     private var activeVoiceInteractionLifecycleToken: DigitalHumanLifecycleToken?
+    private var nativeSpeechCapture: EchoNativeSpeechCapture?
+    private let echoSystemSpeechSynthesizer = AVSpeechSynthesizer()
+    private var echoSystemSpeechLifecycleToken: DigitalHumanLifecycleToken?
+    private var echoSystemSpeechUtterance: AVSpeechUtterance?
     private var hasRunTencentDigitalHumanTextDriveSmoke = false
     private var hasRunTencentDigitalHumanPCMDriveSmoke = false
     private var hasRunTencentDigitalHumanBackendPCMDriveSmoke = false
@@ -720,12 +724,16 @@ final class EchoViewController: UIViewController {
         if isDigitalHumanQADisableEnabled {
             return false
         }
-        return FeatureGateService.shared.isRouteAllowed(
-            .digitalHumanLivePanel,
-            risk: .providerEffect,
-            localEnabled: FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel),
-            qaSyntheticOverride: isDigitalHumanQAOverrideEnabled
-        )
+        if isDigitalHumanQAOverrideEnabled {
+            return FeatureGateService.shared.isRouteAllowed(
+                .digitalHumanLivePanel,
+                risk: .providerEffect,
+                localEnabled: true,
+                qaSyntheticOverride: true
+            )
+        }
+        return FeatureGateService.shared
+            .isServerPolicyManagedRouteAllowed(.digitalHumanLivePanel)
     }
 
     private var isDigitalHumanQAOverrideEnabled: Bool {
@@ -904,7 +912,8 @@ final class EchoViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        FeatureGateService.shared.captureServerPolicyManagedClosedPilotRoute(
+        echoSystemSpeechSynthesizer.delegate = self
+        FeatureGateService.shared.captureServerPolicyManagedRoute(
             .echoTextInput,
             risk: .ownerTextCore
         )
@@ -980,6 +989,11 @@ final class EchoViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        nativeSpeechCapture?.cancel()
+        nativeSpeechCapture = nil
+        echoSystemSpeechLifecycleToken = nil
+        echoSystemSpeechUtterance = nil
+        echoSystemSpeechSynthesizer.stopSpeaking(at: .immediate)
         cancelCloudDigitalHumanBackgroundRelease(reason: "viewWillDisappear")
         invalidateDigitalHumanLifecycle(reason: "viewWillDisappear")
         activeVoiceInteractionLifecycleToken = nil
@@ -6143,8 +6157,236 @@ final class EchoViewController: UIViewController {
         presentOwnerTruthInterviewNaturalInputSheet(presentation: .qa)
     }
 
-    @objc private func ownerTruthInterviewNaturalInputProductEntryTapped() {
-        presentOwnerTruthInterviewNaturalInputSheet(presentation: .product)
+    @objc private func echoTextQuestionTapped() {
+        guard isOwnerTruthInterviewNaturalInputProductEntryVisible,
+              presentedViewController == nil else {
+            return
+        }
+
+        let alert = UIAlertController(
+            title: "文字回响",
+            message: "输入想问 AI 助手或家人的话。回答只会使用当前身份有权访问的记忆。",
+            preferredStyle: .alert
+        )
+        alert.addTextField { textField in
+            textField.placeholder = "例如：我在哪里读的大学？"
+            textField.clearButtonMode = .whileEditing
+            textField.returnKeyType = .send
+            textField.accessibilityIdentifier = "echoTextQuestionField"
+        }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "发送", style: .default) { [weak self, weak alert] _ in
+            let question = alert?.textFields?.first?.text ?? ""
+            self?.beginEchoTextQuestion(question)
+        })
+        present(alert, animated: true)
+    }
+
+    private func beginEchoTextQuestion(_ rawQuestion: String) {
+        let question = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !question.isEmpty else {
+            renderVoiceStatus(
+                text: "请输入想问的内容",
+                isVisible: true,
+                accessibilityIdentifier: "echoTextQuestionEmpty"
+            )
+            return
+        }
+        guard let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                  at: .request,
+                  expected: accountLease,
+                  reason: "textEchoQuestion"
+              ),
+              bindDialogEngineToEchoAccountLease(reason: "textEchoQuestion") else {
+            viewModel.fail("账号状态已变化，请重新进入回响")
+            return
+        }
+
+        if case .error = currentState {
+            viewModel.retryAfterError()
+        }
+        let lifecycleToken = invalidateDigitalHumanInteraction(reason: "textEchoQuestion")
+        activeVoiceInteractionLifecycleToken = lifecycleToken
+        pendingAIText = nil
+        resetDigitalHumanReplyDispatchState()
+        viewModel.prepareVoiceInteraction()
+        viewModel.beginVoiceInteraction()
+        submitEchoQuestion(
+            question,
+            source: "typed",
+            lifecycleToken: lifecycleToken
+        )
+    }
+
+    private func submitEchoQuestion(
+        _ rawQuestion: String,
+        source: String,
+        lifecycleToken: DigitalHumanLifecycleToken
+    ) {
+        let question = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        let context = DigitalHumanContextStore.shared.current
+        guard !question.isEmpty,
+              let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                  at: .request,
+                  expected: accountLease,
+                  reason: "echoAnswerRequest"
+              ),
+              isCurrentDigitalHumanLifecycleToken(
+                  lifecycleToken,
+                  reason: "echoAnswerRequest"
+              ),
+              let expectedIdentity = echoKnowledgeContextIdentity(for: context) else {
+            activeVoiceInteractionLifecycleToken = nil
+            viewModel.fail("当前身份无权访问这份记忆")
+            return
+        }
+
+        let acceptedUserTurn = viewModel.finishUserVoice(
+            text: question,
+            accountLease: accountLease,
+            resourceOwnerId: accountLease.subjectId,
+            roleContextKey: digitalHumanRuntimeContextKey(for: context)
+        )
+        releaseEchoAudioOwnerLease(
+            expectedOwner: .echoCapture,
+            reason: "echoQuestionCaptured"
+        )
+        if let safetyDecision = viewModel.neutralSafetyDecision {
+            activeVoiceInteractionLifecycleToken = nil
+            enterNeutralSafetyMode(safetyDecision)
+            return
+        }
+        guard acceptedUserTurn else {
+            activeVoiceInteractionLifecycleToken = nil
+            return
+        }
+
+        let turnID = digitalHumanConversation.startUserTurn(
+            makeID: makeTencentDigitalHumanRequestID
+        )
+        PrivacySafeDiagnostics.log(
+            subsystem: "Echo",
+            event: "backendAnswerRequested",
+            states: ["source": source],
+            counts: ["questionLength": question.count],
+            correlations: ["turn": turnID]
+        )
+
+        if viewModel.isWaitingForDelayedReply {
+            scheduleDelayedReplyNotificationIfNeeded(rawTranscript: question)
+            beginDelayedReplyWait()
+            activeVoiceInteractionLifecycleToken = nil
+            return
+        }
+
+        renderVoiceStatus(
+            text: "正在从记忆中寻找回答",
+            isVisible: true,
+            accessibilityIdentifier: "echoBackendAnswerLoading"
+        )
+        DreamJourneyBackendClient.shared.requestEchoAnswer(
+            userId: expectedIdentity.userId,
+            query: question,
+            personaScope: expectedIdentity.personaScope,
+            digitalHumanId: expectedIdentity.digitalHumanId,
+            personaName: context.resolvedDisplayName,
+            lifecycleMode: context.mode,
+            viewerFamilyMemberID: context.isSelfAssistant ? nil : context.ownerId
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self,
+                      self.validateEchoAccountLease(
+                          at: .ui,
+                          expected: accountLease,
+                          reason: "echoAnswerResponse"
+                      ),
+                      self.isCurrentDigitalHumanLifecycleToken(
+                          lifecycleToken,
+                          reason: "echoAnswerResponse"
+                      ),
+                      self.echoKnowledgeContextIdentity(
+                          for: DigitalHumanContextStore.shared.current
+                      ) == expectedIdentity else {
+                    return
+                }
+
+                switch result {
+                case .success(let answer):
+                    guard self.viewModel.receiveAIReply(answer.text) else {
+                        self.activeVoiceInteractionLifecycleToken = nil
+                        self.viewModel.fail("本轮回响状态已变化，请重新提问")
+                        return
+                    }
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "Echo",
+                        event: "backendAnswerReceived",
+                        states: ["provider": answer.provider],
+                        counts: [
+                            "answerLength": answer.text.count,
+                            "citationCount": answer.citations.count,
+                        ],
+                        correlations: ["turn": turnID]
+                    )
+                    if self.shouldDispatchEchoReplyToTencentProvider {
+                        self.sendEchoReplyToDigitalHumanRuntimeIfReady(
+                            answer.text,
+                            source: "backendEchoAnswer"
+                        )
+                    } else {
+                        self.playEchoAnswerWithSystemSpeech(
+                            answer.text,
+                            lifecycleToken: lifecycleToken
+                        )
+                    }
+                case .failure:
+                    self.activeVoiceInteractionLifecycleToken = nil
+                    self.viewModel.fail("回响连接失败，请稍后重试")
+                    self.renderVoiceStatus(
+                        text: "回响连接失败，请稍后重试",
+                        isVisible: true,
+                        accessibilityIdentifier: "echoBackendAnswerFailed"
+                    )
+                }
+            }
+        }
+    }
+
+    private func playEchoAnswerWithSystemSpeech(
+        _ text: String,
+        lifecycleToken: DigitalHumanLifecycleToken
+    ) {
+        echoSystemSpeechLifecycleToken = nil
+        echoSystemSpeechUtterance = nil
+        echoSystemSpeechSynthesizer.stopSpeaking(at: .immediate)
+        guard acquireEchoRuntimeAudioOwner(
+            .echoLocalPlayback,
+            priority: .playback,
+            reason: "backendEchoAnswerSystemSpeech"
+        ) else {
+            activeVoiceInteractionLifecycleToken = nil
+            _ = markEchoReplyDelivered()
+            renderVoiceStatus(
+                text: "回响已显示",
+                isVisible: true,
+                accessibilityIdentifier: "echoBackendAnswerTextOnly"
+            )
+            return
+        }
+
+        echoSystemSpeechLifecycleToken = lifecycleToken
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
+        utterance.rate = 0.48
+        utterance.volume = 1
+        echoSystemSpeechUtterance = utterance
+        renderVoiceStatus(
+            text: "系统语音正在朗读回响",
+            isVisible: true,
+            accessibilityIdentifier: "echoSystemSpeechPlayback"
+        )
+        echoSystemSpeechSynthesizer.speak(utterance)
     }
 
     private func presentOwnerTruthInterviewNaturalInputSheet(
@@ -6237,12 +6479,12 @@ final class EchoViewController: UIViewController {
                 switch result {
                 case .success:
                     let surfaceDecision = FeatureGateService.shared
-                        .captureServerPolicyManagedClosedPilotRoute(
+                        .captureServerPolicyManagedRoute(
                             .echoTextInput,
                             risk: .ownerTextCore
                         )
                     let writeDecision = FeatureGateService.shared
-                        .requestServerPolicyManagedClosedPilotDecision(for: .echoTextInput)
+                        .requestServerPolicyManagedDecision(for: .echoTextInput)
                     self.isOwnerTruthInterviewNaturalInputProductPolicyPermitted = surfaceDecision.allowed
                         && writeDecision.allowed
                 case .failure:
@@ -7304,20 +7546,131 @@ final class EchoViewController: UIViewController {
 
     private func handleBlockedRealtimeVoice(reason: String) {
         backendRuntimeTokenApplied = false
-        activeVoiceInteractionLifecycleToken = nil
         if ownsCurrentDialogEngineBinding(),
            DialogEngineManager.shared.isDialogActive {
             DialogEngineManager.shared.stopDialog()
         }
         lastEchoRuntimeFallbackReason = reason
-        viewModel.fail("实时语音暂不可用，文字回响仍可查看")
+        if startNativeSpeechFallbackIfPossible(reason: reason) {
+            recordEchoRuntimeDiagnosticsSnapshot(reason: "nativeSpeechFallback:\(reason)")
+            return
+        }
+
+        activeVoiceInteractionLifecycleToken = nil
+        viewModel.fail("语音暂不可用，请使用文字回响")
         renderVoiceStatus(
-            text: "实时语音暂不可用",
+            text: "语音暂不可用，请使用文字回响",
             isVisible: true,
             accessibilityIdentifier: "echoRealtimeVoiceCredentialBlocked"
         )
         recordEchoRuntimeDiagnosticsSnapshot(reason: reason)
         print("[Echo] providerCredentialBlocked reason=\(reason)")
+    }
+
+    private func startNativeSpeechFallbackIfPossible(reason: String) -> Bool {
+        switch reason {
+        case "backendVoiceRuntimeUnavailable", "providerCredentialBlocked", "backendVoiceRuntimeRequestFailed":
+            break
+        default:
+            return false
+        }
+        guard nativeSpeechCapture == nil,
+              let lifecycleToken = activeVoiceInteractionLifecycleToken,
+              let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                  at: .request,
+                  expected: accountLease,
+                  reason: "nativeSpeechFallback"
+              ),
+              isCurrentDigitalHumanLifecycleToken(
+                  lifecycleToken,
+                  reason: "nativeSpeechFallback"
+              ),
+              acquireEchoRuntimeAudioOwner(
+                  .echoCapture,
+                  priority: .echoCapture,
+                  reason: "nativeSpeechFallback"
+              ) else {
+            return false
+        }
+
+        let capture = EchoNativeSpeechCapture()
+        nativeSpeechCapture = capture
+        capture.start(
+            onReady: { [weak self, weak capture] in
+                guard let self,
+                      let capture,
+                      self.nativeSpeechCapture === capture,
+                      self.isCurrentDigitalHumanLifecycleToken(
+                          lifecycleToken,
+                          reason: "nativeSpeechReady"
+                      ) else {
+                    return
+                }
+                self.viewModel.beginVoiceInteraction()
+                self.renderVoiceStatus(
+                    text: "正在聆听，再点一次话筒结束",
+                    isVisible: true,
+                    accessibilityIdentifier: "echoNativeSpeechListening"
+                )
+            },
+            onPartial: { [weak self, weak capture] text in
+                guard let self,
+                      let capture,
+                      self.nativeSpeechCapture === capture,
+                      self.isCurrentDigitalHumanLifecycleToken(
+                          lifecycleToken,
+                          reason: "nativeSpeechPartial"
+                      ) else {
+                    return
+                }
+                let preview = String(text.prefix(28))
+                self.renderVoiceStatus(
+                    text: "我听到：\(preview)",
+                    isVisible: true,
+                    accessibilityIdentifier: "echoNativeSpeechPartial"
+                )
+            },
+            onFinal: { [weak self, weak capture] text in
+                guard let self,
+                      let capture,
+                      self.nativeSpeechCapture === capture,
+                      self.isCurrentDigitalHumanLifecycleToken(
+                          lifecycleToken,
+                          reason: "nativeSpeechFinal"
+                      ) else {
+                    return
+                }
+                self.nativeSpeechCapture = nil
+                self.submitEchoQuestion(
+                    text,
+                    source: "nativeSpeech",
+                    lifecycleToken: lifecycleToken
+                )
+            },
+            onFailure: { [weak self, weak capture] error in
+                guard let self,
+                      let capture,
+                      self.nativeSpeechCapture === capture else {
+                    return
+                }
+                self.nativeSpeechCapture = nil
+                self.releaseEchoAudioOwnerLease(
+                    expectedOwner: .echoCapture,
+                    reason: "nativeSpeechFailed"
+                )
+                self.activeVoiceInteractionLifecycleToken = nil
+                let message = (error as? LocalizedError)?.errorDescription
+                    ?? "语音识别失败，请使用文字回响"
+                self.viewModel.fail(message)
+                self.renderVoiceStatus(
+                    text: message,
+                    isVisible: true,
+                    accessibilityIdentifier: "echoNativeSpeechFailed"
+                )
+            }
+        )
+        return true
     }
 
     private func currentVoiceSDKReadinessSummary() -> VoiceSDKReadinessSummary {
@@ -7342,6 +7695,30 @@ final class EchoViewController: UIViewController {
     private func stopVoiceCapture() {
         if hasTencentDigitalHumanProviderSpeechInFlight,
            interruptDigitalHumanPlaybackForUserBargeIn() {
+            return
+        }
+
+        if let nativeSpeechCapture {
+            renderVoiceStatus(
+                text: "正在识别并寻找回答",
+                isVisible: true,
+                accessibilityIdentifier: "echoNativeSpeechFinishing"
+            )
+            nativeSpeechCapture.finish()
+            return
+        }
+
+        if echoSystemSpeechLifecycleToken != nil || echoSystemSpeechSynthesizer.isSpeaking {
+            echoSystemSpeechLifecycleToken = nil
+            echoSystemSpeechUtterance = nil
+            echoSystemSpeechSynthesizer.stopSpeaking(at: .immediate)
+            releaseEchoAudioOwnerLease(
+                expectedOwner: .echoLocalPlayback,
+                reason: "userStoppedSystemSpeech"
+            )
+            invalidateDigitalHumanInteraction(reason: "userStoppedSystemSpeech")
+            activeVoiceInteractionLifecycleToken = nil
+            resetEchoViewModelToIdle()
             return
         }
 
@@ -7548,6 +7925,51 @@ final class EchoViewController: UIViewController {
                     states: ["reason": "backendFailure"]
                 )
             }
+        }
+    }
+}
+
+extension EchoViewController: AVSpeechSynthesizerDelegate {
+    func speechSynthesizer(
+        _ synthesizer: AVSpeechSynthesizer,
+        didFinish utterance: AVSpeechUtterance
+    ) {
+        completeEchoSystemSpeechPlayback(utterance)
+    }
+
+    func speechSynthesizer(
+        _ synthesizer: AVSpeechSynthesizer,
+        didCancel utterance: AVSpeechUtterance
+    ) {
+        completeEchoSystemSpeechPlayback(utterance)
+    }
+
+    private func completeEchoSystemSpeechPlayback(_ utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.echoSystemSpeechUtterance === utterance,
+                  let lifecycleToken = self.echoSystemSpeechLifecycleToken else {
+                return
+            }
+            self.echoSystemSpeechUtterance = nil
+            self.echoSystemSpeechLifecycleToken = nil
+            guard self.isCurrentDigitalHumanLifecycleToken(
+                lifecycleToken,
+                reason: "systemSpeechFinished"
+            ) else {
+                return
+            }
+            self.releaseEchoAudioOwnerLease(
+                expectedOwner: .echoLocalPlayback,
+                reason: "systemSpeechFinished"
+            )
+            _ = self.markEchoReplyDelivered()
+            self.activeVoiceInteractionLifecycleToken = nil
+            self.renderVoiceStatus(
+                text: "回响已送达",
+                isVisible: true,
+                accessibilityIdentifier: "echoSystemSpeechFinished"
+            )
         }
     }
 }

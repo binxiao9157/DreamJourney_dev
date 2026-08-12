@@ -20,7 +20,7 @@ enum PublicationVisitorM2QAGate {
 enum PublicationVisitorM2AccessGate {
     static var isRouteAllowed: Bool {
         PublicationVisitorM2QAGate.isEnabled
-            || FeatureGateService.shared.isServerPolicyManagedClosedPilotRouteAllowed(
+            || FeatureGateService.shared.isServerPolicyManagedRouteAllowed(
                 .publicationVisitorM2
             )
     }

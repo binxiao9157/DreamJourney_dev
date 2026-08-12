@@ -439,7 +439,7 @@ struct ReleasePolicyCacheScope: Hashable {
         accountUserId: String?,
         appBuild: String,
         audience: String = "owner",
-        cohort: String = "closedPilotAdultSelf"
+        cohort: String = "authenticatedOwner"
     ) {
         let normalizedAccount = accountUserId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if normalizedAccount.isEmpty {

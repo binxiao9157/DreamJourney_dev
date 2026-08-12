@@ -442,7 +442,7 @@ final class FamilyCircleViewController: UIViewController {
         FeatureGateService.shared.refreshPolicy(for: .ownerTruthFamilyContribution) { [weak self] _ in
             guard let self,
                   AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed,
-                  FeatureGateService.shared.isServerPolicyManagedClosedPilotRouteAllowed(
+                  FeatureGateService.shared.isServerPolicyManagedRouteAllowed(
                     .ownerTruthFamilyContribution
                   ) else {
                 self?.pendingOwnerContributionCount = 0
@@ -1005,7 +1005,7 @@ final class FamilyMemberDetailViewController: UIViewController {
         FeatureGateService.shared.refreshPolicy(for: .ownerTruthFamilyContribution) { [weak self] _ in
             guard let self,
                   AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed,
-                  FeatureGateService.shared.isServerPolicyManagedClosedPilotRouteAllowed(
+                  FeatureGateService.shared.isServerPolicyManagedRouteAllowed(
                     .ownerTruthFamilyContribution
                   ) else {
                 self?.contributionAccessButton.isHidden = true

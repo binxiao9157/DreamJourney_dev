@@ -868,8 +868,8 @@ final class MemoryArchiveViewController: UIViewController {
             isAudioUploadEnabled: false,
             isVideoUploadEnabled: false,
             isTimeLettersEnabled: false,
-            isOwnerTruthTextCaptureEnabled: isOwnerTruthTextCaptureClosedPilotEnabled,
-            isOwnerTruthMediaCaptureEnabled: isOwnerTruthMediaCaptureClosedPilotEnabled
+            isOwnerTruthTextCaptureEnabled: isOwnerTruthTextCaptureEnabled,
+            isOwnerTruthMediaCaptureEnabled: isOwnerTruthMediaCaptureEnabled
         )
     }
 
@@ -881,21 +881,21 @@ final class MemoryArchiveViewController: UIViewController {
         currentArchiveContext.isSelfAssistant
     }
 
-    private var isOwnerTruthTextCaptureClosedPilotEnabled: Bool {
+    private var isOwnerTruthTextCaptureEnabled: Bool {
         FeatureGateService.shared
-            .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTextCaptureV1)
-            && isOwnerTruthCandidateReviewClosedPilotEnabled
+            .isServerPolicyManagedRouteAllowed(.ownerTextCaptureV1)
+            && isOwnerTruthCandidateReviewEnabled
     }
 
-    private var isOwnerTruthCandidateReviewClosedPilotEnabled: Bool {
+    private var isOwnerTruthCandidateReviewEnabled: Bool {
         FeatureGateService.shared
-            .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
+            .isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview)
     }
 
-    private var isOwnerTruthMediaCaptureClosedPilotEnabled: Bool {
-        isOwnerTruthTextCaptureClosedPilotEnabled
+    private var isOwnerTruthMediaCaptureEnabled: Bool {
+        isOwnerTruthTextCaptureEnabled
             && FeatureGateService.shared
-                .isServerPolicyManagedClosedPilotRouteAllowed(.ownerMediaCaptureV1)
+                .isServerPolicyManagedRouteAllowed(.ownerMediaCaptureV1)
     }
 
     private var shouldShowOwnerTruthMediaTaskStatus: Bool {
@@ -905,7 +905,7 @@ final class MemoryArchiveViewController: UIViewController {
 
     private var areOwnerTruthMediaTaskActionsEnabled: Bool {
         ownerTruthMediaTaskActionsEnabledOverride
-            ?? isOwnerTruthMediaCaptureClosedPilotEnabled
+            ?? isOwnerTruthMediaCaptureEnabled
     }
 
     private var archivePersonaName: String {
@@ -925,11 +925,15 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private var isPersonaSettingsVisible: Bool {
-        FeatureGateService.shared.isRouteAllowed(
-            .personaSettings,
-            localEnabled: FeatureFlagService.shared.isEnabled(.personaSettings),
-            qaSyntheticOverride: isUIQAArchiveHiddenBranchesEnabled
-        )
+        if isUIQAArchiveHiddenBranchesEnabled {
+            return FeatureGateService.shared.isRouteAllowed(
+                .personaSettings,
+                localEnabled: true,
+                qaSyntheticOverride: true
+            )
+        }
+        return FeatureGateService.shared
+            .isServerPolicyManagedRouteAllowed(.personaSettings)
     }
 
     private var isUIQAArchiveHiddenBranchesEnabled: Bool {
@@ -1008,6 +1012,7 @@ final class MemoryArchiveViewController: UIViewController {
         setupLayout()
         refreshContent()
         loadRuntimeCapabilitySnapshots()
+        loadV4ProductionReleasePolicy()
     }
 
     deinit {
@@ -1166,6 +1171,16 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func loadRuntimeCapabilitySnapshots() {
         DreamJourneyBackendClient.shared.fetchRuntimeConfig { [weak self] result in
+            guard case .success = result else { return }
+            DispatchQueue.main.async {
+                self?.refreshContent()
+            }
+        }
+    }
+
+    private func loadV4ProductionReleasePolicy() {
+        guard DreamJourneyBackendClient.shared.isReleasePolicyConfigured else { return }
+        FeatureGateService.shared.refreshPolicy(for: .ownerTextCaptureV1) { [weak self] result in
             guard case .success = result else { return }
             DispatchQueue.main.async {
                 self?.refreshContent()
@@ -1542,7 +1557,7 @@ final class MemoryArchiveViewController: UIViewController {
         let taskID = presentation.taskID
         guard presentation.candidateHandoffAvailable,
               let accountLease = captureMediaAccountLease(),
-              isOwnerTruthCandidateReviewClosedPilotEnabled else {
+              isOwnerTruthCandidateReviewEnabled else {
             showToast("待确认记忆当前暂不可用", type: .info)
             return
         }
@@ -1909,7 +1924,7 @@ final class MemoryArchiveViewController: UIViewController {
         let isVisible = isSelfAutobiographyMode && (
             isQALane
                 || FeatureGateService.shared
-                    .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
+                    .isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview)
         )
         let title = isQALane ? "审核候选记忆（QA）" : "待确认记忆"
         candidateReviewQAButton.setTitle(isVisible ? title : nil, for: .normal)
@@ -1920,7 +1935,7 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func updateCandidateConfirmationButton() {
         let isVisible = isSelfAutobiographyMode && FeatureGateService.shared
-            .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
+            .isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview)
         candidateConfirmationButton.setTitle(isVisible ? "待确认记忆" : nil, for: .normal)
         candidateConfirmationButton.accessibilityLabel = isVisible ? "待确认记忆" : nil
         candidateConfirmationButton.isHidden = !isVisible
@@ -1929,7 +1944,7 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func updateCandidateMemoryActivationButton() {
         let isVisible = isSelfAutobiographyMode && FeatureGateService.shared
-            .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
+            .isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview)
         candidateMemoryActivationButton.setTitle(isVisible ? "待纳入正式记忆" : nil, for: .normal)
         candidateMemoryActivationButton.accessibilityLabel = isVisible ? "待纳入正式记忆" : nil
         candidateMemoryActivationButton.isHidden = !isVisible
@@ -3588,7 +3603,7 @@ final class MemoryArchiveViewController: UIViewController {
     @objc private func ownerTruthCandidateConfirmationTapped() {
         guard isSelfAutobiographyMode,
               FeatureGateService.shared
-                .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview),
+                .isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview),
               let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
             return
         }
@@ -3601,7 +3616,7 @@ final class MemoryArchiveViewController: UIViewController {
     @objc private func ownerTruthCandidateMemoryActivationTapped() {
         guard isSelfAutobiographyMode,
               FeatureGateService.shared
-                .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview),
+                .isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview),
               let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
             return
         }
@@ -3617,7 +3632,7 @@ final class MemoryArchiveViewController: UIViewController {
         guard (
                   OwnerTruthCandidateReviewQAGate.isEnabled
                     || FeatureGateService.shared
-                        .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
+                        .isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview)
               ),
               isSelfAutobiographyMode,
               let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
@@ -4015,7 +4030,29 @@ final class MemoryArchiveViewController: UIViewController {
                     note: rawText,
                     ownerUserId: accountLease.subjectId
                 )
-                guard self.repository.add(item) else {
+                let expectsBackendSync = DreamJourneyBackendClient.shared.isArchiveSyncConfigured
+                guard self.repository.add(
+                    item,
+                    backendSyncCompletion: { [weak self] result in
+                        DispatchQueue.main.async {
+                            guard let self,
+                                  self.validateMediaOperation(
+                                    accountLease,
+                                    archiveContext: archiveContext,
+                                    at: .ui
+                                  ) else { return }
+                            self.refreshContent()
+                            switch result {
+                            case .success:
+                                if expectsBackendSync {
+                                    self.showToast("记忆已安全同步", type: .success)
+                                }
+                            case .failure:
+                                self.showToast("已保存在本机，联网后会自动重试", type: .info)
+                            }
+                        }
+                    }
+                ) else {
                     self.showToast("文字记忆保存失败，请稍后重试", type: .error)
                     return
                 }
@@ -4025,7 +4062,10 @@ final class MemoryArchiveViewController: UIViewController {
                     at: .ui
                 ) else { return }
                 self.refreshContent()
-                self.showToast("已封存", type: .success)
+                self.showToast(
+                    expectsBackendSync ? "已保存在本机，正在同步" : "已封存",
+                    type: .success
+                )
             }
         }
         present(entryViewController, animated: true)
@@ -4033,7 +4073,7 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func presentOwnerTruthTextCaptureEntry() {
         guard isSelfAutobiographyMode,
-              isOwnerTruthTextCaptureClosedPilotEnabled,
+              isOwnerTruthTextCaptureEnabled,
               let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
             return
         }
@@ -4047,7 +4087,7 @@ final class MemoryArchiveViewController: UIViewController {
             accountLease: accountLease,
             client: DreamJourneyBackendClient.shared,
             releasePolicyAvailable: { [weak self] in
-                self?.isOwnerTruthTextCaptureClosedPilotEnabled == true
+                self?.isOwnerTruthTextCaptureEnabled == true
             }
         )
         entryViewController.onSubmitOwnerTruthSource = { text, completion in
@@ -4068,7 +4108,7 @@ final class MemoryArchiveViewController: UIViewController {
 
     private func presentOwnerTruthMediaEntry(_ mediaKind: OwnerTruthMediaKind) {
         guard isSelfAutobiographyMode,
-              isOwnerTruthMediaCaptureClosedPilotEnabled,
+              isOwnerTruthMediaCaptureEnabled,
               let accountLease = captureMediaAccountLease() else {
             showToast("该素材入口当前不可用", type: .info)
             return
@@ -4122,7 +4162,7 @@ final class MemoryArchiveViewController: UIViewController {
         allowExternalProcessing: Bool
     ) {
         guard validateMediaOperation(accountLease, archiveContext: archiveContext, at: .ui),
-              isOwnerTruthMediaCaptureClosedPilotEnabled else {
+              isOwnerTruthMediaCaptureEnabled else {
             showToast("账号或开放状态已变化，请重新选择", type: .info)
             return
         }
@@ -4224,7 +4264,7 @@ final class MemoryArchiveViewController: UIViewController {
             archiveContext: operation.archiveContext,
             at: .request
         ), let vaultID = OwnerTruthVaultID(operation.accountLease.vaultId),
-              isOwnerTruthMediaCaptureClosedPilotEnabled else {
+              isOwnerTruthMediaCaptureEnabled else {
             showToast("账号或开放状态已变化，请重新选择", type: .info)
             return
         }
@@ -4238,7 +4278,7 @@ final class MemoryArchiveViewController: UIViewController {
                         operation.accountLease,
                         archiveContext: operation.archiveContext,
                         at: .runtime
-                      ), self.isOwnerTruthMediaCaptureClosedPilotEnabled else {
+                      ), self.isOwnerTruthMediaCaptureEnabled else {
                     return
                 }
                 switch result {
@@ -4928,7 +4968,7 @@ final class OwnerTruthInterviewCandidateMemoryActivationInboxViewController: UIV
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = {
             FeatureGateService.shared
-                .requestServerPolicyManagedClosedPilotDecision(for: .ownerTruthCandidateReview)
+                .requestServerPolicyManagedDecision(for: .ownerTruthCandidateReview)
                 .allowed
         }
     ) {
@@ -5313,7 +5353,7 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = {
             FeatureGateService.shared
-                .requestServerPolicyManagedClosedPilotDecision(for: .ownerTruthCandidateReview)
+                .requestServerPolicyManagedDecision(for: .ownerTruthCandidateReview)
                 .allowed
         }
     ) {
@@ -5617,7 +5657,7 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = {
             FeatureGateService.shared
-                .requestServerPolicyManagedClosedPilotDecision(for: .ownerTruthCandidateReview)
+                .requestServerPolicyManagedDecision(for: .ownerTruthCandidateReview)
                 .allowed
         }
     ) {
@@ -6322,7 +6362,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         qaGateEnabled: @escaping () -> Bool = {
             OwnerTruthCandidateReviewQAGate.isEnabled
                 || FeatureGateService.shared
-                    .isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)
+                    .isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview)
         },
         sourceIDFilter: OwnerTruthRecordID? = nil
     ) {
@@ -10395,6 +10435,45 @@ private struct AutobiographyBookChapter {
     let items: [MemoryArchiveItem]
 }
 
+private enum AutobiographyBookChapterKind: Int, CaseIterable {
+    case growthAndStudy
+    case familyAndLife
+    case workAndReflection
+
+    var indexText: String {
+        switch self {
+        case .growthAndStudy:
+            return "CHAPTER I"
+        case .familyAndLife:
+            return "CHAPTER II"
+        case .workAndReflection:
+            return "CHAPTER III"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .growthAndStudy:
+            return "成长与求学"
+        case .familyAndLife:
+            return "家庭与生活"
+        case .workAndReflection:
+            return "工作与感悟"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .growthAndStudy:
+            return "Growth & Study"
+        case .familyAndLife:
+            return "Family & Life"
+        case .workAndReflection:
+            return "Work & Reflection"
+        }
+    }
+}
+
 private final class AutobiographyBookViewController: UIViewController {
     private let repository: MemoryArchiveRepository
     private let context: DigitalHumanContext
@@ -10497,33 +10576,126 @@ private final class AutobiographyBookViewController: UIViewController {
     }
 
     private func makeChapters(from items: [MemoryArchiveItem]) -> [AutobiographyBookChapter] {
-        let rootItems = items.filter { $0.kind == .photo || $0.kind == .text }
-        let growthItems = items.filter { $0.kind == .audio || $0.kind == .video }
-        let wisdomItems = items.filter { $0.kind == .timeLetter }
+        let groupedItems = Dictionary(grouping: items, by: autobiographyChapterKind(for:))
+        return AutobiographyBookChapterKind.allCases.map { kind in
+            AutobiographyBookChapter(
+                indexText: kind.indexText,
+                title: kind.title,
+                subtitle: kind.subtitle,
+                emptyText: isSelfMode
+                    ? "这一章还没有可整理的记忆。"
+                    : "这一章还没有可阅读的故事。",
+                items: (groupedItems[kind] ?? []).sorted(by: autobiographyItemComesBefore)
+            )
+        }
+    }
 
-        return [
-            AutobiographyBookChapter(
-                indexText: "CHAPTER I",
-                title: isSelfMode ? "家族根基" : "记忆片段",
-                subtitle: isSelfMode ? "Family Roots" : "Stories",
-                emptyText: isSelfMode ? "还没有写入第一章的照片或文字。" : "这一章还没有可阅读的故事。",
-                items: rootItems
-            ),
-            AutobiographyBookChapter(
-                indexText: "CHAPTER II",
-                title: "成长之旅",
-                subtitle: "Growth Journey",
-                emptyText: isSelfMode ? "声音和视频片段会在这里汇成旅程。" : "这一章暂时没有声音或影像。",
-                items: growthItems
-            ),
-            AutobiographyBookChapter(
-                indexText: "CHAPTER III",
-                title: "人生智慧",
-                subtitle: "Life Wisdom",
-                emptyText: isSelfMode ? "时间信件会在这里成为写给未来的页。" : "这一章还在等待被打开。",
-                items: wisdomItems
-            ),
+    private func autobiographyChapterKind(for item: MemoryArchiveItem) -> AutobiographyBookChapterKind {
+        let searchableText = ([item.title, item.note, item.analysisSummary ?? ""] + item.tags)
+            .joined(separator: " ")
+            .lowercased()
+        let growthTerms = [
+            "出生", "小时候", "童年", "少年", "青年", "成长", "学校", "小学", "中学",
+            "高中", "大学", "求学", "读书", "留学", "专业", "毕业", "校园",
         ]
+        let familyTerms = [
+            "家庭", "家人", "父亲", "母亲", "爸爸", "妈妈", "爷爷", "奶奶", "祖父",
+            "祖母", "孩子", "儿子", "女儿", "兄弟", "姐妹", "结婚", "妻子", "丈夫",
+            "伴侣", "亲人", "家乡", "生活",
+        ]
+        let workTerms = [
+            "工作", "职业", "公司", "工程", "事业", "创业", "退休", "经验", "感悟",
+            "人生", "选择", "希望", "未来", "道理", "坚持", "遗憾", "信念",
+        ]
+
+        var scores: [AutobiographyBookChapterKind: Int] = [
+            .growthAndStudy: growthTerms.reduce(0) { $0 + (searchableText.contains($1) ? 1 : 0) },
+            .familyAndLife: familyTerms.reduce(0) { $0 + (searchableText.contains($1) ? 1 : 0) },
+            .workAndReflection: workTerms.reduce(0) { $0 + (searchableText.contains($1) ? 1 : 0) },
+        ]
+        if item.kind == .timeLetter {
+            scores[.workAndReflection, default: 0] += 3
+        } else if item.kind == .photo {
+            scores[.familyAndLife, default: 0] += 1
+        } else if item.kind == .audio || item.kind == .video {
+            scores[.growthAndStudy, default: 0] += 1
+        }
+
+        let highestScore = scores.values.max() ?? 0
+        guard highestScore > 0 else {
+            return .familyAndLife
+        }
+        return AutobiographyBookChapterKind.allCases.first {
+            scores[$0, default: 0] == highestScore
+        } ?? .familyAndLife
+    }
+
+    private func autobiographyItemComesBefore(
+        _ left: MemoryArchiveItem,
+        _ right: MemoryArchiveItem
+    ) -> Bool {
+        let leftYear = autobiographyEventYear(for: left)
+        let rightYear = autobiographyEventYear(for: right)
+        if let leftYear, let rightYear, leftYear != rightYear {
+            return leftYear < rightYear
+        }
+        if leftYear != nil, rightYear == nil {
+            return true
+        }
+        if leftYear == nil, rightYear != nil {
+            return false
+        }
+        return left.createdAt < right.createdAt
+    }
+
+    private func autobiographyEventYear(for item: MemoryArchiveItem) -> Int? {
+        let currentYear = Calendar.current.component(.year, from: Date())
+        for key in ["eventYear", "estimatedYear", "year", "analysisEstimatedYear", "estimatedDecade"] {
+            if let rawValue = item.metadata[key],
+               let year = Int(rawValue),
+               (1900...currentYear).contains(year) {
+                return year
+            }
+        }
+
+        let text = "\(item.title) \(item.note)"
+        guard let regex = try? NSRegularExpression(pattern: "(?:19|20)\\d{2}"),
+              let match = regex.firstMatch(
+                  in: text,
+                  range: NSRange(text.startIndex..., in: text)
+              ),
+              let range = Range(match.range, in: text),
+              let year = Int(text[range]),
+              (1900...currentYear).contains(year) else {
+            return nil
+        }
+        return year
+    }
+
+    private func autobiographyDisplayTitle(for item: MemoryArchiveItem) -> String {
+        let genericTitles: Set<String> = [
+            "文字记忆", "相册影像", "视频片段", "语音档案", "时间信件",
+        ]
+        let normalizedTitle = item.archivePresentation.title
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedTitle.isEmpty || genericTitles.contains(normalizedTitle) else {
+            return normalizedTitle
+        }
+
+        let normalizedNote = item.archivePresentation.note
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedNote.isEmpty else {
+            return item.archivePresentation.kindLabel + "片段"
+        }
+        let firstClause = normalizedNote
+            .components(separatedBy: CharacterSet(charactersIn: "。！？；.!?;"))
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? normalizedNote
+        let limit = 18
+        return firstClause.count > limit
+            ? String(firstClause.prefix(limit)) + "..."
+            : firstClause
     }
 
     private func makeOpeningPage(itemCount: Int, pageNumber: Int) -> UIView {
@@ -10785,7 +10957,7 @@ private final class AutobiographyBookViewController: UIViewController {
 
         stack.addArrangedSubview(imageContainer)
         stack.addArrangedSubview(captionLabel)
-        stack.addArrangedSubview(makeBookItemTitleLabel(item.archivePresentation.title))
+        stack.addArrangedSubview(makeBookItemTitleLabel(autobiographyDisplayTitle(for: item)))
         stack.addArrangedSubview(makeBookItemBodyLabel(item.archivePresentation.note))
 
         imageContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -10818,7 +10990,7 @@ private final class AutobiographyBookViewController: UIViewController {
         header.addArrangedSubview(UIView())
 
         stack.addArrangedSubview(header)
-        stack.addArrangedSubview(makeBookItemTitleLabel(item.archivePresentation.title))
+        stack.addArrangedSubview(makeBookItemTitleLabel(autobiographyDisplayTitle(for: item)))
         stack.addArrangedSubview(makeBookItemBodyLabel(item.archivePresentation.note))
         stack.addArrangedSubview(makeBookWaveformView(durationText: item.metadata["durationText"] ?? "声音片段"))
 
@@ -10859,7 +11031,7 @@ private final class AutobiographyBookViewController: UIViewController {
         }
 
         stack.addArrangedSubview(makeBookItemMetaLabel("\(Self.bookDateFormatter.string(from: item.createdAt)) · \(kindText)"))
-        stack.addArrangedSubview(makeBookItemTitleLabel(item.archivePresentation.title))
+        stack.addArrangedSubview(makeBookItemTitleLabel(autobiographyDisplayTitle(for: item)))
         stack.addArrangedSubview(makeBookItemBodyLabel(item.archivePresentation.note))
         if let metadata = item.archivePresentation.metadataSummary {
             stack.addArrangedSubview(makeBookItemMetaLabel(metadata))
@@ -12297,50 +12469,44 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         guidedRecommendationClient: OwnerTruthGuidedRecommendationPresentationClient = DreamJourneyBackendClient.shared,
         guidedRecommendationPolicyAvailable: @escaping () -> Bool = {
             return FeatureGateService.shared
-                .requestServerPolicyManagedClosedPilotDecision(for: .echoGuidedRecommendations)
+                .requestServerPolicyManagedDecision(for: .echoGuidedRecommendations)
                 .allowed
         },
         lifeMapClient: OwnerTruthLifeMapPresentationClient = DreamJourneyBackendClient.shared,
         lifeMapPolicyAvailable: @escaping () -> Bool = {
             return FeatureGateService.shared
-                .requestServerPolicyManagedClosedPilotDecision(for: .ownerTruthLifeMap)
+                .requestServerPolicyManagedDecision(for: .ownerTruthLifeMap)
                 .allowed
         },
         memorySearchClient: OwnerTruthMemorySearchPresentationClient = DreamJourneyBackendClient.shared,
         memorySearchPolicyAvailable: @escaping () -> Bool = {
-            guard FeatureFlagService.shared.isEnabled(.ownerTruthMemorySearch) else {
-                return false
-            }
             return FeatureGateService.shared
-                .requestDecision(for: .ownerTruthMemorySearch)
+                .requestServerPolicyManagedDecision(for: .ownerTruthMemorySearch)
                 .allowed
         },
         interviewOutcomeClient: OwnerTruthInterviewOutcomePresentationClient = DreamJourneyBackendClient.shared,
         interviewOutcomePolicyAvailable: @escaping () -> Bool = {
-            guard FeatureFlagService.shared.isEnabled(.ownerTruthInterviewOutcome) else {
-                return false
-            }
             return FeatureGateService.shared
-                .requestDecision(for: .ownerTruthInterviewOutcome)
+                .requestServerPolicyManagedDecision(for: .ownerTruthInterviewOutcome)
                 .allowed
         },
         reviewBatchInboxClient: OwnerTruthInterviewPendingReviewBatchInboxClient = DreamJourneyBackendClient.shared,
         reviewBatchAcknowledgementClient: OwnerTruthInterviewReviewBatchAcknowledgementClient = DreamJourneyBackendClient.shared,
         reviewBatchAcknowledgementPolicyAvailable: @escaping () -> Bool = {
             FeatureGateService.shared
-                .requestServerPolicyManagedClosedPilotDecision(for: .echoTextInput)
+                .requestServerPolicyManagedDecision(for: .echoTextInput)
                 .allowed
         },
         candidateProposalAdmissionClient: OwnerTruthInterviewCandidateProposalAdmissionClient = DreamJourneyBackendClient.shared,
         candidateProposalAdmissionPolicyAvailable: @escaping () -> Bool = {
             return FeatureGateService.shared
-                .requestServerPolicyManagedClosedPilotDecision(for: .ownerTruthCandidateReview)
+                .requestServerPolicyManagedDecision(for: .ownerTruthCandidateReview)
                 .allowed
         },
         candidateProposalStatusClient: OwnerTruthInterviewCandidateProposalStatusClient = DreamJourneyBackendClient.shared,
         candidateProposalStatusPolicyAvailable: @escaping () -> Bool = {
             return FeatureGateService.shared
-                .requestServerPolicyManagedClosedPilotDecision(for: .ownerTruthCandidateReview)
+                .requestServerPolicyManagedDecision(for: .ownerTruthCandidateReview)
                 .allowed
         },
         candidateProposalConfirmationInboxControllerProvider: @escaping (AccountLease, OwnerTruthRecordID) -> UIViewController = {

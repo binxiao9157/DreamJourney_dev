@@ -21,7 +21,7 @@ enum ProfileFamilyPersonaReleaseReadiness {
     static let unavailableTitle = "家人管理暂不可用"
     static let unavailableMessage = "请确认已经登录并保持网络连接，然后重新进入家人管理。"
     static let voiceCloneUnavailableTitle = "音色复刻暂不可用"
-    static let voiceCloneUnavailableMessage = "当前版本暂不公开音色复刻；内部验证仍通过后端代理执行训练、查询、合成、禁用和删除。"
+    static let voiceCloneUnavailableMessage = "当前音色服务尚未就绪，请稍后重试。"
 
     static let familyManagementCapability = Capability(
         title: "家人管理",
@@ -51,12 +51,8 @@ enum ProfileFamilyPersonaReleaseReadiness {
     static let voiceCloneCapability = Capability(
         title: "音色复刻",
         feature: .voiceCloneShell,
-        stage: .hiddenReady(
-            feature: .voiceCloneShell,
-            qaLaunchArgument: hiddenBranchesLaunchArgument,
-            reason: "V4 Closed Pilot 暂不公开音色复刻；授权、Provider 质量和外部门完成前只允许 QA 验证。"
-        ),
-        releaseCopy: "音色复刻暂未开放"
+        stage: .publicReady(reason: "已登录用户按服务端授权与音色供应商状态使用。"),
+        releaseCopy: "管理本人授权的音色"
     )
 
     static func isFamilyManagementRowVisible(

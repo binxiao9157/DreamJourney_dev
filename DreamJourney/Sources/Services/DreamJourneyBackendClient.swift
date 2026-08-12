@@ -365,19 +365,23 @@ extension BackendCachedReleasePolicyEvaluation {
 final class FeatureGateService {
     static let shared = FeatureGateService()
 
-    /// These rollout routes remain locally default-off, but their release authority
-    /// comes exclusively from cached server policy. General signed-in features and
-    /// Closed Pilot features are kept separate so account allowlists cannot become
-    /// accidental product entitlements.
-    private static let serverPolicyManagedClosedPilotFeatures: Set<DJFeature> = [
+    /// These routes take their release authority from cached server policy.
+    /// Authentication allowlists are intentionally unrelated to product
+    /// entitlement; the server grants the V4 chain to signed-in owners.
+    private static let serverPolicyManagedProductionFeatures: Set<DJFeature> = [
         .echoTextInput,
         .echoGuidedRecommendations,
         .ownerTruthLifeMap,
+        .ownerTruthMemorySearch,
+        .ownerTruthInterviewOutcome,
         .ownerTextCaptureV1,
         .ownerMediaCaptureV1,
         .ownerMediaProcessingV1,
         .ownerTruthFamilyContribution,
         .ownerTruthCandidateReview,
+        .personaSettings,
+        .voiceCloneShell,
+        .digitalHumanLivePanel,
         .accountDataExport,
         .publicationManagementM2,
         .publicationGrantManagementM2,
@@ -390,7 +394,7 @@ final class FeatureGateService {
         .careDashboard,
     ]
 
-    private static let serverPolicyManagedFeatures = serverPolicyManagedClosedPilotFeatures
+    private static let serverPolicyManagedFeatures = serverPolicyManagedProductionFeatures
         .union(serverPolicyManagedGeneralFeatures)
 
     private let evaluator = FeatureGateEvaluator()
@@ -410,7 +414,7 @@ final class FeatureGateService {
         completion: ((Result<BackendReleasePolicySnapshot, Error>) -> Void)? = nil
     ) {
         let audience = feature?.backendReleasePolicyAudience ?? "owner"
-        let cohort = feature?.backendReleasePolicyCohort ?? "closedPilotAdultSelf"
+        let cohort = feature?.backendReleasePolicyCohort ?? "authenticatedOwner"
         let cached = DreamJourneyBackendClient.shared.cachedReleasePolicyEvaluation(
             risk: .futureBeta,
             clientBuild: clientBuild,
@@ -514,7 +518,7 @@ final class FeatureGateService {
         return decision
     }
 
-    func requestServerPolicyManagedClosedPilotDecision(
+    func requestServerPolicyManagedDecision(
         for feature: DJFeature
     ) -> FeatureDecision {
         requestDecision(
@@ -524,7 +528,7 @@ final class FeatureGateService {
     }
 
     @discardableResult
-    func captureServerPolicyManagedClosedPilotRoute(
+    func captureServerPolicyManagedRoute(
         _ feature: DJFeature,
         risk: ReleasePolicyRiskClass? = nil
     ) -> FeatureDecision {
@@ -535,7 +539,7 @@ final class FeatureGateService {
         )
     }
 
-    func revalidateServerPolicyManagedClosedPilotRequest(
+    func revalidateServerPolicyManagedRequest(
         _ captured: FeatureDecision
     ) -> FeatureDecision {
         revalidateRequest(
@@ -544,7 +548,7 @@ final class FeatureGateService {
         )
     }
 
-    func isServerPolicyManagedClosedPilotRouteAllowed(_ feature: DJFeature) -> Bool {
+    func isServerPolicyManagedRouteAllowed(_ feature: DJFeature) -> Bool {
         isRouteAllowed(
             feature,
             localEnabled: Self.serverPolicyManagedFeatures.contains(feature) ? true : nil
@@ -621,6 +625,7 @@ final class FeatureGateService {
         }
         if normalizedPath == "/profile" { return .profileSettings }
         if normalizedPath == "/context/build"
+            || normalizedPath == "/echo/answers"
             || normalizedPath.hasPrefix("/echo/delayed-replies") {
             return .echoTextInput
         }
@@ -832,6 +837,7 @@ final class FeatureGateService {
              .echoGuidedRecommendations,
              .ownerTruthLifeMap,
              .ownerTruthMemorySearch,
+             .ownerTruthInterviewOutcome,
              .ownerTruthCandidateReview,
              .ownerTruthFamilyContribution,
              .ownerTextCaptureV1,
@@ -3333,7 +3339,7 @@ struct EchoContextPacketRequestCorrelation: Equatable {
 struct EchoContextAuthorityEnvelope: Equatable {
     static let schemaVersion = "owner-truth-context-authority-v1"
     static let strictMode = "ownerTruthConfirmedProjection"
-    static let strictCohort = "closedPilotAdultSelf"
+    static let strictCohort = "authenticatedOwner"
     static let strictFallbackPolicy = "failClosedNoLegacy"
 
     let mode: String
@@ -3621,6 +3627,62 @@ struct EchoContextPacket {
         guard let value = value as? String else {
             return nil
         }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+}
+
+struct EchoAnswerCitation: Equatable {
+    let source: String
+    let refId: String
+    let kind: String
+
+    init?(json: [String: Any]) {
+        guard let source = Self.nonEmptyString(json["source"]),
+              let refId = Self.nonEmptyString(json["refId"]),
+              let kind = Self.nonEmptyString(json["kind"]) else {
+            return nil
+        }
+        self.source = source
+        self.refId = refId
+        self.kind = kind
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+}
+
+struct EchoAnswer: Equatable {
+    static let schemaVersion = "echo-answer-v1"
+
+    let answerId: String
+    let text: String
+    let provider: String
+    let contextTraceId: String
+    let contextVersion: String
+    let citations: [EchoAnswerCitation]
+
+    init?(json: [String: Any]) {
+        guard json["schemaVersion"] as? String == Self.schemaVersion,
+              let answerId = Self.nonEmptyString(json["answerId"]),
+              let text = Self.nonEmptyString(json["text"]),
+              let provider = Self.nonEmptyString(json["provider"]) else {
+            return nil
+        }
+        self.answerId = answerId
+        self.text = text
+        self.provider = provider
+        self.contextTraceId = Self.nonEmptyString(json["contextTraceId"]) ?? ""
+        self.contextVersion = Self.nonEmptyString(json["contextVersion"]) ?? ""
+        self.citations = (json["citations"] as? [[String: Any]] ?? [])
+            .compactMap(EchoAnswerCitation.init(json:))
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
         let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return normalized.isEmpty ? nil : normalized
     }
@@ -6137,12 +6199,12 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
 
     private func requestFeatureDecision(for feature: DJFeature) -> FeatureDecision {
         qaFeatureDecisionProvider?(feature)
-            ?? FeatureGateService.shared.requestServerPolicyManagedClosedPilotDecision(for: feature)
+            ?? FeatureGateService.shared.requestServerPolicyManagedDecision(for: feature)
     }
 
     private func revalidatedRequestFeatureDecision(_ decision: FeatureDecision) -> FeatureDecision {
         qaFeatureDecisionProvider == nil
-            ? FeatureGateService.shared.revalidateServerPolicyManagedClosedPilotRequest(decision)
+            ? FeatureGateService.shared.revalidateServerPolicyManagedRequest(decision)
             : decision
     }
 
@@ -6257,7 +6319,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
 
     func fetchReleasePolicy(
         audience: String = "owner",
-        cohort: String = "closedPilotAdultSelf",
+        cohort: String = "authenticatedOwner",
         clientBuild: Int,
         knownPolicyRevision: Int = 0,
         completion: @escaping (Result<BackendReleasePolicySnapshot, Error>) -> Void
@@ -6321,7 +6383,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         risk: ReleasePolicyRiskClass,
         clientBuild: Int,
         audience: String = "owner",
-        cohort: String = "closedPilotAdultSelf",
+        cohort: String = "authenticatedOwner",
         now: Date = Date(),
         minimumEmergencyRevision: Int = 0
     ) -> BackendCachedReleasePolicyEvaluation {
@@ -6341,7 +6403,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
     func invalidateCachedReleasePolicyAuthority(
         clientBuild: Int,
         audience: String = "owner",
-        cohort: String = "closedPilotAdultSelf"
+        cohort: String = "authenticatedOwner"
     ) {
         releasePolicyStore.remove(scope: releasePolicyCacheScope(
             clientBuild: clientBuild,
@@ -6892,6 +6954,49 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                     return
                 }
                 completion(.success(packet))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func requestEchoAnswer(
+        userId: String,
+        query: String,
+        personaScope: String,
+        digitalHumanId: String,
+        personaName: String,
+        lifecycleMode: DigitalHumanMode,
+        viewerFamilyMemberID: String? = nil,
+        completion: @escaping (Result<EchoAnswer, Error>) -> Void
+    ) {
+        var payload: [String: Any] = [
+            "userId": userId,
+            "intent": "echo_chat",
+            "query": query,
+            "personaScope": personaScope,
+            "digitalHumanId": digitalHumanId,
+            "personaName": personaName,
+            "lifecycleMode": lifecycleMode.rawValue,
+        ]
+        if let viewerFamilyMemberID,
+           !viewerFamilyMemberID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["viewerFamilyMemberID"] = viewerFamilyMemberID
+        }
+        requestJSON(
+            path: "/echo/answers",
+            method: .post,
+            payload: payload,
+            authPolicy: .userRequired
+        ) { result in
+            switch result {
+            case .success(let object):
+                guard let answerJSON = object["answer"] as? [String: Any],
+                      let answer = EchoAnswer(json: answerJSON) else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                completion(.success(answer))
             case .failure(let error):
                 completion(.failure(error))
             }
@@ -8849,7 +8954,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             return .qa
         }
         let decision = FeatureGateService.shared
-            .requestServerPolicyManagedClosedPilotDecision(for: .echoTextInput)
+            .requestServerPolicyManagedDecision(for: .echoTextInput)
         guard decision.allowed else {
             return .unavailable(decision.reason)
         }

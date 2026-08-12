@@ -137,6 +137,9 @@ final class AppCoordinator: Coordinator {
         window?.rootViewController = tabCoordinator.tabBarController
         window?.makeKeyAndVisible()
         tabCoordinator.start()
+        FeatureGateService.shared.refreshPolicy { _ in
+            DreamJourneyBackendClient.shared.fetchRuntimeConfig { _ in }
+        }
         routePendingNotificationRuntimeRoutesIfPossible()
         routePendingPublicationVisitorIfPossible()
     }
