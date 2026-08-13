@@ -111,7 +111,7 @@ for required in [
 }
 let pendingAcknowledgementRoutes = requireSlice(
     routeClassifier,
-    from: "let pathComponents = normalizedPath.split(separator: \"/\")",
+    from: "if method == .get,\n           pathComponents.count == 5",
     to: "normalizedPath.hasSuffix(\"/interview-candidate-confirmations\")",
     "pending/acknowledgement route classification block is missing"
 )
@@ -220,9 +220,9 @@ for required in [
 }
 
 require(
-    archive.contains("private func updateCandidateConfirmationButton()") &&
+    !archive.contains("private func updateCandidateConfirmationButton()") &&
         archive.contains("OwnerTruthInterviewCandidateConfirmationInboxViewController"),
-    "candidate confirmation must retain its separately gated Archive entry point"
+    "candidate confirmation must remain available to interview flows without a duplicate Archive entry point"
 )
 
 for testMention in [

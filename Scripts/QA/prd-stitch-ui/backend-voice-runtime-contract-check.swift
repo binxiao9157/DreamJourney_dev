@@ -3,7 +3,8 @@ import Foundation
 let appRoot = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? FileManager.default.currentDirectoryPath)
 let backendRoot = appRoot.deletingLastPathComponent().appendingPathComponent("DreamJourneyBackend")
 
-func read(_ url: URL) -> String {
+func read(_ root: URL, _ path: String) -> String {
+    let url = root.appendingPathComponent(path)
     guard let content = try? String(contentsOf: url, encoding: .utf8) else {
         fatalError("Unable to read \(url.path)")
     }
@@ -14,49 +15,37 @@ func require(_ condition: @autoclosure () -> Bool, _ message: String) {
     guard condition() else { fatalError(message) }
 }
 
-let backendTokens = read(backendRoot.appendingPathComponent("app/services/tokens.py"))
-let backendRuntime = read(backendRoot.appendingPathComponent("app/services/runtime_config.py"))
-let backendBoundaryTests = read(backendRoot.appendingPathComponent("tests/test_credential_response_boundary.py"))
-let backendClient = read(appRoot.appendingPathComponent("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift"))
-let dialogEngine = read(appRoot.appendingPathComponent("DreamJourney/Sources/Services/DialogEngineManager.swift"))
-let echoView = read(appRoot.appendingPathComponent("DreamJourney/Sources/Modules/Echo/EchoViewController.swift"))
-let releasePackage = read(appRoot.appendingPathComponent("Scripts/QA/prd-stitch-ui/release-qa-package-check.swift"))
-let releaseRegression = read(appRoot.appendingPathComponent("Scripts/QA/prd-stitch-ui/run-release-regression.sh"))
+let backendTokens = read(backendRoot, "app/services/tokens.py")
+let backendBroker = read(backendRoot, "app/services/realtime_voice_proxy.py")
+let backendRuntime = read(backendRoot, "app/services/runtime_config.py")
+let backendBoundaryTests = read(backendRoot, "tests/test_credential_response_boundary.py")
+let backendProxyTests = read(backendRoot, "tests/test_realtime_voice_proxy.py")
+let backendClient = read(appRoot, "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
+let dialogEngine = read(appRoot, "DreamJourney/Sources/Services/DialogEngineManager.swift")
+let echoView = read(appRoot, "DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
+let releasePackage = read(appRoot, "Scripts/QA/prd-stitch-ui/release-qa-package-check.swift")
+let releaseRegression = read(appRoot, "Scripts/QA/prd-stitch-ui/run-release-regression.sh")
 
-for required in ["\"status\": \"blocked\"", "\"credentialMode\": \"blockedStaticCredential\"", "\"providerReady\": False", "\"fallback\""] {
-    require(backendTokens.contains(required), "realtime voice response must be value-free and blocked: missing \(required)")
+require(backendTokens.contains("issue_realtime_config"), "backend must issue a session-bound runtime config")
+for required in ["oneTimeBackendProxyTicket", "backendRealtimeProxy", "mobileDirectAllowed\": False", "ticket_hash", "X-DreamJourney-Voice-Session"] {
+    require(backendBroker.contains(required), "backend realtime broker is missing \(required)")
 }
-require(!backendTokens.contains("\"expiresInSeconds\""), "blocked realtime voice must not invent a credential TTL")
-require(!backendTokens.contains("\"expiresAt\""), "blocked realtime voice must not invent a credential expiry")
-require(backendRuntime.contains("\"realtimeToken\": False"), "runtime capability must disable realtime tokens")
-require(
-    backendRuntime.contains("TokenService(self.settings).realtime_config"),
-    "runtime must source the blocked voice contract from TokenService"
-)
-require(
-    backendRuntime.contains("\"voice\": {") && backendRuntime.contains("**realtime_voice"),
-    "runtime must merge the complete blocked voice contract"
-)
-require(backendBoundaryTests.contains("test_realtime_voice_returns_blocked_value_free_capability"), "backend must test the blocked value-free contract")
+require(backendRuntime.contains("bool(realtime_voice.get(\"providerReady\"))"), "runtime capability must reflect proxy readiness")
+require(backendBoundaryTests.contains("test_realtime_voice_ready_contract_returns_only_one_time_proxy_ticket"), "backend must test the value-free ready contract")
+require(backendProxyTests.contains("test_ticket_is_single_use_and_released_explicitly"), "backend must test single-use ticket semantics")
 require(backendBoundaryTests.contains("assert_no_store"), "backend must test no-store headers")
 
 require(backendClient.contains("struct RealtimeVoiceRuntimeConfig"), "iOS must model realtime voice capability state")
-require(backendClient.contains("var isBlocked: Bool"), "iOS must reject blocked capability responses")
-require(backendClient.contains("fetchRealtimeVoiceConfig"), "iOS must fetch the backend capability contract")
+require(backendClient.contains("oneTimeBackendProxyTicket"), "iOS must require the one-time proxy mode")
 require(!backendClient.contains("let appToken: String"), "iOS runtime model must not parse a Provider app token")
 require(!backendClient.contains("let apiKey: String"), "iOS runtime model must not parse a Provider API key")
-
-require(dialogEngine.contains("case providerCredentialBlocked"), "voice readiness must represent the credential boundary")
-require(
-    dialogEngine.contains("!runtimeConfig.isBlocked else"),
-    "DialogEngine must fail closed for a blocked contract"
-)
+require(dialogEngine.contains("guard !runtimeConfig.mobileDirectAllowed"), "DialogEngine must keep direct mobile access closed")
+require(dialogEngine.contains("SE_PARAMS_KEY_REQUEST_HEADERS_STRING"), "DialogEngine must pass the proxy ticket in the WebSocket handshake")
 require(!dialogEngine.contains("VolcEngineAppToken"), "DialogEngine must not read a packaged Provider token")
-require(echoView.contains("handleBlockedRealtimeVoice"), "Echo must expose the safe blocked path")
-require(echoView.contains("echoRealtimeVoiceCredentialBlocked"), "Echo must expose an accessible blocked status")
-require(!echoView.contains("startDialogWithLocalVoiceFallback"), "Echo must not restore static local Provider fallback")
+require(echoView.contains("liveUserInactivityTimeout: TimeInterval = 60"), "Echo Live must implement the one-minute user inactivity boundary")
+require(echoView.contains("finishLiveMemoryCaptureIfNeeded"), "Echo Live must finish through the pending-memory pipeline")
 
 require(releasePackage.contains("backend-voice-runtime-contract-check.swift"), "release QA package must include this guard")
 require(releaseRegression.contains("backend-voice-runtime-contract-check.swift"), "release regression must run this guard")
 
-print("Backend voice runtime blocked-contract checks passed")
+print("Backend voice runtime proxy-contract checks passed")

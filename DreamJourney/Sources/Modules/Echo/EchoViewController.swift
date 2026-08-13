@@ -48,6 +48,305 @@ private struct EchoRoleVoiceProfileSelection {
     }
 }
 
+private struct EchoMemoryGapHandoff {
+    enum Destination: String {
+        case ownerInterview
+        case familyContribution
+    }
+
+    let question: String
+    let destination: Destination
+    let contextKey: String
+}
+
+private enum EchoLiveMemoryCaptureState: Equatable {
+    case live
+    case organizing
+    case pendingReview
+    case empty
+    case unavailable
+
+    var isTerminal: Bool {
+        switch self {
+        case .pendingReview, .empty, .unavailable:
+            return true
+        case .live, .organizing:
+            return false
+        }
+    }
+}
+
+/// Persists one user-controlled Live conversation through the V4 private
+/// interview lane. Assistant turns remain context only; only owner turns can
+/// become evidence for a pending memory candidate.
+private final class EchoLiveMemoryCaptureCoordinator {
+    private struct Turn: Equatable {
+        let role: OwnerTruthInterviewNaturalInputMessageRole
+        let text: String
+    }
+
+    let id = UUID()
+    private let accountLease: AccountLease
+    private let client: DreamJourneyBackendClient
+    private let naturalInputPolicyAvailable: () -> Bool
+    private let candidateReviewPolicyAvailable: () -> Bool
+    private var naturalInputUseCase: OwnerTruthInterviewNaturalInputUseCase?
+    private var acknowledgementUseCase: OwnerTruthInterviewReviewBatchAcknowledgementUseCase?
+    private var admissionUseCase: OwnerTruthInterviewCandidateProposalAdmissionUseCase?
+    private var queuedTurns: [Turn] = []
+    private var inFlightTurn: Turn?
+    private var ownerTurnCount = 0
+    private var persistedOwnerTurnCount = 0
+    private var isFinishing = false
+    private var didRequestEnd = false
+    private var didBeginOrganization = false
+    private var lastOwnerText = ""
+    private var lastOwnerTurnAt: Date?
+    private var lastAssistantText = ""
+    private var lastAssistantOwnerTurnCount = 0
+    private static let duplicateOwnerTurnWindow: TimeInterval = 1.0
+
+    private(set) var state: EchoLiveMemoryCaptureState = .live {
+        didSet {
+            guard oldValue != state else { return }
+            PrivacySafeDiagnostics.log(
+                subsystem: "EchoLiveMemory",
+                event: "captureStateChanged",
+                states: [
+                    "from": String(describing: oldValue),
+                    "to": String(describing: state),
+                ],
+                counts: [
+                    "ownerTurnCount": ownerTurnCount,
+                    "persistedOwnerTurnCount": persistedOwnerTurnCount,
+                    "queuedTurnCount": queuedTurns.count,
+                ]
+            )
+            onStateChange?(state)
+        }
+    }
+
+    var onStateChange: ((EchoLiveMemoryCaptureState) -> Void)?
+
+    var acceptsTurns: Bool {
+        state == .live && !isFinishing
+    }
+
+    init(
+        accountLease: AccountLease,
+        client: DreamJourneyBackendClient = .shared,
+        naturalInputPolicyAvailable: @escaping () -> Bool,
+        candidateReviewPolicyAvailable: @escaping () -> Bool
+    ) {
+        self.accountLease = accountLease
+        self.client = client
+        self.naturalInputPolicyAvailable = naturalInputPolicyAvailable
+        self.candidateReviewPolicyAvailable = candidateReviewPolicyAvailable
+    }
+
+    func appendOwnerTurn(_ text: String) {
+        guard acceptsTurns, let normalized = normalizedTurn(text) else { return }
+        let now = Date()
+        if normalized == lastOwnerText,
+           let lastOwnerTurnAt,
+           now.timeIntervalSince(lastOwnerTurnAt) <= Self.duplicateOwnerTurnWindow {
+            return
+        }
+        lastOwnerText = normalized
+        lastOwnerTurnAt = now
+        ownerTurnCount += 1
+        turnSegments(normalized).forEach {
+            enqueue(Turn(role: .owner, text: $0))
+        }
+    }
+
+    func appendAssistantTurn(_ text: String) {
+        guard acceptsTurns,
+              ownerTurnCount > 0,
+              let normalized = normalizedTurn(text) else {
+            return
+        }
+        guard normalized != lastAssistantText
+                || lastAssistantOwnerTurnCount != ownerTurnCount else {
+            return
+        }
+        lastAssistantText = normalized
+        lastAssistantOwnerTurnCount = ownerTurnCount
+        turnSegments(normalized).forEach {
+            enqueue(Turn(role: .assistant, text: $0))
+        }
+    }
+
+    func finish() {
+        guard state == .live, !isFinishing else { return }
+        isFinishing = true
+        if ownerTurnCount == 0 {
+            queuedTurns.removeAll()
+            state = .empty
+            return
+        }
+        ensureNaturalInputSession()
+        advanceNaturalInputPipeline()
+    }
+
+    private func enqueue(_ turn: Turn) {
+        queuedTurns.append(turn)
+        ensureNaturalInputSession()
+        advanceNaturalInputPipeline()
+    }
+
+    private func ensureNaturalInputSession() {
+        guard naturalInputUseCase == nil else { return }
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: accountLease,
+            client: client,
+            qaGateEnabled: naturalInputPolicyAvailable,
+            entryMode: .live,
+            allowsEntryModeTransition: true
+        )
+        useCase.onViewStateChange = { [weak self, weak useCase] viewState in
+            DispatchQueue.main.async {
+                guard let self, useCase === self.naturalInputUseCase else { return }
+                self.receiveNaturalInputState(viewState)
+            }
+        }
+        naturalInputUseCase = useCase
+        useCase.send(.start)
+    }
+
+    private func receiveNaturalInputState(_ viewState: OwnerTruthInterviewNaturalInputViewState) {
+        switch viewState.phase {
+        case .ready:
+            if let completedTurn = inFlightTurn,
+               viewState.latestReceipt?.messageID != nil {
+                if queuedTurns.first == completedTurn {
+                    queuedTurns.removeFirst()
+                }
+                if completedTurn.role == .owner {
+                    persistedOwnerTurnCount += 1
+                }
+                inFlightTurn = nil
+            }
+            if viewState.latestReceipt?.lifecycle == .ended {
+                beginPendingMemoryOrganization(receipt: viewState.latestReceipt)
+                return
+            }
+            DispatchQueue.main.async { [weak self] in
+                self?.advanceNaturalInputPipeline()
+            }
+        case .unavailable, .failed:
+            state = .unavailable
+        case .idle, .starting, .submitting:
+            break
+        }
+    }
+
+    private func advanceNaturalInputPipeline() {
+        guard state == .live,
+              let useCase = naturalInputUseCase,
+              useCase.viewState.phase == .ready,
+              inFlightTurn == nil else {
+            return
+        }
+        if let turn = queuedTurns.first {
+            inFlightTurn = turn
+            useCase.send(.submitLiveTurn(text: turn.text, role: turn.role))
+            return
+        }
+        guard isFinishing, persistedOwnerTurnCount > 0, !didRequestEnd else { return }
+        didRequestEnd = true
+        useCase.send(.end)
+    }
+
+    private func beginPendingMemoryOrganization(
+        receipt: OwnerTruthInterviewNaturalInputReceipt?
+    ) {
+        guard !didBeginOrganization,
+              let receipt,
+              receipt.lifecycle == .ended else {
+            return
+        }
+        didBeginOrganization = true
+        state = .organizing
+        let useCase = OwnerTruthInterviewReviewBatchAcknowledgementUseCase(
+            accountLease: accountLease,
+            threadID: receipt.threadID,
+            sessionID: receipt.sessionID,
+            inboxClient: client,
+            acknowledgementClient: client,
+            releasePolicyAvailable: naturalInputPolicyAvailable
+        )
+        useCase.onViewStateChange = { [weak self, weak useCase] viewState in
+            DispatchQueue.main.async {
+                guard let self, useCase === self.acknowledgementUseCase else { return }
+                self.receiveAcknowledgementState(viewState)
+            }
+        }
+        acknowledgementUseCase = useCase
+        useCase.send(.acknowledge)
+    }
+
+    private func receiveAcknowledgementState(
+        _ viewState: OwnerTruthInterviewReviewBatchAcknowledgementViewState
+    ) {
+        switch viewState.phase {
+        case .acknowledged:
+            guard admissionUseCase == nil, let receipt = viewState.receipt else { return }
+            let useCase = OwnerTruthInterviewCandidateProposalAdmissionUseCase(
+                accountLease: accountLease,
+                acknowledgementReceipt: receipt,
+                client: client,
+                releasePolicyAvailable: candidateReviewPolicyAvailable
+            )
+            useCase.onViewStateChange = { [weak self, weak useCase] admissionState in
+                DispatchQueue.main.async {
+                    guard let self, useCase === self.admissionUseCase else { return }
+                    self.receiveAdmissionState(admissionState)
+                }
+            }
+            admissionUseCase = useCase
+            useCase.send(.admit)
+        case .unavailable, .failed:
+            state = .unavailable
+        case .idle, .discovering, .acknowledging:
+            break
+        }
+    }
+
+    private func receiveAdmissionState(
+        _ viewState: OwnerTruthInterviewCandidateProposalAdmissionViewState
+    ) {
+        switch viewState.phase {
+        case .admitted:
+            state = .pendingReview
+        case .unavailable, .failed:
+            state = .unavailable
+        case .idle, .admitting:
+            break
+        }
+    }
+
+    private func normalizedTurn(_ text: String) -> String? {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private func turnSegments(_ text: String) -> [String] {
+        var segments: [String] = []
+        var start = text.startIndex
+        while start < text.endIndex {
+            let end = text.index(
+                start,
+                offsetBy: OwnerTruthInterviewNaturalInputAppendCommand.maximumCharacterCount,
+                limitedBy: text.endIndex
+            ) ?? text.endIndex
+            segments.append(String(text[start..<end]))
+            start = end
+        }
+        return segments
+    }
+}
+
 private struct EchoVoiceProfileExitEvidence {
     let evidenceState: String
     let exitState: String?
@@ -551,7 +850,7 @@ final class EchoViewController: UIViewController {
         button.accessibilityIdentifier = "ownerTruthInterviewNaturalInputProductEntryButton"
         button.addTarget(
             self,
-            action: #selector(echoTextQuestionTapped),
+            action: #selector(ownerTruthInterviewNaturalInputProductEntryTapped),
             for: .touchUpInside
         )
         return button
@@ -572,6 +871,7 @@ final class EchoViewController: UIViewController {
     private var quoteBubbleBottomToNaturalInputConstraint: NSLayoutConstraint?
     private var isOwnerTruthInterviewNaturalInputProductPolicyPermitted = false
     private var ownerTruthInterviewNaturalInputPolicyRefreshGeneration: UInt = 0
+    private var pendingMemoryGapHandoff: EchoMemoryGapHandoff?
     private var currentState: EchoInteractionState = .idle
     private var transcriptEntries: [(text: String, isUser: Bool)] = []
     private var pendingAIText: String?
@@ -586,7 +886,6 @@ final class EchoViewController: UIViewController {
     private let digitalHumanLifecycle = DigitalHumanLifecycleCoordinator()
     private let echoRuntimeSessionCoordinator = EchoRuntimeSessionCoordinator()
     private var activeVoiceInteractionLifecycleToken: DigitalHumanLifecycleToken?
-    private var nativeSpeechCapture: EchoNativeSpeechCapture?
     private let echoSystemSpeechSynthesizer = AVSpeechSynthesizer()
     private var echoSystemSpeechLifecycleToken: DigitalHumanLifecycleToken?
     private var echoSystemSpeechUtterance: AVSpeechUtterance?
@@ -596,6 +895,20 @@ final class EchoViewController: UIViewController {
     private var isStoppingForDelayedReply = false
     private var isStoppingForNeutralSafety = false
     private var isStoppingVoiceCaptureManually = false
+    private var isUserControlledLiveSessionOpen = false {
+        didSet {
+            if !isUserControlledLiveSessionOpen {
+                cancelLiveUserInactivityTimeout()
+            }
+        }
+    }
+    /// The business-level Live conversation stays open while an underlying
+    /// recorder/provider transport is recoverable. The next mic tap resumes
+    /// transport instead of accidentally committing the whole conversation.
+    private var isLiveVoiceTransportSuspended = false
+    private var liveMemoryCaptureCoordinator: EchoLiveMemoryCaptureCoordinator?
+    private var retainedLiveMemoryCaptureCoordinators: [UUID: EchoLiveMemoryCaptureCoordinator] = [:]
+    private var liveUserInactivityWorkItem: DispatchWorkItem?
     private var showsVoiceSDKReadinessPreview = false
     private var backendRuntimeTokenApplied = false
     private var hasRequestedCloudDigitalHumanRuntime = false
@@ -618,6 +931,7 @@ final class EchoViewController: UIViewController {
     private static let tencentDigitalHumanOpenFailureRecoveryDelay: TimeInterval = 2.0
     private static let tencentDigitalHumanOpenFailureRecoveryLimit = 1
     private static let tencentDigitalHumanBackgroundReleaseGracePeriod: TimeInterval = 8.0
+    private static let liveUserInactivityTimeout: TimeInterval = 60
 
     private struct TencentPCMDriveTestSignal {
         let data: Data
@@ -989,8 +1303,10 @@ final class EchoViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        nativeSpeechCapture?.cancel()
-        nativeSpeechCapture = nil
+        if isUserControlledLiveSessionOpen {
+            isUserControlledLiveSessionOpen = false
+            finishLiveMemoryCaptureIfNeeded()
+        }
         echoSystemSpeechLifecycleToken = nil
         echoSystemSpeechUtterance = nil
         echoSystemSpeechSynthesizer.stopSpeaking(at: .immediate)
@@ -1407,6 +1723,7 @@ final class EchoViewController: UIViewController {
 
     private func rebindEchoAccountScope(reason: String) {
         ownerTruthInterviewNaturalInputPolicyRefreshGeneration &+= 1
+        pendingMemoryGapHandoff = nil
         isOwnerTruthInterviewNaturalInputProductPolicyPermitted = false
         updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
         invalidateDigitalHumanLifecycle(reason: reason)
@@ -1570,6 +1887,9 @@ final class EchoViewController: UIViewController {
         invalidateDigitalHumanInteraction(reason: "appLifecycle:\(reason)")
         activeVoiceInteractionLifecycleToken = nil
         isSuspendedByAppLifecycle = true
+        if isUserControlledLiveSessionOpen {
+            isLiveVoiceTransportSuspended = true
+        }
         interruptDigitalHumanPlayback(reason: "appLifecycle:\(reason)")
         preserveTencentProviderSessionAfterLocalDialogStop(reason: "appLifecycle:\(reason)")
         muteTencentProviderRemoteAudioForUserCapture(reason: "appLifecycle:\(reason)")
@@ -2810,18 +3130,18 @@ final class EchoViewController: UIViewController {
                 systemName: "stop.fill",
                 backgroundColor: DJDesignTokens.Color.accentDeep,
                 isEnabled: true,
-                accessibilityLabel: "停止语音"
+                accessibilityLabel: "结束本次实时对话"
             )
             setMicPulse(active: true)
         case .thinking:
             renderVoiceStatus(text: "我在想一想", isVisible: true)
             configureMicButton(
-                systemName: "ellipsis",
-                backgroundColor: DJDesignTokens.Color.surfaceContainer,
-                isEnabled: false,
-                accessibilityLabel: "我在想一想"
+                systemName: "stop.fill",
+                backgroundColor: DJDesignTokens.Color.accentDeep,
+                isEnabled: true,
+                accessibilityLabel: "结束本次实时对话"
             )
-            setMicPulse(active: false)
+            setMicPulse(active: true)
         case .waitingReply(let minutes):
             renderVoiceStatus(text: "先去窗边走走，约 \(minutes) 分钟后我再回信", isVisible: true)
             configureMicButton(
@@ -2856,18 +3176,17 @@ final class EchoViewController: UIViewController {
                 systemName: "stop.fill",
                 backgroundColor: DJDesignTokens.Color.accentDeep,
                 isEnabled: true,
-                accessibilityLabel: "停止回响"
+                accessibilityLabel: "结束本次实时对话"
             )
             setMicPulse(active: true)
         case .replied:
-            if digitalHumanConversation.shouldResumeAfterProviderSpeech,
-               routeEchoAudioThroughDigitalHuman {
+            if isUserControlledLiveSessionOpen {
                 renderVoiceStatus(text: "正在恢复聆听", isVisible: true)
                 configureMicButton(
                     systemName: "stop.fill",
                     backgroundColor: DJDesignTokens.Color.accentDeep,
                     isEnabled: true,
-                    accessibilityLabel: "停止语音"
+                    accessibilityLabel: "结束本次实时对话"
                 )
                 setMicPulse(active: true)
             } else {
@@ -4306,9 +4625,18 @@ final class EchoViewController: UIViewController {
             return false
         }
         digitalHumanConversation.markPausingForProviderSpeech()
+        cancelLiveUserInactivityTimeout()
         markTencentProviderAudioHandoff(reason: "pauseDialogEngineForProviderSpeech")
-        DialogEngineManager.shared.stopDialog()
-        print("[TencentDigitalHuman] paused DialogEngine before provider speech")
+        guard DialogEngineManager.shared.pauseRecorder() else {
+            digitalHumanConversation.clearResumeState()
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "dialogRecorderPauseFailed",
+                states: ["reason": "providerSpeechHandoff"]
+            )
+            return false
+        }
+        print("[TencentDigitalHuman] paused recorder in existing Live session before provider speech")
         return true
     }
 
@@ -4389,7 +4717,25 @@ final class EchoViewController: UIViewController {
         DialogEngineManager.shared.delegate = self
         if ownsCurrentDialogEngineBinding(),
            DialogEngineManager.shared.isDialogActive {
-            DialogEngineManager.shared.stopDialog()
+            muteTencentProviderRemoteAudioForUserCapture(reason: reason)
+            guard prepareEchoCaptureAudioSession(reason: "resumeDialog:\(reason)"),
+                  DialogEngineManager.shared.resumeRecorder() else {
+                resumeVoiceCaptureAfterTencentProviderSpeech(
+                    reason: "transportRecovery:\(reason)",
+                    lifecycleToken: lifecycleToken
+                )
+                return true
+            }
+            activeVoiceInteractionLifecycleToken = lifecycleToken
+            viewModel.beginVoiceInteraction()
+            armLiveUserInactivityTimeout(reason: "resumeDialogAfterProviderSpeech")
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "dialogRecorderResumed",
+                states: ["reason": reason]
+            )
+            print("[TencentDigitalHuman] resumed recorder in existing Live session reason=\(reason)")
+            return true
         }
         resumeVoiceCaptureAfterTencentProviderSpeech(
             reason: reason,
@@ -4427,7 +4773,8 @@ final class EchoViewController: UIViewController {
             }
             DialogEngineManager.shared.startDialog(
                 sendsGreeting: false,
-                usesTurnScopedKnowledgeContext: true
+                usesTurnScopedKnowledgeContext: true,
+                lifetimePolicy: .userControlledLive
             )
         } else {
             configureVoiceRuntimeThenStart(lifecycleToken: lifecycleToken)
@@ -6140,6 +6487,15 @@ final class EchoViewController: UIViewController {
     }
 
     @objc private func micTapped() {
+        if isUserControlledLiveSessionOpen, isLiveVoiceTransportSuspended {
+            isLiveVoiceTransportSuspended = false
+            startVoiceCapture()
+            return
+        }
+        if isUserControlledLiveSessionOpen {
+            stopVoiceCapture()
+            return
+        }
         switch currentState {
         case .listening, .thinking, .speaking:
             stopVoiceCapture()
@@ -6155,6 +6511,27 @@ final class EchoViewController: UIViewController {
 
     @objc private func ownerTruthInterviewNaturalInputEntryTapped() {
         presentOwnerTruthInterviewNaturalInputSheet(presentation: .qa)
+    }
+
+    @objc private func ownerTruthInterviewNaturalInputProductEntryTapped() {
+        guard isOwnerTruthInterviewNaturalInputProductEntryVisible else { return }
+        if let handoff = pendingMemoryGapHandoff,
+           handoff.contextKey == currentDigitalHumanRuntimeContextKey() {
+            pendingMemoryGapHandoff = nil
+            updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
+            switch handoff.destination {
+            case .ownerInterview:
+                presentOwnerTruthInterviewNaturalInputSheet(
+                    presentation: .product,
+                    initialTopic: handoff.question
+                )
+            case .familyContribution:
+                presentFamilyContributionForMemoryGap(topic: handoff.question)
+            }
+            return
+        }
+        pendingMemoryGapHandoff = nil
+        echoTextQuestionTapped()
     }
 
     @objc private func echoTextQuestionTapped() {
@@ -6203,6 +6580,9 @@ final class EchoViewController: UIViewController {
             return
         }
 
+        pendingMemoryGapHandoff = nil
+        updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
+
         if case .error = currentState {
             viewModel.retryAfterError()
         }
@@ -6224,6 +6604,7 @@ final class EchoViewController: UIViewController {
         source: String,
         lifecycleToken: DigitalHumanLifecycleToken
     ) {
+        cancelLiveUserInactivityTimeout()
         let question = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
         let context = DigitalHumanContextStore.shared.current
         guard !question.isEmpty,
@@ -6242,6 +6623,9 @@ final class EchoViewController: UIViewController {
             viewModel.fail("当前身份无权访问这份记忆")
             return
         }
+
+        pendingMemoryGapHandoff = nil
+        updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
 
         let acceptedUserTurn = viewModel.finishUserVoice(
             text: question,
@@ -6314,7 +6698,19 @@ final class EchoViewController: UIViewController {
 
                 switch result {
                 case .success(let answer):
-                    guard self.viewModel.receiveAIReply(answer.text) else {
+                    let memoryGapHandoff = self.memoryGapHandoff(
+                        for: answer,
+                        question: question,
+                        context: context
+                    )
+                    self.pendingMemoryGapHandoff = memoryGapHandoff
+                    let replyText = self.replyText(
+                        for: answer,
+                        memoryGapHandoff: memoryGapHandoff,
+                        context: context
+                    )
+                    self.captureLiveAssistantTurn(replyText)
+                    guard self.viewModel.receiveAIReply(replyText) else {
                         self.activeVoiceInteractionLifecycleToken = nil
                         self.viewModel.fail("本轮回响状态已变化，请重新提问")
                         return
@@ -6322,21 +6718,25 @@ final class EchoViewController: UIViewController {
                     PrivacySafeDiagnostics.log(
                         subsystem: "Echo",
                         event: "backendAnswerReceived",
-                        states: ["provider": answer.provider],
+                        states: [
+                            "provider": answer.provider,
+                            "memoryGrounding": answer.memoryGrounding.outcome.rawValue,
+                            "memoryHandoff": memoryGapHandoff?.destination.rawValue ?? "none",
+                        ],
                         counts: [
-                            "answerLength": answer.text.count,
+                            "answerLength": replyText.count,
                             "citationCount": answer.citations.count,
                         ],
                         correlations: ["turn": turnID]
                     )
                     if self.shouldDispatchEchoReplyToTencentProvider {
                         self.sendEchoReplyToDigitalHumanRuntimeIfReady(
-                            answer.text,
+                            replyText,
                             source: "backendEchoAnswer"
                         )
                     } else {
                         self.playEchoAnswerWithSystemSpeech(
-                            answer.text,
+                            replyText,
                             lifecycleToken: lifecycleToken
                         )
                     }
@@ -6357,6 +6757,7 @@ final class EchoViewController: UIViewController {
         _ text: String,
         lifecycleToken: DigitalHumanLifecycleToken
     ) {
+        cancelLiveUserInactivityTimeout()
         echoSystemSpeechLifecycleToken = nil
         echoSystemSpeechUtterance = nil
         echoSystemSpeechSynthesizer.stopSpeaking(at: .immediate)
@@ -6390,7 +6791,8 @@ final class EchoViewController: UIViewController {
     }
 
     private func presentOwnerTruthInterviewNaturalInputSheet(
-        presentation: OwnerTruthInterviewNaturalInputPresentation
+        presentation: OwnerTruthInterviewNaturalInputPresentation,
+        initialTopic: String? = nil
     ) {
         let isEntryAvailable: Bool
         switch presentation {
@@ -6413,6 +6815,7 @@ final class EchoViewController: UIViewController {
         let controller = OwnerTruthInterviewNaturalInputViewController(
             accountLease: accountLease,
             presentation: presentation,
+            initialTopic: initialTopic,
             reviewBatchAcknowledgementPolicyAvailable: { [weak self] in
                 guard let self else { return false }
                 switch presentation {
@@ -6439,6 +6842,117 @@ final class EchoViewController: UIViewController {
             sheet.prefersGrabberVisible = true
         }
         present(navigationController, animated: true)
+    }
+
+    private func memoryGapHandoff(
+        for answer: EchoAnswer,
+        question: String,
+        context: DigitalHumanContext
+    ) -> EchoMemoryGapHandoff? {
+        guard answer.signalsMemoryGap else { return nil }
+        let destination: EchoMemoryGapHandoff.Destination = context.isSelfAssistant
+            ? .ownerInterview
+            : .familyContribution
+        return EchoMemoryGapHandoff(
+            question: String(question.prefix(200)),
+            destination: destination,
+            contextKey: digitalHumanRuntimeContextKey(for: context)
+        )
+    }
+
+    private func replyText(
+        for answer: EchoAnswer,
+        memoryGapHandoff: EchoMemoryGapHandoff?,
+        context: DigitalHumanContext
+    ) -> String {
+        guard let memoryGapHandoff else { return answer.text }
+        switch memoryGapHandoff.destination {
+        case .ownerInterview:
+            return "这段记忆我还不了解。那我们来聊一聊吧，你最先想到的是什么？"
+        case .familyContribution:
+            return "我还没有从\(context.resolvedDisplayName)已确认的记忆中找到这个答案。"
+                + "如果你愿意，可以分享一段相关的故事，交给档案所有者确认。"
+        }
+    }
+
+    private func presentFamilyContributionForMemoryGap(topic: String) {
+        let context = DigitalHumanContextStore.shared.current
+        guard !context.isSelfAssistant,
+              let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                at: .request,
+                expected: accountLease,
+                reason: "memoryGapFamilyContribution"
+              ),
+              let member = FamilyRepository.shared.acceptedMembers(for: accountLease.subjectId)
+                .first(where: { $0.id == context.ownerId }) else {
+            showFamilyContributionUnavailable()
+            return
+        }
+        let expectedContextKey = digitalHumanRuntimeContextKey(for: context)
+        renderVoiceStatus(
+            text: "正在准备家庭记忆贡献",
+            isVisible: true,
+            accessibilityIdentifier: "echoMemoryGapFamilyContributionLoading"
+        )
+        DreamJourneyBackendClient.shared.listContributorFamilyContributionGrants(
+            accountLease: accountLease
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self,
+                      self.validateEchoAccountLease(
+                        at: .ui,
+                        expected: accountLease,
+                        reason: "memoryGapFamilyContributionResponse"
+                      ),
+                      self.currentDigitalHumanRuntimeContextKey() == expectedContextKey else {
+                    return
+                }
+                switch result {
+                case .success(let grants):
+                    guard let grant = grants.first(where: {
+                        $0.isActive && $0.relationshipId == member.relationshipId
+                    }) else {
+                        self.showFamilyContributionUnavailable()
+                        return
+                    }
+                    let controller = FamilyContributionComposerViewController(
+                        grant: grant,
+                        accountLease: accountLease,
+                        initialTopic: topic
+                    )
+                    if let navigationController = self.navigationController {
+                        navigationController.pushViewController(controller, animated: true)
+                    } else {
+                        let navigationController = UINavigationController(rootViewController: controller)
+                        navigationController.modalPresentationStyle = .pageSheet
+                        self.present(navigationController, animated: true)
+                    }
+                case .failure:
+                    self.showFamilyContributionUnavailable()
+                }
+            }
+        }
+    }
+
+    private func showFamilyContributionUnavailable() {
+        let alert = UIAlertController(
+            title: "需要家庭贡献授权",
+            message: "这段故事属于当前家人的档案。请先在家人管理中取得贡献授权，再提交给档案所有者确认。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "稍后", style: .cancel))
+        alert.addAction(UIAlertAction(title: "进入家人管理", style: .default) { [weak self] _ in
+            let controller = FamilyCircleViewController()
+            if let navigationController = self?.navigationController {
+                navigationController.pushViewController(controller, animated: true)
+            } else if let self {
+                let navigationController = UINavigationController(rootViewController: controller)
+                navigationController.modalPresentationStyle = .pageSheet
+                self.present(navigationController, animated: true)
+            }
+        })
+        present(alert, animated: true)
     }
 
     private var isOwnerTruthInterviewNaturalInputProductEntryVisible: Bool {
@@ -6497,12 +7011,157 @@ final class EchoViewController: UIViewController {
 
     private func updateOwnerTruthInterviewNaturalInputProductEntryVisibility() {
         let isVisible = isOwnerTruthInterviewNaturalInputProductEntryVisible
+        var configuration = ownerTruthInterviewNaturalInputProductEntryButton.configuration
+        if pendingMemoryGapHandoff?.contextKey == currentDigitalHumanRuntimeContextKey() {
+            configuration?.title = "继续聊聊"
+            configuration?.image = UIImage(systemName: "bubble.left.and.bubble.right.fill")
+            ownerTruthInterviewNaturalInputProductEntryButton.accessibilityLabel = "继续补充这段记忆"
+        } else {
+            configuration?.title = "文字回响"
+            configuration?.image = UIImage(systemName: "keyboard")
+            ownerTruthInterviewNaturalInputProductEntryButton.accessibilityLabel = "输入文字开始回响"
+        }
+        ownerTruthInterviewNaturalInputProductEntryButton.configuration = configuration
         ownerTruthInterviewNaturalInputProductEntryButton.isHidden = !isVisible
         ownerTruthInterviewNaturalInputProductEntryButton.alpha = isVisible ? 1 : 0
         ownerTruthInterviewNaturalInputProductEntryButton.isUserInteractionEnabled = isVisible
         quoteBubbleBottomToVoiceStatusConstraint?.isActive = !isVisible
         quoteBubbleBottomToNaturalInputConstraint?.isActive = isVisible
         view.setNeedsLayout()
+    }
+
+    private func beginLiveMemoryCaptureIfNeeded(accountLease: AccountLease) {
+        guard DigitalHumanContextStore.shared.current.isSelfAssistant else {
+            liveMemoryCaptureCoordinator = nil
+            return
+        }
+        guard liveMemoryCaptureCoordinator == nil else { return }
+        let coordinator = EchoLiveMemoryCaptureCoordinator(
+            accountLease: accountLease,
+            naturalInputPolicyAvailable: {
+                FeatureGateService.shared
+                    .requestServerPolicyManagedDecision(for: .echoTextInput)
+                    .allowed
+            },
+            candidateReviewPolicyAvailable: {
+                FeatureGateService.shared
+                    .requestServerPolicyManagedDecision(for: .ownerTruthCandidateReview)
+                    .allowed
+            }
+        )
+        let coordinatorID = coordinator.id
+        coordinator.onStateChange = { [weak self, weak coordinator] state in
+            DispatchQueue.main.async {
+                guard let self, let coordinator,
+                      self.retainedLiveMemoryCaptureCoordinators[coordinatorID] === coordinator else {
+                    return
+                }
+                self.renderLiveMemoryCaptureState(state)
+                if state.isTerminal {
+                    self.retainedLiveMemoryCaptureCoordinators[coordinatorID] = nil
+                }
+            }
+        }
+        liveMemoryCaptureCoordinator = coordinator
+        retainedLiveMemoryCaptureCoordinators[coordinatorID] = coordinator
+    }
+
+    private func captureLiveOwnerTurn(_ text: String) {
+        guard DigitalHumanContextStore.shared.current.isSelfAssistant else { return }
+        liveMemoryCaptureCoordinator?.appendOwnerTurn(text)
+    }
+
+    private func captureLiveAssistantTurn(_ text: String) {
+        guard DigitalHumanContextStore.shared.current.isSelfAssistant else { return }
+        liveMemoryCaptureCoordinator?.appendAssistantTurn(text)
+    }
+
+    private func finishLiveMemoryCaptureIfNeeded() {
+        guard let coordinator = liveMemoryCaptureCoordinator else { return }
+        liveMemoryCaptureCoordinator = nil
+        coordinator.finish()
+    }
+
+    private func armLiveUserInactivityTimeout(reason: String) {
+        cancelLiveUserInactivityTimeout()
+        guard isUserControlledLiveSessionOpen else { return }
+        let accountLease = echoAccountLease
+        let lifecycleToken = activeVoiceInteractionLifecycleToken
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.isUserControlledLiveSessionOpen,
+                  self.echoAccountLease == accountLease,
+                  self.activeVoiceInteractionLifecycleToken == lifecycleToken else {
+                return
+            }
+            PrivacySafeDiagnostics.log(
+                subsystem: "Echo",
+                event: "liveUserInactivityTimeout",
+                states: ["reason": reason],
+                counts: ["timeoutSeconds": Int(Self.liveUserInactivityTimeout)]
+            )
+            self.endLiveSessionAfterUserInactivity()
+        }
+        liveUserInactivityWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.liveUserInactivityTimeout,
+            execute: workItem
+        )
+    }
+
+    private func noteLiveUserVoiceActivity(_ text: String, reason: String) {
+        guard isUserControlledLiveSessionOpen,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        armLiveUserInactivityTimeout(reason: reason)
+    }
+
+    private func cancelLiveUserInactivityTimeout() {
+        liveUserInactivityWorkItem?.cancel()
+        liveUserInactivityWorkItem = nil
+    }
+
+    private func endLiveSessionAfterUserInactivity() {
+        guard isUserControlledLiveSessionOpen else { return }
+        renderVoiceStatus(
+            text: "一分钟未检测到语音，正在整理本次对话",
+            isVisible: true,
+            accessibilityIdentifier: "echoLiveUserInactivityFinishing"
+        )
+        stopVoiceCapture()
+    }
+
+    private func renderLiveMemoryCaptureState(_ state: EchoLiveMemoryCaptureState) {
+        guard !isUserControlledLiveSessionOpen else { return }
+        switch state {
+        case .live:
+            break
+        case .organizing:
+            renderVoiceStatus(
+                text: "正在整理本次对话",
+                isVisible: true,
+                accessibilityIdentifier: "echoLiveMemoryOrganizing"
+            )
+        case .pendingReview:
+            renderVoiceStatus(
+                text: "已送入待确认记忆，整理完成后可在记忆档案查看",
+                isVisible: true,
+                accessibilityIdentifier: "echoLiveMemoryPendingReview"
+            )
+        case .empty:
+            renderVoiceStatus(
+                text: "本次没有需要整理的表达",
+                isVisible: true,
+                accessibilityIdentifier: "echoLiveMemoryEmpty"
+            )
+        case .unavailable:
+            renderVoiceStatus(
+                text: "本次对话暂未完成整理，请稍后重试",
+                isVisible: true,
+                accessibilityIdentifier: "echoLiveMemoryUnavailable"
+            )
+        }
     }
 
     private func startVoiceCapture() {
@@ -6534,12 +7193,16 @@ final class EchoViewController: UIViewController {
                     return
                 }
                 guard granted else {
+                    self.isUserControlledLiveSessionOpen = false
                     self.activeVoiceInteractionLifecycleToken = nil
                     MicrophonePermissionManager.shared.showPermissionDeniedAlert(on: self)
                     self.viewModel.fail("需要麦克风权限，才能听见您的声音")
                     return
                 }
                 DialogEngineManager.shared.delegate = self
+                self.isUserControlledLiveSessionOpen = true
+                self.isLiveVoiceTransportSuspended = false
+                self.beginLiveMemoryCaptureIfNeeded(accountLease: accountLease)
                 self.pendingAIText = nil
                 self.resetDigitalHumanReplyDispatchState()
                 self.viewModel.prepareVoiceInteraction()
@@ -6772,10 +7435,12 @@ final class EchoViewController: UIViewController {
                 reason: "providerTextOver",
                 lifecycleToken: lifecycleToken
             ) {
+                self.armLiveUserInactivityTimeout(reason: "providerTextOverResume")
                 return
             }
             if DialogEngineManager.shared.isDialogActive {
                 self.viewModel.beginVoiceInteraction()
+                self.armLiveUserInactivityTimeout(reason: "providerTextOverResume")
             } else {
                 self.resetEchoViewModelToIdle()
             }
@@ -7524,7 +8189,8 @@ final class EchoViewController: UIViewController {
                     }
                     DialogEngineManager.shared.startDialog(
                         sendsGreeting: !self.routeEchoAudioThroughDigitalHuman,
-                        usesTurnScopedKnowledgeContext: true
+                        usesTurnScopedKnowledgeContext: true,
+                        lifetimePolicy: .userControlledLive
                     )
                 } else {
                     self.backendRuntimeTokenApplied = false
@@ -7551,11 +8217,10 @@ final class EchoViewController: UIViewController {
             DialogEngineManager.shared.stopDialog()
         }
         lastEchoRuntimeFallbackReason = reason
-        if startNativeSpeechFallbackIfPossible(reason: reason) {
-            recordEchoRuntimeDiagnosticsSnapshot(reason: "nativeSpeechFallback:\(reason)")
-            return
-        }
-
+        isUserControlledLiveSessionOpen = false
+        isLiveVoiceTransportSuspended = false
+        finishLiveMemoryCaptureIfNeeded()
+        releaseEchoAudioOwnerLease(reason: "realtimeVoiceUnavailable")
         activeVoiceInteractionLifecycleToken = nil
         viewModel.fail("语音暂不可用，请使用文字回响")
         renderVoiceStatus(
@@ -7565,112 +8230,6 @@ final class EchoViewController: UIViewController {
         )
         recordEchoRuntimeDiagnosticsSnapshot(reason: reason)
         print("[Echo] providerCredentialBlocked reason=\(reason)")
-    }
-
-    private func startNativeSpeechFallbackIfPossible(reason: String) -> Bool {
-        switch reason {
-        case "backendVoiceRuntimeUnavailable", "providerCredentialBlocked", "backendVoiceRuntimeRequestFailed":
-            break
-        default:
-            return false
-        }
-        guard nativeSpeechCapture == nil,
-              let lifecycleToken = activeVoiceInteractionLifecycleToken,
-              let accountLease = echoAccountLease,
-              validateEchoAccountLease(
-                  at: .request,
-                  expected: accountLease,
-                  reason: "nativeSpeechFallback"
-              ),
-              isCurrentDigitalHumanLifecycleToken(
-                  lifecycleToken,
-                  reason: "nativeSpeechFallback"
-              ),
-              acquireEchoRuntimeAudioOwner(
-                  .echoCapture,
-                  priority: .echoCapture,
-                  reason: "nativeSpeechFallback"
-              ) else {
-            return false
-        }
-
-        let capture = EchoNativeSpeechCapture()
-        nativeSpeechCapture = capture
-        capture.start(
-            onReady: { [weak self, weak capture] in
-                guard let self,
-                      let capture,
-                      self.nativeSpeechCapture === capture,
-                      self.isCurrentDigitalHumanLifecycleToken(
-                          lifecycleToken,
-                          reason: "nativeSpeechReady"
-                      ) else {
-                    return
-                }
-                self.viewModel.beginVoiceInteraction()
-                self.renderVoiceStatus(
-                    text: "正在聆听，再点一次话筒结束",
-                    isVisible: true,
-                    accessibilityIdentifier: "echoNativeSpeechListening"
-                )
-            },
-            onPartial: { [weak self, weak capture] text in
-                guard let self,
-                      let capture,
-                      self.nativeSpeechCapture === capture,
-                      self.isCurrentDigitalHumanLifecycleToken(
-                          lifecycleToken,
-                          reason: "nativeSpeechPartial"
-                      ) else {
-                    return
-                }
-                let preview = String(text.prefix(28))
-                self.renderVoiceStatus(
-                    text: "我听到：\(preview)",
-                    isVisible: true,
-                    accessibilityIdentifier: "echoNativeSpeechPartial"
-                )
-            },
-            onFinal: { [weak self, weak capture] text in
-                guard let self,
-                      let capture,
-                      self.nativeSpeechCapture === capture,
-                      self.isCurrentDigitalHumanLifecycleToken(
-                          lifecycleToken,
-                          reason: "nativeSpeechFinal"
-                      ) else {
-                    return
-                }
-                self.nativeSpeechCapture = nil
-                self.submitEchoQuestion(
-                    text,
-                    source: "nativeSpeech",
-                    lifecycleToken: lifecycleToken
-                )
-            },
-            onFailure: { [weak self, weak capture] error in
-                guard let self,
-                      let capture,
-                      self.nativeSpeechCapture === capture else {
-                    return
-                }
-                self.nativeSpeechCapture = nil
-                self.releaseEchoAudioOwnerLease(
-                    expectedOwner: .echoCapture,
-                    reason: "nativeSpeechFailed"
-                )
-                self.activeVoiceInteractionLifecycleToken = nil
-                let message = (error as? LocalizedError)?.errorDescription
-                    ?? "语音识别失败，请使用文字回响"
-                self.viewModel.fail(message)
-                self.renderVoiceStatus(
-                    text: message,
-                    isVisible: true,
-                    accessibilityIdentifier: "echoNativeSpeechFailed"
-                )
-            }
-        )
-        return true
     }
 
     private func currentVoiceSDKReadinessSummary() -> VoiceSDKReadinessSummary {
@@ -7693,22 +8252,10 @@ final class EchoViewController: UIViewController {
     }
 
     private func stopVoiceCapture() {
-        if hasTencentDigitalHumanProviderSpeechInFlight,
-           interruptDigitalHumanPlaybackForUserBargeIn() {
-            return
-        }
-
-        if let nativeSpeechCapture {
-            renderVoiceStatus(
-                text: "正在识别并寻找回答",
-                isVisible: true,
-                accessibilityIdentifier: "echoNativeSpeechFinishing"
-            )
-            nativeSpeechCapture.finish()
-            return
-        }
-
+        isLiveVoiceTransportSuspended = false
         if echoSystemSpeechLifecycleToken != nil || echoSystemSpeechSynthesizer.isSpeaking {
+            isUserControlledLiveSessionOpen = false
+            finishLiveMemoryCaptureIfNeeded()
             echoSystemSpeechLifecycleToken = nil
             echoSystemSpeechUtterance = nil
             echoSystemSpeechSynthesizer.stopSpeaking(at: .immediate)
@@ -7722,6 +8269,14 @@ final class EchoViewController: UIViewController {
             return
         }
 
+        isUserControlledLiveSessionOpen = false
+        if case .error = currentState,
+           !(ownsCurrentDialogEngineBinding() && DialogEngineManager.shared.isDialogActive) {
+            finishLiveMemoryCaptureIfNeeded()
+            activeVoiceInteractionLifecycleToken = nil
+            resetEchoViewModelToIdle()
+            return
+        }
         releaseEchoAudioOwnerLease(reason: "userStoppedVoiceCapture")
         invalidateDigitalHumanInteraction(reason: "userStoppedVoiceCapture")
         activeVoiceInteractionLifecycleToken = nil
@@ -7736,6 +8291,8 @@ final class EchoViewController: UIViewController {
             DialogEngineManager.shared.stopDialog()
         } else {
             isStoppingVoiceCaptureManually = false
+            flushPendingAIReplyIfNeeded()
+            finishLiveMemoryCaptureIfNeeded()
             if !hasTencentDigitalHumanProviderSpeechInFlight {
                 resetDigitalHumanReplyDispatchState()
             }
@@ -7752,7 +8309,8 @@ final class EchoViewController: UIViewController {
               !aiText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return
         }
-        viewModel.receiveAIReply(aiText)
+        captureLiveAssistantTurn(aiText)
+        _ = viewModel.receiveAIReply(aiText)
         pendingAIText = nil
     }
 
@@ -7964,9 +8522,15 @@ extension EchoViewController: AVSpeechSynthesizerDelegate {
                 reason: "systemSpeechFinished"
             )
             _ = self.markEchoReplyDelivered()
-            self.activeVoiceInteractionLifecycleToken = nil
+            if self.isUserControlledLiveSessionOpen,
+               self.prepareEchoCaptureAudioSession(reason: "systemSpeechFinishedLiveResume") {
+                self.viewModel.beginVoiceInteraction()
+                self.armLiveUserInactivityTimeout(reason: "systemSpeechFinishedLiveResume")
+            } else {
+                self.activeVoiceInteractionLifecycleToken = nil
+            }
             self.renderVoiceStatus(
-                text: "回响已送达",
+                text: self.isUserControlledLiveSessionOpen ? "我在听，您可以继续说" : "回响已送达",
                 isVisible: true,
                 accessibilityIdentifier: "echoSystemSpeechFinished"
             )
@@ -7986,23 +8550,30 @@ extension EchoViewController: DialogEngineDelegate {
                 return
             }
             self.viewModel.beginVoiceInteraction()
+            self.armLiveUserInactivityTimeout(reason: "dialogStarted")
         }
     }
 
     func onASRResult(text: String, isFinal: Bool) {
-        guard isFinal else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self,
                   self.validateEchoAccountLease(at: .ui, reason: "asrFinal"),
                   let lifecycleToken = self.activeVoiceInteractionToken(reason: "asrFinal"),
                   let accountLease = self.echoAccountLease else { return }
+            self.noteLiveUserVoiceActivity(
+                text,
+                reason: isFinal ? "dialogASRFinal" : "dialogASRPartial"
+            )
+            guard isFinal else { return }
+            self.cancelLiveUserInactivityTimeout()
             let acceptedUserTurn = self.viewModel.finishUserVoice(
                 text: text,
                 accountLease: accountLease,
                 resourceOwnerId: accountLease.subjectId,
                 roleContextKey: self.digitalHumanRuntimeContextKey(
                     for: DigitalHumanContextStore.shared.current
-                )
+                ),
+                allowsDelayedReply: !self.isUserControlledLiveSessionOpen
             )
             if let safetyDecision = self.viewModel.neutralSafetyDecision {
                 self.releaseEchoAudioOwnerLease(
@@ -8012,6 +8583,12 @@ extension EchoViewController: DialogEngineDelegate {
                 self.enterNeutralSafetyMode(safetyDecision)
                 return
             }
+            // Live transcript persistence is independent from the legacy
+            // one-question/one-answer presentation state. The provider can
+            // complete a valid ASR turn while that UI state rejects a second
+            // turn, but the complete Live conversation must still enter the
+            // V4 interview and pending-memory pipeline.
+            self.captureLiveOwnerTurn(text)
             guard acceptedUserTurn else {
                 PrivacySafeDiagnostics.log(
                     subsystem: "Echo",
@@ -8020,10 +8597,16 @@ extension EchoViewController: DialogEngineDelegate {
                 )
                 return
             }
-            self.releaseEchoAudioOwnerLease(
-                expectedOwner: .echoCapture,
-                reason: "asrFinal"
-            )
+            // A user-controlled Live session keeps one play-and-record lease
+            // across recognition, reasoning and local SDK playback. Deactivating
+            // AVAudioSession here leaves the provider websocket alive while its
+            // RemoteIO recorder can no longer deliver PCM frames.
+            if !self.isUserControlledLiveSessionOpen {
+                self.releaseEchoAudioOwnerLease(
+                    expectedOwner: .echoCapture,
+                    reason: "asrFinal"
+                )
+            }
             if self.routeEchoAudioThroughDigitalHuman,
                self.hasTencentDigitalHumanProviderSpeechInFlight {
                 self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "userSpeechFinal")
@@ -8055,8 +8638,13 @@ extension EchoViewController: DialogEngineDelegate {
                   self.activeVoiceInteractionToken(reason: "ttsStarted") != nil,
                   !self.viewModel.isNeutralSafetyMode,
                   !self.viewModel.isWaitingForDelayedReply else { return }
+            self.cancelLiveUserInactivityTimeout()
             self.pendingAIText = nil
             self.cancelDigitalHumanReplyPrewarm()
+            // Keep assistant context for the Live organizer even when the
+            // legacy presentation state has already advanced. Assistant turns
+            // remain context-only and can never become Owner evidence.
+            self.captureLiveAssistantTurn(text)
             guard self.viewModel.receiveAIReply(text) else {
                 PrivacySafeDiagnostics.log(
                     subsystem: "Echo",
@@ -8072,11 +8660,22 @@ extension EchoViewController: DialogEngineDelegate {
                 print("[TencentDigitalHuman] skipped SDK TTS fallback; Tencent cloud render owns audio/lip-sync")
                 return
             }
-            guard self.acquireEchoRuntimeAudioOwner(
-                .echoLocalPlayback,
-                priority: .playback,
-                reason: "dialogTTSStarted"
-            ) else {
+            let audioOwnerReady: Bool
+            if self.isUserControlledLiveSessionOpen {
+                // SpeechEngine owns both recorder and player in this route. Keep
+                // the existing playAndRecord/voiceChat session continuously active
+                // instead of deactivating RemoteIO between greeting and capture.
+                audioOwnerReady = self.prepareEchoCaptureAudioSession(
+                    reason: "dialogTTSStartedLive"
+                )
+            } else {
+                audioOwnerReady = self.acquireEchoRuntimeAudioOwner(
+                    .echoLocalPlayback,
+                    priority: .playback,
+                    reason: "dialogTTSStarted"
+                )
+            }
+            guard audioOwnerReady else {
                 self.viewModel.fail("音频正在切换，请稍后重试")
                 return
             }
@@ -8098,10 +8697,12 @@ extension EchoViewController: DialogEngineDelegate {
                 print("[TencentDigitalHuman] waiting for provider TextOver before finishing Echo reply")
                 return
             }
-            self.releaseEchoAudioOwnerLease(
-                expectedOwner: .echoLocalPlayback,
-                reason: "dialogTTSFinished"
-            )
+            if !self.isUserControlledLiveSessionOpen {
+                self.releaseEchoAudioOwnerLease(
+                    expectedOwner: .echoLocalPlayback,
+                    reason: "dialogTTSFinished"
+                )
+            }
             self.stopDigitalHumanAudioLevelMetering()
             guard self.markEchoReplyDelivered() else {
                 PrivacySafeDiagnostics.log(
@@ -8121,6 +8722,7 @@ extension EchoViewController: DialogEngineDelegate {
                 if DialogEngineManager.shared.isDialogActive {
                     if self.prepareEchoCaptureAudioSession(reason: "dialogTTSFinishedResume") {
                         self.viewModel.beginVoiceInteraction()
+                        self.armLiveUserInactivityTimeout(reason: "dialogTTSFinishedResume")
                     } else {
                         self.resetEchoViewModelToIdle()
                     }
@@ -8181,6 +8783,10 @@ extension EchoViewController: DialogEngineDelegate {
             } else {
                 self.resetDigitalHumanReplyDispatchState()
             }
+            if self.isUserControlledLiveSessionOpen {
+                self.isLiveVoiceTransportSuspended = true
+                self.armLiveUserInactivityTimeout(reason: "dialogErrorSuspended")
+            }
             self.viewModel.fail(self.sanitizedDialogEngineErrorMessage(error))
         }
     }
@@ -8221,6 +8827,7 @@ extension EchoViewController: DialogEngineDelegate {
             if self.isStoppingVoiceCaptureManually {
                 self.isStoppingVoiceCaptureManually = false
                 self.flushPendingAIReplyIfNeeded()
+                self.finishLiveMemoryCaptureIfNeeded()
                 ConversationMemoryManager.shared.endSession()
                 self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "dialogEndedAfterUserStop")
                 if !self.hasTencentDigitalHumanProviderSpeechInFlight {
@@ -8236,6 +8843,10 @@ extension EchoViewController: DialogEngineDelegate {
                 self.preserveTencentProviderSessionAfterLocalDialogStop(reason: "dialogEnded")
             } else {
                 self.resetDigitalHumanReplyDispatchState()
+            }
+            if self.isUserControlledLiveSessionOpen {
+                self.isLiveVoiceTransportSuspended = true
+                self.armLiveUserInactivityTimeout(reason: "dialogEndedUnexpectedly")
             }
             self.resetEchoViewModelToIdle()
         }
@@ -8256,7 +8867,8 @@ extension EchoViewController {
         }
         DialogEngineManager.shared.startDialog(
             sendsGreeting: false,
-            usesTurnScopedKnowledgeContext: true
+            usesTurnScopedKnowledgeContext: true,
+            lifetimePolicy: .userControlledLive
         )
     }
 

@@ -426,6 +426,7 @@ final class DigitalHumanConversationCoordinator {
         guard shouldResumeAfterProviderSpeech else {
             return false
         }
+        isPausingForProviderSpeech = false
         shouldResumeAfterProviderSpeech = false
         return true
     }

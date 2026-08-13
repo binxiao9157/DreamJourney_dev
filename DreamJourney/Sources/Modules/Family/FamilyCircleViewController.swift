@@ -1140,6 +1140,7 @@ final class FamilyContributionComposerViewController: UIViewController, PHPicker
 
     private let grant: FamilyContributionGrantContract
     private let accountLease: AccountLease
+    private let initialTopic: String?
     private var selectedImageData: Data?
     private var selectedImageFileName = "family-memory.jpg"
 
@@ -1212,9 +1213,16 @@ final class FamilyContributionComposerViewController: UIViewController, PHPicker
         return button
     }()
 
-    init(grant: FamilyContributionGrantContract, accountLease: AccountLease) {
+    init(
+        grant: FamilyContributionGrantContract,
+        accountLease: AccountLease,
+        initialTopic: String? = nil
+    ) {
         self.grant = grant
         self.accountLease = accountLease
+        self.initialTopic = initialTopic.map {
+            String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
+        }.flatMap { $0.isEmpty ? nil : $0 }
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -1235,8 +1243,17 @@ final class FamilyContributionComposerViewController: UIViewController, PHPicker
         recipientLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         recipientLabel.textColor = UIColor(red: 0.30, green: 0.24, blue: 0.18, alpha: 1)
 
-        let stack = UIStackView(arrangedSubviews: [
-            recipientLabel,
+        var arrangedSubviews: [UIView] = [recipientLabel]
+        if let initialTopic {
+            let topicLabel = UILabel()
+            topicLabel.text = "关于「\(initialTopic)」，如果你知道相关故事，可以写下来交给档案所有者确认。"
+            topicLabel.font = .systemFont(ofSize: 16)
+            topicLabel.textColor = UIColor(red: 0.20, green: 0.16, blue: 0.12, alpha: 1)
+            topicLabel.numberOfLines = 0
+            topicLabel.accessibilityIdentifier = "familyContributionMemoryGapPrompt"
+            arrangedSubviews.append(topicLabel)
+        }
+        arrangedSubviews.append(contentsOf: [
             materialControl,
             textView,
             chooseImageButton,
@@ -1244,6 +1261,7 @@ final class FamilyContributionComposerViewController: UIViewController, PHPicker
             statusLabel,
             submitButton,
         ])
+        let stack = UIStackView(arrangedSubviews: arrangedSubviews)
         stack.axis = .vertical
         stack.spacing = 14
         view.addSubview(stack)

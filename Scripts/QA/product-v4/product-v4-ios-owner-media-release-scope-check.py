@@ -40,25 +40,25 @@ def main() -> None:
 
     text_capture_policy = section(
         archive,
-        "private var isOwnerTruthTextCaptureClosedPilotEnabled: Bool",
-        "private var isOwnerTruthMediaCaptureClosedPilotEnabled: Bool",
+        "private var isOwnerTruthTextCaptureEnabled: Bool",
+        "private var isOwnerTruthMediaCaptureEnabled: Bool",
     )
     media_policy = section(
         archive,
-        "private var isOwnerTruthMediaCaptureClosedPilotEnabled: Bool",
+        "private var isOwnerTruthMediaCaptureEnabled: Bool",
         "private var archivePersonaName",
     )
     require(
         ".ownerTextCaptureV1" in text_capture_policy
         and ".ownerTruthCandidateReview" in text_capture_policy
-        and "isOwnerTruthTextCaptureClosedPilotEnabled" in media_policy
+        and "isOwnerTruthTextCaptureEnabled" in media_policy
         and ".ownerMediaCaptureV1" in media_policy,
-        "media creation must require the text, Candidate and media closed-pilot policies",
+        "media creation must require the text, Candidate and media production policies",
     )
     require(
         "shouldShowOwnerTruthMediaTaskStatus" in media_policy
-        and "isOwnerTruthMediaCaptureClosedPilotEnabled" in media_policy,
-        "ordinary release must not render live media task state without the closed-pilot policy",
+        and "isOwnerTruthMediaCaptureEnabled" in media_policy,
+        "ordinary release must not render live media task state without the production policy",
     )
 
     handoff = section(
@@ -67,9 +67,9 @@ def main() -> None:
         "func runUIQAOwnerTruthMediaTaskStatusSmoke",
     )
     require(
-        "isOwnerTruthCandidateReviewClosedPilotEnabled" in handoff
+        "isOwnerTruthCandidateReviewEnabled" in handoff
         and "OwnerTruthCandidateInboxViewController(" in handoff,
-        "media-to-Candidate handoff must remain server-policy closed-pilot gated",
+        "media-to-Candidate handoff must remain server-policy gated",
     )
 
     candidate_surface = section(
@@ -93,14 +93,14 @@ def main() -> None:
         "private func reloadFeatureCards",
     )
     require(
-        "isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)" in review_entry
+        "isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview)" in review_entry
         and "candidateReviewQAButton.isHidden = !isVisible" in review_entry,
-        "Candidate review entry must remain hidden outside QA or closed-pilot policy",
+        "Candidate review entry must remain hidden outside QA or production policy",
     )
     require(
-        "candidateConfirmationButton.isHidden = !isVisible" in review_entry
-        and "candidateMemoryActivationButton.isHidden = !isVisible" in review_entry,
-        "formal Candidate paths must stay hidden in the public default state",
+        "candidateConfirmationButton" not in review_entry
+        and "candidateMemoryActivationButton" not in review_entry,
+        "Archive must keep one unified pending-memory entry",
     )
 
     for required in (

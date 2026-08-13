@@ -29,12 +29,7 @@ let root = URL(fileURLWithPath: #filePath)
 let archive = try read("\(root)/DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift")
 
 for required in [
-    "private let candidateMemoryActivationButton",
-    "configureCandidateMemoryActivationButton()",
-    "updateCandidateMemoryActivationButton()",
-    "@objc private func ownerTruthCandidateMemoryActivationTapped()",
     "OwnerTruthInterviewCandidateMemoryActivationInboxViewController",
-    "owner-truth-memory-activation-inbox-entry",
     "owner-truth-memory-activation-inbox-list",
     "owner-truth-memory-activation-inbox-status",
     "owner-truth-memory-activation-inbox-item",
@@ -43,41 +38,48 @@ for required in [
     require(archive.contains(required), "formal activation inbox presentation missing: \(required)")
 }
 
-guard let entrySection = slice(
+guard let archiveEntrySection = slice(
     archive,
-    from: "private func updateCandidateMemoryActivationButton()",
+    from: "private func updateCandidateReviewQAButton()",
     to: "private func reloadFeatureCards"
 ) else {
     fatalError("owner-truth memory activation inbox presentation check failed: entry section is missing")
 }
 require(
-    entrySection.contains("isSelfAutobiographyMode") &&
-        entrySection.contains("FeatureGateService.shared.isRouteAllowed(") &&
-        entrySection.contains(".ownerTruthCandidateReview") &&
-        entrySection.contains("FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview)"),
-    "activation inbox entry must require self autobiography mode and the formal release route gate"
+    archiveEntrySection.contains("isSelfAutobiographyMode") &&
+        archiveEntrySection.contains("isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview)"),
+    "unified pending-memory entry must require self autobiography mode and the formal release route gate"
 )
 require(
-    entrySection.contains("candidateMemoryActivationButton.isHidden = !isVisible"),
-    "activation inbox entry must remain hidden by default when the release gate is not allowed"
+    !archive.contains("candidateMemoryActivationButton") &&
+        !archive.contains("ownerTruthCandidateMemoryActivationTapped"),
+    "Archive must not expose a second formal-memory activation entry"
 )
 require(
-    !entrySection.contains("qaSyntheticOverride") && !entrySection.contains("OwnerTruthCandidateReviewQAGate"),
-    "activation inbox entry must not use a QA bypass"
+    !archiveEntrySection.contains("qaSyntheticOverride"),
+    "unified pending-memory entry must not use a synthetic release bypass"
 )
 
-guard let tapSection = slice(
+guard let unifiedInboxSection = slice(
     archive,
-    from: "@objc private func ownerTruthCandidateMemoryActivationTapped()",
-    to: "@objc private func ownerTruthCandidateReviewQATapped()"
+    from: "final class OwnerTruthInterviewCandidateConfirmationInboxViewController",
+    to: "private final class OwnerTruthCandidateConfirmationInboxCell"
 ) else {
-    fatalError("owner-truth memory activation inbox presentation check failed: entry action is missing")
+    fatalError("owner-truth memory activation inbox presentation check failed: unified inbox is missing")
+}
+for required in [
+    "OwnerTruthInterviewCandidateMemoryActivationInboxUseCase",
+    "activationInboxUseCase.send(.refresh)",
+    "case activationRecovery",
+    "待完成写入",
+    "OwnerTruthInterviewCandidateMemoryActivationInboxViewController",
+] {
+    require(unifiedInboxSection.contains(required), "unified recovery presentation missing: \(required)")
 }
 require(
-    tapSection.contains(".ownerTruthCandidateReview") &&
-        tapSection.contains("OwnerTruthInterviewCandidateMemoryActivationInboxViewController") &&
-        !tapSection.contains("OwnerTruthCandidateReviewQAGate"),
-    "activation inbox route must revalidate the formal release gate without QA-only routing"
+    archive.contains("func configureRecovery()") &&
+        archive.contains("继续写入正式记忆"),
+    "unified recovery row must explain that formal-memory activation can be retried"
 )
 
 guard let inboxSection = slice(

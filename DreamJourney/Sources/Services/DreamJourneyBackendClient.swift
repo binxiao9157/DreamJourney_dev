@@ -616,6 +616,7 @@ final class FeatureGateService {
             }
         }
         if normalizedPath.hasPrefix("/digital-human/") { return .digitalHumanLivePanel }
+        if normalizedPath == "/voice/realtime-token" { return .echoTextInput }
         if normalizedPath.hasPrefix("/voice/") || normalizedPath == "/tts" { return .voiceCloneShell }
         if normalizedPath.hasPrefix("/family/") { return .familyManagement }
         if normalizedPath.hasPrefix("/care/") { return .careDashboard }
@@ -630,6 +631,14 @@ final class FeatureGateService {
             return .echoTextInput
         }
         let pathComponents = normalizedPath.split(separator: "/")
+        if method == .post,
+           pathComponents.count == 6,
+           pathComponents[0] == "v2",
+           pathComponents[1] == "vaults",
+           pathComponents[3] == "interview-sessions",
+           pathComponents[5] == "pause-for-topic-switch" {
+            return .echoTextInput
+        }
         if method == .get,
            pathComponents.count == 5,
            pathComponents[0] == "v2",
@@ -2659,13 +2668,51 @@ struct RealtimeVoiceRuntimeConfig {
     let missingCredentialProperties: [String]
     let fallbackMode: String?
     let contractVersion: Int
+    let proxyAddress: String?
+    let proxyURI: String?
+    let sessionToken: String?
+    let sessionHeader: String?
+    let sdkClientID: String?
+    let sdkClientKey: String?
+    let sdkResourceID: String?
+    let uid: String?
+    let expiresAt: Date?
+
+    private var hasSecureProxyEndpoint: Bool {
+        guard let proxyAddress,
+              let components = URLComponents(string: proxyAddress),
+              components.scheme?.lowercased() == "wss",
+              components.host?.isEmpty == false,
+              components.user == nil,
+              components.password == nil,
+              components.path.isEmpty,
+              components.query == nil,
+              components.fragment == nil,
+              let proxyURI,
+              proxyURI.hasPrefix("/"),
+              !proxyURI.contains("://") else {
+            return false
+        }
+        return true
+    }
 
     var isBlocked: Bool {
         status == "blocked"
             || credentialMode == "blockedStaticCredential"
             || !providerReady
-            || !mobileDirectAllowed
-            || accessPath != "scopedSessionCredential"
+            || mobileDirectAllowed
+            || accessPath != "backendRealtimeProxy"
+            || credentialMode != "oneTimeBackendProxyTicket"
+            || brokerStatus != "verified"
+            || contractVersion < 4
+            || !hasSecureProxyEndpoint
+            || sessionToken?.hasPrefix("djv_") != true
+            || sessionHeader != "X-DreamJourney-Voice-Session"
+            || sdkClientID?.isEmpty != false
+            || sdkClientKey?.isEmpty != false
+            || sdkResourceID?.isEmpty != false
+            || uid?.isEmpty != false
+            || expiresAt.map { $0 <= Date() } != false
     }
 
     init?(json: [String: Any]) {
@@ -2690,6 +2737,16 @@ struct RealtimeVoiceRuntimeConfig {
         let fallback = json["fallback"] as? [String: Any]
         self.fallbackMode = fallback?["mode"] as? String
         self.contractVersion = Self.intValue(json["contractVersion"]) ?? 1
+        let proxy = json["proxy"] as? [String: Any]
+        self.proxyAddress = proxy?["address"] as? String
+        self.proxyURI = proxy?["uri"] as? String
+        self.sessionToken = proxy?["sessionToken"] as? String
+        self.sessionHeader = proxy?["sessionHeader"] as? String
+        self.sdkClientID = proxy?["sdkClientID"] as? String
+        self.sdkClientKey = proxy?["sdkClientKey"] as? String
+        self.sdkResourceID = proxy?["sdkResourceID"] as? String
+        self.uid = proxy?["uid"] as? String
+        self.expiresAt = Self.iso8601Date(json["expiresAt"])
     }
 
     private static func intValue(_ value: Any?) -> Int? {
@@ -2697,6 +2754,15 @@ struct RealtimeVoiceRuntimeConfig {
         if let value = value as? NSNumber { return value.intValue }
         if let value = value as? String { return Int(value) }
         return nil
+    }
+
+    private static func iso8601Date(_ value: Any?) -> Date? {
+        guard let raw = value as? String else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: raw) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: raw)
     }
 }
 
@@ -3655,6 +3721,42 @@ struct EchoAnswerCitation: Equatable {
     }
 }
 
+enum EchoMemoryGroundingOutcome: String, Equatable {
+    case gap
+    case grounded
+    case notApplicable
+}
+
+enum EchoMemoryGroundingHandoff: String, Equatable {
+    case none
+    case ownerInterview
+    case familyContribution
+}
+
+struct EchoMemoryGrounding: Equatable {
+    static let schemaVersion = "echo-memory-grounding-v1"
+
+    let outcome: EchoMemoryGroundingOutcome
+    let handoff: EchoMemoryGroundingHandoff
+
+    init?(json: [String: Any]) {
+        guard json["schemaVersion"] as? String == Self.schemaVersion,
+              let outcomeValue = json["outcome"] as? String,
+              let outcome = EchoMemoryGroundingOutcome(rawValue: outcomeValue),
+              let handoffValue = json["handoff"] as? String,
+              let handoff = EchoMemoryGroundingHandoff(rawValue: handoffValue) else {
+            return nil
+        }
+        self.outcome = outcome
+        self.handoff = handoff
+    }
+
+    init(outcome: EchoMemoryGroundingOutcome, handoff: EchoMemoryGroundingHandoff) {
+        self.outcome = outcome
+        self.handoff = handoff
+    }
+}
+
 struct EchoAnswer: Equatable {
     static let schemaVersion = "echo-answer-v1"
 
@@ -3664,6 +3766,20 @@ struct EchoAnswer: Equatable {
     let contextTraceId: String
     let contextVersion: String
     let citations: [EchoAnswerCitation]
+    let memoryGrounding: EchoMemoryGrounding
+
+    var signalsMemoryGap: Bool {
+        if memoryGrounding.outcome == .gap {
+            return true
+        }
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.contains("没有在记忆库里面寻找到")
+            || normalized.contains("未在记忆库中找到")
+            || (
+                normalized.contains("还没有从")
+                    && normalized.contains("已确认的记忆中找到这个答案")
+            )
+    }
 
     init?(json: [String: Any]) {
         guard json["schemaVersion"] as? String == Self.schemaVersion,
@@ -3677,8 +3793,21 @@ struct EchoAnswer: Equatable {
         self.provider = provider
         self.contextTraceId = Self.nonEmptyString(json["contextTraceId"]) ?? ""
         self.contextVersion = Self.nonEmptyString(json["contextVersion"]) ?? ""
-        self.citations = (json["citations"] as? [[String: Any]] ?? [])
+        let citations = (json["citations"] as? [[String: Any]] ?? [])
             .compactMap(EchoAnswerCitation.init(json:))
+        self.citations = citations
+        if let object = json["memoryGrounding"] as? [String: Any],
+           let memoryGrounding = EchoMemoryGrounding(json: object) {
+            self.memoryGrounding = memoryGrounding
+        } else {
+            let hasMemoryCitation = citations.contains {
+                ["archive", "kbFact", "care"].contains($0.source)
+            }
+            self.memoryGrounding = EchoMemoryGrounding(
+                outcome: hasMemoryCitation ? .grounded : .notApplicable,
+                handoff: .none
+            )
+        }
     }
 
     private static func nonEmptyString(_ value: Any?) -> String? {
@@ -8611,26 +8740,40 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         command: OwnerTruthInterviewPauseForTopicSwitchCommand,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
     ) {
-        // Topic switches remain a default-off QA lifecycle contract. They
-        // must not inherit a released echoTextInput policy capture until the
-        // product flow has its own approval Gate.
-        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+        let transport = ownerTruthInterviewNaturalInputTransport()
+        switch transport {
+        case .unavailable(let reason):
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
                     feature: "ownerTruthInterviewTopicSwitch",
-                    reason: "qaOnlyDisabled"
+                    reason: reason
                 )))
             }
             return
+        case .qa, .releasePolicy:
+            break
         }
 
         let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions/\(pathComponent(command.sessionID.rawValue.uuidString))/pause-for-topic-switch"
+        let additionalHeaders: [String: String]
+        let featureDecision: FeatureDecision?
+        switch transport {
+        case .qa:
+            additionalHeaders = ["X-DreamJourney-QA-Owner-Truth": "1"]
+            featureDecision = nil
+        case .releasePolicy(let capturedDecision):
+            additionalHeaders = [:]
+            featureDecision = capturedDecision
+        case .unavailable:
+            return
+        }
         requestJSON(
             path: path,
             method: .post,
             payload: command.backendPayload,
             authPolicy: .userRequired,
-            additionalHeaders: ["X-DreamJourney-QA-Owner-Truth": "1"]
+            featureDecision: featureDecision,
+            additionalHeaders: additionalHeaders
         ) { result in
             switch result {
             case .success(let object):

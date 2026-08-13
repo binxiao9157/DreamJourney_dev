@@ -601,6 +601,61 @@ final class EchoTurnIntentReducerTests: XCTestCase {
 }
 
 final class EchoViewModelTurnAdmissionTests: XCTestCase {
+    func testUserControlledLiveDoesNotScheduleLegacyDelayedReplyAtTenTurns() throws {
+        let suiteName = "EchoViewModelTurnAdmissionTests.Live.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
+        runtime.publish(session: AccountSession(
+            subjectId: "owner-live",
+            vaultId: "vault-live",
+            sessionId: "session-live",
+            tokenFamilyId: "token-family-live",
+            sessionVersion: 1,
+            generation: 1,
+            generationId: UUID(uuidString: "00000000-0000-0000-0000-000000000010")!,
+            state: .active,
+            activatedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        ))
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-live"))
+        let viewModel = EchoViewModel(
+            archiveContextStatusProvider: { .empty },
+            accountLeaseRuntime: runtime,
+            delayedReplyStore: EchoDelayedReplyStore(
+                defaults: defaults,
+                accountLeaseRuntime: runtime
+            ),
+            delayedReplyCallsiteScopeStore: EchoDelayedReplyCallsiteScopeStore(
+                defaults: defaults,
+                accountLeaseRuntime: runtime
+            )
+        )
+
+        viewModel.prepareVoiceInteraction()
+        viewModel.beginVoiceInteraction()
+        for turn in 1...10 {
+            XCTAssertTrue(viewModel.finishUserVoice(
+                text: "第 \(turn) 轮继续讲这段日常故事",
+                accountLease: lease,
+                resourceOwnerId: lease.subjectId,
+                roleContextKey: "owner-live|self",
+                allowsDelayedReply: false
+            ))
+            if turn < 10 {
+                XCTAssertTrue(viewModel.receiveAIReply("我在听，请继续。"))
+                XCTAssertTrue(viewModel.markReplyDelivered(accountLease: lease))
+                viewModel.beginVoiceInteraction()
+            }
+        }
+
+        XCTAssertNil(viewModel.pendingDelayedReply)
+        guard case .thinking = viewModel.state else {
+            return XCTFail("a user-controlled Live session must remain active at turn ten")
+        }
+    }
+
     func testDuplicateFinalUserVoiceIsRejectedBeforeTranscriptSideEffects() throws {
         let suiteName = "EchoViewModelTurnAdmissionTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -3031,5 +3086,57 @@ private final class EchoDelayedReplyAnswerReadClientStub: EchoDelayedReplyAnswer
         completion(result ?? .failure(EchoDelayedReplyAnswerReadContractError.invalidResponse(
             "missing test result"
         )))
+    }
+}
+
+final class EchoAnswerMemoryGroundingTests: XCTestCase {
+    func testParsesMemoryGapHandoffFromNewBackendContract() throws {
+        let answer = try XCTUnwrap(EchoAnswer(json: [
+            "schemaVersion": EchoAnswer.schemaVersion,
+            "answerId": "answer-gap-1",
+            "text": "这段记忆我还不了解。那我们来聊一聊吧。",
+            "provider": "deepseek",
+            "citations": [],
+            "memoryGrounding": [
+                "schemaVersion": EchoMemoryGrounding.schemaVersion,
+                "outcome": "gap",
+                "handoff": "ownerInterview",
+            ],
+        ]))
+
+        XCTAssertTrue(answer.signalsMemoryGap)
+        XCTAssertEqual(answer.memoryGrounding.outcome, .gap)
+        XCTAssertEqual(answer.memoryGrounding.handoff, .ownerInterview)
+    }
+
+    func testLegacyMemoryGapStillSignalsWhenPersonaCitationExists() throws {
+        let answer = try XCTUnwrap(EchoAnswer(json: [
+            "schemaVersion": EchoAnswer.schemaVersion,
+            "answerId": "answer-gap-legacy",
+            "text": "我还没有从你已确认的记忆中找到这个答案。",
+            "provider": "deepseek",
+            "citations": [[
+                "source": "persona",
+                "refId": "persona:personal:owner-1",
+                "kind": "sunlight",
+            ]],
+        ]))
+
+        XCTAssertTrue(answer.signalsMemoryGap)
+        XCTAssertEqual(answer.memoryGrounding.outcome, .notApplicable)
+        XCTAssertEqual(answer.memoryGrounding.handoff, .none)
+    }
+
+    func testGeneralLegacyAnswerWithoutMemoryDoesNotSignalGap() throws {
+        let answer = try XCTUnwrap(EchoAnswer(json: [
+            "schemaVersion": EchoAnswer.schemaVersion,
+            "answerId": "answer-general-legacy",
+            "text": "北京是中国的首都。",
+            "provider": "deepseek",
+            "citations": [],
+        ]))
+
+        XCTAssertFalse(answer.signalsMemoryGap)
+        XCTAssertEqual(answer.memoryGrounding.outcome, .notApplicable)
     }
 }

@@ -88,19 +88,37 @@ def main() -> None:
     # decision, so a read-only fallback cannot expose a new private write.
     for snippet in (
         'accessibilityIdentifier = "ownerTruthInterviewNaturalInputProductEntryButton"',
-        'configuration.title = "今天想聊点什么？"',
+        'configuration.title = "文字回响"',
         "button.isHidden = true",
         "FeatureGateService.shared.refreshPolicy",
-        "FeatureGateService.shared.captureRoute(",
-        "FeatureGateService.shared.requestDecision(for: .echoTextInput)",
+        "FeatureGateService.shared.captureServerPolicyManagedRoute(",
+        ".requestServerPolicyManagedDecision(for: .echoTextInput)",
         "surfaceDecision.allowed",
         "writeDecision.allowed",
-        "presentOwnerTruthInterviewNaturalInputSheet(presentation: .product)",
+        "ownerTruthInterviewNaturalInputProductEntryTapped",
+        "presentOwnerTruthInterviewNaturalInputSheet(",
+        'configuration?.title = "继续聊聊"',
+        "memoryGapHandoff(",
+        "presentFamilyContributionForMemoryGap",
         "isOwnerTruthInterviewNaturalInputProductEntryVisible",
         "isOwnerTruthInterviewNaturalInputProductPolicyPermitted = false",
         "refreshOwnerTruthInterviewNaturalInputProductEntryPolicy()",
+        "turnSegments(normalized).forEach",
+        "OwnerTruthInterviewNaturalInputAppendCommand.maximumCharacterCount",
+        "lastAssistantOwnerTurnCount != ownerTurnCount",
+        "captureLiveAssistantTurn(aiText)",
     ):
         require(snippet in echo, f"policy-controlled product entry missing: {snippet}")
+    manual_stop_body = body(echo, "if self.isStoppingVoiceCaptureManually")
+    require(
+        manual_stop_body.find("flushPendingAIReplyIfNeeded()")
+        < manual_stop_body.find("finishLiveMemoryCaptureIfNeeded()"),
+        "manual Live stop must flush the final assistant context before organization",
+    )
+    require(
+        "String(normalized.prefix(20_000))" not in echo,
+        "Live transcript turns must be segmented without silently truncating text",
+    )
 
     for snippet in (
         "enum OwnerTruthInterviewNaturalInputPresentation",
@@ -151,8 +169,9 @@ def main() -> None:
 
     for snippet in (
         "这段分享已经留好。想起来时，可以继续补充。",
-        "有内容等待你确认",
-        "确认后才会进入你的记忆。",
+        "这段分享等待整理",
+        "整理完成，等待你确认",
+        "后续整理结果仍会等待你确认是否保存为记忆。",
         "canContinue",
     ):
         require(snippet in natural_input_surface, f"value-minimized product summary missing: {snippet}")
@@ -176,7 +195,8 @@ def main() -> None:
 
     require(
         "runOwnerTruthInterviewNaturalInputEchoSurfaceSmoke" in delegate
-        and "writeOwnerTruthInterviewNaturalInputEchoSurfaceSmokeResult" in delegate,
+        and "owner-truth-interview-natural-input-echo-surface-smoke-result.json" in delegate
+        and "QAScenarioResultWriter.writeAndLog" in delegate,
         "AppDelegate must dispatch and persist the Echo surface smoke",
     )
     for argument in (

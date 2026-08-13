@@ -842,8 +842,6 @@ final class MemoryArchiveViewController: UIViewController {
     private let remoteSyncCaptionLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
     private let analysisPrivacyDisclaimerLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
     private let timeLetterReminderButton = UIButton(type: .system)
-    private let candidateConfirmationButton = UIButton(type: .system)
-    private let candidateMemoryActivationButton = UIButton(type: .system)
     private let candidateReviewQAButton = UIButton(type: .system)
     private var isRefreshingFromBackend = false
     private var isRefreshingTimeLetterMailbox = false
@@ -1090,8 +1088,6 @@ final class MemoryArchiveViewController: UIViewController {
         configureAnalysisPrivacyDisclaimerLabel()
         configureRemoteSyncCaptionLabel()
         configureTimeLetterReminderButton()
-        configureCandidateConfirmationButton()
-        configureCandidateMemoryActivationButton()
         configureCandidateReviewQAButton()
         configureArchiveFilterButton()
         let bookEntry = makeBookEntryCard()
@@ -1102,8 +1098,6 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.addArrangedSubview(analysisPrivacyDisclaimerLabel)
         mainStack.addArrangedSubview(remoteSyncCaptionLabel)
         mainStack.addArrangedSubview(timeLetterReminderButton)
-        mainStack.addArrangedSubview(candidateConfirmationButton)
-        mainStack.addArrangedSubview(candidateMemoryActivationButton)
         mainStack.addArrangedSubview(candidateReviewQAButton)
         mainStack.addArrangedSubview(bookEntry)
         mainStack.addArrangedSubview(materialsHeader)
@@ -1116,8 +1110,6 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.setCustomSpacing(ArchiveLayout.afterFeatureGridSpacing, after: analysisPrivacyDisclaimerLabel)
         mainStack.setCustomSpacing(8, after: remoteSyncCaptionLabel)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: timeLetterReminderButton)
-        mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: candidateConfirmationButton)
-        mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: candidateMemoryActivationButton)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: candidateReviewQAButton)
         mainStack.setCustomSpacing(22, after: bookEntry)
         mainStack.setCustomSpacing(10, after: materialsHeader)
@@ -1161,8 +1153,6 @@ final class MemoryArchiveViewController: UIViewController {
         updateAutobiographyPageCopy()
         reloadFeatureCards(summary: summary)
         updateTimeLetterReminderButton()
-        updateCandidateConfirmationButton()
-        updateCandidateMemoryActivationButton()
         updateCandidateReviewQAButton()
         updateArchiveFilterButton()
         refreshOwnerTruthMediaTaskStatus()
@@ -1812,40 +1802,6 @@ final class MemoryArchiveViewController: UIViewController {
         )
     }
 
-    private func configureCandidateConfirmationButton() {
-        candidateConfirmationButton.titleLabel?.font = DJDesignTokens.Font.label(12)
-        candidateConfirmationButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
-        candidateConfirmationButton.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.72)
-        candidateConfirmationButton.layer.cornerRadius = 14
-        candidateConfirmationButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
-        candidateConfirmationButton.contentHorizontalAlignment = .leading
-        candidateConfirmationButton.accessibilityIdentifier = "archive-owner-truth-candidate-confirmation"
-        candidateConfirmationButton.accessibilityLabel = "待确认记忆"
-        candidateConfirmationButton.isHidden = true
-        candidateConfirmationButton.addTarget(
-            self,
-            action: #selector(ownerTruthCandidateConfirmationTapped),
-            for: .touchUpInside
-        )
-    }
-
-    private func configureCandidateMemoryActivationButton() {
-        candidateMemoryActivationButton.titleLabel?.font = DJDesignTokens.Font.label(12)
-        candidateMemoryActivationButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
-        candidateMemoryActivationButton.backgroundColor = DJDesignTokens.Color.surfaceContainer.withAlphaComponent(0.72)
-        candidateMemoryActivationButton.layer.cornerRadius = 14
-        candidateMemoryActivationButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
-        candidateMemoryActivationButton.contentHorizontalAlignment = .leading
-        candidateMemoryActivationButton.accessibilityIdentifier = "owner-truth-memory-activation-inbox-entry"
-        candidateMemoryActivationButton.accessibilityLabel = "待纳入正式记忆"
-        candidateMemoryActivationButton.isHidden = true
-        candidateMemoryActivationButton.addTarget(
-            self,
-            action: #selector(ownerTruthCandidateMemoryActivationTapped),
-            for: .touchUpInside
-        )
-    }
-
     private func configureArchiveFilterButton() {
         archiveFilterButton.titleLabel?.font = DJDesignTokens.Font.label(12)
         archiveFilterButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
@@ -1931,24 +1887,6 @@ final class MemoryArchiveViewController: UIViewController {
         candidateReviewQAButton.accessibilityLabel = isVisible ? title : nil
         candidateReviewQAButton.isHidden = !isVisible
         candidateReviewQAButton.isUserInteractionEnabled = isVisible
-    }
-
-    private func updateCandidateConfirmationButton() {
-        let isVisible = isSelfAutobiographyMode && FeatureGateService.shared
-            .isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview)
-        candidateConfirmationButton.setTitle(isVisible ? "待确认记忆" : nil, for: .normal)
-        candidateConfirmationButton.accessibilityLabel = isVisible ? "待确认记忆" : nil
-        candidateConfirmationButton.isHidden = !isVisible
-        candidateConfirmationButton.isUserInteractionEnabled = isVisible
-    }
-
-    private func updateCandidateMemoryActivationButton() {
-        let isVisible = isSelfAutobiographyMode && FeatureGateService.shared
-            .isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview)
-        candidateMemoryActivationButton.setTitle(isVisible ? "待纳入正式记忆" : nil, for: .normal)
-        candidateMemoryActivationButton.accessibilityLabel = isVisible ? "待纳入正式记忆" : nil
-        candidateMemoryActivationButton.isHidden = !isVisible
-        candidateMemoryActivationButton.isUserInteractionEnabled = isVisible
     }
 
     private func reloadFeatureCards(summary: (total: Int, photos: Int, audio: Int, text: Int)) {
@@ -3597,34 +3535,6 @@ final class MemoryArchiveViewController: UIViewController {
             snapshot,
             accountLease: accountLease,
             snapshotProvider: snapshotProvider
-        )
-    }
-
-    @objc private func ownerTruthCandidateConfirmationTapped() {
-        guard isSelfAutobiographyMode,
-              FeatureGateService.shared
-                .isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview),
-              let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
-            return
-        }
-        navigationController?.pushViewController(
-            OwnerTruthInterviewCandidateConfirmationInboxViewController(accountLease: accountLease),
-            animated: true
-        )
-    }
-
-    @objc private func ownerTruthCandidateMemoryActivationTapped() {
-        guard isSelfAutobiographyMode,
-              FeatureGateService.shared
-                .isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview),
-              let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
-            return
-        }
-        navigationController?.pushViewController(
-            OwnerTruthInterviewCandidateMemoryActivationInboxViewController(
-                accountLease: accountLease
-            ),
-            animated: true
         )
     }
 
@@ -5324,9 +5234,22 @@ private final class OwnerTruthCandidateMemoryActivationInboxCell: UITableViewCel
 }
 
 final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewController {
+    private enum Section: Int, CaseIterable {
+        case pendingConfirmation
+        case activationRecovery
+
+        var title: String {
+            switch self {
+            case .pendingConfirmation: return "待确认"
+            case .activationRecovery: return "待完成写入"
+            }
+        }
+    }
+
     private let accountLease: AccountLease
     private let focusedReviewBatchID: OwnerTruthRecordID?
     private let useCase: OwnerTruthInterviewCandidateConfirmationInboxUseCase
+    private let activationInboxUseCase: OwnerTruthInterviewCandidateMemoryActivationInboxUseCase
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
     private let statusLabel = UILabel()
     private let emptyStateLabel = UILabel()
@@ -5337,7 +5260,9 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
     )
 
     private var renderedState = OwnerTruthInterviewCandidateConfirmationInboxViewState.idle
+    private var renderedActivationState = OwnerTruthInterviewCandidateMemoryActivationInboxViewState.idle
     private var visibleItems: [OwnerTruthInterviewCandidateConfirmationInboxItem] = []
+    private var recoveryItems: [OwnerTruthInterviewCandidateMemoryActivationInboxItem] = []
 
     /// Simulator-only observation for the focused handoff smoke. It exposes
     /// opaque review-batch handles only, never Candidate content or decisions.
@@ -5350,6 +5275,7 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
         accountLease: AccountLease,
         focusedReviewBatchID: OwnerTruthRecordID? = nil,
         client: OwnerTruthInterviewCandidateConfirmationInboxClient = DreamJourneyBackendClient.shared,
+        activationInboxClient: OwnerTruthInterviewCandidateMemoryActivationInboxClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = {
             FeatureGateService.shared
@@ -5363,6 +5289,12 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
             accountLease: accountLease,
             focusedReviewBatchID: focusedReviewBatchID,
             client: client,
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyAvailable: releasePolicyAvailable
+        )
+        activationInboxUseCase = OwnerTruthInterviewCandidateMemoryActivationInboxUseCase(
+            accountLease: accountLease,
+            client: activationInboxClient,
             accountLeaseRuntime: accountLeaseRuntime,
             releasePolicyAvailable: releasePolicyAvailable
         )
@@ -5382,8 +5314,11 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
         configureHeader()
         configureTableView()
         configureUseCase()
+        configureActivationInboxUseCase()
         render(useCase.viewState)
+        renderActivationInbox(activationInboxUseCase.viewState)
         useCase.send(.refresh)
+        activationInboxUseCase.send(.refresh)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -5396,7 +5331,7 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
         statusLabel.font = DJDesignTokens.Font.body(14)
         statusLabel.textColor = DJDesignTokens.Color.textSecondary
         statusLabel.numberOfLines = 0
-        statusLabel.text = "确认后只记录审核结果，暂不会写入正式记忆。"
+        statusLabel.text = "确认后会直接写入正式记忆；不想保留的内容可以丢弃。"
         statusLabel.accessibilityIdentifier = "owner-truth-candidate-confirmation-inbox-status"
         view.addSubview(statusLabel)
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -5445,14 +5380,53 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
         }
     }
 
+    private func configureActivationInboxUseCase() {
+        activationInboxUseCase.onViewStateChange = { [weak self] state in
+            guard let self else { return }
+            if Thread.isMainThread {
+                renderActivationInbox(state)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.renderActivationInbox(state)
+                }
+            }
+        }
+    }
+
     private func render(_ state: OwnerTruthInterviewCandidateConfirmationInboxViewState) {
         renderedState = state
         visibleItems = visibleItems(for: state)
-        refreshButton.isEnabled = state.phase != .loading
-            && (state.phase != .unavailable || state.notice == .contextChanged)
-        statusLabel.text = statusText(for: state)
-        emptyStateLabel.text = emptyText(for: state)
-        emptyStateLabel.isHidden = emptyStateLabel.text == nil
+        updateCombinedPresentation()
+    }
+
+    private func renderActivationInbox(
+        _ state: OwnerTruthInterviewCandidateMemoryActivationInboxViewState
+    ) {
+        renderedActivationState = state
+        let items = state.inbox?.items ?? []
+        recoveryItems = focusedReviewBatchID.map { focusedID in
+            items.filter { $0.reviewBatchID == focusedID }
+        } ?? items
+        updateCombinedPresentation()
+    }
+
+    private func updateCombinedPresentation() {
+        let confirmationRefreshAllowed = renderedState.phase != .loading
+            && (renderedState.phase != .unavailable || renderedState.notice == .contextChanged)
+        refreshButton.isEnabled = confirmationRefreshAllowed
+            && renderedActivationState.phase != .loading
+        if !recoveryItems.isEmpty {
+            statusLabel.text = visibleItems.isEmpty
+                ? "有已确认的记忆尚未完成写入，点选后即可重试。"
+                : "确认后会直接写入正式记忆；另有 \(recoveryItems.count) 条可恢复的写入任务。"
+        } else {
+            statusLabel.text = statusText(for: renderedState)
+        }
+        let emptyText = visibleItems.isEmpty && recoveryItems.isEmpty
+            ? emptyText(for: renderedState)
+            : nil
+        emptyStateLabel.text = emptyText
+        emptyStateLabel.isHidden = emptyText == nil
         tableView.reloadData()
     }
 
@@ -5477,7 +5451,7 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
             return "正在读取待确认记忆。"
         case .ready:
             return focusedReviewBatchID == nil || !visibleItems.isEmpty
-                ? "确认后只记录审核结果，暂不会写入正式记忆。"
+                ? "确认后会直接写入正式记忆；不想保留的内容可以丢弃。"
                 : "本次整理尚未准备好待确认内容。"
         case .empty:
             return "当前没有需要你确认的记忆。"
@@ -5522,12 +5496,35 @@ final class OwnerTruthInterviewCandidateConfirmationInboxViewController: UIViewC
 
     @objc private func refreshTapped() {
         useCase.send(.refresh)
+        activationInboxUseCase.send(.refresh)
+    }
+
+    private var visibleSections: [Section] {
+        Section.allCases.filter { section in
+            switch section {
+            case .pendingConfirmation: return !visibleItems.isEmpty
+            case .activationRecovery: return !recoveryItems.isEmpty
+            }
+        }
     }
 }
 
 extension OwnerTruthInterviewCandidateConfirmationInboxViewController: UITableViewDataSource, UITableViewDelegate {
+    func numberOfSections(in tableView: UITableView) -> Int {
+        visibleSections.count
+    }
+
+    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        guard visibleSections.indices.contains(section) else { return nil }
+        return visibleSections[section].title
+    }
+
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        visibleItems.count
+        guard visibleSections.indices.contains(section) else { return 0 }
+        switch visibleSections[section] {
+        case .pendingConfirmation: return visibleItems.count
+        case .activationRecovery: return recoveryItems.count
+        }
     }
 
     func tableView(
@@ -5538,27 +5535,45 @@ extension OwnerTruthInterviewCandidateConfirmationInboxViewController: UITableVi
             withIdentifier: OwnerTruthCandidateConfirmationInboxCell.reuseIdentifier,
             for: indexPath
         ) as! OwnerTruthCandidateConfirmationInboxCell
-        if visibleItems.indices.contains(indexPath.row) {
-            let item = visibleItems[indexPath.row]
-            cell.configure(item)
+        if visibleSections.indices.contains(indexPath.section) {
+            switch visibleSections[indexPath.section] {
+            case .pendingConfirmation where visibleItems.indices.contains(indexPath.row):
+                cell.configure(visibleItems[indexPath.row])
+            case .activationRecovery where recoveryItems.indices.contains(indexPath.row):
+                cell.configureRecovery()
+            default:
+                break
+            }
         }
         return cell
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        guard let inbox = renderedState.inbox,
-              inbox.isBound(to: accountLease),
-              visibleItems.indices.contains(indexPath.row) else {
-            return
-        }
+        guard visibleSections.indices.contains(indexPath.section) else { return }
         tableView.deselectRow(at: indexPath, animated: true)
-        navigationController?.pushViewController(
-            OwnerTruthInterviewCandidateConfirmationViewController(
-                accountLease: accountLease,
-                reviewBatchID: visibleItems[indexPath.row].reviewBatchID
-            ),
-            animated: true
-        )
+        switch visibleSections[indexPath.section] {
+        case .pendingConfirmation:
+            guard let inbox = renderedState.inbox,
+                  inbox.isBound(to: accountLease),
+                  visibleItems.indices.contains(indexPath.row) else { return }
+            navigationController?.pushViewController(
+                OwnerTruthInterviewCandidateConfirmationViewController(
+                    accountLease: accountLease,
+                    reviewBatchID: visibleItems[indexPath.row].reviewBatchID
+                ),
+                animated: true
+            )
+        case .activationRecovery:
+            guard let inbox = renderedActivationState.inbox,
+                  inbox.isBound(to: accountLease),
+                  recoveryItems.indices.contains(indexPath.row) else { return }
+            navigationController?.pushViewController(
+                OwnerTruthInterviewCandidateMemoryActivationInboxViewController(
+                    accountLease: accountLease
+                ),
+                animated: true
+            )
+        }
     }
 }
 
@@ -5607,6 +5622,12 @@ private final class OwnerTruthCandidateConfirmationInboxCell: UITableViewCell {
         detailLabel.text = "普通线索 \(item.batchCandidateCount) 条 · 逐条确认 \(item.singleCandidateCount) 条 · \(readiness)"
         accessibilityLabel = "\(titleLabel.text ?? "")，\(detailLabel.text ?? "")"
     }
+
+    func configureRecovery() {
+        titleLabel.text = "继续写入正式记忆"
+        detailLabel.text = "这条记忆已确认，上次写入未完成"
+        accessibilityLabel = "继续写入正式记忆，这条记忆已确认，上次写入未完成"
+    }
 }
 
 final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewController {
@@ -5627,6 +5648,7 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
     private let batchActionClient: OwnerTruthInterviewCandidateConfirmationActionClient
     private let singleActionClient: OwnerTruthInterviewCandidateConfirmationSingleActionClient
     private let confirmationClient: OwnerTruthInterviewCandidateConfirmationClient
+    private let activationClient: OwnerTruthInterviewCandidateMemoryActivationClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let releasePolicyAvailable: () -> Bool
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
@@ -5647,6 +5669,11 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
     private var isCandidateActionInFlight = false
     private var actionConfigurationGeneration: UInt = 0
     private var candidateActionReloadStatusText: String?
+    private var pendingActivationCandidateIDs: [OwnerTruthRecordID] = []
+    private var activationConfirmation: OwnerTruthInterviewCandidateConfirmation?
+    private var activationEligibility: OwnerTruthInterviewCandidateMemoryActivationEligibility?
+    private var activeActivationUseCase: OwnerTruthInterviewCandidateMemoryActivationUseCase?
+    private var formalActivationDidFail = false
 
     init(
         accountLease: AccountLease,
@@ -5654,6 +5681,7 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         confirmationClient: OwnerTruthInterviewCandidateConfirmationClient = DreamJourneyBackendClient.shared,
         batchActionClient: OwnerTruthInterviewCandidateConfirmationActionClient = DreamJourneyBackendClient.shared,
         singleActionClient: OwnerTruthInterviewCandidateConfirmationSingleActionClient = DreamJourneyBackendClient.shared,
+        activationClient: OwnerTruthInterviewCandidateMemoryActivationClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = {
             FeatureGateService.shared
@@ -5665,6 +5693,7 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         self.confirmationClient = confirmationClient
         self.batchActionClient = batchActionClient
         self.singleActionClient = singleActionClient
+        self.activationClient = activationClient
         self.accountLeaseRuntime = accountLeaseRuntime
         self.releasePolicyAvailable = releasePolicyAvailable
         readUseCase = OwnerTruthInterviewCandidateConfirmationUseCase(
@@ -5684,7 +5713,7 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "确认记忆线索"
+        title = "待确认记忆"
         view.backgroundColor = DJDesignTokens.Color.background
         navigationItem.rightBarButtonItem = refreshButton
         configureViews()
@@ -5828,8 +5857,15 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
                 tableView.isUserInteractionEnabled = false
                 statusLabel.text = "正在确认所选普通线索。"
             case .confirmed:
-                self.refreshAfterCandidateAction(
-                    statusText: "已记录确认结果，正在刷新待确认线索。"
+                guard let confirmation = self.renderedState.confirmation,
+                      let result = state.latestResult else {
+                    self.refreshAfterCandidateAction(statusText: "确认结果异常，请重新载入。")
+                    return
+                }
+                self.beginFormalMemoryActivation(
+                    confirmation: confirmation,
+                    eligibility: .batchConfirmation(result),
+                    candidateIDs: result.acceptedCandidateIDs
                 )
             case .unavailable:
                 self.refreshAfterCandidateAction(
@@ -5868,9 +5904,23 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
                 confirmSelectionButton.isEnabled = false
                 statusLabel.text = "正在记录逐条确认结果。"
             case .confirmed:
-                self.refreshAfterCandidateAction(
-                    statusText: singleActionText(for: state.notice)
-                )
+                guard let confirmation = self.renderedState.confirmation,
+                      let result = state.latestResult else {
+                    self.refreshAfterCandidateAction(statusText: "确认结果异常，请重新载入。")
+                    return
+                }
+                switch result.decision {
+                case .accepted, .corrected:
+                    self.beginFormalMemoryActivation(
+                        confirmation: confirmation,
+                        eligibility: .singleConfirmation(result),
+                        candidateIDs: [result.candidateID]
+                    )
+                case .rejected:
+                    self.refreshAfterCandidateAction(statusText: "已丢弃这条记忆。")
+                case .pending, .invalidated:
+                    self.refreshAfterCandidateAction(statusText: "确认结果异常，请重新载入。")
+                }
             case .unavailable:
                 self.refreshAfterCandidateAction(
                     statusText: singleActionText(for: state.notice)
@@ -5909,6 +5959,85 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         readUseCase.send(.refresh)
     }
 
+    private func beginFormalMemoryActivation(
+        confirmation: OwnerTruthInterviewCandidateConfirmation,
+        eligibility: OwnerTruthInterviewCandidateMemoryActivationEligibility,
+        candidateIDs: [OwnerTruthRecordID]
+    ) {
+        let eligibleIDs = eligibility.eligibleCandidateIDs
+        let orderedIDs = candidateIDs.filter { eligibleIDs.contains($0) }
+        guard !orderedIDs.isEmpty else {
+            refreshAfterCandidateAction(statusText: "没有可写入的记忆，请重新载入。")
+            return
+        }
+        pendingActivationCandidateIDs = orderedIDs
+        activationConfirmation = confirmation
+        activationEligibility = eligibility
+        formalActivationDidFail = false
+        isCandidateActionInFlight = true
+        activateNextConfirmedCandidate()
+    }
+
+    private func activateNextConfirmedCandidate() {
+        guard !pendingActivationCandidateIDs.isEmpty else {
+            let status = formalActivationDidFail
+                ? "确认已保存，部分记忆写入失败；可从待确认记忆重试。"
+                : "已写入正式记忆。"
+            clearFormalActivationState()
+            refreshAfterCandidateAction(statusText: status)
+            return
+        }
+        guard let confirmation = activationConfirmation,
+              let eligibility = activationEligibility else {
+            formalActivationDidFail = true
+            pendingActivationCandidateIDs.removeAll()
+            activateNextConfirmedCandidate()
+            return
+        }
+
+        let candidateID = pendingActivationCandidateIDs[0]
+        let useCase = OwnerTruthInterviewCandidateMemoryActivationUseCase(
+            accountLease: accountLease,
+            confirmation: confirmation,
+            eligibility: eligibility,
+            candidateID: candidateID,
+            client: activationClient,
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyAvailable: releasePolicyAvailable
+        )
+        activeActivationUseCase = useCase
+        useCase.onViewStateChange = { [weak self, weak useCase] state in
+            DispatchQueue.main.async { [weak self, weak useCase] in
+                guard let self, self.activeActivationUseCase === useCase else { return }
+                switch state.phase {
+                case .activating:
+                    self.statusLabel.text = "正在写入正式记忆。"
+                case .activated:
+                    self.pendingActivationCandidateIDs.removeFirst()
+                    self.activeActivationUseCase = nil
+                    self.activateNextConfirmedCandidate()
+                case .failed, .unavailable:
+                    self.formalActivationDidFail = true
+                    self.pendingActivationCandidateIDs.removeFirst()
+                    self.activeActivationUseCase = nil
+                    self.activateNextConfirmedCandidate()
+                case .idle:
+                    break
+                }
+            }
+        }
+        useCase.send(.activate)
+    }
+
+    private func clearFormalActivationState() {
+        activeActivationUseCase?.onViewStateChange = nil
+        activeActivationUseCase = nil
+        pendingActivationCandidateIDs.removeAll()
+        activationConfirmation = nil
+        activationEligibility = nil
+        formalActivationDidFail = false
+    }
+
     private func invalidateActionConfiguration() {
         actionConfigurationGeneration &+= 1
         isCandidateActionInFlight = false
@@ -5916,6 +6045,7 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         singleActionUseCase?.onViewStateChange = nil
         batchActionUseCase = nil
         singleActionUseCase = nil
+        clearFormalActivationState()
     }
 
     private func requiresCandidateConfirmationReload(
@@ -5973,7 +6103,7 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         case .loading:
             return "正在读取确认线索。"
         case .ready:
-            return "确认只会记录审核结果，正式记忆仍需后续明确激活。"
+            return "确认后会直接写入正式记忆；不想保留的内容可以丢弃。"
         case .empty:
             return "这一组线索已经没有待确认内容。"
         case .failed:
@@ -6015,7 +6145,7 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         confirmSelectionButton.isHidden = false
         let selectedCount = selectedBatchCandidateIDs.count
         confirmSelectionButton.setTitle(
-            selectedCount == 0 ? "选择普通线索后确认" : "确认所选普通线索（\(selectedCount)）",
+            selectedCount == 0 ? "选择要写入的记忆" : "写入所选正式记忆（\(selectedCount)）",
             for: .normal
         )
         confirmSelectionButton.isEnabled = selectedCount > 0 && !isSubmitting
@@ -6062,12 +6192,12 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         }
         guard !candidateIDs.isEmpty else { return }
         let alert = UIAlertController(
-            title: "确认普通线索",
-            message: "确认后将生成审核回执，不会直接写入正式记忆。",
+            title: "写入正式记忆",
+            message: "所选内容将经过确认并直接写入正式记忆。",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-        alert.addAction(UIAlertAction(title: "确认", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "确认写入", style: .default) { [weak self] _ in
             self?.submitBatchConfirmation(candidateIDs: candidateIDs)
         })
         present(alert, animated: true)
@@ -6104,18 +6234,18 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
         sourceView: UIView
     ) {
         let alert = UIAlertController(
-            title: "逐条确认线索",
-            message: "敏感线索需要你单独确认、更正或拒绝；操作不会直接写入正式记忆。",
+            title: "确认这条记忆",
+            message: "你可以直接写入、更正后写入，或丢弃这条内容。",
             preferredStyle: .actionSheet
         )
-        alert.addAction(UIAlertAction(title: "确认", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "写入正式记忆", style: .default) { [weak self] _ in
             self?.submitSingleConfirmation(.accept(candidateID: item.id))
         })
-        alert.addAction(UIAlertAction(title: "更正后确认", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "更正后写入", style: .default) { [weak self] _ in
             guard let self, self.isCandidateInteractionAllowed else { return }
             self.presentCorrectionAlert(for: item)
         })
-        alert.addAction(UIAlertAction(title: "拒绝", style: .destructive) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "丢弃", style: .destructive) { [weak self] _ in
             self?.submitSingleConfirmation(.reject(candidateID: item.id))
         })
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
@@ -6129,7 +6259,7 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
     private func presentCorrectionAlert(for item: OwnerTruthInterviewCandidateReviewItem) {
         let alert = UIAlertController(
             title: "更正线索",
-            message: "更正只会保存为本次审核结果。",
+            message: "更正后的内容会在确认后写入正式记忆。",
             preferredStyle: .alert
         )
         alert.addTextField { textField in
@@ -6183,7 +6313,7 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
     }
 
     static func proposalPreview(for item: OwnerTruthInterviewCandidateReviewItem) -> String {
-        for key in ["summary", "title", "text"] {
+        for key in ["summary", "claim", "label", "title", "text"] {
             guard case .string(let rawValue)? = item.candidate.content[key] else { continue }
             let normalized = rawValue
                 .replacingOccurrences(of: "\n", with: " ")
@@ -12264,6 +12394,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let useCase: OwnerTruthInterviewNaturalInputUseCase
     private let guidedRecommendationUseCase: OwnerTruthGuidedRecommendationPresentationUseCase?
     private let presentation: OwnerTruthInterviewNaturalInputPresentation
+    private let initialTopic: String?
     private let accountLease: AccountLease
     private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let lifeMapClient: OwnerTruthLifeMapPresentationClient
@@ -12283,6 +12414,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let stackView = UIStackView()
     private let subtitleLabel = UILabel()
+    private let memoryGapPromptLabel = UILabel()
     private let guidedRecommendationStack = UIStackView()
     private let guidedRecommendationTitleLabel = UILabel()
     private let guidedRecommendationPromptStack = UIStackView()
@@ -12325,6 +12457,8 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
     private var candidateProposalStatusUseCase: OwnerTruthInterviewCandidateProposalStatusUseCase?
     private var candidateProposalStatusReviewBatchID: OwnerTruthRecordID?
     private var candidateProposalStatusState: OwnerTruthInterviewCandidateProposalStatusViewState = .idle
+    private var memoryGapBaselineCaptured = false
+    private var memoryGapBaselineMessageSequence = 0
     var onViewStateRendered: ((OwnerTruthInterviewNaturalInputViewState) -> Void)?
 
     var isTranscriptClearForQA: Bool {
@@ -12466,6 +12600,7 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         client: OwnerTruthInterviewNaturalInputClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         presentation: OwnerTruthInterviewNaturalInputPresentation = .qa,
+        initialTopic: String? = nil,
         guidedRecommendationClient: OwnerTruthGuidedRecommendationPresentationClient = DreamJourneyBackendClient.shared,
         guidedRecommendationPolicyAvailable: @escaping () -> Bool = {
             return FeatureGateService.shared
@@ -12520,6 +12655,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled }
     ) {
         self.presentation = presentation
+        self.initialTopic = initialTopic.map {
+            String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
+        }.flatMap { $0.isEmpty ? nil : $0 }
         self.accountLease = accountLease
         self.accountLeaseRuntime = accountLeaseRuntime
         self.lifeMapClient = lifeMapClient
@@ -12646,6 +12784,17 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         subtitleLabel.textColor = DJDesignTokens.Color.textTertiary
         subtitleLabel.numberOfLines = 0
 
+        applyDynamicType(
+            to: memoryGapPromptLabel,
+            baseFont: DJDesignTokens.Font.body(16),
+            textStyle: .body
+        )
+        memoryGapPromptLabel.textColor = DJDesignTokens.Color.textPrimary
+        memoryGapPromptLabel.numberOfLines = 0
+        memoryGapPromptLabel.accessibilityIdentifier = "owner-truth-interview-memory-gap-prompt"
+        memoryGapPromptLabel.isHidden = initialTopic == nil
+        updateMemoryGapPrompt(submittedMessageCount: 0, lifecycle: nil)
+
         configureGuidedRecommendations()
         configureLifeMapEntry()
         configureMemorySearchEntry()
@@ -12709,6 +12858,9 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
         configureBoundaryControls()
         stackView.addArrangedSubview(subtitleLabel)
+        if initialTopic != nil {
+            stackView.addArrangedSubview(memoryGapPromptLabel)
+        }
         if presentation == .product {
             stackView.addArrangedSubview(guidedRecommendationStack)
             stackView.addArrangedSubview(lifeMapButton)
@@ -13190,7 +13342,35 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
         updateCandidateProposalStatusEntry(for: state)
         statusLabel.text = statusText(for: state)
         detailLabel.text = detailText(for: state)
+        if initialTopic != nil,
+           !memoryGapBaselineCaptured,
+           state.phase == .ready,
+           let receipt = state.latestReceipt {
+            memoryGapBaselineCaptured = true
+            memoryGapBaselineMessageSequence = receipt.messageSequence ?? 0
+        }
+        let currentMessageSequence = state.latestReceipt?.messageSequence ?? 0
+        updateMemoryGapPrompt(
+            submittedMessageCount: max(0, currentMessageSequence - memoryGapBaselineMessageSequence),
+            lifecycle: state.latestReceipt?.lifecycle
+        )
         onViewStateRendered?(state)
+    }
+
+    private func updateMemoryGapPrompt(
+        submittedMessageCount: Int,
+        lifecycle: OwnerTruthInterviewSessionLifecycle?
+    ) {
+        guard let initialTopic else { return }
+        if lifecycle == .ended {
+            memoryGapPromptLabel.text = "这次分享已进入整理流程。系统会生成候选记忆，确认后才会进入正式记忆。"
+        } else if submittedMessageCount > 1 {
+            memoryGapPromptLabel.text = "还有什么细节是你希望以后也能被记住的？说完后可点「结束这次分享」进入归纳与确认。"
+        } else if submittedMessageCount == 1 {
+            memoryGapPromptLabel.text = "谢谢你告诉我这些。还有哪些人物、地点或感受，能让这段经历更完整？"
+        } else {
+            memoryGapPromptLabel.text = "关于「\(initialTopic)」，这段记忆还没有被收录。你愿意先说说自己记得的部分吗？"
+        }
     }
 
     @objc private func submitTapped() {

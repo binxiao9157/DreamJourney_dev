@@ -48,34 +48,18 @@ require(
 )
 
 for required in [
-    "private let candidateConfirmationButton",
-    "configureCandidateConfirmationButton()",
-    "updateCandidateConfirmationButton()",
-    "@objc private func ownerTruthCandidateConfirmationTapped()",
     "OwnerTruthInterviewCandidateConfirmationInboxViewController",
     "OwnerTruthInterviewCandidateConfirmationViewController",
-    "确认所选普通线索",
+    "写入所选正式记忆",
     "需要逐条确认",
 ] {
     require(archive.contains(required), "default-off product confirmation presentation missing: \(required)")
 }
 
-guard let entrySection = slice(
-    archive,
-    from: "private func updateCandidateConfirmationButton()",
-    to: "private func reloadFeatureCards"
-) else {
-    fatalError("owner-truth candidate confirmation presentation check failed: archive entry section is missing")
-}
 require(
-    entrySection.contains("FeatureGateService.shared.isRouteAllowed(") &&
-        entrySection.contains(".ownerTruthCandidateReview") &&
-        entrySection.contains("FeatureFlagService.shared.isEnabled(.ownerTruthCandidateReview)"),
-    "product confirmation entry must capture the dedicated route decision before it becomes visible"
-)
-require(
-    entrySection.contains("candidateConfirmationButton.isHidden = !isVisible"),
-    "product confirmation entry must remain hidden when its policy is not allowed"
+    !archive.contains("candidateConfirmationButton") &&
+        !archive.contains("ownerTruthCandidateConfirmationTapped"),
+    "Archive must expose one unified candidate inbox instead of a duplicate interview confirmation entry"
 )
 
 guard let inboxSection = slice(
@@ -87,7 +71,8 @@ guard let inboxSection = slice(
 }
 require(
     inboxSection.contains("OwnerTruthInterviewCandidateConfirmationInboxUseCase") &&
-        inboxSection.contains("FeatureGateService.shared.requestDecision(for: .ownerTruthCandidateReview).allowed"),
+        inboxSection.contains("requestServerPolicyManagedDecision(for: .ownerTruthCandidateReview)") &&
+        inboxSection.contains(".allowed"),
     "product confirmation inbox must use the lease-fenced product contract and revalidate release policy"
 )
 require(
@@ -105,8 +90,16 @@ guard let detailSection = slice(
 require(
     detailSection.contains("OwnerTruthInterviewCandidateConfirmationActionUseCase") &&
         detailSection.contains("OwnerTruthInterviewCandidateConfirmationSingleActionUseCase") &&
+        detailSection.contains("OwnerTruthInterviewCandidateMemoryActivationUseCase") &&
+        detailSection.contains("beginFormalMemoryActivation(") &&
         detailSection.contains("confirmBatch(candidateIDs:"),
-    "product confirmation detail must keep ordinary and sensitive decisions on their distinct contracts"
+    "product confirmation detail must confirm and activate through distinct authority contracts"
+)
+require(
+    detailSection.contains("已丢弃这条记忆。") &&
+        detailSection.contains("已写入正式记忆。") &&
+        detailSection.contains("部分记忆写入失败；可从待确认记忆重试。"),
+    "pending-memory detail must expose discard, activation success, and recoverable failure semantics"
 )
 require(
     !detailSection.contains("OwnerTruthCandidateReviewQAGate"),

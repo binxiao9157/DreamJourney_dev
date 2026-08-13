@@ -1493,7 +1493,8 @@ final class EchoViewModel {
         text: String,
         accountLease: AccountLease,
         resourceOwnerId: String,
-        roleContextKey: String
+        roleContextKey: String,
+        allowsDelayedReply: Bool = true
     ) -> Bool {
         guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
             return false
@@ -1516,7 +1517,7 @@ final class EchoViewModel {
 
         let nextUserTurnCount = currentSessionUserTurnCount + 1
         let delayedReplyTrigger: EchoDelayedReplyTrigger?
-        if EchoReplyPacingPolicy.shouldWaitForReply(
+        if allowsDelayedReply && EchoReplyPacingPolicy.shouldWaitForReply(
             afterUserTurnCount: nextUserTurnCount,
             userText: normalizedText
         ) {

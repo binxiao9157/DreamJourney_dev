@@ -2821,6 +2821,87 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.latestResult?.candidateID, singleCandidateID)
     }
 
+    func testInterviewCandidateConfirmationSingleCorrectionUsesKnowledgeClaimField() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-0000000001f0")
+        let singleCandidateID = recordID("00000000-0000-0000-0000-0000000001f1")
+        let confirmation = try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: recordID("00000000-0000-0000-0000-0000000001f2"),
+            singleCandidateID: singleCandidateID,
+            singleMemoryKind: .knowledge,
+            singleContentSchemaVersion: "owner-truth-v1",
+            singleContent: [
+                "claim": "外祖父喜欢在院子里讲故事",
+                "context": "夏日晚饭后",
+            ]
+        ).bound(to: lease)
+        let client = InterviewCandidateConfirmationSingleActionClientSpy()
+        client.deferResult = true
+        let useCase = OwnerTruthInterviewCandidateConfirmationSingleActionUseCase(
+            accountLease: lease,
+            confirmation: confirmation,
+            client: client,
+            confirmationReader: InterviewCandidateConfirmationClientSpy(),
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.correct(
+            candidateID: singleCandidateID,
+            correctedSummary: "外祖父喜欢在廊下讲家乡故事"
+        ))
+
+        let command = try XCTUnwrap(client.requestedCommands.first)
+        XCTAssertEqual(
+            command.correctedValue?["claim"],
+            .string("外祖父喜欢在廊下讲家乡故事")
+        )
+        XCTAssertEqual(command.correctedValue?["context"], .string("夏日晚饭后"))
+        XCTAssertNil(command.correctedValue?["summary"])
+        XCTAssertEqual(command.correctedValueSchemaVersion, "owner-truth-v1")
+    }
+
+    func testInterviewCandidateConfirmationSingleCorrectionUsesEmotionLabelField() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-0000000001f3")
+        let singleCandidateID = recordID("00000000-0000-0000-0000-0000000001f4")
+        let confirmation = try interviewCandidateConfirmation(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            batchCandidateID: recordID("00000000-0000-0000-0000-0000000001f5"),
+            singleCandidateID: singleCandidateID,
+            singleMemoryKind: .emotion,
+            singleContentSchemaVersion: "owner-truth-v1",
+            singleContent: [
+                "label": "安心",
+                "trigger": "听家人讲旧事",
+            ]
+        ).bound(to: lease)
+        let client = InterviewCandidateConfirmationSingleActionClientSpy()
+        client.deferResult = true
+        let useCase = OwnerTruthInterviewCandidateConfirmationSingleActionUseCase(
+            accountLease: lease,
+            confirmation: confirmation,
+            client: client,
+            confirmationReader: InterviewCandidateConfirmationClientSpy(),
+            accountLeaseRuntime: runtime,
+            releasePolicyAvailable: { true }
+        )
+
+        useCase.send(.correct(
+            candidateID: singleCandidateID,
+            correctedSummary: "怀念"
+        ))
+
+        let command = try XCTUnwrap(client.requestedCommands.first)
+        XCTAssertEqual(command.correctedValue?["label"], .string("怀念"))
+        XCTAssertEqual(command.correctedValue?["trigger"], .string("听家人讲旧事"))
+        XCTAssertNil(command.correctedValue?["summary"])
+        XCTAssertEqual(command.correctedValueSchemaVersion, "owner-truth-v1")
+    }
+
     func testInterviewCandidateConfirmationSingleActionFailsClosedWhenSourceBecomesInactive() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let reviewBatchID = recordID("00000000-0000-0000-0000-000000000187")
@@ -3258,6 +3339,55 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertFalse(String(describing: receipt).contains(append.text))
     }
 
+    func testInterviewLiveAssistantTurnCarriesRoleAndCaptureModeWithoutChangingLegacyPayload() throws {
+        let threadID = recordID("00000000-0000-0000-0000-000000000171")
+        let sessionID = recordID("00000000-0000-0000-0000-000000000172")
+        let legacy = try OwnerTruthInterviewNaturalInputAppendCommand(
+            commandID: "natural-input-legacy-owner",
+            threadID: threadID,
+            sessionID: sessionID,
+            messageID: recordID("00000000-0000-0000-0000-000000000173"),
+            expectedThreadVersion: 1,
+            expectedSessionVersion: 1,
+            text: "这是用户主动写下的内容。"
+        )
+        let liveAssistant = try OwnerTruthInterviewNaturalInputAppendCommand(
+            commandID: "natural-input-live-assistant",
+            threadID: threadID,
+            sessionID: sessionID,
+            messageID: recordID("00000000-0000-0000-0000-000000000174"),
+            expectedThreadVersion: 2,
+            expectedSessionVersion: 2,
+            text: "那时候最让您难忘的声音是什么？",
+            role: .assistant,
+            captureMode: .live
+        )
+
+        XCTAssertNil(legacy.backendPayload["role"])
+        XCTAssertNil(legacy.backendPayload["captureMode"])
+        XCTAssertEqual(liveAssistant.backendPayload["role"] as? String, "assistant")
+        XCTAssertEqual(liveAssistant.backendPayload["captureMode"] as? String, "live")
+        XCTAssertEqual(liveAssistant.role, .assistant)
+        XCTAssertEqual(liveAssistant.captureMode, .live)
+    }
+
+    func testInterviewLiveSessionUsesExplicitEntryModeAndRejectsOrdinaryResume() throws {
+        let liveStart = try OwnerTruthInterviewNaturalInputStartCommand(
+            commandID: "live-session-start",
+            threadID: recordID("00000000-0000-0000-0000-000000000175"),
+            sessionID: recordID("00000000-0000-0000-0000-000000000176"),
+            entryMode: .live
+        )
+        XCTAssertEqual(liveStart.backendPayload["entryMode"] as? String, "live")
+
+        let ordinaryStart = try OwnerTruthInterviewNaturalInputStartCommand(
+            commandID: "ordinary-session-start",
+            threadID: recordID("00000000-0000-0000-0000-000000000177"),
+            sessionID: recordID("00000000-0000-0000-0000-000000000178")
+        )
+        XCTAssertNil(ordinaryStart.backendPayload["entryMode"])
+    }
+
     func testInterviewBoundaryCommandUsesBoundedPayloadAndMatchesValueMinimizedReceipt() throws {
         let (_, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
@@ -3501,6 +3631,134 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.latestReceipt?.messageSequence, 1)
         XCTAssertEqual(client.appendCommand?.text, text)
         XCTAssertFalse(String(describing: useCase.viewState).contains(text))
+    }
+
+    func testInterviewNaturalInputUseCaseSubmitsLiveAssistantTurnWithContextOnlyRole() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        client.appendHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, append: command) }
+        }
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            entryMode: .live
+        )
+
+        useCase.send(.start)
+        useCase.send(.submitLiveTurn(text: "可以慢慢说，我在听。", role: .assistant))
+
+        XCTAssertEqual(client.appendCommand?.role, .assistant)
+        XCTAssertEqual(client.appendCommand?.captureMode, .live)
+        XCTAssertEqual(client.startCommand?.entryMode, .live)
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertFalse(String(describing: useCase.viewState).contains("可以慢慢说"))
+    }
+
+    func testInterviewLiveUseCaseFailsClosedForActiveOrdinarySession() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.currentSessionHandler = { _ in
+            Result {
+                try OwnerTruthInterviewNaturalInputCurrentSession(
+                    backendJSONObject: [
+                        "schemaVersion": OwnerTruthInterviewNaturalInputCurrentSession.schemaVersion,
+                        "vaultId": vaultID.rawValue,
+                        "currentSession": [
+                            "status": "resumed",
+                            "threadId": "00000000-0000-0000-0000-000000000179",
+                            "sessionId": "00000000-0000-0000-0000-000000000180",
+                            "threadVersion": 1,
+                            "sessionVersion": 1,
+                            "state": "active",
+                            "boundary": "open",
+                            "entryMode": "naturalInput",
+                        ],
+                    ],
+                    expectedVaultID: vaultID
+                )
+            }
+        }
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            entryMode: .live
+        )
+
+        useCase.send(.start)
+
+        XCTAssertEqual(useCase.viewState.phase, .failed)
+        XCTAssertEqual(useCase.viewState.notice, .contractMismatch)
+        XCTAssertNil(client.startCommand)
+    }
+
+    func testInterviewLiveUseCasePausesOrdinarySessionBeforeStartingLiveWhenTransitionAllowed() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let existingThreadID = "00000000-0000-0000-0000-000000000181"
+        let existingSessionID = "00000000-0000-0000-0000-000000000182"
+        let client = InterviewNaturalInputClientSpy()
+        client.currentSessionHandler = { _ in
+            Result {
+                try OwnerTruthInterviewNaturalInputCurrentSession(
+                    backendJSONObject: [
+                        "schemaVersion": OwnerTruthInterviewNaturalInputCurrentSession.schemaVersion,
+                        "vaultId": vaultID.rawValue,
+                        "currentSession": [
+                            "status": "resumed",
+                            "threadId": existingThreadID,
+                            "sessionId": existingSessionID,
+                            "threadVersion": 4,
+                            "sessionVersion": 4,
+                            "state": "active",
+                            "boundary": "skipOnce",
+                            "entryMode": "naturalInput",
+                        ],
+                    ],
+                    expectedVaultID: vaultID
+                )
+            }
+        }
+        client.topicSwitchHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, topicSwitch: command) }
+        }
+        client.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            entryMode: .live,
+            allowsEntryModeTransition: true
+        )
+
+        useCase.send(.start)
+
+        XCTAssertEqual(
+            client.topicSwitchCommand?.threadID.rawValue.uuidString.lowercased(),
+            existingThreadID
+        )
+        XCTAssertEqual(
+            client.topicSwitchCommand?.sessionID.rawValue.uuidString.lowercased(),
+            existingSessionID
+        )
+        XCTAssertEqual(client.topicSwitchCommand?.expectedThreadVersion, 4)
+        XCTAssertEqual(client.topicSwitchCommand?.expectedSessionVersion, 4)
+        XCTAssertEqual(client.startCommand?.entryMode, .live)
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.latestReceipt?.lifecycle, .active)
+        XCTAssertNil(client.endCommand)
     }
 
     func testInterviewNaturalInputUseCaseEndsPersistedSessionAndRefreshesContinuation() throws {
@@ -6373,7 +6631,10 @@ final class OwnerTruthContractsTests: XCTestCase {
         vaultID: String,
         reviewBatchID: OwnerTruthRecordID,
         batchCandidateID: OwnerTruthRecordID,
-        singleCandidateID: OwnerTruthRecordID
+        singleCandidateID: OwnerTruthRecordID,
+        singleMemoryKind: OwnerTruthMemoryKind = .experience,
+        singleContentSchemaVersion: String = "owner-truth-candidate-content-v1",
+        singleContent: [String: Any] = ["summary": "确认前只读的敏感候选"]
     ) throws -> OwnerTruthInterviewCandidateConfirmation {
         let sourceID = "00000000-0000-0000-0000-000000000151"
         let extractionID = "00000000-0000-0000-0000-000000000152"
@@ -6413,12 +6674,12 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "singleCandidates": [[
                     "candidateId": singleCandidateID.rawValue.uuidString,
                     "sourceId": sourceID,
-                    "memoryKind": OwnerTruthMemoryKind.experience.rawValue,
+                    "memoryKind": singleMemoryKind.rawValue,
                     "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
                     "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
                     "sensitivity": OwnerTruthSensitivityLevel.sensitive.rawValue,
-                    "contentSchemaVersion": "owner-truth-candidate-content-v1",
-                    "content": ["summary": "确认前只读的敏感候选"],
+                    "contentSchemaVersion": singleContentSchemaVersion,
+                    "content": singleContent,
                     "contentHash": "interview-confirmation-single-hash",
                     "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
                     "reviewMode": "single",
@@ -7442,6 +7703,94 @@ final class OwnerTruthContractsTests: XCTestCase {
                 payload: nil
             ),
             .echoGuidedRecommendations
+        )
+    }
+
+    func testRealtimeVoiceRuntimeConfigAcceptsOnlyFutureBackendProxyTicket() throws {
+        let json: [String: Any] = [
+            "status": "ready",
+            "credentialMode": "oneTimeBackendProxyTicket",
+            "accessPath": "backendRealtimeProxy",
+            "mobileDirectAllowed": false,
+            "brokerStatus": "verified",
+            "providerReady": true,
+            "releaseVisible": true,
+            "retryable": true,
+            "contractVersion": 4,
+            "expiresAt": "2099-01-01T00:00:00Z",
+            "proxy": [
+                "address": "wss://api.example.test",
+                "uri": "/voice/realtime-stream",
+                "sessionToken": "djv_one_time_test_ticket",
+                "sessionHeader": "X-DreamJourney-Voice-Session",
+                "sdkClientID": "dreamjourney-realtime-proxy",
+                "sdkClientKey": "proxy-session",
+                "sdkResourceID": "dreamjourney.realtime.proxy",
+                "uid": "dju_test",
+            ],
+        ]
+
+        let config = try XCTUnwrap(RealtimeVoiceRuntimeConfig(json: json))
+
+        XCTAssertFalse(config.isBlocked)
+        XCTAssertFalse(config.mobileDirectAllowed)
+        XCTAssertEqual(config.proxyAddress, "wss://api.example.test")
+        XCTAssertEqual(config.sessionHeader, "X-DreamJourney-Voice-Session")
+    }
+
+    func testRealtimeVoiceRuntimeConfigFailsClosedForDirectExpiredOrIncompleteContract() throws {
+        var json: [String: Any] = [
+            "status": "ready",
+            "credentialMode": "oneTimeBackendProxyTicket",
+            "accessPath": "backendRealtimeProxy",
+            "mobileDirectAllowed": true,
+            "brokerStatus": "verified",
+            "providerReady": true,
+            "releaseVisible": true,
+            "retryable": true,
+            "contractVersion": 4,
+            "expiresAt": "2099-01-01T00:00:00Z",
+            "proxy": [
+                "address": "wss://api.example.test",
+                "uri": "/voice/realtime-stream",
+                "sessionToken": "djv_one_time_test_ticket",
+                "sessionHeader": "X-DreamJourney-Voice-Session",
+                "sdkClientID": "dreamjourney-realtime-proxy",
+                "sdkClientKey": "proxy-session",
+                "sdkResourceID": "dreamjourney.realtime.proxy",
+                "uid": "dju_test",
+            ],
+        ]
+        XCTAssertTrue(try XCTUnwrap(RealtimeVoiceRuntimeConfig(json: json)).isBlocked)
+
+        json["mobileDirectAllowed"] = false
+        json["expiresAt"] = "2020-01-01T00:00:00Z"
+        XCTAssertTrue(try XCTUnwrap(RealtimeVoiceRuntimeConfig(json: json)).isBlocked)
+
+        json["expiresAt"] = "2099-01-01T00:00:00Z"
+        json["contractVersion"] = 3
+        XCTAssertTrue(try XCTUnwrap(RealtimeVoiceRuntimeConfig(json: json)).isBlocked)
+    }
+
+    func testRealtimeVoiceTokenUsesEchoTextInputReleaseFeature() {
+        XCTAssertEqual(
+            FeatureGateService.shared.featureForRequest(
+                path: "/voice/realtime-token",
+                method: .post,
+                payload: nil
+            ),
+            .echoTextInput
+        )
+    }
+
+    func testInterviewTopicSwitchLifecycleUsesEchoTextInputReleaseFeature() {
+        XCTAssertEqual(
+            FeatureGateService.shared.featureForRequest(
+                path: "/v2/vaults/vault-a/interview-sessions/00000000-0000-0000-0000-000000000101/pause-for-topic-switch",
+                method: .post,
+                payload: nil
+            ),
+            .echoTextInput
         )
     }
 

@@ -135,6 +135,13 @@ struct DialogEngineBindingHandle: Equatable, Sendable {
     let accountLease: AccountLease
 }
 
+/// Controls who owns the lifetime of a dialog session. Echo Live uses an
+/// explicit user stop; other callers keep the existing keyword/idle behavior.
+enum DialogSessionLifetimePolicy: Equatable, Sendable {
+    case automatic
+    case userControlledLive
+}
+
 private func isSameDialogAccountGeneration(_ lhs: AccountLease, _ rhs: AccountLease) -> Bool {
     lhs.subjectId == rhs.subjectId
         && lhs.vaultId == rhs.vaultId
@@ -263,6 +270,8 @@ final class DialogEngineManager: NSObject {
     private var activeDialogBindingHandle: DialogEngineBindingHandle?
     private(set) var isEngineReady = false
     private(set) var isDialogActive = false
+    private(set) var isRecorderPaused = false
+    private(set) var sessionLifetimePolicy: DialogSessionLifetimePolicy = .automatic
     var currentTopic: String?
     var currentConfigurationIsProductionReady: Bool { false }
     private(set) var isLocalTTSPlaybackEnabled = true
@@ -390,7 +399,8 @@ final class DialogEngineManager: NSObject {
 
     func startDialog(
         sendsGreeting: Bool = true,
-        usesTurnScopedKnowledgeContext: Bool = false
+        usesTurnScopedKnowledgeContext: Bool = false,
+        lifetimePolicy: DialogSessionLifetimePolicy = .automatic
     ) {
         guard isActiveAccountLeaseValid(at: .request),
               let accountLease = boundAccountLease,
@@ -398,11 +408,27 @@ final class DialogEngineManager: NSObject {
         activeDialogAccountLease = accountLease
         activeDialogBindingHandle = bindingHandle
         self.usesTurnScopedKnowledgeContext = usesTurnScopedKnowledgeContext
+        sessionLifetimePolicy = lifetimePolicy
+        isRecorderPaused = false
         recordUIQAPromptSnapshot()
         isDialogActive = true
         if isActiveAccountLeaseValid(at: .runtime) {
             delegate?.onDialogStarted()
         }
+    }
+
+    @discardableResult
+    func pauseRecorder() -> Bool {
+        guard isDialogActive else { return false }
+        isRecorderPaused = true
+        return true
+    }
+
+    @discardableResult
+    func resumeRecorder() -> Bool {
+        guard isDialogActive else { return false }
+        isRecorderPaused = false
+        return true
     }
 
     @discardableResult
@@ -426,6 +452,7 @@ final class DialogEngineManager: NSObject {
         guard isDialogActive else { return }
         let shouldDeliver = isActiveAccountLeaseValid(at: .runtime)
         isDialogActive = false
+        isRecorderPaused = false
         activeDialogBindingHandle = nil
         activeDialogAccountLease = nil
         if shouldDeliver {
@@ -436,6 +463,8 @@ final class DialogEngineManager: NSObject {
     func destroyEngine() {
         isEngineReady = false
         isDialogActive = false
+        isRecorderPaused = false
+        sessionLifetimePolicy = .automatic
         activeDialogBindingHandle = nil
         activeDialogAccountLease = nil
         usesTurnScopedKnowledgeContext = false
@@ -576,6 +605,11 @@ final class DialogEngineManager: NSObject {
     /// 是否有活跃对话
     private(set) var isDialogActive = false
 
+    /// Recorder transport may pause while the Digital Human speaks without
+    /// ending the provider conversation or the product-level Live session.
+    private(set) var isRecorderPaused = false
+    private(set) var sessionLifetimePolicy: DialogSessionLifetimePolicy = .automatic
+
     /// AI 是否正在语音播报中（用于判断是否需要打断）
     private(set) var isAISpeaking = false
 
@@ -600,16 +634,20 @@ final class DialogEngineManager: NSObject {
         var token: String = ""
         /// 用户唯一标识（用于日志追踪）
         var uid: String = UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
-        /// Dialog 服务地址
-        var address: String = "wss://openspeech.bytedance.com"
-        /// Dialog 服务 URI
-        var uri: String = "/api/v3/realtime/dialogue"
-        /// 资源 ID
-        var resourceID: String = "volc.speech.dialog"
+        /// Backend realtime proxy address. There is deliberately no Provider
+        /// default: production Live can start only from a one-time ticket.
+        var address: String = ""
+        /// Backend realtime proxy URI
+        var uri: String = ""
+        /// Backend proxy placeholder resource ID
+        var resourceID: String = ""
         /// 是否启用 SDK 软件 AEC 回声消除（需要 AEC 模型文件，iOS 硬件 AEC 通过 AVAudioSession voiceChat 模式已生效）
         var enableAEC: Bool = false
         /// 是否启用内置播放器
         var enablePlayer: Bool = true
+        /// Backend proxy admission header. It carries a one-time DreamJourney
+        /// ticket, never a Provider credential.
+        var requestHeaders: [String: String] = [:]
 
         // MARK: - 对话能力配置
 
@@ -703,7 +741,11 @@ final class DialogEngineManager: NSObject {
         var isProductionReady: Bool {
             Self.isConfiguredValue(appID) &&
                 Self.isConfiguredValue(appKey) &&
-                Self.isConfiguredValue(token)
+                Self.isConfiguredValue(token) &&
+                Self.isConfiguredValue(address) &&
+                Self.isConfiguredValue(uri) &&
+                Self.isConfiguredValue(resourceID) &&
+                !requestHeaders.isEmpty
         }
 
         static func isConfiguredValue(_ value: String) -> Bool {
@@ -857,12 +899,21 @@ final class DialogEngineManager: NSObject {
         )
     }
 
-    /// 共享静态凭据已停用；真正的短期 session broker 在后续 Work Item 接入。
+    /// Applies a backend-issued, one-time proxy ticket. Provider credentials
+    /// and the upstream Provider address never enter the app bundle.
     @discardableResult
     func configure(runtimeConfig: RealtimeVoiceRuntimeConfig) -> Bool {
-        guard runtimeConfig.mobileDirectAllowed,
-              runtimeConfig.accessPath == "scopedSessionCredential",
-              !runtimeConfig.isBlocked else {
+        guard !runtimeConfig.mobileDirectAllowed,
+              runtimeConfig.accessPath == "backendRealtimeProxy",
+              runtimeConfig.credentialMode == "oneTimeBackendProxyTicket",
+              !runtimeConfig.isBlocked,
+              let address = runtimeConfig.proxyAddress,
+              let uri = runtimeConfig.proxyURI,
+              let token = runtimeConfig.sessionToken,
+              let header = runtimeConfig.sessionHeader,
+              let clientID = runtimeConfig.sdkClientID,
+              let clientKey = runtimeConfig.sdkClientKey,
+              let resourceID = runtimeConfig.sdkResourceID else {
             DDLogWarn(
                 "[DialogEngine] providerCredentialBlocked " +
                 "mode=\(runtimeConfig.credentialMode) " +
@@ -872,8 +923,23 @@ final class DialogEngineManager: NSObject {
             )
             return false
         }
-        DDLogWarn("[DialogEngine] 未识别可撤销的 scoped session credential，保持实时语音关闭")
-        return false
+        if isDialogActive {
+            DDLogWarn("[DialogEngine] active Live session refuses runtime reconfiguration")
+            return false
+        }
+        if isEngineReady {
+            destroyEngine()
+        }
+        config.appID = clientID
+        config.appKey = clientKey
+        config.token = token
+        config.address = address
+        config.uri = uri
+        config.resourceID = resourceID
+        config.uid = runtimeConfig.uid ?? config.uid
+        config.requestHeaders = [header: token]
+        DDLogInfo("[DialogEngine] backend realtime proxy ticket applied")
+        return true
     }
 
     /// 客户端主动打断 AI 回复（仅在 AI 正在播报时生效）
@@ -969,7 +1035,8 @@ final class DialogEngineManager: NSObject {
     /// 开始语音对话
     func startDialog(
         sendsGreeting: Bool = true,
-        usesTurnScopedKnowledgeContext: Bool = false
+        usesTurnScopedKnowledgeContext: Bool = false,
+        lifetimePolicy: DialogSessionLifetimePolicy = .automatic
     ) {
         guard let accountLease = boundAccountLease,
               let bindingHandle = boundBindingHandle,
@@ -991,6 +1058,8 @@ final class DialogEngineManager: NSObject {
         activeDialogBindingHandle = bindingHandle
         activeDialogOperationId = dialogOperationId
         self.usesTurnScopedKnowledgeContext = usesTurnScopedKnowledgeContext
+        sessionLifetimePolicy = lifetimePolicy
+        isRecorderPaused = false
         suppressGreetingForNextStart = !sendsGreeting
         // 引擎未就绪时先初始化
         guard isEngineReady, engine != nil else {
@@ -1050,6 +1119,7 @@ final class DialogEngineManager: NSObject {
         }
 
         isDialogActive = false
+        isRecorderPaused = false
         isAISpeaking = false
         isEnding = false
         activeDialogAccountLease = nil
@@ -1076,6 +1146,40 @@ final class DialogEngineManager: NSObject {
         ) { _, delegate in
             delegate.onDialogEnded(reason: reason)
         }
+    }
+
+    /// Temporarily releases microphone capture while preserving the same
+    /// realtime provider session and its accumulated conversation context.
+    @discardableResult
+    func pauseRecorder() -> Bool {
+        guard isDialogActive, !isRecorderPaused, let engine else {
+            return isDialogActive && isRecorderPaused
+        }
+        let result = engine.send(SEDirectivePauseRecorder)
+        guard result == SENoError else {
+            DDLogError("[DialogEngine] PauseRecorder failed: \(result.rawValue)")
+            return false
+        }
+        isRecorderPaused = true
+        invalidateSilenceTimer()
+        DDLogInfo("[DialogEngine] recorder paused; provider Live session preserved")
+        return true
+    }
+
+    @discardableResult
+    func resumeRecorder() -> Bool {
+        guard isDialogActive, isRecorderPaused, let engine else {
+            return isDialogActive && !isRecorderPaused
+        }
+        let result = engine.send(SEDirectiveResumeRecorder)
+        guard result == SENoError else {
+            DDLogError("[DialogEngine] ResumeRecorder failed: \(result.rawValue)")
+            return false
+        }
+        isRecorderPaused = false
+        resetSilenceTimer()
+        DDLogInfo("[DialogEngine] recorder resumed in existing provider Live session")
+        return true
     }
 
     /// 播报开场白（对应豆包SDK的 SayHello 事件 3006）
@@ -1149,8 +1253,10 @@ final class DialogEngineManager: NSObject {
         activeDialogAccountLease = nil
         isEngineReady = false
         isDialogActive = false
+        isRecorderPaused = false
         isAISpeaking = false
         isEnding = false
+        sessionLifetimePolicy = .automatic
         usesTurnScopedKnowledgeContext = false
         restoreAudioSessionIfNeeded()
         externallyManagedAudioSessionLease = nil
@@ -1348,6 +1454,16 @@ final class DialogEngineManager: NSObject {
         engine.setStringParam(config.address, forKey: SE_PARAMS_KEY_DIALOG_ADDRESS_STRING)
         engine.setStringParam(config.uri, forKey: SE_PARAMS_KEY_DIALOG_URI_STRING)
 
+        if let headerData = try? JSONSerialization.data(
+            withJSONObject: config.requestHeaders,
+            options: []
+        ), let headerJSON = String(data: headerData, encoding: .utf8) {
+            engine.setStringParam(headerJSON, forKey: SE_PARAMS_KEY_REQUEST_HEADERS_STRING)
+        }
+        // A proxy ticket is one-use. A network failure creates a new explicit
+        // Live start and a fresh ticket instead of silently replaying it.
+        engine.setBoolParam(false, forKey: SE_PARAMS_KEY_ENABLE_WS_RECONNECT_BOOL)
+
         // 录音类型：使用设备内置录音机
         engine.setStringParam(SE_RECORDER_TYPE_RECORDER, forKey: SE_PARAMS_KEY_RECORDER_TYPE_STRING)
 
@@ -1544,6 +1660,7 @@ final class DialogEngineManager: NSObject {
 
     /// 检测 ASR 识别结果是否包含结束关键词
     private func checkEndKeyword(in text: String) -> String? {
+        guard sessionLifetimePolicy == .automatic else { return nil }
         let lowered = text.lowercased()
         return config.endKeywords.first { lowered.contains($0) }
     }
@@ -1553,7 +1670,9 @@ final class DialogEngineManager: NSObject {
     /// 启动/重置静音超时计时器
     private func resetSilenceTimer() {
         invalidateSilenceTimer()
-        guard config.silenceTimeoutSeconds > 0,
+        guard sessionLifetimePolicy == .automatic,
+              !isRecorderPaused,
+              config.silenceTimeoutSeconds > 0,
               let accountLease = activeDialogAccountLease,
               accountLeaseRuntime.validate(accountLease, at: .timer).allowed else { return }
 
@@ -1666,6 +1785,7 @@ extension DialogEngineManager {
             requiresActiveOperation: true
         ) else { return false }
         isDialogActive = false
+        isRecorderPaused = false
         isAISpeaking = false
         activeDialogAccountLease = nil
         activeDialogBindingHandle = nil
@@ -1807,22 +1927,28 @@ extension DialogEngineManager {
 
         // MARK: ASR Events
         case SEEventASRInfo:
-            // AI 播报期间，ASR 可能回声识别到 AI 的声音，需要过滤
+            let asrRawStr = String(data: data, encoding: .utf8) ?? ""
+            let parsedASRInfo = parseASRResult(from: data)
+
+            // Live 模式允许用户直接开口打断本地 AI 播报。只有识别到非空
+            // 用户文本时才发送 ClientInterrupt，避免纯播放器回声误触发。
             if isAISpeaking {
-                print("[DialogEngine] 🎤 AI播报中，忽略ASRInfo回声")
-                return
+                let interruptText = parsedASRInfo?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard sessionLifetimePolicy == .userControlledLive,
+                      !interruptText.isEmpty else {
+                    print("[DialogEngine] 🎤 AI播报中，忽略ASRInfo回声")
+                    return
+                }
+                interruptAI()
             }
-            // 用户开始说话 → 自动打断 AI 回复
-            interruptAI()
             // 重置静音超时计时器
             deliverProviderCallback(callbackContext) { manager, _ in
                 manager.resetSilenceTimer()
             }
             // 解析 ASR 结果
-            let asrRawStr = String(data: data, encoding: .utf8) ?? ""
             print("[DialogEngine] 🎤 ASRInfo raw: \(asrRawStr.prefix(300))")
 
-            if let result = parseASRResult(from: data) {
+            if let result = parsedASRInfo {
                 print("[DialogEngine] 🎤 ASRInfo parsed: text=\(result.text), isFinal=\(result.isFinal)")
                 if result.isFinal {
                     if let keyword = checkEndKeyword(in: result.text) {
@@ -1878,16 +2004,21 @@ extension DialogEngineManager {
             }
 
         case SEEventASRResponse:
-            // AI 播报期间，ASR 可能回声识别到 AI 的声音，需要过滤
+            let parsedASRResponse = parseASRResult(from: data)
             if isAISpeaking {
-                print("[DialogEngine] 🎤 AI播报中，忽略ASRResponse回声")
-                return
+                let interruptText = parsedASRResponse?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard sessionLifetimePolicy == .userControlledLive,
+                      !interruptText.isEmpty else {
+                    print("[DialogEngine] 🎤 AI播报中，忽略ASRResponse回声")
+                    return
+                }
+                interruptAI()
             }
             // ASR 识别结果（流式，通过 is_interim 区分中间/最终）
             deliverProviderCallback(callbackContext) { manager, _ in
                 manager.resetSilenceTimer()
             }
-            if let result = parseASRResult(from: data) {
+            if let result = parsedASRResponse {
                 print("[DialogEngine] 🎤 ASRResponse: text=\(result.text), isFinal=\(result.isFinal)")
                 if result.isFinal {
                     if let keyword = checkEndKeyword(in: result.text) {
@@ -1909,10 +2040,15 @@ extension DialogEngineManager {
             DDLogInfo("[DialogEngine] ASR 结束")
 
         case SEEventChatTextQueryConfirmed:
-            // AI 播报期间，ASR 可能回声识别到 AI 的声音，需要过滤
+            let confirmedQueryText = parseQueryConfirmedText(from: data)
             if isAISpeaking {
-                print("[DialogEngine] 🎤 AI播报中，忽略ChatTextQueryConfirmed回声")
-                return
+                let interruptText = confirmedQueryText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard sessionLifetimePolicy == .userControlledLive,
+                      !interruptText.isEmpty else {
+                    print("[DialogEngine] 🎤 AI播报中，忽略ChatTextQueryConfirmed回声")
+                    return
+                }
+                interruptAI()
             }
             // 用户语音已确认，这是发送给 LLM 的最终文本
             print("[DialogEngine] ✅ 用户语音确认: \(dataStr.prefix(300))")
@@ -1920,7 +2056,7 @@ extension DialogEngineManager {
                 manager.resetSilenceTimer()
             }
             // 解析用户查询文本
-            if let queryText = parseQueryConfirmedText(from: data), !queryText.isEmpty {
+            if let queryText = confirmedQueryText, !queryText.isEmpty {
                 // 检测结束关键词
                 if let keyword = checkEndKeyword(in: queryText) {
                     print("[DialogEngine] 🛑 用户确认文本中检测到结束关键词: \(keyword)")

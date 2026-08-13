@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Guard WI-S0-03-04's deny-by-default realtime voice decision."""
+"""Guard the backend-only, one-time-ticket realtime voice path."""
 
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
+BACKEND = ROOT.parent / "DreamJourneyBackend"
 
 
-def read(path: str) -> str:
-    return (ROOT / path).read_text(encoding="utf-8")
+def read(root: Path, path: str) -> str:
+    return (root / path).read_text(encoding="utf-8")
 
 
 def require(condition: bool, message: str) -> None:
@@ -17,56 +18,74 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> None:
-    client = read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
-    dialog = read("DreamJourney/Sources/Services/DialogEngineManager.swift")
-    status = read("docs/superpowers/status/2026-07-16-wi-s0-03-04-realtime-voice-secure-path.md")
+    client = read(ROOT, "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
+    dialog = read(ROOT, "DreamJourney/Sources/Services/DialogEngineManager.swift")
+    echo = read(ROOT, "DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
+    contracts = read(ROOT, "DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift")
+    broker = read(BACKEND, "app/services/realtime_voice_proxy.py")
+    migration = read(BACKEND, "db/migrations/0091_realtime_voice_session_tickets.sql")
+    entry_mode_migration = read(
+        BACKEND,
+        "db/migrations/0092_owner_truth_live_interview_entry_mode.sql",
+    )
 
     for field in (
         "accessPath",
         "mobileDirectAllowed",
         "brokerStatus",
-        "decisionReasonCode",
-        "requiredCredentialProperties",
-        "verifiedCredentialProperties",
-        "missingCredentialProperties",
+        "sessionToken",
+        "sessionHeader",
+        "expiresAt",
     ):
         require(field in client, f"Realtime voice client contract is missing {field}")
 
     require(
-        "!mobileDirectAllowed" in client,
-        "Unknown or denied contracts must block the direct mobile route",
+        'accessPath != "backendRealtimeProxy"' in client,
+        "iOS must accept only the backend realtime proxy path",
     )
     require(
-        'accessPath != "scopedSessionCredential"' in client,
-        "Only an explicit scoped-session path may reach the direct Provider route",
+        'credentialMode != "oneTimeBackendProxyTicket"' in client,
+        "iOS must accept only one-time proxy tickets",
     )
     require(
-        "runtimeConfig.mobileDirectAllowed" in dialog,
-        "DialogEngine must enforce the server decision before initialization",
+        "guard !runtimeConfig.mobileDirectAllowed" in dialog,
+        "DialogEngine must reject contracts that enable direct mobile Provider access",
     )
     require(
-        "runtimeConfig.decisionReasonCode" in dialog,
-        "DialogEngine diagnostics must retain the value-free denial reason",
+        "SE_PARAMS_KEY_REQUEST_HEADERS_STRING" in dialog,
+        "DialogEngine must send the one-time ticket as a WebSocket request header",
     )
     require(
-        "expiresAt" not in client[client.index("struct RealtimeVoiceRuntimeConfig"):client.index("struct ArchiveMediaUploadIntent")],
-        "Blocked realtime voice config must not parse invented expiry metadata",
+        "SE_PARAMS_KEY_ENABLE_WS_RECONNECT_BOOL" in dialog,
+        "DialogEngine must disable implicit replay of a one-use ticket",
     )
-    for term in (
-        "EXTERNAL_BLOCKED",
-        "KEEP_DIRECT_MOBILE_CLOSED",
-        "G3=MISSING",
-        "G4=MISSING",
-        "scope",
-        "TTL",
-        "audience",
-        "revocation",
-        "mobileDirectAllowed=false",
-        "backendProxyOrText",
-    ):
-        require(term in status, f"WI-S0-03-04 status receipt is missing {term}")
+    require("VolcEngineAppToken" not in dialog, "iOS must not read a packaged Provider token")
+    require("liveUserInactivityTimeout: TimeInterval = 60" in echo, "Live must auto-close after 60 seconds without user speech")
+    require("finishLiveMemoryCaptureIfNeeded()" in echo, "Live close must enter the V4 pending-memory pipeline")
+    require("entryMode: .live" in echo, "Live capture must use a session isolated from ordinary text interviews")
+    require(
+        "guard currentEntryMode == entryMode else" in contracts
+        and "guard allowsEntryModeTransition else" in contracts,
+        "Client must reject cross-mode resume unless an explicit transition is allowed",
+    )
+    require(
+        "pauseCurrentSessionForEntryModeTransition(" in contracts,
+        "An allowed Live transition must pause the existing session before starting another",
+    )
+    require("'live'" in entry_mode_migration, "Database must admit the isolated Live entry mode")
 
-    print("Product V4 realtime voice secure-path check passed: direct mobile remains deny-by-default")
+    for term in (
+        "oneTimeBackendProxyTicket",
+        "backendRealtimeProxy",
+        "X-DreamJourney-Voice-Session",
+        "ticket_hash",
+        "is_realtime_voice_auth_session_active",
+        "max_session_bytes",
+    ):
+        require(term in broker or term in migration, f"Backend proxy contract is missing {term}")
+    require("Audio, transcripts and provider credentials never enter this table" in migration, "Ticket table must document its data boundary")
+
+    print("Product V4 realtime voice secure-path check passed: backend proxy enabled, direct mobile Provider access closed")
 
 
 if __name__ == "__main__":

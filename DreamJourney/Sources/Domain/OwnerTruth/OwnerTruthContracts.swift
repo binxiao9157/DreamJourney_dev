@@ -4200,7 +4200,7 @@ final class OwnerTruthInterviewCandidateReviewUseCase {
     }
 
     private static func proposalPreview(for candidate: OwnerTruthCandidateInboxItem) -> String {
-        for key in ["summary", "title", "text"] {
+        for key in ["summary", "claim", "label", "title", "text"] {
             guard case .string(let rawValue)? = candidate.content[key] else { continue }
             let normalized = rawValue
                 .replacingOccurrences(of: "\n", with: " ")
@@ -4213,7 +4213,7 @@ final class OwnerTruthInterviewCandidateReviewUseCase {
     }
 
     private static func correctionTextKey(for candidate: OwnerTruthCandidateInboxItem) -> String {
-        for key in ["summary", "title", "text"] where candidate.content[key] != nil {
+        for key in ["summary", "claim", "label", "title", "text"] where candidate.content[key] != nil {
             return key
         }
         return "summary"
@@ -5719,7 +5719,7 @@ final class OwnerTruthInterviewCandidateConfirmationSingleActionUseCase {
     }
 
 private static func correctionTextKey(for candidate: OwnerTruthCandidateInboxItem) -> String {
-        for key in ["summary", "title", "text"] where candidate.content[key] != nil {
+        for key in ["summary", "claim", "label", "title", "text"] where candidate.content[key] != nil {
             return key
         }
         return "summary"
@@ -6962,6 +6962,7 @@ struct OwnerTruthInterviewNaturalInputCurrentSession: Equatable, Sendable {
 
     let vaultID: OwnerTruthVaultID
     let receipt: OwnerTruthInterviewNaturalInputReceipt?
+    let entryMode: OwnerTruthInterviewEntryMode?
 
     init(
         backendJSONObject object: [String: Any],
@@ -6994,12 +6995,30 @@ struct OwnerTruthInterviewNaturalInputCurrentSession: Equatable, Sendable {
                     "currentSession must contain an active resumed session handle"
                 )
             }
+            guard let parsedEntryMode = OwnerTruthInterviewEntryMode(
+                rawValue: OwnerTruthInterviewNaturalInputContract.requiredString(
+                    currentSession["entryMode"]
+                ) ?? OwnerTruthInterviewEntryMode.naturalInput.rawValue
+            ) else {
+                throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                    "currentSession contains an unsupported entry mode"
+                )
+            }
             receipt = parsedReceipt
+            entryMode = parsedEntryMode
         } else {
             receipt = nil
+            entryMode = nil
         }
         vaultID = expectedVaultID
     }
+}
+
+enum OwnerTruthInterviewEntryMode: String, Equatable, Sendable {
+    case naturalInput
+    case live
+    case recommendation
+    case resume
 }
 
 /// A product-safe projection of one private interview session. It intentionally
@@ -7056,11 +7075,13 @@ struct OwnerTruthInterviewNaturalInputStartCommand: Equatable, Sendable {
     let commandID: String
     let threadID: OwnerTruthRecordID
     let sessionID: OwnerTruthRecordID
+    let entryMode: OwnerTruthInterviewEntryMode
 
     init(
         commandID: String,
         threadID: OwnerTruthRecordID,
-        sessionID: OwnerTruthRecordID
+        sessionID: OwnerTruthRecordID,
+        entryMode: OwnerTruthInterviewEntryMode = .naturalInput
     ) throws {
         guard let commandID = OwnerTruthInterviewNaturalInputContract.nonEmptyString(commandID) else {
             throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
@@ -7070,15 +7091,30 @@ struct OwnerTruthInterviewNaturalInputStartCommand: Equatable, Sendable {
         self.commandID = commandID
         self.threadID = threadID
         self.sessionID = sessionID
+        self.entryMode = entryMode
     }
 
     var backendPayload: [String: Any] {
-        [
+        var payload: [String: Any] = [
             "commandId": commandID,
             "threadId": threadID.rawValue.uuidString.lowercased(),
             "sessionId": sessionID.rawValue.uuidString.lowercased(),
         ]
+        if entryMode != .naturalInput {
+            payload["entryMode"] = entryMode.rawValue
+        }
+        return payload
     }
+}
+
+enum OwnerTruthInterviewNaturalInputMessageRole: String, Equatable, Sendable {
+    case owner
+    case assistant
+}
+
+enum OwnerTruthInterviewNaturalInputCaptureMode: String, Equatable, Sendable {
+    case naturalInput
+    case live
 }
 
 struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
@@ -7091,6 +7127,8 @@ struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
     let expectedThreadVersion: Int
     let expectedSessionVersion: Int
     let text: String
+    let role: OwnerTruthInterviewNaturalInputMessageRole
+    let captureMode: OwnerTruthInterviewNaturalInputCaptureMode
 
     init(
         commandID: String,
@@ -7099,7 +7137,9 @@ struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
         messageID: OwnerTruthRecordID,
         expectedThreadVersion: Int,
         expectedSessionVersion: Int,
-        text: String
+        text: String,
+        role: OwnerTruthInterviewNaturalInputMessageRole = .owner,
+        captureMode: OwnerTruthInterviewNaturalInputCaptureMode = .naturalInput
     ) throws {
         guard let commandID = OwnerTruthInterviewNaturalInputContract.nonEmptyString(commandID),
               let text = OwnerTruthInterviewNaturalInputContract.nonEmptyString(text),
@@ -7117,10 +7157,12 @@ struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
         self.expectedThreadVersion = expectedThreadVersion
         self.expectedSessionVersion = expectedSessionVersion
         self.text = text
+        self.role = role
+        self.captureMode = captureMode
     }
 
     var backendPayload: [String: Any] {
-        [
+        var payload: [String: Any] = [
             "commandId": commandID,
             "threadId": threadID.rawValue.uuidString.lowercased(),
             "messageId": messageID.rawValue.uuidString.lowercased(),
@@ -7128,6 +7170,13 @@ struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
             "expectedSessionVersion": expectedSessionVersion,
             "text": text,
         ]
+        if role != .owner {
+            payload["role"] = role.rawValue
+        }
+        if captureMode != .naturalInput {
+            payload["captureMode"] = captureMode.rawValue
+        }
+        return payload
     }
 }
 
@@ -10794,6 +10843,7 @@ final class OwnerTruthKnowledgeDimensionConfirmationUseCase {
 enum OwnerTruthInterviewNaturalInputIntent: Equatable, Sendable {
     case start
     case submit(text: String)
+    case submitLiveTurn(text: String, role: OwnerTruthInterviewNaturalInputMessageRole)
     case end
     case setBoundary(OwnerTruthInterviewSessionBoundary)
     case recordPacing(OwnerTruthInterviewPacingEvent)
@@ -10847,6 +10897,8 @@ final class OwnerTruthInterviewNaturalInputUseCase {
     private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let qaGateEnabled: () -> Bool
     private let identifierFactory: () -> UUID
+    private let entryMode: OwnerTruthInterviewEntryMode
+    private let allowsEntryModeTransition: Bool
     private var operationGeneration: UInt = 0
 
     private(set) var viewState: OwnerTruthInterviewNaturalInputViewState = .idle {
@@ -10860,7 +10912,9 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         client: OwnerTruthInterviewNaturalInputClient,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled },
-        identifierFactory: @escaping () -> UUID = UUID.init
+        identifierFactory: @escaping () -> UUID = UUID.init,
+        entryMode: OwnerTruthInterviewEntryMode = .naturalInput,
+        allowsEntryModeTransition: Bool = false
     ) {
         self.accountLease = accountLease
         self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
@@ -10868,6 +10922,8 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         self.accountLeaseRuntime = accountLeaseRuntime
         self.qaGateEnabled = qaGateEnabled
         self.identifierFactory = identifierFactory
+        self.entryMode = entryMode
+        self.allowsEntryModeTransition = allowsEntryModeTransition
     }
 
     func send(_ intent: OwnerTruthInterviewNaturalInputIntent) {
@@ -10875,7 +10931,9 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         case .start:
             start()
         case .submit(let text):
-            submit(text: text)
+            submit(text: text, role: .owner, captureMode: .naturalInput)
+        case .submitLiveTurn(let text, let role):
+            submit(text: text, role: role, captureMode: .live)
         case .end:
             end()
         case .setBoundary(let boundary):
@@ -10912,7 +10970,8 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             let command = try OwnerTruthInterviewNaturalInputStartCommand(
                 commandID: identifierFactory().uuidString.lowercased(),
                 threadID: OwnerTruthRecordID(rawValue: identifierFactory()),
-                sessionID: OwnerTruthRecordID(rawValue: identifierFactory())
+                sessionID: OwnerTruthRecordID(rawValue: identifierFactory()),
+                entryMode: entryMode
             )
             operationGeneration &+= 1
             let generation = operationGeneration
@@ -10946,11 +11005,23 @@ final class OwnerTruthInterviewNaturalInputUseCase {
                 startNewSession(vaultID: vaultID)
                 return
             }
-            guard receipt.outcome == .resumed,
+            guard let currentEntryMode = current.entryMode,
+                  receipt.outcome == .resumed,
                   receipt.lifecycle == .active,
                   receipt.messageID == nil,
                   receipt.messageSequence == nil else {
                 transitionFailure(.contractMismatch)
+                return
+            }
+            guard currentEntryMode == entryMode else {
+                guard allowsEntryModeTransition else {
+                    transitionFailure(.contractMismatch)
+                    return
+                }
+                pauseCurrentSessionForEntryModeTransition(
+                    vaultID: vaultID,
+                    receipt: receipt
+                )
                 return
             }
             viewState = OwnerTruthInterviewNaturalInputViewState(
@@ -10967,7 +11038,47 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         }
     }
 
-    private func submit(text: String) {
+    private func pauseCurrentSessionForEntryModeTransition(
+        vaultID: OwnerTruthVaultID,
+        receipt: OwnerTruthInterviewNaturalInputReceipt
+    ) {
+        do {
+            let command = try OwnerTruthInterviewPauseForTopicSwitchCommand(
+                commandID: identifierFactory().uuidString.lowercased(),
+                threadID: receipt.threadID,
+                sessionID: receipt.sessionID,
+                expectedThreadVersion: receipt.threadVersion,
+                expectedSessionVersion: receipt.sessionVersion
+            )
+            operationGeneration &+= 1
+            let generation = operationGeneration
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .submitting,
+                latestReceipt: receipt,
+                continuation: nil,
+                notice: nil
+            )
+            client.pauseOwnerTruthInterviewForTopicSwitch(
+                vaultID: vaultID,
+                command: command
+            ) { [weak self] result in
+                self?.receiveTopicSwitchPause(
+                    result,
+                    vaultID: vaultID,
+                    command: command,
+                    generation: generation
+                )
+            }
+        } catch {
+            transitionFailure(.invalidInput)
+        }
+    }
+
+    private func submit(
+        text: String,
+        role: OwnerTruthInterviewNaturalInputMessageRole,
+        captureMode: OwnerTruthInterviewNaturalInputCaptureMode
+    ) {
         guard let receipt = viewState.latestReceipt,
               viewState.phase == .ready else {
             return
@@ -10981,7 +11092,9 @@ final class OwnerTruthInterviewNaturalInputUseCase {
                 messageID: OwnerTruthRecordID(rawValue: identifierFactory()),
                 expectedThreadVersion: receipt.threadVersion,
                 expectedSessionVersion: receipt.sessionVersion,
-                text: text
+                text: text,
+                role: role,
+                captureMode: captureMode
             )
             operationGeneration &+= 1
             let generation = operationGeneration
