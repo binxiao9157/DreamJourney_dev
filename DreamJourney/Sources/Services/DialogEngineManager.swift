@@ -1549,12 +1549,6 @@ final class DialogEngineManager: NSObject {
     private func configureEngine(_ engine: SpeechEngine) {
         // 引擎类型：Dialog
         engine.setStringParam(SE_DIALOG_ENGINE, forKey: SE_PARAMS_KEY_ENGINE_NAME_STRING)
-        if pendingTextReplyPlayback != nil {
-            engine.setIntParam(
-                Int(SEDialogWorkModeDelegateChatTtsText.rawValue),
-                forKey: SE_PARAMS_KEY_DIALOG_WORK_MODE_INT
-            )
-        }
 
         // 鉴权
         engine.setStringParam(config.appID, forKey: SE_PARAMS_KEY_APP_ID_STRING)
@@ -2443,14 +2437,10 @@ extension DialogEngineManager {
             return
         }
         isRecorderPaused = true
-
-        let clientTriggerResult = engine.send(SEDirectiveDialogUseClientTriggerTts)
-        if clientTriggerResult != SENoError {
-            DDLogWarn(
-                "[DialogEngine] client-trigger TTS mode hint rejected: " +
-                "\(clientTriggerResult.rawValue); trying ChatTtsText directly"
-            )
-        }
+        // startDialog(sendsGreeting: false) leaves this flag set because the
+        // one-shot route bypasses sendGreetingIfNeeded(). Clear it so the next
+        // real Live session keeps its normal greeting behavior.
+        suppressGreetingForNextStart = false
 
         guard let payloadData = try? JSONSerialization.data(
             withJSONObject: ["content": playback.text],
@@ -2463,7 +2453,11 @@ extension DialogEngineManager {
             return
         }
 
-        let result = engine.send(SEDirectiveEventChatTtsText, data: payload)
+        // SayHello is the same provider-side text-to-audio event already used
+        // by the proven Live greeting path. It accepts arbitrary content and
+        // keeps text Echo on the same realtime ticket, player, and role voice
+        // without entering the microphone/LLM turn pipeline.
+        let result = engine.send(SEDirectiveEventSayHello, data: payload)
         guard result == SENoError else {
             completeTextReplyPlayback(
                 .failure(
@@ -2476,7 +2470,8 @@ extension DialogEngineManager {
             return
         }
         playback.onStarted()
-        DDLogInfo("[DialogEngine] text Echo reply submitted through realtime ChatTtsText")
+        print("[DialogEngine] text Echo reply submitted through realtime SayHello")
+        DDLogInfo("[DialogEngine] text Echo reply submitted through realtime SayHello")
     }
 
     private func scheduleTextReplyPlaybackCompletionFallback(playbackID: UUID) {
