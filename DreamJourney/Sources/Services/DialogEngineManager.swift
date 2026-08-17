@@ -142,6 +142,26 @@ enum DialogSessionLifetimePolicy: Equatable, Sendable {
     case userControlledLive
 }
 
+enum DialogTextReplyPlaybackError: LocalizedError, Equatable {
+    case invalidText
+    case sessionBusy
+    case unavailable
+    case directiveRejected(code: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidText:
+            return "回响内容为空"
+        case .sessionBusy:
+            return "实时语音会话正在使用中"
+        case .unavailable:
+            return "火山实时语音暂不可用"
+        case .directiveRejected:
+            return "火山实时语音暂未接受本次播报"
+        }
+    }
+}
+
 private func isSameDialogAccountGeneration(_ lhs: AccountLease, _ rhs: AccountLease) -> Bool {
     lhs.subjectId == rhs.subjectId
         && lhs.vaultId == rhs.vaultId
@@ -418,6 +438,28 @@ final class DialogEngineManager: NSObject {
     }
 
     @discardableResult
+    func startTextReplyPlayback(
+        text: String,
+        onStarted: @escaping () -> Void,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) -> Bool {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            completion(.failure(DialogTextReplyPlaybackError.invalidText))
+            return false
+        }
+        guard !isDialogActive else {
+            completion(.failure(DialogTextReplyPlaybackError.sessionBusy))
+            return false
+        }
+        onStarted()
+        completion(.success(()))
+        return true
+    }
+
+    func cancelTextReplyPlayback() {}
+
+    @discardableResult
     func pauseRecorder() -> Bool {
         guard isDialogActive else { return false }
         isRecorderPaused = true
@@ -571,6 +613,13 @@ private struct DialogEngineProviderCallbackContext {
     let delegateIdentity: ObjectIdentifier
 }
 
+private struct DialogEngineTextReplyPlayback {
+    let id: UUID
+    let text: String
+    let onStarted: () -> Void
+    let completion: (Result<Void, Error>) -> Void
+}
+
 // MARK: - DialogEngineManager
 
 /// Dialog 语音对话引擎管理器 - 直接封装火山引擎 SpeechEngineToB SDK
@@ -598,6 +647,8 @@ final class DialogEngineManager: NSObject {
     private var requiresEngineRecreationBeforeNextDialog = false
     private var scopedTTSVoiceSelectionStore = DialogEngineScopedTTSVoiceSelectionStore()
     private var externallyManagedAudioSessionLease: AudioOwnerLease?
+    private var pendingTextReplyPlayback: DialogEngineTextReplyPlayback?
+    private var textReplyPlaybackFallbackWorkItem: DispatchWorkItem?
 
     /// 引擎是否就绪（已初始化完成）
     private(set) var isEngineReady = false
@@ -1097,6 +1148,59 @@ final class DialogEngineManager: NSObject {
         )
     }
 
+    /// Speaks a backend-generated text reply through the same Fire realtime
+    /// dialog transport and role-bound speaker used by Live. The recorder is
+    /// paused before text is injected, so this one-shot route cannot create a
+    /// second user turn or mutate the Live conversation.
+    @discardableResult
+    func startTextReplyPlayback(
+        text: String,
+        onStarted: @escaping () -> Void,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) -> Bool {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            completion(.failure(DialogTextReplyPlaybackError.invalidText))
+            return false
+        }
+        guard pendingTextReplyPlayback == nil,
+              !isDialogActive,
+              config.enablePlayer,
+              currentConfigurationIsProductionReady,
+              boundBindingHandle != nil else {
+            completion(.failure(DialogTextReplyPlaybackError.sessionBusy))
+            return false
+        }
+
+        pendingTextReplyPlayback = DialogEngineTextReplyPlayback(
+            id: UUID(),
+            text: normalized,
+            onStarted: onStarted,
+            completion: completion
+        )
+        startDialog(
+            sendsGreeting: false,
+            usesTurnScopedKnowledgeContext: true,
+            lifetimePolicy: .automatic
+        )
+        guard isEngineReady, activeDialogOperationId != nil else {
+            completeTextReplyPlayback(
+                .failure(DialogTextReplyPlaybackError.unavailable),
+                stopsProviderSession: true
+            )
+            return false
+        }
+        return true
+    }
+
+    func cancelTextReplyPlayback() {
+        guard pendingTextReplyPlayback != nil else { return }
+        textReplyPlaybackFallbackWorkItem?.cancel()
+        textReplyPlaybackFallbackWorkItem = nil
+        pendingTextReplyPlayback = nil
+        closeTextReplyProviderSession()
+    }
+
     /// 结束语音对话
     func stopDialog() {
         stopDialog(reason: .manual)
@@ -1104,6 +1208,10 @@ final class DialogEngineManager: NSObject {
 
     /// 结束语音对话（带原因）
     func stopDialog(reason: DialogEndReason) {
+        if pendingTextReplyPlayback != nil {
+            cancelTextReplyPlayback()
+            return
+        }
         guard isDialogActive,
               let engine,
               let callbackContext = currentProviderCallbackContext() else { return }
@@ -1237,6 +1345,9 @@ final class DialogEngineManager: NSObject {
     /// 销毁引擎（登出/退出时调用）
     func destroyEngine() {
         invalidateSilenceTimer()
+        textReplyPlaybackFallbackWorkItem?.cancel()
+        textReplyPlaybackFallbackWorkItem = nil
+        pendingTextReplyPlayback = nil
         if isDialogActive {
             _ = engine?.send(SEDirectiveSyncStopEngine)
         }
@@ -1438,6 +1549,12 @@ final class DialogEngineManager: NSObject {
     private func configureEngine(_ engine: SpeechEngine) {
         // 引擎类型：Dialog
         engine.setStringParam(SE_DIALOG_ENGINE, forKey: SE_PARAMS_KEY_ENGINE_NAME_STRING)
+        if pendingTextReplyPlayback != nil {
+            engine.setIntParam(
+                Int(SEDialogWorkModeDelegateChatTtsText.rawValue),
+                forKey: SE_PARAMS_KEY_DIALOG_WORK_MODE_INT
+            )
+        }
 
         // 鉴权
         engine.setStringParam(config.appID, forKey: SE_PARAMS_KEY_APP_ID_STRING)
@@ -1516,6 +1633,10 @@ final class DialogEngineManager: NSObject {
 
         print("[DialogEngine] 配置 AudioSession...")
         guard configureAudioSession() else {
+            completeTextReplyPlayback(
+                .failure(DialogTextReplyPlaybackError.unavailable),
+                stopsProviderSession: true
+            )
             return
         }
 
@@ -1625,6 +1746,16 @@ final class DialogEngineManager: NSObject {
         if startResult != SENoError {
             DDLogError("[DialogEngine] StartEngine 失败: \(startResult.rawValue)")
             restoreAudioSessionIfNeeded()
+            if completeTextReplyPlayback(
+                .failure(
+                    DialogTextReplyPlaybackError.directiveRejected(
+                        code: Int(startResult.rawValue)
+                    )
+                ),
+                stopsProviderSession: true
+            ) {
+                return
+            }
             if let callbackContext = currentProviderCallbackContext(),
                finishProviderOperation(callbackContext) {
                 deliverProviderCallback(
@@ -1844,6 +1975,34 @@ extension DialogEngineManager {
         let dataStr = String(data: data, encoding: .utf8) ?? "(binary \(data.count) bytes)"
         print("[DialogEngine] onMessage type=\(type.rawValue), data=\(dataStr.prefix(500))")
 
+        if pendingTextReplyPlayback != nil {
+            switch type {
+            case SEEventConnectionStarted,
+                 SEEventConnectionFailed,
+                 SEEventConnectionFinished,
+                 SEEventSessionStarted,
+                 SEEventSessionFailed,
+                 SEEventSessionFinished,
+                 SEEventSessionCanceled,
+                 SEEventTTSSentenceStart,
+                 SEEventTTSSentenceEnd,
+                 SEEventTTSResponse,
+                 SEEventTTSEnded,
+                 SEPlayerAudioData,
+                 SEPlayerStartPlayAudio,
+                 SEPlayerFinishPlayAudio,
+                 SEEngineStart,
+                 SEEngineStop,
+                 SEEngineError:
+                break
+            default:
+                DDLogVerbose(
+                    "[DialogEngine] suppressed non-playback callback during text Echo"
+                )
+                return
+            }
+        }
+
         switch type {
         // MARK: Connection Events
         case SEEventConnectionStarted:
@@ -1854,6 +2013,16 @@ extension DialogEngineManager {
             let msg = parseErrorMessage(from: data)
             print("[DialogEngine] ❌ 连接失败: \(msg)")
             DDLogError("[DialogEngine] 连接失败: \(msg)")
+            if completeTextReplyPlayback(
+                .failure(
+                    DialogTextReplyPlaybackError.directiveRejected(
+                        code: Int(type.rawValue)
+                    )
+                ),
+                stopsProviderSession: true
+            ) {
+                return
+            }
             guard finishProviderOperation(callbackContext) else { return }
             restoreAudioSessionIfNeeded()
             deliverProviderCallback(
@@ -1870,6 +2039,12 @@ extension DialogEngineManager {
 
         case SEEventConnectionFinished:
             DDLogInfo("[DialogEngine] 连接已关闭")
+            if completeTextReplyPlayback(
+                .failure(DialogTextReplyPlaybackError.unavailable),
+                stopsProviderSession: false
+            ) {
+                return
+            }
             _ = finishProviderOperation(callbackContext)
 
         // MARK: Session Events
@@ -1878,6 +2053,10 @@ extension DialogEngineManager {
             DDLogInfo("[DialogEngine] 对话会话已开始")
             isDialogActive = true
             providerSessionOperationId = callbackContext.dialogOperationId
+            if pendingTextReplyPlayback != nil {
+                submitPendingTextReplyPlayback()
+                return
+            }
             // 发送开场白
             sendGreetingIfNeeded()
             // 启动静音超时计时器
@@ -1889,6 +2068,12 @@ extension DialogEngineManager {
         case SEEventSessionFinished:
             DDLogInfo("[DialogEngine] 对话会话已结束")
             invalidateSilenceTimer()
+            if completeTextReplyPlayback(
+                .failure(DialogTextReplyPlaybackError.unavailable),
+                stopsProviderSession: false
+            ) {
+                return
+            }
             guard finishProviderOperation(callbackContext) else { return }
             deliverProviderCallback(
                 callbackContext,
@@ -1901,6 +2086,16 @@ extension DialogEngineManager {
             let msg = parseErrorMessage(from: data)
             print("[DialogEngine] ❌ 会话失败: \(msg)")
             DDLogError("[DialogEngine] 会话失败: \(msg)")
+            if completeTextReplyPlayback(
+                .failure(
+                    DialogTextReplyPlaybackError.directiveRejected(
+                        code: Int(type.rawValue)
+                    )
+                ),
+                stopsProviderSession: true
+            ) {
+                return
+            }
             guard finishProviderOperation(callbackContext) else { return }
             deliverProviderCallback(
                 callbackContext,
@@ -1917,6 +2112,12 @@ extension DialogEngineManager {
         case SEEventSessionCanceled:
             DDLogInfo("[DialogEngine] 会话已取消")
             invalidateSilenceTimer()
+            if completeTextReplyPlayback(
+                .failure(DialogTextReplyPlaybackError.unavailable),
+                stopsProviderSession: false
+            ) {
+                return
+            }
             guard finishProviderOperation(callbackContext) else { return }
             deliverProviderCallback(
                 callbackContext,
@@ -2080,6 +2281,9 @@ extension DialogEngineManager {
             }
             // TTS 句子开始 - 标记 AI 正在播报
             isAISpeaking = true
+            if pendingTextReplyPlayback != nil {
+                return
+            }
             // AI 说话时也重置静音计时器（AI 播报期间不应触发超时）
             deliverProviderCallback(callbackContext) { manager, _ in
                 manager.resetSilenceTimer()
@@ -2104,6 +2308,9 @@ extension DialogEngineManager {
                 print("[DialogEngine] skipped Fire TTS sentence end; Tencent owns audible playback")
                 return
             }
+            if pendingTextReplyPlayback != nil {
+                return
+            }
             // 部分 SpeechEngine 版本在 SentenceStart 只给空文本，完整文本出现在
             // SentenceEnd。数字人主音频模式依赖这里的文本转交给腾讯云渲染。
             if let text = parseTTSText(from: data), !text.isEmpty {
@@ -2120,6 +2327,10 @@ extension DialogEngineManager {
             }
             isAISpeaking = false
             DDLogInfo("[DialogEngine] TTS 播放结束")
+            if let playback = pendingTextReplyPlayback {
+                scheduleTextReplyPlaybackCompletionFallback(playbackID: playback.id)
+                return
+            }
             deliverProviderCallback(callbackContext) { _, delegate in
                 delegate.onTTSFinished()
             }
@@ -2131,6 +2342,9 @@ extension DialogEngineManager {
             }
             isAISpeaking = false
             DDLogInfo("[DialogEngine] 播放器播放完毕")
+            if completeTextReplyPlayback(.success(()), stopsProviderSession: true) {
+                return
+            }
             deliverProviderCallback(callbackContext) { _, delegate in
                 delegate.onTTSFinished()
             }
@@ -2171,6 +2385,16 @@ extension DialogEngineManager {
             let msg = parseErrorMessage(from: data)
             print("[DialogEngine] ❌ 引擎错误: \(msg)")
             DDLogError("[DialogEngine] 引擎错误: \(msg)")
+            if completeTextReplyPlayback(
+                .failure(
+                    DialogTextReplyPlaybackError.directiveRejected(
+                        code: Int(type.rawValue)
+                    )
+                ),
+                stopsProviderSession: true
+            ) {
+                return
+            }
             deliverProviderCallback(callbackContext) { _, delegate in
                 delegate.onError(
                     error: DialogEngineError.sdkError(
@@ -2199,6 +2423,109 @@ extension DialogEngineManager {
     }
 
     // MARK: - JSON Parsing Helpers
+
+    private func submitPendingTextReplyPlayback() {
+        guard let playback = pendingTextReplyPlayback,
+              let engine else {
+            return
+        }
+
+        let pauseResult = engine.send(SEDirectivePauseRecorder)
+        guard pauseResult == SENoError else {
+            completeTextReplyPlayback(
+                .failure(
+                    DialogTextReplyPlaybackError.directiveRejected(
+                        code: Int(pauseResult.rawValue)
+                    )
+                ),
+                stopsProviderSession: true
+            )
+            return
+        }
+        isRecorderPaused = true
+
+        let clientTriggerResult = engine.send(SEDirectiveDialogUseClientTriggerTts)
+        if clientTriggerResult != SENoError {
+            DDLogWarn(
+                "[DialogEngine] client-trigger TTS mode hint rejected: " +
+                "\(clientTriggerResult.rawValue); trying ChatTtsText directly"
+            )
+        }
+
+        guard let payloadData = try? JSONSerialization.data(
+            withJSONObject: ["content": playback.text],
+            options: []
+        ), let payload = String(data: payloadData, encoding: .utf8) else {
+            completeTextReplyPlayback(
+                .failure(DialogTextReplyPlaybackError.invalidText),
+                stopsProviderSession: true
+            )
+            return
+        }
+
+        let result = engine.send(SEDirectiveEventChatTtsText, data: payload)
+        guard result == SENoError else {
+            completeTextReplyPlayback(
+                .failure(
+                    DialogTextReplyPlaybackError.directiveRejected(
+                        code: Int(result.rawValue)
+                    )
+                ),
+                stopsProviderSession: true
+            )
+            return
+        }
+        playback.onStarted()
+        DDLogInfo("[DialogEngine] text Echo reply submitted through realtime ChatTtsText")
+    }
+
+    private func scheduleTextReplyPlaybackCompletionFallback(playbackID: UUID) {
+        textReplyPlaybackFallbackWorkItem?.cancel()
+        let characterCount = pendingTextReplyPlayback?.text.count ?? 0
+        let delay = max(4.0, min(30.0, Double(characterCount) * 0.35))
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.pendingTextReplyPlayback?.id == playbackID else {
+                return
+            }
+            self.completeTextReplyPlayback(.success(()), stopsProviderSession: true)
+        }
+        textReplyPlaybackFallbackWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    @discardableResult
+    private func completeTextReplyPlayback(
+        _ result: Result<Void, Error>,
+        stopsProviderSession: Bool
+    ) -> Bool {
+        guard let playback = pendingTextReplyPlayback else { return false }
+        textReplyPlaybackFallbackWorkItem?.cancel()
+        textReplyPlaybackFallbackWorkItem = nil
+        pendingTextReplyPlayback = nil
+        if stopsProviderSession {
+            closeTextReplyProviderSession()
+        }
+        playback.completion(result)
+        return true
+    }
+
+    private func closeTextReplyProviderSession() {
+        invalidateSilenceTimer()
+        if activeDialogOperationId != nil {
+            _ = engine?.send(SEDirectiveSyncStopEngine)
+        }
+        isDialogActive = false
+        isRecorderPaused = false
+        isAISpeaking = false
+        isEnding = false
+        activeDialogAccountLease = nil
+        activeDialogBindingHandle = nil
+        activeDialogOperationId = nil
+        providerSessionOperationId = nil
+        requiresEngineRecreationBeforeNextDialog = true
+        restoreAudioSessionIfNeeded()
+    }
 
     /// 解析 ASR 文本和是否为最终结果
     private func parseASRResult(from data: Data) -> (text: String, isFinal: Bool)? {
