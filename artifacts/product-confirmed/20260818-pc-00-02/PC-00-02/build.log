@@ -1,0 +1,7 @@
+Command:
+xcodebuild -workspace DreamJourney.xcworkspace -scheme DreamJourney -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+Result:
+BUILD SUCCEEDED
+
+Release UIQA build used the local override bundle ID com.yxj.dreamjourney.app.

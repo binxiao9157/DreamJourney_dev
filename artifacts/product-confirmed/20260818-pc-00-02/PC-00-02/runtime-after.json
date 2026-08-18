@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-08-18T10:04:16Z",
+  "backendReady": "ready",
+  "store": "postgres",
+  "schemaReason": "migrationHeadVerified",
+  "migrationHead": "0093",
+  "releasePolicyDeployedSmoke": "passed",
+  "capabilities": {
+    "timeLetters": {
+      "enabled": false,
+      "providerReady": false,
+      "releaseVisible": false,
+      "reason": "productClosed",
+      "fallbackMode": "disabled"
+    },
+    "echoDelayedReplies": {
+      "enabled": false,
+      "providerReady": false,
+      "releaseVisible": false,
+      "reason": "productClosed",
+      "fallbackMode": "disabled"
+    }
+  },
+  "capabilityAliases": {
+    "timeLetters": false,
+    "echoDelayedReplies": false
+  }
+}

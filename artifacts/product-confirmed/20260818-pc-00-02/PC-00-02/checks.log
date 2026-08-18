@@ -1,0 +1,20 @@
+PASS backend PC-00-02 closure gate: 6 tests
+PASS backend full memory-store unittest discovery: 2107 tests
+PASS backend provider-cost evidence test: 7 tests
+PASS backend release-policy deployed smoke
+PASS backend targeted runtime capability deployed assertions
+PASS backend time-letter dispatcher no-op: 0 items, 0 reminders
+PASS backend git diff --check
+PASS iOS product-confirmed-time-letter-delayed-reply-closure-check.py
+PASS iOS runtime-capability-snapshot-model smoke
+PASS iOS public-release-scope-model smoke
+PASS iOS delayed-reply callsite gate
+PASS iOS delayed-reply owner-scope gate
+PASS iOS time-letter notification lifecycle gate
+PASS iOS generic simulator Debug workspace build
+PASS iOS public release scope UIQA
+PASS iOS git diff --check
+
+NOTE the general runtime deployed smoke has an independent pre-existing
+voiceCloneShell visibility mismatch between Runtime and Release Policy. The
+PC-00-02 target capabilities passed their deployed assertions.

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "workItem": "PC-00-02",
+  "status": "complete",
+  "executedBy": "Codex",
+  "executedAt": "2026-08-18T10:04:16Z",
+  "environment": {
+    "backend": "production-postgres",
+    "iosBuild": "generic-ios-simulator-debug",
+    "uiqa": "release-ios-simulator"
+  },
+  "repositories": {
+    "iosImplementationCommit": "80d88d9575f5d26e63353fd22a7272cec8f0ccc2",
+    "backendImplementationCommit": "13081afe",
+    "backendValidationMaintenanceCommit": "4a8200eccfdfbcbaf51c3796ce43bcd6319cbd97",
+    "backendDeployedSource": "4a8200eccfdfbcbaf51c3796ce43bcd6319cbd97"
+  },
+  "deployment": {
+    "image": "sha256:a80be1bebb03bed171591e83df1ee751ba92abc422224a50ff4b204be7f38dfa",
+    "store": "postgres",
+    "readiness": "ready",
+    "schema": "migrationHeadVerified",
+    "migrationHead": "0093"
+  },
+  "results": {
+    "backendClosureGate": "passed",
+    "backendFullSuite": "passed:2107",
+    "backendReleasePolicyDeployed": "passed",
+    "backendRuntimeTargeted": "passed",
+    "backendWorkerNoOp": "passed",
+    "iosStaticAndModelGates": "passed",
+    "iosBuild": "passed",
+    "publicScopeUIQA": "passed"
+  },
+  "migration": {
+    "productionHistoryExists": false,
+    "databaseMigrationExecuted": false,
+    "backfillExecuted": false,
+    "redeliveryExecuted": false
+  },
+  "independentObservation": "The general runtime smoke still finds a pre-existing voiceCloneShell visibility mismatch between Runtime and Release Policy; target PC-00-02 assertions pass.",
+  "externalOrDeviceRemainder": [],
+  "privacy": "Sanitized evidence only; no access token, phone number, user content, media URL, or Provider credential is stored."
+}

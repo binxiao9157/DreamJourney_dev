@@ -208,6 +208,8 @@ artifacts/product-confirmed/<run-id>/<work-item>/
 
 关联：GAP-12、NOTI-001。
 
+状态：`COMPLETE`（2026-08-18）。实现提交：iOS `80d88d95`，Backend `13081af`；后端测试维护提交 `4a8200e`。Backend `4a8200ec` 已部署到 production-postgres。验收证据见 `artifacts/product-confirmed/20260818-pc-00-02/PC-00-02/` 和 `docs/superpowers/status/2026-08-18-pc-00-02-time-letter-delayed-reply-closure.md`。当前连续执行交接点为 `PC-00-03`。
+
 实现：
 
 1. `timeLetters=false`、`echoDelayedReplies=false`，创建接口对普通用户失败关闭。

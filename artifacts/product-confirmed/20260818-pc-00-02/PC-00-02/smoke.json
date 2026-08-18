@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "backend": {
+    "focusedTests": 6,
+    "fullSuiteTests": 2107,
+    "releasePolicyDeployed": "passed",
+    "runtimeTargeted": "passed",
+    "timeLetterDispatcher": {
+      "status": "productClosed",
+      "itemCount": 0,
+      "reminderCount": 0,
+      "providerDeliveryAttempted": false
+    }
+  },
+  "ios": {
+    "productClosureStaticCheck": "passed",
+    "runtimeCapabilityModel": "passed",
+    "publicReleaseScopeModel": "passed",
+    "delayedReplyCallsite": "passed",
+    "delayedReplyOwnerScope": "passed",
+    "timeLetterNotificationLifecycle": "passed",
+    "workspaceBuild": "passed",
+    "publicScopeUIQA": "passed"
+  }
+}
