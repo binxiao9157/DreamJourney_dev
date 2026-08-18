@@ -463,6 +463,80 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(candidate.sourceReferences[0].span, OwnerTruthEvidenceSpan(backendJSONObject: ["start": 0, "end": 12]))
         XCTAssertEqual(candidate.content["summary"], .string("小时候在院子里听父亲讲故事"))
         XCTAssertEqual(candidate.content["confidence"], .number(0.92))
+        XCTAssertEqual(candidate.facetsState, .legacyNotAvailable)
+    }
+
+    func testCandidateInboxDecodesV2FacetsAndDoesNotTreatMissingFacetsAsSuccess() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-owner-v2"))
+        let sourceID = "00000000-0000-0000-0000-000000000091"
+        func candidate(content: [String: Any], schema: String) -> [String: Any] {
+            [
+                "candidateId": "00000000-0000-0000-0000-000000000090",
+                "sourceId": sourceID,
+                "memoryKind": "experience",
+                "perspectiveType": "firstPerson",
+                "epistemicStatus": "recalled",
+                "sensitivity": "standard",
+                "contentSchemaVersion": schema,
+                "content": content,
+                "contentHash": "v2-content-hash",
+                "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                "reviewMode": "single",
+                "candidateVersion": 1,
+            ]
+        }
+        let facetObject: [String: Any] = [
+            "people": [[
+                "value": "外公",
+                "evidenceMode": "ownerStated",
+                "confidence": 1.0,
+                "providerOpaque": "preserved",
+            ]],
+            "time": [],
+            "places": [[
+                "value": "杭州",
+                "evidenceMode": "inferred",
+                "confidence": 0.7,
+            ]],
+            "relationships": [],
+            "emotions": [],
+            "values": [],
+            "personality": [],
+            "confidence": 0.88,
+            "futureFacetMetadata": "preserved",
+        ]
+        let validInbox = try OwnerTruthCandidateInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "candidates": [candidate(
+                    content: ["summary": "小时候和外公去杭州散步", "facets": facetObject],
+                    schema: "owner-truth-v2"
+                )],
+            ],
+            expectedVaultID: vaultID
+        )
+
+        let validCandidate = try XCTUnwrap(validInbox.candidates.first)
+        guard case .available(let facets) = validCandidate.facetsState else {
+            return XCTFail("V2 facets must be available")
+        }
+        XCTAssertEqual(facets.values(for: .people).first?.value, "外公")
+        XCTAssertEqual(facets.values(for: .places).first?.evidenceMode, .inferred)
+        XCTAssertEqual(facets.confidence, 0.88)
+
+        let invalidInbox = try OwnerTruthCandidateInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "candidates": [candidate(
+                    content: ["summary": "缺少 facets 的 V2 候选"],
+                    schema: "owner-truth-v2"
+                )],
+            ],
+            expectedVaultID: vaultID
+        )
+        XCTAssertEqual(invalidInbox.candidates.first?.facetsState, .invalid)
     }
 
     func testCandidateInboxRejectsMismatchedVault() throws {
@@ -600,8 +674,24 @@ final class OwnerTruthContractsTests: XCTestCase {
                     "versionNumber": 2,
                     "status": "current",
                     "decision": "corrected",
-                    "contentSchemaVersion": "owner-truth-v1",
-                    "content": ["summary": "外祖父在院子里讲故事"],
+                    "contentSchemaVersion": "owner-truth-v2",
+                    "content": [
+                        "summary": "外祖父在院子里讲故事",
+                        "facets": [
+                            "people": [[
+                                "value": "外祖父",
+                                "evidenceMode": "ownerStated",
+                                "confidence": 1.0,
+                            ]],
+                            "time": [],
+                            "places": [],
+                            "relationships": [],
+                            "emotions": [],
+                            "values": [],
+                            "personality": [],
+                            "confidence": 1.0,
+                        ],
+                    ],
                     "sourceCount": 1,
                     "createdAt": "2026-08-08T11:00:00Z",
                 ],
@@ -639,6 +729,11 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.items.map(\.versionNumber), [2, 1])
         XCTAssertEqual(useCase.viewState.items.first?.summary, "外祖父在院子里讲故事")
         XCTAssertEqual(useCase.viewState.items.first?.status, .current)
+        guard case .available(let facets)? = useCase.viewState.items.first?.facetsState else {
+            return XCTFail("current V2 MemoryVersion facets must be available")
+        }
+        XCTAssertEqual(facets.values(for: .people).first?.value, "外祖父")
+        XCTAssertEqual(useCase.viewState.items.last?.facetsState, .legacyNotAvailable)
 
         client.deferMemoryVersionHistory = true
         useCase.refresh()
@@ -871,6 +966,90 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(command.correctedValueSchemaVersion, "owner-truth-candidate-content-v1")
         XCTAssertEqual(useCase.viewState.notice, .candidateCorrected)
         XCTAssertEqual(useCase.viewState.latestReceipt?.decision, .corrected)
+    }
+
+    func testCandidateReviewUseCaseCorrectsV2FacetsAsOwnerStatedAndPreservesExtensions() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let candidateID = recordID("00000000-0000-0000-0000-000000000092")
+        let sourceID = "00000000-0000-0000-0000-000000000093"
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try OwnerTruthCandidateInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "candidates": [[
+                    "candidateId": candidateID.rawValue.uuidString.lowercased(),
+                    "sourceId": sourceID,
+                    "memoryKind": "experience",
+                    "perspectiveType": "firstPerson",
+                    "epistemicStatus": "recalled",
+                    "sensitivity": "standard",
+                    "contentSchemaVersion": "owner-truth-v2",
+                    "content": [
+                        "summary": "小时候和外公散步",
+                        "facets": [
+                            "people": [[
+                                "value": "外公",
+                                "evidenceMode": "inferred",
+                                "confidence": 0.7,
+                                "providerOpaque": "preserved",
+                            ]],
+                            "time": [],
+                            "places": [],
+                            "relationships": [],
+                            "emotions": [],
+                            "values": [],
+                            "personality": [],
+                            "confidence": 0.7,
+                            "futureFacetMetadata": "preserved",
+                        ],
+                    ],
+                    "contentHash": "v2-correction-hash",
+                    "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                    "reviewMode": "single",
+                    "candidateVersion": 1,
+                ]],
+            ],
+            expectedVaultID: vaultID
+        ))
+        client.reviewResult = .success(try decisionResult(
+            candidateID: candidateID,
+            decision: .corrected
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "candidate-review-v2-correct-001" }
+        )
+
+        useCase.send(.refresh)
+        useCase.send(.correct(
+            candidateID: candidateID,
+            correctedPrimaryValue: "小时候常和外公散步",
+            correctedFacetValues: [
+                .people: ["外公"],
+                .places: ["杭州"],
+            ]
+        ))
+
+        let command = try XCTUnwrap(client.reviewedCommands.first)
+        guard case .object(let correctedFacets)? = command.correctedValue?["facets"],
+              case .array(let people)? = correctedFacets["people"],
+              case .object(let person)? = people.first,
+              case .array(let places)? = correctedFacets["places"],
+              case .object(let place)? = places.first else {
+            return XCTFail("corrected V2 facets must remain structured")
+        }
+        XCTAssertEqual(person["evidenceMode"], .string("ownerStated"))
+        XCTAssertEqual(person["providerOpaque"], .string("preserved"))
+        XCTAssertEqual(place["value"], .string("杭州"))
+        XCTAssertEqual(place["evidenceMode"], .string("ownerStated"))
+        XCTAssertEqual(correctedFacets["futureFacetMetadata"], .string("preserved"))
+        XCTAssertEqual(correctedFacets["confidence"], .number(1.0))
+        XCTAssertEqual(command.correctedValueSchemaVersion, "owner-truth-v2")
     }
 
     func testCandidateReviewUseCaseMapsStructuredKnowledgeCorrectionAndSources() throws {
@@ -8589,10 +8768,16 @@ final class OwnerTruthContractsTests: XCTestCase {
             vaultID: lease.vaultId,
             reviewBatchIDs: [focusedReviewBatchID, otherReviewBatchID]
         ))
+        let activationInboxClient = InterviewCandidateMemoryActivationInboxClientSpy()
+        activationInboxClient.readResult = .success(try interviewCandidateMemoryActivationInbox(
+            vaultID: lease.vaultId,
+            handles: []
+        ))
         let controller = OwnerTruthInterviewCandidateConfirmationInboxViewController(
             accountLease: lease,
             focusedReviewBatchID: focusedReviewBatchID,
             client: client,
+            activationInboxClient: activationInboxClient,
             accountLeaseRuntime: runtime,
             releasePolicyAvailable: { true }
         )
@@ -8617,10 +8802,16 @@ final class OwnerTruthContractsTests: XCTestCase {
             vaultID: lease.vaultId,
             reviewBatchIDs: [recordID("00000000-0000-0000-0000-000000000086")]
         ))
+        let activationInboxClient = InterviewCandidateMemoryActivationInboxClientSpy()
+        activationInboxClient.readResult = .success(try interviewCandidateMemoryActivationInbox(
+            vaultID: lease.vaultId,
+            handles: []
+        ))
         let controller = OwnerTruthInterviewCandidateConfirmationInboxViewController(
             accountLease: lease,
             focusedReviewBatchID: focusedReviewBatchID,
             client: client,
+            activationInboxClient: activationInboxClient,
             accountLeaseRuntime: runtime,
             releasePolicyAvailable: { true }
         )
@@ -8637,7 +8828,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             accessibilityIdentifier: "owner-truth-candidate-confirmation-inbox-list"
         ) as? UITableView)
         XCTAssertEqual(statusLabel.text, "本次待确认内容已失效，无法继续确认。")
-        XCTAssertEqual(tableView.numberOfRows(inSection: 0), 0)
+        XCTAssertEqual(tableView.numberOfSections, 0)
         XCTAssertFalse(try XCTUnwrap(controller.navigationItem.rightBarButtonItem).isEnabled)
         XCTAssertNil(controller.presentedViewController)
         XCTAssertTrue(navigationController.topViewController === controller)
@@ -8652,10 +8843,16 @@ final class OwnerTruthContractsTests: XCTestCase {
             statusCode: 409,
             context: .init(detail: "context changed")
         ))
+        let activationInboxClient = InterviewCandidateMemoryActivationInboxClientSpy()
+        activationInboxClient.readResult = .success(try interviewCandidateMemoryActivationInbox(
+            vaultID: lease.vaultId,
+            handles: []
+        ))
         let controller = OwnerTruthInterviewCandidateConfirmationInboxViewController(
             accountLease: lease,
             focusedReviewBatchID: focusedReviewBatchID,
             client: client,
+            activationInboxClient: activationInboxClient,
             accountLeaseRuntime: runtime,
             releasePolicyAvailable: { true }
         )

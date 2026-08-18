@@ -90,6 +90,7 @@ grep -Eq '"candidateVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fai
 grep -Eq '"candidatePreviewVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate preview should render."
 grep -Eq '"candidateDetailVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate structured detail should render."
 grep -Eq '"structuredPrimaryFieldVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate primary field should use the typed ontology."
+grep -Eq '"structuredFacetsVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate V2 facets and inference labels should render."
 grep -Eq '"sourceReferenceDetailsVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate source reference details should render."
 grep -Eq '"reviewActionsAvailable"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Review actions should be available."
 grep -Eq '"reviewSubmitted"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Candidate review should submit."

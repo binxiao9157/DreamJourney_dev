@@ -366,6 +366,178 @@ indirect enum OwnerTruthJSONValue: Codable, Equatable, Sendable {
     }
 }
 
+enum OwnerTruthMemoryFacetKind: String, CaseIterable, Codable, Equatable, Sendable {
+    case people
+    case time
+    case places
+    case relationships
+    case emotions
+    case values
+    case personality
+
+    var title: String {
+        switch self {
+        case .people: return "人物"
+        case .time: return "时间"
+        case .places: return "地点"
+        case .relationships: return "关系"
+        case .emotions: return "情绪"
+        case .values: return "价值观"
+        case .personality: return "性格"
+        }
+    }
+}
+
+enum OwnerTruthFacetEvidenceMode: String, Codable, Equatable, Sendable {
+    case ownerStated
+    case inferred
+
+    var title: String {
+        switch self {
+        case .ownerStated: return "本人表达"
+        case .inferred: return "系统推断"
+        }
+    }
+}
+
+struct OwnerTruthMemoryFacetValue: Equatable, Sendable {
+    let value: String
+    let evidenceMode: OwnerTruthFacetEvidenceMode
+    let confidence: Double
+    fileprivate let rawObject: [String: OwnerTruthJSONValue]
+
+    fileprivate init?(jsonValue: OwnerTruthJSONValue) {
+        guard case .object(let object) = jsonValue,
+              case .string(let rawValue)? = object["value"],
+              case .string(let rawEvidenceMode)? = object["evidenceMode"],
+              let evidenceMode = OwnerTruthFacetEvidenceMode(rawValue: rawEvidenceMode),
+              case .number(let confidence)? = object["confidence"],
+              confidence.isFinite,
+              (0...1).contains(confidence) else {
+            return nil
+        }
+        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        self.value = value
+        self.evidenceMode = evidenceMode
+        self.confidence = confidence
+        rawObject = object
+    }
+
+    fileprivate func ownerCorrectedJSONValue(value: String) -> OwnerTruthJSONValue {
+        var object = rawObject
+        object["value"] = .string(value)
+        object["evidenceMode"] = .string(OwnerTruthFacetEvidenceMode.ownerStated.rawValue)
+        object["confidence"] = .number(1.0)
+        return .object(object)
+    }
+}
+
+struct OwnerTruthMemoryFacets: Equatable, Sendable {
+    let valuesByKind: [OwnerTruthMemoryFacetKind: [OwnerTruthMemoryFacetValue]]
+    let confidence: Double
+    private let rawObject: [String: OwnerTruthJSONValue]
+
+    init?(jsonValue: OwnerTruthJSONValue) {
+        guard case .object(let object) = jsonValue,
+              case .number(let confidence)? = object["confidence"],
+              confidence.isFinite,
+              (0...1).contains(confidence) else {
+            return nil
+        }
+        var valuesByKind: [OwnerTruthMemoryFacetKind: [OwnerTruthMemoryFacetValue]] = [:]
+        for kind in OwnerTruthMemoryFacetKind.allCases {
+            guard case .array(let values)? = object[kind.rawValue] else {
+                return nil
+            }
+            var parsed: [OwnerTruthMemoryFacetValue] = []
+            parsed.reserveCapacity(values.count)
+            for value in values {
+                guard let item = OwnerTruthMemoryFacetValue(jsonValue: value) else {
+                    return nil
+                }
+                parsed.append(item)
+            }
+            valuesByKind[kind] = parsed
+        }
+        self.valuesByKind = valuesByKind
+        self.confidence = confidence
+        rawObject = object
+    }
+
+    func values(for kind: OwnerTruthMemoryFacetKind) -> [OwnerTruthMemoryFacetValue] {
+        valuesByKind[kind] ?? []
+    }
+
+    var isEmpty: Bool {
+        OwnerTruthMemoryFacetKind.allCases.allSatisfy { values(for: $0).isEmpty }
+    }
+
+    /// Rebuilds only known facet arrays. Unknown provider fields remain in the
+    /// raw object, while every value explicitly submitted by the Owner becomes
+    /// owner-stated evidence.
+    func ownerCorrectedJSONValue(
+        valuesByKind correctedValues: [OwnerTruthMemoryFacetKind: [String]]
+    ) -> OwnerTruthJSONValue {
+        var object = rawObject
+        for kind in OwnerTruthMemoryFacetKind.allCases {
+            var currentValues: [String: OwnerTruthMemoryFacetValue] = [:]
+            for value in values(for: kind) {
+                currentValues[Self.comparisonKey(value.value)] = value
+            }
+            var seen: Set<String> = []
+            let normalizedValues = (correctedValues[kind] ?? []).compactMap { rawValue -> String? in
+                let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                let key = Self.comparisonKey(value)
+                guard !value.isEmpty, seen.insert(key).inserted else { return nil }
+                return value
+            }
+            object[kind.rawValue] = .array(normalizedValues.map { value in
+                let existing = currentValues[Self.comparisonKey(value)]
+                return existing?.ownerCorrectedJSONValue(value: value)
+                    ?? .object([
+                        "value": .string(value),
+                        "evidenceMode": .string(OwnerTruthFacetEvidenceMode.ownerStated.rawValue),
+                        "confidence": .number(1.0),
+                    ])
+            })
+        }
+        object["confidence"] = .number(1.0)
+        return .object(object)
+    }
+
+    private static func comparisonKey(_ value: String) -> String {
+        value.folding(options: [.caseInsensitive, .widthInsensitive], locale: .current)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+    }
+}
+
+enum OwnerTruthMemoryFacetsState: Equatable, Sendable {
+    case available(OwnerTruthMemoryFacets)
+    case legacyNotAvailable
+    case invalid
+    case unsupportedSchema(String)
+
+    static func resolve(
+        contentSchemaVersion: String,
+        content: [String: OwnerTruthJSONValue]
+    ) -> OwnerTruthMemoryFacetsState {
+        switch contentSchemaVersion {
+        case "owner-truth-v2":
+            guard let rawFacets = content["facets"],
+                  let facets = OwnerTruthMemoryFacets(jsonValue: rawFacets) else {
+                return .invalid
+            }
+            return .available(facets)
+        case "owner-truth-v1", "owner-truth-candidate-content-v1":
+            return .legacyNotAvailable
+        default:
+            return .unsupportedSchema(contentSchemaVersion)
+        }
+    }
+}
+
 struct OwnerTruthEvidenceSpan: Codable, Equatable, Sendable {
     let start: Int
     let end: Int
@@ -546,6 +718,13 @@ struct OwnerTruthCandidateInboxItem: Codable, Equatable, Sendable, Identifiable 
 
     var primaryField: OwnerTruthCandidatePrimaryField {
         OwnerTruthCandidatePrimaryField(memoryKind: memoryKind)
+    }
+
+    var facetsState: OwnerTruthMemoryFacetsState {
+        OwnerTruthMemoryFacetsState.resolve(
+            contentSchemaVersion: contentSchemaVersion,
+            content: content
+        )
     }
 
     var primaryValue: String {
@@ -851,6 +1030,13 @@ struct OwnerTruthMemoryVersionHistoryItem: Codable, Equatable, Sendable, Identif
         self.content = content
         self.sourceCount = sourceCount
         self.createdAt = createdAt
+    }
+
+    var facetsState: OwnerTruthMemoryFacetsState {
+        OwnerTruthMemoryFacetsState.resolve(
+            contentSchemaVersion: contentSchemaVersion,
+            content: content
+        )
     }
 
     private static func nonEmptyString(_ value: Any?) -> String? {
@@ -12466,7 +12652,11 @@ enum OwnerTruthCandidateReviewIntent: Equatable, Sendable {
     case refresh
     case accept(candidateID: OwnerTruthRecordID)
     case acceptBatch(candidateIDs: [OwnerTruthRecordID])
-    case correct(candidateID: OwnerTruthRecordID, correctedPrimaryValue: String)
+    case correct(
+        candidateID: OwnerTruthRecordID,
+        correctedPrimaryValue: String,
+        correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]? = nil
+    )
     case reject(candidateID: OwnerTruthRecordID)
 }
 
@@ -12511,6 +12701,7 @@ struct OwnerTruthCandidateInboxItemViewState: Equatable, Sendable, Identifiable 
     let perspective: OwnerTruthPerspectiveType
     let epistemicStatus: OwnerTruthEpistemicStatus
     let sensitivity: OwnerTruthSensitivityLevel
+    let facetsState: OwnerTruthMemoryFacetsState
     let evidenceCount: Int
     let sourceReferences: [OwnerTruthCandidateSourceReferenceViewState]
     let reviewMode: String
@@ -12629,11 +12820,12 @@ final class OwnerTruthCandidateReviewUseCase {
             submit(candidateID: candidateID, action: .accept, correctedPrimaryValue: nil)
         case .acceptBatch(let candidateIDs):
             submitBatch(candidateIDs: candidateIDs)
-        case .correct(let candidateID, let correctedPrimaryValue):
+        case .correct(let candidateID, let correctedPrimaryValue, let correctedFacetValues):
             submit(
                 candidateID: candidateID,
                 action: .correct,
-                correctedPrimaryValue: correctedPrimaryValue
+                correctedPrimaryValue: correctedPrimaryValue,
+                correctedFacetValues: correctedFacetValues
             )
         case .reject(let candidateID):
             submit(candidateID: candidateID, action: .reject, correctedPrimaryValue: nil)
@@ -12659,7 +12851,8 @@ final class OwnerTruthCandidateReviewUseCase {
     private func submit(
         candidateID: OwnerTruthRecordID,
         action: OwnerTruthCandidateReviewAction,
-        correctedPrimaryValue: String?
+        correctedPrimaryValue: String?,
+        correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]? = nil
     ) {
         guard let vaultID = beginRequestOrFail() else { return }
         guard let candidate = candidatesByID[candidateID] else {
@@ -12669,7 +12862,8 @@ final class OwnerTruthCandidateReviewUseCase {
         guard let command = makeCommand(
             candidate: candidate,
             action: action,
-            correctedPrimaryValue: correctedPrimaryValue
+            correctedPrimaryValue: correctedPrimaryValue,
+            correctedFacetValues: correctedFacetValues
         ) else {
             return
         }
@@ -12874,6 +13068,7 @@ final class OwnerTruthCandidateReviewUseCase {
         candidate: OwnerTruthCandidateInboxItem,
         action: OwnerTruthCandidateReviewAction,
         correctedPrimaryValue: String?,
+        correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]? = nil,
         commandID: String? = nil
     ) -> OwnerTruthCandidateReviewCommand? {
         do {
@@ -12902,6 +13097,15 @@ final class OwnerTruthCandidateReviewUseCase {
                 }
                 var correctedValue = candidate.content
                 correctedValue[candidate.primaryField.rawValue] = .string(normalizedValue)
+                if let correctedFacetValues {
+                    guard case .available(let facets) = candidate.facetsState else {
+                        transitionFailure(.requestFailed)
+                        return nil
+                    }
+                    correctedValue["facets"] = facets.ownerCorrectedJSONValue(
+                        valuesByKind: correctedFacetValues
+                    )
+                }
                 return try OwnerTruthCandidateReviewCommand(
                     commandID: stableCommandID,
                     expectedCandidateVersion: candidate.candidateVersion,
@@ -13019,6 +13223,7 @@ final class OwnerTruthCandidateReviewUseCase {
                 perspective: candidate.perspective,
                 epistemicStatus: candidate.epistemicStatus,
                 sensitivity: candidate.sensitivity,
+                facetsState: candidate.facetsState,
                 evidenceCount: candidate.sourceReferences.count,
                 sourceReferences: candidate.sourceReferences.enumerated().map { index, reference in
                     OwnerTruthCandidateSourceReferenceViewState(
@@ -13362,6 +13567,7 @@ struct OwnerTruthMemoryVersionHistoryItemViewState: Equatable, Sendable, Identif
     let status: OwnerTruthMemoryVersionHistoryStatus
     let decision: OwnerTruthCandidateDecision
     let summary: String
+    let facetsState: OwnerTruthMemoryFacetsState
     let sourceCount: Int
     let createdAt: Date
 
@@ -13486,6 +13692,7 @@ final class OwnerTruthMemoryVersionHistoryUseCase {
             status: item.status,
             decision: item.decision,
             summary: summary(for: item.content),
+            facetsState: item.facetsState,
             sourceCount: item.sourceCount,
             createdAt: item.createdAt
         )

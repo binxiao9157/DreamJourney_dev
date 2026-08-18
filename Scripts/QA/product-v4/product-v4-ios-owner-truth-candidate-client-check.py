@@ -48,6 +48,10 @@ def main() -> None:
     for required in (
         "enum OwnerTruthCandidateReviewAction",
         "indirect enum OwnerTruthJSONValue",
+        "enum OwnerTruthMemoryFacetKind",
+        "enum OwnerTruthFacetEvidenceMode",
+        "struct OwnerTruthMemoryFacets",
+        "enum OwnerTruthMemoryFacetsState",
         "struct OwnerTruthCandidateInboxItem",
         "enum OwnerTruthCandidatePrimaryField",
         "struct OwnerTruthCandidateSourceReferenceViewState",
@@ -84,6 +88,13 @@ def main() -> None:
     require(
         "accepted or corrected decisions require a MemoryVersion activation" in contracts,
         "candidate decision response must require MemoryVersion activation for owner acceptance",
+    )
+    require(
+        'case "owner-truth-v2":' in contracts
+        and "case legacyNotAvailable" in contracts
+        and "case invalid" in contracts
+        and "case unsupportedSchema(String)" in contracts,
+        "V2 facets must distinguish available, legacy, invalid and unsupported schema states",
     )
     require(
         "rejected or invalidated decisions must not activate memory" in contracts,
@@ -147,6 +158,14 @@ def main() -> None:
         "Candidate Inbox vault-binding negative test missing",
     )
     require(
+        "func testCandidateInboxDecodesV2FacetsAndDoesNotTreatMissingFacetsAsSuccess()" in tests,
+        "V2 facets parsing and missing-data negative test missing",
+    )
+    require(
+        "func testCandidateReviewUseCaseCorrectsV2FacetsAsOwnerStatedAndPreservesExtensions()" in tests,
+        "V2 facet owner-correction and forward-compatibility test missing",
+    )
+    require(
         "func testCorrectReviewCommandRequiresValueAndProducesOnlyCorrectPayload()" in tests,
         "corrected value command test missing",
     )
@@ -202,8 +221,11 @@ def main() -> None:
         "candidateRemovedAfterReview",
         "candidateDetailVisible",
         "structuredPrimaryFieldVisible",
+        "structuredFacetsVisible",
         "sourceReferenceDetailsVisible",
         "owner-truth-candidate-primary-value",
+        "owner-truth-candidate-facets-card",
+        "owner-truth-candidate-facet-\\(kind.rawValue)-input",
         "owner-truth-candidate-source-reference",
         "owner-truth-candidate-correction-input",
         "更正只会修改下方标明的权威字段",
@@ -225,7 +247,7 @@ def main() -> None:
         require(required in archive, f"Candidate Inbox QA UI missing: {required}")
     require(
         "let isVisible = isSelfAutobiographyMode && (" in archive
-        and "isServerPolicyManagedClosedPilotRouteAllowed(.ownerTruthCandidateReview)" in archive,
+        and "isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview)" in archive,
         "Candidate Inbox must require self mode plus QA or server-granted closed-pilot policy",
     )
     require(
@@ -233,7 +255,8 @@ def main() -> None:
         "Candidate Inbox must remain default-hidden",
     )
     require(
-        "OwnerTruthCandidateReviewQAGate.isEnabled\n                    || FeatureGateService.shared" in archive,
+        "OwnerTruthCandidateReviewQAGate.isEnabled\n                    || FeatureGateService.shared" in archive
+        and ".isServerPolicyManagedRouteAllowed(.ownerTruthCandidateReview)" in archive,
         "Candidate Inbox route must enforce QA or server-granted closed-pilot policy at the tap boundary",
     )
     for required in (

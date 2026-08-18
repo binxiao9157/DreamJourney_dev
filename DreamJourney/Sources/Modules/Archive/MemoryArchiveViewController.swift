@@ -6917,11 +6917,12 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
             controller?.navigationController?.popViewController(animated: true)
             self?.useCase.send(.accept(candidateID: item.id))
         }
-        controller.onCorrect = { [weak self, weak controller] correctedValue in
+        controller.onCorrect = { [weak self, weak controller] correctedValue, correctedFacetValues in
             controller?.navigationController?.popViewController(animated: true)
             self?.useCase.send(.correct(
                 candidateID: item.id,
-                correctedPrimaryValue: correctedValue
+                correctedPrimaryValue: correctedValue,
+                correctedFacetValues: correctedFacetValues
             ))
         }
         controller.onReject = { [weak self, weak controller] in
@@ -7050,13 +7051,23 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
     private let correctionCard = UIView()
     private let correctionTextView = UITextView()
     private let correctionErrorLabel = UILabel()
+    private var facetTextFields: [OwnerTruthMemoryFacetKind: UITextField] = [:]
     private var didEmitRenderedForUIQA = false
 
     var onAccept: (() -> Void)?
-    var onCorrect: ((String) -> Void)?
+    var onCorrect: ((String, [OwnerTruthMemoryFacetKind: [String]]?) -> Void)?
     var onReject: (() -> Void)?
     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
     var onRenderedForUIQA: ((OwnerTruthCandidateInboxItemViewState) -> Void)?
+
+    var renderedTextForUIQA: String {
+        labelTexts(in: view).joined(separator: "\n")
+    }
+
+    private func labelTexts(in root: UIView) -> [String] {
+        let ownText = (root as? UILabel)?.text.map { [$0] } ?? []
+        return ownText + root.subviews.flatMap(labelTexts(in:))
+    }
     #endif
 
     init(item: OwnerTruthCandidateInboxItemViewState) {
@@ -7133,6 +7144,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
         contentStack.addArrangedSubview(heading)
         contentStack.addArrangedSubview(introduction)
         contentStack.addArrangedSubview(makePrimaryContentCard())
+        contentStack.addArrangedSubview(makeFacetsCard())
         contentStack.addArrangedSubview(makeMetadataCard())
         contentStack.addArrangedSubview(makeSourcesCard())
         configureCorrectionCard()
@@ -7166,6 +7178,35 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
             metadataRow(title: "敏感程度", value: sensitivityText(item.sensitivity)),
         ]
         return card(containing: [sectionTitle("候选属性")] + rows)
+    }
+
+    private func makeFacetsCard() -> UIView {
+        var views: [UIView] = [sectionTitle("记忆线索")]
+        switch item.facetsState {
+        case .available(let facets):
+            if facets.isEmpty {
+                views.append(messageLabel("本次整理没有提取到需要确认的结构化线索。"))
+            } else {
+                for kind in OwnerTruthMemoryFacetKind.allCases {
+                    let values = facets.values(for: kind)
+                    guard !values.isEmpty else { continue }
+                    let valueText = values.map { value in
+                        "\(value.value)（\(value.evidenceMode.title)）"
+                    }.joined(separator: "、")
+                    views.append(metadataRow(title: kind.title, value: valueText))
+                }
+            }
+            views.append(messageLabel("整体可信度 \(Int((facets.confidence * 100).rounded()))%。系统推断需由你确认后才会成为正式记忆的一部分。"))
+        case .legacyNotAvailable:
+            views.append(messageLabel("这条旧版候选尚未包含结构化线索，不会显示为已分析。"))
+        case .invalid:
+            views.append(messageLabel("结构化线索数据不完整，请刷新后再确认。"))
+        case .unsupportedSchema:
+            views.append(messageLabel("这条候选使用较新的线索格式，当前版本暂不展示或编辑。"))
+        }
+        let result = card(containing: views)
+        result.accessibilityIdentifier = "owner-truth-candidate-facets-card"
+        return result
     }
 
     private func makeSourcesCard() -> UIView {
@@ -7207,7 +7248,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
 
         let titleLabel = sectionTitle("更正\(item.primaryFieldTitle)")
         let helpLabel = UILabel()
-        helpLabel.text = "其他结构化内容和来源引用会保持不变。"
+        helpLabel.text = "来源引用会保持不变；你提交的线索将标记为本人确认。"
         helpLabel.font = DJDesignTokens.Font.label(12)
         helpLabel.textColor = DJDesignTokens.Color.textTertiary
         helpLabel.numberOfLines = 0
@@ -7241,8 +7282,17 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
             selector: #selector(cancelCorrectionTapped)
         )
 
-        [titleLabel, helpLabel, correctionTextView, correctionErrorLabel, submitButton, cancelButton]
-            .forEach(stack.addArrangedSubview)
+        [titleLabel, helpLabel, correctionTextView].forEach(stack.addArrangedSubview)
+        if case .available(let facets) = item.facetsState {
+            let facetTitle = sectionTitle("更正结构化线索")
+            stack.addArrangedSubview(facetTitle)
+            let facetHelp = messageLabel("多项内容请使用逗号分隔；留空表示移除该类线索。")
+            stack.addArrangedSubview(facetHelp)
+            for kind in OwnerTruthMemoryFacetKind.allCases {
+                stack.addArrangedSubview(makeFacetEditor(kind: kind, facets: facets))
+            }
+        }
+        [correctionErrorLabel, submitButton, cancelButton].forEach(stack.addArrangedSubview)
         correctionCard.addSubview(stack)
         stack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -7251,6 +7301,38 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
             stack.trailingAnchor.constraint(equalTo: correctionCard.trailingAnchor, constant: -16),
             stack.bottomAnchor.constraint(equalTo: correctionCard.bottomAnchor, constant: -16),
         ])
+    }
+
+    private func makeFacetEditor(
+        kind: OwnerTruthMemoryFacetKind,
+        facets: OwnerTruthMemoryFacets
+    ) -> UIView {
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 6
+
+        let label = UILabel()
+        label.text = kind.title
+        label.font = DJDesignTokens.Font.label(12)
+        label.textColor = DJDesignTokens.Color.textSecondary
+
+        let textField = UITextField()
+        textField.text = facets.values(for: kind).map(\.value).joined(separator: "，")
+        textField.placeholder = "暂无\(kind.title)线索"
+        textField.font = DJDesignTokens.Font.body(15)
+        textField.textColor = DJDesignTokens.Color.textPrimary
+        textField.backgroundColor = DJDesignTokens.Color.background
+        textField.layer.cornerRadius = 10
+        textField.clearButtonMode = .whileEditing
+        textField.accessibilityIdentifier = "owner-truth-candidate-facet-\(kind.rawValue)-input"
+        textField.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        textField.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 12, height: 1))
+        textField.leftViewMode = .always
+
+        facetTextFields[kind] = textField
+        stack.addArrangedSubview(label)
+        stack.addArrangedSubview(textField)
+        return stack
     }
 
     private func makeActions() -> UIView {
@@ -7320,6 +7402,15 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
         return label
     }
 
+    private func messageLabel(_ text: String) -> UILabel {
+        let label = UILabel()
+        label.text = text
+        label.font = DJDesignTokens.Font.label(12)
+        label.textColor = DJDesignTokens.Color.textTertiary
+        label.numberOfLines = 0
+        return label
+    }
+
     private func metadataRow(title: String, value: String) -> UIView {
         let row = UIStackView()
         row.axis = .horizontal
@@ -7365,6 +7456,13 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
 
     @objc private func cancelCorrectionTapped() {
         correctionTextView.text = item.primaryValue
+        if case .available(let facets) = item.facetsState {
+            for kind in OwnerTruthMemoryFacetKind.allCases {
+                facetTextFields[kind]?.text = facets.values(for: kind)
+                    .map(\.value)
+                    .joined(separator: "，")
+            }
+        }
         correctionErrorLabel.isHidden = true
         correctionCard.isHidden = true
         view.endEditing(true)
@@ -7378,7 +7476,23 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
             return
         }
         view.endEditing(true)
-        onCorrect?(value)
+        let correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]?
+        if case .available = item.facetsState {
+            correctedFacetValues = Dictionary(uniqueKeysWithValues:
+                OwnerTruthMemoryFacetKind.allCases.map { kind in
+                    let rawValue = facetTextFields[kind]?.text ?? ""
+                    let values = rawValue.components(
+                        separatedBy: CharacterSet(charactersIn: ",，、\n")
+                    ).map {
+                        $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                    }.filter { !$0.isEmpty }
+                    return (kind, values)
+                }
+            )
+        } else {
+            correctedFacetValues = nil
+        }
+        onCorrect?(value, correctedFacetValues)
     }
 
     @objc private func acceptTapped() {
@@ -8091,6 +8205,7 @@ private final class OwnerTruthMemoryVersionHistoryCell: UITableViewCell {
     private let cardView = UIView()
     private let stateLabel = PaddingLabel(horizontalInset: 8, verticalInset: 4)
     private let summaryLabel = UILabel()
+    private let facetsLabel = UILabel()
     private let metadataLabel = UILabel()
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -8112,12 +8227,16 @@ private final class OwnerTruthMemoryVersionHistoryCell: UITableViewCell {
         summaryLabel.textColor = DJDesignTokens.Color.textPrimary
         summaryLabel.numberOfLines = 0
 
+        facetsLabel.font = DJDesignTokens.Font.label(12)
+        facetsLabel.textColor = DJDesignTokens.Color.textSecondary
+        facetsLabel.numberOfLines = 0
+
         metadataLabel.font = DJDesignTokens.Font.label(12)
         metadataLabel.textColor = DJDesignTokens.Color.textTertiary
         metadataLabel.numberOfLines = 2
 
         contentView.addSubview(cardView)
-        [stateLabel, summaryLabel, metadataLabel].forEach {
+        [stateLabel, summaryLabel, facetsLabel, metadataLabel].forEach {
             cardView.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
@@ -8135,7 +8254,11 @@ private final class OwnerTruthMemoryVersionHistoryCell: UITableViewCell {
             summaryLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
             summaryLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
 
-            metadataLabel.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 8),
+            facetsLabel.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 8),
+            facetsLabel.leadingAnchor.constraint(equalTo: summaryLabel.leadingAnchor),
+            facetsLabel.trailingAnchor.constraint(equalTo: summaryLabel.trailingAnchor),
+
+            metadataLabel.topAnchor.constraint(equalTo: facetsLabel.bottomAnchor, constant: 8),
             metadataLabel.leadingAnchor.constraint(equalTo: summaryLabel.leadingAnchor),
             metadataLabel.trailingAnchor.constraint(equalTo: summaryLabel.trailingAnchor),
             metadataLabel.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -16),
@@ -8154,10 +8277,29 @@ private final class OwnerTruthMemoryVersionHistoryCell: UITableViewCell {
             : DJDesignTokens.Color.textSecondary
         stateLabel.backgroundColor = stateLabel.textColor.withAlphaComponent(0.12)
         summaryLabel.text = item.summary
+        facetsLabel.text = Self.facetsText(item.facetsState)
         let decision = item.decision == .corrected ? "本人更正" : "本人确认"
         metadataLabel.text = "第 \(item.versionNumber) 版 · \(decision) · 来源 \(item.sourceCount) 条\n\(Self.dateFormatter.string(from: item.createdAt))"
         accessibilityIdentifier = "owner-truth-memory-version-history-item"
         accessibilityLabel = "\(stateLabel.text ?? "版本")，第 \(item.versionNumber) 版，\(item.summary)"
+    }
+
+    private static func facetsText(_ state: OwnerTruthMemoryFacetsState) -> String {
+        switch state {
+        case .available(let facets):
+            let groups = OwnerTruthMemoryFacetKind.allCases.compactMap { kind -> String? in
+                let values = facets.values(for: kind).map(\.value)
+                guard !values.isEmpty else { return nil }
+                return "\(kind.title)：\(values.joined(separator: "、"))"
+            }
+            return groups.isEmpty ? "结构化线索：暂无" : groups.joined(separator: " · ")
+        case .legacyNotAvailable:
+            return "结构化线索：旧版本未包含"
+        case .invalid:
+            return "结构化线索：数据不完整"
+        case .unsupportedSchema:
+            return "结构化线索：当前版本暂不支持"
+        }
     }
 }
 
@@ -8839,6 +8981,7 @@ struct OwnerTruthCandidateInboxUIQASmokeResult: Codable {
     let candidatePreviewVisible: Bool
     let candidateDetailVisible: Bool
     let structuredPrimaryFieldVisible: Bool
+    let structuredFacetsVisible: Bool
     let sourceReferenceDetailsVisible: Bool
     let reviewActionsAvailable: Bool
     let reviewSubmitted: Bool
@@ -8913,6 +9056,7 @@ enum OwnerTruthCandidateInboxUIQASmoke {
             candidatePreviewVisible: false,
             candidateDetailVisible: false,
             structuredPrimaryFieldVisible: false,
+            structuredFacetsVisible: false,
             sourceReferenceDetailsVisible: false,
             reviewActionsAvailable: false,
             reviewSubmitted: false,
@@ -8952,6 +9096,7 @@ private final class CandidateInboxUIQAScenario {
     private var candidatePreviewVisible = false
     private var candidateDetailVisible = false
     private var structuredPrimaryFieldVisible = false
+    private var structuredFacetsVisible = false
     private var sourceReferenceDetailsVisible = false
     private var reviewActionsAvailable = false
     private var batchCandidateCount = 0
@@ -9029,11 +9174,23 @@ private final class CandidateInboxUIQAScenario {
         structuredPrimaryFieldVisible = !item.primaryFieldTitle.isEmpty
             && !item.primaryValue.isEmpty
             && item.proposalPreview == item.primaryValue
+        if case .available(let facets) = item.facetsState {
+            let renderedText = detailController.renderedTextForUIQA
+            structuredFacetsVisible = facets.values(for: .people).contains { $0.value == "外公" }
+                && facets.values(for: .places).contains {
+                    $0.value == "杭州" && $0.evidenceMode == .inferred
+                }
+                && renderedText.contains("人物")
+                && renderedText.contains("外公（本人表达）")
+                && renderedText.contains("杭州（系统推断）")
+        }
         sourceReferenceDetailsVisible = !item.sourceReferences.isEmpty
             && item.sourceReferences.enumerated().allSatisfy { index, reference in
                 reference.ordinal == index + 1 && reference.sourceVersion > 0
             }
-        guard structuredPrimaryFieldVisible, sourceReferenceDetailsVisible else {
+        guard structuredPrimaryFieldVisible,
+              structuredFacetsVisible,
+              sourceReferenceDetailsVisible else {
             didWrite = true
             OwnerTruthCandidateInboxUIQASmoke.writeFailure("candidateDetailContractMismatch")
             return
@@ -9104,6 +9261,7 @@ private final class CandidateInboxUIQAScenario {
                 && candidatePreviewVisible
                 && candidateDetailVisible
                 && structuredPrimaryFieldVisible
+                && structuredFacetsVisible
                 && sourceReferenceDetailsVisible
                 && reviewActionsAvailable
                 && batchAcceptedCount == batchCandidateCount
@@ -9116,6 +9274,7 @@ private final class CandidateInboxUIQAScenario {
             candidatePreviewVisible: candidatePreviewVisible,
             candidateDetailVisible: candidateDetailVisible,
             structuredPrimaryFieldVisible: structuredPrimaryFieldVisible,
+            structuredFacetsVisible: structuredFacetsVisible,
             sourceReferenceDetailsVisible: sourceReferenceDetailsVisible,
             reviewActionsAvailable: reviewActionsAvailable,
             reviewSubmitted: didSubmit,
@@ -9256,8 +9415,8 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
                         "versionNumber": 1,
                         "status": OwnerTruthMemoryVersionHistoryStatus.current.rawValue,
                         "decision": OwnerTruthCandidateDecision.accepted.rawValue,
-                        "contentSchemaVersion": "owner-truth-candidate-content-v1",
-                        "content": ["summary": "小时候在院子里听家人讲故事"],
+                        "contentSchemaVersion": "owner-truth-v2",
+                        "content": candidateContent(isFirstCandidate: true),
                         "sourceCount": 1,
                         "createdAt": "2026-08-08T10:30:00Z",
                     ]],
@@ -9338,13 +9497,8 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
             "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
             "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
             "sensitivity": OwnerTruthSensitivityLevel.standard.rawValue,
-            "contentSchemaVersion": "owner-truth-candidate-content-v1",
-            "content": [
-                "summary": isFirstCandidate
-                    ? "小时候在院子里听家人讲故事"
-                    : "夏天在院子里一起乘凉",
-                "confidence": 0.92,
-            ],
+            "contentSchemaVersion": "owner-truth-v2",
+            "content": candidateContent(isFirstCandidate: isFirstCandidate),
             "contentHash": isFirstCandidate
                 ? "uiqa-owner-truth-candidate-hash-0"
                 : "uiqa-owner-truth-candidate-hash-1",
@@ -9355,6 +9509,32 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
             ]],
             "reviewMode": "batch",
             "candidateVersion": 1,
+        ]
+    }
+
+    private func candidateContent(isFirstCandidate: Bool) -> [String: Any] {
+        [
+            "summary": isFirstCandidate
+                ? "小时候在院子里听家人讲故事"
+                : "夏天在院子里一起乘凉",
+            "facets": [
+                "people": [[
+                    "value": "外公",
+                    "evidenceMode": "ownerStated",
+                    "confidence": 1.0,
+                ]],
+                "time": [],
+                "places": [[
+                    "value": "杭州",
+                    "evidenceMode": "inferred",
+                    "confidence": 0.72,
+                ]],
+                "relationships": [],
+                "emotions": [],
+                "values": [],
+                "personality": [],
+                "confidence": 0.88,
+            ],
         ]
     }
 }
