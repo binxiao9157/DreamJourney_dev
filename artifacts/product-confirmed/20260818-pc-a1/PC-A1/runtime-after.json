@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "capturedFrom": "/config/runtime",
+  "auth": {
+    "testAccountAuthorization": {
+      "contractVersion": 1,
+      "implemented": true,
+      "serverAuthoritative": true,
+      "defaultFeatureEntitlements": [],
+      "featureCount": 35,
+      "roles": [
+        "superTest",
+        "ownerTest",
+        "familyTest",
+        "operatorTest"
+      ],
+      "scenarioBindingsAreAuthority": false,
+      "sessionRevisionValidation": true,
+      "normalAppManagementVisible": false,
+      "managementRoute": "/ops/test-accounts/admin"
+    },
+    "routeAuthentication": {
+      "mode": "enforce",
+      "routeCount": 217,
+      "unclassifiedCount": 0
+    }
+  }
+}

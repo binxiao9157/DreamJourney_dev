@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "workItem": "PC-A1",
+  "status": "passed",
+  "backend": {
+    "migrationHead": "0095",
+    "ready": true,
+    "defaultEntitlementsEmpty": true,
+    "authorizationRevision": 2,
+    "oldSessionInvalidated": true,
+    "scenarioBindingsAreAuthority": false,
+    "normalAppManagementVisible": false,
+    "routeCount": 217,
+    "rawCredentialsPersisted": false
+  },
+  "ios": {
+    "swiftFilesScanned": 139,
+    "managementSurface": "backendInternalOnly",
+    "bundleIdentifier": "com.yxj.dreamjourney.app",
+    "developmentTeamOverride": "2BTR77V3R8",
+    "genericIPhoneOSBuild": "passed"
+  }
+}

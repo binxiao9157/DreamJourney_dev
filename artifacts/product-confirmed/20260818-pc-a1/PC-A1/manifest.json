@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "workItem": "PC-A1",
+  "title": "测试账号角色与权限",
+  "executedAt": "2026-08-18T15:47:00Z",
+  "executor": "Codex",
+  "environment": "production-postgres + generic iPhoneOS",
+  "commits": {
+    "iosQA": "9cc2196e4c06b26a763cb279bb09020d38b37564",
+    "backendFeature": "d08c537691a3b022b242982b7fb752123fc70175",
+    "backendDeployed": "aae0b04186f4d8ecde760e849159eae136c1721d"
+  },
+  "deployment": {
+    "backendCommit": "aae0b04186f4d8ecde760e849159eae136c1721d",
+    "apiImage": "sha256:1796f2c533f9871198de2e5d94c30de4c5dcb205e9fd9d66f80d043f7024faa2",
+    "migrationHead": "0095",
+    "ready": true
+  },
+  "results": {
+    "backendFullVerification": "passed (2132 primary tests plus standard gates)",
+    "backendFocusedTests": "passed (170 tests)",
+    "backendDeployedSmoke": "passed",
+    "iosSurfaceGate": "passed (139 Swift files)",
+    "genericIPhoneOSBuild": "passed",
+    "gitDiffCheck": "passed"
+  },
+  "externalGates": [],
+  "redaction": {
+    "tokensStored": false,
+    "phoneNumbersStored": false,
+    "adminCredentialsStored": false,
+    "providerCredentialsStored": false,
+    "businessPayloadsStored": false
+  }
+}

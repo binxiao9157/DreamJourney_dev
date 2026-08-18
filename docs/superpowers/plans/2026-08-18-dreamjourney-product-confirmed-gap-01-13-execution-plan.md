@@ -3,7 +3,7 @@
 日期：2026-08-18
 状态：`IN_PROGRESS`
 日常开发入口：`CANONICAL_EXECUTION_PLAN`
-执行控制版本：V1.4
+执行控制版本：V1.5
 
 ## 0. 目标和基线
 
@@ -22,12 +22,12 @@
 
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
-| `COMPLETE` | 4 | 文档基线、PC-00-01、PC-00-02、PC-00-03 |
+| `COMPLETE` | 5 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1 |
 | `WAITING_EXTERNAL_CONFIGURATION` | 1 | PC-A0：代码、production-postgres 部署和非真机验收已完成；真实短信 Provider 待配置 |
-| 当前执行项 | 1 | PC-A1：测试账号角色与权限 |
-| 后续待执行 | 14 | PC-A3 至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+| 当前执行项 | 1 | PC-A2：Owner Truth V2 facets |
+| 后续待执行 | 13 | PC-A3 至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：iOS 实现提交 `5aaf3543`，PC-A0 证据提交 `b084f1ac`；Backend production-postgres 为 `994b3cc`，migration head 为 `0094`。PC-A0 的外部短信 Gate 不阻塞 PC-A1；在真实短信 Provider 配置前，不得宣称生产 OTP 恢复完成。
+当前代码与部署交接：iOS PC-A1 普通 App 管理面静态 Gate 为 `9cc2196e`；Backend PC-A1 实现为 `d08c537`，迁移顺序修复及 production-postgres 部署版本为 `aae0b04`，migration head 为 `0095`。PC-A0 的外部短信 Gate 不阻塞 PC-A2；在真实短信 Provider 配置前，不得宣称生产 OTP 恢复完成。
 
 每轮只需读取：
 
@@ -307,6 +307,8 @@ iOS/后台：
 验证：角色矩阵、旧 Session 失效、super 越权负向、Family/Visitor Grant 负向、审计脱敏。
 
 完成定义：测试验证码资格与产品功能权限完全分离。
+
+状态：`COMPLETE`（2026-08-18）。测试账号已具备显式角色、Feature entitlement、仅作场景引用的 scenario binding、revision/snapshot 和脱敏审计；默认白名单无产品 entitlement。权限更新会使旧 revision Session 失效并撤销该 Subject 的活动 Session，`superTest/familyTest` 仍受 Owner/Grant 权限边界约束。内部管理页已支持角色与 Feature 多选，普通 App 静态 Gate 证明不存在管理入口。Backend `d08c537`、迁移修复及部署 `aae0b04`，iOS QA Gate `9cc2196e`；production-postgres migration head `0095`，证据见 `artifacts/product-confirmed/20260818-pc-a1/PC-A1/` 和 `docs/superpowers/status/2026-08-18-pc-a1-test-account-authorization.md`。当前连续执行交接点为 `PC-A2`。
 
 ### PC-A2 Owner Truth V2 facets
 

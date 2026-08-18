@@ -1,0 +1,8 @@
+PC-A1 build summary
+
+- Debug generic iPhoneOS workspace build: PASSED
+- Built bundle identifier: com.yxj.dreamjourney.app
+- Local development team override: 2BTR77V3R8
+- Product source changes: none
+- Test authorization management surface in normal App: absent
+- Raw build log: /tmp/dreamjourney-pc-a1-build/20260818-pc-a1/iphoneos-generic-build.log

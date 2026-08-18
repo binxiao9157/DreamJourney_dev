@@ -1,0 +1,19 @@
+PC-A1 deployed backend summary
+
+- Deployment preflight: passed at previous head 994b3cce.
+- Migration-before backup: passed.
+- Target source: main@aae0b04186f4d8ecde760e849159eae136c1721d.
+- Migration dry-run: 0094 -> 0095 pending.
+- Migration apply: 0095 applied.
+- Migration verify: expectedHead=0095, appliedHead=0095, status=ready.
+- API container: healthy, image sha256:1796f2c533f9871198de2e5d94c30de4c5dcb205e9fd9d66f80d043f7024faa2.
+- Migration-after backup: passed.
+- Disposable PostgreSQL test-account smoke: passed.
+- Default feature entitlements empty: true.
+- Authorization revision update: 1 -> 2.
+- Old session revoked/invalidated: true.
+- Raw credentials persisted: false.
+- Route authentication deployed smoke: passed, routeCount=217.
+- Public readiness: database/schema/auth/incident ready.
+
+The first 0095 apply attempt failed closed because the legacy contract-version constraint was removed after the version-2 backfill. The transaction rolled back at head 0094. Commit aae0b04 moved the constraint removal before the backfill and added a regression assertion; the second apply and verify passed.
