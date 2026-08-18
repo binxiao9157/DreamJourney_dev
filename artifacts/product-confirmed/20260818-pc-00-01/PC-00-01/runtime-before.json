@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "captured": false,
+  "reason": "A sanitized pre-deployment runtime response was not retained. Source-level parent-commit behavior is covered by the implementation diff; no pre-deployment contract value is inferred here."
+}

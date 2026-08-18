@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "runs": [
+    {
+      "name": "cold-start",
+      "completed": true,
+      "firstTurn": true,
+      "secondTurn": true,
+      "stoppedToIdle": true,
+      "staleReplyRejected": true,
+      "leftAndReenteredEcho": true,
+      "finalState": "idle",
+      "digitalHumanPanelVisible": false,
+      "audioOwner": "volcengineLocalTTS"
+    },
+    {
+      "name": "process-restart",
+      "completed": true,
+      "firstTurn": true,
+      "secondTurn": true,
+      "stoppedToIdle": true,
+      "staleReplyRejected": true,
+      "leftAndReenteredEcho": true,
+      "finalState": "idle",
+      "digitalHumanPanelVisible": false,
+      "audioOwner": "volcengineLocalTTS"
+    }
+  ],
+  "visualReview": "Ordinary full-screen Echo rendered without a digital-human panel, connection state, or fallback message."
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-08-18T06:33:31Z",
+  "backendReady": "ready",
+  "releasePolicy": {
+    "feature": "digitalHumanLivePanel",
+    "enabled": false,
+    "releaseVisible": false,
+    "reason": "productClosed"
+  },
+  "digitalHuman": {
+    "enabled": false,
+    "releaseVisible": false,
+    "productState": "closed",
+    "reason": "productClosed",
+    "fallbackMode": "text",
+    "mobileDirectAllowed": false,
+    "sessionLeaseEnabled": false
+  }
+}

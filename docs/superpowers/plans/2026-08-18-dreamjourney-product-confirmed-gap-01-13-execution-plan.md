@@ -186,6 +186,8 @@ artifacts/product-confirmed/<run-id>/<work-item>/
 
 关联：GAP-11、DH-001。
 
+状态：`COMPLETE`（2026-08-18）。实现提交：iOS `84339ab8`，Backend `0a8d5a8`；验收证据见 `artifacts/product-confirmed/20260818-pc-00-01/PC-00-01/` 和 `docs/superpowers/status/2026-08-18-pc-00-01-digital-human-product-closure.md`。当前连续执行交接点为 `PC-00-02`。
+
 实现：
 
 1. 后端 Release Policy 对普通用户固定拒绝 `digitalHumanLivePanel`。

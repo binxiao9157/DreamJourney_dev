@@ -1,0 +1,20 @@
+PASS backend product-confirmed digital-human closure gate: 68 tests
+PASS backend release policy suite: 46 tests
+PASS backend digital-human session suite: 9 tests
+PASS backend runtime capability suite: 13 tests
+PASS backend git diff --check
+PASS iOS product-confirmed-digital-human-closure-check.py
+PASS iOS digital-human-runtime-abstraction-check.swift
+PASS iOS digital-human-live-panel-check.swift
+PASS iOS run-public-release-scope-model-smoke.sh
+PASS iOS git diff --check
+
+NOTE full backend unittest discovery was not used as this Work Item's gate because
+the global suite has pre-existing test-order/store-lifecycle failures. All
+isolated suites that own the changed contracts passed.
+
+NOTE backend-credential-response-deployed-smoke.py also asserts the independent
+realtimeToken=false environment policy. The deployed environment currently has
+that capability enabled, so PC-00-01 uses dedicated policy/runtime/session
+assertions instead of treating this unrelated assumption as a digital-human
+failure.

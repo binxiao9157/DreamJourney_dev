@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "workItem": "PC-00-01",
+  "status": "complete",
+  "executedBy": "Codex",
+  "executedAt": "2026-08-18T06:36:54Z",
+  "environment": {
+    "backend": "production-postgres",
+    "iosBuild": "generic-iphoneos-debug",
+    "uiqa": "iPhone 17 Pro simulator"
+  },
+  "repositories": {
+    "iosImplementationCommit": "84339ab8",
+    "backendCommit": "0a8d5a80b9aff1a76733927bf168e9b5a74f950d",
+    "backendDeployedSource": "0a8d5a80"
+  },
+  "productDecisionDependencies": [
+    "PCQ-06"
+  ],
+  "results": {
+    "backendPolicy": "passed",
+    "backendRuntime": "passed",
+    "backendSessionFailClosed": "passed",
+    "iosStaticChecks": "passed",
+    "iosBuild": "passed",
+    "ordinaryEchoUIQA": "passed"
+  },
+  "externalOrDeviceRemainder": [],
+  "privacy": "Sanitized evidence only; no access token, phone number, user content, media URL, or Provider credential is stored."
+}

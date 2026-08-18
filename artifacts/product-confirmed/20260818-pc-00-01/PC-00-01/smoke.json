@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "backend": {
+    "ready": "passed",
+    "releasePolicy": {
+      "feature": "digitalHumanLivePanel",
+      "enabled": false,
+      "releaseVisible": false,
+      "reason": "productClosed"
+    },
+    "runtime": {
+      "enabled": false,
+      "releaseVisible": false,
+      "productState": "closed",
+      "reason": "productClosed"
+    },
+    "authenticatedSessionCreate": {
+      "statusCode": 403,
+      "code": "release_policy_denied",
+      "feature": "digitalHumanLivePanel",
+      "reason": "productClosed",
+      "retryable": false,
+      "syntheticSessionRevoked": true
+    }
+  },
+  "ios": {
+    "coldStart": "passed",
+    "processRestart": "passed",
+    "finalState": "idle",
+    "digitalHumanPanelVisible": false,
+    "audioOwner": "volcengineLocalTTS"
+  }
+}
