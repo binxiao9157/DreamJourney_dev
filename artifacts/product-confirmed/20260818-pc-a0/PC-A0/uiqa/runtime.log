@@ -1,0 +1,120 @@
+2026-08-18 23:02:28.323 Df DreamJourney[49549:110a315] [com.apple.securityd:trust] <compose failure [shared UUID]>
+2026-08-18 23:02:28.325 Df DreamJourney[49549:110a319] [com.apple.securityd:trust] <compose failure [shared UUID]>
+2026-08-18 23:02:28.325 Df DreamJourney[49549:110a319] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.325 Df DreamJourney[49549:110a319] [com.apple.securityd:trust] <compose failure [shared UUID]>
+2026-08-18 23:02:28.325 A  DreamJourney[49549:110a319] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.325 Df DreamJourney[49549:110a319] [com.apple.xpc:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.325 Df DreamJourney[49549:110a319] [com.apple.securityd:trust] <compose failure [shared UUID]>
+2026-08-18 23:02:28.325 Df DreamJourney[49549:110a319] [com.apple.xpc:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.327 Df DreamJourney[49549:110a319] [com.apple.securityd:trust] <compose failure [shared UUID]>
+2026-08-18 23:02:28.327 Df DreamJourney[49549:110a319] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.327 Df DreamJourney[49549:110a319] [com.apple.network:boringssl] <compose failure [shared UUID]>
+2026-08-18 23:02:28.327 Df DreamJourney[49549:110a319] [com.apple.network:boringssl] <compose failure [shared UUID]>
+2026-08-18 23:02:28.327 Df DreamJourney[49549:110a319] [com.apple.network:boringssl] <compose failure [shared UUID]>
+2026-08-18 23:02:28.327 Df DreamJourney[49549:110a319] [com.apple.network:boringssl] <compose failure [shared UUID]>
+2026-08-18 23:02:28.327 Df DreamJourney[49549:110a319] [com.apple.network:boringssl] <compose failure [shared UUID]>
+2026-08-18 23:02:28.327 Df DreamJourney[49549:110a319] [com.apple.network:boringssl] <compose failure [shared UUID]>
+2026-08-18 23:02:28.327 Df DreamJourney[49549:110a319] [com.apple.network:boringssl] <compose failure [shared UUID]>
+2026-08-18 23:02:28.327 Df DreamJourney[49549:110a319] [com.apple.network:boringssl] <compose failure [shared UUID]>
+2026-08-18 23:02:28.327 Df DreamJourney[49549:110a319] [com.apple.network:boringssl] <compose failure [shared UUID]>
+2026-08-18 23:02:28.327 Df DreamJourney[49549:110a319] [com.apple.network:boringssl] <compose failure [shared UUID]>
+2026-08-18 23:02:28.327 Df DreamJourney[49549:110a319] [com.apple.network:boringssl] <compose failure [shared UUID]>
+2026-08-18 23:02:28.328 A  DreamJourney[49549:110a319] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.328 A  DreamJourney[49549:110a319] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.328 A  DreamJourney[49549:110a319] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.328 Df DreamJourney[49549:110a319] [com.apple.network:boringssl] <compose failure [shared UUID]>
+2026-08-18 23:02:28.328 Df DreamJourney[49549:110a319] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.328 Df DreamJourney[49549:110a319] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.328 Df DreamJourney[49549:110a319] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.328 Df DreamJourney[49549:110a319] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.328 Df DreamJourney[49549:110a319] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.328 Df DreamJourney[49549:110a319] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.328 Df DreamJourney[49549:110a319] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.328 Df DreamJourney[49549:110a319] [com.apple.xpc:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.328 Df DreamJourney[49549:110a319] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.328 Df DreamJourney[49549:110a319] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.328 Df DreamJourney[49549:110a319] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.328 Df DreamJourney[49549:110a319] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.329 Df DreamJourney[49549:110a319] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.329 Df DreamJourney[49549:110a319] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.329 Df DreamJourney[49549:110a319] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.333 Df DreamJourney[49549:110a2e8] [com.apple.Accessibility:AXCommon] <compose failure [shared UUID]>
+2026-08-18 23:02:28.356 A  DreamJourney[49549:110a319] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.356 A  DreamJourney[49549:110a319] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.356 A  DreamJourney[49549:110a319] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.356 A  DreamJourney[49549:110a319] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.356 A  DreamJourney[49549:110a319] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.356 A  DreamJourney[49549:110a319] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.358 Df DreamJourney[49549:110a2e8] [com.apple.UIKit:EventDeferring] <compose failure [shared UUID]>
+2026-08-18 23:02:28.358 Df DreamJourney[49549:110a2e8] [com.apple.UIKit:KeyWindow] <compose failure [shared UUID]>
+2026-08-18 23:02:28.358 Df DreamJourney[49549:110a2e8] [com.apple.FrontBoard:SceneExtension] <compose failure [shared UUID]>
+2026-08-18 23:02:28.359 Df DreamJourney[49549:110a2e8] [com.apple.UIKit:InterfaceStyle] <compose failure [shared UUID]>
+2026-08-18 23:02:28.359 Df DreamJourney[49549:110a2e8] [com.apple.UIKit:InterfaceStyle] <compose failure [shared UUID]>
+2026-08-18 23:02:28.359 Df DreamJourney[49549:110a2e8] [com.apple.UIKit:AppLifecycle] <compose failure [shared UUID]>
+2026-08-18 23:02:28.359 Df DreamJourney[49549:110a2e8] [com.apple.UIKit:Application] <compose failure [shared UUID]>
+2026-08-18 23:02:28.359 Df DreamJourney[49549:110a2e8] [com.apple.KeyboardArbiter:Client] <compose failure [shared UUID]>
+2026-08-18 23:02:28.359 Df DreamJourney[49549:110a2e8] [com.apple.UIKit:Application] <compose failure [shared UUID]>
+2026-08-18 23:02:28.360 Df DreamJourney[49549:110a2e8] [com.apple.KeyboardArbiter:Client] <compose failure [shared UUID]>
+2026-08-18 23:02:28.360 Df DreamJourney[49549:110a2e8] [com.apple.xpc:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.361 A  DreamJourney[49549:110a355] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.361 Df DreamJourney[49549:110a355] [com.apple.securityd:thread-local-client-debug] <compose failure [shared UUID]>
+2026-08-18 23:02:28.361 Df DreamJourney[49549:110a2e8] [com.apple.KeyboardArbiter:Client] <compose failure [shared UUID]>
+2026-08-18 23:02:28.364 Df DreamJourney[49549:110a2e8] [com.apple.UIKit:KeyboardSceneDelegate] <compose failure [shared UUID]>
+2026-08-18 23:02:28.364 Df DreamJourney[49549:110a2e8] [com.apple.UIKit:KeyboardSceneDelegate] <compose failure [shared UUID]>
+2026-08-18 23:02:28.364 Df DreamJourney[49549:110a2e8] [com.apple.UIKit:KeyboardArbiterClientLog] <compose failure [shared UUID]>
+2026-08-18 23:02:28.365 Df DreamJourney[49549:110a315] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.370 A  DreamJourney[49549:110a355] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.371 A  DreamJourney[49549:110a355] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.371 A  DreamJourney[49549:110a355] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.371 A  DreamJourney[49549:110a355] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.371 A  DreamJourney[49549:110a355] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.371 Df DreamJourney[49549:110a355] [com.apple.containermanager:xpc] <compose failure [shared UUID]>
+2026-08-18 23:02:28.371 E  DreamJourney[49549:110a355] [com.apple.containermanager:unspecified] <compose failure [shared UUID]>
+2026-08-18 23:02:28.375 Df DreamJourney[49549:110a353] [com.apple.chrono:widget] <compose failure [shared UUID]>
+2026-08-18 23:02:28.381 Df DreamJourney[49549:110a353] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.381 Df DreamJourney[49549:110a353] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.381 Df DreamJourney[49549:110a353] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.381 Df DreamJourney[49549:110a353] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.381 Df DreamJourney[49549:110a319] [com.apple.CFNetwork:Summary] <compose failure [shared UUID]>
+2026-08-18 23:02:28.381 Df DreamJourney[49549:110a319] [com.apple.CoreAnalytics:client] <compose failure [shared UUID]>
+2026-08-18 23:02:28.381 Df DreamJourney[49549:110a353] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.385 Df DreamJourney[49549:110a353] [com.apple.xpc:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.395 Df DreamJourney[49549:110a2e8] [com.apple.runningboard:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.395 Df DreamJourney[49549:110a2e8] [com.apple.xpc:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.396 Df DreamJourney[49549:110a2e8] [com.apple.runningboard:process] <compose failure [shared UUID]>
+2026-08-18 23:02:28.427 A  DreamJourney[49549:110a353] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.492 Df DreamJourney[49549:110a353] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.492 Df DreamJourney[49549:110a355] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.492 Df DreamJourney[49549:110a355] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.492 Df DreamJourney[49549:110a355] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.492 Df DreamJourney[49549:110a355] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.514 Df DreamJourney[49549:110a353] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.516 Df DreamJourney[49549:110a353] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.516 Df DreamJourney[49549:110a353] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.516 Df DreamJourney[49549:110a353] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.516 Df DreamJourney[49549:110a353] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.517 Df DreamJourney[49549:110a353] [com.apple.CFNetwork:Summary] <compose failure [shared UUID]>
+2026-08-18 23:02:28.517 Df DreamJourney[49549:110a353] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.518 Df DreamJourney[49549:110a315] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.518 Df DreamJourney[49549:110a315] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.518 Df DreamJourney[49549:110a315] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.518 Df DreamJourney[49549:110a315] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.519 Df DreamJourney[49549:110a315] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.555 Df DreamJourney[49549:110a315] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.558 Df DreamJourney[49549:110a355] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.558 Df DreamJourney[49549:110a355] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.558 Df DreamJourney[49549:110a355] [com.apple.network:connection] <compose failure [shared UUID]>
+2026-08-18 23:02:28.558 Df DreamJourney[49549:110a355] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.558 Df DreamJourney[49549:110a355] [com.apple.CFNetwork:Summary] <compose failure [shared UUID]>
+2026-08-18 23:02:28.558 Df DreamJourney[49549:110a315] [com.apple.CFNetwork:Default] <compose failure [shared UUID]>
+2026-08-18 23:02:28.611 Df DreamJourney[49549:110a2e8] [com.apple.BackBoard:Display] <compose failure [shared UUID]>
+2026-08-18 23:02:28.657 Df DreamJourney[49549:110a2e8] [com.apple.network:activity] <compose failure [shared UUID]>
+2026-08-18 23:02:28.661 Df DreamJourney[49549:110a2e8] [com.apple.network:activity] <compose failure [shared UUID]>
+2026-08-18 23:02:28.661 Df DreamJourney[49549:110a2e8] [com.apple.network:activity] <compose failure [shared UUID]>
+2026-08-18 23:02:28.661 Df DreamJourney[49549:110a2e8] [com.apple.network:activity] <compose failure [shared UUID]>
+2026-08-18 23:02:28.662 Df DreamJourney[49549:110a2e8] [com.apple.app_launch_measurement:ApplicationLaunch] <compose failure [shared UUID]>
+2026-08-18 23:02:28.725 A  DreamJourney[49549:110a356] (3A9BB57B-A0CB-3348-B747-5E5D19DE9237)
+2026-08-18 23:02:28.793 Df DreamJourney[49549:110a353] [com.apple.UIKit:BackgroundTask] <compose failure [shared UUID]>
+2026-08-18 23:02:28.793 Df DreamJourney[49549:110a353] [com.apple.UIKit:BackgroundTask] <compose failure [shared UUID]>
+2026-08-18 23:02:28.793 Df DreamJourney[49549:110a353] [com.apple.UIKit:BackgroundTask] <compose failure [shared UUID]>
+2026-08-18 23:02:28.793 Df DreamJourney[49549:110a353] [com.apple.UIKit:BackgroundTask] <compose failure [shared UUID]>

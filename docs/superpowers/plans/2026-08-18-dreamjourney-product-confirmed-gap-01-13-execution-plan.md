@@ -259,6 +259,8 @@ artifacts/product-confirmed/<run-id>/<work-item>/
 
 关联：AUTH-001、PROF-001、PCQ-02。
 
+状态：`WAITING_EXTERNAL_CONFIGURATION`（2026-08-18）。密码全链路、synthetic/test allowlist OTP、Session/风控合同、iOS 双模式、migration `0094` 和 production-postgres 部署均已验证；真实短信 Provider、签名、模板和非白名单测试号码仍为外部 Gate。实现提交：iOS `5aaf3543`，Backend `3ea80d1`、`994b3cc`；证据见 `artifacts/product-confirmed/20260818-pc-a0/PC-A0/` 和 `docs/superpowers/status/2026-08-18-pc-a0-password-otp-dual-authentication.md`。PC-A0 Session 合同已稳定，当前连续执行交接点为 `PC-A1`。
+
 后端：
 
 1. 在现有 OTP Challenge/Login 基础上增加密码设置、密码登录、修改、忘记/重置和敏感操作 OTP 再认证合同。

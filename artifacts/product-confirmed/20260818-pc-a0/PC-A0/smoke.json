@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "workItem": "PC-A0",
+  "status": "passed_with_external_gate",
+  "backend": {
+    "focusedTests": 106,
+    "migrationHead": "0094",
+    "ready": true,
+    "passwordContractVersion": 2,
+    "loginReady": true,
+    "resetReady": false,
+    "testRecoveryReady": true,
+    "recoveryMode": "testAllowlist",
+    "negativeLoginCode": "password_authentication_failed"
+  },
+  "ios": {
+    "bundleIdentifier": "com.yxj.dreamjourney.app",
+    "developmentTeamOverride": "2BTR77V3R8",
+    "passwordModeVisible": true,
+    "otpModeVisible": true,
+    "publicPasswordResetVisible": false,
+    "genericIPhoneOSBuild": "passed",
+    "simulatorBuildAndInstall": "passed"
+  }
+}

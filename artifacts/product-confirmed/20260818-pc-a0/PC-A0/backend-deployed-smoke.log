@@ -1,0 +1,1 @@
+{"contractVersion": 2, "loginReady": true, "negativeLoginCode": "password_authentication_failed", "recoveryMode": "testAllowlist", "recoveryReason": "testAllowlistOnly", "resetReady": false, "status": "passed", "testRecoveryReady": true}

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "workItem": "PC-A0",
+  "title": "密码与手机号验证码双登录",
+  "executedAt": "2026-08-18T15:05:03Z",
+  "executor": "Codex",
+  "environment": "production-postgres + iOS Simulator + generic iPhoneOS",
+  "productDecisionDependencies": ["PCQ-02"],
+  "commits": {
+    "ios": "5aaf3543e8e4374f936dc8fc5af3721c0a8bc609",
+    "backend": "994b3ccee904c38d0a4000f43ec3f9ff8e005ccd"
+  },
+  "deployment": {
+    "backendCommit": "994b3ccee904c38d0a4000f43ec3f9ff8e005ccd",
+    "apiImage": "sha256:66559250000a7d6680c352032d72224f5465c387672e2d27dcd2aa0c443960a1",
+    "migrationHead": "0094",
+    "ready": true
+  },
+  "results": {
+    "backendFocusedGate": "passed (106 tests)",
+    "backendFullVerification": "passed on implementation base before final runtime visibility hardening",
+    "backendDeployedSmoke": "passed",
+    "iosContractChecks": "passed",
+    "genericIPhoneOSBuild": "passed",
+    "simulatorBuildAndInstall": "passed",
+    "simulatorUIQA": "passed",
+    "gitDiffCheck": "passed"
+  },
+  "externalGates": [
+    "真实短信 Provider、签名、模板和非白名单测试号码尚未配置",
+    "真实短信到达与生产 OTP 恢复流程尚未验收"
+  ],
+  "redaction": {
+    "tokensStored": false,
+    "phoneNumbersStored": false,
+    "passwordsStored": false,
+    "providerCredentialsStored": false
+  }
+}

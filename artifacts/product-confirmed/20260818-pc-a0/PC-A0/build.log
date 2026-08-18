@@ -1,0 +1,12 @@
+PC-A0 build summary
+
+- Debug generic iPhoneOS workspace build: PASSED
+- Debug arm64 iOS Simulator workspace build: PASSED
+- Simulator install and launch: PASSED
+- Built bundle identifier: com.yxj.dreamjourney.app
+- Local development team override: 2BTR77V3R8
+- QA mobile credential artifact check: PASSED
+- Product code compile errors: none
+- Observed warning: third-party Kingfisher source has Swift 6 whitespace warning
+
+Raw build logs were intentionally excluded from the committed evidence package because they are generated, large and reproducible from the commands in the status report.
