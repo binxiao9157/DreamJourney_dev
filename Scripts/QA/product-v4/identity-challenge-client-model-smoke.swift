@@ -87,6 +87,30 @@ enum IdentityChallengeClientModelSmoke {
         precondition(challenge?.remainingAttempts == 5)
         precondition(challenge?.recoveryState == .available)
 
+        let passwordResetChallenge = BackendIdentityChallengeContract(json: [
+            "status": "accepted",
+            "challenge": [
+                "challengeId": "challenge_password_reset",
+                "purpose": "passwordreset",
+                "deliveryMode": "acceptedOnly",
+                "expiresAt": "2030-07-17T06:00:00Z",
+                "contractVersion": 1,
+            ],
+        ])
+        precondition(passwordResetChallenge?.purpose == "passwordReset")
+
+        let sensitiveOperationChallenge = BackendIdentityChallengeContract(json: [
+            "status": "accepted",
+            "challenge": [
+                "challengeId": "challenge_sensitive_operation",
+                "purpose": "sensitiveoperation",
+                "deliveryMode": "acceptedOnly",
+                "expiresAt": "2030-07-17T06:00:00Z",
+                "contractVersion": 1,
+            ],
+        ])
+        precondition(sensitiveOperationChallenge?.purpose == "sensitiveOperation")
+
         let recovered = BackendIdentityChallengeStateContract(json: [
             "status": "available",
             "challenge": [

@@ -126,6 +126,8 @@
 		C7E190000000000000000002 /* RuntimeCapabilitySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E190000000000000000102 /* RuntimeCapabilitySnapshot.swift */; };
 		C7E1A0000000000000000001 /* OperationsEvidenceEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1A0000000000000000101 /* OperationsEvidenceEvent.swift */; };
 		C7E1B0000000000000000001 /* BackendIdentityChallenge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B0000000000000000101 /* BackendIdentityChallenge.swift */; };
+		D6A000000000000000000001 /* BackendPasswordAuthentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6A000000000000000000101 /* BackendPasswordAuthentication.swift */; };
+		D6A000000000000000000002 /* PasswordResetViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6A000000000000000000102 /* PasswordResetViewController.swift */; };
 		C7E1B2000000000000000001 /* AccountSessionActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B2000000000000000101 /* AccountSessionActor.swift */; };
 		C7E1B3000000000000000001 /* AccountLease.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B3000000000000000101 /* AccountLease.swift */; };
 		C7E1B4000000000000000001 /* AccountLifecycleCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1B4000000000000000101 /* AccountLifecycleCoordinator.swift */; };
@@ -342,6 +344,8 @@
 		C7E190000000000000000102 /* RuntimeCapabilitySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeCapabilitySnapshot.swift; sourceTree = "<group>"; };
 		C7E1A0000000000000000101 /* OperationsEvidenceEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationsEvidenceEvent.swift; sourceTree = "<group>"; };
 		C7E1B0000000000000000101 /* BackendIdentityChallenge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendIdentityChallenge.swift; sourceTree = "<group>"; };
+		D6A000000000000000000101 /* BackendPasswordAuthentication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendPasswordAuthentication.swift; sourceTree = "<group>"; };
+		D6A000000000000000000102 /* PasswordResetViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordResetViewController.swift; sourceTree = "<group>"; };
 		C7E1B2000000000000000101 /* AccountSessionActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSessionActor.swift; sourceTree = "<group>"; };
 		C7E1B3000000000000000101 /* AccountLease.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountLease.swift; sourceTree = "<group>"; };
 		C7E1B4000000000000000101 /* AccountLifecycleCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountLifecycleCoordinator.swift; sourceTree = "<group>"; };
@@ -473,6 +477,7 @@
 				6603143627D340B690FFE39E /* OwnerTruthMediaTaskRecovery.swift */,
 				A9F000000000000000000101 /* BackendAuthSessionStore.swift */,
 				C7E1B0000000000000000101 /* BackendIdentityChallenge.swift */,
+				D6A000000000000000000101 /* BackendPasswordAuthentication.swift */,
 				B1B000000000000000000041 /* EchoDelayedReplyStore.swift */,
 				B1B000000000000000000042 /* EchoDelayedReplyNotificationScheduler.swift */,
 				D1D000000000000000000101 /* PushDeviceTokenStore.swift */,
@@ -605,6 +610,7 @@
 			isa = PBXGroup;
 			children = (
 				AB6F020939B8B3A55A3A9013 /* LoginViewController.swift */,
+				D6A000000000000000000102 /* PasswordResetViewController.swift */,
 			);
 			path = Auth;
 			sourceTree = "<group>";
@@ -1146,6 +1152,7 @@
 				6603143627D340B690FFE39F /* OwnerTruthMediaTaskRecovery.swift in Sources */,
 				A9F000000000000000000001 /* BackendAuthSessionStore.swift in Sources */,
 				C7E1B0000000000000000001 /* BackendIdentityChallenge.swift in Sources */,
+				D6A000000000000000000001 /* BackendPasswordAuthentication.swift in Sources */,
 				A1A000000000000000000041 /* EchoDelayedReplyStore.swift in Sources */,
 				A1A000000000000000000042 /* EchoDelayedReplyNotificationScheduler.swift in Sources */,
 				C1C000000000000000000101 /* PushDeviceTokenStore.swift in Sources */,
@@ -1199,6 +1206,7 @@
 				896769650B9A953A6C0B6F19 /* KBSyncViewController.swift in Sources */,
 				F2F9DEA8D6BDEBC8B7C5538F /* KnowledgeBaseViewController.swift in Sources */,
 				6863A6E1DDA4E382A101740F /* LoginViewController.swift in Sources */,
+				D6A000000000000000000002 /* PasswordResetViewController.swift in Sources */,
 				F19B799BEF51661DE29991D3 /* MapFootprintViewController.swift in Sources */,
 				328F094BD6DC27B02845187F /* MemoirAudioPlayer.swift in Sources */,
 				F8500DFD3392E5FDCFD54A14 /* MemoirDetailViewController.swift in Sources */,

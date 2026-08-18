@@ -38,14 +38,10 @@ enum ProfileFamilyPersonaReleaseReadiness {
     )
 
     static let passwordChangeCapability = Capability(
-        title: "修改密码",
+        title: "密码与安全",
         feature: .accountPasswordChange,
-        stage: .hiddenReady(
-            feature: .accountPasswordChange,
-            qaLaunchArgument: hiddenBranchesLaunchArgument,
-            reason: "App 内修改密码已建立页面壳层和后端合同，但默认发布态不展示，避免在真实认证、安全审计和后端接口验收前误承诺。"
-        ),
-        releaseCopy: "当前环境暂不支持修改密码"
+        stage: .publicReady(reason: "登录用户仅在服务端密码认证能力完整就绪时管理密码。"),
+        releaseCopy: "由服务端认证能力决定是否可用"
     )
 
     static let voiceCloneCapability = Capability(
@@ -86,10 +82,9 @@ enum ProfileFamilyPersonaReleaseReadiness {
     }
 
     static func isPasswordChangeVisible(
-        isPasswordChangeEnabled: Bool,
-        isHiddenBranchesEnabled: Bool
+        passwordAuthentication: BackendPasswordAuthenticationCapability
     ) -> Bool {
-        isHiddenBranchesEnabled || isPasswordChangeEnabled
+        passwordAuthentication.canManagePassword
     }
 
     static func isVoiceCloneVisible(

@@ -21,6 +21,22 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def function_body(source: str, signature: str) -> str:
+    start = source.find(signature)
+    require(start >= 0, f"missing function: {signature}")
+    opening = source.find("{", start)
+    require(opening >= 0, f"missing function body: {signature}")
+    depth = 0
+    for offset in range(opening, len(source)):
+        if source[offset] == "{":
+            depth += 1
+        elif source[offset] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[opening : offset + 1]
+    raise AssertionError(f"unterminated function body: {signature}")
+
+
 def main() -> None:
     require(CONTRACT.is_file(), "typed identity challenge contract is missing")
     require(MODEL_RUNNER.is_file(), "identity challenge model smoke runner is missing")
@@ -69,7 +85,7 @@ def main() -> None:
     require("/v2/auth/challenges/\(pathComponent(challengeId))/verify" in client, "identity verify endpoint drift")
     require("guard try self.adoptAuthSession(from: object) else" in client, "verified identity must yield a valid user session")
     require('"identityType": "phone"' in client, "challenge request must use the typed phone identity field")
-    verify_body = client.split("func verifyIdentityChallenge(", 1)[1].split("func logoutAuthSession", 1)[0]
+    verify_body = function_body(client, "func verifyIdentityChallenge(")
     require("password" not in verify_body, "typed identity verification must not transport an unused password")
 
     require("identityChallenge.canStartClientFlow" in login, "login must require a supported typed runtime capability")

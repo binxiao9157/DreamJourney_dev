@@ -25,32 +25,20 @@ final class ProfileSettingsViewController: UIViewController {
     private let statusLabel = UILabel()
     private let avatarEditButton = UIButton(type: .system)
     private let saveButton = UIButton(type: .system)
-    private let featureFlags: FeatureFlagService
+    private lazy var securityCard = makeSecurityCard()
+    private var passwordCapability: BackendPasswordAuthenticationCapability?
     private let maxNameLength = 24
     private let maxRegionLength = 32
     private let allowedGenderValues = ["男", "女", "不便透露"]
 
-    private var isProfileHiddenBranchesEnabled: Bool {
-        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
-        return ProcessInfo.processInfo.arguments.contains(ProfileFamilyPersonaReleaseReadiness.hiddenBranchesLaunchArgument)
-        #else
-        return false
-        #endif
-    }
-
     private var isPasswordChangeVisible: Bool {
-        ProfileFamilyPersonaReleaseReadiness.isPasswordChangeVisible(
-            isPasswordChangeEnabled: FeatureGateService.shared.isRouteAllowed(
-                .accountPasswordChange,
-                localEnabled: featureFlags.isEnabled(.accountPasswordChange),
-                qaSyntheticOverride: isProfileHiddenBranchesEnabled
-            ),
-            isHiddenBranchesEnabled: false
+        guard let passwordCapability else { return false }
+        return ProfileFamilyPersonaReleaseReadiness.isPasswordChangeVisible(
+            passwordAuthentication: passwordCapability
         )
     }
 
-    init(featureFlags: FeatureFlagService = .shared) {
-        self.featureFlags = featureFlags
+    init(featureFlags _: FeatureFlagService = .shared) {
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
     }
@@ -77,6 +65,7 @@ final class ProfileSettingsViewController: UIViewController {
             .foregroundColor: DJDesignTokens.Color.textPrimary,
             .font: DJDesignTokens.Font.title(18),
         ]
+        loadPasswordAuthenticationCapability()
     }
 
     private func configureScrollView() {
@@ -117,9 +106,8 @@ final class ProfileSettingsViewController: UIViewController {
     private func buildContent() {
         contentStack.addArrangedSubview(makeHeader())
         contentStack.addArrangedSubview(makeEditableCard())
-        if isPasswordChangeVisible {
-            contentStack.addArrangedSubview(makeSecurityCard())
-        }
+        contentStack.addArrangedSubview(securityCard)
+        securityCard.isHidden = true
         contentStack.addArrangedSubview(statusLabel)
         contentStack.addArrangedSubview(saveButton)
 
@@ -214,12 +202,12 @@ final class ProfileSettingsViewController: UIViewController {
         let button = UIControl()
         button.isAccessibilityElement = true
         button.accessibilityIdentifier = "profile-settings-password-change-row"
-        button.accessibilityLabel = "修改密码"
+        button.accessibilityLabel = "密码与安全"
         button.accessibilityTraits = .button
         button.addTarget(self, action: #selector(passwordChangeTapped), for: .touchUpInside)
 
         let titleLabel = makeLabel(
-            text: "修改密码",
+            text: "密码与安全",
             font: DJDesignTokens.Font.body(15),
             color: DJDesignTokens.Color.textPrimary
         )
@@ -490,7 +478,25 @@ final class ProfileSettingsViewController: UIViewController {
     }
 
     @objc private func passwordChangeTapped() {
-        navigationController?.pushViewController(ProfilePasswordChangeViewController(), animated: true)
+        guard let passwordCapability, isPasswordChangeVisible else { return }
+        navigationController?.pushViewController(
+            ProfilePasswordChangeViewController(capability: passwordCapability),
+            animated: true
+        )
+    }
+
+    private func loadPasswordAuthenticationCapability() {
+        DreamJourneyBackendClient.shared.fetchRuntimeConfig { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let runtime):
+                self.passwordCapability = runtime.passwordAuthentication
+            case .failure:
+                self.passwordCapability = nil
+            }
+            self.securityCard.isHidden = !self.isPasswordChangeVisible
+            self.securityCard.accessibilityValue = self.isPasswordChangeVisible ? "可用" : "不可用"
+        }
     }
 }
 

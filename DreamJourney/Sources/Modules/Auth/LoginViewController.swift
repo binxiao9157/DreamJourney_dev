@@ -8,6 +8,11 @@ final class LoginViewController: UIViewController {
         case register
     }
 
+    private enum CredentialMode: Int, Equatable {
+        case password = 0
+        case verificationCode = 1
+    }
+
     var didLogin: (() -> Void)?
 
     private let titleLabel: UILabel = {
@@ -33,6 +38,18 @@ final class LoginViewController: UIViewController {
         label.textColor = DJDesignTokens.Color.textSecondary.withAlphaComponent(0.62)
         label.textAlignment = .center
         return label
+    }()
+
+    private let credentialModeControl: UISegmentedControl = {
+        let control = UISegmentedControl(items: ["密码", "验证码"])
+        control.selectedSegmentIndex = CredentialMode.verificationCode.rawValue
+        control.selectedSegmentTintColor = DJDesignTokens.Color.surface
+        control.setTitleTextAttributes([
+            .font: DJDesignTokens.Font.label(14),
+            .foregroundColor: DJDesignTokens.Color.textPrimary,
+        ], for: .normal)
+        control.accessibilityIdentifier = "auth.credentialMode"
+        return control
     }()
 
     private let phoneFieldContainer = UIView()
@@ -68,6 +85,23 @@ final class LoginViewController: UIViewController {
         return field
     }()
 
+    private let passwordFieldContainer = UIView()
+    private let passwordIcon = UIImageView(image: UIImage(systemName: "lock"))
+    private let passwordField: UITextField = {
+        let field = UITextField()
+        field.attributedPlaceholder = NSAttributedString(
+            string: "密码",
+            attributes: [.foregroundColor: DJDesignTokens.Color.textSecondary.withAlphaComponent(0.42)]
+        )
+        field.font = DJDesignTokens.Font.body(16)
+        field.textColor = DJDesignTokens.Color.textPrimary
+        field.isSecureTextEntry = true
+        field.textContentType = .password
+        field.returnKeyType = .done
+        field.borderStyle = .none
+        return field
+    }()
+
     private lazy var requestCodeButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("获取验证码", for: .normal)
@@ -84,6 +118,16 @@ final class LoginViewController: UIViewController {
         label.textColor = DJDesignTokens.Color.textSecondary.withAlphaComponent(0.7)
         label.numberOfLines = 0
         return label
+    }()
+
+    private lazy var forgotPasswordButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("忘记密码", for: .normal)
+        button.titleLabel?.font = DJDesignTokens.Font.label(13)
+        button.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        button.addTarget(self, action: #selector(forgotPasswordTapped), for: .touchUpInside)
+        button.accessibilityIdentifier = "auth.forgotPassword"
+        return button
     }()
 
     private lazy var loginButton: UIButton = {
@@ -117,6 +161,8 @@ final class LoginViewController: UIViewController {
 
     private var rawPhone = ""
     private var authMode: AuthMode = .login
+    private var credentialMode: CredentialMode = .verificationCode
+    private var passwordAuthentication = BackendPasswordAuthenticationCapability(json: nil)
     private var pendingChallenge: BackendIdentityChallengeContract?
     private var pendingPhone: String?
     private var isChallengeRequestInProgress = false
@@ -129,12 +175,15 @@ final class LoginViewController: UIViewController {
         setupLayout()
         setupActions()
         applyAuthMode(animated: false)
+        applyCredentialMode(animated: false)
         updateControls()
+        loadAuthenticationCapabilities()
         hideKeyboardWhenTapped()
     }
 
     private func setupLayout() {
         configureFieldContainer(phoneFieldContainer, icon: phoneIcon, textField: phoneField)
+        configureFieldContainer(passwordFieldContainer, icon: passwordIcon, textField: passwordField)
         configureVerificationFieldContainer()
 
         let registerStack = UIStackView(arrangedSubviews: [registerPrefixLabel, registerButton])
@@ -142,12 +191,19 @@ final class LoginViewController: UIViewController {
         registerStack.alignment = .center
         registerStack.spacing = 4
 
+        let credentialHelpStack = UIStackView(arrangedSubviews: [verificationHintLabel, forgotPasswordButton])
+        credentialHelpStack.axis = .horizontal
+        credentialHelpStack.alignment = .firstBaseline
+        credentialHelpStack.spacing = 12
+
         [
             titleLabel,
             subtitleLabel,
+            credentialModeControl,
             phoneFieldContainer,
+            passwordFieldContainer,
             verificationFieldContainer,
-            verificationHintLabel,
+            credentialHelpStack,
             loginButton,
             registerStack,
         ].forEach {
@@ -164,21 +220,31 @@ final class LoginViewController: UIViewController {
             subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             subtitleLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
 
-            phoneFieldContainer.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 64),
+            credentialModeControl.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 36),
+            credentialModeControl.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            credentialModeControl.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            credentialModeControl.heightAnchor.constraint(equalToConstant: 36),
+
+            phoneFieldContainer.topAnchor.constraint(equalTo: credentialModeControl.bottomAnchor, constant: 20),
             phoneFieldContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
             phoneFieldContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
             phoneFieldContainer.heightAnchor.constraint(equalToConstant: 56),
+
+            passwordFieldContainer.topAnchor.constraint(equalTo: phoneFieldContainer.bottomAnchor, constant: 16),
+            passwordFieldContainer.leadingAnchor.constraint(equalTo: phoneFieldContainer.leadingAnchor),
+            passwordFieldContainer.trailingAnchor.constraint(equalTo: phoneFieldContainer.trailingAnchor),
+            passwordFieldContainer.heightAnchor.constraint(equalToConstant: 56),
 
             verificationFieldContainer.topAnchor.constraint(equalTo: phoneFieldContainer.bottomAnchor, constant: 16),
             verificationFieldContainer.leadingAnchor.constraint(equalTo: phoneFieldContainer.leadingAnchor),
             verificationFieldContainer.trailingAnchor.constraint(equalTo: phoneFieldContainer.trailingAnchor),
             verificationFieldContainer.heightAnchor.constraint(equalToConstant: 56),
 
-            verificationHintLabel.topAnchor.constraint(equalTo: verificationFieldContainer.bottomAnchor, constant: 8),
-            verificationHintLabel.leadingAnchor.constraint(equalTo: verificationFieldContainer.leadingAnchor, constant: 16),
-            verificationHintLabel.trailingAnchor.constraint(equalTo: verificationFieldContainer.trailingAnchor, constant: -16),
+            credentialHelpStack.topAnchor.constraint(equalTo: verificationFieldContainer.bottomAnchor, constant: 8),
+            credentialHelpStack.leadingAnchor.constraint(equalTo: verificationFieldContainer.leadingAnchor, constant: 16),
+            credentialHelpStack.trailingAnchor.constraint(equalTo: verificationFieldContainer.trailingAnchor, constant: -16),
 
-            loginButton.topAnchor.constraint(equalTo: verificationHintLabel.bottomAnchor, constant: 20),
+            loginButton.topAnchor.constraint(equalTo: credentialHelpStack.bottomAnchor, constant: 20),
             loginButton.leadingAnchor.constraint(equalTo: phoneFieldContainer.leadingAnchor),
             loginButton.trailingAnchor.constraint(equalTo: phoneFieldContainer.trailingAnchor),
             loginButton.heightAnchor.constraint(equalToConstant: 57),
@@ -249,15 +315,30 @@ final class LoginViewController: UIViewController {
     }
 
     private func setupActions() {
+        credentialModeControl.addTarget(self, action: #selector(credentialModeChanged), for: .valueChanged)
         phoneField.delegate = self
         phoneField.addTarget(self, action: #selector(phoneChanged), for: .editingChanged)
+        passwordField.delegate = self
+        passwordField.addTarget(self, action: #selector(passwordChanged), for: .editingChanged)
         verificationField.delegate = self
         verificationField.addTarget(self, action: #selector(verificationCodeChanged), for: .editingChanged)
         phoneField.accessibilityIdentifier = "auth.phone"
+        passwordField.accessibilityIdentifier = "auth.password"
         verificationField.accessibilityIdentifier = "auth.verificationCode"
         requestCodeButton.accessibilityIdentifier = "auth.requestCode"
         loginButton.accessibilityIdentifier = "auth.submit"
         registerButton.accessibilityIdentifier = "auth.switchMode"
+    }
+
+    @objc private func credentialModeChanged() {
+        guard let mode = CredentialMode(rawValue: credentialModeControl.selectedSegmentIndex) else { return }
+        if mode == .password, !passwordAuthentication.canLogin {
+            credentialModeControl.selectedSegmentIndex = CredentialMode.verificationCode.rawValue
+            showLoginAlert(title: "密码登录暂不可用", message: "当前服务尚未开放密码登录，请使用验证码登录。")
+            return
+        }
+        credentialMode = mode
+        applyCredentialMode(animated: true)
     }
 
     @objc private func phoneChanged() {
@@ -274,7 +355,7 @@ final class LoginViewController: UIViewController {
         }
         phoneField.text = formatted
 
-        if pendingPhone != rawPhone {
+        if pendingPhone != nil, pendingPhone != rawPhone {
             clearPendingChallenge()
         }
         updateControls()
@@ -286,10 +367,30 @@ final class LoginViewController: UIViewController {
         updateControls()
     }
 
+    @objc private func passwordChanged() {
+        updateControls()
+    }
+
     @objc private func registerTapped() {
         authMode = authMode == .login ? .register : .login
+        if authMode == .register {
+            credentialMode = .verificationCode
+            credentialModeControl.selectedSegmentIndex = CredentialMode.verificationCode.rawValue
+        }
         applyAuthMode(animated: true)
+        applyCredentialMode(animated: true)
         phoneField.becomeFirstResponder()
+    }
+
+    @objc private func forgotPasswordTapped() {
+        guard passwordAuthentication.canResetPassword else {
+            showLoginAlert(title: "密码重置暂不可用", message: "当前无法安全重置密码，请使用验证码登录。")
+            return
+        }
+        let controller = PasswordResetViewController(capability: passwordAuthentication)
+        let navigation = UINavigationController(rootViewController: controller)
+        navigation.modalPresentationStyle = .pageSheet
+        present(navigation, animated: true)
     }
 
     @objc private func requestVerificationCodeTapped() {
@@ -346,6 +447,52 @@ final class LoginViewController: UIViewController {
             phoneField.becomeFirstResponder()
             return
         }
+        switch credentialMode {
+        case .password:
+            submitPasswordLogin()
+        case .verificationCode:
+            submitVerificationCodeLogin()
+        }
+    }
+
+    private func submitPasswordLogin() {
+        guard authMode == .login, passwordAuthentication.canLogin else {
+            showLoginAlert(title: "密码登录暂不可用", message: "请切换到验证码登录。")
+            return
+        }
+        let password = passwordField.text ?? ""
+        guard password.count >= passwordAuthentication.minimumPasswordLength,
+              password.count <= passwordAuthentication.maximumPasswordLength else {
+            showLoginAlert(
+                title: "密码不完整",
+                message: "请输入 \(passwordAuthentication.minimumPasswordLength) 至 \(passwordAuthentication.maximumPasswordLength) 位密码。"
+            )
+            passwordField.becomeFirstResponder()
+            return
+        }
+
+        setLoginInProgress(true)
+        let submittedPhone = rawPhone
+        DreamJourneyBackendClient.shared.loginWithPassword(
+            phone: submittedPhone,
+            password: password
+        ) { [weak self] result in
+            guard let self else { return }
+            self.setLoginInProgress(false)
+            switch result {
+            case .success(let login):
+                self.completeLogin(
+                    userId: login.userId,
+                    nickname: login.nickname,
+                    phone: submittedPhone
+                )
+            case .failure(let error):
+                self.renderPasswordFailure(error, title: "密码登录失败")
+            }
+        }
+    }
+
+    private func submitVerificationCodeLogin() {
         let verificationCode = verificationField.text?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !verificationCode.isEmpty else {
@@ -409,7 +556,10 @@ final class LoginViewController: UIViewController {
         capability: BackendIdentityChallengeCapability,
         autoSubmitCode: String?
     ) {
-        DreamJourneyBackendClient.shared.createIdentityChallenge(phone: phone) { [weak self] result in
+        DreamJourneyBackendClient.shared.createIdentityChallenge(
+            phone: phone,
+            purpose: authMode == .register ? "register" : "login"
+        ) { [weak self] result in
             guard let self else { return }
             self.setChallengeRequestInProgress(false)
             switch result {
@@ -499,6 +649,10 @@ final class LoginViewController: UIViewController {
             return
         }
         let nickname = (user["nickname"] as? String) ?? ""
+        completeLogin(userId: userId, nickname: nickname, phone: phone)
+    }
+
+    private func completeLogin(userId: String, nickname: String, phone: String) {
         guard UserManager.shared.loginVerifiedAccount(
             phone: phone,
             nickname: nickname,
@@ -508,6 +662,32 @@ final class LoginViewController: UIViewController {
             return
         }
         didLogin?()
+    }
+
+    private func renderPasswordFailure(_ error: Error, title: String) {
+        let context = (error as? DreamJourneyBackendClient.ClientError)?.backendErrorContext
+        let failure = BackendPasswordFailureState.resolve(
+            code: context?.code,
+            retryAfterSeconds: context?.retryAfterSeconds,
+            message: context?.detail ?? error.localizedDescription
+        )
+        switch failure {
+        case .locked(let message, let retryAfterSeconds):
+            let retry = retryAfterSeconds.map { "请在 \($0) 秒后重试。" } ?? "请稍后重试。"
+            verificationHintLabel.text = "密码已临时锁定"
+            verificationHintLabel.textColor = DJDesignTokens.Color.danger
+            showLoginAlert(title: "密码已锁定", message: "\(message)\n\(retry)")
+        case .invalidCredentials:
+            verificationHintLabel.text = "手机号或密码不正确"
+            verificationHintLabel.textColor = DJDesignTokens.Color.danger
+            showLoginAlert(title: title, message: "手机号或密码不正确。")
+        case .reauthenticationRequired(let message),
+             .unavailable(let message),
+             .failed(let message):
+            verificationHintLabel.text = "密码登录失败，请重试"
+            verificationHintLabel.textColor = DJDesignTokens.Color.danger
+            showLoginAlert(title: title, message: message)
+        }
     }
 
     private func setLoginInProgress(_ inProgress: Bool) {
@@ -544,6 +724,10 @@ final class LoginViewController: UIViewController {
                 : "验证手机号后，将自动创建你的账号"
             self.registerPrefixLabel.text = self.authMode == .login ? "还没有账号？" : "已有账号？"
             self.registerButton.setTitle(self.authMode == .login ? "立即注册" : "立即登录", for: .normal)
+            self.credentialModeControl.setEnabled(
+                self.authMode == .login && self.passwordAuthentication.canLogin,
+                forSegmentAt: CredentialMode.password.rawValue
+            )
             self.updateControls()
         }
         if animated {
@@ -558,15 +742,73 @@ final class LoginViewController: UIViewController {
         }
     }
 
+    private func applyCredentialMode(animated: Bool) {
+        let updates = {
+            let usesPassword = self.credentialMode == .password && self.authMode == .login
+            self.passwordFieldContainer.isHidden = !usesPassword
+            self.verificationFieldContainer.isHidden = usesPassword
+            self.forgotPasswordButton.isHidden = !usesPassword || !self.passwordAuthentication.canResetPassword
+            if usesPassword {
+                self.verificationHintLabel.text = self.passwordAuthentication.canLogin
+                    ? "使用已设置的密码登录"
+                    : "密码登录暂不可用，请使用验证码"
+            } else if self.pendingChallenge == nil {
+                self.verificationHintLabel.text = "输入手机号后获取验证码"
+            }
+            self.verificationHintLabel.textColor = DJDesignTokens.Color.textSecondary.withAlphaComponent(0.7)
+            self.updateControls()
+        }
+        if animated {
+            UIView.transition(
+                with: view,
+                duration: 0.2,
+                options: [.transitionCrossDissolve, .allowAnimatedContent],
+                animations: updates
+            )
+        } else {
+            updates()
+        }
+    }
+
+    private func loadAuthenticationCapabilities() {
+        credentialModeControl.setEnabled(false, forSegmentAt: CredentialMode.password.rawValue)
+        DreamJourneyBackendClient.shared.fetchRuntimeConfig { [weak self] result in
+            guard let self else { return }
+            if case .success(let runtime) = result {
+                self.passwordAuthentication = runtime.passwordAuthentication
+            } else {
+                self.passwordAuthentication = BackendPasswordAuthenticationCapability(json: nil)
+            }
+            if self.credentialMode == .password, !self.passwordAuthentication.canLogin {
+                self.credentialMode = .verificationCode
+                self.credentialModeControl.selectedSegmentIndex = CredentialMode.verificationCode.rawValue
+            }
+            self.credentialModeControl.setEnabled(
+                self.authMode == .login && self.passwordAuthentication.canLogin,
+                forSegmentAt: CredentialMode.password.rawValue
+            )
+            self.applyCredentialMode(animated: false)
+        }
+    }
+
     private func updateControls() {
         let isBusy = isChallengeRequestInProgress || isLoginInProgress
         let hasChallenge = pendingChallenge != nil && pendingPhone == rawPhone
         let hasVerificationCode = !(verificationField.text ?? "").isEmpty
+        let passwordLength = (passwordField.text ?? "").count
+        let hasPassword = passwordLength >= passwordAuthentication.minimumPasswordLength
+            && passwordLength <= passwordAuthentication.maximumPasswordLength
+        let usesPassword = credentialMode == .password && authMode == .login
 
+        credentialModeControl.isEnabled = !isBusy
         phoneField.isEnabled = !isBusy
+        passwordField.isEnabled = !isBusy
         verificationField.isEnabled = !isBusy
-        requestCodeButton.isEnabled = rawPhone.count == 11 && !isBusy
-        loginButton.isEnabled = rawPhone.count == 11 && hasVerificationCode && !isBusy
+        requestCodeButton.isEnabled = !usesPassword && rawPhone.count == 11 && !isBusy
+        forgotPasswordButton.isEnabled = passwordAuthentication.canResetPassword && !isBusy
+        loginButton.isEnabled = rawPhone.count == 11
+            && (usesPassword ? hasPassword && passwordAuthentication.canLogin : hasVerificationCode)
+            && !isBusy
         registerButton.isEnabled = !isBusy
 
         if isChallengeRequestInProgress {
@@ -575,7 +817,7 @@ final class LoginViewController: UIViewController {
             requestCodeButton.setTitle(hasChallenge ? "重新获取" : "获取验证码", for: .normal)
         }
         if isLoginInProgress {
-            loginButton.setTitle("验证中...", for: .normal)
+            loginButton.setTitle(usesPassword ? "登录中..." : "验证中...", for: .normal)
         } else {
             loginButton.setTitle(authMode == .login ? "登录" : "注册并登录", for: .normal)
         }

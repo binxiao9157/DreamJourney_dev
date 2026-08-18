@@ -1468,6 +1468,7 @@ struct BackendRuntimeConfig {
     let releasePolicy: BackendReleasePolicyRuntimeDescriptor
     let recovery: BackendRecoveryRuntimePolicy
     let identityChallenge: BackendIdentityChallengeCapability
+    let passwordAuthentication: BackendPasswordAuthenticationCapability
 
     init(json: [String: Any]) {
         capabilitySnapshotSchemaVersion = Self.intValue(json["capabilitySnapshotSchemaVersion"]) ?? 0
@@ -1521,6 +1522,9 @@ struct BackendRuntimeConfig {
         self.recovery = BackendRecoveryRuntimePolicy(json: recovery)
         identityChallenge = BackendIdentityChallengeCapability(
             json: auth?["identityChallenge"] as? [String: Any]
+        )
+        passwordAuthentication = BackendPasswordAuthenticationCapability(
+            json: auth?["passwordAuthentication"] as? [String: Any]
         )
     }
 
@@ -9802,6 +9806,70 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         }
     }
 
+    func verifyIdentityChallengeAction(
+        challengeId: String,
+        verificationCode: String,
+        expectedAction: BackendPasswordAction,
+        completion: @escaping (Result<BackendPasswordActionTokenContract, Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/v2/auth/challenges/\(pathComponent(challengeId))/verify",
+            method: .post,
+            payload: ["code": verificationCode],
+            authPolicy: .publicRequest,
+            allowsRefresh: false
+        ) { result in
+            completion(result.flatMap { object in
+                guard let token = BackendPasswordActionTokenContract(
+                    json: object,
+                    expectedAction: expectedAction
+                ) else {
+                    return .failure(ClientError.invalidJSONResponse)
+                }
+                return .success(token)
+            })
+        }
+    }
+
+    func loginWithPassword(
+        phone: String,
+        password: String,
+        completion: @escaping (Result<BackendPasswordLoginContract, Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/v2/auth/password/login",
+            method: .post,
+            payload: [
+                "identityType": "phone",
+                "target": phone,
+                "password": password,
+            ],
+            authPolicy: .publicRequest,
+            allowsRefresh: false
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let object):
+                guard let login = BackendPasswordLoginContract(json: object) else {
+                    self.authSessionStore.clear()
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                do {
+                    guard try self.adoptAuthSession(from: object) else {
+                        throw ClientError.invalidJSONResponse
+                    }
+                    completion(.success(login))
+                } catch {
+                    self.authSessionStore.clear()
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func resumePrivateAccessSession(completion: @escaping (Bool) -> Void) {
         guard let capturedSession = authSessionStore.currentSession,
               capturedSession.isPrivateAccessEligible else {
@@ -9879,19 +9947,103 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         )
     }
 
-    func changePassword(
-        userId: String,
-        oldPassword: String,
+    func setupPassword(
         newPassword: String,
-        completion: @escaping (Result<[String: Any], Error>) -> Void
+        reauthToken: String,
+        completion: @escaping (Result<BackendPasswordMutationContract, Error>) -> Void
     ) {
         requestJSON(
-            path: "/auth/password",
+            path: "/v2/auth/password/setup",
             method: .post,
-            payload: ["userId": userId, "oldPassword": oldPassword, "newPassword": newPassword],
+            payload: [
+                "newPassword": newPassword,
+                "reauthToken": reauthToken,
+            ],
             authPolicy: .userRequired,
-            completion: completion
+            completion: { [weak self] result in
+                self?.resolvePasswordMutation(
+                    result,
+                    expectedAction: .setup,
+                    completion: completion
+                )
+            }
         )
+    }
+
+    func changePassword(
+        currentPassword: String,
+        newPassword: String,
+        completion: @escaping (Result<BackendPasswordMutationContract, Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/v2/auth/password/change",
+            method: .post,
+            payload: [
+                "currentPassword": currentPassword,
+                "newPassword": newPassword,
+            ],
+            authPolicy: .userRequired,
+            completion: { [weak self] result in
+                self?.resolvePasswordMutation(
+                    result,
+                    expectedAction: .change,
+                    completion: completion
+                )
+            }
+        )
+    }
+
+    func resetPassword(
+        resetToken: String,
+        newPassword: String,
+        completion: @escaping (Result<BackendPasswordMutationContract, Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/v2/auth/password/reset",
+            method: .post,
+            payload: [
+                "resetToken": resetToken,
+                "newPassword": newPassword,
+            ],
+            authPolicy: .publicRequest,
+            allowsRefresh: false,
+            completion: { [weak self] result in
+                self?.resolvePasswordMutation(
+                    result,
+                    expectedAction: .reset,
+                    completion: completion
+                )
+            }
+        )
+    }
+
+    private func resolvePasswordMutation(
+        _ result: Result<[String: Any], Error>,
+        expectedAction: BackendPasswordMutationAction,
+        completion: @escaping (Result<BackendPasswordMutationContract, Error>) -> Void
+    ) {
+        switch result {
+        case .success(let object):
+            guard let mutation = BackendPasswordMutationContract(
+                json: object,
+                expectedAction: expectedAction
+            ) else {
+                completion(.failure(ClientError.invalidJSONResponse))
+                return
+            }
+            do {
+                if object["auth"] != nil {
+                    guard try adoptAuthSession(from: object) else {
+                        throw ClientError.invalidJSONResponse
+                    }
+                }
+                completion(.success(mutation))
+            } catch {
+                completion(.failure(error))
+            }
+        case .failure(let error):
+            completion(.failure(error))
+        }
     }
 
     func softDeleteAccount(

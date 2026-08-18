@@ -106,14 +106,25 @@ def main() -> None:
 
     public_functions = {
         "func fetchRuntimeConfig(": 'path: "/config/runtime"',
-        "func fetchReleasePolicy(": 'let path = "/v2/release-policy"',
         "func createIdentityChallenge(": 'path: "/v2/auth/challenges"',
+        "func fetchIdentityChallengeState(": "/v2/auth/challenges/\\(pathComponent(challengeId))",
         "func verifyIdentityChallenge(": "/v2/auth/challenges/\\(pathComponent(challengeId))/verify",
+        "func verifyIdentityChallengeAction(": "/v2/auth/challenges/\\(pathComponent(challengeId))/verify",
+        "func loginWithPassword(": 'path: "/v2/auth/password/login"',
+        "func resetPassword(": 'path: "/v2/auth/password/reset"',
     }
     for signature, route in public_functions.items():
         body = function_body(client, signature)
         require(route in body, f"public route drifted in {signature}")
         require("authPolicy: .publicRequest" in body, f"{signature} must be explicitly public")
+
+    release_policy_span = function_span(client, "func fetchReleasePolicy(")
+    release_policy = client[release_policy_span[0] : release_policy_span[1]]
+    require('let path = "/v2/release-policy"' in release_policy, "release policy route drifted")
+    require(
+        "authPolicy: sessionUserID == nil ? .publicRequest : .userRequired" in release_policy,
+        "release policy must be public before login and user-scoped after login",
+    )
 
     for signature, route in (
         ("func upsertUser(", 'path: "/auth/login"'),
@@ -140,6 +151,12 @@ def main() -> None:
     calls = request_calls(client)
     require(calls, "requestJSON call inventory is empty")
     for offset, call in calls:
+        if "authPolicy: sessionUserID == nil ? .publicRequest : .userRequired" in call:
+            require(
+                contains_offset(release_policy_span, offset),
+                "conditional public/user policy escaped release-policy fetch",
+            )
+            continue
         match = re.search(r"\bauthPolicy\s*:\s*(\.\w+|authPolicy)\b", call)
         require(match is not None, f"requestJSON call at offset {offset} has no explicit auth policy")
         policy = match.group(1)

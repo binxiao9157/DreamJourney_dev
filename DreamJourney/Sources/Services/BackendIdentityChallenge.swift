@@ -146,12 +146,20 @@ struct BackendIdentityChallengeStateSnapshot: Equatable {
         allowsLegacyState: Bool
     ) {
         guard let challengeId = Self.string(json["challengeId"]),
-              let purpose = Self.string(json["purpose"]),
+              let rawPurpose = Self.string(json["purpose"]),
+              let purpose = Self.canonicalPurpose(rawPurpose),
               let deliveryMode = Self.string(json["deliveryMode"]),
               let expiresAt = Self.string(json["expiresAt"]),
               let expiresAtDate = Self.iso8601Date(expiresAt),
               !challengeId.isEmpty,
-              ["login", "register", "restore", "invitation"].contains(purpose),
+              [
+                  "login",
+                  "register",
+                  "restore",
+                  "invitation",
+                  "passwordReset",
+                  "sensitiveOperation",
+              ].contains(purpose),
               deliveryMode == "acceptedOnly",
               Self.int(json["contractVersion"]) == 1 else {
             return nil
@@ -247,6 +255,18 @@ struct BackendIdentityChallengeStateSnapshot: Equatable {
 
     private static func state(_ value: Any?) -> BackendIdentityChallengeLifecycleState? {
         string(value).flatMap(BackendIdentityChallengeLifecycleState.init(rawValue:))
+    }
+
+    private static func canonicalPurpose(_ value: String) -> String? {
+        switch value.lowercased() {
+        case "login": return "login"
+        case "register": return "register"
+        case "restore": return "restore"
+        case "invitation": return "invitation"
+        case "passwordreset": return "passwordReset"
+        case "sensitiveoperation": return "sensitiveOperation"
+        default: return nil
+        }
     }
 
     private static func delivery(_ value: Any?) -> BackendIdentityChallengeDeliveryState? {
