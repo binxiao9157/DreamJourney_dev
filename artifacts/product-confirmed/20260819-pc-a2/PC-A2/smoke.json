@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "workItem": "PC-A2",
+  "status": "passed",
+  "backend": {
+    "migrationHead": "0096",
+    "ready": true,
+    "v1Readable": true,
+    "v2FacetsIndexed": true,
+    "unknownSchemaQuarantined": true,
+    "facetAuthorityMetadataExcluded": true,
+    "crossOwnerDenied": true,
+    "candidateExtractionWorkerReady": true,
+    "memoryProjectionWorkerReady": true
+  },
+  "ios": {
+    "contractTests": 221,
+    "structuredFacetsVisible": true,
+    "missingFacetsNotReportedAsSuccess": true,
+    "unknownFieldsPreserved": true,
+    "bundleIdentifier": "com.yxj.dreamjourney.app",
+    "genericIPhoneOSBuild": "passed"
+  }
+}

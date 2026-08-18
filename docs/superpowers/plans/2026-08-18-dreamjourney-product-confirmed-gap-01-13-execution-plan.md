@@ -3,7 +3,7 @@
 日期：2026-08-18
 状态：`IN_PROGRESS`
 日常开发入口：`CANONICAL_EXECUTION_PLAN`
-执行控制版本：V1.5
+执行控制版本：V1.6
 
 ## 0. 目标和基线
 
@@ -18,16 +18,16 @@
 
 ### 0.1 当前执行进度
 
-更新时间：2026-08-18
+更新时间：2026-08-19
 
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
-| `COMPLETE` | 5 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1 |
+| `COMPLETE` | 6 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2 |
 | `WAITING_EXTERNAL_CONFIGURATION` | 1 | PC-A0：代码、production-postgres 部署和非真机验收已完成；真实短信 Provider 待配置 |
-| 当前执行项 | 1 | PC-A2：Owner Truth V2 facets |
-| 后续待执行 | 13 | PC-A3 至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+| 当前执行项 | 1 | PC-A3：Family/Visitor V4 权限路由 |
+| 后续待执行 | 12 | PC-A3 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：iOS PC-A1 普通 App 管理面静态 Gate 为 `9cc2196e`；Backend PC-A1 实现为 `d08c537`，迁移顺序修复及 production-postgres 部署版本为 `aae0b04`，migration head 为 `0095`。PC-A0 的外部短信 Gate 不阻塞 PC-A2；在真实短信 Provider 配置前，不得宣称生产 OTP 恢复完成。
+当前代码与部署交接：iOS PC-A2 facets 展示、编辑和兼容解析为 `4325fcd2`；Backend PC-A2 功能实现为 `6965dd4`，部署态 smoke 修复及 production-postgres 部署版本为 `b964e0c`，migration head 为 `0096`。PC-A0 的外部短信 Gate 不阻塞 PC-A3；在真实短信 Provider 配置前，不得宣称生产 OTP 恢复完成。PC-A3 完成前不得把私人 V2 facets 暴露给 Family/Visitor。
 
 每轮只需读取：
 
@@ -330,6 +330,8 @@ iOS：
 验证：schema 正负样本、V1/V2 兼容、未知 schema、推断标识、索引和跨账号负向。
 
 完成定义：V2 Candidate 经 Owner 确认后生成可检索、可追溯的 V2 MemoryVersion。
+
+状态：`COMPLETE`（2026-08-19）。新写入使用 `owner-truth-v2`，支持七类 facets 和总体 confidence；AI 线索保留 `inferred` 证据标识，关系 facet 不进入权限判定。V1 保持只读兼容且不自动补写，未知 schema fail-closed quarantine。Candidate 提取、人工纠正、MemoryVersion 激活、Projection 和私有 SearchDocument 已贯通；结构化索引只接收 allowlist `value`，不索引 subject/grant 等扩展元数据。iOS 已支持待确认详情、纠正编辑和正式记忆历史展示，并明确区分 V1 缺失、非法和未知 schema。Backend `6965dd4`，部署 smoke 修复 `3a7f5ba`、`b964e0c`；iOS `4325fcd2`；production-postgres migration head `0096`，两个 Owner Truth Worker 均 ready/running。证据见 `artifacts/product-confirmed/20260819-pc-a2/PC-A2/` 和 `docs/superpowers/status/2026-08-19-pc-a2-owner-truth-v2-facets.md`。当前连续执行交接点为 `PC-A3`。
 
 ### PC-A3 Family/Visitor V4 权限路由
 

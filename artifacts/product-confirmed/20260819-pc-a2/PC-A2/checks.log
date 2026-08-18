@@ -1,0 +1,12 @@
+PC-A2 checks
+
+- Backend verify_backend.sh: passed; 2139 primary tests plus standard gates.
+- Backend git diff --check and Python compileall: passed.
+- Migration 0096 dry-run/apply/verify: passed.
+- Deployed readiness: database/schema/auth/incident ready.
+- Deployed disposable Postgres search smoke: passed.
+- iOS OwnerTruthContractsTests: 221/221 passed.
+- iOS typed client static check and Swift parse: passed.
+- iOS Candidate inbox UIQA: passed; structuredFacetsVisible=true.
+- iOS generic iPhoneOS Debug build: passed.
+- iOS git diff --check: passed.

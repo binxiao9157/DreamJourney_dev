@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "workItem": "PC-A2",
+  "title": "Owner Truth V2 facets",
+  "executedAt": "2026-08-18T16:42:00Z",
+  "executor": "Codex",
+  "environment": "production-postgres + simulator UIQA + generic iPhoneOS",
+  "commits": {
+    "ios": "4325fcd2be2518308009d13c01c3f4ccaab06c7b",
+    "backendFeature": "6965dd4a5d3734abd834b753ea6d98dd0e7fe176",
+    "backendDeployed": "b964e0c5e76738f3dab92706956791745308c46c"
+  },
+  "deployment": {
+    "backendCommit": "b964e0c5e76738f3dab92706956791745308c46c",
+    "apiImage": "sha256:eebafa4607a2af64eaba02cf906d74805e69de9dd33d45821535cc150b03929f",
+    "migrationHead": "0096",
+    "ready": true,
+    "candidateExtractionWorker": "ready",
+    "memoryProjectionWorker": "ready"
+  },
+  "results": {
+    "backendFullVerification": "passed (2139 primary tests plus standard gates)",
+    "backendPostgresSmoke": "passed",
+    "iosContractTests": "passed (221/221)",
+    "iosUIQASmoke": "passed",
+    "genericIPhoneOSBuild": "passed",
+    "gitDiffCheck": "passed"
+  },
+  "externalGates": [],
+  "redaction": {
+    "tokensStored": false,
+    "phoneNumbersStored": false,
+    "databaseCredentialsStored": false,
+    "providerCredentialsStored": false,
+    "businessPayloadsStored": false
+  }
+}

@@ -1,0 +1,1 @@
+{"schemaVersion":1,"status":"ready","components":[{"component":"database","status":"ready","reason":"readWriteProbeSucceeded"},{"component":"schema","status":"ready","reason":"migrationHeadVerified"},{"component":"auth","status":"ready","reason":"requiredAuthConfigPresent"},{"component":"incident","status":"ready","reason":"noCriticalIncidentOpen"}]}

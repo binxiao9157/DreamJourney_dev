@@ -1,0 +1,11 @@
+PC-A2 iOS build and UIQA
+
+- Generic iPhoneOS report:
+  tmp/visual-qa/prd-stitch-ui/iphoneos-generic-build/20260819-pc-a2-v2-facets/report.md
+- Candidate inbox UIQA result:
+  tmp/visual-qa/product-v4/owner-truth-candidate-inbox-smoke/20260819-pc-a2-v2-facets/owner-truth-candidate-inbox-uiqa-result.json
+- Candidate inbox screenshot:
+  tmp/visual-qa/product-v4/owner-truth-candidate-inbox-smoke/20260819-pc-a2-v2-facets/01-owner-truth-candidate-inbox.png
+- Structured facets detail screenshot:
+  tmp/visual-qa/product-v4/owner-truth-candidate-inbox-smoke/20260819-pc-a2-v2-facets/02-owner-truth-candidate-structured-detail.png
+- Result: passed.

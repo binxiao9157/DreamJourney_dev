@@ -1,0 +1,19 @@
+PC-A2 deployed backend smoke
+
+- Source: b964e0c5e76738f3dab92706956791745308c46c
+- Pre-migration encrypted backup: success.
+- Migration dry-run: 0095 -> 0096 pending.
+- Migration apply: 0096 applied.
+- Migration verify: expectedHead=0096, appliedHead=0096, status=ready.
+- Post-migration encrypted backup: success.
+- Public readiness: database/schema/auth/incident ready.
+- Candidate extraction Worker: ready/running.
+- Memory projection Worker: ready/running.
+- Disposable production-postgres smoke: v1Readable=true, v2FacetsIndexed=true,
+  facetAuthorityMetadataExcluded=true, crossOwnerDenied=true.
+
+The first deployed smoke run exposed two defects in the smoke fixture itself:
+the V2 experience seed used the knowledge ontology, and a substring assertion
+mistook searchTextTruncated for the private searchText field. Both checks failed
+closed in a disposable database, were corrected in commits 3a7f5ba and b964e0c,
+and the complete smoke then passed. No production business data was modified.
