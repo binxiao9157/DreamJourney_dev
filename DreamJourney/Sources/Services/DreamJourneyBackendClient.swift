@@ -365,6 +365,14 @@ extension BackendCachedReleasePolicyEvaluation {
 final class FeatureGateService {
     static let shared = FeatureGateService()
 
+    /// Product-confirmed exclusions are not ordinary server rollout flags.
+    /// They stay closed even if a stale policy snapshot or provider capability
+    /// says that the feature is available. QA launch arguments use the
+    /// isolated synthetic route in Echo and do not pass through this set.
+    private static let productClosedFeatures: Set<DJFeature> = [
+        .digitalHumanLivePanel,
+    ]
+
     /// These routes take their release authority from cached server policy.
     /// Authentication allowlists are intentionally unrelated to product
     /// entitlement; the server grants the V4 chain to signed-in owners.
@@ -381,7 +389,6 @@ final class FeatureGateService {
         .ownerTruthCandidateReview,
         .personaSettings,
         .voiceCloneShell,
-        .digitalHumanLivePanel,
         .accountDataExport,
         .publicationManagementM2,
         .publicationGrantManagementM2,
@@ -549,7 +556,8 @@ final class FeatureGateService {
     }
 
     func isServerPolicyManagedRouteAllowed(_ feature: DJFeature) -> Bool {
-        isRouteAllowed(
+        guard !Self.productClosedFeatures.contains(feature) else { return false }
+        return isRouteAllowed(
             feature,
             localEnabled: Self.serverPolicyManagedFeatures.contains(feature) ? true : nil
         )
