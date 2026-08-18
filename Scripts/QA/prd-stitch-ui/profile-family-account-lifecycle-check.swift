@@ -107,12 +107,6 @@ for required in [
 assertNotContains(familyView, "复制邀请邮票", "Family UI should not keep old stamp-copy invite copy")
 
 for required in [
-    "showAccountDataExport",
-    "导出个人数据",
-    "pollAccountDataExportJob",
-    "showAccountDataExportRetry",
-    "部分外部数据未包含",
-    "注销前可导出个人数据副本",
     "showFinalAccountDeletionConfirmation",
     "submitAccountDeletion",
     "数据会保留 30 天",
@@ -121,16 +115,16 @@ for required in [
     "DreamJourneyBackendClient.shared.softDeleteAccount",
     "externalCleanupDomainStates",
     "isAccountDataExportVisible",
-    "isServerPolicyManagedClosedPilotRouteAllowed(.accountDataExport)",
-    "AccountDataExportJobStatusSnapshot",
-    "AccountDataExportJobStatusStore",
-    "resumeAccountDataExportJob",
-    "statusSubtitle",
 ] {
     assertContains(profileView, required, "Profile should implement two-step account deletion UI \(required)")
 }
 assertNotContains(profileView, "提交注销申请（未开放）", "Account deletion should no longer be blocked shell")
-assertNotContains(profileView, "不支持数据导出", "V4 data-rights UI should not retain the superseded no-export copy")
+assertContains(
+    profileView,
+    "private var isAccountDataExportVisible: Bool {\n        false\n    }",
+    "Full-account export must have no client entry"
+)
+assertNotContains(profileView, "注销前可导出个人数据副本", "Deletion copy must not advertise full-account export")
 assertNotContains(
     profileView,
     "if isFeatureRouteAllowed(.accountDeletion, risk: .ownerTextCore) {\n            rows.append(.dataExport)",

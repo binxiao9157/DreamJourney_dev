@@ -1313,7 +1313,7 @@ enum OwnerTruthMediaKind: String, CaseIterable, Codable, Sendable {
     case document
 
     var allowsExternalProcessing: Bool {
-        self == .image || self == .audio
+        self == .image || self == .document
     }
 
     fileprivate var supportedContentTypes: Set<String> {

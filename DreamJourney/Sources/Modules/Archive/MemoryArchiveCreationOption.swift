@@ -32,24 +32,33 @@ struct MemoryArchiveCreationOption: Equatable {
         isVideoUploadEnabled: Bool,
         isTimeLettersEnabled: Bool,
         isOwnerTruthTextCaptureEnabled: Bool = false,
-        isOwnerTruthMediaCaptureEnabled: Bool = false
+        isOwnerTruthMediaCaptureEnabled: Bool = false,
+        includesProductClosedMedia: Bool = false
     ) -> [MemoryArchiveCreationOption] {
         if isOwnerTruthTextCaptureEnabled {
             var options: [MemoryArchiveCreationOption] = [.ownerTruthTextCapture]
             if isOwnerTruthMediaCaptureEnabled {
                 options.append(contentsOf: [
                     .ownerTruthPhotoCapture,
-                    .ownerTruthAudioCapture,
                     .ownerTruthDocumentCapture,
-                    .ownerTruthVideoCapture,
                 ])
+                if includesProductClosedMedia {
+                    options.append(contentsOf: [
+                        .ownerTruthAudioCapture,
+                        .ownerTruthVideoCapture,
+                    ])
+                }
             } else {
                 options.append(contentsOf: [
                     .ownerTruthPhotoUnavailable,
-                    .ownerTruthAudioUnavailable,
                     .ownerTruthDocumentUnavailable,
-                    .ownerTruthVideoUnavailable,
                 ])
+                if includesProductClosedMedia {
+                    options.append(contentsOf: [
+                        .ownerTruthAudioUnavailable,
+                        .ownerTruthVideoUnavailable,
+                    ])
+                }
             }
             if isTimeLettersEnabled {
                 options.append(.timeLetter)

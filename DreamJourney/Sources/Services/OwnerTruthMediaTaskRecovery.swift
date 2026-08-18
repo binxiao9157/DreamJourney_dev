@@ -1001,6 +1001,7 @@ final class OwnerTruthMediaTaskRecoveryCoordinator: @unchecked Sendable {
             guard accountLeaseRuntime.validate(accountLease, at: .request).allowed,
                   let task = try store.recoverableTasks(for: accountLease)
                     .first(where: { $0.taskID == taskID }),
+                  Self.isFirstReleaseMediaKindAllowed(task.mediaKind),
                   task.phase == .retryableFailed || task.phase == .failed,
                   let vaultID = OwnerTruthVaultID(accountLease.vaultId),
                   let sourceObjectID = task.sourceObjectID.map({ OwnerTruthRecordID(rawValue: $0) }) else {
@@ -1137,6 +1138,21 @@ final class OwnerTruthMediaTaskRecoveryCoordinator: @unchecked Sendable {
             return
         }
         let task = tasks[index]
+        guard Self.isFirstReleaseMediaKindAllowed(task.mediaKind) else {
+            process(
+                tasks,
+                index: index + 1,
+                accountLease: accountLease,
+                generation: generation,
+                report: OwnerTruthMediaTaskRecoveryReport(
+                    resumedUploadCount: report.resumedUploadCount,
+                    refreshedStatusCount: report.refreshedStatusCount,
+                    failedTaskCount: report.failedTaskCount + 1
+                ),
+                completion: completion
+            )
+            return
+        }
         if task.phase == .prepared || task.phase == .uploadRetryableFailed {
             createIntentAndContinue(
                 task,
@@ -1177,6 +1193,10 @@ final class OwnerTruthMediaTaskRecoveryCoordinator: @unchecked Sendable {
                 completion: completion
             )
         }
+    }
+
+    private static func isFirstReleaseMediaKindAllowed(_ mediaKind: OwnerTruthMediaKind) -> Bool {
+        mediaKind == .image || mediaKind == .document
     }
 
     private func createIntentAndContinue(

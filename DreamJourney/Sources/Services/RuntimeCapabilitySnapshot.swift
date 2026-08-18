@@ -9,6 +9,8 @@ enum RuntimeCapabilityID: String, CaseIterable {
     case identityChallenge
     case timeLetters
     case echoDelayedReplies
+    case kbliteUserSurface
+    case accountDataExport
     case familyManagement
     case familySpace
     case voiceCloneShell

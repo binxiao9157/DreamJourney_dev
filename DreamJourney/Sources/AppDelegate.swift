@@ -4042,7 +4042,8 @@ private extension AppDelegate {
             isVideoUploadEnabled: false,
             isTimeLettersEnabled: false,
             isOwnerTruthTextCaptureEnabled: true,
-            isOwnerTruthMediaCaptureEnabled: true
+            isOwnerTruthMediaCaptureEnabled: true,
+            includesProductClosedMedia: true
         )
         let hostViewController = UIViewController()
         hostViewController.view.backgroundColor = DJDesignTokens.Color.background
@@ -4056,14 +4057,14 @@ private extension AppDelegate {
             sheetViewController.view.layoutIfNeeded()
             let detents = sheetViewController.sheetPresentationController?.detents ?? []
             let usesLargeDetent = detents.count == 1
-            let expectedTitles = ["记录文字", "选择图片", "选择音频", "选择文档", "选择视频"]
+            let expectedTitles = ["记录文字", "选择图片", "选择文档", "选择音频", "选择视频"]
             let titles = unifiedOptions.map(\.title)
             let allOptionsVisible = expectedTitles.allSatisfy {
                 self.viewTreeContainsText($0, in: sheetViewController.view)
             }
             let completed = publicOptions.map(\.title) == ["添加文字描述", "选择照片"]
                 && titles == expectedTitles
-                && unifiedOptions.compactMap(\.ownerTruthMediaKind) == [.image, .audio, .document, .video]
+                && unifiedOptions.compactMap(\.ownerTruthMediaKind) == [.image, .document, .audio, .video]
                 && usesLargeDetent
                 && allOptionsVisible
 

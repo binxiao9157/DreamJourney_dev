@@ -214,6 +214,7 @@ for static_check in \
   Scripts/QA/product-v4/owner-truth-interview-product-boundary-surface-check.py \
   Scripts/QA/product-v4/product-v4-ios-owner-truth-closed-pilot-candidate-review-check.py \
   Scripts/QA/product-v4/product-v4-ios-owner-truth-text-source-capture-check.py \
+  Scripts/QA/product-v4/product-confirmed-first-release-scope-check.py \
   Scripts/QA/product-v4/product-v4-ios-owner-media-unified-creation-check.py \
   Scripts/QA/product-v4/product-v4-ios-owner-media-task-status-check.py \
   Scripts/QA/product-v4/product-v4-ios-owner-media-candidate-handoff-check.py \

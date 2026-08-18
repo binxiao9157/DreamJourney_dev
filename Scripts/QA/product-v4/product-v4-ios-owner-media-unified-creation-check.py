@@ -54,6 +54,7 @@ def main() -> None:
     )
     for required in (
         "isOwnerTruthMediaCaptureEnabled: Bool = false",
+        "includesProductClosedMedia: Bool = false",
         "var options: [MemoryArchiveCreationOption] = [.ownerTruthTextCapture]",
         ".ownerTruthAudioCapture",
         ".ownerTruthDocumentCapture",
@@ -76,9 +77,10 @@ def main() -> None:
         require(required in options, f"unified creation contract missing: {required}")
 
     require(
-        "isOwnerTruthMediaCaptureClosedPilotEnabled" in archive
-        and "isServerPolicyManagedClosedPilotRouteAllowed(.ownerMediaCaptureV1)" in archive
-        and "isOwnerTruthTextCaptureClosedPilotEnabled" in archive,
+        "isOwnerTruthMediaCaptureEnabled" in archive
+        and ".isServerPolicyManagedRouteAllowed(.ownerMediaCaptureV1)" in archive
+        and "isOwnerTruthTextCaptureEnabled" in archive
+        and "includesProductClosedMedia: isUIQAArchiveHiddenBranchesEnabled" in archive,
         "owner media entry must be authorized by captured server release policy",
     )
     require(

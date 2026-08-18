@@ -60,8 +60,13 @@ assertContains(
 )
 assertContains(
     archive,
-    "navigationController?.pushViewController(KnowledgeBaseViewController(), animated: true)",
-    "persona card should open the persona/knowledge settings surface"
+    "guard isUIQAArchiveHiddenBranchesEnabled,",
+    "persona card must not expose KBLite outside the isolated QA route"
+)
+assertContains(
+    archive,
+    ".kbliteUserSurface",
+    "the internal KBLite route needs a distinct product-closed capability"
 )
 assertContains(
     archive,

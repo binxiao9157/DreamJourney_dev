@@ -438,6 +438,7 @@ run_step "Python QA scripts compile" "$STATIC_LOG_DIR/python-qa-compile.log" \
     "$SCRIPT_DIR/backend-voice-clone-deployed-smoke.py" \
     "$ROOT_DIR/Scripts/QA/product-v4/stage0_readiness_artifact_adapter.py" \
     "$ROOT_DIR/Scripts/QA/product-v4/stage0_readiness_artifact_adapter_check.py" \
+    "$ROOT_DIR/Scripts/QA/product-v4/product-confirmed-first-release-scope-check.py" \
     "$ROOT_DIR/Scripts/QA/product-v4/product-confirmed-time-letter-delayed-reply-closure-check.py" \
     "$SCRIPT_DIR/backend-voice-synthesis-viseme-smoke.py" \
     "$SCRIPT_DIR/public-release-scope-evidence.py"
@@ -445,6 +446,10 @@ run_step "Python QA scripts compile" "$STATIC_LOG_DIR/python-qa-compile.log" \
 run_step "Product-confirmed time-letter/delayed-reply closure" \
   "$STATIC_LOG_DIR/product-confirmed-time-letter-delayed-reply-closure.log" \
   python3 "$ROOT_DIR/Scripts/QA/product-v4/product-confirmed-time-letter-delayed-reply-closure-check.py"
+
+run_step "Product-confirmed first-release scope" \
+  "$STATIC_LOG_DIR/product-confirmed-first-release-scope.log" \
+  python3 "$ROOT_DIR/Scripts/QA/product-v4/product-confirmed-first-release-scope-check.py"
 
 if [[ "$RUN_CREDENTIAL_INVENTORY_SCAN" == "1" ]]; then
   mkdir -p "$OUTPUT_DIR/credential-inventory/$RUN_ID"

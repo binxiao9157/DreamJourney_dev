@@ -481,11 +481,7 @@ final class ProfileViewController: UIViewController {
     }
 
     private var isAccountDataExportVisible: Bool {
-        if isProfileHiddenBranchesEnabled {
-            return true
-        }
-        return FeatureGateService.shared
-            .isServerPolicyManagedRouteAllowed(.accountDataExport)
+        false
     }
 
     private func isFeatureRouteAllowed(
@@ -1264,7 +1260,7 @@ final class ProfileViewController: UIViewController {
         }
         let alert = UIAlertController(
             title: "注销账户",
-            message: "注销前可导出个人数据副本；提交注销后不再提供导出。你的数据会保留 30 天；30 天内用同手机号重新注册可恢复数据，恢复机会只有 1 次。超过 30 天后将不可逆删除。",
+            message: "提交注销后会立即退出当前账号。你的数据会保留 30 天；30 天内用同手机号重新注册可恢复数据，恢复机会只有 1 次。超过 30 天后将不可逆删除。",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))

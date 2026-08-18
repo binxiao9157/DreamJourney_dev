@@ -18,6 +18,7 @@ Authority：服务器 `ReleasePolicySnapshot`；iOS 本地 flag 仅承担 UI 组
 | `timeLetters` | hidden | lifecycle + backend delivery contract | product/privacy approval | G2/G4 | Release deny；`DJEnableArchiveHiddenBranches` only；captured command 保持 deny |
 | `profileSettings` | public-core | implemented | Closed Pilot Owner core | G0/G1 | server allow；scoped cache；captured route/request Gate；线上 command observe allow |
 | `personaSettings` | hidden | local knowledge/persona shell | product/privacy approval | G1/G4 | Release deny；archive QA branch only |
+| `kbliteUserSurface` | hidden | internal read/write compatibility retained | product-confirmed first-release closure | G0/G1/G2 | ordinary UI/routes/export hidden；isolated archive QA branch only；`kbSync` remains internal |
 | `archiveAudioUpload` | hidden | recorder/detail/upload contracts | media release decision | G2/G3/G4 | Release deny；mock/QA entry only |
 | `archiveVideoUpload` | hidden | detail/upload-intent shell | media release decision | G2/G3/G4 | Release deny；mock/QA entry only |
 | `archiveRemoteFetch` | hidden | backend-ready client | data authority rollout | G1/G2 | Release deny；`DJEnableArchiveRemoteFetch` in Debug/UIQA only |
@@ -26,6 +27,7 @@ Authority：服务器 `ReleasePolicySnapshot`；iOS 本地 flag 仅承担 UI 组
 | `familySpace` | hidden | persona switch + family context contracts | family authorization approval | G1/G2/G4 | Release deny；`DJEnableProfileHiddenBranches` only |
 | `legalCenter` | public-core | implemented | Closed Pilot Owner core | G0/G1 | server allow；read-only route |
 | `accountDeletion` | public-core | soft-delete/restore contract | Closed Pilot safety requirement | G1/G2 | server allow；destructive confirmation remains mandatory |
+| `accountDataExport` | hidden | backend package/export code retained | operations approval deferred | G1/G2/G4 | product-closed；no client row or route；formal Memory Markdown is a separate capability |
 | `accountPasswordChange` | hidden | UI/backend-ready shell | auth security approval | G1/G2 | Release deny；profile QA branch only |
 | `careDashboard` | hidden | snapshot states + retry + message provider | care product/privacy approval | G1/G2/G4 | Release deny；profile QA branch only |
 | `careDoctorContact` | hidden | non-executing draft shell | clinical/legal approval | G1/G2/G4 | Release deny；no call/message/backend effect |

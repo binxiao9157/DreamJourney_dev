@@ -62,6 +62,7 @@ let futureOrBeta: Set<String> = [
     "echoImageInput",
     "timeLetters",
     "personaSettings",
+    "kbliteUserSurface",
     "archiveAudioUpload",
     "archiveVideoUpload",
     "archiveRemoteFetch",
@@ -102,9 +103,11 @@ assertContains(flags, "subtracting(Self.nonPersistentFeatures)", "stored flags m
 assertContains(flags, "#if DEBUG || UI_QA_SIMULATOR", "QA overrides must be compile-time restricted")
 
 assertContains(archiveOptions, "var options: [MemoryArchiveCreationOption] = [\n            .text,\n            .photo,\n        ]", "archive creation baseline must remain text/photo")
-for feature in ["archiveAudioUpload", "archiveVideoUpload", "archiveRemoteFetch", "timeLetters", "personaSettings"] {
+for feature in ["archiveAudioUpload", "archiveVideoUpload", "archiveRemoteFetch", "timeLetters"] {
     assertContains(archive, "FeatureFlagService.shared.isEnabled(.\(feature))", "archive route must remain gated by \(feature)")
 }
+assertContains(archive, ".kbliteUserSurface", "KBLite user route must use its product-closed feature")
+assertContains(archive, "isUIQAArchiveHiddenBranchesEnabled", "KBLite user route must remain QA-only")
 assertContains(archive, "MemoryArchiveMediaReleaseReadiness.isCreationVisible", "archive creation must consume the shared readiness contract")
 assertContains(archiveReadiness, "case .timeLetter:\n            return .hiddenReady(", "time letters must remain implemented but hidden")
 assertContains(archiveReadiness, "DJEnableArchiveHiddenBranches", "archive QA branches need one explicit launch argument")
@@ -112,12 +115,12 @@ assertContains(archiveReadiness, "DJEnableArchiveHiddenBranches", "archive QA br
 assertContains(profile, "FeatureGateService.shared.isRouteAllowed(", "profile routes must use captured policy gates")
 assertContains(profile, "isFeatureRouteAllowed(.profileSettings", "profile settings route must remain gated")
 assertContains(profile, "isFeatureRouteAllowed(.legalCenter", "legal route must remain gated")
-assertContains(profile, "isFeatureRouteAllowed(.familyManagement", "family route must remain gated")
-assertContains(profile, "isFeatureRouteAllowed(.voiceCloneShell", "voice clone route must remain gated")
+assertContains(profile, "isFamilyRouteAllowed(.familyManagement)", "family route must remain gated")
+assertContains(profile, ".isServerPolicyManagedRouteAllowed(.voiceCloneShell)", "voice clone route must remain gated")
 assertContains(profile, "isFeatureRouteAllowed(.accountDeletion", "account deletion route must remain gated")
 assertContains(profileReadiness, "DJEnableProfileHiddenBranches", "profile QA branches need one explicit launch argument")
-assertContains(profileReadiness, "stage: .hiddenReady(", "family and voice capabilities must remain hidden-ready")
-assertContains(profileReadiness, "V4 Closed Pilot 暂不公开音色复刻", "voice clone readiness must explain the V4 boundary")
+assertContains(profileReadiness, "stage: .publicReady(", "confirmed profile capabilities must declare their public-ready boundary")
+assertContains(profileReadiness, "已登录用户按服务端授权与音色供应商状态使用。", "voice clone readiness must explain its provider boundary")
 
 assertContains(echo, "FeatureFlagService.shared.isEnabled(.digitalHumanLivePanel)", "digital human panel must remain feature gated")
 assertContains(echo, "private var isDigitalHumanQAOverrideEnabled: Bool", "digital human QA arguments must be isolated")
@@ -151,13 +154,18 @@ assertNotContains(matrix, "enabled by default", "matrix must not preserve the su
 assertNotContains(infoPlist, "CFBundleURLTypes", "Closed Pilot must not register hidden deep links")
 assertContains(
     sceneDelegate,
-    "receiveNotificationRuntimeDeepLink(context.url)",
-    "external URL ingress must only forward to the notification runtime router"
+    "receiveAppDeepLink(context.url)",
+    "external URL ingress must only forward to the coordinator deep-link router"
 )
 assertContains(
     appCoordinator,
     "notificationRuntimeRouteInbox.ingest(deepLinkURL: url)",
     "deep-link ingress must be validated by NotificationRuntimeRouteInbox"
+)
+assertContains(
+    appCoordinator,
+    "receiveNotificationRuntimeDeepLink(url)",
+    "non-publication deep links must continue through the notification runtime router"
 )
 assertContains(
     accountLease,

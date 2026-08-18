@@ -370,8 +370,12 @@ final class FeatureGateService {
     /// says that the feature is available. QA launch arguments use the
     /// isolated synthetic route in Echo and do not pass through this set.
     private static let productClosedFeatures: Set<DJFeature> = [
+        .accountDataExport,
+        .archiveAudioUpload,
+        .archiveVideoUpload,
         .digitalHumanLivePanel,
         .echoDelayedReplies,
+        .kbliteUserSurface,
         .timeLetters,
     ]
 
@@ -391,7 +395,6 @@ final class FeatureGateService {
         .ownerTruthCandidateReview,
         .personaSettings,
         .voiceCloneShell,
-        .accountDataExport,
         .publicationManagementM2,
         .publicationGrantManagementM2,
         .publicationVisitorM2,
@@ -7492,11 +7495,20 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             }
             return
         }
-        let decision = requestFeatureDecision(for: .ownerMediaCaptureV1)
+        let feature: DJFeature
+        switch command.mediaKind {
+        case .audio:
+            feature = .archiveAudioUpload
+        case .video:
+            feature = .archiveVideoUpload
+        case .image, .document:
+            feature = .ownerMediaCaptureV1
+        }
+        let decision = requestFeatureDecision(for: feature)
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
-                    feature: DJFeature.ownerMediaCaptureV1.rawValue,
+                    feature: feature.rawValue,
                     reason: decision.reason
                 )))
             }

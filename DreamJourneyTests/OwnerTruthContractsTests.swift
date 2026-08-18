@@ -327,6 +327,14 @@ final class OwnerTruthContractsTests: XCTestCase {
             isOwnerTruthTextCaptureEnabled: true,
             isOwnerTruthMediaCaptureEnabled: true
         )
+        let internalMediaOptions = MemoryArchiveCreationOption.availableOptions(
+            isAudioUploadEnabled: false,
+            isVideoUploadEnabled: false,
+            isTimeLettersEnabled: false,
+            isOwnerTruthTextCaptureEnabled: true,
+            isOwnerTruthMediaCaptureEnabled: true,
+            includesProductClosedMedia: true
+        )
         let textOnlyAuthorityOptions = MemoryArchiveCreationOption.availableOptions(
             isAudioUploadEnabled: true,
             isVideoUploadEnabled: true,
@@ -340,19 +348,23 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(closedPilotOptions.filter(\.submitsOwnerTruthSource).count, 1)
         XCTAssertEqual(
             closedPilotOptions.map(\.title),
-            ["记录文字", "选择图片", "选择音频", "选择文档", "选择视频"]
+            ["记录文字", "选择图片", "选择文档"]
         )
         XCTAssertEqual(
             closedPilotOptions.compactMap(\.ownerTruthMediaKind),
-            [.image, .audio, .document, .video]
+            [.image, .document]
+        )
+        XCTAssertEqual(
+            internalMediaOptions.map(\.title),
+            ["记录文字", "选择图片", "选择文档", "选择音频", "选择视频"]
         )
         XCTAssertEqual(
             textOnlyAuthorityOptions.map(\.title),
-            ["记录文字", "选择图片", "选择音频", "选择文档", "选择视频"]
+            ["记录文字", "选择图片", "选择文档"]
         )
         XCTAssertEqual(
             textOnlyAuthorityOptions.map(\.isAvailable),
-            [true, false, false, false, false]
+            [true, false, false]
         )
         XCTAssertFalse(
             textOnlyAuthorityOptions.contains {
@@ -364,8 +376,8 @@ final class OwnerTruthContractsTests: XCTestCase {
 
     func testOwnerTruthMediaCreationPolicyRequiresExplicitProcessingChoice() throws {
         XCTAssertTrue(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .image))
-        XCTAssertTrue(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .audio))
-        XCTAssertFalse(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .document))
+        XCTAssertFalse(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .audio))
+        XCTAssertTrue(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .document))
         XCTAssertFalse(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .video))
         XCTAssertEqual(OwnerTruthMediaCreationPolicy.maximumFileSizeMB(for: .image), 20)
         XCTAssertEqual(OwnerTruthMediaCreationPolicy.maximumFileSizeMB(for: .audio), 50)
@@ -387,14 +399,14 @@ final class OwnerTruthContractsTests: XCTestCase {
             )
         }
 
-        let audioCommand = try OwnerTruthMediaCreationPolicy.makeCommand(
-            mediaKind: .audio,
-            fileName: "memory.m4a",
-            contentType: "audio/m4a",
-            content: Data("audio".utf8),
+        let documentCommand = try OwnerTruthMediaCreationPolicy.makeCommand(
+            mediaKind: .document,
+            fileName: "memory.pdf",
+            contentType: "application/pdf",
+            content: Data("document".utf8),
             allowExternalProcessing: true
         )
-        XCTAssertTrue(audioCommand.allowExternalProcessing)
+        XCTAssertTrue(documentCommand.allowExternalProcessing)
 
         let videoCommand = try OwnerTruthMediaCreationPolicy.makeCommand(
             mediaKind: .video,
@@ -10122,7 +10134,11 @@ final class OwnerTruthContractsTests: XCTestCase {
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
         let rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("owner-truth-media-processing-retry-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: rootURL) }
+        defer {
+            if FileManager.default.fileExists(atPath: rootURL.path) {
+                try? FileManager.default.removeItem(at: rootURL)
+            }
+        }
         let secretStore = OwnerTruthMediaUploadSecretStoreSpy()
         let store = OwnerTruthMediaTaskStore(
             rootDirectory: rootURL,
@@ -10132,9 +10148,9 @@ final class OwnerTruthContractsTests: XCTestCase {
         let content = Data(repeating: 0x56, count: 128)
         let command = try OwnerTruthMediaUploadIntentCommand(
             expectedAuthorityEpoch: 0,
-            mediaKind: .audio,
-            fileName: "father.m4a",
-            contentType: "audio/m4a",
+            mediaKind: .document,
+            fileName: "family-notes.pdf",
+            contentType: "application/pdf",
             content: content,
             allowExternalProcessing: true
         )
