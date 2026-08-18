@@ -48,12 +48,15 @@ require(installer.contains("Release builds cannot enable DEBUG or UI_QA_SIMULATO
 require(!infoPlist.contains("CFBundleURLTypes"), "Closed Pilot must not register a custom URL scheme")
 require(
     sceneDelegate.contains("func scene(_ scene: UIScene, openURLContexts")
-        && sceneDelegate.contains("receiveNotificationRuntimeDeepLink(context.url)"),
-    "external URL ingress must only forward to the notification runtime router"
+        && sceneDelegate.contains("receiveAppDeepLink(context.url)"),
+    "external URL ingress must only forward to the coordinator deep-link router"
 )
 require(
-    appCoordinator.contains("notificationRuntimeRouteInbox.ingest(deepLinkURL: url)"),
-    "deep-link ingress must be validated by NotificationRuntimeRouteInbox"
+    appCoordinator.contains("func receiveAppDeepLink(_ url: URL)")
+        && appCoordinator.contains("publicationVisitorRuntime.stage(deepLinkURL: url)")
+        && appCoordinator.contains("receiveNotificationRuntimeDeepLink(url)")
+        && appCoordinator.contains("notificationRuntimeRouteInbox.ingest(deepLinkURL: url)"),
+    "deep-link ingress must be classified by the coordinator and validated by NotificationRuntimeRouteInbox"
 )
 require(
     accountLease.contains("NotificationRuntimeRoutePayload(deepLinkURL: deepLinkURL)")

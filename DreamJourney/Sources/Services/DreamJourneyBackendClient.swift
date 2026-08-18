@@ -371,6 +371,8 @@ final class FeatureGateService {
     /// isolated synthetic route in Echo and do not pass through this set.
     private static let productClosedFeatures: Set<DJFeature> = [
         .digitalHumanLivePanel,
+        .echoDelayedReplies,
+        .timeLetters,
     ]
 
     /// These routes take their release authority from cached server policy.
@@ -446,12 +448,25 @@ final class FeatureGateService {
         qaSyntheticOverride: Bool = false
     ) -> FeatureDecision {
         let resolvedRisk = risk ?? riskClass(for: feature)
+        let resolvedQAOverride = Self.qaOverrideAllowed(qaSyntheticOverride)
+        if Self.productClosedFeatures.contains(feature), !resolvedQAOverride {
+            let decision = productClosedDecision(
+                for: feature,
+                purpose: .route,
+                risk: resolvedRisk
+            )
+            lock.lock()
+            routeDecisions[feature] = decision
+            latestDecisions[feature] = decision
+            lock.unlock()
+            return decision
+        }
         let decision = evaluator.capture(
             feature: feature,
             risk: resolvedRisk,
             purpose: .route,
             localEnabled: localEnabled ?? FeatureFlagService.shared.isEnabled(feature),
-            qaSyntheticOverride: Self.qaOverrideAllowed(qaSyntheticOverride),
+            qaSyntheticOverride: resolvedQAOverride,
             accountGeneration: accountGeneration,
             policy: currentPolicy(for: feature, risk: resolvedRisk)
         )
@@ -481,6 +496,15 @@ final class FeatureGateService {
         localEnabled: Bool? = nil
     ) -> FeatureDecision {
         let risk = riskClass(for: feature)
+        if Self.productClosedFeatures.contains(feature) {
+            let decision = productClosedDecision(
+                for: feature,
+                purpose: .request,
+                risk: risk
+            )
+            storeLatest(decision)
+            return decision
+        }
         let generation = accountGeneration
         let resolvedLocalEnabled = localEnabled ?? FeatureFlagService.shared.isEnabled(feature)
         let captured: FeatureDecision?
@@ -515,6 +539,19 @@ final class FeatureGateService {
         _ captured: FeatureDecision,
         localEnabled: Bool? = nil
     ) -> FeatureDecision {
+        if Self.productClosedFeatures.contains(captured.feature) {
+            let policy = currentPolicy(
+                for: captured.feature,
+                risk: riskClass(for: captured.feature)
+            )
+            let decision = captured.deniedForRequest(
+                reason: "productClosed",
+                validatedPolicyRevision: policy.policyRevision,
+                validatedEmergencyRevision: policy.emergencyRevision
+            )
+            storeLatest(decision)
+            return decision
+        }
         let decision = evaluator.revalidateForRequest(
             captured: captured,
             localEnabled: localEnabled ?? FeatureFlagService.shared.isEnabled(captured.feature),
@@ -588,6 +625,18 @@ final class FeatureGateService {
         payload: [String: Any]?
     ) -> DJFeature? {
         let normalizedPath = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
+        if method == .get && (
+            normalizedPath.hasPrefix("/archive/time-letters/")
+                || normalizedPath.hasPrefix("/mailbox/letters/")
+                || normalizedPath.hasPrefix("/echo/delayed-replies/")
+        ) {
+            return nil
+        }
+        if method == .post,
+           normalizedPath.hasPrefix("/mailbox/letters/"),
+           normalizedPath.hasSuffix("/read") || normalizedPath.hasSuffix("/archive") {
+            return nil
+        }
         if normalizedPath.hasPrefix("/v2/internal/owner-authority/vaults/") {
             return .publicationManagementM2
         }
@@ -634,10 +683,10 @@ final class FeatureGateService {
         }
         if normalizedPath == "/profile" { return .profileSettings }
         if normalizedPath == "/context/build"
-            || normalizedPath == "/echo/answers"
-            || normalizedPath.hasPrefix("/echo/delayed-replies") {
+            || normalizedPath == "/echo/answers" {
             return .echoTextInput
         }
+        if normalizedPath.hasPrefix("/echo/delayed-replies") { return .echoDelayedReplies }
         let pathComponents = normalizedPath.split(separator: "/")
         if method == .post,
            pathComponents.count == 6,
@@ -846,6 +895,28 @@ final class FeatureGateService {
         lock.lock()
         latestDecisions[decision.feature] = decision
         lock.unlock()
+    }
+
+    private func productClosedDecision(
+        for feature: DJFeature,
+        purpose: FeatureGatePurpose,
+        risk: ReleasePolicyRiskClass
+    ) -> FeatureDecision {
+        let policy = currentPolicy(for: feature, risk: risk)
+        return FeatureDecision(
+            decisionId: UUID().uuidString.lowercased(),
+            feature: feature,
+            purpose: purpose,
+            policyVersion: policy.policyVersion,
+            policyRevision: policy.policyRevision,
+            emergencyRevision: policy.emergencyRevision,
+            validatedPolicyRevision: policy.policyRevision,
+            validatedEmergencyRevision: policy.emergencyRevision,
+            accountGeneration: accountGeneration,
+            allowed: false,
+            reason: "productClosed",
+            expiresAt: policy.expiresAt
+        )
     }
 
     private func riskClass(for feature: DJFeature) -> ReleasePolicyRiskClass {
@@ -6207,6 +6278,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
 
     var isEchoDelayedReplyPushConfigured: Bool {
         hasExplicitBaseURL
+            && FeatureGateService.shared.isServerPolicyManagedRouteAllowed(.echoDelayedReplies)
     }
 
     var isEchoDelayedReplyAnswerReconciliationQAConfigured: Bool {
@@ -11102,6 +11174,15 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         rawTranscript: String,
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
+        guard FeatureGateService.shared.isServerPolicyManagedRouteAllowed(.echoDelayedReplies) else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.echoDelayedReplies.rawValue,
+                    reason: "productClosed"
+                )))
+            }
+            return
+        }
         var payload: [String: Any] = [
             "userId": userId,
             "delayedReplyId": delayedReply.id,

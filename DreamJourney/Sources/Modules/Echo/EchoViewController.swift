@@ -1066,6 +1066,14 @@ final class EchoViewController: UIViewController {
         #endif
     }
 
+    private var isEchoDelayedReplyProductEnabled: Bool {
+        if EchoDelayedReplyAnswerReconciliationQAGate.isEnabled {
+            return true
+        }
+        return FeatureGateService.shared
+            .isServerPolicyManagedRouteAllowed(.echoDelayedReplies)
+    }
+
     private var isDigitalHumanQADisableEnabled: Bool {
         #if DEBUG || UI_QA_SIMULATOR
         return QALaunchConfiguration.shared.contains("DJDisableDigitalHumanLivePanel")
@@ -1243,19 +1251,26 @@ final class EchoViewController: UIViewController {
         updatePersonaBadge()
         loadVoiceCloneRuntimeCapabilityIfNeeded()
         seedTranscriptPreview()
-        let restoredDelayedReply = accountLease.map {
-            viewModel.restoreStoredDelayedReplyIfAvailable(
-                accountLease: $0,
-                resourceOwnerId: $0.subjectId,
-                roleContextKey: digitalHumanRuntimeContextKey(
-                    for: DigitalHumanContextStore.shared.current
+        let restoredDelayedReply: Bool
+        if isEchoDelayedReplyProductEnabled {
+            restoredDelayedReply = accountLease.map {
+                viewModel.restoreStoredDelayedReplyIfAvailable(
+                    accountLease: $0,
+                    resourceOwnerId: $0.subjectId,
+                    roleContextKey: digitalHumanRuntimeContextKey(
+                        for: DigitalHumanContextStore.shared.current
+                    )
                 )
-            )
-        } ?? false
+            } ?? false
+        } else {
+            restoredDelayedReply = false
+        }
         if !restoredDelayedReply {
             render(state: .idle)
         }
-        refreshDelayedReplyAnswerReconciliation(reason: "viewDidLoad")
+        if isEchoDelayedReplyProductEnabled {
+            refreshDelayedReplyAnswerReconciliation(reason: "viewDidLoad")
+        }
         renderArchiveContextStatus(viewModel.archiveContextStatus)
     }
 
@@ -1755,7 +1770,7 @@ final class EchoViewController: UIViewController {
             return
         }
         viewModel.resetTransientStateForAccountRebind()
-        if let accountLease {
+        if isEchoDelayedReplyProductEnabled, let accountLease {
             _ = viewModel.restoreStoredDelayedReplyIfAvailable(
                 accountLease: accountLease,
                 resourceOwnerId: accountLease.subjectId,
@@ -1764,7 +1779,9 @@ final class EchoViewController: UIViewController {
                 )
             )
         }
-        refreshDelayedReplyAnswerReconciliation(reason: reason)
+        if isEchoDelayedReplyProductEnabled {
+            refreshDelayedReplyAnswerReconciliation(reason: reason)
+        }
         seedTranscriptPreview()
         if view.window != nil,
            bindDialogEngineToEchoAccountLease(reason: reason) {
@@ -1789,7 +1806,7 @@ final class EchoViewController: UIViewController {
             return
         }
         viewModel.resetTransientStateForAccountRebind()
-        if let echoAccountLease {
+        if isEchoDelayedReplyProductEnabled, let echoAccountLease {
             _ = viewModel.restoreStoredDelayedReplyIfAvailable(
                 accountLease: echoAccountLease,
                 resourceOwnerId: echoAccountLease.subjectId,
@@ -1798,7 +1815,9 @@ final class EchoViewController: UIViewController {
                 )
             )
         }
-        refreshDelayedReplyAnswerReconciliation(reason: "contextDidChange")
+        if isEchoDelayedReplyProductEnabled {
+            refreshDelayedReplyAnswerReconciliation(reason: "contextDidChange")
+        }
         let didReleaseStaleRuntime = reconcileDigitalHumanRuntimeWithCurrentContext(reason: "contextDidChange")
         viewModel.refreshArchiveContextStatus()
         updatePersonaBadge()
@@ -2611,7 +2630,8 @@ final class EchoViewController: UIViewController {
     }
 
     private func refreshDelayedReplyAnswerReconciliation(reason: String) {
-        guard let echoAccountLease,
+        guard isEchoDelayedReplyProductEnabled,
+              let echoAccountLease,
               validateEchoAccountLease(
                 at: .request,
                 expected: echoAccountLease,
@@ -6627,7 +6647,8 @@ final class EchoViewController: UIViewController {
             text: question,
             accountLease: accountLease,
             resourceOwnerId: accountLease.subjectId,
-            roleContextKey: digitalHumanRuntimeContextKey(for: context)
+            roleContextKey: digitalHumanRuntimeContextKey(for: context),
+            allowsDelayedReply: isEchoDelayedReplyProductEnabled
         )
         releaseEchoAudioOwnerLease(
             expectedOwner: .echoCapture,
@@ -8479,7 +8500,8 @@ final class EchoViewController: UIViewController {
     }
 
     private func scheduleDelayedReplyNotificationIfNeeded(rawTranscript: String) {
-        guard !viewModel.isNeutralSafetyMode,
+        guard isEchoDelayedReplyProductEnabled,
+              !viewModel.isNeutralSafetyMode,
               let delayedReply = viewModel.pendingDelayedReply,
               let callsiteContext = viewModel.pendingDelayedReplyContext,
               delayedReply.id == callsiteContext.operationId,
@@ -8651,7 +8673,8 @@ extension EchoViewController: DialogEngineDelegate {
                 roleContextKey: self.digitalHumanRuntimeContextKey(
                     for: DigitalHumanContextStore.shared.current
                 ),
-                allowsDelayedReply: !self.isUserControlledLiveSessionOpen
+                allowsDelayedReply: self.isEchoDelayedReplyProductEnabled
+                    && !self.isUserControlledLiveSessionOpen
             )
             if let safetyDecision = self.viewModel.neutralSafetyDecision {
                 self.releaseEchoAudioOwnerLease(

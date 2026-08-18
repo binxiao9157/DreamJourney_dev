@@ -3608,6 +3608,8 @@ final class MemoryArchiveViewController: UIViewController {
         }
         let snapshot = repository.inAppMessageCenterSnapshot(
             accountLease: accountLease,
+            includeTimeLetters: false,
+            includeEchoReplies: false,
             familyInvitationSources: familyInvitationSources,
             careSignalSources: careSignalSources,
             echoReplySources: echoReplySources,

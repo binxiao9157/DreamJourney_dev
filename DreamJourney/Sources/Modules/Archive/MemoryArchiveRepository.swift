@@ -473,6 +473,8 @@ final class MemoryArchiveRepository {
 
     func inAppMessageCenterSnapshot(
         includeUnavailableCandidates: Bool = false,
+        includeTimeLetters: Bool = true,
+        includeEchoReplies: Bool = true,
         familyInvitationSources: [FamilyInvitationMessageSource] = [],
         careSignalSources: [CareSignalMessageSource] = [],
         echoReplySources: [EchoReplyMessageSource] = [],
@@ -484,6 +486,8 @@ final class MemoryArchiveRepository {
         return inAppMessageCenterSnapshot(
             accountLease: accountLease,
             includeUnavailableCandidates: includeUnavailableCandidates,
+            includeTimeLetters: includeTimeLetters,
+            includeEchoReplies: includeEchoReplies,
             familyInvitationSources: familyInvitationSources,
             careSignalSources: careSignalSources,
             echoReplySources: echoReplySources,
@@ -494,6 +498,8 @@ final class MemoryArchiveRepository {
     func inAppMessageCenterSnapshot(
         accountLease: AccountLease,
         includeUnavailableCandidates: Bool = false,
+        includeTimeLetters: Bool = true,
+        includeEchoReplies: Bool = true,
         familyInvitationSources: [FamilyInvitationMessageSource] = [],
         careSignalSources: [CareSignalMessageSource] = [],
         echoReplySources: [EchoReplyMessageSource] = [],
@@ -502,8 +508,10 @@ final class MemoryArchiveRepository {
         guard isCurrentAccountLease(accountLease, at: .request) else {
             return InAppMessageCenterSnapshot(messages: [], hiddenCandidateMessages: [])
         }
-        let timeLetterMessages = timeLetterMailboxReminders(accountLease: accountLease)
-            .map(InAppMessage.fromTimeLetterReminder)
+        let timeLetterMessages = includeTimeLetters
+            ? timeLetterMailboxReminders(accountLease: accountLease)
+                .map(InAppMessage.fromTimeLetterReminder)
+            : []
         let familyInvitationMessages = familyInvitationSources
             .compactMap(InAppMessage.fromFamilyInvitation)
             .map { applyLocalInAppMessageStateIfNeeded($0, accountLease: accountLease) }
@@ -513,9 +521,11 @@ final class MemoryArchiveRepository {
         let systemNoticeMessages = systemNoticeSources
             .compactMap(InAppMessage.fromSystemNotice)
             .map { applyLocalInAppMessageStateIfNeeded($0, accountLease: accountLease) }
-        let echoReplyMessages = echoReplySources
-            .compactMap(InAppMessage.fromEchoReply)
-            .map { applyLocalInAppMessageStateIfNeeded($0, accountLease: accountLease) }
+        let echoReplyMessages = includeEchoReplies
+            ? echoReplySources
+                .compactMap(InAppMessage.fromEchoReply)
+                .map { applyLocalInAppMessageStateIfNeeded($0, accountLease: accountLease) }
+            : []
         let hiddenCandidates: [InAppMessage] = []
         let visibleMessages = InAppMessageCenterSnapshot.sortedMessages(
             timeLetterMessages

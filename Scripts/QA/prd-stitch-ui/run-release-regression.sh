@@ -24,7 +24,7 @@ RUN_RELEASE_POLICY_ROLLOUT_BACKEND_G2="${RUN_RELEASE_POLICY_ROLLOUT_BACKEND_G2:-
 RUN_PUBLIC_MVP_REGRESSION="${RUN_PUBLIC_MVP_REGRESSION:-0}"
 RUN_SIMULATOR_SMOKE="${RUN_SIMULATOR_SMOKE:-1}"
 RUN_P0_ARCHIVE_ECHO_REGRESSION="${RUN_P0_ARCHIVE_ECHO_REGRESSION:-0}"
-RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE="${RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE:-1}"
+RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE="${RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE:-0}"
 RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE="${RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE:-0}"
 RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE="${RUN_ECHO_TRACE_EVIDENCE_PACKAGE_EXPORT_SMOKE:-0}"
 RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE="${RUN_ECHO_TRACE_EVIDENCE_PACKAGE_PANEL_EXPORT_SMOKE:-0}"
@@ -438,8 +438,13 @@ run_step "Python QA scripts compile" "$STATIC_LOG_DIR/python-qa-compile.log" \
     "$SCRIPT_DIR/backend-voice-clone-deployed-smoke.py" \
     "$ROOT_DIR/Scripts/QA/product-v4/stage0_readiness_artifact_adapter.py" \
     "$ROOT_DIR/Scripts/QA/product-v4/stage0_readiness_artifact_adapter_check.py" \
+    "$ROOT_DIR/Scripts/QA/product-v4/product-confirmed-time-letter-delayed-reply-closure-check.py" \
     "$SCRIPT_DIR/backend-voice-synthesis-viseme-smoke.py" \
     "$SCRIPT_DIR/public-release-scope-evidence.py"
+
+run_step "Product-confirmed time-letter/delayed-reply closure" \
+  "$STATIC_LOG_DIR/product-confirmed-time-letter-delayed-reply-closure.log" \
+  python3 "$ROOT_DIR/Scripts/QA/product-v4/product-confirmed-time-letter-delayed-reply-closure-check.py"
 
 if [[ "$RUN_CREDENTIAL_INVENTORY_SCAN" == "1" ]]; then
   mkdir -p "$OUTPUT_DIR/credential-inventory/$RUN_ID"
