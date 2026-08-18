@@ -1,0 +1,23 @@
+PASS backend PC-00-03 focused implementation gate: 69 tests
+PASS backend full unittest discovery: 2111 tests
+PASS backend post-deployment focused gate: 18 tests
+PASS backend deployed readiness smoke
+PASS backend deployed runtime capability smoke
+PASS backend deployed public release scope smoke
+PASS backend git diff --check
+PASS iOS PC-00-03 first-release scope static gate
+PASS iOS Owner Truth unified media creation gate
+PASS iOS Archive feature-card IA gate
+PASS iOS Profile family/account lifecycle gate
+PASS iOS Release feature matrix gate
+PASS iOS Group 3 archive core gate
+PASS iOS release script syntax gates
+PASS iOS generic simulator Debug workspace build
+PASS iOS selected Owner Truth media tests: 2 tests
+PASS iOS public release scope UIQA
+PASS iOS git diff --check
+
+NOTE a full OwnerTruthContractsTests class run also exposes two pre-existing,
+independently reproducible candidate-inbox presentation failures on iOS 26.5.
+The two PC-00-03 media tests and the application build pass; those unrelated
+tests were not changed as part of this work item.

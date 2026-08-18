@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "backend": {
+    "focusedImplementationTests": 69,
+    "fullSuiteTests": 2111,
+    "postDeploymentFocusedTests": 18,
+    "readinessDeployed": "passed",
+    "runtimeCapabilityDeployed": "passed",
+    "publicReleaseScopeDeployed": "passed",
+    "migrationHead": "0093"
+  },
+  "ios": {
+    "staticGates": "passed",
+    "selectedOwnerMediaTests": 2,
+    "workspaceBuild": "passed",
+    "publicScopeUIQA": {
+      "status": "passed",
+      "bundleId": "com.yxj.dreamjourney.app",
+      "hiddenProbeCount": 4,
+      "hiddenDeepLinkBypassCount": 0,
+      "registeredCustomSchemes": 0,
+      "qaCompilationConditions": false
+    }
+  }
+}

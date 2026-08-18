@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-08-18T10:48:42Z",
+  "backendReady": "ready",
+  "store": "postgres",
+  "schemaReason": "migrationHeadVerified",
+  "migrationHead": "0093",
+  "deployedSource": "9759f1bf1a3ab288a04a70da332acb7ef23e5fff",
+  "capabilities": {
+    "archiveAudioUpload": false,
+    "archiveVideoUpload": false,
+    "kbliteUserSurface": false,
+    "accountDataExport": false,
+    "kbSync": true,
+    "ownerTruthMediaCapture": true,
+    "ownerTruthMediaProcessing": false
+  },
+  "closedCapabilityReason": "productClosed",
+  "ownerTruthMedia": {
+    "contractVersion": 1,
+    "supportedMediaKinds": [
+      "document",
+      "image"
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "captured": false,
+  "reason": "A sanitized pre-deployment runtime payload was not retained. Parent-commit behavior is covered by source diff and local contract tests; no prior production value is inferred."
+}

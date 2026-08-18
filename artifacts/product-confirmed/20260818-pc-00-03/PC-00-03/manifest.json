@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "workItem": "PC-00-03",
+  "status": "complete",
+  "executedBy": "Codex",
+  "executedAt": "2026-08-18T10:48:42Z",
+  "environment": {
+    "backend": "production-postgres",
+    "iosBuild": "generic-ios-simulator-debug",
+    "uiqa": "release-ios-simulator"
+  },
+  "repositories": {
+    "iosImplementationCommit": "e4e5034b18283f9551a5b6b88d34fe98a62f796f",
+    "backendImplementationCommit": "6d542f9d51abb4af11f788a71b291ef65cb5d813",
+    "backendValidationMaintenanceCommit": "9759f1bf1a3ab288a04a70da332acb7ef23e5fff",
+    "backendDeployedSource": "9759f1bf1a3ab288a04a70da332acb7ef23e5fff"
+  },
+  "deployment": {
+    "image": "sha256:988e4462dbe64ac6efbb75c9f190cfabda14e40f843aeec1716cb10ee3d9360d",
+    "store": "postgres",
+    "readiness": "ready",
+    "schema": "migrationHeadVerified",
+    "migrationHead": "0093"
+  },
+  "results": {
+    "backendFocusedGate": "passed:69",
+    "backendFullSuite": "passed:2111",
+    "backendPostDeploymentFocused": "passed:18",
+    "backendReadinessDeployed": "passed",
+    "backendRuntimeCapabilityDeployed": "passed",
+    "backendPublicReleaseScopeDeployed": "passed",
+    "iosStaticGates": "passed",
+    "iosSelectedTests": "passed:2",
+    "iosBuild": "passed",
+    "publicScopeUIQA": "passed"
+  },
+  "migration": {
+    "databaseMigrationExecuted": false,
+    "backfillExecuted": false,
+    "historicalInternalRecordsDeleted": false
+  },
+  "externalOrDeviceRemainder": [],
+  "privacy": "Sanitized evidence only; no access token, phone number, user content, media URL, object key, or Provider credential is stored."
+}

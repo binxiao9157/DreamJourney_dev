@@ -1,0 +1,21 @@
+{
+  "build": {
+    "bundleId": "com.yxj.dreamjourney.app",
+    "configuration": "Release",
+    "platform": "iphonesimulator",
+    "qaCompilationConditions": false
+  },
+  "deepLinks": {
+    "hiddenDeepLinkBypassCount": 0,
+    "hiddenProbeCount": 4,
+    "registeredCustomSchemes": 0,
+    "registeredUniversalLinks": 0
+  },
+  "defaultEntry": {
+    "expectedEntry": "authenticationUntilVerifiedSession",
+    "launchArguments": [],
+    "legacyProfileSeeded": true,
+    "screenshotFile": "01-authentication-gate-entry.png"
+  },
+  "schemaVersion": 1
+}

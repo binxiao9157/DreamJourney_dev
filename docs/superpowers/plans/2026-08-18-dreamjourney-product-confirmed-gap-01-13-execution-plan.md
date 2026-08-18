@@ -228,6 +228,8 @@ artifacts/product-confirmed/<run-id>/<work-item>/
 
 关联：ARCH-004、DATA-001、KB-001、PCQ-09、PCQ-11、PCQ-12。
 
+状态：`COMPLETE`（2026-08-18）。实现提交：iOS `e4e5034b`，Backend `6d542f9`；Backend smoke 维护提交 `9759f1b` 已部署到 production-postgres，migration head 为 `0093`。验收证据见 `artifacts/product-confirmed/20260818-pc-00-03/PC-00-03/` 和 `docs/superpowers/status/2026-08-18-pc-00-03-first-release-scope-closure.md`。`Gate P0` 已通过，当前连续执行交接点为 `PC-A0`。
+
 实现：
 
 1. 音频和视频的普通用户入口、upload intent、处理任务和运行时能力统一关闭；保留现有代码和内部测试能力，不以 mock 数据或历史壳层冒充首版功能。
