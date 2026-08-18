@@ -1,9 +1,9 @@
 # DreamJourney 产品确认版 GAP-01 至 GAP-13 执行计划
 
 日期：2026-08-18
-状态：`READY_FOR_EXECUTION`
+状态：`IN_PROGRESS`
 日常开发入口：`CANONICAL_EXECUTION_PLAN`
-执行控制版本：V1.3
+执行控制版本：V1.4
 
 ## 0. 目标和基线
 
@@ -15,6 +15,19 @@
 |---|---|---|
 | iOS | `feature/prd-stitch-ui-adaptation` | `09394f9869e0b0e20150a43ffe8149a7e607356c` |
 | Backend | `main` | `b472b6de9fc43e797936741b63a9de877db48750` |
+
+### 0.1 当前执行进度
+
+更新时间：2026-08-18
+
+| 分类 | 数量 | 当前内容 |
+|---|---:|---|
+| `COMPLETE` | 4 | 文档基线、PC-00-01、PC-00-02、PC-00-03 |
+| `WAITING_EXTERNAL_CONFIGURATION` | 1 | PC-A0：代码、production-postgres 部署和非真机验收已完成；真实短信 Provider 待配置 |
+| 当前执行项 | 1 | PC-A1：测试账号角色与权限 |
+| 后续待执行 | 14 | PC-A3 至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+
+当前代码与部署交接：iOS 实现提交 `5aaf3543`，PC-A0 证据提交 `b084f1ac`；Backend production-postgres 为 `994b3cc`，migration head 为 `0094`。PC-A0 的外部短信 Gate 不阻塞 PC-A1；在真实短信 Provider 配置前，不得宣称生产 OTP 恢复完成。
 
 每轮只需读取：
 
