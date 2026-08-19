@@ -1819,6 +1819,14 @@ private extension AppDelegate {
             "profile-publication-management-qa-grants",
             in: shell.view
         )
+        let grantInviteRendered = containsUIQAAccessibilityIdentifier(
+            "profile-publication-management-create-grant",
+            in: shell.view
+        )
+        let grantRevokeRendered = containsUIQAAccessibilityIdentifier(
+            "profile-publication-management-revoke-grant",
+            in: shell.view
+        )
         guard let versionAuditButton = firstUIQAView(
             withAccessibilityIdentifier: "profile-publication-management-version-audit",
             in: shell.view
@@ -1861,6 +1869,8 @@ private extension AppDelegate {
                     && shellRendered
                     && publicationRendered
                     && grantRendered
+                    && grantInviteRendered
+                    && grantRevokeRendered
                     && versionAuditRendered
                     && revisionComposerRendered
 
@@ -1874,7 +1884,9 @@ private extension AppDelegate {
                     grantRendered: grantRendered,
                     versionAuditRendered: versionAuditRendered,
                     failureReason: completed ? nil : "publicationManagementM2SurfaceMismatch",
-                    revisionComposerRendered: revisionComposerRendered
+                    revisionComposerRendered: revisionComposerRendered,
+                    grantInviteRendered: grantInviteRendered,
+                    grantRevokeRendered: grantRevokeRendered
                 )
                 print(
                     "[UI_QA] PublicationManagementM2Smoke completed " +
@@ -1987,7 +1999,7 @@ private extension AppDelegate {
                 let grantRevokedRendered = self.firstUIQAView(
                     withAccessibilityIdentifier: "profile-publication-management-qa-grant-row",
                     in: shell.view
-                )?.accessibilityValue == "revoked:0"
+                )?.accessibilityValue == "revoked"
                 let completed = managementGateEnabled
                     && visitorGateEnabled
                     && lifecycleGateEnabled
@@ -6018,7 +6030,9 @@ private extension AppDelegate {
         grantRendered: Bool,
         versionAuditRendered: Bool,
         failureReason: String?,
-        revisionComposerRendered: Bool = false
+        revisionComposerRendered: Bool = false,
+        grantInviteRendered: Bool = false,
+        grantRevokeRendered: Bool = false
     ) {
         var result: [String: Any] = [
             "completed": completed,
@@ -6030,6 +6044,8 @@ private extension AppDelegate {
             "grantRendered": grantRendered,
             "versionAuditRendered": versionAuditRendered,
             "revisionComposerRendered": revisionComposerRendered,
+            "grantInviteRendered": grantInviteRendered,
+            "grantRevokeRendered": grantRevokeRendered,
             "launchArgument": PublicationManagementM2QAGate.launchArgument,
         ]
         if let failureReason {
@@ -6515,13 +6531,13 @@ private extension AppDelegate {
     }
 }
 
-private final class PublicationManagementM2UIQAFixtureClient: PublicationManagementReaderClient, PublicationVersionAuditReaderClient, PublicationDraftWriterClient, PublicationLifecycleClient {
+private final class PublicationManagementM2UIQAFixtureClient: PublicationManagementReaderClient, PublicationVersionAuditReaderClient, PublicationDraftWriterClient, PublicationGrantManagementClient, PublicationLifecycleClient {
     private let publicationID = "61111111-1111-4111-8111-111111111111"
     private let publicationVersionID = "62222222-2222-4222-8222-222222222222"
+    private let grantID = "64444444-4444-4444-8444-444444444444"
     fileprivate private(set) var publicationState = "confirmed"
     fileprivate private(set) var projectionState = "active"
     private var grantState = "active"
-    private var grantUseRemaining = 2
     fileprivate private(set) var withdrawalObserved = false
 
     func fetchOwnerPublications(
@@ -6566,12 +6582,12 @@ private final class PublicationManagementM2UIQAFixtureClient: PublicationManagem
                 "schemaVersion": PublicationManagementGrantList.schemaVersion,
                 "vaultId": vaultID,
                 "grants": [[
-                    "grantId": "uiqa-grant-1",
+                    "grantId": grantID,
                     "publicationId": publicationID,
                     "publicationVersionId": publicationVersionID,
+                    "recipientDisplayLabel": "手机号尾号 8000",
                     "state": grantState,
                     "expiresAt": ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600)),
-                    "useRemaining": grantUseRemaining,
                 ]],
               ]) else {
             completion(.failure(PublicationManagementAccessError.unavailable))
@@ -6676,6 +6692,59 @@ private final class PublicationManagementM2UIQAFixtureClient: PublicationManagem
         completion(.failure(PublicationDraftAccessError.unavailable))
     }
 
+    func issueOwnerPublicationGrant(
+        vaultID: String,
+        command: PublicationGrantIssueCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationGrantIssueReceipt, Error>) -> Void
+    ) {
+        guard vaultID == "uiqa-publication-vault",
+              command.publicationID == publicationID,
+              command.publicationVersionID == publicationVersionID,
+              accountLease.subjectId == "uiqa-publication-owner",
+              let receipt = PublicationGrantIssueReceipt(json: [
+                "schemaVersion": "publication-owner-grant-issue-v1",
+                "vaultId": vaultID,
+                "grantId": grantID,
+                "publicationId": publicationID,
+                "publicationVersionId": publicationVersionID,
+                "recipientDisplayLabel": command.recipient.displayLabel,
+                "outcome": "created",
+                "expiresAt": ISO8601DateFormatter().string(from: command.expiresAt),
+                "credentialIssued": true,
+                "grantCredential": "uiqa-grant-credential-1234567890",
+              ]) else {
+            completion(.failure(PublicationManagementAccessError.unavailable))
+            return
+        }
+        grantState = "active"
+        completion(.success(receipt))
+    }
+
+    func revokeOwnerPublicationGrant(
+        vaultID: String,
+        grantID: String,
+        command: PublicationGrantRevokeCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationGrantRevokeReceipt, Error>) -> Void
+    ) {
+        guard vaultID == "uiqa-publication-vault",
+              grantID == self.grantID,
+              accountLease.subjectId == "uiqa-publication-owner",
+              let receipt = PublicationGrantRevokeReceipt(json: [
+                "schemaVersion": "publication-visitor-access-v1",
+                "vaultId": vaultID,
+                "grantId": grantID,
+                "outcome": "revoked",
+                "revokedSessionCount": 0,
+              ]) else {
+            completion(.failure(PublicationManagementAccessError.unavailable))
+            return
+        }
+        grantState = "revoked"
+        completion(.success(receipt))
+    }
+
     func executePublicationLifecycle(
         action: PublicationLifecycleAction,
         vaultID: String,
@@ -6697,7 +6766,6 @@ private final class PublicationManagementM2UIQAFixtureClient: PublicationManagem
         publicationState = "withdrawn"
         projectionState = "withdrawn"
         grantState = "revoked"
-        grantUseRemaining = 0
         withdrawalObserved = true
         guard let receipt = PublicationLifecycleReceipt(json: [
             "schemaVersion": PublicationLifecycleReceipt.schemaVersion,

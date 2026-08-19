@@ -61,6 +61,8 @@ enum PublicationManagementM2AccessGate {
 enum PublicationManagementAccessError: LocalizedError, Equatable {
     case disabled
     case accountLeaseInvalid
+    case invalidInput
+    case invitationUnavailable
     case malformedResponse
     case responseScopeMismatch
     case unavailable
@@ -71,6 +73,10 @@ enum PublicationManagementAccessError: LocalizedError, Equatable {
             return "发布管理当前未启用"
         case .accountLeaseInvalid:
             return "当前账户状态已变更"
+        case .invalidInput:
+            return "请输入已注册账户的手机号或账户 ID"
+        case .invitationUnavailable:
+            return "邀请凭证未能安全生成，请撤销后重新邀请"
         case .malformedResponse:
             return "发布管理响应无效"
         case .responseScopeMismatch:
@@ -171,31 +177,36 @@ struct PublicationManagementGrant: Equatable {
     let grantID: String
     let publicationID: String
     let publicationVersionID: String
+    let recipientDisplayLabel: String
     let state: String
     let expiresAt: Date
-    let useRemaining: Int
+    let useRemaining: Int?
 
     init?(json: [String: Any]) {
         guard let grantID = Self.identifier(json["grantId"] as? String),
               let publicationID = Self.identifier(json["publicationId"] as? String),
               let publicationVersionID = Self.identifier(json["publicationVersionId"] as? String),
               let state = Self.state(json["state"] as? String),
-              let expiresAt = Self.date(json["expiresAt"] as? String),
-              let useRemaining = json["useRemaining"] as? Int,
-              useRemaining >= 0 else {
+              let expiresAt = Self.date(json["expiresAt"] as? String) else {
             return nil
         }
+        let recipientDisplayLabel = Self.label(
+            json["recipientDisplayLabel"] as? String
+        ) ?? "已注册账户"
+        let useRemaining = json["useRemaining"] as? Int
+        guard useRemaining == nil || useRemaining! >= 0 else { return nil }
 
         self.grantID = grantID
         self.publicationID = publicationID
         self.publicationVersionID = publicationVersionID
+        self.recipientDisplayLabel = recipientDisplayLabel
         self.state = state
         self.expiresAt = expiresAt
         self.useRemaining = useRemaining
     }
 
     var isUsable: Bool {
-        state == "active" && useRemaining > 0 && expiresAt > Date()
+        state == "active" && expiresAt > Date()
     }
 
     private static func identifier(_ value: String?) -> String? {
@@ -205,6 +216,11 @@ struct PublicationManagementGrant: Equatable {
 
     private static func state(_ value: String?) -> String? {
         guard let value = identifier(value), value.count <= 64 else { return nil }
+        return value
+    }
+
+    private static func label(_ value: String?) -> String? {
+        guard let value = identifier(value), value.count <= 80 else { return nil }
         return value
     }
 
@@ -246,15 +262,21 @@ struct PublicationManagementPublicationList: Equatable {
 }
 
 struct PublicationManagementGrantList: Equatable {
-    static let schemaVersion = "publication-owner-grant-list-v1"
+    static let schemaVersion = "publication-owner-grant-list-v2"
+    static let legacySchemaVersion = "publication-owner-grant-list-v1"
 
     let vaultID: String
     let grants: [PublicationManagementGrant]
 
     init?(json: [String: Any]) {
-        guard json["schemaVersion"] as? String == Self.schemaVersion,
+        guard let schemaVersion = json["schemaVersion"] as? String,
+              [Self.schemaVersion, Self.legacySchemaVersion].contains(schemaVersion),
               let vaultID = Self.identifier(json["vaultId"] as? String),
               let rawGrants = json["grants"] as? [[String: Any]] else {
+            return nil
+        }
+        if schemaVersion == Self.schemaVersion,
+           rawGrants.contains(where: { $0["useRemaining"] != nil }) {
             return nil
         }
         let grants = rawGrants.compactMap(PublicationManagementGrant.init(json:))
@@ -266,6 +288,203 @@ struct PublicationManagementGrantList: Equatable {
     private static func identifier(_ value: String?) -> String? {
         let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return normalized.isEmpty ? nil : normalized
+    }
+}
+
+enum PublicationGrantRecipientType: String, Equatable {
+    case phone
+    case accountID = "accountId"
+}
+
+struct PublicationGrantRecipient: Equatable {
+    let type: PublicationGrantRecipientType
+    let value: String
+
+    init?(input: String) {
+        let normalized = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        let digits = normalized.filter(\.isNumber)
+        if (8...20).contains(digits.count),
+           normalized.allSatisfy({ $0.isNumber || "+- ()".contains($0) }) {
+            type = .phone
+            value = digits
+            return
+        }
+        guard normalized.hasPrefix("user_"), normalized.count <= 128 else {
+            return nil
+        }
+        type = .accountID
+        value = normalized
+    }
+
+    var displayLabel: String {
+        switch type {
+        case .phone:
+            return "手机号尾号 \(value.suffix(4))"
+        case .accountID:
+            return "账户 · \(value.suffix(6))"
+        }
+    }
+
+    var requestPayload: [String: Any] {
+        ["type": type.rawValue, "value": value]
+    }
+}
+
+struct PublicationGrantIssueCommand: Equatable {
+    let commandID: UUID
+    let publicationID: String
+    let publicationVersionID: String
+    let recipient: PublicationGrantRecipient
+    let expiresAt: Date
+
+    init?(
+        commandID: UUID = UUID(),
+        publicationID: String,
+        publicationVersionID: String,
+        recipient: PublicationGrantRecipient,
+        expiresAt: Date,
+        now: Date = Date()
+    ) {
+        guard UUID(uuidString: publicationID) != nil,
+              UUID(uuidString: publicationVersionID) != nil,
+              expiresAt > now,
+              expiresAt <= now.addingTimeInterval(7 * 24 * 60 * 60) else {
+            return nil
+        }
+        self.commandID = commandID
+        self.publicationID = publicationID.lowercased()
+        self.publicationVersionID = publicationVersionID.lowercased()
+        self.recipient = recipient
+        self.expiresAt = expiresAt
+    }
+
+    func requestPayload(usesQAContract: Bool) -> [String: Any] {
+        var payload: [String: Any] = [
+            "commandId": commandID.uuidString.lowercased(),
+            "publicationId": publicationID,
+            "publicationVersionId": publicationVersionID,
+            "expiresAt": ISO8601DateFormatter().string(from: expiresAt),
+        ]
+        if usesQAContract {
+            payload["granteeUserId"] = recipient.value
+            payload["granteeDisplayLabel"] = recipient.displayLabel
+            payload["useLimit"] = 100
+        } else {
+            payload["recipient"] = recipient.requestPayload
+        }
+        return payload
+    }
+}
+
+struct PublicationGrantIssueReceipt: Equatable {
+    let vaultID: String
+    let grantID: String
+    let publicationID: String
+    let publicationVersionID: String
+    let recipientDisplayLabel: String
+    let outcome: String
+    let expiresAt: Date
+    let invitationURL: URL?
+
+    init?(json: [String: Any]) {
+        let acceptedSchemas = [
+            "publication-owner-grant-issue-v1",
+            "publication-visitor-access-v1",
+        ]
+        guard let schema = json["schemaVersion"] as? String,
+              acceptedSchemas.contains(schema),
+              let vaultID = Self.identifier(json["vaultId"] as? String),
+              let grantID = Self.uuid(json["grantId"] as? String),
+              let publicationID = Self.uuid(json["publicationId"] as? String),
+              let publicationVersionID = Self.uuid(json["publicationVersionId"] as? String),
+              let recipientDisplayLabel = Self.label(json["recipientDisplayLabel"] as? String),
+              let outcome = Self.value(json["outcome"] as? String, allowed: ["created", "deduplicated"]),
+              let expiresAt = Self.date(json["expiresAt"] as? String),
+              let credentialIssued = json["credentialIssued"] as? Bool else {
+            return nil
+        }
+        let credential = Self.identifier(json["grantCredential"] as? String)
+        guard !credentialIssued || credential.map({ (24...256).contains($0.count) }) == true else {
+            return nil
+        }
+        self.vaultID = vaultID
+        self.grantID = grantID
+        self.publicationID = publicationID
+        self.publicationVersionID = publicationVersionID
+        self.recipientDisplayLabel = recipientDisplayLabel
+        self.outcome = outcome
+        self.expiresAt = expiresAt
+        invitationURL = credential.flatMap {
+            var components = URLComponents()
+            components.scheme = "dreamjourney"
+            components.host = "publication"
+            components.path = "/visitor"
+            components.queryItems = [
+                URLQueryItem(name: "grantId", value: grantID),
+                URLQueryItem(name: "grantCredential", value: $0),
+            ]
+            return components.url
+        }
+    }
+
+    fileprivate static func identifier(_ value: String?) -> String? {
+        let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    fileprivate static func uuid(_ value: String?) -> String? {
+        guard let value = identifier(value), let uuid = UUID(uuidString: value) else { return nil }
+        return uuid.uuidString.lowercased()
+    }
+
+    fileprivate static func label(_ value: String?) -> String? {
+        guard let value = identifier(value), value.count <= 80 else { return nil }
+        return value
+    }
+
+    fileprivate static func value(_ value: String?, allowed: Set<String>) -> String? {
+        guard let value = identifier(value), allowed.contains(value) else { return nil }
+        return value
+    }
+
+    private static func date(_ value: String?) -> Date? {
+        guard let value = identifier(value) else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+    }
+}
+
+struct PublicationGrantRevokeCommand: Equatable {
+    let commandID: UUID
+
+    init(commandID: UUID = UUID()) {
+        self.commandID = commandID
+    }
+
+    var requestPayload: [String: Any] {
+        ["commandId": commandID.uuidString.lowercased()]
+    }
+}
+
+struct PublicationGrantRevokeReceipt: Equatable {
+    let vaultID: String
+    let grantID: String
+    let outcome: String
+
+    init?(json: [String: Any]) {
+        guard json["schemaVersion"] as? String == "publication-visitor-access-v1",
+              let vaultID = PublicationGrantIssueReceipt.identifier(json["vaultId"] as? String),
+              let grantID = PublicationGrantIssueReceipt.uuid(json["grantId"] as? String),
+              let outcome = PublicationGrantIssueReceipt.value(
+                json["outcome"] as? String,
+                allowed: ["revoked", "deduplicated", "alreadyRevoked"]
+              ) else {
+            return nil
+        }
+        self.vaultID = vaultID
+        self.grantID = grantID
+        self.outcome = outcome
     }
 }
 
@@ -1095,6 +1314,140 @@ final class PublicationManagementReadUseCase {
                     grants: grants.grants
                 )))
             }
+        }
+    }
+}
+
+protocol PublicationGrantManagementClient: AnyObject {
+    func issueOwnerPublicationGrant(
+        vaultID: String,
+        command: PublicationGrantIssueCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationGrantIssueReceipt, Error>) -> Void
+    )
+
+    func revokeOwnerPublicationGrant(
+        vaultID: String,
+        grantID: String,
+        command: PublicationGrantRevokeCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationGrantRevokeReceipt, Error>) -> Void
+    )
+}
+
+final class PublicationGrantManagementUseCase {
+    private let client: PublicationGrantManagementClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let isEnabled: () -> Bool
+
+    init(
+        client: PublicationGrantManagementClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        isEnabled: @escaping () -> Bool = {
+            PublicationManagementM2AccessGate.isManagementRouteAllowed
+        }
+    ) {
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.isEnabled = isEnabled
+    }
+
+    func issue(
+        publication: PublicationManagementPublication,
+        recipient: PublicationGrantRecipient,
+        expiresAt: Date,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationGrantIssueReceipt, Error>) -> Void
+    ) {
+        guard isEnabled() else {
+            completion(.failure(PublicationManagementAccessError.disabled))
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+            return
+        }
+        guard publication.publicationState == "confirmed",
+              publication.projectionState == "active",
+              let publicationVersionID = publication.publicationVersionID,
+              let command = PublicationGrantIssueCommand(
+                publicationID: publication.publicationID,
+                publicationVersionID: publicationVersionID,
+                recipient: recipient,
+                expiresAt: expiresAt
+              ) else {
+            completion(.failure(PublicationManagementAccessError.invalidInput))
+            return
+        }
+        client.issueOwnerPublicationGrant(
+            vaultID: accountLease.vaultId,
+            command: command,
+            accountLease: accountLease
+        ) { [weak self] result in
+            guard let self else { return }
+            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+                return
+            }
+            guard case let .success(receipt) = result else {
+                completion(result)
+                return
+            }
+            guard receipt.vaultID == accountLease.vaultId,
+                  receipt.publicationID == command.publicationID,
+                  receipt.publicationVersionID == command.publicationVersionID,
+                  receipt.recipientDisplayLabel == recipient.displayLabel else {
+                completion(.failure(PublicationManagementAccessError.responseScopeMismatch))
+                return
+            }
+            guard receipt.invitationURL != nil else {
+                completion(.failure(PublicationManagementAccessError.invitationUnavailable))
+                return
+            }
+            completion(.success(receipt))
+        }
+    }
+
+    func revoke(
+        grant: PublicationManagementGrant,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationGrantRevokeReceipt, Error>) -> Void
+    ) {
+        guard isEnabled() else {
+            completion(.failure(PublicationManagementAccessError.disabled))
+            return
+        }
+        guard grant.state == "active",
+              UUID(uuidString: grant.grantID) != nil else {
+            completion(.failure(PublicationManagementAccessError.invalidInput))
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+            return
+        }
+        let command = PublicationGrantRevokeCommand()
+        client.revokeOwnerPublicationGrant(
+            vaultID: accountLease.vaultId,
+            grantID: grant.grantID,
+            command: command,
+            accountLease: accountLease
+        ) { [weak self] result in
+            guard let self else { return }
+            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+                return
+            }
+            guard case let .success(receipt) = result else {
+                completion(result)
+                return
+            }
+            guard receipt.vaultID == accountLease.vaultId,
+                  receipt.grantID.caseInsensitiveCompare(grant.grantID) == .orderedSame else {
+                completion(.failure(PublicationManagementAccessError.responseScopeMismatch))
+                return
+            }
+            completion(.success(receipt))
         }
     }
 }

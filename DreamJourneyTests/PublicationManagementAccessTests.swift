@@ -28,6 +28,7 @@ final class PublicationManagementAccessTests: XCTestCase {
             XCTAssertEqual(snapshot.grants.count, 1)
             XCTAssertEqual(snapshot.grants.first?.state, "active")
             XCTAssertEqual(snapshot.grants.first?.useRemaining, 2)
+            XCTAssertEqual(snapshot.grants.first?.recipientDisplayLabel, "手机号尾号 8000")
             expectation.fulfill()
         }
         wait(for: [expectation], timeout: 1)
@@ -131,17 +132,197 @@ final class PublicationManagementAccessTests: XCTestCase {
 
     private func makeGrantList(vaultID: String) throws -> PublicationManagementGrantList {
         try XCTUnwrap(PublicationManagementGrantList(json: [
-            "schemaVersion": PublicationManagementGrantList.schemaVersion,
+            "schemaVersion": PublicationManagementGrantList.legacySchemaVersion,
             "vaultId": vaultID,
             "grants": [[
                 "grantId": "grant-a",
                 "publicationId": "publication-a",
                 "publicationVersionId": "version-a",
+                "recipientDisplayLabel": "手机号尾号 8000",
                 "state": "active",
                 "expiresAt": ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600)),
                 "useRemaining": 2,
             ]],
         ]))
+    }
+
+    private func makeSession(subjectID: String, vaultID: String, generation: UInt64) -> AccountSession {
+        AccountSession(
+            subjectId: subjectID,
+            vaultId: vaultID,
+            sessionId: "session-\(generation)",
+            tokenFamilyId: "family-\(generation)",
+            sessionVersion: Int(generation),
+            generation: generation,
+            generationId: UUID(),
+            state: .active,
+            activatedAt: Date()
+        )
+    }
+}
+
+final class PublicationGrantManagementAccessTests: XCTestCase {
+    func testFormalIssuePayloadUsesRegisteredRecipientAndNoProductBalance() throws {
+        let recipient = try XCTUnwrap(PublicationGrantRecipient(input: "138 0013 8000"))
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let command = try XCTUnwrap(PublicationGrantIssueCommand(
+            commandID: UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")!,
+            publicationID: "61111111-1111-4111-8111-111111111111",
+            publicationVersionID: "62222222-2222-4222-8222-222222222222",
+            recipient: recipient,
+            expiresAt: now.addingTimeInterval(3600),
+            now: now
+        ))
+
+        let payload = command.requestPayload(usesQAContract: false)
+
+        XCTAssertEqual(recipient.displayLabel, "手机号尾号 8000")
+        XCTAssertEqual((payload["recipient"] as? [String: String])?["type"], "phone")
+        XCTAssertEqual((payload["recipient"] as? [String: String])?["value"], "13800138000")
+        XCTAssertNil(payload["useLimit"])
+        XCTAssertNil(payload["granteeUserId"])
+    }
+
+    func testV2GrantListHidesSafetyCounterAndUsesMaskedRecipient() throws {
+        let list = try XCTUnwrap(PublicationManagementGrantList(json: [
+            "schemaVersion": PublicationManagementGrantList.schemaVersion,
+            "vaultId": "vault-a",
+            "grants": [[
+                "grantId": "64444444-4444-4444-8444-444444444444",
+                "publicationId": "61111111-1111-4111-8111-111111111111",
+                "publicationVersionId": "62222222-2222-4222-8222-222222222222",
+                "recipientDisplayLabel": "账户 · a1b2c3",
+                "state": "active",
+                "expiresAt": ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600)),
+            ]],
+        ]))
+
+        XCTAssertEqual(list.grants.first?.recipientDisplayLabel, "账户 · a1b2c3")
+        XCTAssertNil(list.grants.first?.useRemaining)
+        XCTAssertEqual(list.grants.first?.isUsable, true)
+    }
+
+    func testIssueUseCaseReturnsTransientDeepLinkBoundToResponseScope() throws {
+        let runtime = makeRuntime(subjectID: "owner-a", vaultID: "vault-a", generation: 1)
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-a"))
+        let client = PublicationGrantManagementClientStub()
+        let publication = try makePublication()
+        let recipient = try XCTUnwrap(PublicationGrantRecipient(input: "13800138000"))
+        let expiresAt = Date().addingTimeInterval(3600)
+        client.issueResult = .success(try makeIssueReceipt(
+            vaultID: "vault-a",
+            publication: publication,
+            recipient: recipient,
+            expiresAt: expiresAt
+        ))
+        let useCase = PublicationGrantManagementUseCase(
+            client: client,
+            accountLeaseRuntime: runtime,
+            isEnabled: { true }
+        )
+
+        let expectation = expectation(description: "issue grant")
+        useCase.issue(
+            publication: publication,
+            recipient: recipient,
+            expiresAt: expiresAt,
+            accountLease: lease
+        ) { result in
+            guard case let .success(receipt) = result,
+                  let invitationURL = receipt.invitationURL else {
+                XCTFail("Expected a transient invitation URL")
+                expectation.fulfill()
+                return
+            }
+            XCTAssertNotNil(PublicationVisitorInvitation(deepLinkURL: invitationURL))
+            XCTAssertEqual(receipt.recipientDisplayLabel, "手机号尾号 8000")
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1)
+        XCTAssertEqual(client.issueCallCount, 1)
+    }
+
+    func testIssueUseCaseRejectsAccountSwitchBeforeCommit() throws {
+        let runtime = makeRuntime(subjectID: "owner-a", vaultID: "vault-a", generation: 1)
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-a"))
+        let client = PublicationGrantManagementClientStub()
+        let publication = try makePublication()
+        let recipient = try XCTUnwrap(PublicationGrantRecipient(input: "13800138000"))
+        let expiresAt = Date().addingTimeInterval(3600)
+        client.issueResult = .success(try makeIssueReceipt(
+            vaultID: "vault-a",
+            publication: publication,
+            recipient: recipient,
+            expiresAt: expiresAt
+        ))
+        client.beforeIssueCompletion = {
+            runtime.publish(session: self.makeSession(
+                subjectID: "owner-b",
+                vaultID: "vault-b",
+                generation: 2
+            ))
+        }
+        let useCase = PublicationGrantManagementUseCase(
+            client: client,
+            accountLeaseRuntime: runtime,
+            isEnabled: { true }
+        )
+
+        let expectation = expectation(description: "stale lease")
+        useCase.issue(
+            publication: publication,
+            recipient: recipient,
+            expiresAt: expiresAt,
+            accountLease: lease
+        ) { result in
+            guard case let .failure(error) = result else {
+                XCTFail("Expected account lease failure")
+                expectation.fulfill()
+                return
+            }
+            XCTAssertEqual(error as? PublicationManagementAccessError, .accountLeaseInvalid)
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1)
+    }
+
+    private func makePublication() throws -> PublicationManagementPublication {
+        try XCTUnwrap(PublicationManagementPublication(json: [
+            "publicationId": "61111111-1111-4111-8111-111111111111",
+            "publicationVersionId": "62222222-2222-4222-8222-222222222222",
+            "publicationState": "confirmed",
+            "projectionState": "active",
+            "preview": ["title": "公开标题", "body": "公开正文"],
+            "requiresSecondConfirmation": false,
+            "thirdPartyReviewRequired": false,
+            "aiDisclosureRequired": false,
+        ]))
+    }
+
+    private func makeIssueReceipt(
+        vaultID: String,
+        publication: PublicationManagementPublication,
+        recipient: PublicationGrantRecipient,
+        expiresAt: Date
+    ) throws -> PublicationGrantIssueReceipt {
+        try XCTUnwrap(PublicationGrantIssueReceipt(json: [
+            "schemaVersion": "publication-owner-grant-issue-v1",
+            "vaultId": vaultID,
+            "grantId": "64444444-4444-4444-8444-444444444444",
+            "publicationId": publication.publicationID,
+            "publicationVersionId": publication.publicationVersionID!,
+            "recipientDisplayLabel": recipient.displayLabel,
+            "outcome": "created",
+            "expiresAt": ISO8601DateFormatter().string(from: expiresAt),
+            "credentialIssued": true,
+            "grantCredential": "unit-test-grant-credential-123456",
+        ]))
+    }
+
+    private func makeRuntime(subjectID: String, vaultID: String, generation: UInt64) -> AccountLeaseRuntime {
+        let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
+        runtime.publish(session: makeSession(subjectID: subjectID, vaultID: vaultID, generation: generation))
+        return runtime
     }
 
     private func makeSession(subjectID: String, vaultID: String, generation: UInt64) -> AccountSession {
@@ -861,6 +1042,34 @@ private final class PublicationLifecycleClientStub: PublicationLifecycleClient {
     ) {
         commandIDs.append(command.commandID)
         completion(results.isEmpty ? .failure(PublicationLifecycleAccessError.unavailable) : results.removeFirst())
+    }
+}
+
+private final class PublicationGrantManagementClientStub: PublicationGrantManagementClient {
+    var issueResult: Result<PublicationGrantIssueReceipt, Error>?
+    var revokeResult: Result<PublicationGrantRevokeReceipt, Error>?
+    var beforeIssueCompletion: (() -> Void)?
+    private(set) var issueCallCount = 0
+
+    func issueOwnerPublicationGrant(
+        vaultID: String,
+        command: PublicationGrantIssueCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationGrantIssueReceipt, Error>) -> Void
+    ) {
+        issueCallCount += 1
+        beforeIssueCompletion?()
+        completion(issueResult ?? .failure(PublicationManagementAccessError.unavailable))
+    }
+
+    func revokeOwnerPublicationGrant(
+        vaultID: String,
+        grantID: String,
+        command: PublicationGrantRevokeCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationGrantRevokeReceipt, Error>) -> Void
+    ) {
+        completion(revokeResult ?? .failure(PublicationManagementAccessError.unavailable))
     }
 }
 

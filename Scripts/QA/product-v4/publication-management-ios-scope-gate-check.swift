@@ -61,11 +61,31 @@ require(
 )
 require(
     managementAccess.contains("publication-owner-management-v1")
-        && managementAccess.contains("publication-owner-grant-list-v1")
+        && managementAccess.contains("publication-owner-grant-list-v2")
+        && managementAccess.contains("publication-owner-grant-issue-v1")
         && managementAccess.contains("publication-owner-version-audit-v1")
         && !managementAccess.contains("UserDefaults")
         && !managementAccess.contains(": Codable"),
     "management state must remain schema-checked and in memory only"
+)
+require(
+    managementAccess.contains("protocol PublicationGrantManagementClient")
+        && managementAccess.contains("final class PublicationGrantManagementUseCase")
+        && managementAccess.contains("recipientDisplayLabel")
+        && backendClient.contains("func issueOwnerPublicationGrant(")
+        && backendClient.contains("func revokeOwnerPublicationGrant(")
+        && managementView.contains("profile-publication-management-create-grant")
+        && managementView.contains("profile-publication-management-revoke-grant")
+        && managementView.contains("不限制产品查询次数")
+        && !managementView.contains("剩余 "),
+    "registered-account ShareGrant management must be typed and must not expose a product query balance"
+)
+require(
+    managementAccess.contains("invitationURL")
+        && managementAccess.contains("URLQueryItem(name: \"grantCredential\"")
+        && !managementView.contains("grantCredential")
+        && !managementView.contains("granteeUserId"),
+    "the one-time invitation credential must remain transient and outside the view layer"
 )
 require(
     managementAccess.contains("protocol PublicationVersionAuditReaderClient")
@@ -100,8 +120,6 @@ for forbiddenSymbol in [
     "VoiceClone",
     "KBLite",
     "MemoryRepository",
-    "grantCredential",
-    "granteeUserId",
     "sessionCredential",
 ] {
     require(

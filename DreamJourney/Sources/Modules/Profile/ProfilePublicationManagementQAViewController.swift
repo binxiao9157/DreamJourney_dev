@@ -20,6 +20,7 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
 
     private let useCase: PublicationManagementReadUseCase
     private let versionAuditUseCase: PublicationVersionAuditUseCase
+    private let grantUseCase: PublicationGrantManagementUseCase
     private let lifecycleUseCase: PublicationLifecycleUseCase
     private let publicationClient: PublicationDraftWriterClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
@@ -34,10 +35,13 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
     private var versionAudits: [String: PublicationOwnerVersionAudit] = [:]
     private var versionAuditFailures: [String: String] = [:]
     private var versionAuditPendingPublicationIDs: Set<String> = []
+    private var grantFailures: [String: String] = [:]
+    private var grantPendingIDs: Set<String> = []
 
     init(
         client: PublicationManagementReaderClient = DreamJourneyBackendClient.shared,
         versionClient: PublicationVersionAuditReaderClient? = nil,
+        grantClient: PublicationGrantManagementClient? = nil,
         publicationClient: PublicationDraftWriterClient = DreamJourneyBackendClient.shared,
         lifecycleClient: PublicationLifecycleClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
@@ -52,6 +56,12 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
         versionAuditUseCase = PublicationVersionAuditUseCase(
             client: versionClient
                 ?? (client as? PublicationVersionAuditReaderClient)
+                ?? DreamJourneyBackendClient.shared,
+            accountLeaseRuntime: accountLeaseRuntime
+        )
+        grantUseCase = PublicationGrantManagementUseCase(
+            client: grantClient
+                ?? (client as? PublicationGrantManagementClient)
                 ?? DreamJourneyBackendClient.shared,
             accountLeaseRuntime: accountLeaseRuntime
         )
@@ -102,6 +112,8 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
             versionAudits.removeAll()
             versionAuditFailures.removeAll()
             versionAuditPendingPublicationIDs.removeAll()
+            grantFailures.removeAll()
+            grantPendingIDs.removeAll()
         }
     }
 
@@ -308,6 +320,22 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
                 publication.aiDisclosureRequired ? "含 AI 说明" : nil,
             ].compactMap { $0 }
             stack.addArrangedSubview(makePillRow(disclosures))
+        }
+
+        if publication.publicationState == "confirmed",
+           publication.projectionState == "active",
+           publication.publicationVersionID != nil,
+           PublicationManagementM2AccessGate.isManagementRouteAllowed {
+            stack.addArrangedSubview(makeInvitationControl(for: publication))
+        }
+        if let message = grantFailures[publication.publicationID] {
+            let label = makeLabel(
+                text: message,
+                font: DJDesignTokens.Font.body(13),
+                color: DJDesignTokens.Color.danger
+            )
+            label.accessibilityIdentifier = "profile-publication-management-grant-failure"
+            stack.addArrangedSubview(label)
         }
 
         if PublicationManagementM2AccessGate.isPublicationRouteAllowed {
@@ -638,9 +666,14 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
         stack.axis = .vertical
         stack.spacing = 7
         stack.accessibilityIdentifier = "profile-publication-management-qa-grant-row"
-        stack.accessibilityValue = "\(grant.state):\(grant.useRemaining)"
+        stack.accessibilityValue = grant.state
 
         let state = grant.isUsable ? "有效" : displayState(grant.state)
+        stack.addArrangedSubview(makeLabel(
+            text: grant.recipientDisplayLabel,
+            font: DJDesignTokens.Font.label(15),
+            color: DJDesignTokens.Color.textPrimary
+        ))
         stack.addArrangedSubview(makeLabel(
             text: "授权状态：\(state)",
             font: DJDesignTokens.Font.body(15),
@@ -651,11 +684,191 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
         dateFormatter.dateStyle = .medium
         dateFormatter.timeStyle = .short
         stack.addArrangedSubview(makeLabel(
-            text: "到期：\(dateFormatter.string(from: grant.expiresAt)) · 剩余 \(grant.useRemaining) 次",
+            text: "到期：\(dateFormatter.string(from: grant.expiresAt))",
             font: DJDesignTokens.Font.body(13),
             color: DJDesignTokens.Color.textSecondary
         ))
+        if grant.state == "active" {
+            let button = UIButton(type: .system)
+            let isPending = grantPendingIDs.contains(grant.grantID)
+            button.setTitle(isPending ? "正在撤销" : "撤销授权", for: .normal)
+            button.setTitleColor(DJDesignTokens.Color.danger, for: .normal)
+            button.titleLabel?.font = DJDesignTokens.Font.label(14)
+            button.contentHorizontalAlignment = .leading
+            button.isEnabled = !isPending
+            button.accessibilityIdentifier = "profile-publication-management-revoke-grant"
+            button.addAction(UIAction { [weak self] _ in
+                self?.requestGrantRevocation(grant)
+            }, for: .touchUpInside)
+            stack.addArrangedSubview(button)
+        }
+        if let message = grantFailures[grant.grantID] {
+            let label = makeLabel(
+                text: message,
+                font: DJDesignTokens.Font.body(13),
+                color: DJDesignTokens.Color.danger
+            )
+            label.accessibilityIdentifier = "profile-publication-management-grant-failure"
+            stack.addArrangedSubview(label)
+        }
         return stack
+    }
+
+    private func makeInvitationControl(
+        for publication: PublicationManagementPublication
+    ) -> UIView {
+        let button = UIButton(type: .system)
+        let isPending = grantPendingIDs.contains(publication.publicationID)
+        button.setTitle(isPending ? "正在创建邀请" : "邀请已注册账户查看", for: .normal)
+        button.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        button.titleLabel?.font = DJDesignTokens.Font.label(15)
+        button.contentHorizontalAlignment = .leading
+        button.isEnabled = !isPending
+        button.accessibilityIdentifier = "profile-publication-management-create-grant"
+        button.addAction(UIAction { [weak self] _ in
+            self?.requestGrantInvitation(publication)
+        }, for: .touchUpInside)
+        return button
+    }
+
+    private func requestGrantInvitation(
+        _ publication: PublicationManagementPublication
+    ) {
+        guard !grantPendingIDs.contains(publication.publicationID) else { return }
+        let alert = UIAlertController(
+            title: "邀请查看公开记忆",
+            message: "输入已注册账户的手机号或账户 ID。授权有效期为 7 天，不限制产品查询次数。",
+            preferredStyle: .alert
+        )
+        alert.addTextField { textField in
+            textField.placeholder = "手机号或账户 ID"
+            textField.textContentType = .telephoneNumber
+            textField.clearButtonMode = .whileEditing
+            textField.accessibilityIdentifier = "profile-publication-management-grant-recipient"
+        }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "创建邀请", style: .default) { [weak self, weak alert] _ in
+            guard let self,
+                  let input = alert?.textFields?.first?.text,
+                  let recipient = PublicationGrantRecipient(input: input),
+                  let accountLease = self.accountLeaseProvider() else {
+                self?.grantFailures[publication.publicationID] =
+                    PublicationManagementAccessError.invalidInput.localizedDescription
+                if let self, case let .loaded(snapshot) = self.loadState {
+                    self.render(.loaded(snapshot))
+                }
+                return
+            }
+            self.issueGrant(
+                publication: publication,
+                recipient: recipient,
+                accountLease: accountLease
+            )
+        })
+        present(alert, animated: true)
+    }
+
+    private func issueGrant(
+        publication: PublicationManagementPublication,
+        recipient: PublicationGrantRecipient,
+        accountLease: AccountLease
+    ) {
+        grantFailures.removeValue(forKey: publication.publicationID)
+        grantPendingIDs.insert(publication.publicationID)
+        if case let .loaded(snapshot) = loadState {
+            render(.loaded(snapshot))
+        }
+        let expiry = Date().addingTimeInterval(7 * 24 * 60 * 60 - 30)
+        grantUseCase.issue(
+            publication: publication,
+            recipient: recipient,
+            expiresAt: expiry,
+            accountLease: accountLease
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.grantPendingIDs.remove(publication.publicationID)
+                switch result {
+                case .success(let receipt):
+                    guard let invitationURL = receipt.invitationURL else {
+                        self.grantFailures[publication.publicationID] =
+                            PublicationManagementAccessError.invitationUnavailable.localizedDescription
+                        if case let .loaded(snapshot) = self.loadState {
+                            self.render(.loaded(snapshot))
+                        }
+                        return
+                    }
+                    self.presentInvitationShare(
+                        invitationURL,
+                        recipientLabel: receipt.recipientDisplayLabel
+                    )
+                    self.reload()
+                case .failure(let error):
+                    self.grantFailures[publication.publicationID] = self.displayMessage(for: error)
+                    if case let .loaded(snapshot) = self.loadState {
+                        self.render(.loaded(snapshot))
+                    }
+                }
+            }
+        }
+    }
+
+    private func presentInvitationShare(
+        _ invitationURL: URL,
+        recipientLabel: String
+    ) {
+        let controller = UIActivityViewController(
+            activityItems: ["寻梦环游公开记忆邀请（\(recipientLabel)）", invitationURL],
+            applicationActivities: nil
+        )
+        if let popover = controller.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
+        }
+        present(controller, animated: true)
+    }
+
+    private func requestGrantRevocation(_ grant: PublicationManagementGrant) {
+        guard !grantPendingIDs.contains(grant.grantID),
+              let accountLease = accountLeaseProvider() else {
+            return
+        }
+        let alert = UIAlertController(
+            title: "撤销对 \(grant.recipientDisplayLabel) 的授权？",
+            message: "撤销后，已有受邀会话会立即失效。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "确认撤销", style: .destructive) { [weak self] _ in
+            self?.revokeGrant(grant, accountLease: accountLease)
+        })
+        present(alert, animated: true)
+    }
+
+    private func revokeGrant(
+        _ grant: PublicationManagementGrant,
+        accountLease: AccountLease
+    ) {
+        grantFailures.removeValue(forKey: grant.grantID)
+        grantPendingIDs.insert(grant.grantID)
+        if case let .loaded(snapshot) = loadState {
+            render(.loaded(snapshot))
+        }
+        grantUseCase.revoke(grant: grant, accountLease: accountLease) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.grantPendingIDs.remove(grant.grantID)
+                switch result {
+                case .success:
+                    self.reload()
+                case .failure(let error):
+                    self.grantFailures[grant.grantID] = self.displayMessage(for: error)
+                    if case let .loaded(snapshot) = self.loadState {
+                        self.render(.loaded(snapshot))
+                    }
+                }
+            }
+        }
     }
 
     private enum StatusStyle: Equatable {

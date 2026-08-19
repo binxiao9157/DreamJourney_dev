@@ -6615,7 +6615,7 @@ final class EchoDelayedReplyInboxAnswerReader {
     }
 }
 
-final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorAdmissionClient, PublicationVisitorReaderClient, PublicationManagementReaderClient, PublicationVersionAuditReaderClient, PublicationDraftWriterClient, PublicationLifecycleClient, InAppMessageCenterClientPort {
+final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorAdmissionClient, PublicationVisitorReaderClient, PublicationManagementReaderClient, PublicationVersionAuditReaderClient, PublicationDraftWriterClient, PublicationGrantManagementClient, PublicationLifecycleClient, InAppMessageCenterClientPort {
     static let shared = DreamJourneyBackendClient()
 
     struct BackendErrorContext: Equatable {
@@ -12989,6 +12989,126 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                     return
                 }
                 completion(.success(response))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func issueOwnerPublicationGrant(
+        vaultID: String,
+        command: PublicationGrantIssueCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationGrantIssueReceipt, Error>) -> Void
+    ) {
+        let usesQAContract = PublicationManagementM2QAGate.isEnabled
+        guard usesQAContract || PublicationManagementM2AccessGate.isManagementRouteAllowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationManagementAccessError.disabled))
+            }
+            return
+        }
+        let normalizedVaultID = vaultID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedVaultID.isEmpty,
+              normalizedVaultID == accountLease.vaultId,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+            }
+            return
+        }
+        requestJSON(
+            path: usesQAContract
+                ? "/v2/internal/publication-access/vaults/\(pathComponent(normalizedVaultID))/grants"
+                : "/v2/vaults/\(pathComponent(normalizedVaultID))/publication-grants",
+            method: .post,
+            payload: command.requestPayload(usesQAContract: usesQAContract),
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            additionalHeaders: usesQAContract
+                ? ["X-DreamJourney-QA-Visitor-Access": "1"]
+                : [:]
+        ) { [weak self] result in
+            guard let self else { return }
+            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+                return
+            }
+            switch result {
+            case .success(let object):
+                guard let receipt = PublicationGrantIssueReceipt(json: object) else {
+                    completion(.failure(PublicationManagementAccessError.malformedResponse))
+                    return
+                }
+                guard receipt.vaultID == normalizedVaultID,
+                      receipt.publicationID == command.publicationID,
+                      receipt.publicationVersionID == command.publicationVersionID else {
+                    completion(.failure(PublicationManagementAccessError.responseScopeMismatch))
+                    return
+                }
+                completion(.success(receipt))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func revokeOwnerPublicationGrant(
+        vaultID: String,
+        grantID: String,
+        command: PublicationGrantRevokeCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationGrantRevokeReceipt, Error>) -> Void
+    ) {
+        let usesQAContract = PublicationManagementM2QAGate.isEnabled
+        guard usesQAContract || PublicationManagementM2AccessGate.isManagementRouteAllowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationManagementAccessError.disabled))
+            }
+            return
+        }
+        let normalizedVaultID = vaultID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedGrantID = grantID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedVaultID.isEmpty,
+              normalizedVaultID == accountLease.vaultId,
+              UUID(uuidString: normalizedGrantID) != nil,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+            }
+            return
+        }
+        requestJSON(
+            path: usesQAContract
+                ? "/v2/internal/publication-access/vaults/\(pathComponent(normalizedVaultID))/grants/\(pathComponent(normalizedGrantID))/revoke"
+                : "/v2/vaults/\(pathComponent(normalizedVaultID))/publication-grants/\(pathComponent(normalizedGrantID))/revoke",
+            method: .post,
+            payload: command.requestPayload,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            additionalHeaders: usesQAContract
+                ? ["X-DreamJourney-QA-Visitor-Access": "1"]
+                : [:]
+        ) { [weak self] result in
+            guard let self else { return }
+            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+                return
+            }
+            switch result {
+            case .success(let object):
+                guard let receipt = PublicationGrantRevokeReceipt(json: object) else {
+                    completion(.failure(PublicationManagementAccessError.malformedResponse))
+                    return
+                }
+                guard receipt.vaultID == normalizedVaultID,
+                      receipt.grantID.caseInsensitiveCompare(normalizedGrantID) == .orderedSame else {
+                    completion(.failure(PublicationManagementAccessError.responseScopeMismatch))
+                    return
+                }
+                completion(.success(receipt))
             case .failure(let error):
                 completion(.failure(error))
             }
