@@ -6615,7 +6615,7 @@ final class EchoDelayedReplyInboxAnswerReader {
     }
 }
 
-final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorAdmissionClient, PublicationVisitorReaderClient, PublicationManagementReaderClient, PublicationDraftWriterClient, PublicationLifecycleClient, InAppMessageCenterClientPort {
+final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorAdmissionClient, PublicationVisitorReaderClient, PublicationManagementReaderClient, PublicationVersionAuditReaderClient, PublicationDraftWriterClient, PublicationLifecycleClient, InAppMessageCenterClientPort {
     static let shared = DreamJourneyBackendClient()
 
     struct BackendErrorContext: Equatable {
@@ -12822,6 +12822,64 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         }
     }
 
+    func fetchOwnerPublicationVersions(
+        vaultID: String,
+        publicationID: String,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationOwnerVersionAudit, Error>) -> Void
+    ) {
+        let usesQAContract = PublicationManagementM2QAGate.isEnabled
+        guard usesQAContract || PublicationManagementM2AccessGate.isPublicationRouteAllowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationManagementAccessError.disabled))
+            }
+            return
+        }
+        let normalizedVaultID = vaultID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedPublicationID = publicationID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedVaultID.isEmpty,
+              normalizedVaultID == accountLease.vaultId,
+              UUID(uuidString: normalizedPublicationID) != nil,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+            }
+            return
+        }
+        requestJSON(
+            path: usesQAContract
+                ? "/v2/internal/owner-authority/vaults/\(pathComponent(normalizedVaultID))/publications/\(pathComponent(normalizedPublicationID))/versions"
+                : "/v2/vaults/\(pathComponent(normalizedVaultID))/publications/\(pathComponent(normalizedPublicationID))/versions",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            additionalHeaders: usesQAContract ? ["X-DreamJourney-QA-Publication": "1"] : [:]
+        ) { [weak self] result in
+            guard let self else { return }
+            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+                return
+            }
+            switch result {
+            case .success(let object):
+                guard let response = PublicationOwnerVersionAudit(json: object) else {
+                    completion(.failure(PublicationManagementAccessError.malformedResponse))
+                    return
+                }
+                guard response.vaultID == normalizedVaultID,
+                      response.publicationID.caseInsensitiveCompare(normalizedPublicationID) == .orderedSame else {
+                    completion(.failure(PublicationManagementAccessError.responseScopeMismatch))
+                    return
+                }
+                completion(.success(response))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func fetchOwnerGrants(
         vaultID: String,
         accountLease: AccountLease,
@@ -13109,7 +13167,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             PublicationManagementM2QAGate.isEnabled
             && (
                 path.hasPrefix("/v2/internal/owner-authority/vaults/")
-                    && path.hasSuffix("/publications")
+                    && (path.hasSuffix("/publications") || path.hasSuffix("/versions"))
                     && additionalHeaders["X-DreamJourney-QA-Publication"] == "1"
                 || path.hasPrefix("/v2/internal/publication-access/vaults/")
                     && path.hasSuffix("/grants")

@@ -1775,6 +1775,7 @@ private extension AppDelegate {
                 shellRendered: false,
                 publicationRendered: false,
                 grantRendered: false,
+                versionAuditRendered: false,
                 failureReason: "profileNavigationUnavailable"
             )
             return
@@ -1817,29 +1818,58 @@ private extension AppDelegate {
             "profile-publication-management-qa-grants",
             in: shell.view
         )
-        let completed = gateEnabled
-            && featureFlagDefaultOff
-            && profileEntryVisible
-            && shellRendered
-            && publicationRendered
-            && grantRendered
+        guard let versionAuditButton = firstUIQAView(
+            withAccessibilityIdentifier: "profile-publication-management-version-audit",
+            in: shell.view
+        ) as? UIButton else {
+            writePublicationManagementM2SmokeResult(
+                completed: false,
+                gateEnabled: gateEnabled,
+                featureFlagDefaultOff: featureFlagDefaultOff,
+                profileEntryVisible: profileEntryVisible,
+                shellRendered: shellRendered,
+                publicationRendered: publicationRendered,
+                grantRendered: grantRendered,
+                versionAuditRendered: false,
+                failureReason: "publicationVersionAuditButtonUnavailable"
+            )
+            return
+        }
 
-        writePublicationManagementM2SmokeResult(
-            completed: completed,
-            gateEnabled: gateEnabled,
-            featureFlagDefaultOff: featureFlagDefaultOff,
-            profileEntryVisible: profileEntryVisible,
-            shellRendered: shellRendered,
-            publicationRendered: publicationRendered,
-            grantRendered: grantRendered,
-            failureReason: completed ? nil : "publicationManagementM2SurfaceMismatch"
-        )
-        print(
-            "[UI_QA] PublicationManagementM2Smoke completed " +
-                "gateEnabled=\(gateEnabled) " +
-                "profileEntryVisible=\(profileEntryVisible) " +
-                "shellRendered=\(shellRendered)"
-        )
+        versionAuditButton.sendActions(for: .touchUpInside)
+        DispatchQueue.main.async { [weak self, weak shell] in
+            guard let self, let shell else { return }
+            let versionAuditRendered = self.containsUIQAAccessibilityIdentifier(
+                "profile-publication-management-version-list",
+                in: shell.view
+            )
+            let completed = gateEnabled
+                && featureFlagDefaultOff
+                && profileEntryVisible
+                && shellRendered
+                && publicationRendered
+                && grantRendered
+                && versionAuditRendered
+
+            self.writePublicationManagementM2SmokeResult(
+                completed: completed,
+                gateEnabled: gateEnabled,
+                featureFlagDefaultOff: featureFlagDefaultOff,
+                profileEntryVisible: profileEntryVisible,
+                shellRendered: shellRendered,
+                publicationRendered: publicationRendered,
+                grantRendered: grantRendered,
+                versionAuditRendered: versionAuditRendered,
+                failureReason: completed ? nil : "publicationManagementM2SurfaceMismatch"
+            )
+            print(
+                "[UI_QA] PublicationManagementM2Smoke completed " +
+                    "gateEnabled=\(gateEnabled) " +
+                    "profileEntryVisible=\(profileEntryVisible) " +
+                    "shellRendered=\(shellRendered) " +
+                    "versionAuditRendered=\(versionAuditRendered)"
+            )
+        }
     }
 
     func runPublicationLifecycleM2Smoke() {
@@ -5970,6 +6000,7 @@ private extension AppDelegate {
         shellRendered: Bool,
         publicationRendered: Bool,
         grantRendered: Bool,
+        versionAuditRendered: Bool,
         failureReason: String?
     ) {
         var result: [String: Any] = [
@@ -5980,6 +6011,7 @@ private extension AppDelegate {
             "shellRendered": shellRendered,
             "publicationRendered": publicationRendered,
             "grantRendered": grantRendered,
+            "versionAuditRendered": versionAuditRendered,
             "launchArgument": PublicationManagementM2QAGate.launchArgument,
         ]
         if let failureReason {
@@ -6465,7 +6497,7 @@ private extension AppDelegate {
     }
 }
 
-private final class PublicationManagementM2UIQAFixtureClient: PublicationManagementReaderClient, PublicationLifecycleClient {
+private final class PublicationManagementM2UIQAFixtureClient: PublicationManagementReaderClient, PublicationVersionAuditReaderClient, PublicationLifecycleClient {
     private let publicationID = "61111111-1111-4111-8111-111111111111"
     private let publicationVersionID = "62222222-2222-4222-8222-222222222222"
     fileprivate private(set) var publicationState = "confirmed"
@@ -6522,6 +6554,41 @@ private final class PublicationManagementM2UIQAFixtureClient: PublicationManagem
                     "state": grantState,
                     "expiresAt": ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600)),
                     "useRemaining": grantUseRemaining,
+                ]],
+              ]) else {
+            completion(.failure(PublicationManagementAccessError.unavailable))
+            return
+        }
+        completion(.success(response))
+    }
+
+    func fetchOwnerPublicationVersions(
+        vaultID: String,
+        publicationID: String,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationOwnerVersionAudit, Error>) -> Void
+    ) {
+        guard vaultID == "uiqa-publication-vault",
+              publicationID == self.publicationID,
+              accountLease.subjectId == "uiqa-publication-owner",
+              let response = PublicationOwnerVersionAudit(json: [
+                "schemaVersion": PublicationOwnerVersionAudit.schemaVersion,
+                "vaultId": vaultID,
+                "publicationId": publicationID,
+                "versions": [[
+                    "publicationVersionId": publicationVersionID,
+                    "versionNumber": 1,
+                    "confirmedAt": "2026-08-19T12:00:00Z",
+                    "projectionState": projectionState,
+                    "publicSnapshotHash": String(repeating: "a", count: 64),
+                    "isCurrent": true,
+                    "itemCount": 1,
+                    "items": [[
+                        "itemIndex": 0,
+                        "publicTitle": "雨后的院子",
+                        "publicBody": "这是已确认且不可变的公开版本快照。",
+                        "aiDisclosureRequired": true,
+                    ]],
                 ]],
               ]) else {
             completion(.failure(PublicationManagementAccessError.unavailable))

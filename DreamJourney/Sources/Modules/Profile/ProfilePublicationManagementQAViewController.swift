@@ -19,6 +19,7 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
     }
 
     private let useCase: PublicationManagementReadUseCase
+    private let versionAuditUseCase: PublicationVersionAuditUseCase
     private let lifecycleUseCase: PublicationLifecycleUseCase
     private let accountLeaseProvider: () -> AccountLease?
     private let scrollView = UIScrollView()
@@ -28,9 +29,13 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
     private var lifecycleFailures: [String: String] = [:]
     private var lifecyclePendingPublicationIDs: Set<String> = []
     private var pendingWithdrawalConfirmation: PendingWithdrawalConfirmation?
+    private var versionAudits: [String: PublicationOwnerVersionAudit] = [:]
+    private var versionAuditFailures: [String: String] = [:]
+    private var versionAuditPendingPublicationIDs: Set<String> = []
 
     init(
         client: PublicationManagementReaderClient = DreamJourneyBackendClient.shared,
+        versionClient: PublicationVersionAuditReaderClient? = nil,
         lifecycleClient: PublicationLifecycleClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         accountLeaseProvider: @escaping () -> AccountLease? = {
@@ -39,6 +44,12 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
     ) {
         useCase = PublicationManagementReadUseCase(
             client: client,
+            accountLeaseRuntime: accountLeaseRuntime
+        )
+        versionAuditUseCase = PublicationVersionAuditUseCase(
+            client: versionClient
+                ?? (client as? PublicationVersionAuditReaderClient)
+                ?? DreamJourneyBackendClient.shared,
             accountLeaseRuntime: accountLeaseRuntime
         )
         lifecycleUseCase = PublicationLifecycleUseCase(
@@ -83,6 +94,9 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
             lifecycleFailures.removeAll()
             lifecyclePendingPublicationIDs.removeAll()
             pendingWithdrawalConfirmation = nil
+            versionAudits.removeAll()
+            versionAuditFailures.removeAll()
+            versionAuditPendingPublicationIDs.removeAll()
         }
     }
 
@@ -291,6 +305,22 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
             stack.addArrangedSubview(makePillRow(disclosures))
         }
 
+        if PublicationManagementM2AccessGate.isPublicationRouteAllowed {
+            stack.addArrangedSubview(makeVersionAuditControl(for: publication))
+        }
+        if let audit = versionAudits[publication.publicationID] {
+            stack.addArrangedSubview(makeVersionAudit(audit))
+        }
+        if let message = versionAuditFailures[publication.publicationID] {
+            let label = makeLabel(
+                text: message,
+                font: DJDesignTokens.Font.body(13),
+                color: DJDesignTokens.Color.danger
+            )
+            label.accessibilityIdentifier = "profile-publication-management-version-failure"
+            stack.addArrangedSubview(label)
+        }
+
         if PublicationWithdrawalPresentationPolicy.isAvailable(
             for: publication,
             routeAllowed: PublicationManagementM2AccessGate.isLifecycleRouteAllowed
@@ -310,6 +340,112 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
             stack.addArrangedSubview(label)
         }
         return stack
+    }
+
+    private func makeVersionAuditControl(for publication: PublicationManagementPublication) -> UIView {
+        let button = UIButton(type: .system)
+        let isPending = versionAuditPendingPublicationIDs.contains(publication.publicationID)
+        let isExpanded = versionAudits[publication.publicationID] != nil
+        button.setTitle(
+            isPending ? "正在读取版本记录" : (isExpanded ? "收起版本记录" : "查看版本记录"),
+            for: .normal
+        )
+        button.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        button.titleLabel?.font = DJDesignTokens.Font.label(15)
+        button.contentHorizontalAlignment = .leading
+        button.isEnabled = !isPending
+        button.accessibilityIdentifier = "profile-publication-management-version-audit"
+        button.addAction(UIAction { [weak self] _ in
+            self?.toggleVersionAudit(for: publication)
+        }, for: .touchUpInside)
+        return button
+    }
+
+    private func makeVersionAudit(_ audit: PublicationOwnerVersionAudit) -> UIView {
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 10
+        stack.accessibilityIdentifier = "profile-publication-management-version-list"
+
+        if audit.versions.isEmpty {
+            stack.addArrangedSubview(makeEmptyLabel("尚未生成已确认版本。"))
+            return stack
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        for (index, version) in audit.versions.enumerated() {
+            if index > 0 {
+                let divider = UIView()
+                divider.backgroundColor = DJDesignTokens.Color.divider.withAlphaComponent(0.45)
+                divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
+                stack.addArrangedSubview(divider)
+            }
+            let heading = version.isCurrent
+                ? "版本 \(version.versionNumber) · 当前版本"
+                : "版本 \(version.versionNumber)"
+            stack.addArrangedSubview(makeLabel(
+                text: heading,
+                font: DJDesignTokens.Font.label(15),
+                color: DJDesignTokens.Color.textPrimary
+            ))
+            stack.addArrangedSubview(makeLabel(
+                text: "确认于 \(formatter.string(from: version.confirmedAt)) · \(displayState(version.projectionState ?? "unknown"))",
+                font: DJDesignTokens.Font.body(12),
+                color: DJDesignTokens.Color.textSecondary
+            ))
+            for item in version.items {
+                stack.addArrangedSubview(makeLabel(
+                    text: item.publicTitle,
+                    font: DJDesignTokens.Font.label(14),
+                    color: DJDesignTokens.Color.textPrimary
+                ))
+                stack.addArrangedSubview(makeLabel(
+                    text: item.publicBody,
+                    font: DJDesignTokens.Font.body(13),
+                    color: DJDesignTokens.Color.textSecondary
+                ))
+            }
+        }
+        return stack
+    }
+
+    private func toggleVersionAudit(for publication: PublicationManagementPublication) {
+        if versionAudits.removeValue(forKey: publication.publicationID) != nil {
+            if case let .loaded(snapshot) = loadState {
+                render(.loaded(snapshot))
+            }
+            return
+        }
+        guard !versionAuditPendingPublicationIDs.contains(publication.publicationID),
+              let accountLease = accountLeaseProvider() else {
+            return
+        }
+        versionAuditFailures.removeValue(forKey: publication.publicationID)
+        versionAuditPendingPublicationIDs.insert(publication.publicationID)
+        if case let .loaded(snapshot) = loadState {
+            render(.loaded(snapshot))
+        }
+        versionAuditUseCase.load(
+            publicationID: publication.publicationID,
+            accountLease: accountLease
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.versionAuditPendingPublicationIDs.remove(publication.publicationID)
+                switch result {
+                case .success(let audit):
+                    self.versionAudits[publication.publicationID] = audit
+                case .failure(let error):
+                    self.versionAuditFailures[publication.publicationID] = self.displayMessage(for: error)
+                }
+                if case let .loaded(snapshot) = self.loadState {
+                    self.render(.loaded(snapshot))
+                }
+            }
+        }
     }
 
     private func makeWithdrawalControl(for publication: PublicationManagementPublication) -> UIView {

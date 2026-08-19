@@ -61,9 +61,17 @@ require(
 require(
     managementAccess.contains("publication-owner-management-v1")
         && managementAccess.contains("publication-owner-grant-list-v1")
+        && managementAccess.contains("publication-owner-version-audit-v1")
         && !managementAccess.contains("UserDefaults")
         && !managementAccess.contains(": Codable"),
     "management state must remain schema-checked and in memory only"
+)
+require(
+    managementAccess.contains("protocol PublicationVersionAuditReaderClient")
+        && managementAccess.contains("final class PublicationVersionAuditUseCase")
+        && backendClient.contains("/publications/\\(pathComponent(normalizedPublicationID))/versions")
+        && managementView.contains("查看版本记录"),
+    "owner version audit must use a typed, lease-bound publication route"
 )
 
 for forbiddenSymbol in [

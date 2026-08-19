@@ -159,6 +159,109 @@ final class PublicationManagementAccessTests: XCTestCase {
     }
 }
 
+final class PublicationVersionAuditAccessTests: XCTestCase {
+    func testParserAcceptsOrderedRedactedPublicVersionSnapshots() throws {
+        let publicationID = UUID().uuidString.lowercased()
+        let audit = try XCTUnwrap(PublicationOwnerVersionAudit(json: [
+            "schemaVersion": PublicationOwnerVersionAudit.schemaVersion,
+            "vaultId": "vault-a",
+            "publicationId": publicationID,
+            "versions": [
+                makeVersionJSON(id: UUID().uuidString, number: 2, isCurrent: true),
+                makeVersionJSON(id: UUID().uuidString, number: 1, isCurrent: false),
+            ],
+        ]))
+
+        XCTAssertEqual(audit.publicationID, publicationID)
+        XCTAssertEqual(audit.versions.map(\.versionNumber), [2, 1])
+        XCTAssertEqual(audit.versions.first?.items.first?.publicTitle, "第 2 版")
+    }
+
+    func testParserRejectsUnorderedOrMultipleCurrentVersions() {
+        XCTAssertNil(PublicationOwnerVersionAudit(json: [
+            "schemaVersion": PublicationOwnerVersionAudit.schemaVersion,
+            "vaultId": "vault-a",
+            "publicationId": UUID().uuidString,
+            "versions": [
+                makeVersionJSON(id: UUID().uuidString, number: 1, isCurrent: true),
+                makeVersionJSON(id: UUID().uuidString, number: 2, isCurrent: true),
+            ],
+        ]))
+    }
+
+    func testUseCaseDropsVersionAuditAfterAccountSwitch() throws {
+        let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
+        runtime.publish(session: makeSession(subjectID: "owner-a", vaultID: "vault-a", generation: 4))
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-a"))
+        let publicationID = UUID().uuidString.lowercased()
+        let client = PublicationVersionAuditReaderClientStub()
+        client.result = .success(try XCTUnwrap(PublicationOwnerVersionAudit(json: [
+            "schemaVersion": PublicationOwnerVersionAudit.schemaVersion,
+            "vaultId": "vault-a",
+            "publicationId": publicationID,
+            "versions": [
+                makeVersionJSON(id: UUID().uuidString, number: 1, isCurrent: true),
+            ],
+        ])))
+        client.beforeCompletion = {
+            runtime.publish(session: self.makeSession(
+                subjectID: "owner-b",
+                vaultID: "vault-b",
+                generation: 5
+            ))
+        }
+        let useCase = PublicationVersionAuditUseCase(
+            client: client,
+            accountLeaseRuntime: runtime,
+            isEnabled: { true }
+        )
+
+        let expectation = expectation(description: "stale version audit rejected")
+        useCase.load(publicationID: publicationID, accountLease: lease) { result in
+            guard case let .failure(error) = result else {
+                XCTFail("Expected account switch to discard the version audit")
+                expectation.fulfill()
+                return
+            }
+            XCTAssertEqual(error as? PublicationManagementAccessError, .accountLeaseInvalid)
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1)
+    }
+
+    private func makeVersionJSON(id: String, number: Int, isCurrent: Bool) -> [String: Any] {
+        [
+            "publicationVersionId": id,
+            "versionNumber": number,
+            "confirmedAt": "2026-08-19T12:00:00Z",
+            "projectionState": "active",
+            "publicSnapshotHash": String(repeating: "a", count: 64),
+            "isCurrent": isCurrent,
+            "itemCount": 1,
+            "items": [[
+                "itemIndex": 0,
+                "publicTitle": "第 \(number) 版",
+                "publicBody": "公开正文。",
+                "aiDisclosureRequired": true,
+            ]],
+        ]
+    }
+
+    private func makeSession(subjectID: String, vaultID: String, generation: UInt64) -> AccountSession {
+        AccountSession(
+            subjectId: subjectID,
+            vaultId: vaultID,
+            sessionId: "session-\(generation)",
+            tokenFamilyId: "family-\(generation)",
+            sessionVersion: Int(generation),
+            generation: generation,
+            generationId: UUID(),
+            state: .active,
+            activatedAt: Date()
+        )
+    }
+}
+
 final class PublicationLifecycleAccessTests: XCTestCase {
     func testWithdrawalPresentationRequiresOrdinaryLifecycleRouteAndWithdrawableState() throws {
         let withdrawable = try makeWithdrawablePublication()
@@ -603,6 +706,21 @@ private final class PublicationManagementReaderClientStub: PublicationManagement
         lastGrantVaultID = vaultID
         beforeGrantCompletion?()
         completion(grantsResult ?? .failure(PublicationManagementAccessError.unavailable))
+    }
+}
+
+private final class PublicationVersionAuditReaderClientStub: PublicationVersionAuditReaderClient {
+    var result: Result<PublicationOwnerVersionAudit, Error>?
+    var beforeCompletion: (() -> Void)?
+
+    func fetchOwnerPublicationVersions(
+        vaultID: String,
+        publicationID: String,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationOwnerVersionAudit, Error>) -> Void
+    ) {
+        beforeCompletion?()
+        completion(result ?? .failure(PublicationManagementAccessError.unavailable))
     }
 }
 

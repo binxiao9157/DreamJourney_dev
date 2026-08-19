@@ -277,6 +277,125 @@ struct PublicationManagementSnapshot: Equatable {
     let grants: [PublicationManagementGrant]
 }
 
+struct PublicationOwnerVersionItem: Equatable {
+    let itemIndex: Int
+    let publicTitle: String
+    let publicBody: String
+    let aiDisclosureRequired: Bool
+
+    init?(json: [String: Any]) {
+        guard let itemIndex = PublicationDraftContract.nonnegativeInt(json["itemIndex"]),
+              let publicTitle = PublicationDraftContract.text(
+                json["publicTitle"] as? String,
+                maximumLength: 120
+              ),
+              let publicBody = PublicationDraftContract.text(
+                json["publicBody"] as? String,
+                maximumLength: 12_000
+              ),
+              let aiDisclosureRequired = json["aiDisclosureRequired"] as? Bool else {
+            return nil
+        }
+        self.itemIndex = itemIndex
+        self.publicTitle = publicTitle
+        self.publicBody = publicBody
+        self.aiDisclosureRequired = aiDisclosureRequired
+    }
+}
+
+struct PublicationOwnerVersion: Equatable {
+    let publicationVersionID: String
+    let versionNumber: Int
+    let confirmedAt: Date
+    let projectionState: String?
+    let publicSnapshotHash: String
+    let isCurrent: Bool
+    let items: [PublicationOwnerVersionItem]
+
+    init?(json: [String: Any]) {
+        guard let publicationVersionID = PublicationDraftContract.uuid(
+                json["publicationVersionId"] as? String
+              ),
+              let versionNumber = PublicationDraftContract.positiveInt(json["versionNumber"]),
+              let confirmedAt = Self.date(json["confirmedAt"] as? String),
+              let publicSnapshotHash = PublicationDraftContract.sha256(
+                json["publicSnapshotHash"] as? String
+              ),
+              let isCurrent = json["isCurrent"] as? Bool,
+              let itemCount = PublicationDraftContract.positiveInt(json["itemCount"]),
+              let rawItems = json["items"] as? [[String: Any]] else {
+            return nil
+        }
+        let items = rawItems.compactMap(PublicationOwnerVersionItem.init(json:))
+        guard items.count == rawItems.count,
+              items.count == itemCount,
+              items.map(\.itemIndex) == Array(0..<itemCount) else {
+            return nil
+        }
+        if let rawState = json["projectionState"] as? String {
+            guard let projectionState = PublicationDraftContract.value(
+                rawState,
+                allowed: ["active", "suspended", "withdrawn", "blocked", "superseded"]
+            ) else {
+                return nil
+            }
+            self.projectionState = projectionState
+        } else {
+            self.projectionState = nil
+        }
+        self.publicationVersionID = publicationVersionID
+        self.versionNumber = versionNumber
+        self.confirmedAt = confirmedAt
+        self.publicSnapshotHash = publicSnapshotHash
+        self.isCurrent = isCurrent
+        self.items = items
+    }
+
+    private static func date(_ value: String?) -> Date? {
+        let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !normalized.isEmpty else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: normalized) {
+            return date
+        }
+        let standard = ISO8601DateFormatter()
+        standard.formatOptions = [.withInternetDateTime]
+        return standard.date(from: normalized)
+    }
+}
+
+struct PublicationOwnerVersionAudit: Equatable {
+    static let schemaVersion = "publication-owner-version-audit-v1"
+
+    let vaultID: String
+    let publicationID: String
+    let versions: [PublicationOwnerVersion]
+
+    init?(json: [String: Any]) {
+        guard json["schemaVersion"] as? String == Self.schemaVersion,
+              let vaultID = PublicationDraftContract.identifier(json["vaultId"] as? String),
+              let publicationID = PublicationDraftContract.uuid(json["publicationId"] as? String),
+              let rawVersions = json["versions"] as? [[String: Any]] else {
+            return nil
+        }
+        let versions = rawVersions.compactMap(PublicationOwnerVersion.init(json:))
+        guard versions.count == rawVersions.count,
+              Set(versions.map(\.publicationVersionID)).count == versions.count,
+              Set(versions.map(\.versionNumber)).count == versions.count,
+              versions.map(\.versionNumber) == versions.map(\.versionNumber).sorted(by: >),
+              (versions.isEmpty || (
+                versions.filter { $0.isCurrent }.count == 1
+                    && versions.first?.isCurrent == true
+              )) else {
+            return nil
+        }
+        self.vaultID = vaultID
+        self.publicationID = publicationID
+        self.versions = versions
+    }
+}
+
 enum PublicationDraftAccessError: LocalizedError, Equatable {
     case disabled
     case accountLeaseInvalid
@@ -736,6 +855,15 @@ protocol PublicationManagementReaderClient {
     )
 }
 
+protocol PublicationVersionAuditReaderClient {
+    func fetchOwnerPublicationVersions(
+        vaultID: String,
+        publicationID: String,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationOwnerVersionAudit, Error>) -> Void
+    )
+}
+
 final class PublicationManagementReadUseCase {
     private let client: PublicationManagementReaderClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
@@ -812,6 +940,61 @@ final class PublicationManagementReadUseCase {
                     grants: grants.grants
                 )))
             }
+        }
+    }
+}
+
+final class PublicationVersionAuditUseCase {
+    private let client: PublicationVersionAuditReaderClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let isEnabled: () -> Bool
+
+    init(
+        client: PublicationVersionAuditReaderClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        isEnabled: @escaping () -> Bool = {
+            PublicationManagementM2AccessGate.isPublicationRouteAllowed
+        }
+    ) {
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.isEnabled = isEnabled
+    }
+
+    func load(
+        publicationID: String,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationOwnerVersionAudit, Error>) -> Void
+    ) {
+        guard isEnabled() else {
+            completion(.failure(PublicationManagementAccessError.disabled))
+            return
+        }
+        guard let normalizedPublicationID = PublicationDraftContract.uuid(publicationID),
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+            return
+        }
+        client.fetchOwnerPublicationVersions(
+            vaultID: accountLease.vaultId,
+            publicationID: normalizedPublicationID,
+            accountLease: accountLease
+        ) { [weak self] result in
+            guard let self else { return }
+            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(PublicationManagementAccessError.accountLeaseInvalid))
+                return
+            }
+            guard case let .success(audit) = result else {
+                completion(result)
+                return
+            }
+            guard audit.vaultID == accountLease.vaultId,
+                  audit.publicationID == normalizedPublicationID else {
+                completion(.failure(PublicationManagementAccessError.responseScopeMismatch))
+                return
+            }
+            completion(.success(audit))
         }
     }
 }
