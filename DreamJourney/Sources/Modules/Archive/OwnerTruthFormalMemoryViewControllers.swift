@@ -3,6 +3,7 @@ import UIKit
 final class OwnerTruthFormalMemoryListViewController: UIViewController {
     private let accountLease: AccountLease
     private let client: OwnerTruthFormalMemoryClient
+    private let publicationClient: PublicationDraftWriterClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
     private let statusLabel = UILabel()
@@ -18,6 +19,24 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
         target: self,
         action: #selector(refreshTapped)
     )
+    private lazy var publishButton = UIBarButtonItem(
+        image: UIImage(systemName: "square.and.arrow.up"),
+        style: .plain,
+        target: self,
+        action: #selector(publishTapped)
+    )
+    private lazy var continueButton = UIBarButtonItem(
+        title: "下一步",
+        style: .done,
+        target: self,
+        action: #selector(continuePublicationTapped)
+    )
+    private lazy var cancelSelectionButton = UIBarButtonItem(
+        title: "取消",
+        style: .plain,
+        target: self,
+        action: #selector(cancelPublicationSelection)
+    )
 
     private var items: [OwnerTruthFormalMemoryListItem] = []
     private var nextCursor: String?
@@ -26,6 +45,8 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
     private var requestGeneration: UInt64 = 0
     private var searchWorkItem: DispatchWorkItem?
     private var isLoading = false
+    private var isSelectingForPublication = false
+    private var selectedPublicationMemoryIDs: Set<OwnerTruthRecordID> = []
     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
     var onPageRenderedForUIQA: ((OwnerTruthFormalMemoryListViewController) -> Void)?
     #endif
@@ -33,10 +54,12 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
     init(
         accountLease: AccountLease,
         client: OwnerTruthFormalMemoryClient = DreamJourneyBackendClient.shared,
+        publicationClient: PublicationDraftWriterClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
     ) {
         self.accountLease = accountLease
         self.client = client
+        self.publicationClient = publicationClient
         self.accountLeaseRuntime = accountLeaseRuntime
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
@@ -59,6 +82,9 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(false, animated: animated)
         navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+        if !isSelectingForPublication {
+            updateNavigationItems()
+        }
     }
 
     private var vaultID: OwnerTruthVaultID? {
@@ -69,7 +95,11 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
         filterButton.accessibilityIdentifier = "owner-truth-formal-memory-filter"
         filterButton.accessibilityLabel = "筛选正式记忆"
         refreshButton.accessibilityIdentifier = "owner-truth-formal-memory-refresh"
-        navigationItem.rightBarButtonItems = [refreshButton, filterButton]
+        publishButton.accessibilityIdentifier = "owner-publication-start"
+        publishButton.accessibilityLabel = "选择正式记忆并发布"
+        continueButton.accessibilityIdentifier = "owner-publication-selection-next"
+        cancelSelectionButton.accessibilityIdentifier = "owner-publication-selection-cancel"
+        updateNavigationItems()
 
         searchController.obscuresBackgroundDuringPresentation = false
         searchController.searchBar.placeholder = "搜索正式记忆"
@@ -117,6 +147,61 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
 
     @objc private func refreshTapped() {
         load(reset: true)
+    }
+
+    @objc private func publishTapped() {
+        guard PublicationManagementM2AccessGate.isPublicationRouteAllowed else {
+            showPublicationAlert(title: "暂不可用", message: "记忆发布当前未启用。")
+            return
+        }
+        guard !items.isEmpty else {
+            showPublicationAlert(title: "还没有可发布内容", message: "正式记忆生成后，可从这里选择公开副本。")
+            return
+        }
+        isSelectingForPublication = true
+        selectedPublicationMemoryIDs.removeAll()
+        tableView.allowsMultipleSelection = true
+        searchController.isActive = false
+        searchController.searchBar.isUserInteractionEnabled = false
+        updateNavigationItems()
+        tableView.reloadData()
+        UIAccessibility.post(notification: .announcement, argument: "请选择要发布的正式记忆")
+    }
+
+    @objc private func cancelPublicationSelection() {
+        finishPublicationSelection()
+    }
+
+    @objc private func continuePublicationTapped() {
+        guard isSelectingForPublication,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            failClosedForAccountChange()
+            return
+        }
+        let selected = items.filter { selectedPublicationMemoryIDs.contains($0.id) }
+        guard !selected.isEmpty else { return }
+        do {
+            let composer = try OwnerPublicationDraftComposerViewController(
+                accountLease: accountLease,
+                memories: selected,
+                client: publicationClient,
+                accountLeaseRuntime: accountLeaseRuntime
+            )
+            composer.onPublicationConfirmed = { [weak self] receipt in
+                guard let self else { return }
+                self.finishPublicationSelection()
+                self.navigationController?.popToViewController(self, animated: true)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    self.showPublicationAlert(
+                        title: "发布完成",
+                        message: "已生成不可变公开版本，共 \(receipt.itemCount) 项。"
+                    )
+                }
+            }
+            navigationController?.pushViewController(composer, animated: true)
+        } catch {
+            showPublicationAlert(title: "无法继续", message: error.localizedDescription)
+        }
     }
 
     @objc private func filterTapped() {
@@ -259,6 +344,53 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
         return values.isEmpty ? nil : "正在查看：\(values.joined(separator: " · "))"
     }
 
+    private func updateNavigationItems() {
+        if isSelectingForPublication {
+            navigationItem.leftBarButtonItem = cancelSelectionButton
+            continueButton.isEnabled = !selectedPublicationMemoryIDs.isEmpty
+            continueButton.title = selectedPublicationMemoryIDs.isEmpty
+                ? "下一步"
+                : "下一步（\(selectedPublicationMemoryIDs.count)）"
+            navigationItem.rightBarButtonItems = [continueButton]
+            refreshButton.isEnabled = false
+            filterButton.isEnabled = false
+        } else {
+            navigationItem.leftBarButtonItem = nil
+            var buttons = [refreshButton, filterButton]
+            if PublicationManagementM2AccessGate.isPublicationRouteAllowed {
+                buttons.insert(publishButton, at: 0)
+            }
+            navigationItem.rightBarButtonItems = buttons
+            refreshButton.isEnabled = !isLoading
+            filterButton.isEnabled = true
+            searchController.searchBar.isUserInteractionEnabled = true
+        }
+    }
+
+    private func finishPublicationSelection() {
+        isSelectingForPublication = false
+        selectedPublicationMemoryIDs.removeAll()
+        tableView.allowsMultipleSelection = false
+        for indexPath in tableView.indexPathsForSelectedRows ?? [] {
+            tableView.deselectRow(at: indexPath, animated: false)
+        }
+        updateNavigationItems()
+        tableView.reloadData()
+    }
+
+    private func updatePublicationSelection() {
+        continueButton.isEnabled = !selectedPublicationMemoryIDs.isEmpty
+        continueButton.title = selectedPublicationMemoryIDs.isEmpty
+            ? "下一步"
+            : "下一步（\(selectedPublicationMemoryIDs.count)）"
+    }
+
+    private func showPublicationAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "好", style: .default))
+        present(alert, animated: true)
+    }
+
     private func failClosedForAccountChange() {
         requestGeneration &+= 1
         isLoading = false
@@ -269,12 +401,22 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
         statusLabel.isHidden = false
         filterButton.isEnabled = false
         refreshButton.isEnabled = false
+        publishButton.isEnabled = false
+        continueButton.isEnabled = false
     }
 
     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
     func openFirstMemoryForUIQA() {
         guard !items.isEmpty else { return }
         tableView(tableView, didSelectRowAt: IndexPath(row: 0, section: 0))
+    }
+
+    func openPublicationComposerForUIQA() {
+        guard items.count >= 2 else { return }
+        publishTapped()
+        selectedPublicationMemoryIDs = Set(items.prefix(2).map(\.id))
+        updatePublicationSelection()
+        continuePublicationTapped()
     }
     #endif
 }
@@ -312,19 +454,37 @@ extension OwnerTruthFormalMemoryListViewController: UITableViewDataSource, UITab
         cell.detailTextLabel?.text = "\(item.memoryKind.formalMemoryTitle) · 第 \(item.currentVersion.versionNumber) 版 · \(item.currentVersion.createdAt.formalMemoryDateText)"
         cell.detailTextLabel?.font = DJDesignTokens.Font.label(12)
         cell.detailTextLabel?.textColor = DJDesignTokens.Color.textTertiary
-        cell.accessoryType = .disclosureIndicator
+        cell.accessoryType = isSelectingForPublication && selectedPublicationMemoryIDs.contains(item.id)
+            ? .checkmark
+            : (isSelectingForPublication ? .none : .disclosureIndicator)
         cell.accessibilityIdentifier = "owner-truth-formal-memory-row"
         cell.accessibilityLabel = "\(item.currentVersion.summary)，\(item.memoryKind.formalMemoryTitle)，第 \(item.currentVersion.versionNumber) 版"
         return cell
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
         if indexPath.row == items.count {
+            tableView.deselectRow(at: indexPath, animated: true)
             load(reset: false)
             return
         }
         let item = items[indexPath.row]
+        if isSelectingForPublication {
+            guard selectedPublicationMemoryIDs.count < PublicationDraftCreateCommand.maximumItemCount
+                    || selectedPublicationMemoryIDs.contains(item.id) else {
+                tableView.deselectRow(at: indexPath, animated: false)
+                showPublicationAlert(
+                    title: "已达到上限",
+                    message: "一次最多选择 \(PublicationDraftCreateCommand.maximumItemCount) 条正式记忆。"
+                )
+                return
+            }
+            selectedPublicationMemoryIDs.insert(item.id)
+            tableView.cellForRow(at: indexPath)?.accessoryType = .checkmark
+            updatePublicationSelection()
+            return
+        }
+        tableView.deselectRow(at: indexPath, animated: true)
         let detail = OwnerTruthFormalMemoryDetailViewController(
             accountLease: accountLease,
             memoryID: item.id,
@@ -338,6 +498,13 @@ extension OwnerTruthFormalMemoryListViewController: UITableViewDataSource, UITab
         #endif
         detail.onRevisionCommitted = { [weak self] in self?.load(reset: true) }
         navigationController?.pushViewController(detail, animated: true)
+    }
+
+    func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
+        guard isSelectingForPublication, indexPath.row < items.count else { return }
+        selectedPublicationMemoryIDs.remove(items[indexPath.row].id)
+        tableView.cellForRow(at: indexPath)?.accessoryType = .none
+        updatePublicationSelection()
     }
 
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
@@ -857,6 +1024,8 @@ private struct OwnerTruthFormalMemoryUIQAResult: Codable {
     let currentVersionVisible: Bool
     let historyVersionCount: Int
     let userDeleteAvailable: Bool
+    let publicationComposerVisible: Bool
+    let publicationPreviewVisible: Bool
 
     func write() throws -> URL {
         let documents = try FileManager.default.url(
@@ -875,16 +1044,25 @@ private struct OwnerTruthFormalMemoryUIQAResult: Codable {
 
 enum OwnerTruthFormalMemoryUIQASmoke {
     static let holdAtDetailArgument = "DJOwnerTruthFormalMemoryUIQAHoldAtDetail"
+    static let holdAtPublicationComposerArgument = "DJOwnerPublicationUIQAHoldAtComposer"
+    static let holdAtPublicationPreviewArgument = "DJOwnerPublicationUIQAHoldAtPreview"
 
     static func makeViewController(accountLease: AccountLease) -> OwnerTruthFormalMemoryListViewController {
         let client = OwnerTruthFormalMemoryUIQAClient(vaultID: OwnerTruthVaultID(accountLease.vaultId)!)
-        let list = OwnerTruthFormalMemoryListViewController(accountLease: accountLease, client: client)
+        let list = OwnerTruthFormalMemoryListViewController(
+            accountLease: accountLease,
+            client: client,
+            publicationClient: OwnerPublicationDraftUIQAClient()
+        )
         var consumedList = false
         list.onPageRenderedForUIQA = { controller in
             guard !consumedList else { return }
             consumedList = true
             if ProcessInfo.processInfo.arguments.contains(holdAtDetailArgument) {
                 controller.openFirstMemoryForUIQA()
+            } else if ProcessInfo.processInfo.arguments.contains(holdAtPublicationComposerArgument)
+                        || ProcessInfo.processInfo.arguments.contains(holdAtPublicationPreviewArgument) {
+                controller.openPublicationComposerForUIQA()
             } else {
                 finish(listVisible: true, detailVisible: false, historyVersionCount: 0)
             }
@@ -899,10 +1077,32 @@ enum OwnerTruthFormalMemoryUIQASmoke {
         }
     }
 
+    static func finishPublicationComposer() {
+        finish(
+            listVisible: true,
+            detailVisible: false,
+            historyVersionCount: 0,
+            publicationComposerVisible: true,
+            publicationPreviewVisible: false
+        )
+    }
+
+    static func finishPublicationPreview() {
+        finish(
+            listVisible: true,
+            detailVisible: false,
+            historyVersionCount: 0,
+            publicationComposerVisible: true,
+            publicationPreviewVisible: true
+        )
+    }
+
     private static func finish(
         listVisible: Bool,
         detailVisible: Bool,
-        historyVersionCount: Int
+        historyVersionCount: Int,
+        publicationComposerVisible: Bool = false,
+        publicationPreviewVisible: Bool = false
     ) {
         do {
             let url = try OwnerTruthFormalMemoryUIQAResult(
@@ -911,12 +1111,66 @@ enum OwnerTruthFormalMemoryUIQASmoke {
                 detailVisible: detailVisible,
                 currentVersionVisible: true,
                 historyVersionCount: historyVersionCount,
-                userDeleteAvailable: false
+                userDeleteAvailable: false,
+                publicationComposerVisible: publicationComposerVisible,
+                publicationPreviewVisible: publicationPreviewVisible
             ).write()
             print("[UI_QA] OwnerTruthFormalMemorySmoke completed result=\(url.path)")
         } catch {
             print("[UI_QA] OwnerTruthFormalMemorySmoke failed write=\(error.localizedDescription)")
         }
+    }
+}
+
+private final class OwnerPublicationDraftUIQAClient: PublicationDraftWriterClient {
+    func createPublicationDraft(
+        vaultID: String,
+        command: PublicationDraftCreateCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationDraftReceipt, Error>) -> Void
+    ) {
+        let publicationID = "00000000-0000-0000-0000-000000000201"
+        let draftID = "00000000-0000-0000-0000-000000000202"
+        let items: [[String: Any]] = command.items.enumerated().map { index, item in
+            [
+                "itemIndex": index,
+                "memoryVersionId": item.memoryVersionID,
+                "itemSnapshotHash": String(repeating: String(index + 1), count: 64),
+                "preview": ["title": item.publicTitle, "body": item.publicBody],
+                "thirdPartyReviewRequired": false,
+            ]
+        }
+        let object: [String: Any] = [
+            "schemaVersion": "publication-authority-v2",
+            "vaultId": vaultID,
+            "publicationId": publicationID,
+            "draftId": draftID,
+            "outcome": "created",
+            "state": "draft",
+            "expectedDraftRevision": 1,
+            "expectedDraftSnapshotHash": String(repeating: "a", count: 64),
+            "itemCount": items.count,
+            "items": items,
+            "requiresSecondConfirmation": true,
+            "thirdPartyReviewRequired": false,
+            "aiDisclosureRequired": true,
+        ]
+        guard let receipt = PublicationDraftReceipt(json: object) else {
+            completion(.failure(PublicationDraftAccessError.malformedResponse))
+            return
+        }
+        completion(.success(receipt))
+    }
+
+    func confirmPublicationDraft(
+        vaultID: String,
+        publicationID: String,
+        draftID: String,
+        command: PublicationDraftConfirmCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationDraftConfirmReceipt, Error>) -> Void
+    ) {
+        completion(.failure(PublicationDraftAccessError.unavailable))
     }
 }
 
@@ -937,7 +1191,16 @@ private final class OwnerTruthFormalMemoryUIQAClient: OwnerTruthFormalMemoryClie
                 backendJSONObject: [
                     "schemaVersion": OwnerTruthFormalMemoryPage.schemaVersion,
                     "vaultId": self.vaultID.rawValue,
-                    "memories": [memoryObject(currentVersion: versionObject(number: 4, current: true))],
+                    "memories": [
+                        memoryObject(
+                            memoryID: "00000000-0000-0000-0000-000000000101",
+                            currentVersion: versionObject(number: 4, current: true)
+                        ),
+                        memoryObject(
+                            memoryID: "00000000-0000-0000-0000-000000000102",
+                            currentVersion: versionObject(number: 5, current: true)
+                        ),
+                    ],
                     "nextCursor": NSNull(),
                 ],
                 expectedVaultID: self.vaultID
@@ -959,6 +1222,7 @@ private final class OwnerTruthFormalMemoryUIQAClient: OwnerTruthFormalMemoryClie
                     "schemaVersion": OwnerTruthFormalMemoryDetail.schemaVersion,
                     "vaultId": self.vaultID.rawValue,
                     "memory": memoryObject(
+                        memoryID: "00000000-0000-0000-0000-000000000101",
                         currentVersion: versions[0],
                         versions: versions,
                         historyTruncated: true
@@ -981,12 +1245,13 @@ private final class OwnerTruthFormalMemoryUIQAClient: OwnerTruthFormalMemoryClie
     }
 
     private func memoryObject(
+        memoryID: String,
         currentVersion: [String: Any],
         versions: [[String: Any]]? = nil,
         historyTruncated: Bool = false
     ) -> [String: Any] {
         var object: [String: Any] = [
-            "memoryId": "00000000-0000-0000-0000-000000000101",
+            "memoryId": memoryID,
             "memoryKind": "experience",
             "perspectiveType": "firstPerson",
             "epistemicStatus": "recalled",

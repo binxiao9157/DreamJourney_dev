@@ -10,9 +10,15 @@ OUTPUT_DIR="$OUTPUT_ROOT/$RUN_ID"
 INSTALL_DIR="$OUTPUT_DIR/install"
 LIST_LOG="$OUTPUT_DIR/list-runtime.log"
 DETAIL_LOG="$OUTPUT_DIR/detail-runtime.log"
+PUBLICATION_LOG="$OUTPUT_DIR/publication-runtime.log"
+PUBLICATION_PREVIEW_LOG="$OUTPUT_DIR/publication-preview-runtime.log"
 LIST_SCREENSHOT="$OUTPUT_DIR/01-formal-memory-list.png"
 DETAIL_SCREENSHOT="$OUTPUT_DIR/02-formal-memory-detail.png"
+PUBLICATION_SCREENSHOT="$OUTPUT_DIR/03-publication-composer.png"
+PUBLICATION_PREVIEW_SCREENSHOT="$OUTPUT_DIR/04-publication-preview.png"
 RESULT_COPY="$OUTPUT_DIR/owner-truth-formal-memory-uiqa-result.json"
+PUBLICATION_RESULT_COPY="$OUTPUT_DIR/owner-publication-composer-uiqa-result.json"
+PUBLICATION_PREVIEW_RESULT_COPY="$OUTPUT_DIR/owner-publication-preview-uiqa-result.json"
 
 mkdir -p "$OUTPUT_DIR"
 cd "$ROOT_DIR"
@@ -61,7 +67,27 @@ grep -Eq '"detailVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_COPY"
 grep -Eq '"historyVersionCount"[[:space:]]*:[[:space:]]*3' "$RESULT_COPY"
 grep -Eq '"userDeleteAvailable"[[:space:]]*:[[:space:]]*false' "$RESULT_COPY"
 
+run_case \
+  "$PUBLICATION_LOG" \
+  "$PUBLICATION_SCREENSHOT" \
+  DJEnablePublicationManagementM2QA \
+  DJOwnerPublicationUIQAHoldAtComposer
+cp "$RESULT_FILE" "$PUBLICATION_RESULT_COPY"
+grep -Eq '"publicationComposerVisible"[[:space:]]*:[[:space:]]*true' "$PUBLICATION_RESULT_COPY"
+
+run_case \
+  "$PUBLICATION_PREVIEW_LOG" \
+  "$PUBLICATION_PREVIEW_SCREENSHOT" \
+  DJEnablePublicationManagementM2QA \
+  DJOwnerPublicationUIQAHoldAtPreview
+cp "$RESULT_FILE" "$PUBLICATION_PREVIEW_RESULT_COPY"
+grep -Eq '"publicationPreviewVisible"[[:space:]]*:[[:space:]]*true' "$PUBLICATION_PREVIEW_RESULT_COPY"
+
 echo "Formal-memory UIQA passed"
 echo "Result: $RESULT_COPY"
 echo "List screenshot: $LIST_SCREENSHOT"
 echo "Detail screenshot: $DETAIL_SCREENSHOT"
+echo "Publication composer result: $PUBLICATION_RESULT_COPY"
+echo "Publication composer screenshot: $PUBLICATION_SCREENSHOT"
+echo "Publication preview result: $PUBLICATION_PREVIEW_RESULT_COPY"
+echo "Publication preview screenshot: $PUBLICATION_PREVIEW_SCREENSHOT"

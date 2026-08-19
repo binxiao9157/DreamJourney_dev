@@ -12657,7 +12657,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationDraftReceipt, Error>) -> Void
     ) {
         let usesQAContract = PublicationManagementM2QAGate.isEnabled
-        guard usesQAContract || PublicationManagementM2AccessGate.isManagementRouteAllowed else {
+        guard usesQAContract || PublicationManagementM2AccessGate.isPublicationRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationDraftAccessError.disabled))
             }
@@ -12714,7 +12714,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationDraftConfirmReceipt, Error>) -> Void
     ) {
         let usesQAContract = PublicationManagementM2QAGate.isEnabled
-        guard usesQAContract || PublicationManagementM2AccessGate.isManagementRouteAllowed else {
+        guard usesQAContract || PublicationManagementM2AccessGate.isPublicationRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationDraftAccessError.disabled))
             }

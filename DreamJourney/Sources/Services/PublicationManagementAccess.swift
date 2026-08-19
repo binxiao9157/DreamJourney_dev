@@ -32,6 +32,13 @@ enum PublicationLifecycleM2QAGate {
 }
 
 enum PublicationManagementM2AccessGate {
+    static var isPublicationRouteAllowed: Bool {
+        PublicationManagementM2QAGate.isEnabled
+            || FeatureGateService.shared.isServerPolicyManagedRouteAllowed(
+                .publicationManagementM2
+            )
+    }
+
     static var isManagementRouteAllowed: Bool {
         if PublicationManagementM2QAGate.isEnabled {
             return true
@@ -571,7 +578,7 @@ final class PublicationDraftUseCase {
         client: PublicationDraftWriterClient,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         isEnabled: @escaping () -> Bool = {
-            PublicationManagementM2AccessGate.isManagementRouteAllowed
+            PublicationManagementM2AccessGate.isPublicationRouteAllowed
         }
     ) {
         self.client = client
@@ -610,10 +617,6 @@ final class PublicationDraftUseCase {
                 completion(.failure(PublicationDraftAccessError.responseScopeMismatch))
                 return
             }
-            guard !receipt.thirdPartyReviewRequired else {
-                completion(.failure(PublicationDraftAccessError.thirdPartyReviewRequired))
-                return
-            }
             completion(.success(receipt))
         }
     }
@@ -629,10 +632,17 @@ final class PublicationDraftUseCase {
             return
         }
         guard accountLeaseRuntime.validate(accountLease, at: .request).allowed,
-              draft.vaultID == accountLease.vaultId,
-              command.expectedDraftRevision == draft.expectedDraftRevision,
-              command.expectedDraftSnapshotHash == draft.expectedDraftSnapshotHash else {
+              draft.vaultID == accountLease.vaultId else {
             completion(.failure(PublicationDraftAccessError.accountLeaseInvalid))
+            return
+        }
+        guard !draft.thirdPartyReviewRequired else {
+            completion(.failure(PublicationDraftAccessError.thirdPartyReviewRequired))
+            return
+        }
+        guard command.expectedDraftRevision == draft.expectedDraftRevision,
+              command.expectedDraftSnapshotHash == draft.expectedDraftSnapshotHash else {
+            completion(.failure(PublicationDraftAccessError.invalidInput))
             return
         }
         client.confirmPublicationDraft(

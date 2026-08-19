@@ -288,6 +288,36 @@ final class PublicationLifecycleAccessTests: XCTestCase {
 }
 
 final class PublicationDraftAccessTests: XCTestCase {
+    func testEditorStatePreservesEditedOrderInCreateCommand() throws {
+        let firstID = UUID().uuidString.lowercased()
+        let secondID = UUID().uuidString.lowercased()
+        var state = try OwnerPublicationDraftEditorState(items: [
+            OwnerPublicationDraftEditorItem(
+                memoryVersionID: firstID,
+                memoryKindTitle: "经历",
+                sensitivityTitle: "普通内容",
+                publicTitle: "第一章",
+                publicBody: "第一段"
+            ),
+            OwnerPublicationDraftEditorItem(
+                memoryVersionID: secondID,
+                memoryKindTitle: "感受",
+                sensitivityTitle: "敏感内容",
+                publicTitle: "第二章",
+                publicBody: "第二段"
+            ),
+        ])
+
+        state.move(from: 0, to: 1)
+        var edited = state.items[0]
+        edited.publicTitle = "更新后的第二章"
+        state.update(edited, at: 0)
+        let command = try state.makeCommand()
+
+        XCTAssertEqual(command.items.map(\.memoryVersionID), [secondID, firstID])
+        XCTAssertEqual(command.items.first?.publicTitle, "更新后的第二章")
+    }
+
     func testOrderedDraftCommandPreservesOrderAndRejectsDuplicates() throws {
         let firstID = UUID().uuidString.lowercased()
         let secondID = UUID().uuidString.lowercased()
@@ -419,6 +449,44 @@ final class PublicationDraftAccessTests: XCTestCase {
         wait(for: [expectation], timeout: 1)
     }
 
+    func testConfirmationStopsBeforeClientWhenThirdPartyReviewIsRequired() throws {
+        let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
+        runtime.publish(session: makeSession(subjectID: "owner-a", vaultID: "vault-a", generation: 4))
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-a"))
+        let client = PublicationDraftWriterClientStub()
+        let draft = try XCTUnwrap(PublicationDraftReceipt(json: draftJSON(
+            vaultID: "vault-a",
+            publicationID: UUID().uuidString.lowercased(),
+            draftID: UUID().uuidString.lowercased(),
+            firstID: UUID().uuidString.lowercased(),
+            secondID: UUID().uuidString.lowercased(),
+            thirdPartyReviewRequired: true
+        )))
+        let command = try PublicationDraftConfirmCommand(
+            expectedDraftRevision: draft.expectedDraftRevision,
+            expectedDraftSnapshotHash: draft.expectedDraftSnapshotHash,
+            secondConfirmation: true
+        )
+        let useCase = PublicationDraftUseCase(
+            client: client,
+            accountLeaseRuntime: runtime,
+            isEnabled: { true }
+        )
+
+        let expectation = expectation(description: "third-party review blocks confirmation")
+        useCase.confirm(draft: draft, command: command, accountLease: lease) { result in
+            guard case let .failure(error) = result else {
+                XCTFail("Expected third-party review to block confirmation")
+                expectation.fulfill()
+                return
+            }
+            XCTAssertEqual(error as? PublicationDraftAccessError, .thirdPartyReviewRequired)
+            XCTAssertEqual(client.confirmCallCount, 0)
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1)
+    }
+
     private func makeDraftReceiptItem(
         index: Int,
         memoryVersionID: String,
@@ -438,7 +506,8 @@ final class PublicationDraftAccessTests: XCTestCase {
         publicationID: String,
         draftID: String,
         firstID: String,
-        secondID: String
+        secondID: String,
+        thirdPartyReviewRequired: Bool = false
     ) -> [String: Any] {
         [
             "schemaVersion": "publication-authority-v2",
@@ -455,7 +524,7 @@ final class PublicationDraftAccessTests: XCTestCase {
                 makeDraftReceiptItem(index: 1, memoryVersionID: secondID, hash: "c"),
             ],
             "requiresSecondConfirmation": true,
-            "thirdPartyReviewRequired": false,
+            "thirdPartyReviewRequired": thirdPartyReviewRequired,
             "aiDisclosureRequired": true,
         ]
     }
@@ -527,6 +596,7 @@ private final class PublicationDraftWriterClientStub: PublicationDraftWriterClie
     var createResult: Result<PublicationDraftReceipt, Error>?
     var confirmResult: Result<PublicationDraftConfirmReceipt, Error>?
     var beforeCreateCompletion: (() -> Void)?
+    var confirmCallCount = 0
 
     func createPublicationDraft(
         vaultID: String,
@@ -546,6 +616,7 @@ private final class PublicationDraftWriterClientStub: PublicationDraftWriterClie
         accountLease: AccountLease,
         completion: @escaping (Result<PublicationDraftConfirmReceipt, Error>) -> Void
     ) {
+        confirmCallCount += 1
         completion(confirmResult ?? .failure(PublicationDraftAccessError.unavailable))
     }
 }
