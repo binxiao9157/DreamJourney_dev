@@ -1,7 +1,7 @@
 # PC-D1 Publication Owner 创建、撤回与版本审计子闭环状态
 
 日期：2026-08-19
-状态：`INTERNAL_READY`
+状态：`COMPLETE_WITH_EXTERNAL_GATES`
 Work Item：`PC-D1`
 
 ## 本轮完成
@@ -21,12 +21,12 @@ Work Item：`PC-D1`
 - 模拟器 UIQA 通过：`tmp/visual-qa/product-v4/owner-truth-formal-memory-smoke/20260819-pc-d1-publication-flow/`。
 - 关键截图：`03-publication-composer.png`、`04-publication-preview.png`。
 
-## 未完成边界
+## 当时未完成边界（本轮已关闭代码项）
 
-PC-D1 不能标记为完整完成，剩余任务按顺序为：
+初始交接时 PC-D1 尚有以下两项：
 
-1. ShareGrant 创建、查看和撤销管理。
-2. 发布与 Visitor 的法律、安全、数据地域和真实流量审批。
+1. ShareGrant 创建、查看和撤销管理：已由后文记录的 `9a6d85b / 0464e31a` 关闭。
+2. 发布与 Visitor 的法律、安全、数据地域和真实流量审批：继续作为外部 Gate 保留，不计为代码闭环完成。
 
 “暂停”当前后端语义用于冲突阻断，不等同于可恢复的产品暂停；在恢复合同明确前不向普通用户暴露可逆暂停操作。
 
@@ -91,6 +91,24 @@ Backend `3c9b9a3`、部署热修 `6272bb6`、路由清单提交 `459a5dd` 与 iO
 - Backend `459a5dd` 已部署，schema head 为 `0103`，线上 `/ready`、236 条路由认证、迁移前 `0102` 与迁移后 `0103` 验证备份均通过。
 - 部署时同步重建既有异步 Worker，消除了旧镜像因数据库 head 已到 `0102` 而报 `migrationHeadAhead` 的重启状态；部署后相关 Worker 均为 running。
 
+## ShareGrant Owner 管理闭环补充
+
+Backend `9a6d85b`、migration `0104` 与 iOS `0464e31a` 已关闭普通 Owner 的注册账户授权管理代码闭环：
+
+1. 正式请求仅接受已注册账户的手机号或 `user_` 账户 ID，不开放匿名链接，也不接受客户端指定内部调用限额或接收人主体 ID。
+2. 服务端解析并验证接收账户，拒绝未知、已删除、已停用和本人账户；数据库只保存接收人主体 hash 与脱敏展示标签，不保存原始手机号或账户 ID。
+3. Grant 绑定 Publication、不可变 PublicationVersion、接收人、有效期和撤销状态；撤销后已有 VisitorSession 立即失效。
+4. iOS 提供创建邀请、脱敏授权列表和二次确认撤销；产品界面不显示内部安全调用余量，签发凭证只在当次响应内生成临时深链并用于系统分享。
+5. AccountLease 在请求和提交边界均校验，账户切换后的旧授权响应不会进入当前 UI。
+
+验证：
+
+- 后端 154 项 Publication 测试、19 项路由认证测试与 Python compileall 通过。
+- iOS 12 项 Publication XCTest与静态 scope gate 通过。
+- UIQA：`tmp/visual-qa/prd-stitch-ui/publication-management-m2-smoke/20260819-214129/`，邀请、授权列表、撤销和修订入口均实际渲染。
+- generic iPhoneOS build：`tmp/visual-qa/prd-stitch-ui/iphoneos-generic-build/20260819-pc-d1-share-grant/report.md`，Bundle ID `com.yxj.dreamjourney.app`，Team `2BTR77V3R8`。
+- Backend `9a6d85b` 已部署，schema head 为 `0104`；线上 `/ready`、部署态 readiness、临时 PostgreSQL Publication/ShareGrant/Visitor smoke 和 236 条路由认证均通过，迁移前后备份成功。
+
 ## 当前交接点
 
-不可变版本修订已关闭。下一项为 ShareGrant 创建、查看和撤销管理；外部发布审批仍单独保留，不用 mock 结果冒充真实用户公开放量。
+PC-D1 代码闭环完成，外部发布审批仍保持默认关闭。下一项为 PC-D2：让受邀注册账户通过正式入口建立 VisitorSession、读取 PublicProjection、执行文字/实时语音查询，并在撤权、过期、暂停或跨 Vault 时立即失败关闭。

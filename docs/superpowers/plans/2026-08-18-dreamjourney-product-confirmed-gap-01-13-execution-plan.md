@@ -22,12 +22,12 @@
 
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
-| `COMPLETE` | 13 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2、PC-B3、PC-C2 |
+| `COMPLETE` | 14 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2、PC-B3、PC-C2、PC-D1 代码闭环 |
 | `WAITING_EXTERNAL_CONFIGURATION` | 2 | PC-A0：真实短信 Provider 待配置；PC-C1：代码与默认关闭部署完成，真实私有对象存储、内容安全扫描器和视觉 Provider 待配置 |
-| 当前执行项 | 1 | PC-D1：Publication Owner App 闭环 |
-| 后续待执行 | 3 | PC-D1 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+| 当前执行项 | 1 | PC-D2：Visitor 正式产品闭环 |
+| 后续待执行 | 2 | PC-D2 之后的 PC-E1、PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：PC-D1 创建、撤回、版本审计和不可变版本修订子闭环 iOS 为 `bae9e9a4`，Backend 功能提交为 `3c9b9a3`、部署热修为 `6272bb6`、路由清单提交为 `459a5dd`，服务器运行 `459a5dd`，migration head 为 `0103`。后端 PublicationDraft 已支持有序多条 MemoryVersion 与 item 级公开标题、正文、快照 hash 和披露字段；普通 Owner 已可完成多选创建、公开正文编辑、预览、隐私/AI 披露、二次确认、带风险说明的撤回、不可变版本审计，并可从当前版本创建修订 Draft。确认修订会原子生成递增的新 PublicationVersion/PublicProjection，旧版本保留为 `superseded` 且不可原地修改；陈旧 Draft 失败关闭，确认命令在版本被替代后仍可幂等重放。iOS 修订请求不发送 private MemoryVersion/Source 标识，服务端从当前不可变版本解析并复核其权威来源。部署态 PostgreSQL 已验证创建、确认、修订、旧版本保留、唯一 active Projection、Owner 隔离、Visitor 生命周期和 236 条路由认证。PC-D1 仍为 `IN_PROGRESS`：下一交接点是 ShareGrant 创建、查看和撤销管理；真实短信 Provider、APNs 真机到达、腾讯 COS、内容安全扫描器、真实视觉 Provider 和发布/Visitor 外部审批分别保留为外部 Gate。
+当前代码与部署交接：PC-D1 代码闭环 iOS 为 `0464e31a`，Backend 为 `9a6d85b`，服务器运行 `9a6d85b`，migration head 为 `0104`。后端 PublicationDraft 已支持有序多条 MemoryVersion、不可变版本修订和已注册账户 ShareGrant；正式授权请求只接收手机号或账户 ID，服务端解析真实接收人，只持久化主体 hash 与脱敏标签。普通 Owner 的 iOS 管理流已覆盖创建、公开副本编辑、预览、二次确认、撤回、版本审计、创建授权、查看授权和撤销授权；产品界面不展示内部安全调用计数，原始授权凭证只在签发响应中短暂用于分享。部署态 PostgreSQL 已验证发布、版本、授权、Visitor 生命周期、撤权和 236 条路由认证。PC-D1 标记为 `COMPLETE_WITH_EXTERNAL_GATES`：发布/Visitor 外部审批仍保持默认关闭，当前连续执行交接点为 PC-D2 Visitor 正式产品闭环。真实短信 Provider、APNs 真机到达、腾讯 COS、内容安全扫描器和真实视觉 Provider 继续分别保留为外部 Gate。
 
 每轮只需读取：
 
@@ -537,7 +537,7 @@ iOS：更新页面范围说明、下载、预览、系统分享、文件保护�
 
 关联：GAP-09、PUB-001。
 
-状态：`IN_PROGRESS`（2026-08-19）。Backend `459a5dd` 和 migration `0103`、iOS `bae9e9a4` 已完成有序多条 Draft/Version、普通 Owner 创建/撤回、不可变版本审计，以及“当前版本 -> 修订 Draft -> 二次确认 -> 新不可变版本”的完整子闭环。修订保持 item 集合与顺序，客户端只提交公开副本文字；服务端锁定并复核基线版本、原子替代唯一 active Projection、保留旧版本审计，并拒绝陈旧 Draft。定向后端 96 项测试、iOS 12 项 XCTest、静态 Gate、模拟器 UIQA、带 `2BTR77V3R8/com.yxj.dreamjourney.app` 覆盖的 generic iPhoneOS build、部署态 PostgreSQL smoke、236 条路由认证和迁移前后备份均通过。剩余顺序固定为：ShareGrant 创建/查看/撤销管理及外部发布审批。详细证据见 `docs/superpowers/status/2026-08-19-pc-d1-publication-owner-creation.md`。
+状态：`COMPLETE_WITH_EXTERNAL_GATES`（2026-08-19）。Backend `9a6d85b` 和 migration `0104`、iOS `0464e31a` 已完成有序多条 Draft/Version、普通 Owner 创建/撤回、不可变版本审计、“当前版本 -> 修订 Draft -> 二次确认 -> 新不可变版本”，以及已注册账户 ShareGrant 创建/查看/撤销管理。正式 Grant 请求只接收手机号或账户 ID；服务端验证接收账户状态并只持久化主体 hash 与脱敏标签，iOS 不展示安全调用余量，账户切换后的旧响应失败关闭。后端 154 项 Publication 测试和 19 项路由认证测试、iOS 12 项 Publication XCTest、静态 Gate、模拟器 UIQA、带 `2BTR77V3R8/com.yxj.dreamjourney.app` 覆盖的 generic iPhoneOS build、部署态 PostgreSQL smoke、236 条路由认证和迁移前后备份均通过。外部发布、法律、安全和数据地域审批仍单独保留，未因此开放真实用户流量。详细证据见 `docs/superpowers/status/2026-08-19-pc-d1-publication-owner-creation.md`。
 
 后端：
 
