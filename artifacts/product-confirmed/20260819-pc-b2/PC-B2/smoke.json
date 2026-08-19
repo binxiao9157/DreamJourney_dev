@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "owner-truth-query-ranked-context-pc-b2-smoke-v1",
+  "status": "passed",
+  "schemaHead": "0098",
+  "assertions": {
+    "naturalLanguageRelevance": true,
+    "candidateLimit20": true,
+    "finalSelectionLimit8": true,
+    "generationContextLimit4096": true,
+    "authorityCurrentHashStatusRevalidation": true,
+    "noHitReturnsGapWithoutProviderCall": true,
+    "searchProjectionFailureIsExplicitFallback": true,
+    "crossAccountIsolation": true
+  }
+}

@@ -3,7 +3,7 @@
 日期：2026-08-18
 状态：`IN_PROGRESS`
 日常开发入口：`CANONICAL_EXECUTION_PLAN`
-执行控制版本：V1.9
+执行控制版本：V1.10
 
 ## 0. 目标和基线
 
@@ -22,12 +22,12 @@
 
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
-| `COMPLETE` | 10 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1 |
+| `COMPLETE` | 11 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2 |
 | `WAITING_EXTERNAL_CONFIGURATION` | 1 | PC-A0：代码、production-postgres 部署和非真机验收已完成；真实短信 Provider 待配置 |
-| 当前执行项 | 1 | PC-B2：query-ranked Owner 检索 |
-| 后续待执行 | 8 | PC-B2 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+| 当前执行项 | 1 | PC-B3：Citation 与 Grounding 收敛 |
+| 后续待执行 | 7 | PC-B3 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：PC-B1 Backend 为 `d0718b7`，iOS 为 `a437c602`，服务器已部署 `d0718b7`，migration head 保持 `0098`。Owner 已可从统一入口分页、搜索和按 kind/facet 浏览 current 正式记忆，读取 current + 3 个历史快照，并通过内存草稿、差异预览和二次确认创建不可变后继版本；无用户历史删除路由。production-postgres smoke 已验证陈旧写冲突、幂等回放、内部完整版本账本和 PublicationVersion 固定不变；模拟器 UIQA 与 225 项 iOS Owner Truth 合同测试通过。当前进入 PC-B2；真实短信 Provider 仍为 PC-A0 外部 Gate，不阻塞后续非依赖任务，也不得据此宣称生产 OTP 恢复完成。
+当前代码与部署交接：PC-B2 Backend 为 `7bd935d`，iOS 功能基线为 `a437c602`、PC-B1 证据基线为 `2f6bd31d`，服务器已部署 `7bd935d`，migration head 保持 `0098`。生产 Owner Context 已改为 query-ranked SearchDocument：候选最多 20、最终最多 8、生成上下文最多 4,096 字，并复核 Authority Epoch、current version、content hash 和状态；自然语言相关性、无命中 gap、SearchDocument 不可用 fallback 以及 production-postgres deployed smoke 均已通过。当前进入 PC-B3；真实短信 Provider 仍为 PC-A0 外部 Gate，不阻塞后续非依赖任务，也不得据此宣称生产 OTP 恢复完成。
 
 每轮只需读取：
 
@@ -431,6 +431,8 @@ iOS：
 验证：相关性 fixture、删除/纠正后旧版本不命中、撤权、跨账号、容量和延迟预算。
 
 完成定义：Owner 回答使用与问题相关的 current 正式记忆。
+
+状态：`COMPLETE`（2026-08-19）。Backend 将生产 Owner Context 切换到 `deterministicTextFallback` query-ranked SearchDocument，强制候选 20、最终 8 和 4,096 字边界；每条结果在进入上下文前复核 Authority Epoch、current MemoryVersion、content hash 与状态。无命中时直接返回 `memoryGrounding=gap` 且不调用生成 Provider；SearchDocument 缺失时只记录明确 deterministic fallback，不扩大 KBLite/Legacy 数据源。Backend `f093fd6` 完成功能实现，`cee7122/7bd935d` 固化 production-postgres smoke checkpoint，`7bd935d` 已部署，migration head 保持 `0098`。证据见 `artifacts/product-confirmed/20260819-pc-b2/PC-B2/` 和 `docs/superpowers/status/2026-08-19-pc-b2-query-ranked-owner-context.md`。当前连续执行交接点为 `PC-B3`。
 
 ### PC-B3 Citation 与 Grounding 收敛
 

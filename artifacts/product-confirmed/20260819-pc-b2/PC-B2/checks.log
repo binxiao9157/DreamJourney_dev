@@ -1,0 +1,12 @@
+PC-B2 targeted backend tests: PASS (88)
+SearchDocument projection worker gate: PASS (24)
+Memory-search offline evaluation gate: PASS (4)
+Python compileall: PASS
+git diff --check: PASS
+Production deployment: PASS (backend 7bd935d, migration 0098)
+Production PostgreSQL Owner Truth smoke: PASS
+/ready after deployed smoke: PASS
+
+Known baseline, outside PC-B2 scope:
+- Full discovery has 49 order-dependent shared PostgreSQL pool/global-state errors.
+- Route inventory tests expect 219 routes while the existing application exposes 222.

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "status": "ready",
+  "components": {
+    "database": "ready",
+    "schema": "ready",
+    "auth": "ready",
+    "incident": "ready"
+  },
+  "capabilities": {
+    "contextAuthority": true,
+    "memoryProjectionWorker": true,
+    "searchProjectionWorker": true
+  },
+  "migrationHead": "0098",
+  "backendRevision": "7bd935df9261d1ef82262199136b41db52f4c082"
+}

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "dreamjourney-product-confirmed-evidence-v1",
+  "workItem": "PC-B2",
+  "status": "COMPLETE",
+  "capturedAt": "2026-08-19T15:48:51+08:00",
+  "commits": {
+    "backendFeature": "f093fd6f0536b0899dc7c8c878b4de8e1506fb7f",
+    "backendDeployed": "7bd935df9261d1ef82262199136b41db52f4c082",
+    "iosFunctionalBaseline": "a437c602533e92be2dec2be0a1b552add4d1767e"
+  },
+  "deployment": {
+    "backendRevision": "7bd935df9261d1ef82262199136b41db52f4c082",
+    "migrationHead": "0098",
+    "readiness": "ready"
+  },
+  "checks": [
+    "pc-b2-targeted-backend-tests",
+    "search-document-projection-worker-gate",
+    "memory-search-offline-evaluation-gate",
+    "backend-owner-truth-postgres-smoke",
+    "python-compileall",
+    "git-diff-check"
+  ],
+  "containsCredentials": false
+}
