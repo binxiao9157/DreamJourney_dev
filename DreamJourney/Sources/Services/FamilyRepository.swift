@@ -281,7 +281,111 @@ final class FamilyRepository {
     }
 
     func remove(id: String) {
-        // PRD: 家庭成员通过手机号邀请后不可删除；退出/解除关系未明确，暂不实现。
+        // Relationship termination is server-authoritative and must use
+        // terminateRelationship(member:completion:); local deletion is forbidden.
+    }
+
+    func terminateRelationship(
+        member: FamilyMember,
+        completion: @escaping (Result<FamilyRelationshipTerminationReceiptContract, Error>) -> Void
+    ) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async {
+                self.terminateRelationship(member: member, completion: completion)
+            }
+            return
+        }
+        let ownerUserId = activeOwnerUserId
+        guard !ownerUserId.isEmpty else {
+            completion(.failure(FamilyRepositoryError.noActiveOwner))
+            return
+        }
+        guard member.relationshipOwnerUserId == ownerUserId else {
+            completion(.failure(FamilyRepositoryError.ownerMismatch))
+            return
+        }
+        guard member.relationshipStatus != .revoked,
+              !member.relationshipId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              member.relationshipEpoch >= 1,
+              let accountLease = captureAccountLease(for: ownerUserId),
+              isCurrentAccountLease(accountLease, ownerUserId: ownerUserId, at: .request) else {
+            completion(.failure(FamilyRepositoryError.staleResponse))
+            return
+        }
+        let capturedGeneration = userGeneration
+        DreamJourneyBackendClient.shared.terminateFamilyRelationship(
+            accountLease: accountLease,
+            relationshipId: member.relationshipId,
+            expectedEpoch: member.relationshipEpoch
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                guard self.userGeneration == capturedGeneration,
+                      self.activeOwnerUserId == ownerUserId,
+                      self.isCurrentAccountLease(
+                        accountLease,
+                        ownerUserId: ownerUserId,
+                        at: .commit
+                      ) else {
+                    self.deliver(
+                        .failure(FamilyRepositoryError.staleResponse),
+                        accountLease: accountLease,
+                        ownerUserId: ownerUserId,
+                        completion: completion
+                    )
+                    return
+                }
+                switch result {
+                case .success(let receipt):
+                    guard receipt.ownerSubjectId == ownerUserId,
+                          receipt.memberSubjectId == member.memberSubjectId else {
+                        self.deliver(
+                            .failure(FamilyRepositoryError.ownerMismatch),
+                            accountLease: accountLease,
+                            ownerUserId: ownerUserId,
+                            completion: completion
+                        )
+                        return
+                    }
+                    if let index = self.members.firstIndex(where: {
+                        $0.relationshipId == receipt.relationshipId
+                    }) {
+                        self.members[index].relationshipStatus = .revoked
+                        self.members[index].relationshipEpoch = receipt.relationshipEpoch
+                        self.members[index].grantEpoch += 1
+                        self.members[index].accessGrants = []
+                        self.members[index].accessStatus = "revoked"
+                        self.members[index].invitationStatus = "revoked"
+                        self.members[index].isOnline = false
+                        self.members[index].lastUpdated = "家庭关系已解除"
+                    }
+                    self.authorizationFreshness.completeSuccess()
+                    KBLiteManager.shared.familyAuthorizationGenerationDidChange(
+                        ownerUserId: ownerUserId,
+                        generation: self.authorizationFreshness.generation
+                    )
+                    KnowledgeSyncCoordinator.shared.familyAuthorizationDidRefresh(
+                        ownerUserId: ownerUserId,
+                        authorizationChanged: true
+                    )
+                    DigitalHumanContextStore.shared.reconcileFamilyAuthorization()
+                    self.notifyMembersChanged(accountLease: accountLease)
+                    self.deliver(
+                        .success(receipt),
+                        accountLease: accountLease,
+                        ownerUserId: ownerUserId,
+                        completion: completion
+                    )
+                case .failure(let error):
+                    self.deliver(
+                        .failure(error),
+                        accountLease: accountLease,
+                        ownerUserId: ownerUserId,
+                        completion: completion
+                    )
+                }
+            }
+        }
     }
 
     func get(by id: String) -> FamilyMember? {

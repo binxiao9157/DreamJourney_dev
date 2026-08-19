@@ -249,8 +249,24 @@ final class FamilyCircleViewController: UIViewController {
         return button
     }()
 
+    private lazy var leaveFamilyButton: UIButton = {
+        var configuration = UIButton.Configuration.tinted()
+        configuration.image = UIImage(systemName: "rectangle.portrait.and.arrow.right")
+        configuration.imagePadding = 7
+        configuration.title = "退出家庭"
+        configuration.baseForegroundColor = .systemRed
+        configuration.cornerStyle = .medium
+        let button = UIButton(configuration: configuration)
+        button.isHidden = true
+        button.accessibilityIdentifier = "familyRelationshipLeaveButton"
+        button.addTarget(self, action: #selector(leaveFamilyTapped), for: .touchUpInside)
+        return button
+    }()
+
     private lazy var contributionActionsStack: UIStackView = {
-        let stack = UIStackView(arrangedSubviews: [contributeMemoryButton, reviewContributionsButton])
+        let stack = UIStackView(
+            arrangedSubviews: [contributeMemoryButton, reviewContributionsButton, leaveFamilyButton]
+        )
         stack.axis = .horizontal
         stack.distribution = .fillEqually
         stack.spacing = 10
@@ -277,7 +293,13 @@ final class FamilyCircleViewController: UIViewController {
     private var tableHeightConstraint: NSLayoutConstraint?
     private var contributionActionsHeightConstraint: NSLayoutConstraint?
     private var contributorGrants: [FamilyContributionGrantContract] = []
+    private var familyMemberships: [FamilyRelationshipMembershipContract] = []
     private var pendingOwnerContributionCount = 0
+
+    private var activeMemberRelationships: [FamilyRelationshipMembershipContract] {
+        guard let subjectId = UserManager.shared.currentUser?.id else { return [] }
+        return familyMemberships.filter { $0.isActiveMember(for: subjectId) }
+    }
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -421,9 +443,19 @@ final class FamilyCircleViewController: UIViewController {
         guard let user = UserManager.shared.currentUser,
               let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id) else {
             contributorGrants = []
+            familyMemberships = []
             pendingOwnerContributionCount = 0
             updateFamilyContributionActions()
             return
+        }
+
+        DreamJourneyBackendClient.shared.listFamilyRelationshipMemberships(
+            accountLease: accountLease
+        ) { [weak self] result in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else { return }
+            self.familyMemberships = (try? result.get()) ?? []
+            self.updateFamilyContributionActions()
         }
 
         DreamJourneyBackendClient.shared.listContributorFamilyContributionGrants(
@@ -463,10 +495,12 @@ final class FamilyCircleViewController: UIViewController {
 
     private func updateFamilyContributionActions() {
         contributeMemoryButton.isHidden = contributorGrants.isEmpty
+        leaveFamilyButton.isHidden = activeMemberRelationships.isEmpty
         reviewContributionsButton.isHidden = pendingOwnerContributionCount == 0
         reviewContributionsButton.configuration?.title = "待审核贡献 \(pendingOwnerContributionCount)"
         contributionActionsStack.isHidden = contributeMemoryButton.isHidden
             && reviewContributionsButton.isHidden
+            && leaveFamilyButton.isHidden
         contributionActionsHeightConstraint?.constant = contributionActionsStack.isHidden ? 0 : 44
     }
 
@@ -543,6 +577,81 @@ final class FamilyCircleViewController: UIViewController {
         navigationController?.pushViewController(review, animated: true)
     }
 
+    @objc private func leaveFamilyTapped() {
+        guard let user = UserManager.shared.currentUser,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id),
+              !activeMemberRelationships.isEmpty else {
+            showToast("当前没有可退出的家庭关系", type: .info)
+            return
+        }
+        let choose: (FamilyRelationshipMembershipContract) -> Void = { [weak self] relationship in
+            self?.presentRelationshipTerminationConfirmation(
+                title: "退出这个家庭？",
+                accountLease: accountLease,
+                relationshipId: relationship.relationshipId,
+                expectedEpoch: relationship.relationshipEpoch
+            )
+        }
+        if activeMemberRelationships.count == 1,
+           let relationship = activeMemberRelationships.first {
+            choose(relationship)
+            return
+        }
+        let sheet = UIAlertController(title: "选择要退出的家庭", message: nil, preferredStyle: .actionSheet)
+        for relationship in activeMemberRelationships {
+            let title = "家庭 \(relationship.ownerSubjectId.suffix(4))"
+            sheet.addAction(UIAlertAction(title: title, style: .destructive) { _ in
+                choose(relationship)
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = leaveFamilyButton
+            popover.sourceRect = leaveFamilyButton.bounds
+        }
+        present(sheet, animated: true)
+    }
+
+    private func presentRelationshipTerminationConfirmation(
+        title: String,
+        accountLease: AccountLease,
+        relationshipId: String,
+        expectedEpoch: Int
+    ) {
+        let message = """
+        退出后，共享访问和记忆贡献权限会立即失效，待审核贡献会隐藏；当前家人回响会切回本人。已接受的正式记忆保留来源记录，已发布分享不会自动撤销。此操作不会删除任何账号。
+        """
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        let confirm = UIAlertAction(title: "确认退出", style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            self.leaveFamilyButton.isEnabled = false
+            DreamJourneyBackendClient.shared.terminateFamilyRelationship(
+                accountLease: accountLease,
+                relationshipId: relationshipId,
+                expectedEpoch: expectedEpoch
+            ) { [weak self] result in
+                guard let self,
+                      AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else { return }
+                self.leaveFamilyButton.isEnabled = true
+                switch result {
+                case .success:
+                    DigitalHumanContextStore.shared.reconcileFamilyAuthorization()
+                    self.contributorGrants.removeAll { $0.relationshipId == relationshipId }
+                    self.familyMemberships.removeAll { $0.relationshipId == relationshipId }
+                    self.updateFamilyContributionActions()
+                    self.showToast("已退出家庭，账号和正式记忆未被删除", type: .success)
+                case .failure(let error):
+                    self.showToast("退出失败：\(error.localizedDescription)", type: .error)
+                    self.refreshFamilyContributionState()
+                }
+            }
+        }
+        confirm.accessibilityIdentifier = "familyRelationshipConfirmLeaveButton"
+        alert.addAction(confirm)
+        present(alert, animated: true)
+    }
+
     private func selectPersona(option: FamilyPersonaOption) {
         guard let user = UserManager.shared.currentUser else {
             showToast("请先登录后再切换回响对象", type: .info)
@@ -582,6 +691,10 @@ final class FamilyCircleViewController: UIViewController {
         }
         detail.onModeChange = { [weak self] member, mode in
             self?.setMode(mode, for: member)
+        }
+        detail.onRelationshipTerminated = { [weak self] in
+            self?.updateMemberListUI()
+            self?.refreshFamilyContributionState()
         }
         navigationController?.pushViewController(detail, animated: true)
     }
@@ -643,7 +756,7 @@ extension FamilyCircleViewController: UITableViewDelegate {
     private func presentFamilyInviteSheet(prefilledPhone: String?) {
         let alert = UIAlertController(
             title: "邀请家人",
-            message: "通过手机号发送邀请。家人加入后不可删除；退出或解除关系暂未开放。",
+            message: "通过手机号发送邀请。家人加入后可解除家庭关系，但不会删除对方账号。",
             preferredStyle: .alert
         )
         alert.addTextField { textField in
@@ -711,6 +824,7 @@ final class FamilyMemberDetailViewController: UIViewController {
 
     var onModeChange: ((FamilyMember, DigitalHumanMode) -> Void)?
     var onSelectPersona: ((FamilyMember) -> Void)?
+    var onRelationshipTerminated: (() -> Void)?
 
     private var member: FamilyMember
 
@@ -786,6 +900,19 @@ final class FamilyMemberDetailViewController: UIViewController {
         return button
     }()
 
+    private lazy var terminateRelationshipButton: UIButton = {
+        var configuration = UIButton.Configuration.tinted()
+        configuration.image = UIImage(systemName: "person.crop.circle.badge.xmark")
+        configuration.imagePadding = 8
+        configuration.title = "解除家庭关系"
+        configuration.baseForegroundColor = .systemRed
+        configuration.cornerStyle = .medium
+        let button = UIButton(configuration: configuration)
+        button.accessibilityIdentifier = "familyRelationshipTerminateButton"
+        button.addTarget(self, action: #selector(terminateRelationshipTapped), for: .touchUpInside)
+        return button
+    }()
+
     private let boundarySection: UIView = {
         let view = UIView()
         view.backgroundColor = UIColor.white.withAlphaComponent(0.84)
@@ -832,12 +959,13 @@ final class FamilyMemberDetailViewController: UIViewController {
         label.font = .systemFont(ofSize: 12)
         label.textColor = UIColor(white: 0.56, alpha: 1.0)
         label.numberOfLines = 0
-        label.text = "状态可关闭；家人创建后不可删除。请在确认陪伴关系和家人知情的前提下调整。"
+        label.text = "陪伴状态可关闭；解除家庭关系不会删除任何账号，已接受的正式记忆仍保留来源记录。"
         return label
     }()
 
     private var familyContributionGrant: FamilyContributionGrantContract?
     private var contributionAccessHeightConstraint: NSLayoutConstraint?
+    private var terminateRelationshipHeightConstraint: NSLayoutConstraint?
 
     init(member: FamilyMember) {
         self.member = member
@@ -882,7 +1010,7 @@ final class FamilyMemberDetailViewController: UIViewController {
         boundarySection.addSubview(irreversibleNoticeLabel)
 
         [avatarView, nameLabel, relationLabel, updatedLabel, voiceStatusLabel, selectButton,
-         contributionAccessButton, boundarySection].forEach {
+         contributionAccessButton, terminateRelationshipButton, boundarySection].forEach {
             content.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
@@ -891,6 +1019,7 @@ final class FamilyMemberDetailViewController: UIViewController {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
         contributionAccessHeightConstraint = contributionAccessButton.heightAnchor.constraint(equalToConstant: 0)
+        terminateRelationshipHeightConstraint = terminateRelationshipButton.heightAnchor.constraint(equalToConstant: 48)
 
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -940,7 +1069,15 @@ final class FamilyMemberDetailViewController: UIViewController {
             contributionAccessButton.trailingAnchor.constraint(equalTo: selectButton.trailingAnchor),
             contributionAccessHeightConstraint!,
 
-            boundarySection.topAnchor.constraint(equalTo: contributionAccessButton.bottomAnchor, constant: 20),
+            terminateRelationshipButton.topAnchor.constraint(
+                equalTo: contributionAccessButton.bottomAnchor,
+                constant: 12
+            ),
+            terminateRelationshipButton.leadingAnchor.constraint(equalTo: selectButton.leadingAnchor),
+            terminateRelationshipButton.trailingAnchor.constraint(equalTo: selectButton.trailingAnchor),
+            terminateRelationshipHeightConstraint!,
+
+            boundarySection.topAnchor.constraint(equalTo: terminateRelationshipButton.bottomAnchor, constant: 20),
             boundarySection.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             boundarySection.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
             boundarySection.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -40),
@@ -985,6 +1122,10 @@ final class FamilyMemberDetailViewController: UIViewController {
             : .warmAccent
         starSwitch.setOn(member.digitalHumanMode == .star, animated: false)
         starSwitch.isEnabled = member.isAcceptedFamilyMember
+        let canTerminate = member.relationshipStatus != .revoked
+            && !member.relationshipId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        terminateRelationshipButton.isHidden = !canTerminate
+        terminateRelationshipHeightConstraint?.constant = canTerminate ? 48 : 0
         boundarySection.backgroundColor = member.digitalHumanMode == .star
             ? UIColor(red: 0.86, green: 0.84, blue: 0.78, alpha: 0.58)
             : UIColor.white.withAlphaComponent(0.84)
@@ -1058,6 +1199,50 @@ final class FamilyMemberDetailViewController: UIViewController {
             present(alert, animated: true)
         } else {
             setContributionAccess(accountLease: accountLease, existingGrant: nil)
+        }
+    }
+
+    @objc private func terminateRelationshipTapped() {
+        let message = """
+        解除后，共享访问权限和记忆贡献权限会立即失效，待审核贡献会隐藏，当前家人回响会切回本人。已接受的正式记忆保留来源记录；已发布分享不会自动撤销，需要另行处理。此操作不会删除任何账号。
+        """
+        let alert = UIAlertController(
+            title: "解除与 \(member.name) 的家庭关系？",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        let confirm = UIAlertAction(title: "确认解除", style: .destructive) { [weak self] _ in
+            self?.performRelationshipTermination()
+        }
+        confirm.accessibilityIdentifier = "familyRelationshipConfirmTerminateButton"
+        alert.addAction(confirm)
+        present(alert, animated: true)
+    }
+
+    private func performRelationshipTermination() {
+        terminateRelationshipButton.isEnabled = false
+        selectButton.isEnabled = false
+        contributionAccessButton.isEnabled = false
+        FamilyRepository.shared.terminateRelationship(member: member) { [weak self] result in
+            guard let self else { return }
+            self.terminateRelationshipButton.isEnabled = true
+            switch result {
+            case .success(let receipt):
+                self.member.relationshipStatus = .revoked
+                self.member.relationshipEpoch = receipt.relationshipEpoch
+                self.member.accessStatus = "revoked"
+                self.member.invitationStatus = "revoked"
+                self.member.accessGrants = []
+                self.updateContent()
+                self.showToast("家庭关系已解除，账号和正式记忆未被删除", type: .success)
+                self.onRelationshipTerminated?()
+                self.navigationController?.popViewController(animated: true)
+            case .failure(let error):
+                self.selectButton.isEnabled = self.member.isAcceptedFamilyMember
+                self.contributionAccessButton.isEnabled = true
+                self.showToast("解除失败：\(error.localizedDescription)", type: .error)
+            }
         }
     }
 

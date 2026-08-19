@@ -10169,11 +10169,13 @@ final class OwnerTruthContractsTests: XCTestCase {
             "ownerSubjectId": "owner-a",
             "contributorSubjectId": "member-a",
             "relationshipId": "relationship-a",
+            "relationshipEpoch": 3,
             "admissionMode": "closedPilot",
             "status": "active",
             "rowVersion": 1,
         ])
         XCTAssertTrue(grant.isActive)
+        XCTAssertEqual(grant.relationshipEpoch, 3)
 
         let text = try FamilyContributionSubmissionContract(json: [
             "submissionId": "submission-text-1",
@@ -10239,6 +10241,73 @@ final class OwnerTruthContractsTests: XCTestCase {
             "text": "",
             "materialIncluded": true,
         ]))
+    }
+
+    func testFamilyRelationshipTerminationReceiptKeepsParticipantAndDispositionStrict() throws {
+        let contract: [String: Any] = [
+            "receiptId": "frtr_000000000000000000000001",
+            "relationshipId": "relationship-a",
+            "ownerSubjectId": "owner-a",
+            "memberSubjectId": "member-a",
+            "actorSubjectId": "owner-a",
+            "actorRole": "owner",
+            "outcome": "terminated",
+            "relationshipEpoch": 4,
+            "revokedAccessGrantCount": 2,
+            "revokedContributionGrantCount": 1,
+            "withdrawnPendingContributionCount": 1,
+            "retainedAcceptedSourceCount": 1,
+            "acceptedSourceDisposition": "retainedWithProvenance",
+            "publicationGrantDisposition": "preservedRequiresOwnerAction",
+            "accountsDeleted": false,
+            "terminatedAt": "2026-08-19T08:00:00Z",
+        ]
+        let receipt = try FamilyRelationshipTerminationReceiptContract(
+            json: contract,
+            expectedActorSubjectId: "owner-a"
+        )
+
+        XCTAssertEqual(receipt.relationshipEpoch, 4)
+        XCTAssertEqual(receipt.withdrawnPendingContributionCount, 1)
+        XCTAssertFalse(receipt.accountsDeleted)
+        XCTAssertThrowsError(
+            try FamilyRelationshipTerminationReceiptContract(
+                json: contract,
+                expectedActorSubjectId: "member-a"
+            )
+        )
+    }
+
+    func testFamilyRelationshipMembershipIsIndependentFromContributionGrant() throws {
+        let membership = try FamilyRelationshipMembershipContract(
+            json: [
+                "relationshipId": "relationship-a",
+                "ownerSubjectId": "owner-a",
+                "memberSubjectId": "member-a",
+                "familyMemberId": "family-member-a",
+                "status": "accepted",
+                "relationshipEpoch": 3,
+                "grantEpoch": 1,
+            ],
+            expectedParticipantSubjectId: "member-a"
+        )
+
+        XCTAssertTrue(membership.isActiveMember(for: "member-a"))
+        XCTAssertFalse(membership.isActiveMember(for: "owner-a"))
+        XCTAssertThrowsError(
+            try FamilyRelationshipMembershipContract(
+                json: [
+                    "relationshipId": "relationship-a",
+                    "ownerSubjectId": "owner-a",
+                    "memberSubjectId": "member-a",
+                    "familyMemberId": "family-member-a",
+                    "status": "accepted",
+                    "relationshipEpoch": 3,
+                    "grantEpoch": 1,
+                ],
+                expectedParticipantSubjectId: "outsider-a"
+            )
+        )
     }
 
     func testAccountDataExportRemainsDefaultOffAndFailsClosedWithoutServerPolicy() {

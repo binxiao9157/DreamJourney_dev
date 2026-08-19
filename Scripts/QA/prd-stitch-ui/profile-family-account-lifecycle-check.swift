@@ -54,6 +54,13 @@ assertContains(flags, ".accountDeletion", "account deletion should be default-en
 for required in [
     "func inviteFamilyMember(",
     "path: \"/family/invite\"",
+    "func terminateFamilyRelationship(",
+    "func listFamilyRelationshipMemberships(",
+    "FamilyRelationshipMembershipContract",
+    "FamilyRelationshipTerminationReceiptContract",
+    #"path: "/family/relationships/\(pathComponent(relationshipId))/terminate""#,
+    "\"secondConfirmation\": true",
+    "\"publicationGrantAction\": \"preserve\"",
     "func softDeleteAccount(",
     "path: \"/auth/delete\"",
     "func restoreAccount(",
@@ -89,9 +96,11 @@ for required in [
     "func inviteByPhone(",
     "DreamJourneyBackendClient.shared.inviteFamilyMember",
     "invitationStatus: \"failed\"",
-    "PRD: 家庭成员通过手机号邀请后不可删除",
+    "func terminateRelationship(",
+    "DreamJourneyBackendClient.shared.terminateFamilyRelationship",
+    "DigitalHumanContextStore.shared.reconcileFamilyAuthorization()",
 ] {
-    assertContains(familyRepository, required, "FamilyRepository should invite by phone and avoid deletion \(required)")
+    assertContains(familyRepository, required, "FamilyRepository should invite and terminate relationships safely \(required)")
 }
 
 for required in [
@@ -100,11 +109,36 @@ for required in [
     "presentFamilyInviteSheet",
     "member.familyInvitationDisplayName",
     "option.lastUpdated",
-    "家人加入后不可删除",
+    "解除家庭关系",
+    "退出家庭",
+    "不会删除任何账号",
+    "已发布分享不会自动撤销",
+    "familyRelationshipTerminateButton",
+    "leaveFamilyButton.isHidden = activeMemberRelationships.isEmpty",
 ] {
-    assertContains(familyView, required, "Family UI should expose phone invite states \(required)")
+    assertContains(familyView, required, "Family UI should expose invite and termination states \(required)")
 }
 assertNotContains(familyView, "复制邀请邮票", "Family UI should not keep old stamp-copy invite copy")
+assertNotContains(familyView, "退出或解除关系暂未开放", "Family UI must not retain the old unavailable relationship copy")
+assertNotContains(familyView, "家人创建后不可删除", "Family detail must explain relationship termination instead of account deletion")
+
+for required in [
+    "FamilyRelationshipTerminationCommand",
+    "FamilyRelationshipTerminationService",
+    "@app.post(\"/family/relationships/{relationship_id}/terminate\")",
+    "publicationGrantAction",
+] {
+    assertContains(backendMain, required, "Backend should expose participant relationship termination \(required)")
+}
+for required in [
+    "def terminate_family_relationship(",
+    "preservedRequiresOwnerAction",
+    "retainedWithProvenance",
+    "family_contribution_disposal_queue",
+] {
+    let aggregate = backendStore + backendPostgres
+    assertContains(aggregate, required, "Backend stores should atomically dispose family authority \(required)")
+}
 
 for required in [
     "showFinalAccountDeletionConfirmation",

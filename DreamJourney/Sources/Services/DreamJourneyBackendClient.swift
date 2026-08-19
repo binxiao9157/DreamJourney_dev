@@ -2380,12 +2380,158 @@ enum FamilyContributionContractError: LocalizedError {
     }
 }
 
+enum FamilyRelationshipTerminationContractError: LocalizedError {
+    case malformedResponse
+    case participantScopeMismatch
+
+    var errorDescription: String? {
+        switch self {
+        case .malformedResponse:
+            return "家庭关系解除回执格式无效"
+        case .participantScopeMismatch:
+            return "家庭关系解除回执与当前账号不一致"
+        }
+    }
+}
+
+struct FamilyRelationshipMembershipContract: Equatable, Identifiable {
+    let relationshipId: String
+    let ownerSubjectId: String
+    let memberSubjectId: String
+    let familyMemberId: String
+    let status: String
+    let relationshipEpoch: Int
+    let grantEpoch: Int
+
+    var id: String { relationshipId }
+
+    init(json: [String: Any], expectedParticipantSubjectId: String) throws {
+        guard let relationshipId = Self.identifier(json["relationshipId"]),
+              let ownerSubjectId = Self.identifier(json["ownerSubjectId"]),
+              let memberSubjectId = Self.identifier(json["memberSubjectId"]),
+              [ownerSubjectId, memberSubjectId].contains(expectedParticipantSubjectId),
+              let familyMemberId = Self.identifier(json["familyMemberId"]),
+              let status = json["status"] as? String,
+              ["pending", "accepted", "paused", "revoked"].contains(status),
+              let relationshipEpoch = Self.intValue(json["relationshipEpoch"]),
+              relationshipEpoch >= 1,
+              let grantEpoch = Self.intValue(json["grantEpoch"]),
+              grantEpoch >= 0 else {
+            throw FamilyRelationshipTerminationContractError.malformedResponse
+        }
+        self.relationshipId = relationshipId
+        self.ownerSubjectId = ownerSubjectId
+        self.memberSubjectId = memberSubjectId
+        self.familyMemberId = familyMemberId
+        self.status = status
+        self.relationshipEpoch = relationshipEpoch
+        self.grantEpoch = grantEpoch
+    }
+
+    func isActiveMember(for subjectId: String) -> Bool {
+        memberSubjectId == subjectId
+            && ownerSubjectId != subjectId
+            && status == "accepted"
+    }
+
+    private static func identifier(_ value: Any?) -> String? {
+        let normalized = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        return nil
+    }
+}
+
+struct FamilyRelationshipTerminationReceiptContract: Equatable {
+    let receiptId: String
+    let relationshipId: String
+    let ownerSubjectId: String
+    let memberSubjectId: String
+    let actorSubjectId: String
+    let actorRole: String
+    let outcome: String
+    let relationshipEpoch: Int
+    let revokedAccessGrantCount: Int
+    let revokedContributionGrantCount: Int
+    let withdrawnPendingContributionCount: Int
+    let retainedAcceptedSourceCount: Int
+    let acceptedSourceDisposition: String
+    let publicationGrantDisposition: String
+    let accountsDeleted: Bool
+    let terminatedAt: String
+
+    init(json: [String: Any], expectedActorSubjectId: String) throws {
+        guard let receiptId = Self.identifier(json["receiptId"]),
+              let relationshipId = Self.identifier(json["relationshipId"]),
+              let ownerSubjectId = Self.identifier(json["ownerSubjectId"]),
+              let memberSubjectId = Self.identifier(json["memberSubjectId"]),
+              let actorSubjectId = Self.identifier(json["actorSubjectId"]),
+              actorSubjectId == expectedActorSubjectId,
+              let actorRole = json["actorRole"] as? String,
+              ["owner", "member"].contains(actorRole),
+              let outcome = json["outcome"] as? String,
+              ["terminated", "alreadyTerminated"].contains(outcome),
+              let relationshipEpoch = Self.intValue(json["relationshipEpoch"]),
+              relationshipEpoch >= 1,
+              let revokedAccessGrantCount = Self.nonnegativeInt(json["revokedAccessGrantCount"]),
+              let revokedContributionGrantCount = Self.nonnegativeInt(json["revokedContributionGrantCount"]),
+              let withdrawnPendingContributionCount = Self.nonnegativeInt(json["withdrawnPendingContributionCount"]),
+              let retainedAcceptedSourceCount = Self.nonnegativeInt(json["retainedAcceptedSourceCount"]),
+              json["acceptedSourceDisposition"] as? String == "retainedWithProvenance",
+              json["publicationGrantDisposition"] as? String == "preservedRequiresOwnerAction",
+              json["accountsDeleted"] as? Bool == false,
+              let terminatedAt = Self.identifier(json["terminatedAt"]) else {
+            if Self.identifier(json["actorSubjectId"]) != expectedActorSubjectId {
+                throw FamilyRelationshipTerminationContractError.participantScopeMismatch
+            }
+            throw FamilyRelationshipTerminationContractError.malformedResponse
+        }
+        self.receiptId = receiptId
+        self.relationshipId = relationshipId
+        self.ownerSubjectId = ownerSubjectId
+        self.memberSubjectId = memberSubjectId
+        self.actorSubjectId = actorSubjectId
+        self.actorRole = actorRole
+        self.outcome = outcome
+        self.relationshipEpoch = relationshipEpoch
+        self.revokedAccessGrantCount = revokedAccessGrantCount
+        self.revokedContributionGrantCount = revokedContributionGrantCount
+        self.withdrawnPendingContributionCount = withdrawnPendingContributionCount
+        self.retainedAcceptedSourceCount = retainedAcceptedSourceCount
+        self.acceptedSourceDisposition = "retainedWithProvenance"
+        self.publicationGrantDisposition = "preservedRequiresOwnerAction"
+        self.accountsDeleted = false
+        self.terminatedAt = terminatedAt
+    }
+
+    private static func identifier(_ value: Any?) -> String? {
+        let normalized = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        return nil
+    }
+
+    private static func nonnegativeInt(_ value: Any?) -> Int? {
+        guard let value = intValue(value), value >= 0 else { return nil }
+        return value
+    }
+}
+
 struct FamilyContributionGrantContract: Equatable, Identifiable {
     let grantId: String
     let vaultId: String
     let ownerSubjectId: String
     let contributorSubjectId: String
     let relationshipId: String
+    let relationshipEpoch: Int
     let admissionMode: String
     let status: String
     let rowVersion: Int
@@ -2399,6 +2545,8 @@ struct FamilyContributionGrantContract: Equatable, Identifiable {
               let ownerSubjectId = Self.identifier(json["ownerSubjectId"]),
               let contributorSubjectId = Self.identifier(json["contributorSubjectId"]),
               let relationshipId = Self.identifier(json["relationshipId"]),
+              let relationshipEpoch = Self.intValue(json["relationshipEpoch"]),
+              relationshipEpoch >= 1,
               let admissionMode = json["admissionMode"] as? String,
               let status = json["status"] as? String,
               ["active", "revoked"].contains(status),
@@ -2411,6 +2559,7 @@ struct FamilyContributionGrantContract: Equatable, Identifiable {
         self.ownerSubjectId = ownerSubjectId
         self.contributorSubjectId = contributorSubjectId
         self.relationshipId = relationshipId
+        self.relationshipEpoch = relationshipEpoch
         self.admissionMode = admissionMode
         self.status = status
         self.rowVersion = rowVersion
@@ -10890,6 +11039,85 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             case .failure(let error):
                 completion(.failure(error))
             }
+        }
+    }
+
+    func terminateFamilyRelationship(
+        accountLease: AccountLease,
+        relationshipId: String,
+        expectedEpoch: Int,
+        commandId: String = UUID().uuidString.lowercased(),
+        completion: @escaping (Result<FamilyRelationshipTerminationReceiptContract, Error>) -> Void
+    ) {
+        let normalizedRelationshipId = relationshipId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedRelationshipId.isEmpty, expectedEpoch >= 1 else {
+            completion(.failure(FamilyRelationshipTerminationContractError.malformedResponse))
+            return
+        }
+        requestJSON(
+            path: "/family/relationships/\(pathComponent(relationshipId))/terminate",
+            method: .post,
+            payload: [
+                "commandId": commandId,
+                "expectedEpoch": expectedEpoch,
+                "secondConfirmation": true,
+                "publicationGrantAction": "preserve",
+            ],
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId
+        ) { result in
+            completion(result.flatMap { object in
+                guard object["schemaVersion"] as? String == "family-relationship-termination-v1",
+                      let status = object["status"] as? String,
+                      ["terminated", "alreadyTerminated", "deduplicated"].contains(status),
+                      let receiptJSON = object["receipt"] as? [String: Any] else {
+                    return .failure(FamilyRelationshipTerminationContractError.malformedResponse)
+                }
+                do {
+                    let receipt = try FamilyRelationshipTerminationReceiptContract(
+                        json: receiptJSON,
+                        expectedActorSubjectId: accountLease.subjectId
+                    )
+                    guard receipt.relationshipId == normalizedRelationshipId else {
+                        return .failure(FamilyRelationshipTerminationContractError.malformedResponse)
+                    }
+                    return .success(receipt)
+                } catch {
+                    return .failure(error)
+                }
+            })
+        }
+    }
+
+    func listFamilyRelationshipMemberships(
+        accountLease: AccountLease,
+        completion: @escaping (Result<[FamilyRelationshipMembershipContract], Error>) -> Void
+    ) {
+        requestJSON(
+            path: "/family/relationships",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId
+        ) { result in
+            completion(result.flatMap { object in
+                guard object["participantSubjectId"] as? String == accountLease.subjectId,
+                      let values = object["relationships"] as? [[String: Any]] else {
+                    return .failure(FamilyRelationshipTerminationContractError.malformedResponse)
+                }
+                do {
+                    return .success(try values.map {
+                        try FamilyRelationshipMembershipContract(
+                            json: $0,
+                            expectedParticipantSubjectId: accountLease.subjectId
+                        )
+                    })
+                } catch {
+                    return .failure(error)
+                }
+            })
         }
     }
 
