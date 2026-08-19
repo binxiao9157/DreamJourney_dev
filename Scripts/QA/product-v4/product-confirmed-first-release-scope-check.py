@@ -72,12 +72,18 @@ require(
     "audio/video options must sit behind the explicit internal-only switch",
 )
 require(
-    "self == .image || self == .document" in contracts,
-    "first-release external processing must remain image/document only",
+    "var allowsExternalProcessing: Bool {\n        self == .image\n    }" in contracts,
+    "first-release external Provider consent must remain image-only",
 )
 require(
-    "是否允许文档解析？" in archive and "允许文档解析" in archive,
-    "document processing needs its own disclosure instead of audio copy",
+    'fileExtensions = ["txt", "md", "markdown", "pdf", "docx"]' in archive
+    and 'case (.document, "md"), (.document, "markdown"):' in archive
+    and 'return "text/markdown"' in archive,
+    "first-release document picker must include Markdown",
+)
+require(
+    "是否允许文档解析？" not in archive,
+    "local isolated document parsing must not be described as an external Provider call",
 )
 
 print("PC-00-03 iOS first-release scope check passed")

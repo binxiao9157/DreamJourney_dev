@@ -501,6 +501,8 @@ iOS：
 
 完成定义：每种已开放媒体都能生成有来源的 Candidate，或如实显示不可用/可重试。
 
+状态：`IN_PROGRESS`（2026-08-19）。首个文档处理闭环已完成：后端和 iOS 统一支持 TXT/PDF/DOCX/Markdown，Markdown 使用 `text/markdown` 合同并在隔离子进程中解析，UTF-8 魔数别名、伪装 MIME、损坏输入、来源片段、结果 hash 和 Candidate handoff 已纳入 Gate。文档使用服务端本地隔离 parser，不再错误发送外部 Provider 同意字段。下一小闭环进入图片 OCR/描述 Provider Adapter 与结构化来源 Candidate；真实对象存储、图片 Provider 和部署质量仍保留为外部 Gate。
+
 ### PC-C2 正式记忆 Markdown 导出
 
 关联：GAP-08、DATA-001。

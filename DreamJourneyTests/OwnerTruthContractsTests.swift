@@ -443,7 +443,7 @@ final class OwnerTruthContractsTests: XCTestCase {
     func testOwnerTruthMediaCreationPolicyRequiresExplicitProcessingChoice() throws {
         XCTAssertTrue(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .image))
         XCTAssertFalse(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .audio))
-        XCTAssertTrue(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .document))
+        XCTAssertFalse(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .document))
         XCTAssertFalse(OwnerTruthMediaCreationPolicy.requiresExternalProcessingChoice(for: .video))
         XCTAssertEqual(OwnerTruthMediaCreationPolicy.maximumFileSizeMB(for: .image), 20)
         XCTAssertEqual(OwnerTruthMediaCreationPolicy.maximumFileSizeMB(for: .audio), 50)
@@ -472,7 +472,17 @@ final class OwnerTruthContractsTests: XCTestCase {
             content: Data("document".utf8),
             allowExternalProcessing: true
         )
-        XCTAssertTrue(documentCommand.allowExternalProcessing)
+        XCTAssertFalse(documentCommand.allowExternalProcessing)
+
+        let markdownCommand = try OwnerTruthMediaCreationPolicy.makeCommand(
+            mediaKind: .document,
+            fileName: "memory.md",
+            contentType: "text/markdown",
+            content: Data("# Memory".utf8),
+            allowExternalProcessing: nil
+        )
+        XCTAssertEqual(markdownCommand.contentType, "text/markdown")
+        XCTAssertFalse(markdownCommand.allowExternalProcessing)
 
         let videoCommand = try OwnerTruthMediaCreationPolicy.makeCommand(
             mediaKind: .video,

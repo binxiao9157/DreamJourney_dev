@@ -1499,7 +1499,7 @@ enum OwnerTruthMediaKind: String, CaseIterable, Codable, Sendable {
     case document
 
     var allowsExternalProcessing: Bool {
-        self == .image || self == .document
+        self == .image
     }
 
     fileprivate var supportedContentTypes: Set<String> {
@@ -1513,6 +1513,7 @@ enum OwnerTruthMediaKind: String, CaseIterable, Codable, Sendable {
         case .document:
             return [
                 "text/plain",
+                "text/markdown",
                 "application/pdf",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             ]

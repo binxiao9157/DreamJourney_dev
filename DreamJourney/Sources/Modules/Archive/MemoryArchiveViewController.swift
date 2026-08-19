@@ -4112,36 +4112,9 @@ final class MemoryArchiveViewController: UIViewController {
             return
         }
 
-        let processingDisclosure: (title: String, message: String, action: String)
-        switch mediaKind {
-        case .image:
-            processingDisclosure = (
-                "是否允许图片分析？",
-                "允许后，图片会发送给已披露的外部 AI 服务，用于 OCR 和线索整理。你也可以仅保存原始图片。",
-                "允许图片分析"
-            )
-        case .document:
-            processingDisclosure = (
-                "是否允许文档解析？",
-                "允许后，文档会发送给已披露的外部处理服务，用于提取文字并整理待确认记忆。你也可以仅保存原始文档。",
-                "允许文档解析"
-            )
-        case .audio:
-            processingDisclosure = (
-                "是否允许语音转写？",
-                "允许后，音频会发送给已披露的外部语音服务，用于 ASR 转写和线索整理。你也可以仅保存原始音频。",
-                "允许语音转写"
-            )
-        case .video:
-            processingDisclosure = (
-                "是否允许视频处理？",
-                "允许后，视频会发送给已披露的外部处理服务。你也可以仅保存原始视频。",
-                "允许视频处理"
-            )
-        }
         let alert = UIAlertController(
-            title: processingDisclosure.title,
-            message: processingDisclosure.message,
+            title: "是否允许图片分析？",
+            message: "允许后，图片会发送给已披露的外部 AI 服务，用于 OCR 和线索整理。你也可以仅保存原始图片。",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
@@ -4154,7 +4127,7 @@ final class MemoryArchiveViewController: UIViewController {
             )
         })
         alert.addAction(UIAlertAction(
-            title: processingDisclosure.action,
+            title: "允许图片分析",
             style: .default
         ) { [weak self] _ in
             self?.presentOwnerTruthMediaPicker(
@@ -4226,7 +4199,7 @@ final class MemoryArchiveViewController: UIViewController {
         case .video:
             fileExtensions = ["mp4", "mov"]
         case .document:
-            fileExtensions = ["txt", "pdf", "docx"]
+            fileExtensions = ["txt", "md", "markdown", "pdf", "docx"]
         case .image:
             fileExtensions = ["jpg", "jpeg", "png", "webp"]
         }
@@ -4256,6 +4229,8 @@ final class MemoryArchiveViewController: UIViewController {
             return "video/quicktime"
         case (.document, "txt"):
             return "text/plain"
+        case (.document, "md"), (.document, "markdown"):
+            return "text/markdown"
         case (.document, "pdf"):
             return "application/pdf"
         case (.document, "docx"):

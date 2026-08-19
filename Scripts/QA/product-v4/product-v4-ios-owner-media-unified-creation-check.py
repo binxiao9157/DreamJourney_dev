@@ -85,11 +85,14 @@ def main() -> None:
     )
     require(
         "是否允许图片分析？" in archive
-        and "是否允许语音转写？" in archive
         and "仅保存" in archive
-        and "允许图片分析" in archive
-        and "允许语音转写" in archive,
-        "image and audio must require an explicit external processing choice",
+        and "允许图片分析" in archive,
+        "image must require an explicit external processing choice",
+    )
+    require(
+        'fileExtensions = ["txt", "md", "markdown", "pdf", "docx"]' in archive
+        and 'return "text/markdown"' in archive,
+        "document picker must expose the product-confirmed Markdown format",
     )
     require(
         "UIDocumentPickerViewController" in archive
