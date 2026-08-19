@@ -3,7 +3,7 @@
 日期：2026-08-18
 状态：`IN_PROGRESS`
 日常开发入口：`CANONICAL_EXECUTION_PLAN`
-执行控制版本：V1.11
+执行控制版本：V1.12
 
 ## 0. 目标和基线
 
@@ -27,7 +27,7 @@
 | 当前执行项 | 1 | PC-C1：首版图片/文档理解 |
 | 后续待执行 | 5 | PC-C1 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：PC-B4 Backend 为 `fccbc28`，服务器已部署 `fccbc28`，migration head 为 `0100`；iOS 已完成本次 PC-B4 权威消息中心实现与验证，提交以本节状态记录为准。普通消息由后端按 Principal 聚合，iOS 的记忆档案、回响和“我的”共用同一未读状态源；时光信和延迟回复仍保持关闭。分页、单条已读、批量已读、删除已读、幂等回执、账户 lease 隔离、前台刷新和多尺寸 UIQA 已形成 Gate。当前进入 PC-C1；真实短信 Provider 仍为 PC-A0 外部 Gate，APNs 真机到达仍是 PC-B4 外部验收项，均不阻塞后续非依赖开发。
+当前代码与部署交接：PC-C1 iOS 为 `5a88db2e`，Backend 和服务器均为 `4384fde`，migration head 为 `0100`。TXT/PDF/DOCX/Markdown 文档合同已统一，Markdown 已完成上传、隔离解析、来源片段、Candidate 人工确认、正式 Memory、Search Projection、Context、撤权与删除的部署态 PostgreSQL E2E；合成账户测试中底层完整导出只在一次性测试进程临时开放，真实客户端仍保持 `accountDataExport=productClosed`。当前继续 PC-C1 图片 OCR/描述 Provider Adapter；真实短信 Provider、APNs 真机到达、腾讯 COS 和真实视觉 Provider 分别保留为外部 Gate，均不阻塞后续不依赖它们的开发。
 
 每轮只需读取：
 
@@ -501,7 +501,7 @@ iOS：
 
 完成定义：每种已开放媒体都能生成有来源的 Candidate，或如实显示不可用/可重试。
 
-状态：`IN_PROGRESS`（2026-08-19）。首个文档处理闭环已完成：后端和 iOS 统一支持 TXT/PDF/DOCX/Markdown，Markdown 使用 `text/markdown` 合同并在隔离子进程中解析，UTF-8 魔数别名、伪装 MIME、损坏输入、来源片段、结果 hash 和 Candidate handoff 已纳入 Gate。文档使用服务端本地隔离 parser，不再错误发送外部 Provider 同意字段。下一小闭环进入图片 OCR/描述 Provider Adapter 与结构化来源 Candidate；真实对象存储、图片 Provider 和部署质量仍保留为外部 Gate。
+状态：`IN_PROGRESS`（2026-08-19）。首个文档处理闭环已完成：后端和 iOS 统一支持 TXT/PDF/DOCX/Markdown，Markdown 使用 `text/markdown` 合同并在隔离子进程中解析，UTF-8 魔数别名、伪装 MIME、损坏输入、来源片段、结果 hash 和 Candidate handoff 已纳入 Gate。文档使用服务端本地隔离 parser，不再错误发送外部 Provider 同意字段。Backend `4384fde` 已部署，使用部署容器和 disposable PostgreSQL 的 E2E 已验证 Markdown 从上传、确认到 Context 和删除；生产 Release Policy 仍保持完整账户导出关闭。下一小闭环进入图片 OCR/描述 Provider Adapter 与结构化来源 Candidate；真实腾讯 COS、图片 Provider 质量和真实扫描器媒体链路仍保留为外部 Gate。
 
 ### PC-C2 正式记忆 Markdown 导出
 

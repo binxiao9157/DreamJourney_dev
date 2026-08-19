@@ -21,10 +21,17 @@
 
 - Backend targeted Markdown tests：通过。
 - `scripts/run-backend-owner-truth-media-processing-gate.sh`：245 个测试通过。
+- Backend deployed disposable PostgreSQL E2E：通过；覆盖上传、隔离解析、Candidate、人工确认、MemoryVersion、Search Projection、Context、底层导出隔离、撤权和删除。
+- 部署运行态：Backend/服务器 `4384fde`，migration head `0100`，`/ready` 的 database/schema/auth/incident 均为 `ready`。
 - iOS `OwnerTruthContractsTests.testOwnerTruthMediaCreationPolicyRequiresExplicitProcessingChoice`：通过。
 - `product-confirmed-first-release-scope-check.py`：通过。
 - `product-v4-ios-owner-media-unified-creation-check.py`：通过。
+- iOS generic iPhoneOS Debug build：通过；报告位于 `tmp/visual-qa/prd-stitch-ui/iphoneos-generic-build/20260819-181007-iphoneos-generic-build/report.md`。
 - `git diff --check`：两仓库通过。
+
+提交基线：iOS `5a88db2e`；Backend `4384fde`。
+
+部署 smoke 使用服务器本地一次性数据库、filesystem object adapter 和 clean scanner，证明正式合同与部署容器可运行；它不等同于腾讯 COS、真实 ClamAV 用户媒体扫描或视觉 Provider 的生产验收。完整账户导出在真实 Release Policy 中继续为 `productClosed`，E2E 仅在 disposable 测试进程临时验证其底层隔离能力。
 
 ## PC-C1 剩余内容
 
