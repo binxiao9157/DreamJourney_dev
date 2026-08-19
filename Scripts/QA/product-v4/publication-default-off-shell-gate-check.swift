@@ -61,7 +61,8 @@ for required in [
     "return \"publication\"",
     "return \"visitorAccess\"",
     "return \"visitor\"",
-    "\"closedPilotAdultSelf\"",
+    "var backendReleasePolicyCohort: String",
+    "\"authenticatedOwner\"",
 ] {
     assertContains(features, required, "Feature policy mapping must stay explicit")
 }

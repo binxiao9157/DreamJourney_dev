@@ -33,7 +33,7 @@ require(
 require(
     visitorAccess.contains("static let launchArgument = \"DJEnablePublicationVisitorM2QA\"")
         && visitorAccess.contains("PublicationVisitorM2AccessGate")
-        && visitorAccess.contains("isServerPolicyManagedClosedPilotRouteAllowed"),
+        && visitorAccess.contains("isServerPolicyManagedRouteAllowed"),
     "visitor must preserve QA access while requiring server policy for the formal shell"
 )
 require(

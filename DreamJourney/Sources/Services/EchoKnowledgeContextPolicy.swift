@@ -201,6 +201,67 @@ enum KBPersonaPolicy {
 
 typealias EchoKnowledgeContextIdentity = KBPersonaIdentity
 
+enum EchoV4IdentityRoute: String, Equatable {
+    case ownerPrivate
+    case visitorPublic
+    case familyContribution
+    case denied
+}
+
+struct EchoV4IdentityRouteDecision: Equatable {
+    let route: EchoV4IdentityRoute
+    let reason: String
+    let privateContextAllowed: Bool
+    let legacyFallbackAllowed: Bool
+}
+
+enum EchoV4IdentityRoutingPolicy {
+    static func evaluate(
+        viewerSubjectID: String,
+        targetOwnerSubjectID: String?,
+        isSelfAssistant: Bool,
+        relationshipAccepted: Bool,
+        visitorSessionOwnerSubjectID: String?,
+        visitorSessionActive: Bool
+    ) -> EchoV4IdentityRouteDecision {
+        let viewer = KBPersonaIdentity.normalizedIdentifier(viewerSubjectID)
+        let target = KBPersonaIdentity.normalizedIdentifier(targetOwnerSubjectID ?? "")
+        let visitorOwner = KBPersonaIdentity.normalizedIdentifier(visitorSessionOwnerSubjectID ?? "")
+        if !viewer.isEmpty, viewer == target, isSelfAssistant {
+            return EchoV4IdentityRouteDecision(
+                route: .ownerPrivate,
+                reason: "ownerPrincipalMatched",
+                privateContextAllowed: true,
+                legacyFallbackAllowed: false
+            )
+        }
+        guard !viewer.isEmpty, !target.isEmpty, relationshipAccepted else {
+            return EchoV4IdentityRouteDecision(
+                route: .denied,
+                reason: "familyRelationshipRequired",
+                privateContextAllowed: false,
+                legacyFallbackAllowed: false
+            )
+        }
+        if visitorSessionActive, visitorOwner == target {
+            return EchoV4IdentityRouteDecision(
+                route: .visitorPublic,
+                reason: "visitorSessionMatched",
+                privateContextAllowed: false,
+                legacyFallbackAllowed: false
+            )
+        }
+        return EchoV4IdentityRouteDecision(
+            route: .familyContribution,
+            reason: visitorSessionActive && !visitorOwner.isEmpty
+                ? "visitorSessionOwnerMismatch"
+                : "shareGrantRequired",
+            privateContextAllowed: false,
+            legacyFallbackAllowed: false
+        )
+    }
+}
+
 enum EchoKnowledgeContextPolicy {
     static func canonicalDigitalHumanId(
         personaScope: String,

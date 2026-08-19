@@ -6,6 +6,59 @@ import XCTest
 #endif
 
 final class PublicationVisitorAccessTests: XCTestCase {
+    func testFamilyVisitorV4RoutingAllowsPrivateContextOnlyForSelf() {
+        let decision = EchoV4IdentityRoutingPolicy.evaluate(
+            viewerSubjectID: "owner-a",
+            targetOwnerSubjectID: "owner-a",
+            isSelfAssistant: true,
+            relationshipAccepted: false,
+            visitorSessionOwnerSubjectID: nil,
+            visitorSessionActive: false
+        )
+
+        XCTAssertEqual(decision.route, .ownerPrivate)
+        XCTAssertTrue(decision.privateContextAllowed)
+        XCTAssertFalse(decision.legacyFallbackAllowed)
+    }
+
+    func testFamilyVisitorV4RoutingUsesMatchingVisitorSessionOnly() {
+        let publicDecision = EchoV4IdentityRoutingPolicy.evaluate(
+            viewerSubjectID: "visitor-b",
+            targetOwnerSubjectID: "owner-a",
+            isSelfAssistant: false,
+            relationshipAccepted: true,
+            visitorSessionOwnerSubjectID: "owner-a",
+            visitorSessionActive: true
+        )
+        let mismatchedDecision = EchoV4IdentityRoutingPolicy.evaluate(
+            viewerSubjectID: "visitor-b",
+            targetOwnerSubjectID: "owner-a",
+            isSelfAssistant: false,
+            relationshipAccepted: true,
+            visitorSessionOwnerSubjectID: "owner-c",
+            visitorSessionActive: true
+        )
+
+        XCTAssertEqual(publicDecision.route, .visitorPublic)
+        XCTAssertFalse(publicDecision.privateContextAllowed)
+        XCTAssertFalse(publicDecision.legacyFallbackAllowed)
+        XCTAssertEqual(mismatchedDecision.route, .familyContribution)
+        XCTAssertEqual(mismatchedDecision.reason, "visitorSessionOwnerMismatch")
+    }
+
+    func testVisitorAdmissionBindsSessionToGrantOwner() throws {
+        let admission = try makeAdmission(grantID: UUID().uuidString.lowercased())
+
+        XCTAssertEqual(admission.ownerSubjectID, "owner-a")
+        let runtime = makeRuntime(subjectID: "visitor-a", vaultID: "vault-a", generation: 3)
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "visitor-a"))
+        let scope = try XCTUnwrap(admission.sessionScope(
+            sessionCredential: String(repeating: "c", count: 64),
+            accountLease: lease
+        ))
+        XCTAssertEqual(scope.ownerSubjectID, "owner-a")
+    }
+
     func testM2PolicyBindingsSeparateOwnerGrantManagementFromVisitorAccess() {
         XCTAssertEqual(DJFeature.publicationManagementM2.backendReleasePolicyFeature, "publication")
         XCTAssertEqual(DJFeature.publicationManagementM2.backendReleasePolicyAudience, "owner")
@@ -92,6 +145,7 @@ final class PublicationVisitorAccessTests: XCTestCase {
         let now = Date()
         let scope = try XCTUnwrap(PublicationVisitorSessionScope(
             visitorSessionID: "visitor-session-1",
+            ownerSubjectID: "owner-a",
             publicationID: "publication-1",
             publicationVersionID: "publication-version-1",
             expiresAt: now.addingTimeInterval(1),
@@ -281,6 +335,7 @@ final class PublicationVisitorAccessTests: XCTestCase {
         let lease = try XCTUnwrap(runtime.capture(forSubjectId: "visitor-a"))
         return try XCTUnwrap(PublicationVisitorSessionScope(
             visitorSessionID: "visitor-session-1",
+            ownerSubjectID: "owner-a",
             publicationID: "publication-1",
             publicationVersionID: "publication-version-1",
             expiresAt: Date().addingTimeInterval(300),
@@ -336,6 +391,7 @@ final class PublicationVisitorAccessTests: XCTestCase {
             "schemaVersion": PublicationVisitorAdmission.schemaVersion,
             "grantId": grantID,
             "visitorSessionId": "visitor-session-1",
+            "ownerSubjectId": "owner-a",
             "publicationId": "publication-1",
             "publicationVersionId": "publication-version-1",
             "expiresAt": ISO8601DateFormatter().string(from: Date().addingTimeInterval(300)),

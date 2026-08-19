@@ -33,7 +33,7 @@ require(
     managementAccess.contains("static let launchArgument = \"DJEnablePublicationManagementM2QA\"")
         && managementAccess.contains("QALaunchConfiguration.shared.contains(launchArgument)")
         && managementAccess.contains("PublicationManagementM2AccessGate")
-        && managementAccess.contains("isServerPolicyManagedClosedPilotRouteAllowed"),
+        && managementAccess.contains("isServerPolicyManagedRouteAllowed"),
     "management must preserve QA access while requiring server policy for formal routes"
 )
 require(

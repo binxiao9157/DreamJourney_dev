@@ -12,7 +12,7 @@ BIN_PATH="$OUTPUT_DIR/release-policy-cache-deployed-smoke"
 mkdir -p "$OUTPUT_DIR"
 
 curl --fail --silent --show-error --location --retry 2 \
-  "$BACKEND_BASE_URL/v2/release-policy?audience=owner&cohort=closedPilotAdultSelf&clientBuild=$CLIENT_BUILD&knownPolicyRevision=0" \
+  "$BACKEND_BASE_URL/v2/release-policy?audience=owner&cohort=authenticatedOwner&clientBuild=$CLIENT_BUILD&knownPolicyRevision=0" \
   --output "$PAYLOAD_PATH"
 
 swiftc \

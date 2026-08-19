@@ -60,7 +60,7 @@ for required in [
     "JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])",
     "func cachedReleasePolicyEvaluation(",
     "audience: String = \"owner\"",
-    "cohort: String = \"closedPilotAdultSelf\"",
+    "cohort: String = \"authenticatedOwner\"",
     "cachedPolicyContractInvalid",
     "state = .corrupt",
 ] {

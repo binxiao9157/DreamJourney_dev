@@ -122,6 +122,7 @@ struct PublicationVisitorAdmission: Equatable {
 
     let grantID: String
     let visitorSessionID: String
+    let ownerSubjectID: String
     let publicationID: String
     let publicationVersionID: String
     let expiresAt: Date
@@ -131,6 +132,7 @@ struct PublicationVisitorAdmission: Equatable {
         guard json["schemaVersion"] as? String == Self.schemaVersion,
               let grantID = Self.identifier(json["grantId"] as? String),
               let visitorSessionID = Self.identifier(json["visitorSessionId"] as? String),
+              let ownerSubjectID = Self.identifier(json["ownerSubjectId"] as? String),
               let publicationID = Self.identifier(json["publicationId"] as? String),
               let publicationVersionID = Self.identifier(json["publicationVersionId"] as? String),
               let expiresAt = Self.date(json["expiresAt"] as? String),
@@ -140,6 +142,7 @@ struct PublicationVisitorAdmission: Equatable {
         }
         self.grantID = grantID
         self.visitorSessionID = visitorSessionID
+        self.ownerSubjectID = ownerSubjectID
         self.publicationID = publicationID
         self.publicationVersionID = publicationVersionID
         self.expiresAt = expiresAt
@@ -153,6 +156,7 @@ struct PublicationVisitorAdmission: Equatable {
     ) -> PublicationVisitorSessionScope? {
         PublicationVisitorSessionScope(
             visitorSessionID: visitorSessionID,
+            ownerSubjectID: ownerSubjectID,
             publicationID: publicationID,
             publicationVersionID: publicationVersionID,
             expiresAt: expiresAt,
@@ -189,6 +193,7 @@ protocol PublicationVisitorAdmissionClient {
 /// not expose the credential to callers outside this module.
 struct PublicationVisitorSessionScope: Equatable {
     let visitorSessionID: String
+    let ownerSubjectID: String
     let publicationID: String
     let publicationVersionID: String
     let expiresAt: Date
@@ -197,6 +202,7 @@ struct PublicationVisitorSessionScope: Equatable {
 
     init?(
         visitorSessionID: String,
+        ownerSubjectID: String,
         publicationID: String,
         publicationVersionID: String,
         expiresAt: Date,
@@ -205,6 +211,7 @@ struct PublicationVisitorSessionScope: Equatable {
         now: Date = Date()
     ) {
         guard let normalizedVisitorSessionID = Self.normalized(visitorSessionID),
+              let normalizedOwnerSubjectID = Self.normalized(ownerSubjectID),
               let normalizedPublicationID = Self.normalized(publicationID),
               let normalizedPublicationVersionID = Self.normalized(publicationVersionID),
               let normalizedCredential = Self.normalized(sessionCredential),
@@ -216,6 +223,7 @@ struct PublicationVisitorSessionScope: Equatable {
             return nil
         }
         self.visitorSessionID = normalizedVisitorSessionID
+        self.ownerSubjectID = normalizedOwnerSubjectID
         self.publicationID = normalizedPublicationID
         self.publicationVersionID = normalizedPublicationVersionID
         self.expiresAt = expiresAt
@@ -460,6 +468,7 @@ enum PublicationVisitorSessionInvalidationReason: String, Equatable {
 struct PublicationVisitorSessionSnapshot: Equatable {
     let isActive: Bool
     let visitorSessionID: String?
+    let ownerSubjectID: String?
     let publicationID: String?
     let publicationVersionID: String?
     let expiresAt: Date?
@@ -544,6 +553,7 @@ final class PublicationVisitorSessionCoordinator {
         return PublicationVisitorSessionSnapshot(
             isActive: activeScope != nil,
             visitorSessionID: activeScope?.visitorSessionID,
+            ownerSubjectID: activeScope?.ownerSubjectID,
             publicationID: activeScope?.publicationID,
             publicationVersionID: activeScope?.publicationVersionID,
             expiresAt: activeScope?.expiresAt,

@@ -32,7 +32,13 @@ require(
     "digital-human context persistence must be owner and account-generation scoped"
 )
 require(echo.contains("familyRelationshipUnauthorized"), "Echo must record an explicit unauthorized-family fallback")
-require(echo.contains("guard let expectedIdentity = echoKnowledgeContextIdentity"), "Echo must preflight identity before backend request")
-require(echo.contains("viewerFamilyMemberID: context.isSelfAssistant ? nil : context.ownerId"), "family context request must carry the accepted member ID")
+require(identity.contains("EchoV4IdentityRoutingPolicy"), "Echo must use the V4 Owner/Visitor routing policy")
+require(identity.contains("legacyFallbackAllowed: false"), "V4 family routes must never widen through Legacy Archive or KBLite")
+require(echo.contains("requestVisitorPublicEchoAnswer"), "matching VisitorSession must use PublicProjection reader")
+require(echo.contains("presentFamilyContributionEchoBoundary"), "family without ShareGrant must route to contribution")
+require(echo.contains("PublicationVisitorRuntime.shared.makeReadUseCase()"), "Visitor answers must use the scoped reader")
+require(echo.contains("viewerFamilyMemberID: nil"), "private Context build must be Owner-only")
+require(!echo.contains("viewerFamilyMemberID: context.isSelfAssistant ? nil : context.ownerId"), "family routes must not call private Context APIs")
+require(echo.contains("providerSessionSkipped"), "Visitor and contribution routes must skip digital-human sessions")
 
 print("Echo family context authorization check passed")

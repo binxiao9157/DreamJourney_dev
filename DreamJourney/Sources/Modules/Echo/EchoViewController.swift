@@ -2993,7 +2993,11 @@ final class EchoViewController: UIViewController {
                 at: .request,
                 expected: accountLease,
                 reason: "scheduleRuntimeRecovery:\(reason)"
-              ) else {
+              ),
+              echoV4IdentityRouteDecision(
+                for: DigitalHumanContextStore.shared.current,
+                accountLease: accountLease
+              ).route == .ownerPrivate else {
             return
         }
 
@@ -4078,8 +4082,33 @@ final class EchoViewController: UIViewController {
               validateEchoAccountLease(
                 at: .request,
                 expected: accountLease,
-                reason: "prepareCloudRuntime"
+                  reason: "prepareCloudRuntime"
               ) else { return }
+        let context = DigitalHumanContextStore.shared.current
+        let routeDecision = echoV4IdentityRouteDecision(
+            for: context,
+            accountLease: accountLease
+        )
+        guard routeDecision.route == .ownerPrivate else {
+            releaseDigitalHumanRuntime(
+                reason: "identityRoute:\(routeDecision.route.rawValue)",
+                resetsAudioOwnerToOrdinaryEcho: true,
+                recordsDiagnostics: false
+            )
+            digitalHumanLivePanelView?.isHidden = true
+            lastEchoRuntimeFallbackReason = routeDecision.reason
+            recordEchoRuntimeDiagnosticsSnapshot(reason: routeDecision.reason)
+            PrivacySafeDiagnostics.log(
+                subsystem: "TencentDigitalHuman",
+                event: "providerSessionSkipped",
+                states: [
+                    "identityRoute": routeDecision.route.rawValue,
+                    "reason": routeDecision.reason,
+                ]
+            )
+            return
+        }
+        digitalHumanLivePanelView?.isHidden = false
         if reconcileDigitalHumanRuntimeWithCurrentContext(reason: "prepare") {
             scheduleCloudDigitalHumanRuntimeRecovery(
                 reason: "prepareContextChanged",
@@ -4087,7 +4116,6 @@ final class EchoViewController: UIViewController {
             )
             return
         }
-        let context = DigitalHumanContextStore.shared.current
         let contextKey = digitalHumanRuntimeContextKey(for: context)
         let requestOwnerUserId = accountLease.subjectId
         let lifecycleToken = providedLifecycleToken
@@ -5273,6 +5301,27 @@ final class EchoViewController: UIViewController {
         KBLiteManager.resolveAuthorizedPersonaIdentity(for: context)
     }
 
+    private func echoV4IdentityRouteDecision(
+        for context: DigitalHumanContext,
+        accountLease: AccountLease
+    ) -> EchoV4IdentityRouteDecision {
+        let member = context.isSelfAssistant
+            ? nil
+            : FamilyRepository.shared.acceptedMembers(for: accountLease.subjectId)
+                .first(where: { $0.id == context.ownerId })
+        let visitorSession = PublicationVisitorRuntime.shared.snapshot().session
+        return EchoV4IdentityRoutingPolicy.evaluate(
+            viewerSubjectID: accountLease.subjectId,
+            targetOwnerSubjectID: context.isSelfAssistant
+                ? accountLease.subjectId
+                : member?.memberSubjectId,
+            isSelfAssistant: context.isSelfAssistant,
+            relationshipAccepted: member != nil,
+            visitorSessionOwnerSubjectID: visitorSession.ownerSubjectID,
+            visitorSessionActive: visitorSession.isActive
+        )
+    }
+
     private func cancelActiveEchoContextBuild(reason: String) {
         activeEchoTurnKnowledgeContextGate?.cancel()
         activeEchoTurnKnowledgeContextGate = nil
@@ -5300,19 +5349,6 @@ final class EchoViewController: UIViewController {
         allowsGeneration: Bool
     ) {
         let context = DigitalHumanContextStore.shared.current
-        guard let expectedIdentity = echoKnowledgeContextIdentity(for: context) else {
-            cancelActiveEchoContextBuild(reason: "familyRelationshipUnauthorized")
-            lastEchoRuntimeFallbackReason = "familyRelationshipUnauthorized"
-            recordEchoRuntimeDiagnosticsSnapshot(reason: "familyRelationshipUnauthorized")
-            PrivacySafeDiagnostics.log(
-                subsystem: "CFLite",
-                event: "contextBuildSkipped",
-                states: ["reason": "familyRelationshipUnauthorized"],
-                correlations: ["turn": turnID]
-            )
-            return
-        }
-
         guard let accountLease = echoAccountLease,
               validateEchoAccountLease(
                   at: .request,
@@ -5322,6 +5358,33 @@ final class EchoViewController: UIViewController {
             cancelActiveEchoContextBuild(reason: "contextBuildAccountLeaseUnavailable")
             lastEchoRuntimeFallbackReason = "contextBuildAccountLeaseUnavailable"
             recordEchoRuntimeDiagnosticsSnapshot(reason: "contextBuildAccountLeaseUnavailable")
+            return
+        }
+
+        let routeDecision = echoV4IdentityRouteDecision(
+            for: context,
+            accountLease: accountLease
+        )
+        guard routeDecision.route == .ownerPrivate else {
+            cancelActiveEchoContextBuild(reason: routeDecision.reason)
+            lastEchoRuntimeFallbackReason = routeDecision.reason
+            recordEchoRuntimeDiagnosticsSnapshot(reason: routeDecision.reason)
+            PrivacySafeDiagnostics.log(
+                subsystem: "CFLite",
+                event: "contextBuildSkipped",
+                states: [
+                    "reason": routeDecision.reason,
+                    "route": routeDecision.route.rawValue,
+                    "legacyFallback": "denied",
+                ],
+                correlations: ["turn": turnID]
+            )
+            return
+        }
+        guard let expectedIdentity = echoKnowledgeContextIdentity(for: context) else {
+            cancelActiveEchoContextBuild(reason: "ownerIdentityUnavailable")
+            lastEchoRuntimeFallbackReason = "ownerIdentityUnavailable"
+            recordEchoRuntimeDiagnosticsSnapshot(reason: "ownerIdentityUnavailable")
             return
         }
 
@@ -5379,7 +5442,7 @@ final class EchoViewController: UIViewController {
             expectedIdentity: expectedIdentity,
             accountLease: accountLease,
             lifecycleMode: context.mode,
-            viewerFamilyMemberID: context.isSelfAssistant ? nil : context.ownerId
+            viewerFamilyMemberID: nil
         ) { [weak self] contextBuildLease, delivery in
             switch delivery {
             case .success(let packet):
@@ -6633,10 +6696,18 @@ final class EchoViewController: UIViewController {
               isCurrentDigitalHumanLifecycleToken(
                   lifecycleToken,
                   reason: "echoAnswerRequest"
-              ),
-              let expectedIdentity = echoKnowledgeContextIdentity(for: context) else {
+              ) else {
             activeVoiceInteractionLifecycleToken = nil
             viewModel.fail("当前身份无权访问这份记忆")
+            return
+        }
+        let routeDecision = echoV4IdentityRouteDecision(
+            for: context,
+            accountLease: accountLease
+        )
+        guard routeDecision.route != .denied else {
+            activeVoiceInteractionLifecycleToken = nil
+            viewModel.fail("当前家庭关系不可用于回响")
             return
         }
 
@@ -6670,10 +6741,47 @@ final class EchoViewController: UIViewController {
         PrivacySafeDiagnostics.log(
             subsystem: "Echo",
             event: "backendAnswerRequested",
-            states: ["source": source],
+            states: [
+                "source": source,
+                "identityRoute": routeDecision.route.rawValue,
+            ],
             counts: ["questionLength": question.count],
             correlations: ["turn": turnID]
         )
+
+        switch routeDecision.route {
+        case .visitorPublic:
+            requestVisitorPublicEchoAnswer(
+                question: question,
+                context: context,
+                routeDecision: routeDecision,
+                lifecycleToken: lifecycleToken,
+                accountLease: accountLease,
+                turnID: turnID
+            )
+            return
+        case .familyContribution:
+            presentFamilyContributionEchoBoundary(
+                question: question,
+                context: context,
+                lifecycleToken: lifecycleToken,
+                accountLease: accountLease,
+                turnID: turnID
+            )
+            return
+        case .ownerPrivate:
+            break
+        case .denied:
+            activeVoiceInteractionLifecycleToken = nil
+            viewModel.fail("当前身份无权访问这份记忆")
+            return
+        }
+
+        guard let expectedIdentity = echoKnowledgeContextIdentity(for: context) else {
+            activeVoiceInteractionLifecycleToken = nil
+            viewModel.fail("本人记忆身份暂不可用")
+            return
+        }
 
         if viewModel.isWaitingForDelayedReply {
             scheduleDelayedReplyNotificationIfNeeded(rawTranscript: question)
@@ -6694,7 +6802,7 @@ final class EchoViewController: UIViewController {
             digitalHumanId: expectedIdentity.digitalHumanId,
             personaName: context.resolvedDisplayName,
             lifecycleMode: context.mode,
-            viewerFamilyMemberID: context.isSelfAssistant ? nil : context.ownerId
+            viewerFamilyMemberID: nil
         ) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self,
@@ -6769,6 +6877,119 @@ final class EchoViewController: UIViewController {
                 }
             }
         }
+    }
+
+    private func requestVisitorPublicEchoAnswer(
+        question: String,
+        context: DigitalHumanContext,
+        routeDecision: EchoV4IdentityRouteDecision,
+        lifecycleToken: DigitalHumanLifecycleToken,
+        accountLease: AccountLease,
+        turnID: String
+    ) {
+        let expectedContextKey = digitalHumanRuntimeContextKey(for: context)
+        renderVoiceStatus(
+            text: "正在公开回忆中寻找回答",
+            isVisible: true,
+            accessibilityIdentifier: "echoVisitorPublicAnswerLoading"
+        )
+        PublicationVisitorRuntime.shared.makeReadUseCase().answer(question) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self,
+                      self.validateEchoAccountLease(
+                        at: .ui,
+                        expected: accountLease,
+                        reason: "visitorPublicAnswerResponse"
+                      ),
+                      self.isCurrentDigitalHumanLifecycleToken(
+                        lifecycleToken,
+                        reason: "visitorPublicAnswerResponse"
+                      ),
+                      self.currentDigitalHumanRuntimeContextKey() == expectedContextKey,
+                      self.echoV4IdentityRouteDecision(
+                        for: DigitalHumanContextStore.shared.current,
+                        accountLease: accountLease
+                      ) == routeDecision else {
+                    return
+                }
+
+                switch result {
+                case .success(let response):
+                    let replyText = response.answer.text
+                    self.captureLiveAssistantTurn(replyText)
+                    guard self.viewModel.receiveAIReply(replyText) else {
+                        self.activeVoiceInteractionLifecycleToken = nil
+                        self.viewModel.fail("本轮公开回响状态已变化，请重新提问")
+                        return
+                    }
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "Echo",
+                        event: "visitorPublicAnswerReceived",
+                        states: [
+                            "identityRoute": EchoV4IdentityRoute.visitorPublic.rawValue,
+                            "answerKind": response.answer.kind.rawValue,
+                            "privateContext": "denied",
+                            "digitalHuman": "disabled",
+                        ],
+                        counts: ["answerLength": replyText.count],
+                        correlations: ["turn": turnID]
+                    )
+                    self.playEchoAnswerWithVolcSpeech(
+                        replyText,
+                        lifecycleToken: lifecycleToken,
+                        accountLease: accountLease
+                    )
+                case .failure:
+                    self.activeVoiceInteractionLifecycleToken = nil
+                    self.viewModel.fail("公开回忆暂不可访问，请重新获取分享授权")
+                    self.renderVoiceStatus(
+                        text: "公开回忆授权已失效",
+                        isVisible: true,
+                        accessibilityIdentifier: "echoVisitorPublicAnswerFailed"
+                    )
+                }
+            }
+        }
+    }
+
+    private func presentFamilyContributionEchoBoundary(
+        question: String,
+        context: DigitalHumanContext,
+        lifecycleToken: DigitalHumanLifecycleToken,
+        accountLease: AccountLease,
+        turnID: String
+    ) {
+        let handoff = EchoMemoryGapHandoff(
+            question: String(question.prefix(200)),
+            destination: .familyContribution,
+            contextKey: digitalHumanRuntimeContextKey(for: context)
+        )
+        pendingMemoryGapHandoff = handoff
+        updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
+        let replyText = "这位家人尚未向你发布可查询的回忆。"
+            + "如果你愿意，可以分享一段相关故事，交给档案所有者确认。"
+        captureLiveAssistantTurn(replyText)
+        guard viewModel.receiveAIReply(replyText) else {
+            activeVoiceInteractionLifecycleToken = nil
+            viewModel.fail("本轮家庭贡献状态已变化，请重新提问")
+            return
+        }
+        PrivacySafeDiagnostics.log(
+            subsystem: "Echo",
+            event: "familyContributionBoundaryPresented",
+            states: [
+                "identityRoute": EchoV4IdentityRoute.familyContribution.rawValue,
+                "privateContext": "denied",
+                "legacyFallback": "denied",
+            ],
+            counts: ["questionLength": question.count],
+            correlations: ["turn": turnID]
+        )
+        playEchoAnswerWithVolcSpeech(
+            replyText,
+            lifecycleToken: lifecycleToken,
+            accountLease: accountLease
+        )
     }
 
     private func playEchoAnswerWithVolcSpeech(
