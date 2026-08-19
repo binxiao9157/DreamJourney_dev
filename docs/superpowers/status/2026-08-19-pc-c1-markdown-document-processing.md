@@ -35,7 +35,6 @@
 
 ## PC-C1 剩余内容
 
-- 图片 OCR/描述 Provider Adapter 需要输出带来源的人物、时间、地点候选。
-- 图片 Provider 缺失或失败时必须保留 Source，只显示不可用/可重试，不生成空 Candidate。
+- 图片 OCR/描述 Provider Adapter、结构化人物/时间/地点线索和 `inferred` Candidate 已由 Backend `f936181` 完成并部署，详见 `2026-08-19-pc-c1-image-understanding-provider-adapter.md`。
 - 腾讯 COS、内容安全扫描器、Worker 和图片 Provider 的真实部署态 E2E 仍需外部配置。
 - 音频和视频普通入口、上传与处理继续保持产品关闭。

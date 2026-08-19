@@ -3,7 +3,7 @@
 日期：2026-08-18
 状态：`IN_PROGRESS`
 日常开发入口：`CANONICAL_EXECUTION_PLAN`
-执行控制版本：V1.12
+执行控制版本：V1.13
 
 ## 0. 目标和基线
 
@@ -23,11 +23,11 @@
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
 | `COMPLETE` | 12 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2、PC-B3 |
-| `WAITING_EXTERNAL_CONFIGURATION` | 1 | PC-A0：代码、production-postgres 部署和非真机验收已完成；真实短信 Provider 待配置 |
-| 当前执行项 | 1 | PC-C1：首版图片/文档理解 |
-| 后续待执行 | 5 | PC-C1 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+| `WAITING_EXTERNAL_CONFIGURATION` | 2 | PC-A0：真实短信 Provider 待配置；PC-C1：代码与默认关闭部署完成，真实私有对象存储、内容安全扫描器和视觉 Provider 待配置 |
+| 当前执行项 | 1 | PC-C2：正式记忆 Markdown 导出 |
+| 后续待执行 | 4 | PC-C2 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：PC-C1 iOS 为 `5a88db2e`，Backend 和服务器均为 `4384fde`，migration head 为 `0100`。TXT/PDF/DOCX/Markdown 文档合同已统一，Markdown 已完成上传、隔离解析、来源片段、Candidate 人工确认、正式 Memory、Search Projection、Context、撤权与删除的部署态 PostgreSQL E2E；合成账户测试中底层完整导出只在一次性测试进程临时开放，真实客户端仍保持 `accountDataExport=productClosed`。当前继续 PC-C1 图片 OCR/描述 Provider Adapter；真实短信 Provider、APNs 真机到达、腾讯 COS 和真实视觉 Provider 分别保留为外部 Gate，均不阻塞后续不依赖它们的开发。
+当前代码与部署交接：PC-C1 iOS 为 `0c49b98d`，Backend 和服务器均为 `f936181`，migration head 为 `0100`。TXT/PDF/DOCX/Markdown 已完成上传、隔离解析、来源片段、Candidate 人工确认、正式 Memory、Search Projection、Context、撤权与删除的部署态 PostgreSQL E2E。图片 Provider Adapter 已支持兼容 OCR 文本和严格的 `owner-truth-image-understanding-v1` 合同；描述、OCR 和人物/时间/地点线索写入私有 Source，线索经本体与 hash 校验后只能生成 `inferred`、单条人工确认 Candidate，合同异常或元数据篡改时失败关闭。服务器未配置真实视觉 Provider，当前继续返回不可用状态而不伪造分析结果。执行交接点进入 PC-C2 正式记忆 Markdown 导出；真实短信 Provider、APNs 真机到达、腾讯 COS、内容安全扫描器和真实视觉 Provider 分别保留为外部 Gate。
 
 每轮只需读取：
 
@@ -501,7 +501,7 @@ iOS：
 
 完成定义：每种已开放媒体都能生成有来源的 Candidate，或如实显示不可用/可重试。
 
-状态：`IN_PROGRESS`（2026-08-19）。首个文档处理闭环已完成：后端和 iOS 统一支持 TXT/PDF/DOCX/Markdown，Markdown 使用 `text/markdown` 合同并在隔离子进程中解析，UTF-8 魔数别名、伪装 MIME、损坏输入、来源片段、结果 hash 和 Candidate handoff 已纳入 Gate。文档使用服务端本地隔离 parser，不再错误发送外部 Provider 同意字段。Backend `4384fde` 已部署，使用部署容器和 disposable PostgreSQL 的 E2E 已验证 Markdown 从上传、确认到 Context 和删除；生产 Release Policy 仍保持完整账户导出关闭。下一小闭环进入图片 OCR/描述 Provider Adapter 与结构化来源 Candidate；真实腾讯 COS、图片 Provider 质量和真实扫描器媒体链路仍保留为外部 Gate。
+状态：`WAITING_EXTERNAL_CONFIGURATION`（2026-08-19）。代码与默认关闭部署闭环已完成：后端和 iOS 统一支持 TXT/PDF/DOCX/Markdown，Markdown 使用 `text/markdown` 合同并在隔离子进程中解析；图片使用服务端 Provider Adapter，兼容旧 OCR 文本，并为结构化描述、OCR、人物、时间和地点定义严格 V1 合同。结构化线索只生成 `inferred`、单条人工确认 Candidate；Provider 不能直接写 Memory，合同异常、hash 篡改、空结果和失败均不生成 Candidate。Backend `f936181` 已部署，`/ready` 和 runtime capability smoke 通过，线上图像 Provider 保持 `disabled`。部署态 Markdown PostgreSQL E2E 已覆盖上传到删除；真实腾讯 COS、内容安全扫描器、视觉 Provider 质量和删除回执仍为外部 Gate。执行交接点进入 PC-C2；证据见 `docs/superpowers/status/2026-08-19-pc-c1-markdown-document-processing.md` 与 `docs/superpowers/status/2026-08-19-pc-c1-image-understanding-provider-adapter.md`。
 
 ### PC-C2 正式记忆 Markdown 导出
 
