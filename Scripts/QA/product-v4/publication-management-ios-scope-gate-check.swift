@@ -19,6 +19,7 @@ let featureFlags = try read("DreamJourney/Sources/App/FeatureFlagService.swift")
 let backendClient = try read("DreamJourney/Sources/Services/DreamJourneyBackendClient.swift")
 let managementAccess = try read("DreamJourney/Sources/Services/PublicationManagementAccess.swift")
 let managementView = try read("DreamJourney/Sources/Modules/Profile/ProfilePublicationManagementQAViewController.swift")
+let publicationEditor = try read("DreamJourney/Sources/Modules/Archive/OwnerPublicationDraftViewControllers.swift")
 let profile = try read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
 let tabCoordinator = try read("DreamJourney/Sources/App/TabCoordinator.swift")
 let appDelegate = try read("DreamJourney/Sources/AppDelegate.swift")
@@ -73,6 +74,23 @@ require(
         && managementView.contains("查看版本记录"),
     "owner version audit must use a typed, lease-bound publication route"
 )
+require(
+    managementAccess.contains("struct PublicationRevisionDraftCreateCommand")
+        && managementAccess.contains("func createRevision(")
+        && backendClient.contains("/publications/\\(pathComponent(normalizedPublicationID))/drafts")
+        && managementView.contains("基于当前版本创建新版本")
+        && managementView.contains("profile-publication-management-create-revision")
+        && publicationEditor.contains("case revision(publicationID: String, baseVersion: PublicationOwnerVersion)")
+        && publicationEditor.contains("当前版本的条目与顺序保持不变"),
+    "owner revision must reuse the typed editor, preserve order and use the formal v3 route"
+)
+require(
+    managementAccess.contains("publication-authority-v3")
+        && managementAccess.contains("basePublicationVersionId")
+        && managementAccess.contains("targetPublicationVersion")
+        && !managementAccess.contains("UserDefaults"),
+    "revision receipts must remain schema-checked, transient and bound to the immutable base version"
+)
 
 for forbiddenSymbol in [
     "EchoViewController",
@@ -88,7 +106,8 @@ for forbiddenSymbol in [
 ] {
     require(
         !managementAccess.contains(forbiddenSymbol)
-            && !managementView.contains(forbiddenSymbol),
+            && !managementView.contains(forbiddenSymbol)
+            && !publicationEditor.contains(forbiddenSymbol),
         "management shell must not expose or depend on private runtime symbol \(forbiddenSymbol)"
     )
 }

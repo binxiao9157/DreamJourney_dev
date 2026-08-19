@@ -474,17 +474,82 @@ struct PublicationDraftCreateCommand: Equatable {
     }
 }
 
+struct PublicationRevisionDraftItemInput: Equatable {
+    let itemIndex: Int
+    let publicTitle: String
+    let publicBody: String
+
+    init(itemIndex: Int, publicTitle: String, publicBody: String) throws {
+        guard itemIndex >= 0,
+              let publicTitle = PublicationDraftContract.text(publicTitle, maximumLength: 120),
+              let publicBody = PublicationDraftContract.text(publicBody, maximumLength: 12_000) else {
+            throw PublicationDraftAccessError.invalidInput
+        }
+        self.itemIndex = itemIndex
+        self.publicTitle = publicTitle
+        self.publicBody = publicBody
+    }
+
+    var requestPayload: [String: Any] {
+        [
+            "itemIndex": itemIndex,
+            "publicTitle": publicTitle,
+            "publicBody": publicBody,
+        ]
+    }
+}
+
+struct PublicationRevisionDraftCreateCommand: Equatable {
+    let commandID: UUID
+    let publicationID: String
+    let expectedPublicationVersionID: String
+    let expectedPublicationVersion: Int
+    let items: [PublicationRevisionDraftItemInput]
+
+    init(
+        commandID: UUID = UUID(),
+        publicationID: String,
+        expectedPublicationVersionID: String,
+        expectedPublicationVersion: Int,
+        items: [PublicationRevisionDraftItemInput]
+    ) throws {
+        guard let publicationID = PublicationDraftContract.uuid(publicationID),
+              let expectedPublicationVersionID = PublicationDraftContract.uuid(
+                expectedPublicationVersionID
+              ),
+              expectedPublicationVersion > 0,
+              (1...PublicationDraftCreateCommand.maximumItemCount).contains(items.count),
+              items.map(\.itemIndex) == Array(0..<items.count) else {
+            throw PublicationDraftAccessError.invalidInput
+        }
+        self.commandID = commandID
+        self.publicationID = publicationID
+        self.expectedPublicationVersionID = expectedPublicationVersionID
+        self.expectedPublicationVersion = expectedPublicationVersion
+        self.items = items
+    }
+
+    var requestPayload: [String: Any] {
+        [
+            "commandId": commandID.uuidString.lowercased(),
+            "publicationId": publicationID,
+            "expectedPublicationVersionId": expectedPublicationVersionID,
+            "expectedPublicationVersion": expectedPublicationVersion,
+            "items": items.map(\.requestPayload),
+        ]
+    }
+}
+
 struct PublicationDraftReceiptItem: Equatable {
     let itemIndex: Int
-    let memoryVersionID: String
+    let memoryVersionID: String?
     let itemSnapshotHash: String
     let previewTitle: String
     let previewBody: String
     let thirdPartyReviewRequired: Bool
 
-    init?(json: [String: Any]) {
+    init?(json: [String: Any], requiresMemoryVersionID: Bool = true) {
         guard let itemIndex = PublicationDraftContract.nonnegativeInt(json["itemIndex"]),
-              let memoryVersionID = PublicationDraftContract.uuid(json["memoryVersionId"] as? String),
               let itemSnapshotHash = PublicationDraftContract.sha256(json["itemSnapshotHash"] as? String),
               let preview = json["preview"] as? [String: Any],
               let previewTitle = PublicationDraftContract.text(
@@ -498,6 +563,8 @@ struct PublicationDraftReceiptItem: Equatable {
               let thirdPartyReviewRequired = json["thirdPartyReviewRequired"] as? Bool else {
             return nil
         }
+        let memoryVersionID = PublicationDraftContract.uuid(json["memoryVersionId"] as? String)
+        guard !requiresMemoryVersionID || memoryVersionID != nil else { return nil }
         self.itemIndex = itemIndex
         self.memoryVersionID = memoryVersionID
         self.itemSnapshotHash = itemSnapshotHash
@@ -517,13 +584,19 @@ struct PublicationDraftReceipt: Equatable {
     let expectedDraftRevision: Int
     let expectedDraftSnapshotHash: String
     let items: [PublicationDraftReceiptItem]
+    let basePublicationVersionID: String?
+    let targetPublicationVersion: Int
     let requiresSecondConfirmation: Bool
     let thirdPartyReviewRequired: Bool
     let aiDisclosureRequired: Bool
 
     init?(json: [String: Any]) {
         guard let schemaVersion = json["schemaVersion"] as? String,
-              ["publication-authority-v1", "publication-authority-v2"].contains(schemaVersion),
+              [
+                "publication-authority-v1",
+                "publication-authority-v2",
+                "publication-authority-v3",
+              ].contains(schemaVersion),
               let vaultID = PublicationDraftContract.identifier(json["vaultId"] as? String),
               let publicationID = PublicationDraftContract.uuid(json["publicationId"] as? String),
               let draftID = PublicationDraftContract.uuid(json["draftId"] as? String),
@@ -545,20 +618,48 @@ struct PublicationDraftReceipt: Equatable {
             return nil
         }
         let parsedItems: [PublicationDraftReceiptItem]
-        if schemaVersion == "publication-authority-v2" {
+        if schemaVersion == "publication-authority-v2"
+            || schemaVersion == "publication-authority-v3" {
             guard let itemCount = PublicationDraftContract.positiveInt(json["itemCount"]),
                   let rawItems = json["items"] as? [[String: Any]] else {
                 return nil
             }
-            parsedItems = rawItems.compactMap(PublicationDraftReceiptItem.init(json:))
+            parsedItems = rawItems.compactMap {
+                PublicationDraftReceiptItem(
+                    json: $0,
+                    requiresMemoryVersionID: schemaVersion != "publication-authority-v3"
+                )
+            }
             guard parsedItems.count == rawItems.count,
                   parsedItems.count == itemCount,
-                  parsedItems.map(\.itemIndex) == Array(0..<itemCount),
-                  Set(parsedItems.map(\.memoryVersionID)).count == itemCount else {
+                  parsedItems.map(\.itemIndex) == Array(0..<itemCount) else {
                 return nil
+            }
+            if schemaVersion != "publication-authority-v3" {
+                guard Set(parsedItems.compactMap(\.memoryVersionID)).count == itemCount else {
+                    return nil
+                }
             }
         } else {
             parsedItems = []
+        }
+        let basePublicationVersionID: String?
+        let targetPublicationVersion: Int
+        if schemaVersion == "publication-authority-v3" {
+            guard let parsedBaseVersionID = PublicationDraftContract.uuid(
+                    json["basePublicationVersionId"] as? String
+                  ),
+                  let parsedTargetVersion = PublicationDraftContract.positiveInt(
+                    json["targetPublicationVersion"]
+                  ),
+                  parsedTargetVersion >= 2 else {
+                return nil
+            }
+            basePublicationVersionID = parsedBaseVersionID
+            targetPublicationVersion = parsedTargetVersion
+        } else {
+            basePublicationVersionID = nil
+            targetPublicationVersion = 1
         }
         self.schemaVersion = schemaVersion
         self.vaultID = vaultID
@@ -569,6 +670,8 @@ struct PublicationDraftReceipt: Equatable {
         self.expectedDraftRevision = expectedDraftRevision
         self.expectedDraftSnapshotHash = expectedDraftSnapshotHash
         items = parsedItems
+        self.basePublicationVersionID = basePublicationVersionID
+        self.targetPublicationVersion = targetPublicationVersion
         self.requiresSecondConfirmation = requiresSecondConfirmation
         self.thirdPartyReviewRequired = thirdPartyReviewRequired
         self.aiDisclosureRequired = aiDisclosureRequired
@@ -625,7 +728,11 @@ struct PublicationDraftConfirmReceipt: Equatable {
 
     init?(json: [String: Any]) {
         guard let schemaVersion = json["schemaVersion"] as? String,
-              ["publication-authority-v1", "publication-authority-v2"].contains(schemaVersion),
+              [
+                "publication-authority-v1",
+                "publication-authority-v2",
+                "publication-authority-v3",
+              ].contains(schemaVersion),
               let vaultID = PublicationDraftContract.identifier(json["vaultId"] as? String),
               let publicationID = PublicationDraftContract.uuid(json["publicationId"] as? String),
               let draftID = PublicationDraftContract.uuid(json["draftId"] as? String),
@@ -649,7 +756,8 @@ struct PublicationDraftConfirmReceipt: Equatable {
         }
         let itemCount: Int
         let itemHashes: [String]
-        if schemaVersion == "publication-authority-v2" {
+        if schemaVersion == "publication-authority-v2"
+            || schemaVersion == "publication-authority-v3" {
             guard let parsedItemCount = PublicationDraftContract.positiveInt(json["itemCount"]),
                   let rawHashes = json["publicProjectionItemHashes"] as? [String] else {
                 return nil
@@ -683,6 +791,14 @@ protocol PublicationDraftWriterClient: AnyObject {
     func createPublicationDraft(
         vaultID: String,
         command: PublicationDraftCreateCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationDraftReceipt, Error>) -> Void
+    )
+
+    func createPublicationRevisionDraft(
+        vaultID: String,
+        publicationID: String,
+        command: PublicationRevisionDraftCreateCommand,
         accountLease: AccountLease,
         completion: @escaping (Result<PublicationDraftReceipt, Error>) -> Void
     )
@@ -742,6 +858,45 @@ final class PublicationDraftUseCase {
                 return
             }
             guard receipt.vaultID == accountLease.vaultId else {
+                completion(.failure(PublicationDraftAccessError.responseScopeMismatch))
+                return
+            }
+            completion(.success(receipt))
+        }
+    }
+
+    func createRevision(
+        command: PublicationRevisionDraftCreateCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationDraftReceipt, Error>) -> Void
+    ) {
+        guard isEnabled() else {
+            completion(.failure(PublicationDraftAccessError.disabled))
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            completion(.failure(PublicationDraftAccessError.accountLeaseInvalid))
+            return
+        }
+        client.createPublicationRevisionDraft(
+            vaultID: accountLease.vaultId,
+            publicationID: command.publicationID,
+            command: command,
+            accountLease: accountLease
+        ) { [weak self] result in
+            guard let self else { return }
+            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(PublicationDraftAccessError.accountLeaseInvalid))
+                return
+            }
+            guard case let .success(receipt) = result else {
+                completion(result)
+                return
+            }
+            guard receipt.vaultID == accountLease.vaultId,
+                  receipt.publicationID == command.publicationID,
+                  receipt.basePublicationVersionID == command.expectedPublicationVersionID,
+                  receipt.targetPublicationVersion == command.expectedPublicationVersion + 1 else {
                 completion(.failure(PublicationDraftAccessError.responseScopeMismatch))
                 return
             }

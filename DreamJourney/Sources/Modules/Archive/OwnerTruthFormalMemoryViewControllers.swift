@@ -1162,6 +1162,16 @@ private final class OwnerPublicationDraftUIQAClient: PublicationDraftWriterClien
         completion(.success(receipt))
     }
 
+    func createPublicationRevisionDraft(
+        vaultID: String,
+        publicationID: String,
+        command: PublicationRevisionDraftCreateCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationDraftReceipt, Error>) -> Void
+    ) {
+        completion(.failure(PublicationDraftAccessError.unavailable))
+    }
+
     func confirmPublicationDraft(
         vaultID: String,
         publicationID: String,

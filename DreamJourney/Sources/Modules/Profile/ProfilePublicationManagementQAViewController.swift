@@ -21,6 +21,8 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
     private let useCase: PublicationManagementReadUseCase
     private let versionAuditUseCase: PublicationVersionAuditUseCase
     private let lifecycleUseCase: PublicationLifecycleUseCase
+    private let publicationClient: PublicationDraftWriterClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let accountLeaseProvider: () -> AccountLease?
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
@@ -36,6 +38,7 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
     init(
         client: PublicationManagementReaderClient = DreamJourneyBackendClient.shared,
         versionClient: PublicationVersionAuditReaderClient? = nil,
+        publicationClient: PublicationDraftWriterClient = DreamJourneyBackendClient.shared,
         lifecycleClient: PublicationLifecycleClient = DreamJourneyBackendClient.shared,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         accountLeaseProvider: @escaping () -> AccountLease? = {
@@ -56,6 +59,8 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
             client: lifecycleClient,
             accountLeaseRuntime: accountLeaseRuntime
         )
+        self.publicationClient = publicationClient
+        self.accountLeaseRuntime = accountLeaseRuntime
         self.accountLeaseProvider = accountLeaseProvider
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
@@ -372,6 +377,15 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
             return stack
         }
 
+        if let currentVersion = audit.versions.first(where: {
+            $0.isCurrent && $0.projectionState == "active"
+        }) {
+            stack.addArrangedSubview(makeRevisionControl(
+                audit: audit,
+                currentVersion: currentVersion
+            ))
+        }
+
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateStyle = .medium
@@ -410,6 +424,59 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
             }
         }
         return stack
+    }
+
+    private func makeRevisionControl(
+        audit: PublicationOwnerVersionAudit,
+        currentVersion: PublicationOwnerVersion
+    ) -> UIView {
+        let button = UIButton(type: .system)
+        button.setTitle("基于当前版本创建新版本", for: .normal)
+        button.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        button.titleLabel?.font = DJDesignTokens.Font.label(15)
+        button.contentHorizontalAlignment = .leading
+        button.accessibilityIdentifier = "profile-publication-management-create-revision"
+        button.accessibilityValue = "version-\(currentVersion.versionNumber)"
+        button.addAction(UIAction { [weak self] _ in
+            self?.openRevisionComposer(audit: audit, currentVersion: currentVersion)
+        }, for: .touchUpInside)
+        return button
+    }
+
+    private func openRevisionComposer(
+        audit: PublicationOwnerVersionAudit,
+        currentVersion: PublicationOwnerVersion
+    ) {
+        guard let accountLease = accountLeaseProvider(),
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            versionAuditFailures[audit.publicationID] = "当前账户状态已变更"
+            if case let .loaded(snapshot) = loadState {
+                render(.loaded(snapshot))
+            }
+            return
+        }
+        do {
+            let composer = try OwnerPublicationDraftComposerViewController(
+                accountLease: accountLease,
+                publicationID: audit.publicationID,
+                baseVersion: currentVersion,
+                client: publicationClient,
+                accountLeaseRuntime: accountLeaseRuntime
+            )
+            composer.onPublicationConfirmed = { [weak self] _ in
+                guard let self else { return }
+                self.versionAudits.removeValue(forKey: audit.publicationID)
+                self.versionAuditFailures.removeValue(forKey: audit.publicationID)
+                self.reload()
+                self.navigationController?.popToViewController(self, animated: true)
+            }
+            navigationController?.pushViewController(composer, animated: true)
+        } catch {
+            versionAuditFailures[audit.publicationID] = error.localizedDescription
+            if case let .loaded(snapshot) = loadState {
+                render(.loaded(snapshot))
+            }
+        }
     }
 
     private func toggleVersionAudit(for publication: PublicationManagementPublication) {

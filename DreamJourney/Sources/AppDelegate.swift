@@ -1803,6 +1803,7 @@ private extension AppDelegate {
         let fixtureClient = PublicationManagementM2UIQAFixtureClient()
         let shell = ProfilePublicationManagementQAViewController(
             client: fixtureClient,
+            publicationClient: fixtureClient,
             accountLeaseRuntime: runtime,
             accountLeaseProvider: { accountLease }
         )
@@ -1837,38 +1838,53 @@ private extension AppDelegate {
         }
 
         versionAuditButton.sendActions(for: .touchUpInside)
-        DispatchQueue.main.async { [weak self, weak shell] in
-            guard let self, let shell else { return }
+        DispatchQueue.main.async { [weak self, weak shell, weak profileNavigationController] in
+            guard let self, let shell, let profileNavigationController else { return }
             let versionAuditRendered = self.containsUIQAAccessibilityIdentifier(
                 "profile-publication-management-version-list",
                 in: shell.view
             )
-            let completed = gateEnabled
-                && featureFlagDefaultOff
-                && profileEntryVisible
-                && shellRendered
-                && publicationRendered
-                && grantRendered
-                && versionAuditRendered
+            let revisionButton = self.firstUIQAView(
+                withAccessibilityIdentifier: "profile-publication-management-create-revision",
+                in: shell.view
+            ) as? UIButton
+            revisionButton?.sendActions(for: .touchUpInside)
+            DispatchQueue.main.async { [weak self, weak profileNavigationController] in
+                guard let self, let profileNavigationController else { return }
+                let revisionComposerRendered = self.containsUIQAAccessibilityIdentifier(
+                    "owner-publication-draft-editor",
+                    in: profileNavigationController.topViewController?.view
+                )
+                let completed = gateEnabled
+                    && featureFlagDefaultOff
+                    && profileEntryVisible
+                    && shellRendered
+                    && publicationRendered
+                    && grantRendered
+                    && versionAuditRendered
+                    && revisionComposerRendered
 
-            self.writePublicationManagementM2SmokeResult(
-                completed: completed,
-                gateEnabled: gateEnabled,
-                featureFlagDefaultOff: featureFlagDefaultOff,
-                profileEntryVisible: profileEntryVisible,
-                shellRendered: shellRendered,
-                publicationRendered: publicationRendered,
-                grantRendered: grantRendered,
-                versionAuditRendered: versionAuditRendered,
-                failureReason: completed ? nil : "publicationManagementM2SurfaceMismatch"
-            )
-            print(
-                "[UI_QA] PublicationManagementM2Smoke completed " +
-                    "gateEnabled=\(gateEnabled) " +
-                    "profileEntryVisible=\(profileEntryVisible) " +
-                    "shellRendered=\(shellRendered) " +
-                    "versionAuditRendered=\(versionAuditRendered)"
-            )
+                self.writePublicationManagementM2SmokeResult(
+                    completed: completed,
+                    gateEnabled: gateEnabled,
+                    featureFlagDefaultOff: featureFlagDefaultOff,
+                    profileEntryVisible: profileEntryVisible,
+                    shellRendered: shellRendered,
+                    publicationRendered: publicationRendered,
+                    grantRendered: grantRendered,
+                    versionAuditRendered: versionAuditRendered,
+                    failureReason: completed ? nil : "publicationManagementM2SurfaceMismatch",
+                    revisionComposerRendered: revisionComposerRendered
+                )
+                print(
+                    "[UI_QA] PublicationManagementM2Smoke completed " +
+                        "gateEnabled=\(gateEnabled) " +
+                        "profileEntryVisible=\(profileEntryVisible) " +
+                        "shellRendered=\(shellRendered) " +
+                        "versionAuditRendered=\(versionAuditRendered) " +
+                        "revisionComposerRendered=\(revisionComposerRendered)"
+                )
+            }
         }
     }
 
@@ -6001,7 +6017,8 @@ private extension AppDelegate {
         publicationRendered: Bool,
         grantRendered: Bool,
         versionAuditRendered: Bool,
-        failureReason: String?
+        failureReason: String?,
+        revisionComposerRendered: Bool = false
     ) {
         var result: [String: Any] = [
             "completed": completed,
@@ -6012,6 +6029,7 @@ private extension AppDelegate {
             "publicationRendered": publicationRendered,
             "grantRendered": grantRendered,
             "versionAuditRendered": versionAuditRendered,
+            "revisionComposerRendered": revisionComposerRendered,
             "launchArgument": PublicationManagementM2QAGate.launchArgument,
         ]
         if let failureReason {
@@ -6497,7 +6515,7 @@ private extension AppDelegate {
     }
 }
 
-private final class PublicationManagementM2UIQAFixtureClient: PublicationManagementReaderClient, PublicationVersionAuditReaderClient, PublicationLifecycleClient {
+private final class PublicationManagementM2UIQAFixtureClient: PublicationManagementReaderClient, PublicationVersionAuditReaderClient, PublicationDraftWriterClient, PublicationLifecycleClient {
     private let publicationID = "61111111-1111-4111-8111-111111111111"
     private let publicationVersionID = "62222222-2222-4222-8222-222222222222"
     fileprivate private(set) var publicationState = "confirmed"
@@ -6595,6 +6613,67 @@ private final class PublicationManagementM2UIQAFixtureClient: PublicationManagem
             return
         }
         completion(.success(response))
+    }
+
+    func createPublicationDraft(
+        vaultID: String,
+        command: PublicationDraftCreateCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationDraftReceipt, Error>) -> Void
+    ) {
+        completion(.failure(PublicationDraftAccessError.unavailable))
+    }
+
+    func createPublicationRevisionDraft(
+        vaultID: String,
+        publicationID: String,
+        command: PublicationRevisionDraftCreateCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationDraftReceipt, Error>) -> Void
+    ) {
+        guard vaultID == "uiqa-publication-vault",
+              publicationID == self.publicationID,
+              command.expectedPublicationVersionID == publicationVersionID,
+              let receipt = PublicationDraftReceipt(json: [
+                "schemaVersion": "publication-authority-v3",
+                "vaultId": vaultID,
+                "publicationId": publicationID,
+                "draftId": "63333333-3333-4333-8333-333333333333",
+                "outcome": "created",
+                "state": "draft",
+                "expectedDraftRevision": 1,
+                "expectedDraftSnapshotHash": String(repeating: "b", count: 64),
+                "basePublicationVersionId": publicationVersionID,
+                "targetPublicationVersion": 2,
+                "itemCount": 1,
+                "items": [[
+                    "itemIndex": 0,
+                    "itemSnapshotHash": String(repeating: "c", count: 64),
+                    "preview": [
+                        "title": command.items[0].publicTitle,
+                        "body": command.items[0].publicBody,
+                    ],
+                    "thirdPartyReviewRequired": false,
+                ]],
+                "requiresSecondConfirmation": true,
+                "thirdPartyReviewRequired": false,
+                "aiDisclosureRequired": true,
+              ]) else {
+            completion(.failure(PublicationDraftAccessError.unavailable))
+            return
+        }
+        completion(.success(receipt))
+    }
+
+    func confirmPublicationDraft(
+        vaultID: String,
+        publicationID: String,
+        draftID: String,
+        command: PublicationDraftConfirmCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationDraftConfirmReceipt, Error>) -> Void
+    ) {
+        completion(.failure(PublicationDraftAccessError.unavailable))
     }
 
     func executePublicationLifecycle(

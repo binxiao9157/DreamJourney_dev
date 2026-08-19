@@ -115,6 +115,7 @@ grep -Eq '"shellRendered"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "
 grep -Eq '"publicationRendered"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Publication preview section was not rendered."
 grep -Eq '"grantRendered"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Grant status section was not rendered."
 grep -Eq '"versionAuditRendered"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Publication version audit was not rendered."
+grep -Eq '"revisionComposerRendered"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Publication revision composer was not rendered."
 grep -Eq '"launchArgument"[[:space:]]*:[[:space:]]*"DJEnablePublicationManagementM2QA"' "$RESULT_FILE" || fail "QA launch argument drifted."
 
 sleep 1

@@ -29,6 +29,14 @@ struct OwnerPublicationDraftEditorItem: Equatable {
         self.publicTitle = publicTitle
         self.publicBody = publicBody
     }
+
+    init(versionItem: PublicationOwnerVersionItem) {
+        memoryVersionID = "publication-version-item-\(versionItem.itemIndex)"
+        memoryKindTitle = "公开副本"
+        sensitivityTitle = "已脱敏"
+        publicTitle = versionItem.publicTitle
+        publicBody = versionItem.publicBody
+    }
 }
 
 struct OwnerPublicationDraftEditorState: Equatable {
@@ -68,12 +76,41 @@ struct OwnerPublicationDraftEditorState: Equatable {
             )
         })
     }
+
+    func makeRevisionCommand(
+        publicationID: String,
+        baseVersion: PublicationOwnerVersion
+    ) throws -> PublicationRevisionDraftCreateCommand {
+        try PublicationRevisionDraftCreateCommand(
+            publicationID: publicationID,
+            expectedPublicationVersionID: baseVersion.publicationVersionID,
+            expectedPublicationVersion: baseVersion.versionNumber,
+            items: try items.enumerated().map { index, item in
+                try PublicationRevisionDraftItemInput(
+                    itemIndex: index,
+                    publicTitle: item.publicTitle,
+                    publicBody: item.publicBody
+                )
+            }
+        )
+    }
+}
+
+private enum OwnerPublicationDraftSubmissionMode {
+    case initial
+    case revision(publicationID: String, baseVersion: PublicationOwnerVersion)
+
+    var isRevision: Bool {
+        if case .revision = self { return true }
+        return false
+    }
 }
 
 final class OwnerPublicationDraftComposerViewController: UIViewController {
     private let accountLease: AccountLease
     private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let useCase: PublicationDraftUseCase
+    private let submissionMode: OwnerPublicationDraftSubmissionMode
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
     private let statusLabel = UILabel()
     private lazy var previewButton = UIBarButtonItem(
@@ -99,8 +136,37 @@ final class OwnerPublicationDraftComposerViewController: UIViewController {
     ) throws {
         self.accountLease = accountLease
         self.accountLeaseRuntime = accountLeaseRuntime
+        submissionMode = .initial
         editorState = try OwnerPublicationDraftEditorState(
             items: memories.map(OwnerPublicationDraftEditorItem.init(memory:))
+        )
+        useCase = PublicationDraftUseCase(
+            client: client,
+            accountLeaseRuntime: accountLeaseRuntime,
+            isEnabled: { PublicationManagementM2AccessGate.isPublicationRouteAllowed }
+        )
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    init(
+        accountLease: AccountLease,
+        publicationID: String,
+        baseVersion: PublicationOwnerVersion,
+        client: PublicationDraftWriterClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+    ) throws {
+        guard baseVersion.isCurrent, baseVersion.projectionState == "active" else {
+            throw PublicationDraftAccessError.invalidInput
+        }
+        self.accountLease = accountLease
+        self.accountLeaseRuntime = accountLeaseRuntime
+        submissionMode = .revision(
+            publicationID: publicationID,
+            baseVersion: baseVersion
+        )
+        editorState = try OwnerPublicationDraftEditorState(
+            items: baseVersion.items.map(OwnerPublicationDraftEditorItem.init(versionItem:))
         )
         useCase = PublicationDraftUseCase(
             client: client,
@@ -117,7 +183,7 @@ final class OwnerPublicationDraftComposerViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "编辑公开副本"
+        title = submissionMode.isRevision ? "创建新版本" : "编辑公开副本"
         view.backgroundColor = DJDesignTokens.Color.background
         navigationItem.rightBarButtonItem = previewButton
         previewButton.tintColor = DJDesignTokens.Color.accentDeep
@@ -147,7 +213,7 @@ final class OwnerPublicationDraftComposerViewController: UIViewController {
         tableView.delegate = self
         tableView.dragInteractionEnabled = false
         tableView.allowsSelectionDuringEditing = true
-        tableView.setEditing(true, animated: false)
+        tableView.setEditing(!submissionMode.isRevision, animated: false)
         tableView.accessibilityIdentifier = "owner-publication-draft-editor"
 
         statusLabel.font = DJDesignTokens.Font.body(13)
@@ -178,43 +244,72 @@ final class OwnerPublicationDraftComposerViewController: UIViewController {
             failClosedForAccountChange()
             return
         }
-        let command: PublicationDraftCreateCommand
         do {
-            command = try editorState.makeCommand()
+            switch submissionMode {
+            case .initial:
+                let command = try editorState.makeCommand()
+                submit(command: command)
+            case .revision(let publicationID, let baseVersion):
+                let command = try editorState.makeRevisionCommand(
+                    publicationID: publicationID,
+                    baseVersion: baseVersion
+                )
+                submit(revisionCommand: command)
+            }
         } catch {
             showError(error.localizedDescription)
-            return
         }
+    }
+
+    private func submit(command: PublicationDraftCreateCommand) {
+        prepareForSubmission()
+        let generation = requestGeneration
+        useCase.create(command: command, accountLease: accountLease) { [weak self] result in
+            self?.handleSubmission(result, generation: generation)
+        }
+    }
+
+    private func submit(revisionCommand: PublicationRevisionDraftCreateCommand) {
+        prepareForSubmission()
+        let generation = requestGeneration
+        useCase.createRevision(command: revisionCommand, accountLease: accountLease) { [weak self] result in
+            self?.handleSubmission(result, generation: generation)
+        }
+    }
+
+    private func prepareForSubmission() {
         view.endEditing(true)
         requestGeneration &+= 1
-        let generation = requestGeneration
         isSubmitting = true
         previewButton.isEnabled = false
         previewButton.title = "整理中"
         statusLabel.isHidden = true
-        useCase.create(command: command, accountLease: accountLease) { [weak self] result in
-            DispatchQueue.main.async {
-                guard let self,
-                      generation == self.requestGeneration,
-                      self.accountLeaseRuntime.validate(self.accountLease, at: .ui).allowed else {
-                    return
-                }
-                self.isSubmitting = false
-                self.previewButton.isEnabled = true
-                self.previewButton.title = "预览"
-                switch result {
-                case .success(let draft):
-                    let preview = OwnerPublicationDraftPreviewViewController(
-                        accountLease: self.accountLease,
-                        draft: draft,
-                        useCase: self.useCase,
-                        accountLeaseRuntime: self.accountLeaseRuntime
-                    )
-                    preview.onPublicationConfirmed = self.onPublicationConfirmed
-                    self.navigationController?.pushViewController(preview, animated: true)
-                case .failure(let error):
-                    self.showError(error.localizedDescription)
-                }
+    }
+
+    private func handleSubmission(
+        _ result: Result<PublicationDraftReceipt, Error>,
+        generation: UInt64
+    ) {
+        DispatchQueue.main.async {
+            guard generation == self.requestGeneration,
+                  self.accountLeaseRuntime.validate(self.accountLease, at: .ui).allowed else {
+                return
+            }
+            self.isSubmitting = false
+            self.previewButton.isEnabled = true
+            self.previewButton.title = "预览"
+            switch result {
+            case .success(let draft):
+                let preview = OwnerPublicationDraftPreviewViewController(
+                    accountLease: self.accountLease,
+                    draft: draft,
+                    useCase: self.useCase,
+                    accountLeaseRuntime: self.accountLeaseRuntime
+                )
+                preview.onPublicationConfirmed = self.onPublicationConfirmed
+                self.navigationController?.pushViewController(preview, animated: true)
+            case .failure(let error):
+                self.showError(error.localizedDescription)
             }
         }
     }
@@ -246,7 +341,9 @@ extension OwnerPublicationDraftComposerViewController: UITableViewDataSource, UI
     }
 
     func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        "拖动调整展示顺序。访客只会看到这里确认的标题和正文，不会看到原始资料、私人标识或历史版本。"
+        submissionMode.isRevision
+            ? "当前版本的条目与顺序保持不变。访客只会看到本次确认后的新版本，旧版本继续保留在版本记录中。"
+            : "拖动调整展示顺序。访客只会看到这里确认的标题和正文，不会看到原始资料、私人标识或历史版本。"
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -266,7 +363,9 @@ extension OwnerPublicationDraftComposerViewController: UITableViewDataSource, UI
         return cell
     }
 
-    func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool { true }
+    func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
+        !submissionMode.isRevision
+    }
 
     func tableView(
         _ tableView: UITableView,

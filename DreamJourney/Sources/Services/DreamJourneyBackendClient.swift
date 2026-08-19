@@ -12705,6 +12705,67 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         }
     }
 
+    func createPublicationRevisionDraft(
+        vaultID: String,
+        publicationID: String,
+        command: PublicationRevisionDraftCreateCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationDraftReceipt, Error>) -> Void
+    ) {
+        let usesQAContract = PublicationManagementM2QAGate.isEnabled
+        guard usesQAContract || PublicationManagementM2AccessGate.isPublicationRouteAllowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationDraftAccessError.disabled))
+            }
+            return
+        }
+        let normalizedVaultID = vaultID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedPublicationID = publicationID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedVaultID.isEmpty,
+              normalizedVaultID == accountLease.vaultId,
+              UUID(uuidString: normalizedPublicationID) != nil,
+              command.publicationID.caseInsensitiveCompare(normalizedPublicationID) == .orderedSame,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationDraftAccessError.accountLeaseInvalid))
+            }
+            return
+        }
+        requestJSON(
+            path: usesQAContract
+                ? "/v2/internal/owner-authority/vaults/\(pathComponent(normalizedVaultID))/publications/\(pathComponent(normalizedPublicationID))/drafts"
+                : "/v2/vaults/\(pathComponent(normalizedVaultID))/publications/\(pathComponent(normalizedPublicationID))/drafts",
+            method: .post,
+            payload: command.requestPayload,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            additionalHeaders: usesQAContract ? ["X-DreamJourney-QA-Publication": "1"] : [:]
+        ) { [weak self] result in
+            guard let self else { return }
+            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(PublicationDraftAccessError.accountLeaseInvalid))
+                return
+            }
+            switch result {
+            case .success(let object):
+                guard let receipt = PublicationDraftReceipt(json: object) else {
+                    completion(.failure(PublicationDraftAccessError.malformedResponse))
+                    return
+                }
+                guard receipt.vaultID == normalizedVaultID,
+                      receipt.publicationID.caseInsensitiveCompare(normalizedPublicationID)
+                        == .orderedSame else {
+                    completion(.failure(PublicationDraftAccessError.responseScopeMismatch))
+                    return
+                }
+                completion(.success(receipt))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func confirmPublicationDraft(
         vaultID: String,
         publicationID: String,
