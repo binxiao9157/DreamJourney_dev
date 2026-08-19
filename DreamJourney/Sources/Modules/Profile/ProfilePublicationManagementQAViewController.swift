@@ -606,13 +606,21 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
         )
     }
 
-    func confirmPendingWithdrawalForUIQA() {
+    func confirmPendingWithdrawalForUIQA(completion: (() -> Void)? = nil) {
         guard PublicationLifecycleM2QAGate.isEnabled,
               pendingWithdrawalConfirmation != nil else {
+            completion?()
             return
         }
-        presentedViewController?.dismiss(animated: false)
-        completePendingWithdrawalConfirmation()
+        guard let presentedViewController else {
+            completePendingWithdrawalConfirmation()
+            completion?()
+            return
+        }
+        presentedViewController.dismiss(animated: false) { [weak self] in
+            self?.completePendingWithdrawalConfirmation()
+            completion?()
+        }
     }
 
     private func makeLifecycleReceipt(_ receipt: PublicationLifecycleReceipt) -> UIView {
@@ -790,18 +798,7 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
                 self.grantPendingIDs.remove(publication.publicationID)
                 switch result {
                 case .success(let receipt):
-                    guard let invitationURL = receipt.invitationURL else {
-                        self.grantFailures[publication.publicationID] =
-                            PublicationManagementAccessError.invitationUnavailable.localizedDescription
-                        if case let .loaded(snapshot) = self.loadState {
-                            self.render(.loaded(snapshot))
-                        }
-                        return
-                    }
-                    self.presentInvitationShare(
-                        invitationURL,
-                        recipientLabel: receipt.recipientDisplayLabel
-                    )
+                    self.presentInvitationCreated(recipientLabel: receipt.recipientDisplayLabel)
                     self.reload()
                 case .failure(let error):
                     self.grantFailures[publication.publicationID] = self.displayMessage(for: error)
@@ -813,19 +810,14 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
         }
     }
 
-    private func presentInvitationShare(
-        _ invitationURL: URL,
-        recipientLabel: String
-    ) {
-        let controller = UIActivityViewController(
-            activityItems: ["寻梦环游公开记忆邀请（\(recipientLabel)）", invitationURL],
-            applicationActivities: nil
+    private func presentInvitationCreated(recipientLabel: String) {
+        let alert = UIAlertController(
+            title: "邀请已发送",
+            message: "\(recipientLabel)可在“受邀回忆”中查看这份公开副本。",
+            preferredStyle: .alert
         )
-        if let popover = controller.popoverPresentationController {
-            popover.sourceView = view
-            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
-        }
-        present(controller, animated: true)
+        alert.addAction(UIAlertAction(title: "知道了", style: .default))
+        present(alert, animated: true)
     }
 
     private func requestGrantRevocation(_ grant: PublicationManagementGrant) {

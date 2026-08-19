@@ -202,7 +202,7 @@ final class PublicationGrantManagementAccessTests: XCTestCase {
         XCTAssertEqual(list.grants.first?.isUsable, true)
     }
 
-    func testIssueUseCaseReturnsTransientDeepLinkBoundToResponseScope() throws {
+    func testIssueUseCaseReturnsRegisteredInvitationReceiptWithoutShareCredential() throws {
         let runtime = makeRuntime(subjectID: "owner-a", vaultID: "vault-a", generation: 1)
         let lease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-a"))
         let client = PublicationGrantManagementClientStub()
@@ -228,13 +228,11 @@ final class PublicationGrantManagementAccessTests: XCTestCase {
             expiresAt: expiresAt,
             accountLease: lease
         ) { result in
-            guard case let .success(receipt) = result,
-                  let invitationURL = receipt.invitationURL else {
-                XCTFail("Expected a transient invitation URL")
+            guard case let .success(receipt) = result else {
+                XCTFail("Expected a registered-account invitation receipt")
                 expectation.fulfill()
                 return
             }
-            XCTAssertNotNil(PublicationVisitorInvitation(deepLinkURL: invitationURL))
             XCTAssertEqual(receipt.recipientDisplayLabel, "手机号尾号 8000")
             expectation.fulfill()
         }
@@ -314,8 +312,7 @@ final class PublicationGrantManagementAccessTests: XCTestCase {
             "recipientDisplayLabel": recipient.displayLabel,
             "outcome": "created",
             "expiresAt": ISO8601DateFormatter().string(from: expiresAt),
-            "credentialIssued": true,
-            "grantCredential": "unit-test-grant-credential-123456",
+            "credentialIssued": false,
         ]))
     }
 

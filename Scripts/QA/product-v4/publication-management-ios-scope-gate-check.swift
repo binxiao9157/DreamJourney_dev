@@ -81,11 +81,11 @@ require(
     "registered-account ShareGrant management must be typed and must not expose a product query balance"
 )
 require(
-    managementAccess.contains("invitationURL")
-        && managementAccess.contains("URLQueryItem(name: \"grantCredential\"")
+    !managementAccess.contains("grantCredential")
+        && !managementAccess.contains("invitationURL")
         && !managementView.contains("grantCredential")
         && !managementView.contains("granteeUserId"),
-    "the one-time invitation credential must remain transient and outside the view layer"
+    "registered-account invitations must not create or expose anonymous share credentials"
 )
 require(
     managementAccess.contains("protocol PublicationVersionAuditReaderClient")

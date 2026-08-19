@@ -38,6 +38,7 @@ require(
 )
 require(
     backendClient.contains("/v2/internal/publication-access/")
+        && backendClient.contains("/v2/publication-invitations")
         && backendClient.contains("/v2/publication-grants/")
         && backendClient.contains("/v2/publication-sessions/")
         && backendClient.contains("X-DreamJourney-QA-Visitor-Access")
@@ -53,6 +54,7 @@ require(
 require(
     visitorAccess.contains("activeScope = nil")
         && visitorAccess.contains("activeProjection = nil")
+        && visitorAccess.contains("PublicationVisitorInvitationListClient")
         && !visitorAccess.contains("UserDefaults")
         && !visitorAccess.contains(": Codable"),
     "visitor scope must stay in memory and clear its projection with its credential"
@@ -68,7 +70,6 @@ require(
 for forbiddenSymbol in [
     "EchoViewController",
     "DigitalHumanContextStore",
-    "DialogEngineManager",
     "TencentDigitalHuman",
     "VoiceClone",
     "KBLite",
@@ -83,11 +84,26 @@ for forbiddenSymbol in [
 }
 
 require(
+    visitorView.contains("EchoNativeSpeechCapture")
+        && visitorView.contains("fetchRealtimeVoiceConfig")
+        && visitorView.contains("setLocalTTSVoiceSelection(")
+        && visitorView.contains("voiceProfileId: nil")
+        && visitorView.contains("startTextReplyPlayback")
+        && visitorView.contains("profile-publication-visitor-voice-question")
+        && !visitorView.contains("TencentDigitalHuman")
+        && !visitorView.contains("VoiceClone"),
+    "visitor voice must use ordinary realtime playback without clone or digital-human channels"
+)
+
+require(
     tabCoordinator.contains("selectPublicationVisitor")
         && profile.contains("ProfilePublicationVisitorViewController")
         && profile.contains("profile-publication-visitor-entry")
+        && profile.contains("PublicationVisitorM2AccessGate.isRouteAllowed")
         && !tabCoordinator.contains("viewControllers = [archiveNav, echoNav, profileNav,")
         && visitorView.contains("内容来自本人确认的公开副本")
+        && visitorView.contains("fetchVisitorInvitations")
+        && visitorView.contains("暂无受邀回忆")
         && visitorView.contains("profile-publication-visitor-shell"),
     "visitor shell must remain a neutral Profile-only surface without a fourth Tab"
 )

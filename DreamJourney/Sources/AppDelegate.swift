@@ -1989,8 +1989,8 @@ private extension AppDelegate {
                 )
                 return
             }
-            shell.confirmPendingWithdrawalForUIQA()
-            DispatchQueue.main.async { [weak self, weak shell, weak fixtureClient] in
+            shell.confirmPendingWithdrawalForUIQA { [weak self, weak shell, weak fixtureClient] in
+                DispatchQueue.main.async { [weak self, weak shell, weak fixtureClient] in
                 guard let self, let shell, let fixtureClient else { return }
                 let receiptRendered = self.containsUIQAAccessibilityIdentifier(
                     "profile-publication-management-qa-withdraw-receipt",
@@ -2010,25 +2010,89 @@ private extension AppDelegate {
                     && fixtureClient.withdrawalObserved
                     && fixtureClient.publicationState == "withdrawn"
                     && fixtureClient.projectionState == "withdrawn"
-                self.writePublicationLifecycleM2SmokeResult(
-                    completed: completed,
-                    managementGateEnabled: managementGateEnabled,
-                    visitorGateEnabled: visitorGateEnabled,
-                    lifecycleGateEnabled: lifecycleGateEnabled,
-                    featureFlagDefaultOff: featureFlagDefaultOff,
-                    profileEntryVisible: profileEntryVisible,
-                    withdrawButtonRendered: true,
-                    receiptRendered: receiptRendered,
-                    grantRevokedRendered: grantRevokedRendered,
-                    fixtureWithdrawalObserved: fixtureClient.withdrawalObserved,
-                    failureReason: completed ? nil : "publicationLifecycleM2SurfaceMismatch"
-                )
-                print(
-                    "[UI_QA] PublicationLifecycleM2Smoke completed " +
-                        "lifecycleGateEnabled=\(lifecycleGateEnabled) " +
-                        "receiptRendered=\(receiptRendered) " +
-                        "grantRevokedRendered=\(grantRevokedRendered)"
-                )
+                guard completed,
+                      let invitation = PublicationVisitorInvitation(
+                        registeredGrantID: PublicationVisitorProductUIQAFixtureClient.grantID
+                      ) else {
+                    self.writePublicationLifecycleM2SmokeResult(
+                        completed: false,
+                        managementGateEnabled: managementGateEnabled,
+                        visitorGateEnabled: visitorGateEnabled,
+                        lifecycleGateEnabled: lifecycleGateEnabled,
+                        featureFlagDefaultOff: featureFlagDefaultOff,
+                        profileEntryVisible: profileEntryVisible,
+                        withdrawButtonRendered: true,
+                        receiptRendered: receiptRendered,
+                        grantRevokedRendered: grantRevokedRendered,
+                        fixtureWithdrawalObserved: fixtureClient.withdrawalObserved,
+                        failureReason: "publicationLifecycleM2SurfaceMismatch"
+                    )
+                    return
+                }
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self, weak profileNavigationController] in
+                    guard let self, let profileNavigationController else { return }
+                    let visitorClient = PublicationVisitorProductUIQAFixtureClient()
+                    let visitorRuntime = PublicationVisitorRuntime(
+                        client: visitorClient,
+                        sessionCoordinator: PublicationVisitorSessionCoordinator(
+                            accountLeaseRuntime: runtime
+                        ),
+                        accountLeaseRuntime: runtime,
+                        routeAllowed: { true }
+                    )
+                    visitorRuntime.stage(invitation)
+                    let visitorShell = ProfilePublicationVisitorViewController(
+                        runtime: visitorRuntime,
+                        invitationClient: visitorClient,
+                        readerClient: visitorClient,
+                        accountLeaseProvider: { accountLease }
+                    )
+                    profileNavigationController.pushViewController(visitorShell, animated: false)
+                    visitorShell.loadViewIfNeeded()
+                    DispatchQueue.main.async { [weak self, weak visitorShell] in
+                        DispatchQueue.main.async { [weak self, weak visitorShell] in
+                        guard let self, let visitorShell else { return }
+                        let visitorShellRendered = visitorShell.view.accessibilityIdentifier
+                            == "profile-publication-visitor-shell"
+                        let visitorProjectionRendered = self.containsUIQAAccessibilityIdentifier(
+                            "profile-publication-visitor-projection",
+                            in: visitorShell.view
+                        )
+                        let visitorOrdinaryVoiceRendered = self.containsUIQAAccessibilityIdentifier(
+                            "profile-publication-visitor-voice-question",
+                            in: visitorShell.view
+                        )
+                        let finalCompleted = visitorShellRendered
+                            && visitorProjectionRendered
+                            && visitorOrdinaryVoiceRendered
+                        self.writePublicationLifecycleM2SmokeResult(
+                            completed: finalCompleted,
+                            managementGateEnabled: managementGateEnabled,
+                            visitorGateEnabled: visitorGateEnabled,
+                            lifecycleGateEnabled: lifecycleGateEnabled,
+                            featureFlagDefaultOff: featureFlagDefaultOff,
+                            profileEntryVisible: profileEntryVisible,
+                            withdrawButtonRendered: true,
+                            receiptRendered: receiptRendered,
+                            grantRevokedRendered: grantRevokedRendered,
+                            fixtureWithdrawalObserved: fixtureClient.withdrawalObserved,
+                            failureReason: finalCompleted ? nil : "publicationVisitorProductSurfaceMismatch",
+                            visitorShellRendered: visitorShellRendered,
+                            visitorProjectionRendered: visitorProjectionRendered,
+                            visitorOrdinaryVoiceRendered: visitorOrdinaryVoiceRendered
+                        )
+                        print(
+                            "[UI_QA] PublicationLifecycleM2Smoke completed " +
+                                "lifecycleGateEnabled=\(lifecycleGateEnabled) " +
+                                "receiptRendered=\(receiptRendered) " +
+                                "grantRevokedRendered=\(grantRevokedRendered) " +
+                                "visitorProjectionRendered=\(visitorProjectionRendered)"
+                        )
+                        }
+                    }
+                }
+                }
             }
         }
     }
@@ -6069,7 +6133,10 @@ private extension AppDelegate {
         receiptRendered: Bool,
         grantRevokedRendered: Bool,
         fixtureWithdrawalObserved: Bool,
-        failureReason: String?
+        failureReason: String?,
+        visitorShellRendered: Bool = false,
+        visitorProjectionRendered: Bool = false,
+        visitorOrdinaryVoiceRendered: Bool = false
     ) {
         var result: [String: Any] = [
             "completed": completed,
@@ -6082,6 +6149,9 @@ private extension AppDelegate {
             "receiptRendered": receiptRendered,
             "grantRevokedRendered": grantRevokedRendered,
             "fixtureWithdrawalObserved": fixtureWithdrawalObserved,
+            "visitorShellRendered": visitorShellRendered,
+            "visitorProjectionRendered": visitorProjectionRendered,
+            "visitorOrdinaryVoiceRendered": visitorOrdinaryVoiceRendered,
             "managementLaunchArgument": PublicationManagementM2QAGate.launchArgument,
             "visitorLaunchArgument": PublicationVisitorM2QAGate.launchArgument,
             "lifecycleLaunchArgument": PublicationLifecycleM2QAGate.launchArgument,
@@ -6531,6 +6601,117 @@ private extension AppDelegate {
     }
 }
 
+private final class PublicationVisitorProductUIQAFixtureClient: PublicationVisitorAdmissionClient, PublicationVisitorInvitationListClient, PublicationVisitorReaderClient {
+    static let grantID = "65555555-5555-4555-8555-555555555555"
+    private static let publicationID = "66666666-6666-4666-8666-666666666666"
+    private static let publicationVersionID = "67777777-7777-4777-8777-777777777777"
+    private static let visitorSessionID = "68888888-8888-4888-8888-888888888888"
+    private static let expiry = ISO8601DateFormatter().string(
+        from: Date().addingTimeInterval(24 * 60 * 60)
+    )
+
+    func fetchVisitorInvitations(
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationVisitorInvitationList, Error>) -> Void
+    ) {
+        guard let response = PublicationVisitorInvitationList(json: [
+            "schemaVersion": PublicationVisitorInvitationList.schemaVersion,
+            "invitations": [[
+                "grantId": Self.grantID,
+                "publicationId": Self.publicationID,
+                "publicationVersionId": Self.publicationVersionID,
+                "title": "雨后的院子",
+                "state": "active",
+                "expiresAt": Self.expiry,
+            ]],
+        ]) else {
+            completion(.failure(PublicationVisitorAccessError.malformedResponse))
+            return
+        }
+        completion(.success(response))
+    }
+
+    func admitVisitor(
+        invitation: PublicationVisitorInvitation,
+        sessionCredential: String,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationVisitorAdmission, Error>) -> Void
+    ) {
+        guard invitation.grantID == Self.grantID,
+              let response = PublicationVisitorAdmission(json: [
+                "schemaVersion": PublicationVisitorAdmission.productSchemaVersion,
+                "grantId": Self.grantID,
+                "visitorSessionId": Self.visitorSessionID,
+                "publicationId": Self.publicationID,
+                "publicationVersionId": Self.publicationVersionID,
+                "outcome": "created",
+                "expiresAt": Self.expiry,
+              ]) else {
+            completion(.failure(PublicationVisitorAccessError.malformedResponse))
+            return
+        }
+        completion(.success(response))
+    }
+
+    func fetchProjection(
+        scope: PublicationVisitorSessionScope,
+        completion: @escaping (Result<PublicationVisitorProjection, Error>) -> Void
+    ) {
+        guard scope.visitorSessionID == Self.visitorSessionID,
+              let response = PublicationVisitorProjection(json: projectionPayload()) else {
+            completion(.failure(PublicationVisitorAccessError.malformedResponse))
+            return
+        }
+        completion(.success(response))
+    }
+
+    func answer(
+        scope: PublicationVisitorSessionScope,
+        question: String,
+        completion: @escaping (Result<PublicationVisitorAnswerResponse, Error>) -> Void
+    ) {
+        var payload = projectionPayload()
+        payload["answer"] = [
+            "kind": "excerpt",
+            "text": "雨后，我们一起在院子里散步。",
+            "identityDisclosure": "内容来自本人确认的公开副本。",
+            "source": "publicProjection",
+            "publicCitationHash": String(repeating: "b", count: 64),
+            "uncertainty": "none",
+            "reasonCode": "publicExcerptMatch",
+        ]
+        guard let response = PublicationVisitorAnswerResponse(json: payload) else {
+            completion(.failure(PublicationVisitorAccessError.malformedResponse))
+            return
+        }
+        completion(.success(response))
+    }
+
+    private func projectionPayload() -> [String: Any] {
+        [
+            "schemaVersion": PublicationVisitorProjection.schemaVersion,
+            "visitorSessionId": Self.visitorSessionID,
+            "publicationId": Self.publicationID,
+            "publicationVersionId": Self.publicationVersionID,
+            "expiresAt": Self.expiry,
+            "title": "雨后的院子",
+            "body": "这是本人确认后分享的公开回忆。",
+            "aiDisclosure": "内容来自本人确认的公开副本。",
+            "source": [
+                "kind": "publicProjection",
+                "projectionHash": String(repeating: "a", count: 64),
+                "publicCitationHash": String(repeating: "b", count: 64),
+            ],
+            "answerBoundary": [
+                "identityDisclosureRequired": true,
+                "privateContextAllowed": false,
+                "providerCallAllowed": false,
+                "unknownFallbackRequired": true,
+            ],
+        ]
+    }
+}
+
 private final class PublicationManagementM2UIQAFixtureClient: PublicationManagementReaderClient, PublicationVersionAuditReaderClient, PublicationDraftWriterClient, PublicationGrantManagementClient, PublicationLifecycleClient {
     private let publicationID = "61111111-1111-4111-8111-111111111111"
     private let publicationVersionID = "62222222-2222-4222-8222-222222222222"
@@ -6711,8 +6892,7 @@ private final class PublicationManagementM2UIQAFixtureClient: PublicationManagem
                 "recipientDisplayLabel": command.recipient.displayLabel,
                 "outcome": "created",
                 "expiresAt": ISO8601DateFormatter().string(from: command.expiresAt),
-                "credentialIssued": true,
-                "grantCredential": "uiqa-grant-credential-1234567890",
+                "credentialIssued": false,
               ]) else {
             completion(.failure(PublicationManagementAccessError.unavailable))
             return

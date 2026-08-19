@@ -105,6 +105,14 @@ final class PublicationVisitorAccessTests: XCTestCase {
         )
         XCTAssertEqual(
             service.featureForRequest(
+                path: "/v2/publication-invitations",
+                method: .get,
+                payload: nil
+            ),
+            .publicationVisitorM2
+        )
+        XCTAssertEqual(
+            service.featureForRequest(
                 path: "/v2/publication-grants/grant-a/sessions",
                 method: .post,
                 payload: nil
@@ -137,6 +145,81 @@ final class PublicationVisitorAccessTests: XCTestCase {
         XCTAssertEqual(PublicationVisitorInvitation(deepLinkURL: valid)?.grantID, grantID)
         XCTAssertNil(PublicationVisitorInvitation(deepLinkURL: duplicate))
         XCTAssertNil(PublicationVisitorInvitation(deepLinkURL: unrelated))
+    }
+
+    func testRegisteredInvitationAdmissionPayloadDoesNotContainShareCredential() throws {
+        let grantID = UUID().uuidString.lowercased()
+        let invitation = try XCTUnwrap(PublicationVisitorInvitation(registeredGrantID: grantID))
+        let payload = invitation.requestPayload(
+            sessionCredential: String(repeating: "s", count: 64),
+            usesQAContract: false
+        )
+
+        XCTAssertEqual(invitation.grantID, grantID)
+        XCTAssertNil(payload["grantCredential"])
+        XCTAssertNotNil(payload["commandId"])
+        XCTAssertEqual(payload["sessionCredential"] as? String, String(repeating: "s", count: 64))
+    }
+
+    func testVisitorInvitationListAcceptsOnlyMinimalPublicMetadata() throws {
+        let grantID = UUID().uuidString.lowercased()
+        let publicationID = UUID().uuidString.lowercased()
+        let versionID = UUID().uuidString.lowercased()
+        let contract = try XCTUnwrap(PublicationVisitorInvitationList(json: [
+            "schemaVersion": PublicationVisitorInvitationList.schemaVersion,
+            "invitations": [[
+                "grantId": grantID,
+                "publicationId": publicationID,
+                "publicationVersionId": versionID,
+                "title": "一起散步的下午",
+                "state": "active",
+                "expiresAt": ISO8601DateFormatter().string(from: Date().addingTimeInterval(300)),
+            ]],
+        ]))
+
+        XCTAssertEqual(contract.invitations.count, 1)
+        XCTAssertEqual(contract.invitations[0].grantID, grantID)
+        XCTAssertEqual(contract.invitations[0].title, "一起散步的下午")
+        XCTAssertNotNil(contract.invitations[0].invitation)
+
+        XCTAssertNil(PublicationVisitorInvitationList(json: [
+            "schemaVersion": PublicationVisitorInvitationList.schemaVersion,
+            "invitations": [[
+                "grantId": grantID,
+                "publicationId": publicationID,
+                "publicationVersionId": versionID,
+                "title": "一起散步的下午",
+                "state": "active",
+                "expiresAt": ISO8601DateFormatter().string(from: Date().addingTimeInterval(300)),
+                "grantCredential": String(repeating: "g", count: 32),
+            ]],
+        ]))
+    }
+
+    func testProductAdmissionV2DoesNotRequireInternalUseBalance() throws {
+        let admission = try XCTUnwrap(PublicationVisitorAdmission(json: [
+            "schemaVersion": PublicationVisitorAdmission.productSchemaVersion,
+            "grantId": UUID().uuidString.lowercased(),
+            "visitorSessionId": UUID().uuidString.lowercased(),
+            "publicationId": UUID().uuidString.lowercased(),
+            "publicationVersionId": UUID().uuidString.lowercased(),
+            "expiresAt": ISO8601DateFormatter().string(from: Date().addingTimeInterval(300)),
+        ]))
+
+        XCTAssertNil(admission.ownerSubjectID)
+        XCTAssertNil(admission.useRemaining)
+    }
+
+    func testProductAdmissionRejectsPrivateOwnerIdentifier() {
+        XCTAssertNil(PublicationVisitorAdmission(json: [
+            "schemaVersion": PublicationVisitorAdmission.productSchemaVersion,
+            "grantId": UUID().uuidString.lowercased(),
+            "visitorSessionId": UUID().uuidString.lowercased(),
+            "ownerSubjectId": "private-owner-id",
+            "publicationId": UUID().uuidString.lowercased(),
+            "publicationVersionId": UUID().uuidString.lowercased(),
+            "expiresAt": ISO8601DateFormatter().string(from: Date().addingTimeInterval(300)),
+        ]))
     }
 
     func testExpiredScopeIsClearedBeforeItCanBeRead() throws {

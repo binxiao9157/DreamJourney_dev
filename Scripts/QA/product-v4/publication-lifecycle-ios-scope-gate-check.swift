@@ -82,7 +82,7 @@ require(
         && managementView.contains("撤回后，现有受邀访问会立即停止")
         && managementView.contains("profile-publication-management-qa-withdraw")
         && managementView.contains("profile-publication-management-qa-withdraw-receipt")
-        && managementView.contains("stack.accessibilityValue = \"\\(grant.state):\\(grant.useRemaining)\"")
+        && managementView.contains("stack.accessibilityValue = grant.state")
         && managementView.contains("访问阻断已完成；公开索引清理待处理"),
     "ordinary withdrawal must require the server-managed route, explicit confirmation, and a visible receipt"
 )

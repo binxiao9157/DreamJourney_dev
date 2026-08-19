@@ -71,7 +71,7 @@ enum PublicationVisitorAccessError: LocalizedError, Equatable {
 /// encoded, logged, or exposed back to UI code.
 struct PublicationVisitorInvitation: Equatable {
     let grantID: String
-    private let grantCredential: String
+    private let grantCredential: String?
 
     init?(grantID: String, grantCredential: String) {
         let normalizedGrantID = grantID.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -82,6 +82,13 @@ struct PublicationVisitorInvitation: Equatable {
         }
         self.grantID = normalizedGrantID.lowercased()
         self.grantCredential = normalizedCredential
+    }
+
+    init?(registeredGrantID: String) {
+        let normalizedGrantID = registeredGrantID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard UUID(uuidString: normalizedGrantID) != nil else { return nil }
+        grantID = normalizedGrantID.lowercased()
+        grantCredential = nil
     }
 
     init?(deepLinkURL: URL) {
@@ -108,36 +115,123 @@ struct PublicationVisitorInvitation: Equatable {
         self.init(grantID: grantID, grantCredential: grantCredential)
     }
 
-    func requestPayload(sessionCredential: String) -> [String: Any] {
-        [
+    func requestPayload(
+        sessionCredential: String,
+        usesQAContract: Bool
+    ) -> [String: Any] {
+        var payload: [String: Any] = [
             "commandId": UUID().uuidString.lowercased(),
-            "grantCredential": grantCredential,
             "sessionCredential": sessionCredential,
         ]
+        if usesQAContract, let grantCredential {
+            payload["grantCredential"] = grantCredential
+        }
+        return payload
+    }
+}
+
+struct PublicationVisitorInvitationSummary: Equatable {
+    let grantID: String
+    let publicationID: String
+    let publicationVersionID: String
+    let title: String
+    let state: String
+    let expiresAt: Date
+
+    init?(json: [String: Any]) {
+        let expectedKeys: Set<String> = [
+            "grantId",
+            "publicationId",
+            "publicationVersionId",
+            "title",
+            "state",
+            "expiresAt",
+        ]
+        guard Set(json.keys) == expectedKeys,
+              let grantID = Self.uuid(json["grantId"] as? String),
+              let publicationID = Self.uuid(json["publicationId"] as? String),
+              let publicationVersionID = Self.uuid(json["publicationVersionId"] as? String),
+              let title = Self.text(json["title"] as? String, maximumLength: 80),
+              json["state"] as? String == "active",
+              let expiresAt = Self.date(json["expiresAt"] as? String) else {
+            return nil
+        }
+        self.grantID = grantID
+        self.publicationID = publicationID
+        self.publicationVersionID = publicationVersionID
+        self.title = title
+        state = "active"
+        self.expiresAt = expiresAt
+    }
+
+    var invitation: PublicationVisitorInvitation? {
+        PublicationVisitorInvitation(registeredGrantID: grantID)
+    }
+
+    private static func uuid(_ value: String?) -> String? {
+        let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard UUID(uuidString: normalized) != nil else { return nil }
+        return normalized.lowercased()
+    }
+
+    private static func text(_ value: String?, maximumLength: Int) -> String? {
+        let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !normalized.isEmpty, normalized.count <= maximumLength else { return nil }
+        return normalized
+    }
+
+    private static func date(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        let base = ISO8601DateFormatter()
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: value) ?? base.date(from: value)
+    }
+}
+
+struct PublicationVisitorInvitationList: Equatable {
+    static let schemaVersion = "publication-visitor-invitation-list-v1"
+    let invitations: [PublicationVisitorInvitationSummary]
+
+    init?(json: [String: Any]) {
+        guard Set(json.keys) == ["schemaVersion", "invitations"],
+              json["schemaVersion"] as? String == Self.schemaVersion,
+              let values = json["invitations"] as? [[String: Any]] else {
+            return nil
+        }
+        let parsed = values.compactMap(PublicationVisitorInvitationSummary.init(json:))
+        guard parsed.count == values.count else { return nil }
+        invitations = parsed
     }
 }
 
 struct PublicationVisitorAdmission: Equatable {
     static let schemaVersion = "publication-visitor-access-v1"
+    static let productSchemaVersion = "publication-visitor-admission-v2"
 
     let grantID: String
     let visitorSessionID: String
-    let ownerSubjectID: String
+    let ownerSubjectID: String?
     let publicationID: String
     let publicationVersionID: String
     let expiresAt: Date
-    let useRemaining: Int
+    let useRemaining: Int?
 
     init?(json: [String: Any]) {
-        guard json["schemaVersion"] as? String == Self.schemaVersion,
+        guard let schema = json["schemaVersion"] as? String,
+              [Self.schemaVersion, Self.productSchemaVersion].contains(schema),
               let grantID = Self.identifier(json["grantId"] as? String),
               let visitorSessionID = Self.identifier(json["visitorSessionId"] as? String),
-              let ownerSubjectID = Self.identifier(json["ownerSubjectId"] as? String),
               let publicationID = Self.identifier(json["publicationId"] as? String),
               let publicationVersionID = Self.identifier(json["publicationVersionId"] as? String),
-              let expiresAt = Self.date(json["expiresAt"] as? String),
-              let useRemaining = json["useRemaining"] as? Int,
-              useRemaining >= 0 else {
+              let expiresAt = Self.date(json["expiresAt"] as? String) else {
+            return nil
+        }
+        let ownerSubjectID = Self.identifier(json["ownerSubjectId"] as? String)
+        let useRemaining = json["useRemaining"] as? Int
+        guard schema == Self.productSchemaVersion
+                ? ownerSubjectID == nil && useRemaining == nil
+                : ownerSubjectID != nil && useRemaining.map({ $0 >= 0 }) == true else {
             return nil
         }
         self.grantID = grantID
@@ -189,11 +283,18 @@ protocol PublicationVisitorAdmissionClient {
     )
 }
 
+protocol PublicationVisitorInvitationListClient {
+    func fetchVisitorInvitations(
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationVisitorInvitationList, Error>) -> Void
+    )
+}
+
 /// An in-memory visitor capability. It is intentionally not Codable and does
 /// not expose the credential to callers outside this module.
 struct PublicationVisitorSessionScope: Equatable {
     let visitorSessionID: String
-    let ownerSubjectID: String
+    let ownerSubjectID: String?
     let publicationID: String
     let publicationVersionID: String
     let expiresAt: Date
@@ -202,7 +303,7 @@ struct PublicationVisitorSessionScope: Equatable {
 
     init?(
         visitorSessionID: String,
-        ownerSubjectID: String,
+        ownerSubjectID: String?,
         publicationID: String,
         publicationVersionID: String,
         expiresAt: Date,
@@ -211,7 +312,6 @@ struct PublicationVisitorSessionScope: Equatable {
         now: Date = Date()
     ) {
         guard let normalizedVisitorSessionID = Self.normalized(visitorSessionID),
-              let normalizedOwnerSubjectID = Self.normalized(ownerSubjectID),
               let normalizedPublicationID = Self.normalized(publicationID),
               let normalizedPublicationVersionID = Self.normalized(publicationVersionID),
               let normalizedCredential = Self.normalized(sessionCredential),
@@ -223,7 +323,7 @@ struct PublicationVisitorSessionScope: Equatable {
             return nil
         }
         self.visitorSessionID = normalizedVisitorSessionID
-        self.ownerSubjectID = normalizedOwnerSubjectID
+        self.ownerSubjectID = ownerSubjectID.flatMap(Self.normalized)
         self.publicationID = normalizedPublicationID
         self.publicationVersionID = normalizedPublicationVersionID
         self.expiresAt = expiresAt

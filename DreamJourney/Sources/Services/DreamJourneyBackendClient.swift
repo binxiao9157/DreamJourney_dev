@@ -654,6 +654,9 @@ final class FeatureGateService {
         if normalizedPath.hasPrefix("/v2/internal/publication-access/") {
             return .publicationVisitorM2
         }
+        if normalizedPath == "/v2/publication-invitations" {
+            return .publicationVisitorM2
+        }
         let publicationPathComponents = normalizedPath.split(separator: "/")
         if publicationPathComponents.count >= 2,
            publicationPathComponents[0] == "v2",
@@ -6615,7 +6618,7 @@ final class EchoDelayedReplyInboxAnswerReader {
     }
 }
 
-final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorAdmissionClient, PublicationVisitorReaderClient, PublicationManagementReaderClient, PublicationVersionAuditReaderClient, PublicationDraftWriterClient, PublicationGrantManagementClient, PublicationLifecycleClient, InAppMessageCenterClientPort {
+final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorAdmissionClient, PublicationVisitorInvitationListClient, PublicationVisitorReaderClient, PublicationManagementReaderClient, PublicationVersionAuditReaderClient, PublicationDraftWriterClient, PublicationGrantManagementClient, PublicationLifecycleClient, InAppMessageCenterClientPort {
     static let shared = DreamJourneyBackendClient()
 
     struct BackendErrorContext: Equatable {
@@ -12523,7 +12526,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         requestJSON(
             path: path,
             method: .post,
-            payload: invitation.requestPayload(sessionCredential: sessionCredential),
+            payload: invitation.requestPayload(
+                sessionCredential: sessionCredential,
+                usesQAContract: usesQAContract
+            ),
             authPolicy: .userRequired,
             applicationLease: accountLease,
             sessionUserId: accountLease.subjectId,
@@ -12542,6 +12548,49 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                     return
                 }
                 completion(.success(admission))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func fetchVisitorInvitations(
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationVisitorInvitationList, Error>) -> Void
+    ) {
+        guard !PublicationVisitorM2QAGate.isEnabled,
+              PublicationVisitorM2AccessGate.isRouteAllowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationVisitorAccessError.disabled))
+            }
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            DispatchQueue.main.async {
+                completion(.failure(PublicationVisitorAccessError.accountLeaseInvalid))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/publication-invitations",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId
+        ) { [weak self] result in
+            guard let self else { return }
+            guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                completion(.failure(PublicationVisitorAccessError.accountLeaseInvalid))
+                return
+            }
+            switch result {
+            case .success(let object):
+                guard let contract = PublicationVisitorInvitationList(json: object) else {
+                    completion(.failure(PublicationVisitorAccessError.malformedResponse))
+                    return
+                }
+                completion(.success(contract))
             case .failure(let error):
                 completion(.failure(error))
             }

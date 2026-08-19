@@ -695,8 +695,7 @@ final class ProfileViewController: UIViewController {
     }
 
     private var isPublicationVisitorEntryVisible: Bool {
-        PublicationVisitorRuntime.shared.hasPendingOrActiveAccess
-            && PublicationVisitorM2AccessGate.isRouteAllowed
+        PublicationVisitorM2AccessGate.isRouteAllowed
     }
 
     private var isAccountDataExportVisible: Bool {

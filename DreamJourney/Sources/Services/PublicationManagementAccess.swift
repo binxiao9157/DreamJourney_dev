@@ -384,7 +384,6 @@ struct PublicationGrantIssueReceipt: Equatable {
     let recipientDisplayLabel: String
     let outcome: String
     let expiresAt: Date
-    let invitationURL: URL?
 
     init?(json: [String: Any]) {
         let acceptedSchemas = [
@@ -403,8 +402,7 @@ struct PublicationGrantIssueReceipt: Equatable {
               let credentialIssued = json["credentialIssued"] as? Bool else {
             return nil
         }
-        let credential = Self.identifier(json["grantCredential"] as? String)
-        guard !credentialIssued || credential.map({ (24...256).contains($0.count) }) == true else {
+        guard !credentialIssued || schema == "publication-visitor-access-v1" else {
             return nil
         }
         self.vaultID = vaultID
@@ -414,17 +412,6 @@ struct PublicationGrantIssueReceipt: Equatable {
         self.recipientDisplayLabel = recipientDisplayLabel
         self.outcome = outcome
         self.expiresAt = expiresAt
-        invitationURL = credential.flatMap {
-            var components = URLComponents()
-            components.scheme = "dreamjourney"
-            components.host = "publication"
-            components.path = "/visitor"
-            components.queryItems = [
-                URLQueryItem(name: "grantId", value: grantID),
-                URLQueryItem(name: "grantCredential", value: $0),
-            ]
-            return components.url
-        }
     }
 
     fileprivate static func identifier(_ value: String?) -> String? {
@@ -1398,10 +1385,6 @@ final class PublicationGrantManagementUseCase {
                   receipt.publicationVersionID == command.publicationVersionID,
                   receipt.recipientDisplayLabel == recipient.displayLabel else {
                 completion(.failure(PublicationManagementAccessError.responseScopeMismatch))
-                return
-            }
-            guard receipt.invitationURL != nil else {
-                completion(.failure(PublicationManagementAccessError.invitationUnavailable))
                 return
             }
             completion(.success(receipt))

@@ -19,6 +19,7 @@ SCREENSHOT_PATH="$OUTPUT_DIR/01-publication-lifecycle-m2.png"
 RESULT_COPY_PATH="$OUTPUT_DIR/publication-lifecycle-m2-smoke-result.json"
 COMPLETION_PATTERN="PublicationLifecycleM2Smoke completed"
 LOG_WAIT_TIMEOUT="${LOG_WAIT_TIMEOUT:-45}"
+LOCAL_BUNDLE_ID="${LOCAL_BUNDLE_ID:-com.yxj.dreamjourney.app}"
 
 mkdir -p "$OUTPUT_DIR"
 cd "$ROOT_DIR"
@@ -54,6 +55,7 @@ xcodebuild \
   EXCLUDED_ARCHS='' \
   ARCHS=arm64 \
   ONLY_ACTIVE_ARCH=NO \
+  DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER="$LOCAL_BUNDLE_ID" \
   build > "$BUILD_LOG"
 
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-iphonesimulator/DreamJourney.app"
@@ -115,6 +117,9 @@ grep -Eq '"withdrawButtonRendered"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" 
 grep -Eq '"receiptRendered"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Withdrawal receipt was not rendered."
 grep -Eq '"grantRevokedRendered"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Revoked grant state was not rendered."
 grep -Eq '"fixtureWithdrawalObserved"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Fixture did not observe the withdrawal."
+grep -Eq '"visitorShellRendered"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Visitor product shell was not rendered."
+grep -Eq '"visitorProjectionRendered"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Visitor public projection was not rendered."
+grep -Eq '"visitorOrdinaryVoiceRendered"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Visitor ordinary voice control was not rendered."
 grep -Eq '"managementLaunchArgument"[[:space:]]*:[[:space:]]*"DJEnablePublicationManagementM2QA"' "$RESULT_FILE" || fail "Management launch argument drifted."
 grep -Eq '"visitorLaunchArgument"[[:space:]]*:[[:space:]]*"DJEnablePublicationVisitorM2QA"' "$RESULT_FILE" || fail "Visitor launch argument drifted."
 grep -Eq '"lifecycleLaunchArgument"[[:space:]]*:[[:space:]]*"DJEnablePublicationLifecycleM2QA"' "$RESULT_FILE" || fail "Lifecycle launch argument drifted."

@@ -69,7 +69,6 @@ for required in [
 
 for required in [
     "PublicationManagementM2AccessGate.isManagementRouteAllowed",
-    "PublicationVisitorRuntime.shared.hasPendingOrActiveAccess",
     "PublicationVisitorM2AccessGate.isRouteAllowed",
     "ProfilePublicationVisitorViewController()",
 ] {
@@ -101,6 +100,8 @@ for required in [
     "case expired",
     "case accessRevoked",
     "case policyDenied",
+    "PublicationVisitorInvitationListClient",
+    "PublicationVisitorInvitation(registeredGrantID:",
     "no visitor content is",
     "written to app storage",
 ] {
@@ -118,11 +119,21 @@ assertContains(visitorView, "内容来自本人确认的公开副本。", "Visit
 for required in [
     "profile-publication-visitor-shell",
     "profile-publication-visitor-disclosure",
+    "fetchVisitorInvitations",
+    "暂无受邀回忆",
 ] {
     assertContains(visitorView, required, "Visitor shell must remain observable in QA")
 }
-for forbidden in ["EchoViewController", "MemoirTTSService", "DigitalHuman", "voiceProfileId"] {
-    assertNotContains(visitorView, forbidden, "Neutral Visitor must not activate private Echo, voice, or Digital Human")
+for forbidden in ["EchoViewController", "MemoirTTSService", "DigitalHuman", "VoiceClone"] {
+    assertNotContains(visitorView, forbidden, "Neutral Visitor must not activate private Echo, cloned voice, or Digital Human")
+}
+for required in [
+    "EchoNativeSpeechCapture",
+    "fetchRealtimeVoiceConfig",
+    "voiceProfileId: nil",
+    "startTextReplyPlayback",
+] {
+    assertContains(visitorView, required, "Visitor ordinary voice must remain isolated from private and cloned voice runtimes")
 }
 
 for required in [
