@@ -22,12 +22,12 @@
 
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
-| `COMPLETE` | 14 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2、PC-B3、PC-C2、PC-D1 代码闭环 |
+| `COMPLETE` | 15 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2、PC-B3、PC-C2、PC-D1、PC-D2 代码闭环 |
 | `WAITING_EXTERNAL_CONFIGURATION` | 2 | PC-A0：真实短信 Provider 待配置；PC-C1：代码与默认关闭部署完成，真实私有对象存储、内容安全扫描器和视觉 Provider 待配置 |
-| 当前执行项 | 1 | PC-D2：Visitor 正式产品闭环 |
-| 后续待执行 | 2 | PC-D2 之后的 PC-E1、PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+| 当前执行项 | 1 | PC-E1：稳定 Feature 命名与 Release Policy |
+| 后续待执行 | 1 | PC-E1 完成后进入 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：PC-D1 代码闭环 iOS 为 `0464e31a`，Backend 为 `9a6d85b`，服务器运行 `9a6d85b`，migration head 为 `0104`。后端 PublicationDraft 已支持有序多条 MemoryVersion、不可变版本修订和已注册账户 ShareGrant；正式授权请求只接收手机号或账户 ID，服务端解析真实接收人，只持久化主体 hash 与脱敏标签。普通 Owner 的 iOS 管理流已覆盖创建、公开副本编辑、预览、二次确认、撤回、版本审计、创建授权、查看授权和撤销授权；产品界面不展示内部安全调用计数，原始授权凭证只在签发响应中短暂用于分享。部署态 PostgreSQL 已验证发布、版本、授权、Visitor 生命周期、撤权和 236 条路由认证。PC-D1 标记为 `COMPLETE_WITH_EXTERNAL_GATES`：发布/Visitor 外部审批仍保持默认关闭，当前连续执行交接点为 PC-D2 Visitor 正式产品闭环。真实短信 Provider、APNs 真机到达、腾讯 COS、内容安全扫描器和真实视觉 Provider 继续分别保留为外部 Gate。
+当前代码与部署交接：PC-D2 iOS 为 `17396b9d`，Backend 功能提交为 `836655d`，部署 smoke 顺序无关修复为 `6d44594`；服务器运行 `6d44594`，migration head 保持 `0104`。普通受邀账户可在“我的 -> 受邀回忆”查看自身有效邀请，无需原始 ShareGrant credential 即可建立 VisitorSession；正式响应不返回 Owner 私有主体 ID、安全调用余额或原始凭证。Visitor 只读取 PublicProjection，支持文字提问和普通实时语音播报，明确不接数字人或复刻音色。授权撤销、过期、发布暂停、跨账户和跨 Vault 均失败关闭。模拟器 UIQA、generic iPhoneOS build、部署态 PostgreSQL Visitor smoke、readiness 和 237 条路由认证已通过。PC-D2 标记为 `COMPLETE_WITH_EXTERNAL_GATES`：真实用户开放仍受发布/Visitor 法律、安全和数据地域审批约束，当前连续执行交接点为 PC-E1 稳定 Feature 命名与 Release Policy。真实短信 Provider、APNs 真机到达、腾讯 COS、内容安全扫描器和真实视觉 Provider 继续分别保留为外部 Gate。
 
 每轮只需读取：
 
@@ -556,6 +556,8 @@ iOS：正式记忆多选、公开正文编辑、隐私/AI 披露、预览、二�
 ### PC-D2 Visitor 正式产品闭环
 
 关联：GAP-10、PUB-002。
+
+状态：`COMPLETE_WITH_EXTERNAL_GATES`（2026-08-19）。Backend `836655d` 完成注册账户邀请列表、无原始凭证正式准入和最小产品响应，部署 smoke 修复 `6d44594` 已运行于 production-postgres；iOS `17396b9d` 完成普通用户“受邀回忆”入口、PublicProjection 页面、文字查询和普通实时语音播报。正式链路不返回 Owner 私有主体 ID、Grant credential 或安全调用余额，也不创建腾讯数字人 Session、读取私人域或使用复刻音色。后端 156 项 Publication 测试、iOS 24 项定向 XCTest、发布态静态 Gate、模拟器 UIQA、generic iPhoneOS build、部署态 Visitor PostgreSQL smoke、readiness 和 237 条路由认证均通过。真实用户开放仍保留法律、安全和数据地域审批 Gate；详细证据见 `docs/superpowers/status/2026-08-19-pc-d2-publication-visitor-product-closure.md`。当前连续执行交接点为 `PC-E1`。
 
 实现：
 
