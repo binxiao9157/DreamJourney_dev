@@ -3,7 +3,7 @@
 日期：2026-08-18
 状态：`IN_PROGRESS`
 日常开发入口：`CANONICAL_EXECUTION_PLAN`
-执行控制版本：V1.6
+执行控制版本：V1.7
 
 ## 0. 目标和基线
 
@@ -22,12 +22,12 @@
 
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
-| `COMPLETE` | 6 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2 |
+| `COMPLETE` | 7 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3 |
 | `WAITING_EXTERNAL_CONFIGURATION` | 1 | PC-A0：代码、production-postgres 部署和非真机验收已完成；真实短信 Provider 待配置 |
-| 当前执行项 | 1 | PC-A3：Family/Visitor V4 权限路由 |
-| 后续待执行 | 12 | PC-A3 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+| 当前执行项 | 1 | PC-A4：音色独立授权与累计创建上限 |
+| 后续待执行 | 11 | PC-A4 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：iOS PC-A2 facets 展示、编辑和兼容解析为 `4325fcd2`；Backend PC-A2 功能实现为 `6965dd4`，部署态 smoke 修复及 production-postgres 部署版本为 `b964e0c`，migration head 为 `0096`。PC-A0 的外部短信 Gate 不阻塞 PC-A3；在真实短信 Provider 配置前，不得宣称生产 OTP 恢复完成。PC-A3 完成前不得把私人 V2 facets 暴露给 Family/Visitor。
+当前代码与部署交接：PC-A3 Backend 为 `83240f6`，iOS 为 `b4caa0b4`，服务器已部署 `83240f6`，migration head 仍为 `0096`。本人是唯一私人 V4 路由；Family 无 ShareGrant 只进入贡献引导，有匹配 VisitorSession 才读取 PublicProjection，且非本人路径禁止 Legacy Archive/KBLite 回退和腾讯数字人 Session。PC-A0 的外部短信 Gate 不阻塞 PC-A4；在真实短信 Provider 配置前，不得宣称生产 OTP 恢复完成。
 
 每轮只需读取：
 
@@ -349,6 +349,8 @@ iOS：
 验证：Owner A/B、Family、Visitor、撤权、过期、暂停、旧缓存和旧异步回调矩阵。
 
 完成定义：只有本人账户能访问自己的私人 V4；查询他人只走发布域。
+
+状态：`COMPLETE`（2026-08-19）。Backend 在私人 `/context/build` 和 `/echo/answers` 入口前执行 fail-closed 身份路由，Family 请求稳定返回 `familyPrivateContextDenied`，ShareGrant admission 将 Owner 主体绑定到 VisitorSession。iOS 仅本人进入私人 Context 和腾讯数字人；匹配 VisitorSession 读取 PublicProjection，无分享授权时转入 FamilyContribution，非本人路径不读取 Archive/KBLite。Backend `83240f6` 已部署，iOS `b4caa0b4` 已推送；证据见 `docs/superpowers/status/2026-08-19-pc-a3-family-visitor-v4-routing.md`。当前连续执行交接点为 `PC-A4`。
 
 ### PC-A4 音色独立授权与累计创建上限
 
