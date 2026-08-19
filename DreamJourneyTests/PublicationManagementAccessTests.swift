@@ -287,6 +287,194 @@ final class PublicationLifecycleAccessTests: XCTestCase {
     }
 }
 
+final class PublicationDraftAccessTests: XCTestCase {
+    func testOrderedDraftCommandPreservesOrderAndRejectsDuplicates() throws {
+        let firstID = UUID().uuidString.lowercased()
+        let secondID = UUID().uuidString.lowercased()
+        let first = try PublicationDraftItemInput(
+            memoryVersionID: firstID,
+            publicTitle: "第一章",
+            publicBody: "第一段公开正文。"
+        )
+        let second = try PublicationDraftItemInput(
+            memoryVersionID: secondID,
+            publicTitle: "第二章",
+            publicBody: "第二段公开正文。"
+        )
+        let command = try PublicationDraftCreateCommand(items: [first, second])
+        let payloadItems = try XCTUnwrap(command.requestPayload["items"] as? [[String: Any]])
+
+        XCTAssertEqual(payloadItems.compactMap { $0["memoryVersionId"] as? String }, [firstID, secondID])
+        XCTAssertThrowsError(try PublicationDraftCreateCommand(items: [first, first]))
+    }
+
+    func testV2DraftAndConfirmationReceiptsRequireContiguousOrderedItems() throws {
+        let vaultID = "vault-a"
+        let publicationID = UUID().uuidString.lowercased()
+        let draftID = UUID().uuidString.lowercased()
+        let firstID = UUID().uuidString.lowercased()
+        let secondID = UUID().uuidString.lowercased()
+        let draft = try XCTUnwrap(PublicationDraftReceipt(json: [
+            "schemaVersion": "publication-authority-v2",
+            "vaultId": vaultID,
+            "publicationId": publicationID,
+            "draftId": draftID,
+            "outcome": "created",
+            "state": "draft",
+            "expectedDraftRevision": 1,
+            "expectedDraftSnapshotHash": String(repeating: "a", count: 64),
+            "itemCount": 2,
+            "items": [
+                makeDraftReceiptItem(index: 0, memoryVersionID: firstID, hash: "b"),
+                makeDraftReceiptItem(index: 1, memoryVersionID: secondID, hash: "c"),
+            ],
+            "requiresSecondConfirmation": true,
+            "thirdPartyReviewRequired": false,
+            "aiDisclosureRequired": true,
+        ]))
+        XCTAssertEqual(draft.items.map(\.memoryVersionID), [firstID, secondID])
+
+        let confirmation = try XCTUnwrap(PublicationDraftConfirmReceipt(json: [
+            "schemaVersion": "publication-authority-v2",
+            "vaultId": vaultID,
+            "publicationId": publicationID,
+            "draftId": draftID,
+            "publicationVersionId": UUID().uuidString.lowercased(),
+            "publicationVersion": 1,
+            "outcome": "created",
+            "publicationState": "confirmed",
+            "projectionState": "active",
+            "publicProjectionHash": String(repeating: "d", count: 64),
+            "itemCount": 2,
+            "publicProjectionItemHashes": [
+                String(repeating: "e", count: 64),
+                String(repeating: "f", count: 64),
+            ],
+            "aiDisclosureRequired": true,
+        ]))
+        XCTAssertEqual(confirmation.itemCount, 2)
+
+        var malformed = draftJSON(
+            vaultID: vaultID,
+            publicationID: publicationID,
+            draftID: draftID,
+            firstID: firstID,
+            secondID: secondID
+        )
+        malformed["items"] = [
+            makeDraftReceiptItem(index: 1, memoryVersionID: firstID, hash: "b"),
+            makeDraftReceiptItem(index: 0, memoryVersionID: secondID, hash: "c"),
+        ]
+        XCTAssertNil(PublicationDraftReceipt(json: malformed))
+    }
+
+    func testCreateDropsResultAfterAccountSwitch() throws {
+        let runtime = AccountLeaseRuntime(authorityEpoch: "epoch-v1")
+        runtime.publish(session: makeSession(
+            subjectID: "owner-a",
+            vaultID: "vault-a",
+            generation: 4
+        ))
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-a"))
+        let client = PublicationDraftWriterClientStub()
+        let publicationID = UUID().uuidString.lowercased()
+        let draftID = UUID().uuidString.lowercased()
+        client.createResult = .success(try XCTUnwrap(PublicationDraftReceipt(json: draftJSON(
+            vaultID: "vault-a",
+            publicationID: publicationID,
+            draftID: draftID,
+            firstID: UUID().uuidString.lowercased(),
+            secondID: UUID().uuidString.lowercased()
+        ))))
+        client.beforeCreateCompletion = {
+            runtime.publish(session: self.makeSession(
+                subjectID: "owner-b",
+                vaultID: "vault-b",
+                generation: 5
+            ))
+        }
+        let useCase = PublicationDraftUseCase(
+            client: client,
+            accountLeaseRuntime: runtime,
+            isEnabled: { true }
+        )
+        let command = try PublicationDraftCreateCommand(items: [
+            PublicationDraftItemInput(
+                memoryVersionID: UUID().uuidString.lowercased(),
+                publicTitle: "公开标题",
+                publicBody: "公开正文。"
+            ),
+        ])
+
+        let expectation = expectation(description: "stale publication draft rejected")
+        useCase.create(command: command, accountLease: lease) { result in
+            guard case let .failure(error) = result else {
+                XCTFail("Expected account switch to discard the draft response")
+                expectation.fulfill()
+                return
+            }
+            XCTAssertEqual(error as? PublicationDraftAccessError, .accountLeaseInvalid)
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1)
+    }
+
+    private func makeDraftReceiptItem(
+        index: Int,
+        memoryVersionID: String,
+        hash: Character
+    ) -> [String: Any] {
+        [
+            "itemIndex": index,
+            "memoryVersionId": memoryVersionID,
+            "itemSnapshotHash": String(repeating: hash, count: 64),
+            "preview": ["title": "第 \(index + 1) 章", "body": "公开正文。"],
+            "thirdPartyReviewRequired": false,
+        ]
+    }
+
+    private func draftJSON(
+        vaultID: String,
+        publicationID: String,
+        draftID: String,
+        firstID: String,
+        secondID: String
+    ) -> [String: Any] {
+        [
+            "schemaVersion": "publication-authority-v2",
+            "vaultId": vaultID,
+            "publicationId": publicationID,
+            "draftId": draftID,
+            "outcome": "created",
+            "state": "draft",
+            "expectedDraftRevision": 1,
+            "expectedDraftSnapshotHash": String(repeating: "a", count: 64),
+            "itemCount": 2,
+            "items": [
+                makeDraftReceiptItem(index: 0, memoryVersionID: firstID, hash: "b"),
+                makeDraftReceiptItem(index: 1, memoryVersionID: secondID, hash: "c"),
+            ],
+            "requiresSecondConfirmation": true,
+            "thirdPartyReviewRequired": false,
+            "aiDisclosureRequired": true,
+        ]
+    }
+
+    private func makeSession(subjectID: String, vaultID: String, generation: UInt64) -> AccountSession {
+        AccountSession(
+            subjectId: subjectID,
+            vaultId: vaultID,
+            sessionId: "session-\(generation)",
+            tokenFamilyId: "family-\(generation)",
+            sessionVersion: Int(generation),
+            generation: generation,
+            generationId: UUID(),
+            state: .active,
+            activatedAt: Date()
+        )
+    }
+}
+
 private final class PublicationManagementReaderClientStub: PublicationManagementReaderClient {
     var publicationsResult: Result<PublicationManagementPublicationList, Error>?
     var grantsResult: Result<PublicationManagementGrantList, Error>?
@@ -332,5 +520,32 @@ private final class PublicationLifecycleClientStub: PublicationLifecycleClient {
     ) {
         commandIDs.append(command.commandID)
         completion(results.isEmpty ? .failure(PublicationLifecycleAccessError.unavailable) : results.removeFirst())
+    }
+}
+
+private final class PublicationDraftWriterClientStub: PublicationDraftWriterClient {
+    var createResult: Result<PublicationDraftReceipt, Error>?
+    var confirmResult: Result<PublicationDraftConfirmReceipt, Error>?
+    var beforeCreateCompletion: (() -> Void)?
+
+    func createPublicationDraft(
+        vaultID: String,
+        command: PublicationDraftCreateCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationDraftReceipt, Error>) -> Void
+    ) {
+        beforeCreateCompletion?()
+        completion(createResult ?? .failure(PublicationDraftAccessError.unavailable))
+    }
+
+    func confirmPublicationDraft(
+        vaultID: String,
+        publicationID: String,
+        draftID: String,
+        command: PublicationDraftConfirmCommand,
+        accountLease: AccountLease,
+        completion: @escaping (Result<PublicationDraftConfirmReceipt, Error>) -> Void
+    ) {
+        completion(confirmResult ?? .failure(PublicationDraftAccessError.unavailable))
     }
 }
