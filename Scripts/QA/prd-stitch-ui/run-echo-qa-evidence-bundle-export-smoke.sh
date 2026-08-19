@@ -119,7 +119,7 @@ def correlation_hash(value):
     return "sha256:" + hashlib.sha256(value.encode()).hexdigest()[:16]
 
 require(result.get("completed") is True, "Echo QA evidence bundle smoke did not complete")
-require(result.get("schemaVersion") == 3, "QA evidence bundle schemaVersion changed")
+require(result.get("schemaVersion") == 4, "QA evidence bundle schemaVersion changed")
 require(result.get("latestTurnIDHash") == correlation_hash("uiqa-qa-bundle-turn"), "QA evidence bundle latest turn hash changed")
 require(result.get("latestVoiceOutputMode") == "tencentAudioDrive", "QA evidence bundle voice output mode changed")
 require(result.get("latestProviderLogIdHash") == correlation_hash("uiqa-bundle-provider-log"), "QA evidence bundle provider log hash changed")
@@ -177,9 +177,30 @@ require(isinstance(manifest_export_path, str) and manifest_export_path.endswith(
 export_file = pathlib.Path(export_path)
 require(export_file.exists(), f"Exported QA evidence bundle file missing: {export_file}")
 bundle = json.loads(export_file.read_text())
-require(bundle.get("schemaVersion") == 3, "Exported QA bundle schemaVersion changed")
+require(bundle.get("schemaVersion") == 4, "Exported QA bundle schemaVersion changed")
 require(bundle.get("evidencePackage", {}).get("schemaVersion") == 1, "Nested evidence package schemaVersion changed")
 require(bundle.get("redactionPolicyVersion") == "iosDiagnostics-v1", "QA evidence bundle should declare its redaction policy")
+answer_grounding = bundle.get("answerGrounding") or {}
+require(answer_grounding.get("schemaVersion") == 1, "Answer grounding evidence schema changed")
+require(answer_grounding.get("outcome") == "grounded", "Answer grounding outcome changed")
+require(answer_grounding.get("citationCount") == 1, "Answer grounding citation count changed")
+require(
+    answer_grounding.get("citationSources") == ["ownerTruthMemoryProjection"],
+    "Answer grounding citation source changed",
+)
+for field in ("contextTraceIdDigest",):
+    value = answer_grounding.get(field)
+    require(
+        isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value),
+        f"Answer grounding {field} must be a SHA-256 digest",
+    )
+for field in ("citationRefDigests", "citationContentHashDigests"):
+    values = answer_grounding.get(field) or []
+    require(len(values) == 1, f"Answer grounding {field} count changed")
+    require(
+        all(isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value) for value in values),
+        f"Answer grounding {field} must contain SHA-256 digests",
+    )
 require(bundle.get("contextClues", {}).get("archiveRefsHashes") == [correlation_hash("archive_qa_bundle")], "Exported archive clue summary changed")
 require(bundle.get("contextClues", {}).get("kbFactRefsHashes") == [correlation_hash("fact_qa_bundle")], "Exported kbFact clue summary changed")
 owner_truth_context = bundle.get("ownerTruthContextCitationEvidence") or {}
@@ -225,6 +246,9 @@ require("appkey" not in serialized.lower(), "QA evidence bundle must not export 
 require("accesstoken" not in serialized.lower(), "QA evidence bundle must not export accesstoken")
 require("uiqa-bundle-provider-log" not in serialized, "QA evidence bundle must not export raw provider log IDs")
 require("archive_qa_bundle" not in serialized, "QA evidence bundle must not export raw archive references")
+require("ctx_uiqa_grounding_trace" not in serialized, "QA evidence bundle must not export raw answer Context trace IDs")
+require("memory-version:uiqa-grounding-reference" not in serialized, "QA evidence bundle must not export raw answer Citation refs")
+require(("a" * 64) not in serialized, "QA evidence bundle must not export raw answer Citation content hashes")
 require("uiqa echo context parity evidence" not in serialized, "QA evidence bundle must not export raw parity query")
 require(
     "memory-version:00000000-0000-0000-0000-000000000901" not in serialized,
@@ -242,7 +266,7 @@ require(manifest.get("manifestType") == "echoQaEvidenceBundle", "Exported manife
 require(manifest.get("sourceCommit") == source_commit, "Exported manifest source commit changed")
 require(manifest.get("manifestStatus") == "passed", "Exported manifest must be passed")
 require(manifest.get("artifactHashes") == [bundle_hash], "Manifest must bind the exact redacted bundle hash")
-require(manifest.get("sourceSchemaVersions") == ["echoQaBundle-v3", "echoEvidenceManifest-v1"], "Manifest schema source changed")
+require(manifest.get("sourceSchemaVersions") == ["echoQaBundle-v4", "echoEvidenceManifest-v1"], "Manifest schema source changed")
 require(manifest.get("exclusionCodes") == ["rawAudio", "providerSecret", "reportBody", "userContent"], "Manifest exclusion set changed")
 require(isinstance(manifest.get("ownerLeaseHash"), str) and len(manifest["ownerLeaseHash"]) == 64, "Manifest owner lease hash missing")
 require("evidenceIdHash" in manifest, "Manifest evidence id should be redacted at export")

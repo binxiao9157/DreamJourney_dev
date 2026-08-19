@@ -84,9 +84,9 @@ def main() -> int:
     for required in [
         "struct EchoContextPacketRequestCorrelation",
         "echo-context-request-correlation-v1",
-        "schemaVersion = 3",
+        "schemaVersion = 4",
         "ownerTruthContextParityEvidence",
-        "echoQaBundle-v3",
+        "echoQaBundle-v4",
         "Owner Truth Context V1/V4 parity",
     ]:
         require(required in backend_client, f"QA evidence bundle must carry parity evidence: {required}")

@@ -4030,6 +4030,7 @@ struct EchoAnswerCitation: Equatable {
     let source: String
     let refId: String
     let kind: String
+    let contentHash: String?
 
     init?(json: [String: Any]) {
         guard let source = Self.nonEmptyString(json["source"]),
@@ -4040,6 +4041,7 @@ struct EchoAnswerCitation: Equatable {
         self.source = source
         self.refId = refId
         self.kind = kind
+        self.contentHash = Self.nonEmptyString(json["contentHash"])
     }
 
     private static func nonEmptyString(_ value: Any?) -> String? {
@@ -4052,6 +4054,7 @@ struct EchoAnswerCitation: Equatable {
 enum EchoMemoryGroundingOutcome: String, Equatable {
     case gap
     case grounded
+    case fallback
     case notApplicable
 }
 
@@ -4095,6 +4098,7 @@ struct EchoAnswer: Equatable {
     let contextVersion: String
     let citations: [EchoAnswerCitation]
     let memoryGrounding: EchoMemoryGrounding
+    let fallbackReason: String?
 
     var signalsMemoryGap: Bool {
         if memoryGrounding.outcome == .gap {
@@ -4121,6 +4125,7 @@ struct EchoAnswer: Equatable {
         self.provider = provider
         self.contextTraceId = Self.nonEmptyString(json["contextTraceId"]) ?? ""
         self.contextVersion = Self.nonEmptyString(json["contextVersion"]) ?? ""
+        self.fallbackReason = Self.nonEmptyString(json["fallbackReason"])
         let citations = (json["citations"] as? [[String: Any]] ?? [])
             .compactMap(EchoAnswerCitation.init(json:))
         self.citations = citations
@@ -4129,7 +4134,7 @@ struct EchoAnswer: Equatable {
             self.memoryGrounding = memoryGrounding
         } else {
             let hasMemoryCitation = citations.contains {
-                ["archive", "kbFact", "care"].contains($0.source)
+                ["archive", "kbFact", "care", "ownerTruthMemoryProjection"].contains($0.source)
             }
             self.memoryGrounding = EchoMemoryGrounding(
                 outcome: hasMemoryCitation ? .grounded : .notApplicable,
@@ -4142,6 +4147,57 @@ struct EchoAnswer: Equatable {
         guard let value = value as? String else { return nil }
         let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return normalized.isEmpty ? nil : normalized
+    }
+}
+
+/// QA-only, value-free proof of the public Echo answer grounding contract.
+/// Raw Context trace IDs, Citation refs and content hashes are one-way hashed
+/// before this value can reach local diagnostics or an exported evidence bundle.
+struct EchoAnswerGroundingQAEvidence: Codable, Equatable {
+    let schemaVersion: Int
+    let outcome: String
+    let handoff: String
+    let contextTraceIdDigest: String?
+    let citationCount: Int
+    let citationSources: [String]
+    let citationRefDigests: [String]
+    let citationContentHashDigests: [String]
+    let fallbackReason: String?
+
+    init(answer: EchoAnswer) {
+        schemaVersion = 1
+        outcome = answer.memoryGrounding.outcome.rawValue
+        handoff = answer.memoryGrounding.handoff.rawValue
+        contextTraceIdDigest = Self.digestIfPresent(answer.contextTraceId)
+        citationCount = answer.citations.count
+        citationSources = Array(Set(answer.citations.map(\.source))).sorted()
+        citationRefDigests = answer.citations.map { Self.digest($0.refId) }
+        citationContentHashDigests = answer.citations.compactMap { citation in
+            citation.contentHash.map(Self.digest)
+        }
+        fallbackReason = answer.fallbackReason.map {
+            PrivacySafeDiagnostics.safeCode($0, fallback: "redacted")
+        }
+    }
+
+    func panelLines(prefix: String = "answer") -> [String] {
+        [
+            "\(prefix) grounding: \(outcome) handoff=\(handoff)",
+            "\(prefix) citations: \(citationCount) sources=\(citationSources.joined(separator: ","))",
+            "\(prefix) traceHash: \(contextTraceIdDigest ?? "none")",
+            "\(prefix) fallback: \(fallbackReason ?? "none")",
+        ]
+    }
+
+    private static func digestIfPresent(_ value: String) -> String? {
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : digest(normalized)
+    }
+
+    private static func digest(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 }
 
@@ -5695,6 +5751,7 @@ struct EchoQAEvidenceBundle: Codable {
     let traceRecord: EchoTraceRecord?
     let runtimeDiagnostics: EchoRuntimeDiagnosticsSnapshot?
     let contextClues: EchoContextV2ClueSummary
+    let answerGrounding: EchoAnswerGroundingQAEvidence?
     let ownerTruthContextCitationEvidence: OwnerTruthContextCitationQAEvidenceReadout?
     let ownerTruthContextParityEvidence: EchoOwnerTruthContextParityQAEvidenceReadout?
     let ownerTruthContextCompareEvidence: EchoOwnerTruthContextShadowCompareQAEvidenceReadout?
@@ -5709,11 +5766,12 @@ struct EchoQAEvidenceBundle: Codable {
 
     init(
         evidencePackage: EchoTraceEvidencePackage,
+        answerGrounding: EchoAnswerGroundingQAEvidence? = nil,
         ownerTruthContextCitationEvidence: OwnerTruthContextCitationQAEvidenceReadout? = nil,
         ownerTruthContextParityEvidence: EchoOwnerTruthContextParityQAEvidenceReadout? = nil,
         ownerTruthContextCompareEvidence: EchoOwnerTruthContextShadowCompareQAEvidenceReadout? = nil
     ) {
-        self.schemaVersion = 3
+        self.schemaVersion = 4
         let uniqueSuffix = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24))
         self.bundleId = "echo_qa_bundle_" + uniqueSuffix
         self.generatedAt = Date()
@@ -5724,6 +5782,9 @@ struct EchoQAEvidenceBundle: Codable {
         self.traceRecord = evidencePackage.traceRecord
         self.runtimeDiagnostics = evidencePackage.runtimeDiagnostics
         self.contextClues = evidencePackage.contextBuild.clueSummary
+        self.answerGrounding = OwnerTruthContextCitationQAGate.isEnabled
+            ? answerGrounding
+            : nil
         self.ownerTruthContextCitationEvidence = OwnerTruthContextCitationQAGate.isEnabled
             ? ownerTruthContextCitationEvidence
             : nil
@@ -5744,7 +5805,8 @@ struct EchoQAEvidenceBundle: Codable {
             voiceSynthesis: evidencePackage.voiceSynthesis
         )
         self.redactionPolicy = evidencePackage.redactionPolicy + [
-            "QA bundle v3 汇总 Context V2 线索、数字人 session、声音合成和 fallback 摘要",
+            "QA bundle v4 汇总 Context 线索、回答 grounding、数字人 session、声音合成和 fallback 摘要",
+            "Context trace、Citation ref 和 Citation content hash 只保留单向摘要",
             "Owner Truth Context QA 只导出哈希引用、计数和过滤码",
             "Owner Truth Context V1/V4 parity 只导出哈希、计数和 mismatch code，且不作切流结论",
             "Owner Truth 同请求 Context 对照只导出哈希、计数、状态和 citation 完整性，且不作切流结论",
@@ -5757,12 +5819,15 @@ struct EchoQAEvidenceBundle: Codable {
 final class EchoQAEvidenceBundleStore {
     static let shared = EchoQAEvidenceBundleStore()
 
-    private static let storageKeyPrefix = "DreamJourney.EchoQAEvidenceBundleStore.bundles.v3.owner."
-    private static let legacyStorageKey = "DreamJourney.EchoQAEvidenceBundleStore.bundles.v2"
+    private static let storageKeyPrefix = "DreamJourney.EchoQAEvidenceBundleStore.bundles.v4.owner."
+    private static let legacyStorageKey = "DreamJourney.EchoQAEvidenceBundleStore.bundles.v3.owner."
+    private static let oldestLegacyStorageKey = "DreamJourney.EchoQAEvidenceBundleStore.bundles.v2"
     private let maximumBundleCount = 20
     private let storage: EchoOwnerScopedDefaultsStore<EchoQAEvidenceBundle>
+    private let userDefaults: UserDefaults
 
     init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
         storage = EchoOwnerScopedDefaultsStore(
             userDefaults: userDefaults,
             storageKeyPrefix: Self.storageKeyPrefix,
@@ -5825,6 +5890,7 @@ final class EchoQAEvidenceBundleStore {
 
     fileprivate func purgeLegacyStorage() {
         storage.purgeLegacyStorage()
+        userDefaults.removeObject(forKey: Self.oldestLegacyStorageKey)
     }
 
 }
@@ -5936,7 +6002,7 @@ struct EchoQAEvidenceManifest: Codable {
             Data((artifactHash + "|" + String(bundle.schemaVersion)).utf8)
         )
         self.exclusionCodes = ["rawAudio", "providerSecret", "reportBody", "userContent"]
-        self.sourceSchemaVersions = ["echoQaBundle-v3", "echoEvidenceManifest-v1"]
+        self.sourceSchemaVersions = ["echoQaBundle-v4", "echoEvidenceManifest-v1"]
         self.redactionVersion = PrivacySafeDiagnostics.redactionPolicyVersion
         self.artifactHashes = [artifactHash]
         self.windowStartedAt = bundle.generatedAt

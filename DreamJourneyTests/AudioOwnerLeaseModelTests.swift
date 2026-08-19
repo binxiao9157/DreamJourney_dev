@@ -3139,4 +3139,57 @@ final class EchoAnswerMemoryGroundingTests: XCTestCase {
         XCTAssertFalse(answer.signalsMemoryGap)
         XCTAssertEqual(answer.memoryGrounding.outcome, .notApplicable)
     }
+
+    func testOwnerTruthProjectionCitationIsGroundedAndRetainsHashForQAOnlyEvidence() throws {
+        let contentHash = String(repeating: "a", count: 64)
+        let answer = try XCTUnwrap(EchoAnswer(json: [
+            "schemaVersion": EchoAnswer.schemaVersion,
+            "answerId": "answer-owner-truth-grounded",
+            "text": "这是根据你确认的正式记忆生成的回答。",
+            "provider": "deepseek",
+            "contextTraceId": "ctx_owner_truth_grounded",
+            "citations": [[
+                "source": "ownerTruthMemoryProjection",
+                "refId": "memory-version-private-id",
+                "kind": "experience",
+                "contentHash": contentHash,
+            ]],
+        ]))
+
+        XCTAssertEqual(answer.memoryGrounding.outcome, .grounded)
+        XCTAssertEqual(answer.citations.first?.contentHash, contentHash)
+        XCTAssertEqual(answer.contextTraceId, "ctx_owner_truth_grounded")
+
+        let evidence = EchoAnswerGroundingQAEvidence(answer: answer)
+        XCTAssertEqual(evidence.outcome, "grounded")
+        XCTAssertEqual(evidence.citationCount, 1)
+        XCTAssertNotEqual(evidence.contextTraceIdDigest, answer.contextTraceId)
+        XCTAssertFalse(evidence.citationRefDigests.contains("memory-version-private-id"))
+        XCTAssertFalse(evidence.citationContentHashDigests.contains(contentHash))
+    }
+
+    func testParsesExplicitRetrievalFallbackWithoutInventingMemoryGap() throws {
+        let answer = try XCTUnwrap(EchoAnswer(json: [
+            "schemaVersion": EchoAnswer.schemaVersion,
+            "answerId": "answer-retrieval-fallback",
+            "text": "记忆检索服务暂时不可用，请稍后重试。",
+            "provider": "owner-truth-grounding-policy",
+            "contextTraceId": "ctx_retrieval_fallback",
+            "fallbackReason": "owner_truth_context_search_unavailable_no_personal_memory",
+            "citations": [],
+            "memoryGrounding": [
+                "schemaVersion": EchoMemoryGrounding.schemaVersion,
+                "outcome": "fallback",
+                "handoff": "none",
+            ],
+        ]))
+
+        XCTAssertEqual(answer.memoryGrounding.outcome, .fallback)
+        XCTAssertEqual(answer.memoryGrounding.handoff, .none)
+        XCTAssertFalse(answer.signalsMemoryGap)
+        XCTAssertEqual(
+            answer.fallbackReason,
+            "owner_truth_context_search_unavailable_no_personal_memory"
+        )
+    }
 }

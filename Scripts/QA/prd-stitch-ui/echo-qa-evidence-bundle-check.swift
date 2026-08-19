@@ -44,7 +44,8 @@ for required in [
     "func exportLatestManifest(",
     "echo-qa-evidence-bundle.json",
     "echo-qa-evidence-manifest.json",
-    "schemaVersion = 3",
+    "schemaVersion = 4",
+    "answerGrounding",
     "ownerTruthContextCitationEvidence",
     "ownerTruthContextParityEvidence",
 ] {
@@ -63,6 +64,7 @@ for field in [
     "artifactHashes",
     "expiresAt",
     "ownerLeaseHash",
+    "answerGrounding",
 ] {
     require(backendClient.contains("let \(field)"), "EchoQAEvidenceBundle should include \(field)")
 }

@@ -49,6 +49,7 @@ for required in [
     "DreamJourney.EchoTraceStore.records.v2.owner.",
     "DreamJourney.EchoRuntimeDiagnosticsStore.snapshots.v2.owner.",
     "DreamJourney.EchoTraceEvidencePackageStore.packages.v2.owner.",
+    "DreamJourney.EchoQAEvidenceBundleStore.bundles.v4.owner.",
     "DreamJourney.EchoQAEvidenceBundleStore.bundles.v3.owner.",
     "DreamJourney.EchoTraceStore.records.v1",
     "DreamJourney.EchoRuntimeDiagnosticsStore.snapshots.v1",

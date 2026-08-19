@@ -588,6 +588,7 @@ final class EchoViewController: UIViewController {
     private var lastDigitalHumanSessionEvidenceSummary: EchoDigitalHumanSessionEvidenceSummary?
     private var lastVoiceSynthesisEvidenceSummary: EchoVoiceSynthesisEvidenceSummary?
     private var lastOwnerTruthContextCitationEvidence: OwnerTruthContextCitationQAEvidenceReadout?
+    private var lastEchoAnswerGroundingEvidence: EchoAnswerGroundingQAEvidence?
     private var lastOwnerTruthContextParityEvidence: EchoOwnerTruthContextParityQAEvidenceReadout?
     private var lastOwnerTruthContextCompareEvidence: EchoOwnerTruthContextShadowCompareQAEvidenceReadout?
     private var trueDeviceBackendPCMDriveTrace = TencentBackendPCMDriveTrueDeviceTrace()
@@ -1752,6 +1753,7 @@ final class EchoViewController: UIViewController {
         lastDigitalHumanSessionEvidenceSummary = nil
         lastVoiceSynthesisEvidenceSummary = nil
         lastOwnerTruthContextCitationEvidence = nil
+        lastEchoAnswerGroundingEvidence = nil
         lastOwnerTruthContextParityEvidence = nil
         lastOwnerTruthContextCompareEvidence = nil
         lastVoiceCloneProviderLogId = nil
@@ -3889,6 +3891,7 @@ final class EchoViewController: UIViewController {
         let package = makeEchoTraceEvidencePackage(snapshot: snapshot, source: source)
         return EchoQAEvidenceBundle(
             evidencePackage: package,
+            answerGrounding: lastEchoAnswerGroundingEvidence,
             ownerTruthContextCitationEvidence: lastOwnerTruthContextCitationEvidence,
             ownerTruthContextParityEvidence: lastOwnerTruthContextParityEvidence,
             ownerTruthContextCompareEvidence: lastOwnerTruthContextCompareEvidence
@@ -3980,6 +3983,7 @@ final class EchoViewController: UIViewController {
             capability.map { "capability.\($0.diagnosticSummary)" }
         }
         let ownerTruthContextLines = lastOwnerTruthContextCitationEvidence?.panelLines() ?? []
+        let answerGroundingLines = lastEchoAnswerGroundingEvidence?.panelLines() ?? []
         let ownerTruthContextParityLines = lastOwnerTruthContextParityEvidence?.panelLines() ?? []
         let ownerTruthContextCompareLines = lastOwnerTruthContextCompareEvidence?.panelLines() ?? []
         let baseLines = [
@@ -4004,6 +4008,7 @@ final class EchoViewController: UIViewController {
         echoRuntimeDiagnosticsPanelLabel.text = (
             [baseLines[0]]
                 + ownerTruthContextLines
+                + answerGroundingLines
                 + ownerTruthContextParityLines
                 + ownerTruthContextCompareLines
                 + Array(baseLines.dropFirst())
@@ -5328,6 +5333,7 @@ final class EchoViewController: UIViewController {
         // Shadow evidence belongs to one Echo turn only.  It must not survive a
         // cancellation, account/context switch, or a later turn.
         lastOwnerTruthContextCitationEvidence = nil
+        lastEchoAnswerGroundingEvidence = nil
         lastOwnerTruthContextParityEvidence = nil
         lastOwnerTruthContextCompareEvidence = nil
         guard let lease = echoApplicationCoordinator.invalidateContextBuild() else {
@@ -6823,6 +6829,9 @@ final class EchoViewController: UIViewController {
 
                 switch result {
                 case .success(let answer):
+                    self.lastEchoAnswerGroundingEvidence = OwnerTruthContextCitationQAGate.isEnabled
+                        ? EchoAnswerGroundingQAEvidence(answer: answer)
+                        : nil
                     let memoryGapHandoff = self.memoryGapHandoff(
                         for: answer,
                         question: question,
@@ -10893,10 +10902,12 @@ extension EchoViewController {
         let previousOwnerTruthContextCitationEvidence = lastOwnerTruthContextCitationEvidence
         let previousOwnerTruthContextParityEvidence = lastOwnerTruthContextParityEvidence
         let previousOwnerTruthContextCompareEvidence = lastOwnerTruthContextCompareEvidence
+        let previousAnswerGroundingEvidence = lastEchoAnswerGroundingEvidence
         defer {
             lastOwnerTruthContextCitationEvidence = previousOwnerTruthContextCitationEvidence
             lastOwnerTruthContextParityEvidence = previousOwnerTruthContextParityEvidence
             lastOwnerTruthContextCompareEvidence = previousOwnerTruthContextCompareEvidence
+            lastEchoAnswerGroundingEvidence = previousAnswerGroundingEvidence
             restoreEchoTraceUIQAOwner(ownerContext)
         }
         EchoTraceStore.shared.clear(ownerUserId: ownerUserId)
@@ -10968,6 +10979,37 @@ extension EchoViewController {
             reason: "uiqaBundleSynthesisSummary",
             detail: "UIQA bundle stores provider metadata only"
         )
+
+        let groundingTraceID = "ctx_uiqa_grounding_trace"
+        let groundingCitationRef = "memory-version:uiqa-grounding-reference"
+        let groundingContentHash = String(repeating: "a", count: 64)
+        guard let groundingAnswer = EchoAnswer(json: [
+            "schemaVersion": EchoAnswer.schemaVersion,
+            "answerId": "ans_uiqa_grounding",
+            "text": "已使用确认记忆生成回响。",
+            "provider": "uiqa",
+            "contextTraceId": groundingTraceID,
+            "contextVersion": "echo-context-v4-owner",
+            "citations": [[
+                "source": "ownerTruthMemoryProjection",
+                "refId": groundingCitationRef,
+                "kind": "memoryVersion",
+                "contentHash": groundingContentHash,
+            ]],
+            "memoryGrounding": [
+                "schemaVersion": EchoMemoryGrounding.schemaVersion,
+                "outcome": "grounded",
+                "handoff": "none",
+            ],
+        ]) else {
+            completion([
+                "completed": false,
+                "failureReason": "answerGroundingFixtureInvalid",
+                "error": "redacted",
+            ])
+            return
+        }
+        lastEchoAnswerGroundingEvidence = EchoAnswerGroundingQAEvidence(answer: groundingAnswer)
 
         let ownerTruthContextReference = "memory-version:00000000-0000-0000-0000-000000000901"
         let ownerTruthContextQueryFingerprint = OwnerTruthContextCitationTraceSummary
@@ -11172,6 +11214,7 @@ extension EchoViewController {
             let manifestSerialized = String(data: manifestData, encoding: .utf8) ?? ""
             let evidencePackage = bundle["evidencePackage"] as? [String: Any]
             let clueSummary = bundle["contextClues"] as? [String: Any]
+            let answerGrounding = bundle["answerGrounding"] as? [String: Any]
             let ownerTruthContextEvidence = bundle["ownerTruthContextCitationEvidence"] as? [String: Any]
             let ownerTruthContextParityEvidence = bundle["ownerTruthContextParityEvidence"] as? [String: Any]
             let ownerTruthContextCompareEvidence = bundle["ownerTruthContextCompareEvidence"] as? [String: Any]
@@ -11222,8 +11265,18 @@ extension EchoViewController {
                 at: Date().addingTimeInterval(EchoQAEvidenceManifest.localBundleTTL + 1)
             ) == "expired"
             completion([
-                "completed": bundle["schemaVersion"] as? Int == 3
+                "completed": bundle["schemaVersion"] as? Int == 4
                     && evidencePackage?["schemaVersion"] as? Int == 1
+                    && answerGrounding?["schemaVersion"] as? Int == 1
+                    && answerGrounding?["outcome"] as? String == "grounded"
+                    && answerGrounding?["citationCount"] as? Int == 1
+                    && redactedEchoExportStrings(answerGrounding, key: "citationSources")
+                        == ["ownerTruthMemoryProjection"]
+                    && redactedEchoExportStrings(answerGrounding, key: "citationRefDigests").count == 1
+                    && redactedEchoExportStrings(answerGrounding, key: "citationContentHashDigests").count == 1
+                    && !serialized.contains(groundingTraceID)
+                    && !serialized.contains(groundingCitationRef)
+                    && !serialized.contains(groundingContentHash)
                     && latestTurnIDHash
                         == PrivacySafeDiagnostics.correlationHash("uiqa-qa-bundle-turn")
                     && redactedEchoExportString(clueSummary, key: "contextVersion") == "echo-context-v2"
@@ -11288,6 +11341,8 @@ extension EchoViewController {
                     && !manifestSerialized.contains("uiqa-bundle-provider-log")
                     && !manifestSerialized.contains("archive_qa_bundle"),
                 "schemaVersion": bundle["schemaVersion"] as? Int ?? -1,
+                "answerGroundingOutcome": redactedEchoExportString(answerGrounding, key: "outcome"),
+                "answerGroundingCitationCount": answerGrounding?["citationCount"] as? Int ?? -1,
                 "latestTurnIDHash": latestTurnIDHash,
                 "latestTraceIdHash": latestTraceIdHash,
                 "latestVoiceOutputMode": redactedEchoExportString(voiceSynthesis, key: "outputMode"),
