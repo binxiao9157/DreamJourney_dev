@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "echo-grounding-citation-pc-b3-smoke-v1",
+  "status": "passed",
+  "schemaHead": "0099",
+  "assertions": {
+    "ownerTruthProjectionIsGrounded": true,
+    "groundedGapFallbackAreExclusive": true,
+    "fallbackSkipsGenerationProvider": true,
+    "answerAuditUsesServerMaterialization": true,
+    "answerAuditBindsAnswerId": true,
+    "citationContainsContentHash": true,
+    "contextTraceStoredAsHashOnly": true,
+    "publicUIHidesCitationDetails": true,
+    "qaEvidenceIsRedacted": true,
+    "crossAccountIsolation": true
+  }
+}

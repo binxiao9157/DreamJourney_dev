@@ -3,7 +3,7 @@
 日期：2026-08-18
 状态：`IN_PROGRESS`
 日常开发入口：`CANONICAL_EXECUTION_PLAN`
-执行控制版本：V1.10
+执行控制版本：V1.11
 
 ## 0. 目标和基线
 
@@ -22,12 +22,12 @@
 
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
-| `COMPLETE` | 11 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2 |
+| `COMPLETE` | 12 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2、PC-B3 |
 | `WAITING_EXTERNAL_CONFIGURATION` | 1 | PC-A0：代码、production-postgres 部署和非真机验收已完成；真实短信 Provider 待配置 |
-| 当前执行项 | 1 | PC-B3：Citation 与 Grounding 收敛 |
-| 后续待执行 | 7 | PC-B3 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+| 当前执行项 | 1 | PC-B4：统一消息中心与未读入口 |
+| 后续待执行 | 6 | PC-B4 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：PC-B2 Backend 为 `7bd935d`，iOS 功能基线为 `a437c602`、PC-B1 证据基线为 `2f6bd31d`，服务器已部署 `7bd935d`，migration head 保持 `0098`。生产 Owner Context 已改为 query-ranked SearchDocument：候选最多 20、最终最多 8、生成上下文最多 4,096 字，并复核 Authority Epoch、current version、content hash 和状态；自然语言相关性、无命中 gap、SearchDocument 不可用 fallback 以及 production-postgres deployed smoke 均已通过。当前进入 PC-B3；真实短信 Provider 仍为 PC-A0 外部 Gate，不阻塞后续非依赖任务，也不得据此宣称生产 OTP 恢复完成。
+当前代码与部署交接：PC-B3 Backend 为 `559c412`，iOS 为 `e72eca3b`，服务器已部署 `559c412`，migration head 为 `0099`。`ownerTruthMemoryProjection` 已纳入 grounded 判定；grounded、gap 和 fallback 语义互斥，fallback 不调用生成 Provider。后端从实际 Context materialization 生成不可伪造的回答/引用审计，仅保存脱敏 trace hash；iOS QA 证据包保存脱敏 grounding 摘要，普通回响不展示来源编号、卡片或原文入口。全量后端测试、iOS 构建与定向测试、模拟器证据包导出、production-postgres smoke 和部署态路由鉴权 smoke 均已通过。当前进入 PC-B4；真实短信 Provider 仍为 PC-A0 外部 Gate，不阻塞后续非依赖任务，也不得据此宣称生产 OTP 恢复完成。
 
 每轮只需读取：
 
@@ -448,6 +448,8 @@ iOS：
 验证：grounded/gap/fallback 矩阵、公开 UI 静态检查、QA 导出脱敏。
 
 完成定义：用户界面简洁，内部仍能证明每轮回答依据。
+
+状态：`COMPLETE`（2026-08-19）。Backend 将 `ownerTruthMemoryProjection` 计入 grounded，固定 grounded/gap/fallback 互斥语义，并从服务端实际 Context materialization 自动生成绑定 answerId 的引用审计；`contentHash` 保留用于一致性验证，`contextTraceId` 仅以 SHA-256 写入审计。iOS Evidence Bundle 升级到 schema v4，仅在 QA Gate 下导出脱敏的 Grounding 摘要，公开 Echo 不展示来源编号、来源卡片或原文入口。Backend `559c412` 已部署，migration head `0099`；iOS `e72eca3b` 已推送。证据见 `artifacts/product-confirmed/20260819-pc-b3/PC-B3/` 和 `docs/superpowers/status/2026-08-19-pc-b3-echo-grounding-citation.md`。Gate B 的剩余项为 PC-B4，当前连续执行交接点为 `PC-B4`。
 
 ### PC-B4 统一消息中心与未读入口
 

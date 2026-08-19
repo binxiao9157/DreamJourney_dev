@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "status": "ready",
+  "components": {
+    "database": "ready",
+    "schema": "ready",
+    "auth": "ready",
+    "incident": "ready"
+  },
+  "workers": {
+    "ownerTruthCandidateExtraction": "running",
+    "ownerTruthMemoryProjection": "running",
+    "ownerTruthMediaDeletion": "running"
+  },
+  "routeAuthentication": {
+    "mode": "enforce",
+    "routeCount": 222
+  },
+  "migrationHead": "0099",
+  "backendRevision": "559c412de28980ea15b13be1c9102c86bc423362"
+}
