@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "owner-truth-formal-memory-pc-b1-smoke-v1",
+  "status": "passed",
+  "assertions": {
+    "listSearchFacet": true,
+    "currentPlusThree": true,
+    "staleConflict": true,
+    "idempotentReplay": true,
+    "publicationVersionPinned": true,
+    "noDeleteRoute": true,
+    "simulatorUIQA": true
+  }
+}

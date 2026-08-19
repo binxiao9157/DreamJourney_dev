@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "dreamjourney-product-confirmed-evidence-v1",
+  "workItem": "PC-B1",
+  "status": "COMPLETE",
+  "capturedAt": "2026-08-19T15:18:20+08:00",
+  "commits": {
+    "backend": "d0718b71334a97c9df1ad6896cd09d379a75643a",
+    "ios": "a437c602"
+  },
+  "deployment": {
+    "backendRevision": "d0718b71334a97c9df1ad6896cd09d379a75643a",
+    "migrationHead": "0098",
+    "readiness": "ready"
+  },
+  "checks": [
+    "backend-owner-truth-formal-memory-postgres-smoke",
+    "OwnerTruthContractsTests",
+    "formal-memory-library-check",
+    "owner-truth-formal-memory-uiqa-smoke",
+    "release-qa-package-check",
+    "git-diff-check"
+  ],
+  "uiqa": {
+    "bundleId": "com.yxj.dreamjourney.app",
+    "listScreenshotSha256": "84ba162a78a967860f32779608fdaf4a73a7f832f57613b2eae2a523c315feb2",
+    "detailScreenshotSha256": "a52212c7c1d16f785904c6e1dc7a5edc6b59a93edb8e03b2ac6cdfef4c3a4807",
+    "resultSha256": "9c5cb23575c11785b400bc0decfc8e980e713ea9a38748721fe356aa7bce572a"
+  },
+  "containsCredentials": false
+}

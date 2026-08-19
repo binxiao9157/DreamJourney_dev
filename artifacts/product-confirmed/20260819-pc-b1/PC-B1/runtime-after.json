@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "status": "ready",
+  "components": {
+    "database": "ready",
+    "schema": "ready",
+    "auth": "ready",
+    "incident": "ready"
+  },
+  "migrationHead": "0098",
+  "backendRevision": "d0718b71334a97c9df1ad6896cd09d379a75643a"
+}

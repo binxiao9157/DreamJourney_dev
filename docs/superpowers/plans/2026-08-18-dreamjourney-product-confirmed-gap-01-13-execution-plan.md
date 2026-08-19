@@ -3,7 +3,7 @@
 日期：2026-08-18
 状态：`IN_PROGRESS`
 日常开发入口：`CANONICAL_EXECUTION_PLAN`
-执行控制版本：V1.8
+执行控制版本：V1.9
 
 ## 0. 目标和基线
 
@@ -22,12 +22,12 @@
 
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
-| `COMPLETE` | 9 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5 |
+| `COMPLETE` | 10 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1 |
 | `WAITING_EXTERNAL_CONFIGURATION` | 1 | PC-A0：代码、production-postgres 部署和非真机验收已完成；真实短信 Provider 待配置 |
-| 当前执行项 | 1 | PC-B1：正式记忆总览与二次确认编辑 |
-| 后续待执行 | 9 | PC-B1 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+| 当前执行项 | 1 | PC-B2：query-ranked Owner 检索 |
+| 后续待执行 | 8 | PC-B2 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：PC-A5 Backend 为 `b20e22c`，iOS 为 `0bbf0df0`，服务器已部署 `b20e22c`，migration head 为 `0098`。Owner 或 Member 均可通过二次确认解除家庭关系；关系、ShareGrant-compatible access authority 和 Contribution Grant 原子撤销，待审核贡献隐藏并进入处置队列，已接受 Source 保留来源审计，Publication Grant 保持不变且只能由 Owner 另行撤销。双方账户继续可登录，重复或并发解除幂等收敛。Gate A 的代码与 production-postgres 验证已通过，当前进入 PC-B1；真实短信 Provider 仍为 PC-A0 外部 Gate，不阻塞后续非依赖任务，也不得据此宣称生产 OTP 恢复完成。
+当前代码与部署交接：PC-B1 Backend 为 `d0718b7`，iOS 为 `a437c602`，服务器已部署 `d0718b7`，migration head 保持 `0098`。Owner 已可从统一入口分页、搜索和按 kind/facet 浏览 current 正式记忆，读取 current + 3 个历史快照，并通过内存草稿、差异预览和二次确认创建不可变后继版本；无用户历史删除路由。production-postgres smoke 已验证陈旧写冲突、幂等回放、内部完整版本账本和 PublicationVersion 固定不变；模拟器 UIQA 与 225 项 iOS Owner Truth 合同测试通过。当前进入 PC-B2；真实短信 Provider 仍为 PC-A0 外部 Gate，不阻塞后续非依赖任务，也不得据此宣称生产 OTP 恢复完成。
 
 每轮只需读取：
 
@@ -413,6 +413,8 @@ iOS：
 验证：列表分页、筛选、全文、current + 3 历史、滚动淘汰、无手动删除路由、发布快照不受影响、并发 409、杀 App 前无写入、账户切换、VoiceOver 和模拟器 UIQA。
 
 完成定义：Owner 可从统一入口查看和安全纠正 current 正式记忆。
+
+状态：`COMPLETE`（2026-08-19）。Backend 新增 Owner-only 正式记忆聚合读取和二次确认 correction command，生产 PostgreSQL 已验证全文/线索筛选、current + 3、陈旧写冲突、幂等回放、内部版本账本与 PublicationVersion 不变；iOS 新增正式记忆入口、列表、筛选、详情、历史和内存草稿差异确认编辑，账户切换使用 AccountLease/generation fence。Backend `d0718b7` 已部署，iOS `a437c602` 已推送；证据见 `artifacts/product-confirmed/20260819-pc-b1/PC-B1/` 和 `docs/superpowers/status/2026-08-19-pc-b1-owner-formal-memory-library.md`。当前连续执行交接点为 `PC-B2`。
 
 ### PC-B2 query-ranked Owner 检索
 
