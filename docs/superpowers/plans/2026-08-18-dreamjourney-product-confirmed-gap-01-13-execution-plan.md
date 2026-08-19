@@ -27,7 +27,7 @@
 | 当前执行项 | 1 | PC-D1：Publication Owner App 闭环 |
 | 后续待执行 | 3 | PC-D1 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：PC-C2 iOS 为 `cc1b3174`，Backend 和服务器均为 `6e21f30`，migration head 为 `0101`。正式记忆导出只读取当前已确认 MemoryVersion，生成带确定性文件名、MIME 和 SHA-256 的 Markdown；Source、Candidate、历史正文、媒体、凭据和内部审计不进入文件。iOS 通过服务端策略展示独立入口，支持状态恢复、取消/重试、受保护临时文件、预览、系统分享和分享/账户生命周期清理；完整账户导出入口保持关闭。部署态 PostgreSQL 已验证 Owner 隔离、current-only 内容范围、hash、取消和 232 条路由认证。执行交接点进入 PC-D1 Publication Owner App 闭环；真实短信 Provider、APNs 真机到达、腾讯 COS、内容安全扫描器、真实视觉 Provider 和发布/Visitor 外部审批分别保留为外部 Gate。
+当前代码与部署交接：PC-D1 创建子闭环 iOS 为 `7b2620a4`，Backend 和服务器均为 `5153db2`，migration head 为 `0102`。后端 PublicationDraft 已支持有序多条 MemoryVersion 与 item 级公开标题、正文、快照 hash 和披露字段；iOS 普通 Owner 已可从正式记忆多选进入公开正文编辑、预览、隐私/AI 披露和二次确认，不依赖 QA 页面或预置发布数据。部署态 PostgreSQL 已验证 Draft 创建、确认、Owner 隔离和 232 条路由认证。PC-D1 仍为 `IN_PROGRESS`：下一交接点是普通 Owner 撤回确认闭环，随后补版本审计和 ShareGrant 管理；真实短信 Provider、APNs 真机到达、腾讯 COS、内容安全扫描器、真实视觉 Provider 和发布/Visitor 外部审批分别保留为外部 Gate。
 
 每轮只需读取：
 
@@ -536,6 +536,8 @@ iOS：更新页面范围说明、下载、预览、系统分享、文件保护�
 ### PC-D1 Publication Owner App 闭环
 
 关联：GAP-09、PUB-001。
+
+状态：`IN_PROGRESS`（2026-08-19）。Backend `5153db2` 和 migration `0102` 已完成有序多条 Draft/Version 合同并部署；iOS `f40d13c2/7b2620a4` 已完成 typed client、普通 Owner 多选创建、公开正文编辑、预览、披露和二次确认。创建流程的定向 XCTest、静态 Gate、模拟器 UIQA、generic iPhoneOS build、部署态 PostgreSQL smoke 和 232 条路由认证均通过。剩余顺序固定为：普通 Owner 撤回确认、版本审计、新 Draft/Version 修改链路、ShareGrant 管理及外部发布审批。详细证据见 `docs/superpowers/status/2026-08-19-pc-d1-publication-owner-creation.md`。
 
 后端：
 
