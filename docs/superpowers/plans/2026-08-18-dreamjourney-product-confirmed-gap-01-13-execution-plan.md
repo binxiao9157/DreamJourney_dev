@@ -22,12 +22,12 @@
 
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
-| `COMPLETE` | 7 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3 |
+| `COMPLETE` | 8 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4 |
 | `WAITING_EXTERNAL_CONFIGURATION` | 1 | PC-A0：代码、production-postgres 部署和非真机验收已完成；真实短信 Provider 待配置 |
-| 当前执行项 | 1 | PC-A4：音色独立授权与累计创建上限 |
-| 后续待执行 | 11 | PC-A4 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+| 当前执行项 | 1 | PC-A5：家庭关系解除与数据处置 |
+| 后续待执行 | 10 | PC-A5 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：PC-A3 Backend 为 `83240f6`，iOS 为 `b4caa0b4`，服务器已部署 `83240f6`，migration head 仍为 `0096`。本人是唯一私人 V4 路由；Family 无 ShareGrant 只进入贡献引导，有匹配 VisitorSession 才读取 PublicProjection，且非本人路径禁止 Legacy Archive/KBLite 回退和腾讯数字人 Session。PC-A0 的外部短信 Gate 不阻塞 PC-A4；在真实短信 Provider 配置前，不得宣称生产 OTP 恢复完成。
+当前代码与部署交接：PC-A4 Backend 为 `080e9b8`，iOS 为 `e52267f9`，服务器已部署 `080e9b8`，migration head 为 `0097`。服务端按认证声音主体原子维护累计 5 次创建上限，校验失败和幂等重试不计数，Provider 已受理后的失败、删除或撤销不返还；iOS 展示权威剩余次数并在达到上限时隐藏新建动作。强身份/活体与真实 Provider 回执仍为外部 Gate，不阻塞 PC-A5；在真实短信 Provider 配置前仍不得宣称生产 OTP 恢复完成。
 
 每轮只需读取：
 
@@ -364,6 +364,8 @@ iOS：
 验证：并发创建、幂等重试、Provider 失败、撤销后计数、跨账号/家人越权和现有 Echo binding 回归。
 
 完成定义：第 1 至 5 次创建按合同执行，第 6 次稳定失败；任何角色都不能绕过主体授权或创建上限。
+
+状态：`COMPLETE_WITH_EXTERNAL_GATE`（2026-08-19）。Backend 新增 migration `0097`、主体级原子配额/幂等回执和部署态 Postgres 并发 smoke；iOS 新增 typed quota consumer、授权范围与剩余次数展示，并在上限时关闭新建。Backend `080e9b8` 已部署，iOS `e52267f9` 已推送；证据见 `docs/superpowers/status/2026-08-19-pc-a4-voice-profile-creation-quota.md`。强身份/活体和真实 Provider 生产回执仍按外部 Gate 管理；当前连续执行交接点为 `PC-A5`。
 
 ### PC-A5 家庭关系解除与数据处置
 
