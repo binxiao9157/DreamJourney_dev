@@ -233,6 +233,8 @@ run_step "installable-bundle-team-guard" swift \
   Scripts/QA/prd-stitch-ui/installable-simulator-uiqa-bundle-guard-check.swift "$ROOT_DIR"
 
 run_step "account-lease-runtime" bash Scripts/QA/product-v4/run-account-lease-runtime-gate.sh
+run_step "product-confirmed-message-center" bash \
+  Scripts/QA/product-v4/run-product-confirmed-message-center-gate.sh
 
 if [[ "$RUN_XCTEST" == "1" ]]; then
   run_step "owner-truth-xctest" xcodebuild test \
@@ -249,6 +251,7 @@ if [[ "$RUN_XCTEST" == "1" ]]; then
 fi
 
 if [[ "$RUN_UIQA" == "1" ]]; then
+  run_uiqa_step "product-confirmed-message-center" Scripts/QA/product-v4/run-product-confirmed-message-center-uiqa-smoke.sh
   run_uiqa_step "owner-media-unified-creation" Scripts/QA/product-v4/run-ios-owner-media-unified-creation-uiqa-smoke.sh
   run_uiqa_step "owner-media-task-status" Scripts/QA/product-v4/run-ios-owner-media-task-status-uiqa-smoke.sh
   run_uiqa_step "owner-media-candidate-confirmation" Scripts/QA/prd-stitch-ui/run-owner-truth-candidate-inbox-smoke.sh

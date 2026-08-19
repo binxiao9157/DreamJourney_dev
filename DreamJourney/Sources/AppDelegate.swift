@@ -447,6 +447,8 @@ private extension AppDelegate {
             prepareArchiveMediaEchoContextSmoke()
         case .timeLetterDispatchReminderSmoke:
             scheduleUIQAScenario(scenario) { $0.runTimeLetterDispatchReminderSmoke() }
+        case .productConfirmedMessageCenterSmoke:
+            scheduleUIQAScenario(scenario) { $0.runProductConfirmedMessageCenterSmoke() }
         case .echoListeningStatePreview:
             scheduleUIQAScenario(scenario) {
                 $0.showEchoVoiceStatePreview(targetState: .listening)

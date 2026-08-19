@@ -173,12 +173,13 @@ final class InAppMessageLifecycleProjectionStore {
     func teardownForAccountLifecycle(oldAccountLease: AccountLease?) -> Bool {
         guard let oldAccountLease else { return false }
         lock.lock()
-        defer { lock.unlock() }
-        return teardownInAppMessageProjections(
+        let projectionsCleared = teardownInAppMessageProjections(
             surfaces: [.systemNotice, .echoReply, .localState, .timeLetterMailbox],
             oldAccountLease: oldAccountLease,
             defaults: defaults
         )
+        lock.unlock()
+        return projectionsCleared
     }
 }
 
@@ -383,7 +384,14 @@ private func authenticatedResourceOwnerId(_ source: Any) -> String? {
 
 enum InAppMessageKind: String, Codable, CaseIterable {
     case timeLetter
+    case candidateReady
+    case projectionStatus
+    case exportStatus
     case familyInvitation
+    case familyContribution
+    case authorizationRevoked
+    case accountSecurity
+    case taskRetryRequired
     case careSignal
     case systemNotice
     case echoReply
@@ -392,8 +400,22 @@ enum InAppMessageKind: String, Codable, CaseIterable {
         switch self {
         case .timeLetter:
             return "时间信件"
+        case .candidateReady:
+            return "待确认记忆"
+        case .projectionStatus:
+            return "正式记忆"
+        case .exportStatus:
+            return "数据导出"
         case .familyInvitation:
             return "家庭邀请"
+        case .familyContribution:
+            return "家庭贡献"
+        case .authorizationRevoked:
+            return "授权变更"
+        case .accountSecurity:
+            return "账户安全"
+        case .taskRetryRequired:
+            return "任务提醒"
         case .careSignal:
             return "关怀提醒"
         case .systemNotice:
@@ -548,6 +570,11 @@ enum InAppMessageStatus: String, Codable {
     }
 }
 
+enum InAppMessageAuthority: String, Codable {
+    case backend
+    case localCompatibility
+}
+
 struct InAppMessage: Codable, Equatable {
     let id: String
     let kind: InAppMessageKind
@@ -573,6 +600,73 @@ struct InAppMessage: Codable, Equatable {
     let contentRedacted: Bool
     let isActionable: Bool
     let unavailableReason: String?
+    let resourceType: String?
+    let resourceId: String?
+    let resourceVersion: Int?
+    let requiresReauthorization: Bool
+    let authority: InAppMessageAuthority
+
+    init(
+        id: String,
+        kind: InAppMessageKind,
+        title: String,
+        summary: String,
+        status: InAppMessageStatus,
+        deliveredAt: String,
+        readAt: String?,
+        archivedAt: String?,
+        sourceArchiveItemId: String?,
+        ownerUserId: String?,
+        familyMemberId: String?,
+        careSignalId: String?,
+        careSignalStatus: String?,
+        careSignalSeverity: String?,
+        systemNoticeId: String?,
+        systemNoticeCategory: String?,
+        systemNoticeSeverity: String?,
+        invitationStatus: String?,
+        accessStatus: String?,
+        recipientRole: String?,
+        metadataOnly: Bool,
+        contentRedacted: Bool,
+        isActionable: Bool,
+        unavailableReason: String?,
+        resourceType: String? = nil,
+        resourceId: String? = nil,
+        resourceVersion: Int? = nil,
+        requiresReauthorization: Bool = false,
+        authority: InAppMessageAuthority = .localCompatibility
+    ) {
+        self.id = id
+        self.kind = kind
+        self.title = title
+        self.summary = summary
+        self.status = status
+        self.deliveredAt = deliveredAt
+        self.readAt = readAt
+        self.archivedAt = archivedAt
+        self.sourceArchiveItemId = sourceArchiveItemId
+        self.ownerUserId = ownerUserId
+        self.familyMemberId = familyMemberId
+        self.careSignalId = careSignalId
+        self.careSignalStatus = careSignalStatus
+        self.careSignalSeverity = careSignalSeverity
+        self.systemNoticeId = systemNoticeId
+        self.systemNoticeCategory = systemNoticeCategory
+        self.systemNoticeSeverity = systemNoticeSeverity
+        self.invitationStatus = invitationStatus
+        self.accessStatus = accessStatus
+        self.recipientRole = recipientRole
+        self.metadataOnly = metadataOnly
+        self.contentRedacted = contentRedacted
+        self.isActionable = isActionable
+        self.unavailableReason = unavailableReason
+        self.resourceType = resourceType
+        self.resourceId = resourceId
+        self.resourceVersion = resourceVersion
+        self.requiresReauthorization = requiresReauthorization
+        self.authority = authority
+    }
 
     var isUnread: Bool {
         status.isUnread
@@ -615,7 +709,12 @@ struct InAppMessage: Codable, Equatable {
             metadataOnly: metadataOnly,
             contentRedacted: contentRedacted,
             isActionable: isActionable,
-            unavailableReason: unavailableReason
+            unavailableReason: unavailableReason,
+            resourceType: resourceType,
+            resourceId: resourceId,
+            resourceVersion: resourceVersion,
+            requiresReauthorization: requiresReauthorization,
+            authority: authority
         )
     }
 
@@ -644,7 +743,52 @@ struct InAppMessage: Codable, Equatable {
             metadataOnly: metadataOnly,
             contentRedacted: contentRedacted,
             isActionable: isActionable,
-            unavailableReason: unavailableReason
+            unavailableReason: unavailableReason,
+            resourceType: resourceType,
+            resourceId: resourceId,
+            resourceVersion: resourceVersion,
+            requiresReauthorization: requiresReauthorization,
+            authority: authority
+        )
+    }
+
+    static func fromBackend(
+        _ source: BackendInAppMessage,
+        ownerUserId: String
+    ) -> InAppMessage {
+        let copy = source.kind.backendPublicCopy
+        return InAppMessage(
+            id: source.id,
+            kind: source.kind,
+            title: copy.title,
+            summary: copy.summary,
+            status: source.state == .unread ? .unread : .read,
+            deliveredAt: source.createdAt,
+            readAt: source.readAt,
+            archivedAt: nil,
+            sourceArchiveItemId: source.resource.type == "archiveItem" ? source.resource.id : nil,
+            ownerUserId: ownerUserId,
+            familyMemberId: source.kind == .familyInvitation || source.kind == .familyContribution
+                ? source.resource.id
+                : nil,
+            careSignalId: source.kind == .careSignal ? source.resource.id : nil,
+            careSignalStatus: nil,
+            careSignalSeverity: nil,
+            systemNoticeId: source.kind == .systemNotice ? source.resource.id : nil,
+            systemNoticeCategory: nil,
+            systemNoticeSeverity: nil,
+            invitationStatus: nil,
+            accessStatus: nil,
+            recipientRole: nil,
+            metadataOnly: source.metadataOnly,
+            contentRedacted: true,
+            isActionable: true,
+            unavailableReason: nil,
+            resourceType: source.resource.type,
+            resourceId: source.resource.id,
+            resourceVersion: source.resource.version,
+            requiresReauthorization: source.requiresReauthorization,
+            authority: .backend
         )
     }
 
@@ -1657,4 +1801,236 @@ struct InAppMessageCenterSnapshot: Equatable {
             return lhs.sortKey > rhs.sortKey
         }
     }
+}
+
+private extension InAppMessageKind {
+    var backendPublicCopy: (title: String, summary: String) {
+        switch self {
+        case .candidateReady:
+            return ("有新的记忆待确认", "完成确认后才会进入正式记忆")
+        case .projectionStatus:
+            return ("正式记忆已更新", "记忆投影状态已变化，可前往记忆档案查看")
+        case .exportStatus:
+            return ("数据导出状态已更新", "可前往账户设置查看最新处理状态")
+        case .familyInvitation:
+            return ("家庭邀请状态已更新", "可前往家人管理查看")
+        case .familyContribution:
+            return ("收到新的家庭记忆贡献", "确认后才会进入你的正式记忆")
+        case .authorizationRevoked:
+            return ("一项授权已发生变化", "相关内容将按最新权限重新校验")
+        case .accountSecurity:
+            return ("账户安全提醒", "请前往账户设置确认最新状态")
+        case .taskRetryRequired:
+            return ("有任务需要重新处理", "打开对应功能后可查看失败原因并重试")
+        case .careSignal:
+            return ("关怀状态已更新", "可前往我的页面查看")
+        case .systemNotice:
+            return ("系统通知", "有一项服务状态更新")
+        case .timeLetter, .echoReply:
+            return (displayTitle, "该功能当前未在统一消息中心开放")
+        }
+    }
+
+    var isBackendPublicMessageKind: Bool {
+        switch self {
+        case .candidateReady,
+             .projectionStatus,
+             .exportStatus,
+             .familyInvitation,
+             .familyContribution,
+             .authorizationRevoked,
+             .accountSecurity,
+             .taskRetryRequired,
+             .careSignal,
+             .systemNotice:
+            return true
+        case .timeLetter, .echoReply:
+            return false
+        }
+    }
+}
+
+enum BackendInAppMessageState: String, Equatable {
+    case unread
+    case read
+}
+
+struct BackendInAppMessageResource: Equatable {
+    let type: String
+    let id: String
+    let version: Int
+
+    init?(json: [String: Any]) {
+        guard let type = Self.nonempty(json["type"]),
+              let id = Self.nonempty(json["id"]),
+              let version = Self.integer(json["version"]),
+              version >= 0 else {
+            return nil
+        }
+        self.type = type
+        self.id = id
+        self.version = version
+    }
+
+    private static func nonempty(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func integer(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else {
+            return nil
+        }
+        return number.intValue
+    }
+}
+
+struct BackendInAppMessage: Equatable {
+    let id: String
+    let kind: InAppMessageKind
+    let state: BackendInAppMessageState
+    let createdAt: String
+    let readAt: String?
+    let resource: BackendInAppMessageResource
+    let metadataOnly: Bool
+    let requiresReauthorization: Bool
+
+    init?(json: [String: Any]) {
+        guard let id = Self.nonempty(json["id"]),
+              UUID(uuidString: id) != nil,
+              let rawKind = Self.nonempty(json["kind"]),
+              let kind = InAppMessageKind(rawValue: rawKind),
+              kind.isBackendPublicMessageKind,
+              let rawState = Self.nonempty(json["state"]),
+              let state = BackendInAppMessageState(rawValue: rawState),
+              let createdAt = Self.nonempty(json["createdAt"]),
+              let resourceJSON = json["resource"] as? [String: Any],
+              let resource = BackendInAppMessageResource(json: resourceJSON),
+              json["metadataOnly"] as? Bool == true,
+              json["requiresReauthorization"] as? Bool == true else {
+            return nil
+        }
+        if state == .read && Self.nonempty(json["readAt"]) == nil {
+            return nil
+        }
+        self.id = id
+        self.kind = kind
+        self.state = state
+        self.createdAt = createdAt
+        self.readAt = Self.nonempty(json["readAt"])
+        self.resource = resource
+        metadataOnly = true
+        requiresReauthorization = true
+    }
+
+    private static func nonempty(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+}
+
+struct BackendInAppMessageCenterPage: Equatable {
+    static let schemaVersion = "in-app-message-center-v1"
+
+    let items: [BackendInAppMessage]
+    let unreadCount: Int
+    let nextCursor: String?
+
+    init?(json: [String: Any]) {
+        guard json["schemaVersion"] as? String == Self.schemaVersion,
+              let rawItems = json["items"] as? [[String: Any]],
+              let unreadCount = Self.nonnegativeInteger(json["unreadCount"]),
+              rawItems.count <= 100 else {
+            return nil
+        }
+        let items = rawItems.compactMap(BackendInAppMessage.init(json:))
+        guard items.count == rawItems.count else { return nil }
+        self.items = items
+        self.unreadCount = unreadCount
+        nextCursor = Self.nonempty(json["nextCursor"])
+    }
+
+    private static func nonnegativeInteger(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID(),
+              number.intValue >= 0 else {
+            return nil
+        }
+        return number.intValue
+    }
+
+    private static func nonempty(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+}
+
+struct BackendInAppMessageCommandReceipt: Equatable {
+    static let schemaVersion = "in-app-message-center-v1"
+
+    let status: String
+    let commandId: String
+    let outcome: String
+    let affectedCount: Int
+    let unreadCount: Int
+
+    init?(json: [String: Any], expectedCommandId: String) {
+        guard json["schemaVersion"] as? String == Self.schemaVersion,
+              let status = json["status"] as? String,
+              ["markRead", "markAllRead", "deleteRead"].contains(status),
+              let commandId = json["commandId"] as? String,
+              commandId.caseInsensitiveCompare(expectedCommandId) == .orderedSame,
+              let outcome = json["outcome"] as? String,
+              ["applied", "deduplicated"].contains(outcome),
+              let affectedCount = Self.nonnegativeInteger(json["affectedCount"]),
+              let unreadCount = Self.nonnegativeInteger(json["unreadCount"]) else {
+            return nil
+        }
+        self.status = status
+        self.commandId = commandId
+        self.outcome = outcome
+        self.affectedCount = affectedCount
+        self.unreadCount = unreadCount
+    }
+
+    private static func nonnegativeInteger(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID(),
+              number.intValue >= 0 else {
+            return nil
+        }
+        return number.intValue
+    }
+}
+
+protocol InAppMessageCenterClientPort: AnyObject {
+    func fetchInAppMessages(
+        accountLease: AccountLease,
+        limit: Int,
+        cursor: String?,
+        completion: @escaping (Result<BackendInAppMessageCenterPage, Error>) -> Void
+    )
+
+    func markInAppMessageRead(
+        accountLease: AccountLease,
+        messageId: String,
+        commandId: String,
+        completion: @escaping (Result<BackendInAppMessageCommandReceipt, Error>) -> Void
+    )
+
+    func markAllInAppMessagesRead(
+        accountLease: AccountLease,
+        commandId: String,
+        completion: @escaping (Result<BackendInAppMessageCommandReceipt, Error>) -> Void
+    )
+
+    func deleteReadInAppMessages(
+        accountLease: AccountLease,
+        commandId: String,
+        completion: @escaping (Result<BackendInAppMessageCommandReceipt, Error>) -> Void
+    )
 }

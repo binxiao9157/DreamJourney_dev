@@ -123,57 +123,44 @@ private struct OwnerTruthMediaPickerOperation {
     let allowExternalProcessing: Bool
 }
 
-private final class InAppMessageCenterViewController: UIViewController {
+final class InAppMessageCenterViewController: UIViewController {
     private enum Section: Int, CaseIterable {
-        case inbox
-        case archived
-
-        var title: String {
-            switch self {
-            case .inbox:
-                return "收件箱"
-            case .archived:
-                return "已归档"
-            }
-        }
+        case messages
     }
 
-    private let repository: MemoryArchiveRepository
     private let accountLease: AccountLease
-    private let snapshotProvider: (AccountLease) -> InAppMessageCenterSnapshot?
-    private var messages: [InAppMessage]
+    private let store: AuthoritativeInAppMessageCenterStore
     private let onOpenMessage: (InAppMessage, AccountLease) -> Void
-    private let onShowAllTimeLetters: (AccountLease) -> Void
-    private let onMessageStateChanged: (AccountLease) -> Void
+    private var snapshot = AuthoritativeInAppMessageCenterSnapshot.idle
 
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let headerStack = UIStackView()
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
     private let emptyStateLabel = UILabel()
-    private lazy var archiveReadButton = UIBarButtonItem(
-        title: "归档已读",
+    private let retryButton = UIButton(type: .system)
+    private let loadMoreButton = UIButton(type: .system)
+    private lazy var markAllReadButton = UIBarButtonItem(
+        image: UIImage(systemName: "checkmark.circle"),
         style: .plain,
         target: self,
-        action: #selector(archiveReadRemindersTapped)
+        action: #selector(markAllReadTapped)
+    )
+    private lazy var deleteReadButton = UIBarButtonItem(
+        image: UIImage(systemName: "trash"),
+        style: .plain,
+        target: self,
+        action: #selector(deleteReadTapped)
     )
 
     init(
-        snapshot: InAppMessageCenterSnapshot,
-        repository: MemoryArchiveRepository,
         accountLease: AccountLease,
-        snapshotProvider: @escaping (AccountLease) -> InAppMessageCenterSnapshot?,
-        onOpenMessage: @escaping (InAppMessage, AccountLease) -> Void,
-        onShowAllTimeLetters: @escaping (AccountLease) -> Void,
-        onMessageStateChanged: @escaping (AccountLease) -> Void
+        store: AuthoritativeInAppMessageCenterStore = .shared,
+        onOpenMessage: @escaping (InAppMessage, AccountLease) -> Void
     ) {
-        self.repository = repository
         self.accountLease = accountLease
-        self.snapshotProvider = snapshotProvider
-        self.messages = snapshot.messages
+        self.store = store
         self.onOpenMessage = onOpenMessage
-        self.onShowAllTimeLetters = onShowAllTimeLetters
-        self.onMessageStateChanged = onMessageStateChanged
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
     }
@@ -186,16 +173,22 @@ private final class InAppMessageCenterViewController: UIViewController {
         super.viewDidLoad()
         title = "消息中心"
         view.backgroundColor = DJDesignTokens.Color.background
-        let allLettersButton = UIBarButtonItem(
-            title: "全部信件",
-            style: .plain,
-            target: self,
-            action: #selector(showAllTimeLettersTapped)
-        )
-        navigationItem.rightBarButtonItems = [allLettersButton, archiveReadButton]
+        markAllReadButton.accessibilityLabel = "全部标为已读"
+        deleteReadButton.accessibilityLabel = "删除已读消息"
+        navigationItem.rightBarButtonItems = [deleteReadButton, markAllReadButton]
         configureHeader()
         configureTableView()
-        updateEmptyState()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(messageCenterDidUpdate),
+            name: .djInAppMessageCenterDidUpdate,
+            object: store
+        )
+        render(store.snapshot(for: accountLease))
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -206,7 +199,7 @@ private final class InAppMessageCenterViewController: UIViewController {
             .foregroundColor: DJDesignTokens.Color.textPrimary,
             .font: DJDesignTokens.Font.title(18),
         ]
-        refreshMessagesFromRepository()
+        refreshMessages()
     }
 
     private func configureHeader() {
@@ -249,13 +242,34 @@ private final class InAppMessageCenterViewController: UIViewController {
         emptyStateLabel.textAlignment = .center
         emptyStateLabel.numberOfLines = 0
 
+        retryButton.setTitle("重新加载", for: .normal)
+        retryButton.titleLabel?.font = DJDesignTokens.Font.label(14)
+        retryButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        retryButton.accessibilityIdentifier = "in-app-message-center-retry"
+        retryButton.addTarget(self, action: #selector(retryTapped), for: .touchUpInside)
+        retryButton.isHidden = true
+
+        loadMoreButton.setTitle("加载更多", for: .normal)
+        loadMoreButton.titleLabel?.font = DJDesignTokens.Font.label(14)
+        loadMoreButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
+        loadMoreButton.accessibilityIdentifier = "in-app-message-center-load-more"
+        loadMoreButton.addTarget(self, action: #selector(loadMoreTapped), for: .touchUpInside)
+        loadMoreButton.frame = CGRect(x: 0, y: 0, width: 1, height: 52)
+        tableView.tableFooterView = loadMoreButton
+
+        let refreshControl = UIRefreshControl()
+        refreshControl.addTarget(self, action: #selector(retryTapped), for: .valueChanged)
+        tableView.refreshControl = refreshControl
+
         view.addSubview(headerStack)
         view.addSubview(tableView)
         view.addSubview(emptyStateLabel)
+        view.addSubview(retryButton)
 
         headerStack.translatesAutoresizingMaskIntoConstraints = false
         tableView.translatesAutoresizingMaskIntoConstraints = false
         emptyStateLabel.translatesAutoresizingMaskIntoConstraints = false
+        retryButton.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
             headerStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -270,110 +284,131 @@ private final class InAppMessageCenterViewController: UIViewController {
             emptyStateLabel.centerYAnchor.constraint(equalTo: tableView.centerYAnchor, constant: -24),
             emptyStateLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
             emptyStateLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+
+            retryButton.topAnchor.constraint(equalTo: emptyStateLabel.bottomAnchor, constant: 14),
+            retryButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            retryButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
         ])
     }
 
-    @discardableResult
-    private func refreshMessagesFromRepository() -> Bool {
-        guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed,
-              let snapshot = snapshotProvider(accountLease),
-              AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+    private func refreshMessages() {
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
             failClosedForStaleAccountLease()
-            return false
+            return
         }
-        messages = snapshot.messages
-        tableView.reloadData()
-        updateEmptyState()
-        return true
+        store.refresh(accountLease: accountLease) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.tableView.refreshControl?.endRefreshing()
+            }
+        }
     }
 
     private func failClosedForStaleAccountLease() {
-        messages = []
+        snapshot = .idle
         tableView.reloadData()
-        updateEmptyState()
+        updateViewState()
         subtitleLabel.text = "账号状态已变化，请重新打开消息中心。"
         emptyStateLabel.text = "当前消息已停止显示"
     }
 
-    private func updateEmptyState() {
-        emptyStateLabel.text = "还没有新的应用内提醒"
-        let inboxCount = messages.filter { !$0.isArchived }.count
-        let unreadCount = messages.filter { !$0.isArchived && $0.isUnread }.count
-        subtitleLabel.text = unreadCount > 0
-            ? "\(unreadCount) 条未读，点按消息查看详情。"
-            : "所有消息都已读，可归档收起。"
-        emptyStateLabel.isHidden = !messages.isEmpty
-        tableView.isHidden = messages.isEmpty
-        archiveReadButton.isEnabled = inboxCount > unreadCount
-    }
-
-    @objc private func showAllTimeLettersTapped() {
+    @objc private func messageCenterDidUpdate() {
         guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
             failClosedForStaleAccountLease()
-            showToast("账号已切换，请重新打开消息中心", type: .info)
             return
         }
-        onShowAllTimeLetters(accountLease)
+        render(store.snapshot(for: accountLease))
     }
 
-    @objc private func archiveReadRemindersTapped() {
-        let readMessages = messages.filter { !$0.isArchived && !$0.isUnread }
-        guard !readMessages.isEmpty else {
-            showToast("暂无已读消息可归档", type: .info)
-            return
+    private func render(_ snapshot: AuthoritativeInAppMessageCenterSnapshot) {
+        self.snapshot = snapshot
+        tableView.reloadData()
+        updateViewState()
+    }
+
+    private func updateViewState() {
+        let hasMessages = !snapshot.messages.isEmpty
+        switch snapshot.loadState {
+        case .idle:
+            emptyStateLabel.text = "正在准备消息中心"
+        case .loading:
+            emptyStateLabel.text = "正在加载消息..."
+        case .loaded:
+            emptyStateLabel.text = "还没有新的应用内提醒"
+        case .failed(let message):
+            emptyStateLabel.text = message
         }
-        readMessages.forEach { archiveMessage($0) }
-    }
-
-    private func messages(in section: Section) -> [InAppMessage] {
-        switch section {
-        case .inbox:
-            return messages.filter { !$0.isArchived }
-        case .archived:
-            return messages.filter(\.isArchived)
+        subtitleLabel.text = snapshot.unreadCount > 0
+            ? "\(snapshot.unreadCount) 条未读，点按消息查看对应功能。"
+            : "当前没有未读消息。"
+        emptyStateLabel.isHidden = hasMessages
+        tableView.isHidden = !hasMessages
+        if case .failed = snapshot.loadState {
+            retryButton.isHidden = false
+        } else {
+            retryButton.isHidden = true
         }
+        markAllReadButton.isEnabled = snapshot.unreadCount > 0
+        deleteReadButton.isEnabled = snapshot.hasReadMessages
+        loadMoreButton.isHidden = snapshot.nextCursor == nil
     }
 
-    private func message(at indexPath: IndexPath) -> InAppMessage {
-        let section = Section(rawValue: indexPath.section) ?? .inbox
-        return messages(in: section)[indexPath.row]
+    @objc private func retryTapped() {
+        refreshMessages()
     }
 
-    private func archiveMessage(
-        _ message: InAppMessage,
-        completion: ((Bool) -> Void)? = nil
-    ) {
-        guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
-            failClosedForStaleAccountLease()
-            showToast("账号已切换，请重新打开消息中心", type: .info)
-            completion?(false)
-            return
-        }
-        repository.archiveInAppMessage(message, accountLease: accountLease) { [weak self] result in
+    @objc private func loadMoreTapped() {
+        loadMoreButton.isEnabled = false
+        store.loadNextPage(accountLease: accountLease) { [weak self] result in
             DispatchQueue.main.async {
-                guard let self else {
-                    completion?(false)
-                    return
-                }
-                guard AccountLeaseRuntime.shared.validate(self.accountLease, at: .ui).allowed else {
-                    self.failClosedForStaleAccountLease()
-                    completion?(false)
-                    return
-                }
-                switch result {
-                case .success:
-                    guard self.refreshMessagesFromRepository() else {
-                        completion?(false)
-                        return
-                    }
-                    self.onMessageStateChanged(self.accountLease)
-                    completion?(true)
-                case .failure:
-                    self.showToast("归档失败，请稍后重试", type: .info)
-                    completion?(false)
+                self?.loadMoreButton.isEnabled = true
+                if case .failure = result {
+                    self?.showToast("加载更多失败，请稍后重试", type: .info)
                 }
             }
         }
+    }
+
+    @objc private func markAllReadTapped() {
+        store.markAllRead(accountLease: accountLease) { [weak self] result in
+            DispatchQueue.main.async {
+                if case .failure = result {
+                    self?.showToast("全部已读失败，请稍后重试", type: .info)
+                }
+            }
+        }
+    }
+
+    @objc private func deleteReadTapped() {
+        guard snapshot.hasReadMessages else {
+            showToast("暂无已读消息可删除", type: .info)
+            return
+        }
+        let alert = UIAlertController(
+            title: "删除已读消息？",
+            message: "只会删除当前账户已经读过的消息，未读消息不会受影响。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "删除", style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            store.deleteRead(accountLease: accountLease) { result in
+                DispatchQueue.main.async {
+                    if case .failure = result {
+                        self.showToast("删除失败，请稍后重试", type: .info)
+                    }
+                }
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func messages(in section: Section) -> [InAppMessage] {
+        snapshot.messages
+    }
+
+    private func message(at indexPath: IndexPath) -> InAppMessage {
+        let section = Section(rawValue: indexPath.section) ?? .messages
+        return messages(in: section)[indexPath.row]
     }
 
     private func markMessageReadAndOpen(_ message: InAppMessage) {
@@ -383,11 +418,23 @@ private final class InAppMessageCenterViewController: UIViewController {
             return
         }
         guard message.isUnread else {
-            onOpenMessage(message, accountLease)
+            store.refresh(accountLease: accountLease) { [weak self] result in
+                guard let self,
+                      case .success(let refreshed) = result,
+                      let current = refreshed.messages.first(where: { $0.id == message.id }) else {
+                    DispatchQueue.main.async {
+                        self?.showToast("消息状态已变化，请刷新后重试", type: .info)
+                    }
+                    return
+                }
+                DispatchQueue.main.async {
+                    self.onOpenMessage(current, self.accountLease)
+                }
+            }
             return
         }
 
-        repository.markInAppMessageRead(message, accountLease: accountLease) { [weak self] result in
+        store.markRead(message: message, accountLease: accountLease) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
                 guard AccountLeaseRuntime.shared.validate(self.accountLease, at: .ui).allowed else {
@@ -396,8 +443,6 @@ private final class InAppMessageCenterViewController: UIViewController {
                 }
                 switch result {
                 case .success(let updated):
-                    guard self.refreshMessagesFromRepository() else { return }
-                    self.onMessageStateChanged(self.accountLease)
                     self.onOpenMessage(updated, self.accountLease)
                 case .failure:
                     self.showToast("标记已读失败，请稍后重试", type: .info)
@@ -413,7 +458,7 @@ extension InAppMessageCenterViewController: UITableViewDataSource, UITableViewDe
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        messages(in: Section(rawValue: section) ?? .inbox).count
+        messages(in: Section(rawValue: section) ?? .messages).count
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -436,29 +481,28 @@ extension InAppMessageCenterViewController: UITableViewDataSource, UITableViewDe
         markMessageReadAndOpen(message)
     }
 
-    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        let section = Section(rawValue: section) ?? .inbox
-        return messages(in: section).isEmpty ? nil : section.title
-    }
-
     func tableView(
         _ tableView: UITableView,
         trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
     ) -> UISwipeActionsConfiguration? {
         let message = message(at: indexPath)
-        guard !message.isArchived else {
+        guard message.isUnread else {
             return nil
         }
-        let archiveAction = UIContextualAction(style: .normal, title: "归档") { [weak self] _, _, completion in
+        let readAction = UIContextualAction(style: .normal, title: "已读") { [weak self] _, _, completion in
             guard let self else {
                 completion(false)
                 return
             }
-            self.archiveMessage(message, completion: completion)
+            self.store.markRead(message: message, accountLease: self.accountLease) { result in
+                DispatchQueue.main.async {
+                    completion((try? result.get()) != nil)
+                }
+            }
         }
-        archiveAction.backgroundColor = DJDesignTokens.Color.textTertiary
-        archiveAction.image = UIImage(systemName: "archivebox")
-        return UISwipeActionsConfiguration(actions: [archiveAction])
+        readAction.backgroundColor = DJDesignTokens.Color.accentDeep
+        readAction.image = UIImage(systemName: "checkmark")
+        return UISwipeActionsConfiguration(actions: [readAction])
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
@@ -844,6 +888,7 @@ final class MemoryArchiveViewController: UIViewController {
     private let timeLetterReminderButton = UIButton(type: .system)
     private let candidateReviewQAButton = UIButton(type: .system)
     private let formalMemoryButton = UIButton(type: .system)
+    private let messageCenterBellButton = InAppMessageBellButton(type: .system)
     private var isRefreshingFromBackend = false
     private var isRefreshingTimeLetterMailbox = false
     private var activeKindFilter: ArchiveKindFilter?
@@ -1010,7 +1055,9 @@ final class MemoryArchiveViewController: UIViewController {
         view.backgroundColor = DJDesignTokens.Color.background
         observeDigitalHumanContext()
         setupLayout()
+        observeAuthoritativeMessageCenter()
         refreshContent()
+        refreshAuthoritativeMessageCenter()
         loadRuntimeCapabilitySnapshots()
         loadV4ProductionReleasePolicy()
     }
@@ -1026,6 +1073,7 @@ final class MemoryArchiveViewController: UIViewController {
         retryPendingPublicArchiveSyncIfNeeded()
         refreshRemoteArchiveIfNeeded()
         refreshTimeLetterMailboxRemindersIfNeeded()
+        refreshAuthoritativeMessageCenter()
     }
 
     override func viewDidLayoutSubviews() {
@@ -1136,6 +1184,43 @@ final class MemoryArchiveViewController: UIViewController {
             selector: #selector(digitalHumanContextDidChange),
             name: .djDigitalHumanContextDidChange,
             object: nil
+        )
+    }
+
+    private func observeAuthoritativeMessageCenter() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(authoritativeMessageCenterDidUpdate),
+            name: .djInAppMessageCenterDidUpdate,
+            object: AuthoritativeInAppMessageCenterStore.shared
+        )
+    }
+
+    private func refreshAuthoritativeMessageCenter() {
+        guard isSelfAutobiographyMode,
+              let accountLease = captureInAppMessageCenterAccountLease(at: .request) else {
+            messageCenterBellButton.update(unreadCount: 0)
+            messageCenterBellButton.isHidden = !isSelfAutobiographyMode
+            return
+        }
+        messageCenterBellButton.isHidden = false
+        messageCenterBellButton.update(
+            unreadCount: AuthoritativeInAppMessageCenterStore.shared
+                .snapshot(for: accountLease)
+                .unreadCount
+        )
+        AuthoritativeInAppMessageCenterStore.shared.refresh(accountLease: accountLease)
+    }
+
+    @objc private func authoritativeMessageCenterDidUpdate() {
+        guard let accountLease = captureInAppMessageCenterAccountLease(at: .ui) else {
+            messageCenterBellButton.update(unreadCount: 0)
+            return
+        }
+        messageCenterBellButton.update(
+            unreadCount: AuthoritativeInAppMessageCenterStore.shared
+                .snapshot(for: accountLease)
+                .unreadCount
         )
     }
 
@@ -1880,32 +1965,9 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func updateTimeLetterReminderButton() {
-        guard isSelfAutobiographyMode, isTimeLetterCreationEnabled else {
-            timeLetterReminderButton.setTitle(nil, for: .normal)
-            timeLetterReminderButton.accessibilityLabel = nil
-            timeLetterReminderButton.isHidden = true
-            return
-        }
-
-        guard let accountLease = captureInAppMessageCenterAccountLease(at: .request),
-              let snapshot = currentInAppMessageCenterSnapshot(accountLease: accountLease) else {
-            timeLetterReminderButton.setTitle(nil, for: .normal)
-            timeLetterReminderButton.accessibilityLabel = nil
-            timeLetterReminderButton.isHidden = true
-            return
-        }
-        let reminderCount = repository.timeLetterReminderCount()
-        guard accountLeaseRuntime.validate(accountLease, at: .ui).allowed,
-              let title = snapshot.entryButtonTitle(timeLetterReminderCount: reminderCount) else {
-            timeLetterReminderButton.setTitle(nil, for: .normal)
-            timeLetterReminderButton.accessibilityLabel = nil
-            timeLetterReminderButton.isHidden = true
-            return
-        }
-
-        timeLetterReminderButton.setTitle(title, for: .normal)
-        timeLetterReminderButton.accessibilityLabel = title
-        timeLetterReminderButton.isHidden = false
+        timeLetterReminderButton.setTitle(nil, for: .normal)
+        timeLetterReminderButton.accessibilityLabel = nil
+        timeLetterReminderButton.isHidden = true
     }
 
     private func updateCandidateReviewQAButton() {
@@ -1994,10 +2056,21 @@ final class MemoryArchiveViewController: UIViewController {
         stack.addArrangedSubview(titleLabel)
         stack.addArrangedSubview(subtitleLabel)
         stack.addArrangedSubview(divider)
+        stack.addSubview(messageCenterBellButton)
+        messageCenterBellButton.addTarget(
+            self,
+            action: #selector(messageCenterBellTapped),
+            for: .touchUpInside
+        )
+        messageCenterBellButton.translatesAutoresizingMaskIntoConstraints = false
         divider.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             divider.widthAnchor.constraint(equalToConstant: 42),
             divider.heightAnchor.constraint(equalToConstant: 1),
+            messageCenterBellButton.topAnchor.constraint(equalTo: stack.topAnchor, constant: 12),
+            messageCenterBellButton.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+            messageCenterBellButton.widthAnchor.constraint(equalToConstant: 44),
+            messageCenterBellButton.heightAnchor.constraint(equalToConstant: 44),
         ])
 
         headerTitleLabel = titleLabel
@@ -3555,27 +3628,11 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func timeLetterReminderTapped() {
-        guard let accountLease = captureInAppMessageCenterAccountLease(at: .request) else {
-            showToast("账号状态已变化，请稍后重试", type: .info)
-            return
-        }
-        let snapshotProvider: (AccountLease) -> InAppMessageCenterSnapshot? = { [weak self] lease in
-            self?.currentInAppMessageCenterSnapshot(accountLease: lease)
-        }
-        guard let snapshot = snapshotProvider(accountLease),
-              accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
-            showToast("账号状态已变化，请稍后重试", type: .info)
-            return
-        }
-        guard !snapshot.messages.isEmpty else {
-            applyArchiveKindFilter(.timeLetter)
-            return
-        }
-        presentInAppMessageCenter(
-            snapshot,
-            accountLease: accountLease,
-            snapshotProvider: snapshotProvider
-        )
+        messageCenterBellTapped()
+    }
+
+    @objc private func messageCenterBellTapped() {
+        InAppMessageCenterPresentation.present(from: self)
     }
 
     @objc private func ownerTruthCandidateReviewQATapped() {
@@ -3692,46 +3749,6 @@ final class MemoryArchiveViewController: UIViewController {
         ]
     }
 
-    private func presentInAppMessageCenter(
-        _ snapshot: InAppMessageCenterSnapshot,
-        accountLease: AccountLease,
-        snapshotProvider: @escaping (AccountLease) -> InAppMessageCenterSnapshot?
-    ) {
-        guard accountLease.subjectId == UserManager.shared.currentUser?.id,
-              accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
-            showToast("账号状态已变化，请稍后重试", type: .info)
-            return
-        }
-        let center = InAppMessageCenterViewController(
-            snapshot: snapshot,
-            repository: repository,
-            accountLease: accountLease,
-            snapshotProvider: snapshotProvider,
-            onOpenMessage: { [weak self] message, capturedLease in
-                self?.openInAppMessage(message, accountLease: capturedLease)
-            },
-            onShowAllTimeLetters: { [weak self] capturedLease in
-                guard AccountLeaseRuntime.shared.validate(capturedLease, at: .ui).allowed else {
-                    return
-                }
-                self?.navigationController?.popViewController(animated: true)
-                self?.applyArchiveKindFilter(.timeLetter)
-            },
-            onMessageStateChanged: { [weak self] capturedLease in
-                guard AccountLeaseRuntime.shared.validate(capturedLease, at: .ui).allowed else {
-                    return
-                }
-                self?.refreshContent()
-            }
-        )
-        if let navigationController {
-            navigationController.pushViewController(center, animated: true)
-        } else {
-            let navigationController = UINavigationController(rootViewController: center)
-            present(navigationController, animated: true)
-        }
-    }
-
     private func openInAppMessage(_ message: InAppMessage, accountLease: AccountLease) {
         guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
             showToast("账号已切换，请重新打开消息中心", type: .info)
@@ -3755,6 +3772,14 @@ final class MemoryArchiveViewController: UIViewController {
             openSystemNoticeMessage(message)
         case .echoReply:
             openEchoReplyMessage(message, accountLease: accountLease)
+        case .candidateReady,
+             .projectionStatus,
+             .exportStatus,
+             .familyContribution,
+             .authorizationRevoked,
+             .accountSecurity,
+             .taskRetryRequired:
+            showToast("请从新的消息中心入口打开", type: .info)
         }
     }
 

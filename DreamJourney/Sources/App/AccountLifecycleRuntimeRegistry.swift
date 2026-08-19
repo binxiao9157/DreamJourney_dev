@@ -496,6 +496,9 @@ enum AccountLifecycleRuntimeRegistry {
             InAppMessageLifecycleProjectionStore.shared.teardownForAccountLifecycle(
                 oldAccountLease: oldAccountLease
             ),
+            AuthoritativeInAppMessageCenterStore.shared.teardownForAccountLifecycle(
+                oldAccountLease: oldAccountLease
+            ),
             NotificationRuntimeRouteInbox.shared.teardownForAccountLifecycle(
                 oldAccountLease: oldAccountLease
             ),

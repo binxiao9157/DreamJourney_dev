@@ -6408,7 +6408,7 @@ final class EchoDelayedReplyInboxAnswerReader {
     }
 }
 
-final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorAdmissionClient, PublicationVisitorReaderClient, PublicationManagementReaderClient, PublicationLifecycleClient {
+final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, PublicationVisitorAdmissionClient, PublicationVisitorReaderClient, PublicationManagementReaderClient, PublicationLifecycleClient, InAppMessageCenterClientPort {
     static let shared = DreamJourneyBackendClient()
 
     struct BackendErrorContext: Equatable {
@@ -6487,6 +6487,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             if normalizedPath.hasPrefix("/care/") { return "care" }
             if normalizedPath.hasPrefix("/voice/") { return "voice" }
             if normalizedPath.hasPrefix("/digital-human/") { return "digitalHuman" }
+            if normalizedPath.hasPrefix("/v2/in-app-messages/") { return "messageCenter" }
             if normalizedPath.hasPrefix("/v2/internal/owner-authority/vaults/") {
                 return "publicationManagement"
             }
@@ -10835,6 +10836,112 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             sessionUserId: userId,
             completion: completion
         )
+    }
+
+    func fetchInAppMessages(
+        accountLease: AccountLease,
+        limit: Int = 50,
+        cursor: String? = nil,
+        completion: @escaping (Result<BackendInAppMessageCenterPage, Error>) -> Void
+    ) {
+        let normalizedLimit = min(100, max(1, limit))
+        var components = URLComponents()
+        var queryItems = [URLQueryItem(name: "limit", value: String(normalizedLimit))]
+        if let cursor = cursor?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !cursor.isEmpty {
+            queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        components.queryItems = queryItems
+        let query = components.percentEncodedQuery.map { "?\($0)" } ?? ""
+        requestJSON(
+            path: "/v2/in-app-messages/\(pathComponent(accountLease.subjectId))\(query)",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId
+        ) { result in
+            completion(result.flatMap { object in
+                guard let page = BackendInAppMessageCenterPage(json: object) else {
+                    return .failure(ClientError.invalidJSONResponse)
+                }
+                return .success(page)
+            })
+        }
+    }
+
+    func markInAppMessageRead(
+        accountLease: AccountLease,
+        messageId: String,
+        commandId: String = UUID().uuidString.lowercased(),
+        completion: @escaping (Result<BackendInAppMessageCommandReceipt, Error>) -> Void
+    ) {
+        executeInAppMessageCommand(
+            path: "/v2/in-app-messages/\(pathComponent(accountLease.subjectId))/\(pathComponent(messageId))/read",
+            accountLease: accountLease,
+            commandId: commandId,
+            expectedStatus: "markRead",
+            completion: completion
+        )
+    }
+
+    func markAllInAppMessagesRead(
+        accountLease: AccountLease,
+        commandId: String = UUID().uuidString.lowercased(),
+        completion: @escaping (Result<BackendInAppMessageCommandReceipt, Error>) -> Void
+    ) {
+        executeInAppMessageCommand(
+            path: "/v2/in-app-messages/\(pathComponent(accountLease.subjectId))/read-all",
+            accountLease: accountLease,
+            commandId: commandId,
+            expectedStatus: "markAllRead",
+            completion: completion
+        )
+    }
+
+    func deleteReadInAppMessages(
+        accountLease: AccountLease,
+        commandId: String = UUID().uuidString.lowercased(),
+        completion: @escaping (Result<BackendInAppMessageCommandReceipt, Error>) -> Void
+    ) {
+        executeInAppMessageCommand(
+            path: "/v2/in-app-messages/\(pathComponent(accountLease.subjectId))/delete-read",
+            accountLease: accountLease,
+            commandId: commandId,
+            expectedStatus: "deleteRead",
+            completion: completion
+        )
+    }
+
+    private func executeInAppMessageCommand(
+        path: String,
+        accountLease: AccountLease,
+        commandId: String,
+        expectedStatus: String,
+        completion: @escaping (Result<BackendInAppMessageCommandReceipt, Error>) -> Void
+    ) {
+        guard UUID(uuidString: commandId) != nil else {
+            completion(.failure(ClientError.invalidJSONResponse))
+            return
+        }
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: ["commandId": commandId],
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId
+        ) { result in
+            completion(result.flatMap { object in
+                guard let receipt = BackendInAppMessageCommandReceipt(
+                    json: object,
+                    expectedCommandId: commandId
+                ), receipt.status == expectedStatus else {
+                    return .failure(ClientError.invalidJSONResponse)
+                }
+                return .success(receipt)
+            })
+        }
     }
 
     func getTimeLetterDetail(

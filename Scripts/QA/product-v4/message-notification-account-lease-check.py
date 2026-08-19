@@ -24,6 +24,9 @@ def main() -> None:
     echo = read("DreamJourney/Sources/Modules/Echo/EchoViewController.swift")
     message_repository = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift")
     message_view = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift")
+    authoritative_messages = read(
+        "DreamJourney/Sources/Modules/Archive/AuthoritativeInAppMessageCenter.swift"
+    )
 
     for snippet in (
         "private let accountLeaseRuntime: AccountLeaseRuntimePort",
@@ -105,10 +108,22 @@ def main() -> None:
     for snippet in (
         "private let accountLease: AccountLease",
         "AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed",
-        "repository.markInAppMessageRead(message, accountLease: accountLease)",
-        "repository.archiveInAppMessage(message, accountLease: accountLease)",
+        "store.markRead(message: message, accountLease: accountLease)",
+        "store.deleteRead(accountLease: accountLease)",
     ):
         require(snippet in message_view, f"message page captured lease missing: {snippet}")
+
+    for snippet in (
+        "private struct LeaseScope: Equatable",
+        "accountLeaseRuntime.validate(accountLease, at: .request).allowed",
+        "accountLeaseRuntime.validate(accountLease, at: .commit).allowed",
+        "scope == LeaseScope(accountLease)",
+        "teardownForAccountLifecycle(oldAccountLease:",
+    ):
+        require(
+            snippet in authoritative_messages,
+            f"authoritative message lease isolation missing: {snippet}",
+        )
 
     for snippet in (
         "item.ownerUserId == accountLease.subjectId",

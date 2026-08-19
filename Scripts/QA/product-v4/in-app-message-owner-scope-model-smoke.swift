@@ -189,7 +189,81 @@ private enum InAppMessageOwnerScopeModelSmoke {
         verifyGenerationAndStaleOperationsFailClosed()
         try verifyLegacyArraysAreQuarantinedWithoutOwnerAssignment()
         verifyOwnerProjectionAndStateBoundaries()
+        verifyAuthoritativeBackendContracts()
         print("In-app message owner scope model smoke passed")
+    }
+
+    private static func verifyAuthoritativeBackendContracts() {
+        let messageId = UUID().uuidString.lowercased()
+        let resourceId = UUID().uuidString.lowercased()
+        let validItem: [String: Any] = [
+            "id": messageId,
+            "kind": "candidateReady",
+            "state": "unread",
+            "createdAt": "2026-08-19T08:00:00Z",
+            "readAt": NSNull(),
+            "resource": [
+                "type": "candidateBatch",
+                "id": resourceId,
+                "version": 3,
+            ],
+            "metadataOnly": true,
+            "requiresReauthorization": true,
+        ]
+        let page = BackendInAppMessageCenterPage(json: [
+            "schemaVersion": BackendInAppMessageCenterPage.schemaVersion,
+            "items": [validItem],
+            "unreadCount": 1,
+            "nextCursor": "cursor-2",
+        ])
+        require(page?.items.count == 1, "valid authoritative page should parse")
+        require(page?.items.first?.resource.id == resourceId, "resource identity should be preserved")
+
+        var closedItem = validItem
+        closedItem["kind"] = "timeLetter"
+        require(
+            BackendInAppMessageCenterPage(json: [
+                "schemaVersion": BackendInAppMessageCenterPage.schemaVersion,
+                "items": [closedItem],
+                "unreadCount": 1,
+            ]) == nil,
+            "closed time-letter messages must fail closed"
+        )
+
+        var unsafeItem = validItem
+        unsafeItem["requiresReauthorization"] = false
+        require(
+            BackendInAppMessage(json: unsafeItem) == nil,
+            "messages without route reauthorization must fail closed"
+        )
+
+        let commandId = UUID().uuidString.lowercased()
+        let receipt = BackendInAppMessageCommandReceipt(
+            json: [
+                "schemaVersion": BackendInAppMessageCommandReceipt.schemaVersion,
+                "status": "markAllRead",
+                "commandId": commandId,
+                "outcome": "deduplicated",
+                "affectedCount": 0,
+                "unreadCount": 0,
+            ],
+            expectedCommandId: commandId
+        )
+        require(receipt?.outcome == "deduplicated", "idempotent command receipt should parse")
+        require(
+            BackendInAppMessageCommandReceipt(
+                json: [
+                    "schemaVersion": BackendInAppMessageCommandReceipt.schemaVersion,
+                    "status": "markAllRead",
+                    "commandId": UUID().uuidString,
+                    "outcome": "applied",
+                    "affectedCount": 1,
+                    "unreadCount": 0,
+                ],
+                expectedCommandId: commandId
+            ) == nil,
+            "mismatched command receipts must fail closed"
+        )
     }
 
     private static func verifyKeyBindsCompleteIdentity() {

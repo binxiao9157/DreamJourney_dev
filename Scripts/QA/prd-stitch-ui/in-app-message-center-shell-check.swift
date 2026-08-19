@@ -22,6 +22,9 @@ func assertContains(_ haystack: String, _ needle: String, _ message: String) {
 }
 
 let messageCenter = read("DreamJourney/Sources/Modules/Archive/InAppMessageCenter.swift")
+let authoritativeMessageCenter = read(
+    "DreamJourney/Sources/Modules/Archive/AuthoritativeInAppMessageCenter.swift"
+)
 let repository = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveRepository.swift")
 let archiveView = read("DreamJourney/Sources/Modules/Archive/MemoryArchiveViewController.swift")
 let appDelegate = read("DreamJourney/Sources/AppDelegate.swift")
@@ -152,8 +155,18 @@ assertContains(
 )
 assertContains(
     archiveView,
-    "entryButtonTitle(",
-    "Archive entry should render the unified unread badge from the snapshot"
+    "InAppMessageBellButton",
+    "Archive entry should render the authoritative unread bell"
+)
+assertContains(
+    authoritativeMessageCenter,
+    "AuthoritativeInAppMessageCenterStore",
+    "public message-center state should come from the backend authority store"
+)
+assertContains(
+    authoritativeMessageCenter,
+    "UIApplication.didBecomeActiveNotification",
+    "authoritative messages should refresh when the app returns to the foreground"
 )
 assertContains(
     archiveView,
@@ -244,6 +257,11 @@ assertContains(
     project,
     "InAppMessageCenter.swift",
     "new model should be included in the Xcode target"
+)
+assertContains(
+    project,
+    "AuthoritativeInAppMessageCenter.swift",
+    "authoritative message runtime should be included in the Xcode target"
 )
 assertContains(
     docs,

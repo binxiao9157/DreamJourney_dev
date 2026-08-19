@@ -449,6 +449,7 @@ final class ProfileViewController: UIViewController {
     private let contentStack = UIStackView()
     private weak var careRetryButton: UIButton?
     private weak var dataExportRow: ProfileActionRow?
+    private weak var messageCenterRow: ProfileActionRow?
     private var accountDataExportStatusSnapshot: AccountDataExportJobStatusSnapshot?
 
     private var isProfileHiddenBranchesEnabled: Bool {
@@ -529,11 +530,13 @@ final class ProfileViewController: UIViewController {
         title = "我的"
         view.backgroundColor = DJDesignTokens.Color.background
         observeDigitalHumanContext()
+        observeAuthoritativeMessageCenter()
         configureScrollView()
         restoreAccountDataExportStatus()
         buildContent()
         loadCareSnapshot()
         refreshReleasePolicyAndRuntimeCapabilities()
+        refreshAuthoritativeMessageCenter()
     }
 
     deinit {
@@ -546,6 +549,7 @@ final class ProfileViewController: UIViewController {
         restoreAccountDataExportStatus()
         updateAccountDataExportRow()
         rebuildContent()
+        refreshAuthoritativeMessageCenter()
     }
 
     override func viewDidLayoutSubviews() {
@@ -645,6 +649,41 @@ final class ProfileViewController: UIViewController {
             name: .djFamilyMembersDidChange,
             object: nil
         )
+    }
+
+    private func observeAuthoritativeMessageCenter() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(authoritativeMessageCenterDidUpdate),
+            name: .djInAppMessageCenterDidUpdate,
+            object: AuthoritativeInAppMessageCenterStore.shared
+        )
+    }
+
+    private func refreshAuthoritativeMessageCenter() {
+        guard let userId = UserManager.shared.currentUser?.id,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userId) else {
+            messageCenterRow?.updateSubtitle("暂无未读消息")
+            return
+        }
+        messageCenterRow?.updateSubtitle(messageCenterSubtitle(accountLease: accountLease))
+        AuthoritativeInAppMessageCenterStore.shared.refresh(accountLease: accountLease)
+    }
+
+    private func messageCenterSubtitle(accountLease: AccountLease? = nil) -> String {
+        let lease = accountLease
+            ?? UserManager.shared.currentUser.flatMap {
+                AccountLeaseRuntime.shared.capture(forSubjectId: $0.id)
+            }
+        guard let lease else { return "暂无未读消息" }
+        let unreadCount = AuthoritativeInAppMessageCenterStore.shared
+            .snapshot(for: lease)
+            .unreadCount
+        return unreadCount > 0 ? "\(unreadCount) 条未读消息" : "暂无未读消息"
+    }
+
+    @objc private func authoritativeMessageCenterDidUpdate() {
+        messageCenterRow?.updateSubtitle(messageCenterSubtitle())
     }
 
     @objc private func digitalHumanContextDidChange(_ notification: Notification) {
@@ -989,7 +1028,9 @@ final class ProfileViewController: UIViewController {
         for (index, action) in rows.enumerated() {
             let subtitle = action == .dataExport
                 ? accountDataExportStatusSnapshot?.statusSubtitle
-                : nil
+                : action == .messageCenter
+                    ? messageCenterSubtitle()
+                    : nil
             let row = ProfileActionRow(
                 action: action,
                 subtitle: subtitle,
@@ -997,6 +1038,9 @@ final class ProfileViewController: UIViewController {
             )
             if action == .dataExport {
                 dataExportRow = row
+            }
+            if action == .messageCenter {
+                messageCenterRow = row
             }
             row.addTarget(self, action: #selector(settingRowTapped(_:)), for: .touchUpInside)
             stack.addArrangedSubview(row)
@@ -1019,6 +1063,7 @@ final class ProfileViewController: UIViewController {
         if isFeatureRouteAllowed(.profileSettings, risk: .ownerTextCore) {
             rows.append(.profileSettings)
         }
+        rows.append(.messageCenter)
         if ProfileFamilyPersonaReleaseReadiness.isFamilyManagementRowVisible(
             isFamilyManagementEnabled: isFamilyRouteAllowed(.familyManagement),
             isHiddenBranchesEnabled: false
@@ -1157,6 +1202,8 @@ final class ProfileViewController: UIViewController {
         switch sender.action {
         case .profileSettings:
             showProfileSettings()
+        case .messageCenter:
+            InAppMessageCenterPresentation.present(from: self)
         case .familyManagement:
             openFamilyManagement()
         case .voiceClone:
@@ -1971,6 +2018,7 @@ extension ProfileViewController {
 
 private enum ProfileRowAction: Equatable {
     case profileSettings
+    case messageCenter
     case familyManagement
     case voiceClone
     case publicationManagementQA
@@ -1984,6 +2032,8 @@ private enum ProfileRowAction: Equatable {
         switch self {
         case .profileSettings:
             return "个人资料设置"
+        case .messageCenter:
+            return "消息中心"
         case .familyManagement:
             return "家人管理"
         case .voiceClone:
@@ -2007,6 +2057,8 @@ private enum ProfileRowAction: Equatable {
         switch self {
         case .profileSettings:
             return "chevron.right"
+        case .messageCenter:
+            return "bell"
         case .familyManagement:
             return "chevron.right"
         case .voiceClone:
@@ -2030,7 +2082,7 @@ private enum ProfileRowAction: Equatable {
         switch self {
         case .accountDeletion:
             return true
-        case .profileSettings, .familyManagement, .voiceClone, .publicationManagementQA, .publicationVisitor, .legalCenter, .dataExport, .logout:
+        case .profileSettings, .messageCenter, .familyManagement, .voiceClone, .publicationManagementQA, .publicationVisitor, .legalCenter, .dataExport, .logout:
             return false
         }
     }
@@ -2039,6 +2091,8 @@ private enum ProfileRowAction: Equatable {
         switch self {
         case .profileSettings:
             return "profile-settings-row"
+        case .messageCenter:
+            return "profile-message-center-row"
         case .familyManagement:
             return "profile-family-management-row"
         case .voiceClone:

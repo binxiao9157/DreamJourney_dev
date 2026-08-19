@@ -24,10 +24,10 @@
 |---|---:|---|
 | `COMPLETE` | 12 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2、PC-B3 |
 | `WAITING_EXTERNAL_CONFIGURATION` | 1 | PC-A0：代码、production-postgres 部署和非真机验收已完成；真实短信 Provider 待配置 |
-| 当前执行项 | 1 | PC-B4：统一消息中心与未读入口 |
-| 后续待执行 | 6 | PC-B4 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+| 当前执行项 | 1 | PC-C1：首版图片/文档理解 |
+| 后续待执行 | 5 | PC-C1 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：PC-B3 Backend 为 `559c412`，iOS 为 `e72eca3b`，服务器已部署 `559c412`，migration head 为 `0099`。`ownerTruthMemoryProjection` 已纳入 grounded 判定；grounded、gap 和 fallback 语义互斥，fallback 不调用生成 Provider。后端从实际 Context materialization 生成不可伪造的回答/引用审计，仅保存脱敏 trace hash；iOS QA 证据包保存脱敏 grounding 摘要，普通回响不展示来源编号、卡片或原文入口。全量后端测试、iOS 构建与定向测试、模拟器证据包导出、production-postgres smoke 和部署态路由鉴权 smoke 均已通过。当前进入 PC-B4；真实短信 Provider 仍为 PC-A0 外部 Gate，不阻塞后续非依赖任务，也不得据此宣称生产 OTP 恢复完成。
+当前代码与部署交接：PC-B4 Backend 为 `fccbc28`，服务器已部署 `fccbc28`，migration head 为 `0100`；iOS 已完成本次 PC-B4 权威消息中心实现与验证，提交以本节状态记录为准。普通消息由后端按 Principal 聚合，iOS 的记忆档案、回响和“我的”共用同一未读状态源；时光信和延迟回复仍保持关闭。分页、单条已读、批量已读、删除已读、幂等回执、账户 lease 隔离、前台刷新和多尺寸 UIQA 已形成 Gate。当前进入 PC-C1；真实短信 Provider 仍为 PC-A0 外部 Gate，APNs 真机到达仍是 PC-B4 外部验收项，均不阻塞后续非依赖开发。
 
 每轮只需读取：
 
@@ -471,12 +471,16 @@ iOS：
 
 完成定义：三页面未读数一致，用户能集中处理普通任务通知，关闭的时光信/延迟回复不会重新暴露。
 
+状态：`COMPLETE`（2026-08-19）。Backend `fccbc28` 已部署并完成 PostgreSQL Owner 隔离、业务事件投影和幂等命令 smoke；iOS 新增 typed client、账户 lease 隔离的权威 Store、三入口共享未读状态、列表/空态/失败重试/分页/单条及批量操作，并在 App 前台恢复时刷新。Debug/UIQA 场景使用脱敏后端权威快照，不访问真实 Provider。标准字号、辅助功能大字号和紧凑机型 UIQA 均通过，证据见 `artifacts/product-confirmed/20260819-pc-b4-uiqa/`；实现说明见 `docs/superpowers/status/2026-08-19-pc-b4-authoritative-message-center.md`。真实 APNs 到达保留为外部真机 Gate，不影响应用内消息中心完成判定。
+
 ### Gate B
 
 - 正式记忆列表、编辑、版本历史和 query-ranked Echo E2E 通过。
 - Family 私人数据、旧版本和拒绝 Candidate 不进入 Owner Context；KBLite 不产生用户入口或跨权限回退，现有后台行为保持不变。
 - Citation 不在普通 UI 暴露。
 - 消息中心、铃铛、未读数字和批量操作形成统一闭环。
+
+状态：`COMPLETE`（2026-08-19）。PC-B1 至 PC-B4 的代码、后端部署态 smoke、iOS Gate 和模拟器 UIQA 已通过；连续执行交接点进入 `PC-C1`。
 
 ## 6. Phase C：多媒体与导出
 

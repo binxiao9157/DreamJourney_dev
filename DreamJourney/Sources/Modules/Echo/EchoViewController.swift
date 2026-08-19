@@ -610,6 +610,8 @@ final class EchoViewController: UIViewController {
         return view
     }()
 
+    private let messageCenterBellButton = InAppMessageBellButton(type: .system)
+
     private let personaAvatarView: UIView = {
         let view = UIView()
         view.backgroundColor = DJDesignTokens.Color.accent.withAlphaComponent(0.14)
@@ -1244,9 +1246,11 @@ final class EchoViewController: UIViewController {
         observeEchoAccountLifecycle()
         observeEchoAppLifecycle()
         observeEchoAudioSessionEvents()
+        observeAuthoritativeMessageCenter()
         let accountLease = captureEchoAccountLease(reason: "viewDidLoad")
         _ = captureDigitalHumanLifecycleToken(reason: "viewDidLoad")
         setupLayout()
+        refreshAuthoritativeMessageCenter()
         refreshOwnerTruthInterviewNaturalInputProductEntryPolicy()
         bindViewModel(accountLease: accountLease)
         updatePersonaBadge()
@@ -1304,6 +1308,7 @@ final class EchoViewController: UIViewController {
         loadVoiceCloneRuntimeCapabilityIfNeeded()
         refreshOwnerTruthInterviewNaturalInputProductEntryPolicy()
         refreshTranscriptPreviewForCurrentContextIfIdle()
+        refreshAuthoritativeMessageCenter()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -1376,6 +1381,12 @@ final class EchoViewController: UIViewController {
             view.addSubview(personaBadgeView)
             view.addSubview(archiveContextStatusView)
         }
+        view.addSubview(messageCenterBellButton)
+        messageCenterBellButton.addTarget(
+            self,
+            action: #selector(messageCenterBellTapped),
+            for: .touchUpInside
+        )
         view.addSubview(quoteBubble)
         view.addSubview(voiceStatusView)
         if shouldShowEchoRuntimeDiagnosticsPanel {
@@ -1414,6 +1425,7 @@ final class EchoViewController: UIViewController {
         [
             scenicView,
             personaBadgeView,
+            messageCenterBellButton,
             personaAvatarView,
             personaIconView,
             personaTextStack,
@@ -1466,6 +1478,21 @@ final class EchoViewController: UIViewController {
             personaBadgeView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
             personaBadgeView.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
             personaBadgeView.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.78),
+            personaBadgeView.trailingAnchor.constraint(
+                lessThanOrEqualTo: messageCenterBellButton.leadingAnchor,
+                constant: -8
+            ),
+
+            messageCenterBellButton.topAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.topAnchor,
+                constant: 18
+            ),
+            messageCenterBellButton.trailingAnchor.constraint(
+                equalTo: view.trailingAnchor,
+                constant: -DJDesignTokens.Spacing.page
+            ),
+            messageCenterBellButton.widthAnchor.constraint(equalToConstant: 44),
+            messageCenterBellButton.heightAnchor.constraint(equalToConstant: 44),
 
             personaAvatarView.topAnchor.constraint(equalTo: personaBadgeView.topAnchor, constant: 8),
             personaAvatarView.leadingAnchor.constraint(equalTo: personaBadgeView.leadingAnchor, constant: 8),
@@ -1686,6 +1713,46 @@ final class EchoViewController: UIViewController {
             name: .djDigitalHumanContextDidChange,
             object: nil
         )
+    }
+
+    private func observeAuthoritativeMessageCenter() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(authoritativeMessageCenterDidUpdate),
+            name: .djInAppMessageCenterDidUpdate,
+            object: AuthoritativeInAppMessageCenterStore.shared
+        )
+    }
+
+    private func refreshAuthoritativeMessageCenter() {
+        guard let userId = UserManager.shared.currentUser?.id,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: userId) else {
+            messageCenterBellButton.update(unreadCount: 0)
+            return
+        }
+        messageCenterBellButton.update(
+            unreadCount: AuthoritativeInAppMessageCenterStore.shared
+                .snapshot(for: accountLease)
+                .unreadCount
+        )
+        AuthoritativeInAppMessageCenterStore.shared.refresh(accountLease: accountLease)
+    }
+
+    @objc private func authoritativeMessageCenterDidUpdate() {
+        guard let userId = UserManager.shared.currentUser?.id,
+              let accountLease = accountLeaseRuntime.capture(forSubjectId: userId) else {
+            messageCenterBellButton.update(unreadCount: 0)
+            return
+        }
+        messageCenterBellButton.update(
+            unreadCount: AuthoritativeInAppMessageCenterStore.shared
+                .snapshot(for: accountLease)
+                .unreadCount
+        )
+    }
+
+    @objc private func messageCenterBellTapped() {
+        InAppMessageCenterPresentation.present(from: self)
     }
 
     private func observeEchoAccountLifecycle() {
