@@ -15,8 +15,8 @@ PLAN = (
 )
 RAW_INPUT_SHA256 = "2bd97b7cf1e08e37affdc169cbc68c9ba03b5323557dec8c33bfbc0e81450d6f"
 SUPPLEMENTAL_DECISION_SHA256 = "1ea2fac89c753b3e347502f329a3a9e8b5e614c13f4dc6ffba535cabd152b5ab"
-IOS_HEAD = "09394f9869e0b0e20150a43ffe8149a7e607356c"
-BACKEND_HEAD = "b472b6de9fc43e797936741b63a9de877db48750"
+ORIGINAL_IOS_HEAD = "09394f9869e0b0e20150a43ffe8149a7e607356c"
+ORIGINAL_BACKEND_HEAD = "b472b6de9fc43e797936741b63a9de877db48750"
 
 README = PRODUCT / "README.md"
 HIGH_LEVEL_DESIGN = PRODUCT / "寻梦环游_产品确认版整体概要设计_2026-08-17.md"
@@ -74,8 +74,8 @@ def main() -> int:
     for marker in (
         RAW_INPUT_SHA256,
         SUPPLEMENTAL_DECISION_SHA256,
-        IOS_HEAD,
-        BACKEND_HEAD,
+        ORIGINAL_IOS_HEAD,
+        ORIGINAL_BACKEND_HEAD,
         "GAP-13",
     ):
         require_marker(errors, HIGH_LEVEL_DESIGN, marker)
@@ -107,9 +107,23 @@ def main() -> int:
         errors.append(f"EVIDENCE_REQUIREMENT_COUNT_INVALID: {len(evidence_requirements)}")
     if len(evidence_gaps) != 13:
         errors.append(f"EVIDENCE_GAP_COUNT_INVALID: {len(evidence_gaps)}")
-    for marker in (IOS_HEAD, BACKEND_HEAD, "只评估当前仓库代码"):
+    for marker in (
+        "feature/prd-stitch-ui-adaptation",
+        "Backend",
+        "实现基线 HEAD",
+        "只评估当前仓库代码",
+    ):
         if marker not in evidence_text:
             errors.append(f"EVIDENCE_MARKER_MISSING: {marker}")
+    evidence_head_rows = re.findall(
+        r"\| (?:iOS|Backend) \|[^\n]*\| `([0-9a-f]{40})` \|",
+        evidence_text,
+    )
+    if len(evidence_head_rows) != 2:
+        errors.append(
+            "EVIDENCE_CURRENT_HEAD_COUNT_INVALID: "
+            f"expected=2 actual={len(evidence_head_rows)}"
+        )
 
     decision_text = DECISION_QUEUE.read_text(encoding="utf-8")
     decision_ids = set(re.findall(r"\bPCQ-(?:0[1-9]|1[0-3])\b", decision_text))

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "familyRelationshipTerminationPcA5": true,
+  "concurrentAtomic": true,
+  "accountsDeleted": false,
+  "pendingContributionDisposition": "withdrawnAndQueued",
+  "acceptedSourceDisposition": "retainedWithProvenance",
+  "publicationGrantDisposition": "preservedRequiresOwnerAction"
+}

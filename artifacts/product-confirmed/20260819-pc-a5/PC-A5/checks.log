@@ -1,0 +1,12 @@
+backend unit tests: 2160 passed
+backend PC-A5 contract gate: 25 passed
+backend standard gates: passed
+backend py_compile: passed
+backend FastAPI smoke: passed
+iOS OwnerTruthContractsTests: 222 passed
+iOS PC-A5 focused tests: 2 passed
+iOS family/account lifecycle static check: passed
+iOS family/persona release-boundary simulator UIQA: passed
+iOS UIQA bundle override: com.yxj.dreamjourney.app
+iPhoneOS generic build: passed
+git diff --check: passed

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "workItem": "PC-A5",
+  "status": "complete",
+  "executedAt": "2026-08-19T06:17:05Z",
+  "executor": "codex",
+  "environment": "local-ios-and-production-postgres",
+  "iosCommit": "0bbf0df0",
+  "backendCommit": "b20e22c",
+  "migrationHead": "0098",
+  "commands": [
+    "scripts/run-backend-family-relationship-termination-gate.sh",
+    "scripts/verify_backend.sh",
+    "python scripts/backend-family-relationship-termination-postgres-smoke.py",
+    "swift Scripts/QA/prd-stitch-ui/profile-family-account-lifecycle-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-profile-family-persona-release-smoke.sh",
+    "xcodebuild OwnerTruthContractsTests",
+    "Scripts/QA/prd-stitch-ui/run-iphoneos-generic-build.sh"
+  ],
+  "result": "passed",
+  "externalOrDeviceRemainder": [
+    "Interactive termination-button device acceptance",
+    "Final UI-05 visual review if Stitch/htmlCode changes"
+  ],
+  "redaction": "No token, DSN, phone number, user content, media URL, or provider credential is stored."
+}

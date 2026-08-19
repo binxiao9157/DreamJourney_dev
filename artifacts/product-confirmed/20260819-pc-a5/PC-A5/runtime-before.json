@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-08-19T06:14:49Z",
+  "environment": "production-postgres",
+  "backendCommit": "080e9b8",
+  "migrationHead": "0097",
+  "readiness": "ready",
+  "verifiedBackup": true,
+  "credentialsIncluded": false
+}

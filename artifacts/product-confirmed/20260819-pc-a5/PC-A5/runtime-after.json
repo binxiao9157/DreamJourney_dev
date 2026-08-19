@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-08-19T06:17:06Z",
+  "environment": "production-postgres",
+  "backendCommit": "b20e22c",
+  "migrationHead": "0098",
+  "apiImage": "sha256:c4becd0447c07c4edd25afd63b4f6332638a7f39568db818e4df8c8a533804d2",
+  "health": "ok",
+  "readiness": {
+    "status": "ready",
+    "database": "ready",
+    "schema": "ready",
+    "auth": "ready",
+    "incident": "ready"
+  },
+  "credentialsIncluded": false
+}

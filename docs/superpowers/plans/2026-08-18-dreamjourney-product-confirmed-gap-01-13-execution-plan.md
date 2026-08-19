@@ -3,7 +3,7 @@
 日期：2026-08-18
 状态：`IN_PROGRESS`
 日常开发入口：`CANONICAL_EXECUTION_PLAN`
-执行控制版本：V1.7
+执行控制版本：V1.8
 
 ## 0. 目标和基线
 
@@ -22,12 +22,12 @@
 
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
-| `COMPLETE` | 8 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4 |
+| `COMPLETE` | 9 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5 |
 | `WAITING_EXTERNAL_CONFIGURATION` | 1 | PC-A0：代码、production-postgres 部署和非真机验收已完成；真实短信 Provider 待配置 |
-| 当前执行项 | 1 | PC-A5：家庭关系解除与数据处置 |
-| 后续待执行 | 10 | PC-A5 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+| 当前执行项 | 1 | PC-B1：正式记忆总览与二次确认编辑 |
+| 后续待执行 | 9 | PC-B1 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：PC-A4 Backend 为 `080e9b8`，iOS 为 `e52267f9`，服务器已部署 `080e9b8`，migration head 为 `0097`。服务端按认证声音主体原子维护累计 5 次创建上限，校验失败和幂等重试不计数，Provider 已受理后的失败、删除或撤销不返还；iOS 展示权威剩余次数并在达到上限时隐藏新建动作。强身份/活体与真实 Provider 回执仍为外部 Gate，不阻塞 PC-A5；在真实短信 Provider 配置前仍不得宣称生产 OTP 恢复完成。
+当前代码与部署交接：PC-A5 Backend 为 `b20e22c`，iOS 为 `0bbf0df0`，服务器已部署 `b20e22c`，migration head 为 `0098`。Owner 或 Member 均可通过二次确认解除家庭关系；关系、ShareGrant-compatible access authority 和 Contribution Grant 原子撤销，待审核贡献隐藏并进入处置队列，已接受 Source 保留来源审计，Publication Grant 保持不变且只能由 Owner 另行撤销。双方账户继续可登录，重复或并发解除幂等收敛。Gate A 的代码与 production-postgres 验证已通过，当前进入 PC-B1；真实短信 Provider 仍为 PC-A0 外部 Gate，不阻塞后续非依赖任务，也不得据此宣称生产 OTP 恢复完成。
 
 每轮只需读取：
 
@@ -379,6 +379,8 @@ iOS：
 验证：双方发起权限、重复解除、并发贡献、旧 Session/缓存、已接受与未接受贡献、账户仍可登录和审计回执。
 
 完成定义：关系解除立即阻断关系授权，但不删除任一账户或改写已形成的正式记忆来源。
+
+状态：`COMPLETE`（2026-08-19）。Backend 新增 `family-relationship-termination-v1`、participant membership 查询、migration `0098`、事务级并发/幂等撤权和部署态 PostgreSQL smoke；iOS 新增 Owner 解除、Member 退出、二次确认、typed receipt 和账户切换防陈旧回调。Backend `b20e22c` 已部署，iOS `0bbf0df0` 已推送；线上 `/ready` 和关系解除并发 smoke 通过，迁移前后备份分别为 schema head `0097`/`0098`。证据见 `artifacts/product-confirmed/20260819-pc-a5/PC-A5/` 和 `docs/superpowers/status/2026-08-19-pc-a5-family-relationship-termination.md`。Gate A 的工程和部署态条件已关闭，当前连续执行交接点为 `PC-B1`。
 
 ### Gate A
 
