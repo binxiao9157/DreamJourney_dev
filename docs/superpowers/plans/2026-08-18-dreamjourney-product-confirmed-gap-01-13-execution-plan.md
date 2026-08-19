@@ -3,7 +3,7 @@
 日期：2026-08-18
 状态：`IN_PROGRESS`
 日常开发入口：`CANONICAL_EXECUTION_PLAN`
-执行控制版本：V1.14
+执行控制版本：V1.15
 
 ## 0. 目标和基线
 
@@ -22,12 +22,12 @@
 
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
-| `COMPLETE` | 15 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2、PC-B3、PC-C2、PC-D1、PC-D2 代码闭环 |
+| `COMPLETE` | 17 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2、PC-B3、PC-B4、PC-C2、PC-D1、PC-D2、PC-E1 代码闭环 |
 | `WAITING_EXTERNAL_CONFIGURATION` | 2 | PC-A0：真实短信 Provider 待配置；PC-C1：代码与默认关闭部署完成，真实私有对象存储、内容安全扫描器和视觉 Provider 待配置 |
-| 当前执行项 | 1 | PC-E1：稳定 Feature 命名与 Release Policy |
-| 后续待执行 | 1 | PC-E1 完成后进入 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+| 当前执行项 | 1 | PC-E2：关闭能力零调用与全量回归 |
+| 后续待执行 | 0 | PC-E2 是当前确认版队列最后一个工程闭环；完成后只保留外部配置和真机验收 Gate |
 
-当前代码与部署交接：PC-D2 iOS 为 `17396b9d`，Backend 功能提交为 `836655d`，部署 smoke 顺序无关修复为 `6d44594`；服务器运行 `6d44594`，migration head 保持 `0104`。普通受邀账户可在“我的 -> 受邀回忆”查看自身有效邀请，无需原始 ShareGrant credential 即可建立 VisitorSession；正式响应不返回 Owner 私有主体 ID、安全调用余额或原始凭证。Visitor 只读取 PublicProjection，支持文字提问和普通实时语音播报，明确不接数字人或复刻音色。授权撤销、过期、发布暂停、跨账户和跨 Vault 均失败关闭。模拟器 UIQA、generic iPhoneOS build、部署态 PostgreSQL Visitor smoke、readiness 和 237 条路由认证已通过。PC-D2 标记为 `COMPLETE_WITH_EXTERNAL_GATES`：真实用户开放仍受发布/Visitor 法律、安全和数据地域审批约束，当前连续执行交接点为 PC-E1 稳定 Feature 命名与 Release Policy。真实短信 Provider、APNs 真机到达、腾讯 COS、内容安全扫描器和真实视觉 Provider 继续分别保留为外部 Gate。
+当前代码与部署交接：PC-E1 iOS 为 `6a49ae44`，Backend 功能提交为 `0c05acf`，稳定 Feature 部署 smoke 为 `9b43a72`；服务器仓库和 API 镜像均已更新到 `9b43a72`，migration head 保持 `0104`。产品与服务端统一使用 `publication`、`publicationGrantManagement`、`publicationVisitor`；旧 Feature 名只在后端兼容层映射，截止时间为 2026-11-30，不产生第二套权限规则。`releaseStage` 仅作为旧客户端兼容元数据，授权和默认关闭均由稳定 Feature 集合决定。后端策略/发布测试、iOS 27 项定向 XCTest、静态 Gate、模拟器 UIQA、generic iPhoneOS build、部署态 PostgreSQL Visitor smoke、readiness、237 条路由认证和稳定 Feature deployed smoke 均通过。当前连续执行交接点为 PC-E2 关闭能力零调用与全量回归；真实短信 Provider、APNs 真机到达、腾讯 COS、内容安全扫描器和真实视觉 Provider继续分别保留为外部 Gate。
 
 每轮只需读取：
 
@@ -595,6 +595,8 @@ iOS：正式记忆多选、公开正文编辑、隐私/AI 披露、预览、二�
 验证：旧/新客户端矩阵、策略过期、kill switch、capability mismatch、默认拒绝和文案扫描。
 
 完成定义：产品范围不再依赖阶段标签，但所有安全和运行 Gate 仍失败关闭。
+
+状态：`COMPLETE_WITH_COMPATIBILITY_WINDOW`（2026-08-19）。Backend 使用稳定 Feature 作为唯一授权键，发布、Grant 管理和 Visitor 分别决策；旧 `publication*Mx`/`visitorAccess` 只保留到 2026-11-30 的服务端兼容映射，`releaseStage` 不再控制授权。iOS 删除旧产品 Feature 枚举和产品态 M2 AccessGate 命名，只消费有效服务端策略，本地持久化/临时开关不能自行授权。Backend `0c05acf` 完成功能，`9b43a72` 固化并部署稳定 Feature smoke；iOS `6a49ae44` 已推送。完整证据见 `artifacts/product-confirmed/20260819-pc-e1/PC-E1/manifest.json` 和 `docs/superpowers/status/2026-08-19-pc-e1-stable-feature-release-policy.md`。当前连续执行交接点为 `PC-E2`。
 
 ### PC-E2 关闭能力零调用与全量回归
 

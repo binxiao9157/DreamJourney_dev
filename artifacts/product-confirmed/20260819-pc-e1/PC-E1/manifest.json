@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "dreamjourney-product-confirmed-evidence-v1",
+  "workItem": "PC-E1",
+  "status": "COMPLETE_WITH_COMPATIBILITY_WINDOW",
+  "capturedAt": "2026-08-19T14:59:29Z",
+  "commits": {
+    "ios": "6a49ae44950295f24804d8b6fff6c0d9b30d6019",
+    "backendFeature": "0c05acf057f3befb412571c7099a7a62c8c0db8c",
+    "backendDeployed": "9b43a722eed559d023e82dcb99306ab4bcf27356"
+  },
+  "deployment": {
+    "backendRevision": "9b43a722eed559d023e82dcb99306ab4bcf27356",
+    "migrationHead": "0104",
+    "readiness": "ready"
+  },
+  "compatibility": {
+    "legacyFeatureAliasSunsetAt": "2026-11-30T00:00:00+00:00",
+    "stageMetadataAffectsAuthority": false
+  },
+  "checks": [
+    "backend-release-policy-and-formal-publication-tests-66",
+    "backend-publication-suite-156",
+    "ios-publication-tests-27",
+    "ios-publication-static-gates",
+    "ios-publication-lifecycle-uiqa",
+    "ios-generic-iphoneos-build",
+    "backend-readiness-deployed-smoke",
+    "backend-publication-visitor-postgres-smoke",
+    "backend-route-authentication-237",
+    "backend-release-policy-stable-feature-deployed-smoke",
+    "git-diff-check"
+  ],
+  "containsCredentials": false
+}
