@@ -1,7 +1,7 @@
 import Foundation
 
-/// Compile-time and launch-time boundary for the internal M2 publication
-/// management surface. This capability is never enabled in a release build.
+/// Compile-time and launch-time boundary for publication management UIQA.
+/// This capability is never enabled in a release build.
 enum PublicationManagementM2QAGate {
     static let launchArgument = "DJEnablePublicationManagementM2QA"
 
@@ -31,11 +31,11 @@ enum PublicationLifecycleM2QAGate {
     }
 }
 
-enum PublicationManagementM2AccessGate {
+enum PublicationManagementAccessGate {
     static var isPublicationRouteAllowed: Bool {
         PublicationManagementM2QAGate.isEnabled
             || FeatureGateService.shared.isServerPolicyManagedRouteAllowed(
-                .publicationManagementM2
+                .publication
             )
     }
 
@@ -44,16 +44,16 @@ enum PublicationManagementM2AccessGate {
             return true
         }
         return FeatureGateService.shared.isServerPolicyManagedRouteAllowed(
-            .publicationManagementM2
+            .publication
         ) && FeatureGateService.shared.isServerPolicyManagedRouteAllowed(
-            .publicationGrantManagementM2
+            .publicationGrantManagement
         )
     }
 
     static var isLifecycleRouteAllowed: Bool {
         PublicationLifecycleM2QAGate.isEnabled
             || FeatureGateService.shared.isServerPolicyManagedRouteAllowed(
-                .publicationManagementM2
+                .publication
             )
     }
 }
@@ -1028,7 +1028,7 @@ final class PublicationDraftUseCase {
         client: PublicationDraftWriterClient,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         isEnabled: @escaping () -> Bool = {
-            PublicationManagementM2AccessGate.isPublicationRouteAllowed
+            PublicationManagementAccessGate.isPublicationRouteAllowed
         }
     ) {
         self.client = client
@@ -1331,7 +1331,7 @@ final class PublicationGrantManagementUseCase {
         client: PublicationGrantManagementClient,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         isEnabled: @escaping () -> Bool = {
-            PublicationManagementM2AccessGate.isManagementRouteAllowed
+            PublicationManagementAccessGate.isManagementRouteAllowed
         }
     ) {
         self.client = client
@@ -1444,7 +1444,7 @@ final class PublicationVersionAuditUseCase {
         client: PublicationVersionAuditReaderClient,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         isEnabled: @escaping () -> Bool = {
-            PublicationManagementM2AccessGate.isPublicationRouteAllowed
+            PublicationManagementAccessGate.isPublicationRouteAllowed
         }
     ) {
         self.client = client
@@ -1666,7 +1666,7 @@ final class PublicationLifecycleUseCase {
         client: PublicationLifecycleClient,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         isRouteAllowed: @escaping () -> Bool = {
-            PublicationManagementM2AccessGate.isLifecycleRouteAllowed
+            PublicationManagementAccessGate.isLifecycleRouteAllowed
         }
     ) {
         self.client = client

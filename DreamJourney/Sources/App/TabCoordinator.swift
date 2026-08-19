@@ -55,7 +55,7 @@ final class TabCoordinator: Coordinator {
         guard runtime.hasPendingOrActiveAccess,
               runtimeContext.accountLease == self.runtimeContext.accountLease,
               AccountLeaseRuntime.shared.validate(runtimeContext.accountLease, at: .ui).allowed,
-              PublicationVisitorM2AccessGate.isRouteAllowed,
+              PublicationVisitorAccessGate.isRouteAllowed,
               let viewControllers = tabBarController.viewControllers,
               viewControllers.indices.contains(2),
               let profileNavigationController = viewControllers[2] as? UINavigationController else {

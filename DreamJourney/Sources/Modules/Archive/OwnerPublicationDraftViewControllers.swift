@@ -143,7 +143,7 @@ final class OwnerPublicationDraftComposerViewController: UIViewController {
         useCase = PublicationDraftUseCase(
             client: client,
             accountLeaseRuntime: accountLeaseRuntime,
-            isEnabled: { PublicationManagementM2AccessGate.isPublicationRouteAllowed }
+            isEnabled: { PublicationManagementAccessGate.isPublicationRouteAllowed }
         )
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
@@ -171,7 +171,7 @@ final class OwnerPublicationDraftComposerViewController: UIViewController {
         useCase = PublicationDraftUseCase(
             client: client,
             accountLeaseRuntime: accountLeaseRuntime,
-            isEnabled: { PublicationManagementM2AccessGate.isPublicationRouteAllowed }
+            isEnabled: { PublicationManagementAccessGate.isPublicationRouteAllowed }
         )
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true

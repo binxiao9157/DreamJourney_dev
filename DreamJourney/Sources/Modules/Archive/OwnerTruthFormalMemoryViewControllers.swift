@@ -150,7 +150,7 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
     }
 
     @objc private func publishTapped() {
-        guard PublicationManagementM2AccessGate.isPublicationRouteAllowed else {
+        guard PublicationManagementAccessGate.isPublicationRouteAllowed else {
             showPublicationAlert(title: "暂不可用", message: "记忆发布当前未启用。")
             return
         }
@@ -357,7 +357,7 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
         } else {
             navigationItem.leftBarButtonItem = nil
             var buttons = [refreshButton, filterButton]
-            if PublicationManagementM2AccessGate.isPublicationRouteAllowed {
+            if PublicationManagementAccessGate.isPublicationRouteAllowed {
                 buttons.insert(publishButton, at: 0)
             }
             navigationItem.rightBarButtonItems = buttons

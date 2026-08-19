@@ -64,7 +64,7 @@ require(
     "lifecycle transport must require all three internal QA boundaries"
 )
 require(
-    backendClient.contains("return .publicationManagementM2")
+    backendClient.contains("return .publication")
         && backendClient.contains("isExplicitPublicationLifecycleQARequest"),
     "lifecycle route must remain feature classified and explicit-QA scoped"
 )
@@ -76,7 +76,7 @@ require(
     "visitor reads must clear in-memory scope on withdrawal/access revocation"
 )
 require(
-    managementView.contains("PublicationManagementM2AccessGate.isLifecycleRouteAllowed")
+    managementView.contains("PublicationManagementAccessGate.isLifecycleRouteAllowed")
         && managementView.contains("PublicationWithdrawalPresentationPolicy.isAvailable")
         && managementView.contains("UIAlertController(")
         && managementView.contains("撤回后，现有受邀访问会立即停止")

@@ -395,9 +395,9 @@ final class FeatureGateService {
         .ownerTruthCandidateReview,
         .personaSettings,
         .voiceCloneShell,
-        .publicationManagementM2,
-        .publicationGrantManagementM2,
-        .publicationVisitorM2,
+        .publication,
+        .publicationGrantManagement,
+        .publicationVisitor,
     ]
 
     private static let serverPolicyManagedGeneralFeatures: Set<DJFeature> = [
@@ -642,41 +642,41 @@ final class FeatureGateService {
             return nil
         }
         if normalizedPath.hasPrefix("/v2/internal/owner-authority/vaults/") {
-            return .publicationManagementM2
+            return .publication
         }
         if normalizedPath.hasPrefix("/v2/internal/publication-lifecycle/") {
-            return .publicationManagementM2
+            return .publication
         }
         if normalizedPath.hasPrefix("/v2/internal/publication-access/vaults/")
             && normalizedPath.hasSuffix("/grants") {
-            return .publicationManagementM2
+            return .publication
         }
         if normalizedPath.hasPrefix("/v2/internal/publication-access/") {
-            return .publicationVisitorM2
+            return .publicationVisitor
         }
         if normalizedPath == "/v2/publication-invitations" {
-            return .publicationVisitorM2
+            return .publicationVisitor
         }
         let publicationPathComponents = normalizedPath.split(separator: "/")
         if publicationPathComponents.count >= 2,
            publicationPathComponents[0] == "v2",
            publicationPathComponents[1] == "publication-grants" {
-            return .publicationVisitorM2
+            return .publicationVisitor
         }
         if publicationPathComponents.count >= 2,
            publicationPathComponents[0] == "v2",
            publicationPathComponents[1] == "publication-sessions" {
-            return .publicationVisitorM2
+            return .publicationVisitor
         }
         if publicationPathComponents.count >= 4,
            publicationPathComponents[0] == "v2",
            publicationPathComponents[1] == "vaults" {
             if publicationPathComponents[3] == "publication-grants" {
-                return .publicationGrantManagementM2
+                return .publicationGrantManagement
             }
             if publicationPathComponents[3] == "publications"
                 || publicationPathComponents[3] == "publication-drafts" {
-                return .publicationManagementM2
+                return .publication
             }
         }
         if normalizedPath.hasPrefix("/digital-human/") { return .digitalHumanLivePanel }
@@ -12508,7 +12508,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationVisitorAdmission, Error>) -> Void
     ) {
         let usesQAContract = PublicationVisitorM2QAGate.isEnabled
-        guard usesQAContract || PublicationVisitorM2AccessGate.isRouteAllowed else {
+        guard usesQAContract || PublicationVisitorAccessGate.isRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationVisitorAccessError.disabled))
             }
@@ -12559,7 +12559,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationVisitorInvitationList, Error>) -> Void
     ) {
         guard !PublicationVisitorM2QAGate.isEnabled,
-              PublicationVisitorM2AccessGate.isRouteAllowed else {
+              PublicationVisitorAccessGate.isRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationVisitorAccessError.disabled))
             }
@@ -12602,7 +12602,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationVisitorProjection, Error>) -> Void
     ) {
         let usesQAContract = PublicationVisitorM2QAGate.isEnabled
-        guard usesQAContract || PublicationVisitorM2AccessGate.isRouteAllowed else {
+        guard usesQAContract || PublicationVisitorAccessGate.isRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationVisitorAccessError.disabled))
             }
@@ -12649,7 +12649,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationVisitorAnswerResponse, Error>) -> Void
     ) {
         let usesQAContract = PublicationVisitorM2QAGate.isEnabled
-        guard usesQAContract || PublicationVisitorM2AccessGate.isRouteAllowed else {
+        guard usesQAContract || PublicationVisitorAccessGate.isRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationVisitorAccessError.disabled))
             }
@@ -12706,7 +12706,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationDraftReceipt, Error>) -> Void
     ) {
         let usesQAContract = PublicationManagementM2QAGate.isEnabled
-        guard usesQAContract || PublicationManagementM2AccessGate.isPublicationRouteAllowed else {
+        guard usesQAContract || PublicationManagementAccessGate.isPublicationRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationDraftAccessError.disabled))
             }
@@ -12762,7 +12762,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationDraftReceipt, Error>) -> Void
     ) {
         let usesQAContract = PublicationManagementM2QAGate.isEnabled
-        guard usesQAContract || PublicationManagementM2AccessGate.isPublicationRouteAllowed else {
+        guard usesQAContract || PublicationManagementAccessGate.isPublicationRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationDraftAccessError.disabled))
             }
@@ -12824,7 +12824,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationDraftConfirmReceipt, Error>) -> Void
     ) {
         let usesQAContract = PublicationManagementM2QAGate.isEnabled
-        guard usesQAContract || PublicationManagementM2AccessGate.isPublicationRouteAllowed else {
+        guard usesQAContract || PublicationManagementAccessGate.isPublicationRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationDraftAccessError.disabled))
             }
@@ -12884,7 +12884,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationManagementPublicationList, Error>) -> Void
     ) {
         let usesQAContract = PublicationManagementM2QAGate.isEnabled
-        guard usesQAContract || PublicationManagementM2AccessGate.isManagementRouteAllowed else {
+        guard usesQAContract || PublicationManagementAccessGate.isManagementRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationManagementAccessError.disabled))
             }
@@ -12939,7 +12939,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationOwnerVersionAudit, Error>) -> Void
     ) {
         let usesQAContract = PublicationManagementM2QAGate.isEnabled
-        guard usesQAContract || PublicationManagementM2AccessGate.isPublicationRouteAllowed else {
+        guard usesQAContract || PublicationManagementAccessGate.isPublicationRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationManagementAccessError.disabled))
             }
@@ -12996,7 +12996,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationManagementGrantList, Error>) -> Void
     ) {
         let usesQAContract = PublicationManagementM2QAGate.isEnabled
-        guard usesQAContract || PublicationManagementM2AccessGate.isManagementRouteAllowed else {
+        guard usesQAContract || PublicationManagementAccessGate.isManagementRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationManagementAccessError.disabled))
             }
@@ -13051,7 +13051,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationGrantIssueReceipt, Error>) -> Void
     ) {
         let usesQAContract = PublicationManagementM2QAGate.isEnabled
-        guard usesQAContract || PublicationManagementM2AccessGate.isManagementRouteAllowed else {
+        guard usesQAContract || PublicationManagementAccessGate.isManagementRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationManagementAccessError.disabled))
             }
@@ -13111,7 +13111,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationGrantRevokeReceipt, Error>) -> Void
     ) {
         let usesQAContract = PublicationManagementM2QAGate.isEnabled
-        guard usesQAContract || PublicationManagementM2AccessGate.isManagementRouteAllowed else {
+        guard usesQAContract || PublicationManagementAccessGate.isManagementRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationManagementAccessError.disabled))
             }
@@ -13173,7 +13173,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (Result<PublicationLifecycleReceipt, Error>) -> Void
     ) {
         let usesQAContract = PublicationLifecycleM2QAGate.isEnabled
-        guard usesQAContract || PublicationManagementM2AccessGate.isLifecycleRouteAllowed else {
+        guard usesQAContract || PublicationManagementAccessGate.isLifecycleRouteAllowed else {
             DispatchQueue.main.async {
                 completion(.failure(PublicationLifecycleAccessError.disabled))
             }

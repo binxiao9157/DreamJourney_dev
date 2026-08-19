@@ -669,29 +669,22 @@ enum DJFeature: String, CaseIterable {
     case careDoctorContact
     case voiceCloneShell
     case digitalHumanLivePanel
-    case publicationVisitorM2
-    case publicationGrantManagementM2
-    case publicationManagementM2
+    case publicationVisitor
+    case publicationGrantManagement
+    case publication
 }
 
 extension DJFeature {
-    /// The iOS feature names intentionally describe product surfaces, while
-    /// the backend policy uses the stable M2 authority names. Keep this map
-    /// explicit so a client-only rename cannot silently change server policy.
+    /// Product and backend policy use the same stable vocabulary. Historical
+    /// publication and visitor names are accepted only by the backend compatibility
+    /// layer and never become a second client-side permission rule.
     var backendReleasePolicyFeature: String {
-        switch self {
-        case .publicationManagementM2:
-            return "publication"
-        case .publicationGrantManagementM2, .publicationVisitorM2:
-            return "visitorAccess"
-        default:
-            return rawValue
-        }
+        rawValue
     }
 
     var backendReleasePolicyAudience: String {
         switch self {
-        case .publicationVisitorM2:
+        case .publicationVisitor:
             return "visitor"
         default:
             return "owner"
@@ -708,7 +701,7 @@ final class FeatureFlagService {
 
     private static let storageKey = "dj.featureFlags.enabled"
     private static let storageVersionKey = "dj.featureFlags.schemaVersion"
-    private static let currentStorageVersion = 11
+    private static let currentStorageVersion = 12
     private static let defaultEnabled: Set<DJFeature> = [
         .echoTextInput,
         .profileSettings,
@@ -743,9 +736,9 @@ final class FeatureFlagService {
         .careDoctorContact,
         .voiceCloneShell,
         .digitalHumanLivePanel,
-        .publicationVisitorM2,
-        .publicationGrantManagementM2,
-        .publicationManagementM2,
+        .publicationVisitor,
+        .publicationGrantManagement,
+        .publication,
     ]
 
     private var enabled: Set<DJFeature>

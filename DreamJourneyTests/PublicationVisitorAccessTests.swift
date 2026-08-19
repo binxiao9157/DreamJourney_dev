@@ -59,13 +59,19 @@ final class PublicationVisitorAccessTests: XCTestCase {
         XCTAssertEqual(scope.ownerSubjectID, "owner-a")
     }
 
-    func testM2PolicyBindingsSeparateOwnerGrantManagementFromVisitorAccess() {
-        XCTAssertEqual(DJFeature.publicationManagementM2.backendReleasePolicyFeature, "publication")
-        XCTAssertEqual(DJFeature.publicationManagementM2.backendReleasePolicyAudience, "owner")
-        XCTAssertEqual(DJFeature.publicationGrantManagementM2.backendReleasePolicyFeature, "visitorAccess")
-        XCTAssertEqual(DJFeature.publicationGrantManagementM2.backendReleasePolicyAudience, "owner")
-        XCTAssertEqual(DJFeature.publicationVisitorM2.backendReleasePolicyFeature, "visitorAccess")
-        XCTAssertEqual(DJFeature.publicationVisitorM2.backendReleasePolicyAudience, "visitor")
+    func testStablePolicyBindingsSeparateOwnerGrantManagementFromVisitorAccess() {
+        XCTAssertEqual(DJFeature.publication.backendReleasePolicyFeature, "publication")
+        XCTAssertEqual(DJFeature.publication.backendReleasePolicyAudience, "owner")
+        XCTAssertEqual(
+            DJFeature.publicationGrantManagement.backendReleasePolicyFeature,
+            "publicationGrantManagement"
+        )
+        XCTAssertEqual(DJFeature.publicationGrantManagement.backendReleasePolicyAudience, "owner")
+        XCTAssertEqual(DJFeature.publicationVisitor.backendReleasePolicyFeature, "publicationVisitor")
+        XCTAssertEqual(DJFeature.publicationVisitor.backendReleasePolicyAudience, "visitor")
+        XCTAssertNil(DJFeature(rawValue: "publicationManagementM2"))
+        XCTAssertNil(DJFeature(rawValue: "publicationGrantManagementM2"))
+        XCTAssertNil(DJFeature(rawValue: "publicationVisitorM2"))
     }
 
     func testReleasePolicyCacheScopeSeparatesOwnerAndVisitorAudience() {
@@ -93,7 +99,7 @@ final class PublicationVisitorAccessTests: XCTestCase {
                 method: .get,
                 payload: nil
             ),
-            .publicationManagementM2
+            .publication
         )
         XCTAssertEqual(
             service.featureForRequest(
@@ -101,7 +107,7 @@ final class PublicationVisitorAccessTests: XCTestCase {
                 method: .get,
                 payload: nil
             ),
-            .publicationGrantManagementM2
+            .publicationGrantManagement
         )
         XCTAssertEqual(
             service.featureForRequest(
@@ -109,7 +115,7 @@ final class PublicationVisitorAccessTests: XCTestCase {
                 method: .get,
                 payload: nil
             ),
-            .publicationVisitorM2
+            .publicationVisitor
         )
         XCTAssertEqual(
             service.featureForRequest(
@@ -117,7 +123,7 @@ final class PublicationVisitorAccessTests: XCTestCase {
                 method: .post,
                 payload: nil
             ),
-            .publicationVisitorM2
+            .publicationVisitor
         )
         XCTAssertEqual(
             service.featureForRequest(
@@ -125,7 +131,7 @@ final class PublicationVisitorAccessTests: XCTestCase {
                 method: .post,
                 payload: nil
             ),
-            .publicationVisitorM2
+            .publicationVisitor
         )
     }
 

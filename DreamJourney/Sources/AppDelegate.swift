@@ -193,7 +193,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         FeatureGateService.shared.invalidateCapturedRoutes()
         RuntimeCapabilitySnapshotStore.shared.invalidate()
         print(
-            "[ReleasePolicy] refresh failed; cached M1-M4 authority invalidated for fail-closed access: " +
+            "[ReleasePolicy] refresh failed; cached feature authority invalidated for fail-closed access: " +
             error.localizedDescription
         )
     }
@@ -1765,7 +1765,7 @@ private extension AppDelegate {
 
     func runPublicationManagementM2Smoke() {
         let gateEnabled = PublicationManagementM2QAGate.isEnabled
-        let featureFlagDefaultOff = !FeatureFlagService.shared.isEnabled(.publicationManagementM2)
+        let featureFlagDefaultOff = !FeatureFlagService.shared.isEnabled(.publication)
         guard let profileNavigationController = profileNavigationControllerForPublicationManagementSmoke() else {
             writePublicationManagementM2SmokeResult(
                 completed: false,
@@ -1904,7 +1904,7 @@ private extension AppDelegate {
         let managementGateEnabled = PublicationManagementM2QAGate.isEnabled
         let visitorGateEnabled = PublicationVisitorM2QAGate.isEnabled
         let lifecycleGateEnabled = PublicationLifecycleM2QAGate.isEnabled
-        let featureFlagDefaultOff = !FeatureFlagService.shared.isEnabled(.publicationManagementM2)
+        let featureFlagDefaultOff = !FeatureFlagService.shared.isEnabled(.publication)
         guard let profileNavigationController = profileNavigationControllerForPublicationManagementSmoke() else {
             writePublicationLifecycleM2SmokeResult(
                 completed: false,

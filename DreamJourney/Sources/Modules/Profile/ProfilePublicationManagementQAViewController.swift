@@ -152,7 +152,7 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
     }
 
     private func reload() {
-        guard PublicationManagementM2AccessGate.isManagementRouteAllowed else {
+        guard PublicationManagementAccessGate.isManagementRouteAllowed else {
             render(.failed(PublicationManagementAccessError.disabled.localizedDescription))
             return
         }
@@ -325,7 +325,7 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
         if publication.publicationState == "confirmed",
            publication.projectionState == "active",
            publication.publicationVersionID != nil,
-           PublicationManagementM2AccessGate.isManagementRouteAllowed {
+           PublicationManagementAccessGate.isManagementRouteAllowed {
             stack.addArrangedSubview(makeInvitationControl(for: publication))
         }
         if let message = grantFailures[publication.publicationID] {
@@ -338,7 +338,7 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
             stack.addArrangedSubview(label)
         }
 
-        if PublicationManagementM2AccessGate.isPublicationRouteAllowed {
+        if PublicationManagementAccessGate.isPublicationRouteAllowed {
             stack.addArrangedSubview(makeVersionAuditControl(for: publication))
         }
         if let audit = versionAudits[publication.publicationID] {
@@ -356,7 +356,7 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
 
         if PublicationWithdrawalPresentationPolicy.isAvailable(
             for: publication,
-            routeAllowed: PublicationManagementM2AccessGate.isLifecycleRouteAllowed
+            routeAllowed: PublicationManagementAccessGate.isLifecycleRouteAllowed
         ) {
             stack.addArrangedSubview(makeWithdrawalControl(for: publication))
         }
@@ -572,7 +572,7 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
     private func requestWithdrawalConfirmation(_ publication: PublicationManagementPublication) {
         guard PublicationWithdrawalPresentationPolicy.isAvailable(
             for: publication,
-            routeAllowed: PublicationManagementM2AccessGate.isLifecycleRouteAllowed
+            routeAllowed: PublicationManagementAccessGate.isLifecycleRouteAllowed
         ), !lifecyclePendingPublicationIDs.contains(publication.publicationID),
            let accountLease = accountLeaseProvider() else {
             return
@@ -640,7 +640,7 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
     ) {
         guard PublicationWithdrawalPresentationPolicy.isAvailable(
             for: publication,
-            routeAllowed: PublicationManagementM2AccessGate.isLifecycleRouteAllowed
+            routeAllowed: PublicationManagementAccessGate.isLifecycleRouteAllowed
         ), !lifecyclePendingPublicationIDs.contains(publication.publicationID) else {
             return
         }

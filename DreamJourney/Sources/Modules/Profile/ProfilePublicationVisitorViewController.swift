@@ -104,7 +104,7 @@ final class ProfilePublicationVisitorViewController: UIViewController {
     }
 
     private func loadEntry() {
-        guard PublicationVisitorM2AccessGate.isRouteAllowed else {
+        guard PublicationVisitorAccessGate.isRouteAllowed else {
             runtime.clear(reason: .policyDenied)
             render(.failed(PublicationVisitorAccessError.disabled.localizedDescription))
             return

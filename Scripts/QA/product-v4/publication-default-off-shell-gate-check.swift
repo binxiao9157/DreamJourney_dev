@@ -31,6 +31,11 @@ func section(_ source: String, from start: String, to end: String) -> String {
 }
 
 let features = read("DreamJourney/Sources/App/FeatureFlagService.swift")
+let featureVocabulary = section(
+    features,
+    from: "enum DJFeature",
+    to: "extension DJFeature"
+)
 let profile = read("DreamJourney/Sources/Modules/Profile/ProfileViewController.swift")
 let visitorView = read("DreamJourney/Sources/Modules/Profile/ProfilePublicationVisitorViewController.swift")
 let visitorAccess = read("DreamJourney/Sources/Services/PublicationVisitorAccess.swift")
@@ -47,32 +52,44 @@ let defaults = section(
     to: "private static let nonPersistentFeatures"
 )
 for feature in [
-    ".publicationManagementM2",
-    ".publicationGrantManagementM2",
-    ".publicationVisitorM2",
+    ".publication",
+    ".publicationGrantManagement",
+    ".publicationVisitor",
 ] {
-    assertNotContains(defaults, feature, "M2 publication surfaces must remain default-off")
+    assertNotContains(defaults, feature, "Publication surfaces must remain default-off")
 }
 
 for required in [
-    ".publicationVisitorM2",
-    ".publicationGrantManagementM2",
-    ".publicationManagementM2",
-    "return \"publication\"",
-    "return \"visitorAccess\"",
+    "case publicationVisitor",
+    "case publicationGrantManagement",
+    "case publication",
+    "var backendReleasePolicyFeature: String",
+    "rawValue",
     "return \"visitor\"",
     "var backendReleasePolicyCohort: String",
     "\"authenticatedOwner\"",
 ] {
     assertContains(features, required, "Feature policy mapping must stay explicit")
 }
+for legacyProductFeature in [
+    "case publicationManagementM2",
+    "case publicationGrantManagementM2",
+    "case publicationVisitorM2",
+    "return \"visitorAccess\"",
+] {
+    assertNotContains(
+        featureVocabulary,
+        legacyProductFeature,
+        "Legacy publication names must not remain client-side authorization rules"
+    )
+}
 
 for required in [
-    "PublicationManagementM2AccessGate.isManagementRouteAllowed",
-    "PublicationVisitorM2AccessGate.isRouteAllowed",
+    "PublicationManagementAccessGate.isManagementRouteAllowed",
+    "PublicationVisitorAccessGate.isRouteAllowed",
     "ProfilePublicationVisitorViewController()",
 ] {
-    assertContains(profile, required, "Profile must own all controlled M2 entry points")
+    assertContains(profile, required, "Profile must own all controlled publication entry points")
 }
 
 for required in [
@@ -87,7 +104,7 @@ assertNotContains(tabCoordinator, "visitorNav", "Visitor must not add a fourth t
 for required in [
     "func receiveAppDeepLink(_ url: URL)",
     "publicationVisitorRuntime.stage(deepLinkURL: url)",
-    "refreshPolicy(for: .publicationVisitorM2)",
+    "refreshPolicy(for: .publicationVisitor)",
     "publicationVisitorRuntime.clear(reason: .policyDenied)",
 ] {
     assertContains(appCoordinator, required, "Deep links must be policy-gated before routing")
@@ -95,7 +112,7 @@ for required in [
 assertContains(sceneDelegate, "receiveAppDeepLink", "Scene routing must pass app and universal links through the policy gate")
 
 for required in [
-    "enum PublicationVisitorM2AccessGate",
+    "enum PublicationVisitorAccessGate",
     "private var admissionGeneration = UUID()",
     "case expired",
     "case accessRevoked",
@@ -108,9 +125,9 @@ for required in [
     assertContains(visitorAccess, required, "Visitor runtime must fail closed and remain process-local")
 }
 for required in [
-    "enum PublicationManagementM2AccessGate",
-    ".publicationManagementM2",
-    ".publicationGrantManagementM2",
+    "enum PublicationManagementAccessGate",
+    ".publication",
+    ".publicationGrantManagement",
 ] {
     assertContains(managementAccess, required, "Owner management must require independent server policies")
 }

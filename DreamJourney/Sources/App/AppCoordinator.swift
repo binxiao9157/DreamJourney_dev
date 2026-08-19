@@ -439,7 +439,7 @@ final class AppCoordinator: Coordinator {
                   let activeTabCoordinator,
                   self.rootMode == .main,
                   self.currentFeatureRuntimeContext()?.accountLease == runtimeContext.accountLease,
-                  PublicationVisitorM2AccessGate.isRouteAllowed else {
+                  PublicationVisitorAccessGate.isRouteAllowed else {
                 self?.publicationVisitorRuntime.clear(reason: .policyDenied)
                 return
             }
@@ -455,7 +455,7 @@ final class AppCoordinator: Coordinator {
         }
 
         publicationVisitorPolicyRefreshInFlight = true
-        FeatureGateService.shared.refreshPolicy(for: .publicationVisitorM2) { [weak self] result in
+        FeatureGateService.shared.refreshPolicy(for: .publicationVisitor) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.publicationVisitorPolicyRefreshInFlight = false

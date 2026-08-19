@@ -26,13 +26,13 @@ let sceneDelegate = try read("DreamJourney/Sources/SceneDelegate.swift")
 let project = try read("DreamJourney.xcodeproj/project.pbxproj")
 
 require(
-    featureFlags.contains("case publicationVisitorM2")
-        && featureFlags.contains(".publicationVisitorM2,"),
-    "M2 visitor feature must be default-off and non-persistent"
+    featureFlags.contains("case publicationVisitor")
+        && featureFlags.contains(".publicationVisitor,"),
+    "Visitor feature must be default-off and non-persistent"
 )
 require(
     visitorAccess.contains("static let launchArgument = \"DJEnablePublicationVisitorM2QA\"")
-        && visitorAccess.contains("PublicationVisitorM2AccessGate")
+        && visitorAccess.contains("PublicationVisitorAccessGate")
         && visitorAccess.contains("isServerPolicyManagedRouteAllowed"),
     "visitor must preserve QA access while requiring server policy for the formal shell"
 )
@@ -42,14 +42,16 @@ require(
         && backendClient.contains("/v2/publication-grants/")
         && backendClient.contains("/v2/publication-sessions/")
         && backendClient.contains("X-DreamJourney-QA-Visitor-Access")
-        && backendClient.contains("PublicationVisitorM2AccessGate.isRouteAllowed"),
-    "visitor transport must separate QA and formal closed-beta contracts"
+        && backendClient.contains("PublicationVisitorAccessGate.isRouteAllowed"),
+    "visitor transport must separate QA and formal product contracts"
 )
 require(
-    backendClient.contains("return .publicationVisitorM2")
-        && featureFlags.contains("return \"visitorAccess\"")
+    backendClient.contains("return .publicationVisitor")
+        && featureFlags.contains("case publicationVisitor")
+        && featureFlags.contains("var backendReleasePolicyFeature: String")
+        && featureFlags.contains("rawValue")
         && featureFlags.contains("return \"visitor\""),
-    "formal visitor requests must map to the visitorAccess policy audience"
+    "formal visitor requests must map to the stable publicationVisitor policy and visitor audience"
 )
 require(
     visitorAccess.contains("activeScope = nil")
@@ -99,7 +101,7 @@ require(
     tabCoordinator.contains("selectPublicationVisitor")
         && profile.contains("ProfilePublicationVisitorViewController")
         && profile.contains("profile-publication-visitor-entry")
-        && profile.contains("PublicationVisitorM2AccessGate.isRouteAllowed")
+        && profile.contains("PublicationVisitorAccessGate.isRouteAllowed")
         && !tabCoordinator.contains("viewControllers = [archiveNav, echoNav, profileNav,")
         && visitorView.contains("内容来自本人确认的公开副本")
         && visitorView.contains("fetchVisitorInvitations")

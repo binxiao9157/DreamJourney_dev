@@ -691,11 +691,11 @@ final class ProfileViewController: UIViewController {
     }
 
     private var isPublicationManagementQAEntryVisible: Bool {
-        PublicationManagementM2AccessGate.isManagementRouteAllowed
+        PublicationManagementAccessGate.isManagementRouteAllowed
     }
 
     private var isPublicationVisitorEntryVisible: Bool {
-        PublicationVisitorM2AccessGate.isRouteAllowed
+        PublicationVisitorAccessGate.isRouteAllowed
     }
 
     private var isAccountDataExportVisible: Bool {

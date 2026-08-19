@@ -26,14 +26,14 @@ let appDelegate = try read("DreamJourney/Sources/AppDelegate.swift")
 let project = try read("DreamJourney.xcodeproj/project.pbxproj")
 
 require(
-    featureFlags.contains("case publicationManagementM2")
-        && featureFlags.contains(".publicationManagementM2,"),
+    featureFlags.contains("case publication")
+        && featureFlags.contains(".publication,"),
     "M2 management feature must be non-persistent and default-off"
 )
 require(
     managementAccess.contains("static let launchArgument = \"DJEnablePublicationManagementM2QA\"")
         && managementAccess.contains("QALaunchConfiguration.shared.contains(launchArgument)")
-        && managementAccess.contains("PublicationManagementM2AccessGate")
+        && managementAccess.contains("PublicationManagementAccessGate")
         && managementAccess.contains("isServerPolicyManagedRouteAllowed"),
     "management must preserve QA access while requiring server policy for formal routes"
 )
@@ -48,8 +48,8 @@ require(
     "management transport must separate internal QA and formal closed-beta routes"
 )
 require(
-    backendClient.contains("return .publicationManagementM2")
-        && backendClient.contains("return .publicationGrantManagementM2")
+    backendClient.contains("return .publication")
+        && backendClient.contains("return .publicationGrantManagement")
         && backendClient.contains("return \"publicationManagement\""),
     "management requests must be purpose and feature classified"
 )
@@ -131,7 +131,7 @@ for forbiddenSymbol in [
 }
 
 require(
-    profile.contains("PublicationManagementM2AccessGate.isManagementRouteAllowed")
+    profile.contains("PublicationManagementAccessGate.isManagementRouteAllowed")
         && profile.contains("case publicationManagementQA")
         && profile.contains("profile-publication-management-qa-entry"),
     "management route must be Profile-only and policy gated"

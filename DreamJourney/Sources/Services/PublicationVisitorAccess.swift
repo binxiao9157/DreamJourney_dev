@@ -1,6 +1,6 @@
 import Foundation
 
-/// Narrow QA-only boundary for the closed M2 visitor reader contract.
+/// Narrow QA-only boundary for the Visitor reader regression contract.
 ///
 /// Release artifacts always evaluate this as disabled. The first iOS slice
 /// deliberately has no public entry point, persisted credential, or runtime
@@ -17,11 +17,11 @@ enum PublicationVisitorM2QAGate {
     }
 }
 
-enum PublicationVisitorM2AccessGate {
+enum PublicationVisitorAccessGate {
     static var isRouteAllowed: Bool {
         PublicationVisitorM2QAGate.isEnabled
             || FeatureGateService.shared.isServerPolicyManagedRouteAllowed(
-                .publicationVisitorM2
+                .publicationVisitor
             )
     }
 }
@@ -685,7 +685,7 @@ final class PublicationVisitorRuntime {
         client: PublicationVisitorAdmissionClient = DreamJourneyBackendClient.shared,
         sessionCoordinator: PublicationVisitorSessionCoordinator = PublicationVisitorSessionCoordinator(),
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
-        routeAllowed: @escaping () -> Bool = { PublicationVisitorM2AccessGate.isRouteAllowed }
+        routeAllowed: @escaping () -> Bool = { PublicationVisitorAccessGate.isRouteAllowed }
     ) {
         self.client = client
         self.sessionCoordinator = sessionCoordinator
