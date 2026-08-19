@@ -7,6 +7,8 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 SCHEME="${SCHEME:-DreamJourney}"
 CONFIGURATION="${CONFIGURATION:-Debug}"
 SIMULATOR_NAME="${SIMULATOR_NAME:-iPhone 17}"
+LOCAL_BUNDLE_ID="${LOCAL_BUNDLE_ID:-com.yxj.dreamjourney.app}"
+LOCAL_DEVELOPMENT_TEAM="${LOCAL_DEVELOPMENT_TEAM:-2BTR77V3R8}"
 SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG UI_QA_SIMULATOR'
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/DerivedDataProfileFamilyPersonaReleaseSmoke}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$ROOT_DIR/tmp/visual-qa/prd-stitch-ui/profile-family-persona-release-smoke}"
@@ -56,6 +58,8 @@ xcodebuild \
   -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath "$DERIVED_DATA_PATH" \
   CODE_SIGNING_ALLOWED=NO \
+  DREAMJOURNEY_PRODUCT_BUNDLE_IDENTIFIER="$LOCAL_BUNDLE_ID" \
+  DREAMJOURNEY_DEVELOPMENT_TEAM="$LOCAL_DEVELOPMENT_TEAM" \
   SWIFT_ACTIVE_COMPILATION_CONDITIONS="$SWIFT_ACTIVE_COMPILATION_CONDITIONS" \
   EXCLUDED_ARCHS='' \
   ARCHS=arm64 \
@@ -116,9 +120,9 @@ echo
 
 grep -Eq '"completed"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Smoke did not complete."
 grep -Eq '"releaseRowVisible"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "Family row should stay hidden in default release mode."
-grep -Eq '"familyManagementOnlyRowVisible"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "familyManagement must remain hidden when runtime releaseVisible is false."
-grep -Eq '"familyManagementOnlyCanOpenSwitcher"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "familyManagement alone must not open persona switcher."
-grep -Eq '"familySpaceCanOpenSwitcher"[[:space:]]*:[[:space:]]*false' "$RESULT_FILE" || fail "familySpace must remain closed when runtime releaseVisible is false."
+grep -Eq '"familyManagementOnlyRowVisible"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "familyManagement should expose the signed-in product row when runtime is publicly ready."
+grep -Eq '"familyManagementOnlyCanOpenSwitcher"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "familyManagement should open the signed-in family surface when runtime is publicly ready."
+grep -Eq '"familySpaceCanOpenSwitcher"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "familySpace should open the signed-in family switcher when runtime is publicly ready."
 grep -Eq '"hiddenBranchesCanOpenSwitcher"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Hidden QA launch should open persona switcher."
 grep -Eq '"profileTabSelected"[[:space:]]*:[[:space:]]*true' "$RESULT_FILE" || fail "Smoke should select the profile tab before screenshot."
 grep -Eq '"familyMemberCount"[[:space:]]*:[[:space:]]*[1-9]' "$RESULT_FILE" || fail "Family repository should provide at least one persona option."

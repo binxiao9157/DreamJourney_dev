@@ -1639,9 +1639,9 @@ private extension AppDelegate {
         let firstFamilyMember = backendFamilyMember ?? familyMembers.first
         let profileTabSelected = selectProfileTabForFamilyPersonaSmoke()
         let completed = releaseRowVisible == false
-            && familyManagementOnlyRowVisible == false
-            && familyManagementOnlyCanOpenSwitcher == false
-            && familySpaceCanOpenSwitcher == false
+            && familyManagementOnlyRowVisible
+            && familyManagementOnlyCanOpenSwitcher
+            && familySpaceCanOpenSwitcher
             && hiddenBranchesCanOpenSwitcher
             && selfContext.isSelfAssistant
             && profileTabSelected
