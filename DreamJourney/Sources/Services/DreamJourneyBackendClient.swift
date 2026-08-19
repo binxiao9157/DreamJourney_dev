@@ -404,6 +404,7 @@ final class FeatureGateService {
         .familyManagement,
         .familySpace,
         .careDashboard,
+        .formalMemoryMarkdownExport,
     ]
 
     private static let serverPolicyManagedFeatures = serverPolicyManagedProductionFeatures
@@ -848,6 +849,10 @@ final class FeatureGateService {
             || normalizedPath.hasPrefix("/auth/data-export/jobs") {
             return .accountDataExport
         }
+        if normalizedPath.hasPrefix("/v2/vaults/")
+            && normalizedPath.contains("/memory-exports/jobs") {
+            return .formalMemoryMarkdownExport
+        }
         if normalizedPath == "/auth/delete" || normalizedPath == "/auth/restore" {
             return .accountDeletion
         }
@@ -949,7 +954,8 @@ final class FeatureGateService {
              .profileSettings,
              .legalCenter,
              .accountDeletion,
-             .accountDataExport:
+             .accountDataExport,
+             .formalMemoryMarkdownExport:
             return .ownerTextCore
         case .voiceCloneShell, .digitalHumanLivePanel, .archiveRemoteFetch:
             return .providerEffect
@@ -2749,6 +2755,207 @@ struct AccountDataExportArchiveContract {
             throw AccountDataExportContractError.malformedResponse
         }
         self.data = data
+    }
+}
+
+enum FormalMemoryMarkdownExportContractError: LocalizedError {
+    case malformedResponse
+    case ownerScopeMismatch
+    case integrityMismatch
+
+    var errorDescription: String? {
+        switch self {
+        case .malformedResponse:
+            return "正式记忆导出回执不完整，请稍后重试"
+        case .ownerScopeMismatch:
+            return "账号或记忆空间已变化，未继续导出"
+        case .integrityMismatch:
+            return "正式记忆导出文件校验失败，请重新生成"
+        }
+    }
+}
+
+struct FormalMemoryMarkdownExportManifestContract {
+    static let exportType = "formalMemoryMarkdown"
+    static let mimeType = "text/markdown; charset=utf-8"
+
+    let schemaVersion: Int
+    let jobId: String
+    let scopeId: String
+    let packageStatus: String
+    let generatedAt: String
+    let expiresAt: String
+    let fileName: String
+    let contentHash: String
+    let byteCount: Int
+    let memoryCount: Int
+
+    init(json: [String: Any], expectedJobId: String, expectedVaultId: String) throws {
+        guard let jobId = json["jobId"] as? String,
+              jobId == expectedJobId,
+              json["exportType"] as? String == Self.exportType,
+              let scopeId = json["scopeId"] as? String,
+              scopeId == expectedVaultId,
+              json["packageStatus"] as? String == "ready",
+              let generatedAt = json["generatedAt"] as? String,
+              let expiresAt = json["expiresAt"] as? String,
+              let fileName = json["fileName"] as? String,
+              fileName == URL(fileURLWithPath: fileName).lastPathComponent,
+              fileName.hasSuffix(".md"),
+              fileName.count <= 160,
+              json["mimeType"] as? String == Self.mimeType,
+              let contentHash = json["contentHash"] as? String,
+              contentHash.count == 64,
+              contentHash.allSatisfy({ $0.isHexDigit }),
+              let byteCount = Self.intValue(json["byteCount"]),
+              byteCount >= 0,
+              let memoryCount = Self.intValue(json["memoryCount"]),
+              memoryCount >= 0 else {
+            throw FormalMemoryMarkdownExportContractError.malformedResponse
+        }
+        schemaVersion = Self.intValue(json["schemaVersion"]) ?? 1
+        self.jobId = jobId
+        self.scopeId = scopeId
+        self.packageStatus = "ready"
+        self.generatedAt = generatedAt
+        self.expiresAt = expiresAt
+        self.fileName = fileName
+        self.contentHash = contentHash.lowercased()
+        self.byteCount = byteCount
+        self.memoryCount = memoryCount
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+}
+
+struct FormalMemoryMarkdownExportJobContract {
+    let schemaVersion: Int
+    let jobId: String
+    let scopeId: String
+    let status: String
+    let attempt: Int
+    let failureCode: String?
+    let createdAt: String
+    let updatedAt: String
+    let expiresAt: String
+    let readyAt: String?
+    let downloadAvailable: Bool
+    let manifest: FormalMemoryMarkdownExportManifestContract?
+
+    var isPending: Bool { status == "queued" || status == "running" }
+    var isFailed: Bool { status == "failed" }
+    var isCancelled: Bool { status == "cancelled" }
+    var isExpired: Bool { status == "expired" }
+
+    init(json: [String: Any], expectedVaultId: String) throws {
+        guard let jobId = json["jobId"] as? String,
+              jobId.hasPrefix("dej_"),
+              json["exportType"] as? String == FormalMemoryMarkdownExportManifestContract.exportType,
+              let scopeId = json["scopeId"] as? String,
+              scopeId == expectedVaultId,
+              let status = json["status"] as? String,
+              ["queued", "running", "ready", "failed", "cancelled", "expired"].contains(status),
+              let createdAt = json["createdAt"] as? String,
+              let updatedAt = json["updatedAt"] as? String,
+              let expiresAt = json["expiresAt"] as? String,
+              let downloadAvailable = json["downloadAvailable"] as? Bool else {
+            throw FormalMemoryMarkdownExportContractError.malformedResponse
+        }
+        let parsedManifest: FormalMemoryMarkdownExportManifestContract?
+        if let manifestJSON = json["manifest"] as? [String: Any] {
+            parsedManifest = try FormalMemoryMarkdownExportManifestContract(
+                json: manifestJSON,
+                expectedJobId: jobId,
+                expectedVaultId: expectedVaultId
+            )
+        } else {
+            parsedManifest = nil
+        }
+        guard downloadAvailable == (status == "ready"),
+              !downloadAvailable || parsedManifest != nil else {
+            throw FormalMemoryMarkdownExportContractError.malformedResponse
+        }
+
+        schemaVersion = Self.intValue(json["schemaVersion"]) ?? 1
+        self.jobId = jobId
+        self.scopeId = scopeId
+        self.status = status
+        attempt = max(0, Self.intValue(json["attempt"]) ?? 0)
+        failureCode = json["failureCode"] as? String
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.expiresAt = expiresAt
+        readyAt = json["readyAt"] as? String
+        self.downloadAvailable = downloadAvailable
+        manifest = parsedManifest
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+}
+
+struct FormalMemoryMarkdownDownloadCredentialContract {
+    let schemaVersion: Int
+    let jobId: String
+    let downloadToken: String
+    let expiresAt: String
+
+    init(json: [String: Any], expectedJobId: String) throws {
+        guard let jobId = json["jobId"] as? String,
+              jobId == expectedJobId,
+              let downloadToken = json["downloadToken"] as? String,
+              downloadToken.hasPrefix("dec_"),
+              downloadToken.count <= 128,
+              let expiresAt = json["expiresAt"] as? String,
+              !expiresAt.isEmpty else {
+            throw FormalMemoryMarkdownExportContractError.malformedResponse
+        }
+        schemaVersion = (json["schemaVersion"] as? NSNumber)?.intValue
+            ?? (json["schemaVersion"] as? Int)
+            ?? 1
+        self.jobId = jobId
+        self.downloadToken = downloadToken
+        self.expiresAt = expiresAt
+    }
+}
+
+struct FormalMemoryMarkdownFileContract {
+    let data: Data
+    let markdown: String
+    let fileName: String
+    let contentHash: String
+
+    init(
+        data: Data,
+        manifest: FormalMemoryMarkdownExportManifestContract,
+        responseMIMEType: String?,
+        responseContentHash: String?
+    ) throws {
+        guard responseMIMEType?.lowercased() == FormalMemoryMarkdownExportManifestContract.mimeType,
+              data.count == manifest.byteCount,
+              let markdown = String(data: data, encoding: .utf8) else {
+            throw FormalMemoryMarkdownExportContractError.malformedResponse
+        }
+        let calculatedHash = SHA256.hash(data: data)
+            .map { String(format: "%02x", $0) }
+            .joined()
+        guard calculatedHash == manifest.contentHash,
+              responseContentHash?.lowercased() == manifest.contentHash else {
+            throw FormalMemoryMarkdownExportContractError.integrityMismatch
+        }
+        self.data = data
+        self.markdown = markdown
+        fileName = manifest.fileName
+        contentHash = calculatedHash
     }
 }
 
@@ -6614,6 +6821,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
     }
 
     var isAccountDataExportConfigured: Bool {
+        hasExplicitBaseURL
+    }
+
+    var isFormalMemoryMarkdownExportConfigured: Bool {
         hasExplicitBaseURL
     }
 
@@ -10796,6 +11007,223 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 completion(.failure(error))
             }
         }
+    }
+
+    func createFormalMemoryMarkdownExportJob(
+        accountLease: AccountLease,
+        requestKey: String,
+        completion: @escaping (Result<FormalMemoryMarkdownExportJobContract, Error>) -> Void
+    ) {
+        requestFormalMemoryMarkdownExportJob(
+            accountLease: accountLease,
+            pathSuffix: "",
+            method: .post,
+            payload: [
+                "requestKey": requestKey,
+                "exportType": FormalMemoryMarkdownExportManifestContract.exportType,
+            ],
+            completion: completion
+        )
+    }
+
+    func readFormalMemoryMarkdownExportJob(
+        accountLease: AccountLease,
+        jobId: String,
+        completion: @escaping (Result<FormalMemoryMarkdownExportJobContract, Error>) -> Void
+    ) {
+        requestFormalMemoryMarkdownExportJob(
+            accountLease: accountLease,
+            pathSuffix: "/\(pathComponent(jobId))",
+            method: .get,
+            payload: nil,
+            completion: completion
+        )
+    }
+
+    func retryFormalMemoryMarkdownExportJob(
+        accountLease: AccountLease,
+        jobId: String,
+        completion: @escaping (Result<FormalMemoryMarkdownExportJobContract, Error>) -> Void
+    ) {
+        requestFormalMemoryMarkdownExportJob(
+            accountLease: accountLease,
+            pathSuffix: "/\(pathComponent(jobId))/retry",
+            method: .post,
+            payload: [:],
+            completion: completion
+        )
+    }
+
+    func cancelFormalMemoryMarkdownExportJob(
+        accountLease: AccountLease,
+        jobId: String,
+        completion: @escaping (Result<FormalMemoryMarkdownExportJobContract, Error>) -> Void
+    ) {
+        requestFormalMemoryMarkdownExportJob(
+            accountLease: accountLease,
+            pathSuffix: "/\(pathComponent(jobId))/cancel",
+            method: .post,
+            payload: [:],
+            completion: completion
+        )
+    }
+
+    func issueFormalMemoryMarkdownDownloadCredential(
+        accountLease: AccountLease,
+        jobId: String,
+        completion: @escaping (Result<FormalMemoryMarkdownDownloadCredentialContract, Error>) -> Void
+    ) {
+        guard jobId.hasPrefix("dej_"),
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            completion(.failure(FormalMemoryMarkdownExportContractError.ownerScopeMismatch))
+            return
+        }
+        let path = formalMemoryMarkdownExportBasePath(accountLease: accountLease)
+            + "/\(pathComponent(jobId))/download-credential"
+        requestJSON(
+            path: path,
+            method: .post,
+            payload: [:],
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try FormalMemoryMarkdownDownloadCredentialContract(
+                        json: object,
+                        expectedJobId: jobId
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func downloadFormalMemoryMarkdownExport(
+        accountLease: AccountLease,
+        job: FormalMemoryMarkdownExportJobContract,
+        credential: FormalMemoryMarkdownDownloadCredentialContract,
+        completion: @escaping (Result<FormalMemoryMarkdownFileContract, Error>) -> Void
+    ) {
+        guard job.downloadAvailable,
+              let manifest = job.manifest,
+              job.scopeId == accountLease.vaultId,
+              credential.jobId == job.jobId,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed,
+              let session = currentAuthenticatedSession,
+              session.userId == accountLease.subjectId else {
+            completion(.failure(FormalMemoryMarkdownExportContractError.ownerScopeMismatch))
+            return
+        }
+        let decision = requestFeatureDecision(for: .formalMemoryMarkdownExport)
+        guard decision.allowed else {
+            completion(.failure(ClientError.featurePolicyDenied(
+                feature: DJFeature.formalMemoryMarkdownExport.rawValue,
+                reason: decision.reason
+            )))
+            return
+        }
+
+        let path = formalMemoryMarkdownExportBasePath(accountLease: accountLease)
+            + "/\(pathComponent(job.jobId))/download"
+        let endpoint = EndpointDescriptor(
+            path: path,
+            method: .get,
+            authPolicy: .userRequired,
+            payload: nil,
+            sessionUserId: accountLease.subjectId
+        )
+        guard var headers = authHeaders(for: endpoint.authPolicy, session: session) else {
+            completion(.failure(ClientError.userAuthenticationRequired))
+            return
+        }
+        headers.add(name: "X-DreamJourney-Export-Token", value: credential.downloadToken)
+        headers.add(name: "X-DreamJourney-Client-Build", value: String(FeatureGateService.shared.clientBuild))
+        headers.add(name: "X-DreamJourney-Auth-Contract-Version", value: String(session.contractVersion))
+        headers.add(name: "X-DreamJourney-Request-Purpose", value: endpoint.purpose)
+        headers.add(name: "X-DreamJourney-Owner-Binding", value: endpoint.ownerBinding)
+        for (name, value) in FeatureGateService.shared.metadataHeaders(for: decision) {
+            headers.add(name: name, value: value)
+        }
+
+        transportSession.request(
+            "\(baseURL)\(path)",
+            method: .get,
+            headers: headers
+        )
+        .validate(statusCode: 200..<300)
+        .responseData(queue: .global(qos: .utility)) { response in
+            guard AccountLeaseRuntime.shared.validate(accountLease, at: .commit).allowed,
+                  self.currentAuthenticatedSession?.matchesCASIdentity(session) == true else {
+                DispatchQueue.main.async {
+                    completion(.failure(FormalMemoryMarkdownExportContractError.ownerScopeMismatch))
+                }
+                return
+            }
+            let result: Result<FormalMemoryMarkdownFileContract, Error>
+            switch response.result {
+            case .success(let data):
+                do {
+                    result = .success(try FormalMemoryMarkdownFileContract(
+                        data: data,
+                        manifest: manifest,
+                        responseMIMEType: response.response?.value(forHTTPHeaderField: "Content-Type"),
+                        responseContentHash: response.response?.value(forHTTPHeaderField: "X-Content-SHA256")
+                    ))
+                } catch {
+                    result = .failure(error)
+                }
+            case .failure(let error):
+                result = .failure(error)
+            }
+            DispatchQueue.main.async {
+                completion(result)
+            }
+        }
+    }
+
+    private func requestFormalMemoryMarkdownExportJob(
+        accountLease: AccountLease,
+        pathSuffix: String,
+        method: HTTPMethod,
+        payload: [String: Any]?,
+        completion: @escaping (Result<FormalMemoryMarkdownExportJobContract, Error>) -> Void
+    ) {
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            completion(.failure(FormalMemoryMarkdownExportContractError.ownerScopeMismatch))
+            return
+        }
+        requestJSON(
+            path: formalMemoryMarkdownExportBasePath(accountLease: accountLease) + pathSuffix,
+            method: method,
+            payload: payload,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try FormalMemoryMarkdownExportJobContract(
+                        json: object,
+                        expectedVaultId: accountLease.vaultId
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    private func formalMemoryMarkdownExportBasePath(accountLease: AccountLease) -> String {
+        "/v2/vaults/\(pathComponent(accountLease.vaultId))/memory-exports/jobs"
     }
 
     func restoreAccount(

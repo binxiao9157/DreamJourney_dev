@@ -739,6 +739,24 @@ enum AccountLifecycleRuntimeRegistry {
                 detailCode: "accountDataExportJobStatusTeardownFailed"
             )
         }
+        guard FormalMemoryMarkdownTemporaryStore.teardownForAccountLifecycle(
+            oldAccountLease: context.oldAccountLease
+        ) else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "formalMemoryMarkdownExportTeardownFailed"
+            )
+        }
+        guard FormalMemoryMarkdownExportJobStatusStore.teardownForAccountLifecycle(
+            oldAccountLease: context.oldAccountLease
+        ) else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "formalMemoryMarkdownJobStatusTeardownFailed"
+            )
+        }
         guard AccountDataRightsReceiptStore.teardownForAccountLifecycle(
             oldAccountLease: context.oldAccountLease
         ) else {

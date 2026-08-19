@@ -798,6 +798,7 @@ for guard in \
 	  voice-clone-backend-contract-check.swift \
   digital-human-voice-clone-combo-gate-check.swift \
   formal-memory-library-check.swift \
+  formal-memory-markdown-export-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift
 do

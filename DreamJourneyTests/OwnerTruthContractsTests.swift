@@ -10238,6 +10238,142 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    func testFormalMemoryMarkdownExportContractsRequireVaultMimeAndHash() throws {
+        let data = Data("# 我的正式记忆\n\n一段已确认的记忆。\n".utf8)
+        let contentHash = SHA256.hash(data: data)
+            .map { String(format: "%02x", $0) }
+            .joined()
+        let manifestJSON: [String: Any] = [
+            "schemaVersion": 1,
+            "jobId": "dej_000000000000000000000101",
+            "exportType": "formalMemoryMarkdown",
+            "scopeId": "vault-a",
+            "packageStatus": "ready",
+            "generatedAt": "2026-08-19T08:00:00Z",
+            "expiresAt": "2026-08-19T08:15:00Z",
+            "fileName": "dreamjourney-formal-memory-20260819T080000Z.md",
+            "mimeType": "text/markdown; charset=utf-8",
+            "contentHash": contentHash,
+            "byteCount": data.count,
+            "memoryCount": 1,
+        ]
+        let job = try FormalMemoryMarkdownExportJobContract(
+            json: [
+                "schemaVersion": 2,
+                "jobId": "dej_000000000000000000000101",
+                "exportType": "formalMemoryMarkdown",
+                "scopeId": "vault-a",
+                "status": "ready",
+                "attempt": 1,
+                "failureCode": NSNull(),
+                "createdAt": "2026-08-19T08:00:00Z",
+                "updatedAt": "2026-08-19T08:00:01Z",
+                "expiresAt": "2026-08-19T08:15:00Z",
+                "readyAt": "2026-08-19T08:00:01Z",
+                "downloadAvailable": true,
+                "manifest": manifestJSON,
+            ],
+            expectedVaultId: "vault-a"
+        )
+        let manifest = try XCTUnwrap(job.manifest)
+        let file = try FormalMemoryMarkdownFileContract(
+            data: data,
+            manifest: manifest,
+            responseMIMEType: "text/markdown; charset=utf-8",
+            responseContentHash: contentHash
+        )
+
+        XCTAssertEqual(file.data, data)
+        XCTAssertEqual(file.contentHash, contentHash)
+        XCTAssertEqual(manifest.memoryCount, 1)
+        XCTAssertThrowsError(try FormalMemoryMarkdownExportJobContract(
+            json: [
+                "jobId": "dej_000000000000000000000101",
+                "exportType": "formalMemoryMarkdown",
+                "scopeId": "vault-b",
+                "status": "ready",
+                "createdAt": "2026-08-19T08:00:00Z",
+                "updatedAt": "2026-08-19T08:00:01Z",
+                "expiresAt": "2026-08-19T08:15:00Z",
+                "downloadAvailable": true,
+                "manifest": manifestJSON,
+            ],
+            expectedVaultId: "vault-a"
+        ))
+        XCTAssertThrowsError(try FormalMemoryMarkdownFileContract(
+            data: data,
+            manifest: manifest,
+            responseMIMEType: "application/zip",
+            responseContentHash: contentHash
+        ))
+        XCTAssertThrowsError(try FormalMemoryMarkdownFileContract(
+            data: data,
+            manifest: manifest,
+            responseMIMEType: "text/markdown; charset=utf-8",
+            responseContentHash: String(repeating: "0", count: 64)
+        ))
+    }
+
+    func testFormalMemoryMarkdownExportStatusIsOwnerScopedAndResumable() throws {
+        let suiteName = "FormalMemoryMarkdownExportStatusTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let job = try FormalMemoryMarkdownExportJobContract(
+            json: [
+                "schemaVersion": 2,
+                "jobId": "dej_000000000000000000000102",
+                "exportType": "formalMemoryMarkdown",
+                "scopeId": "vault-a",
+                "status": "running",
+                "attempt": 1,
+                "failureCode": NSNull(),
+                "createdAt": "2026-08-19T08:00:00Z",
+                "updatedAt": "2026-08-19T08:00:01Z",
+                "expiresAt": "2026-08-19T08:15:00Z",
+                "readyAt": NSNull(),
+                "downloadAvailable": false,
+                "manifest": NSNull(),
+            ],
+            expectedVaultId: lease.vaultId
+        )
+
+        let snapshot = try FormalMemoryMarkdownExportJobStatusStore.write(
+            job,
+            accountLease: lease,
+            defaults: defaults,
+            accountLeaseRuntime: runtime
+        )
+        XCTAssertEqual(snapshot.statusSubtitle, "正式记忆整理中")
+        XCTAssertEqual(FormalMemoryMarkdownExportJobStatusStore.load(
+            accountLease: lease,
+            defaults: defaults,
+            accountLeaseRuntime: runtime
+        ), snapshot)
+
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000202")!
+        ))
+        let ownerBLease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-b"))
+        XCTAssertNil(FormalMemoryMarkdownExportJobStatusStore.load(
+            accountLease: lease,
+            defaults: defaults,
+            accountLeaseRuntime: runtime
+        ))
+        XCTAssertNil(FormalMemoryMarkdownExportJobStatusStore.load(
+            accountLease: ownerBLease,
+            defaults: defaults,
+            accountLeaseRuntime: runtime
+        ))
+        XCTAssertTrue(FormalMemoryMarkdownExportJobStatusStore.teardownForAccountLifecycle(
+            oldAccountLease: lease,
+            defaults: defaults
+        ))
+    }
+
     func testFamilyContributionContractsKeepMaterialAndOwnerScopeStrict() throws {
         let grant = try FamilyContributionGrantContract(json: [
             "grantId": "grant-1",

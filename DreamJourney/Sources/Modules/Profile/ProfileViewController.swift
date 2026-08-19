@@ -413,6 +413,222 @@ enum AccountDataExportTemporaryStore {
     }
 }
 
+struct FormalMemoryMarkdownExportJobStatusSnapshot: Codable, Equatable {
+    static let schemaVersion = 1
+
+    let schemaVersion: Int
+    let jobId: String
+    let vaultId: String
+    let status: String
+    let attempt: Int
+    let failureCode: String?
+    let updatedAt: String
+    let expiresAt: String
+    let downloadAvailable: Bool
+    let memoryCount: Int?
+
+    init(job: FormalMemoryMarkdownExportJobContract) {
+        schemaVersion = Self.schemaVersion
+        jobId = job.jobId
+        vaultId = job.scopeId
+        status = job.status
+        attempt = job.attempt
+        failureCode = job.failureCode
+        updatedAt = job.updatedAt
+        expiresAt = job.expiresAt
+        downloadAvailable = job.downloadAvailable
+        memoryCount = job.manifest?.memoryCount
+    }
+
+    var statusSubtitle: String {
+        switch status {
+        case "queued", "running":
+            return "正式记忆整理中"
+        case "ready":
+            if let memoryCount {
+                return "已整理 \(memoryCount) 条正式记忆"
+            }
+            return "正式记忆已就绪"
+        case "failed":
+            return "整理失败，可重试"
+        case "cancelled":
+            return "已取消，可重新生成"
+        case "expired":
+            return "导出已过期，可重新生成"
+        default:
+            return "状态待确认"
+        }
+    }
+}
+
+enum FormalMemoryMarkdownExportJobStatusStore {
+    private static let storageKeyPrefix = "dj.formalMemoryMarkdownExportJobStatus.v1."
+
+    @discardableResult
+    static func write(
+        _ job: FormalMemoryMarkdownExportJobContract,
+        accountLease: AccountLease,
+        defaults: UserDefaults = .standard,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+    ) throws -> FormalMemoryMarkdownExportJobStatusSnapshot {
+        guard job.scopeId == accountLease.vaultId,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            throw FormalMemoryMarkdownExportContractError.ownerScopeMismatch
+        }
+        let snapshot = FormalMemoryMarkdownExportJobStatusSnapshot(job: job)
+        let data = try JSONEncoder().encode(snapshot)
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            throw FormalMemoryMarkdownExportContractError.ownerScopeMismatch
+        }
+        let key = scopedStorageKey(for: accountLease)
+        defaults.set(data, forKey: key)
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            defaults.removeObject(forKey: key)
+            throw FormalMemoryMarkdownExportContractError.ownerScopeMismatch
+        }
+        return snapshot
+    }
+
+    static func load(
+        accountLease: AccountLease,
+        defaults: UserDefaults = .standard,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+    ) -> FormalMemoryMarkdownExportJobStatusSnapshot? {
+        guard accountLeaseRuntime.validate(accountLease, at: .ui).allowed,
+              let data = defaults.data(forKey: scopedStorageKey(for: accountLease)),
+              let snapshot = try? JSONDecoder().decode(
+                  FormalMemoryMarkdownExportJobStatusSnapshot.self,
+                  from: data
+              ),
+              snapshot.schemaVersion == FormalMemoryMarkdownExportJobStatusSnapshot.schemaVersion,
+              snapshot.vaultId == accountLease.vaultId,
+              snapshot.jobId.hasPrefix("dej_") else {
+            return nil
+        }
+        return snapshot
+    }
+
+    static func remove(
+        accountLease: AccountLease,
+        defaults: UserDefaults = .standard
+    ) {
+        defaults.removeObject(forKey: scopedStorageKey(for: accountLease))
+    }
+
+    @discardableResult
+    static func teardownForAccountLifecycle(
+        oldAccountLease: AccountLease?,
+        defaults: UserDefaults = .standard
+    ) -> Bool {
+        if let oldAccountLease {
+            defaults.removeObject(forKey: scopedStorageKey(for: oldAccountLease))
+        }
+        return true
+    }
+
+    private static func scopedStorageKey(for accountLease: AccountLease) -> String {
+        storageKeyPrefix + AccountLeaseScopeDigest.value(for: accountLease)
+    }
+}
+
+enum FormalMemoryMarkdownTemporaryStore {
+    private static let rootDirectoryName = "DreamJourneyFormalMemoryExports"
+
+    static func write(
+        _ export: FormalMemoryMarkdownFileContract,
+        accountLease: AccountLease,
+        fileManager: FileManager = .default
+    ) throws -> URL {
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            throw FormalMemoryMarkdownExportContractError.ownerScopeMismatch
+        }
+        let scopedDirectory = rootDirectory(using: fileManager).appendingPathComponent(
+            AccountLeaseScopeDigest.value(for: accountLease),
+            isDirectory: true
+        )
+        try fileManager.createDirectory(
+            at: scopedDirectory,
+            withIntermediateDirectories: true,
+            attributes: [.protectionKey: FileProtectionType.complete]
+        )
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .commit).allowed else {
+            throw FormalMemoryMarkdownExportContractError.ownerScopeMismatch
+        }
+        let fileURL = scopedDirectory.appendingPathComponent(export.fileName, isDirectory: false)
+        do {
+            try export.data.write(to: fileURL, options: [.atomic, .completeFileProtection])
+            try fileManager.setAttributes(
+                [.protectionKey: FileProtectionType.complete],
+                ofItemAtPath: fileURL.path
+            )
+        } catch {
+            try? fileManager.removeItem(at: fileURL)
+            throw error
+        }
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .commit).allowed else {
+            try? fileManager.removeItem(at: fileURL)
+            throw FormalMemoryMarkdownExportContractError.ownerScopeMismatch
+        }
+        return fileURL
+    }
+
+    static func remove(
+        _ fileURL: URL,
+        accountLease: AccountLease,
+        fileManager: FileManager = .default
+    ) {
+        let scopedDirectory = rootDirectory(using: fileManager).appendingPathComponent(
+            AccountLeaseScopeDigest.value(for: accountLease),
+            isDirectory: true
+        ).standardizedFileURL
+        let normalizedURL = fileURL.standardizedFileURL
+        guard normalizedURL.deletingLastPathComponent() == scopedDirectory,
+              normalizedURL.pathExtension.lowercased() == "md" else {
+            return
+        }
+        try? fileManager.removeItem(at: normalizedURL)
+        removeRootDirectoryIfEmpty(using: fileManager)
+    }
+
+    @discardableResult
+    static func teardownForAccountLifecycle(
+        oldAccountLease: AccountLease?,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        do {
+            if let oldAccountLease {
+                let directory = rootDirectory(using: fileManager).appendingPathComponent(
+                    AccountLeaseScopeDigest.value(for: oldAccountLease),
+                    isDirectory: true
+                )
+                if fileManager.fileExists(atPath: directory.path) {
+                    try fileManager.removeItem(at: directory)
+                }
+            }
+            removeRootDirectoryIfEmpty(using: fileManager)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private static func rootDirectory(using fileManager: FileManager) -> URL {
+        fileManager.temporaryDirectory.appendingPathComponent(rootDirectoryName, isDirectory: true)
+    }
+
+    private static func removeRootDirectoryIfEmpty(using fileManager: FileManager) {
+        let rootDirectory = rootDirectory(using: fileManager)
+        guard let contents = try? fileManager.contentsOfDirectory(
+            at: rootDirectory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ), contents.isEmpty else {
+            return
+        }
+        try? fileManager.removeItem(at: rootDirectory)
+    }
+}
+
 private enum ProfileLayout {
     static let contentTopMargin: CGFloat = 18
     static let contentBottomMargin: CGFloat = 28
@@ -449,8 +665,10 @@ final class ProfileViewController: UIViewController {
     private let contentStack = UIStackView()
     private weak var careRetryButton: UIButton?
     private weak var dataExportRow: ProfileActionRow?
+    private weak var formalMemoryExportRow: ProfileActionRow?
     private weak var messageCenterRow: ProfileActionRow?
     private var accountDataExportStatusSnapshot: AccountDataExportJobStatusSnapshot?
+    private var formalMemoryExportStatusSnapshot: FormalMemoryMarkdownExportJobStatusSnapshot?
 
     private var isProfileHiddenBranchesEnabled: Bool {
         #if UI_QA_SIMULATOR && targetEnvironment(simulator)
@@ -483,6 +701,12 @@ final class ProfileViewController: UIViewController {
 
     private var isAccountDataExportVisible: Bool {
         false
+    }
+
+    private var isFormalMemoryMarkdownExportVisible: Bool {
+        FeatureGateService.shared.isServerPolicyManagedGeneralRouteAllowed(
+            .formalMemoryMarkdownExport
+        )
     }
 
     private func isFeatureRouteAllowed(
@@ -532,7 +756,7 @@ final class ProfileViewController: UIViewController {
         observeDigitalHumanContext()
         observeAuthoritativeMessageCenter()
         configureScrollView()
-        restoreAccountDataExportStatus()
+        restoreFormalMemoryMarkdownExportStatus()
         buildContent()
         loadCareSnapshot()
         refreshReleasePolicyAndRuntimeCapabilities()
@@ -546,8 +770,8 @@ final class ProfileViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: animated)
-        restoreAccountDataExportStatus()
-        updateAccountDataExportRow()
+        restoreFormalMemoryMarkdownExportStatus()
+        updateFormalMemoryMarkdownExportRow()
         rebuildContent()
         refreshAuthoritativeMessageCenter()
     }
@@ -1026,9 +1250,11 @@ final class ProfileViewController: UIViewController {
         stack.spacing = 0
 
         for (index, action) in rows.enumerated() {
-            let subtitle = action == .dataExport
-                ? accountDataExportStatusSnapshot?.statusSubtitle
-                : action == .messageCenter
+            let subtitle = action == .formalMemoryExport
+                ? formalMemoryExportStatusSnapshot?.statusSubtitle
+                : action == .dataExport
+                    ? accountDataExportStatusSnapshot?.statusSubtitle
+                    : action == .messageCenter
                     ? messageCenterSubtitle()
                     : nil
             let row = ProfileActionRow(
@@ -1038,6 +1264,9 @@ final class ProfileViewController: UIViewController {
             )
             if action == .dataExport {
                 dataExportRow = row
+            }
+            if action == .formalMemoryExport {
+                formalMemoryExportRow = row
             }
             if action == .messageCenter {
                 messageCenterRow = row
@@ -1082,8 +1311,8 @@ final class ProfileViewController: UIViewController {
         if isFeatureRouteAllowed(.legalCenter, risk: .ownerTextCore) {
             rows.append(.legalCenter)
         }
-        if isAccountDataExportVisible {
-            rows.append(.dataExport)
+        if isFormalMemoryMarkdownExportVisible {
+            rows.append(.formalMemoryExport)
         }
         rows.append(.logout)
         if isFeatureRouteAllowed(.accountDeletion, risk: .ownerTextCore) {
@@ -1216,6 +1445,8 @@ final class ProfileViewController: UIViewController {
             showLegalCenter()
         case .dataExport:
             showAccountDataExport()
+        case .formalMemoryExport:
+            showFormalMemoryMarkdownExport()
         case .logout:
             UserManager.shared.logout()
         case .accountDeletion:
@@ -1329,6 +1560,351 @@ final class ProfileViewController: UIViewController {
             self?.submitAccountDeletion(user: user)
         })
         present(alert, animated: true)
+    }
+
+    private func showFormalMemoryMarkdownExport() {
+        guard isFormalMemoryMarkdownExportVisible else {
+            showToast("当前账号暂未开放正式记忆导出", type: .info)
+            return
+        }
+        guard DreamJourneyBackendClient.shared.isFormalMemoryMarkdownExportConfigured else {
+            showToast("后端记忆服务未配置，暂时无法导出", type: .error)
+            return
+        }
+        guard let user = UserManager.shared.currentUser,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id),
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            showToast("账号状态已变化，请重新登录后再试", type: .info)
+            return
+        }
+
+        if let snapshot = FormalMemoryMarkdownExportJobStatusStore.load(
+            accountLease: accountLease
+        ) {
+            formalMemoryExportStatusSnapshot = snapshot
+            updateFormalMemoryMarkdownExportRow()
+            if ["cancelled", "expired"].contains(snapshot.status) {
+                FormalMemoryMarkdownExportJobStatusStore.remove(accountLease: accountLease)
+                formalMemoryExportStatusSnapshot = nil
+                updateFormalMemoryMarkdownExportRow()
+            } else if ["queued", "running"].contains(snapshot.status) {
+                presentFormalMemoryExportPendingActions(
+                    jobId: snapshot.jobId,
+                    accountLease: accountLease
+                )
+                return
+            } else {
+                resumeFormalMemoryMarkdownExportJob(
+                    jobId: snapshot.jobId,
+                    accountLease: accountLease
+                )
+                return
+            }
+        }
+
+        let alert = UIAlertController(
+            title: "导出正式记忆",
+            message: "将只导出当前已确认的正式记忆，包括正文、类型、线索和版本信息。原始资料、待确认内容、历史正文、媒体文件和内部记录不会包含在文件中。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "生成 Markdown", style: .default) { [weak self] _ in
+            self?.requestFormalMemoryMarkdownExport(accountLease: accountLease)
+        })
+        present(alert, animated: true)
+    }
+
+    private func restoreFormalMemoryMarkdownExportStatus() {
+        guard let user = UserManager.shared.currentUser,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id) else {
+            formalMemoryExportStatusSnapshot = nil
+            return
+        }
+        formalMemoryExportStatusSnapshot = FormalMemoryMarkdownExportJobStatusStore.load(
+            accountLease: accountLease
+        )
+    }
+
+    private func updateFormalMemoryMarkdownExportRow() {
+        formalMemoryExportRow?.updateSubtitle(formalMemoryExportStatusSnapshot?.statusSubtitle)
+    }
+
+    private func persistFormalMemoryMarkdownExportStatus(
+        _ job: FormalMemoryMarkdownExportJobContract,
+        accountLease: AccountLease
+    ) {
+        do {
+            formalMemoryExportStatusSnapshot = try FormalMemoryMarkdownExportJobStatusStore.write(
+                job,
+                accountLease: accountLease
+            )
+            updateFormalMemoryMarkdownExportRow()
+        } catch {
+            print("[FormalMemoryExport] status cache unavailable: \(error.localizedDescription)")
+        }
+    }
+
+    private func requestFormalMemoryMarkdownExport(accountLease: AccountLease) {
+        showToast("正在整理正式记忆", type: .info)
+        DreamJourneyBackendClient.shared.createFormalMemoryMarkdownExportJob(
+            accountLease: accountLease,
+            requestKey: UUID().uuidString
+        ) { [weak self] result in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+                return
+            }
+            switch result {
+            case .success(let job):
+                self.handleFormalMemoryMarkdownExportJob(
+                    job,
+                    accountLease: accountLease,
+                    remainingPolls: 30
+                )
+            case .failure(let error):
+                self.showToast("正式记忆导出失败：\(error.localizedDescription)", type: .error)
+            }
+        }
+    }
+
+    private func resumeFormalMemoryMarkdownExportJob(
+        jobId: String,
+        accountLease: AccountLease
+    ) {
+        showToast("正在读取正式记忆导出状态", type: .info)
+        DreamJourneyBackendClient.shared.readFormalMemoryMarkdownExportJob(
+            accountLease: accountLease,
+            jobId: jobId
+        ) { [weak self] result in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+                return
+            }
+            switch result {
+            case .success(let job):
+                self.handleFormalMemoryMarkdownExportJob(
+                    job,
+                    accountLease: accountLease,
+                    remainingPolls: 30
+                )
+            case .failure(let error):
+                self.showToast("导出状态读取失败：\(error.localizedDescription)", type: .error)
+            }
+        }
+    }
+
+    private func handleFormalMemoryMarkdownExportJob(
+        _ job: FormalMemoryMarkdownExportJobContract,
+        accountLease: AccountLease,
+        remainingPolls: Int
+    ) {
+        guard AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+            return
+        }
+        persistFormalMemoryMarkdownExportStatus(job, accountLease: accountLease)
+
+        if job.downloadAvailable {
+            downloadFormalMemoryMarkdownExport(job, accountLease: accountLease)
+            return
+        }
+        if job.isFailed {
+            showFormalMemoryMarkdownExportRetry(job: job, accountLease: accountLease)
+            return
+        }
+        if job.isCancelled {
+            FormalMemoryMarkdownExportJobStatusStore.remove(accountLease: accountLease)
+            formalMemoryExportStatusSnapshot = nil
+            updateFormalMemoryMarkdownExportRow()
+            showToast("已取消正式记忆导出", type: .info)
+            return
+        }
+        if job.isExpired {
+            FormalMemoryMarkdownExportJobStatusStore.remove(accountLease: accountLease)
+            formalMemoryExportStatusSnapshot = nil
+            updateFormalMemoryMarkdownExportRow()
+            showFormalMemoryMarkdownExportRetry(job: job, accountLease: accountLease)
+            return
+        }
+        guard job.isPending else {
+            showToast("正式记忆导出状态异常，请稍后重试", type: .error)
+            return
+        }
+        guard remainingPolls > 0 else {
+            presentFormalMemoryExportPendingActions(
+                jobId: job.jobId,
+                accountLease: accountLease
+            )
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+                return
+            }
+            DreamJourneyBackendClient.shared.readFormalMemoryMarkdownExportJob(
+                accountLease: accountLease,
+                jobId: job.jobId
+            ) { [weak self] result in
+                guard let self,
+                      AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+                    return
+                }
+                switch result {
+                case .success(let refreshed):
+                    self.handleFormalMemoryMarkdownExportJob(
+                        refreshed,
+                        accountLease: accountLease,
+                        remainingPolls: remainingPolls - 1
+                    )
+                case .failure(let error):
+                    self.showToast("导出状态读取失败：\(error.localizedDescription)", type: .error)
+                }
+            }
+        }
+    }
+
+    private func presentFormalMemoryExportPendingActions(
+        jobId: String,
+        accountLease: AccountLease
+    ) {
+        let alert = UIAlertController(
+            title: "正式记忆整理中",
+            message: "你可以继续等待，也可以取消本次导出。取消不会影响正式记忆内容。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "稍后再看", style: .cancel))
+        alert.addAction(UIAlertAction(title: "继续等待", style: .default) { [weak self] _ in
+            self?.resumeFormalMemoryMarkdownExportJob(
+                jobId: jobId,
+                accountLease: accountLease
+            )
+        })
+        alert.addAction(UIAlertAction(title: "取消导出", style: .destructive) { [weak self] _ in
+            DreamJourneyBackendClient.shared.cancelFormalMemoryMarkdownExportJob(
+                accountLease: accountLease,
+                jobId: jobId
+            ) { result in
+                guard let self,
+                      AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+                    return
+                }
+                switch result {
+                case .success(let job):
+                    self.handleFormalMemoryMarkdownExportJob(
+                        job,
+                        accountLease: accountLease,
+                        remainingPolls: 0
+                    )
+                case .failure(let error):
+                    self.showToast("取消导出失败：\(error.localizedDescription)", type: .error)
+                }
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func showFormalMemoryMarkdownExportRetry(
+        job: FormalMemoryMarkdownExportJobContract,
+        accountLease: AccountLease
+    ) {
+        let message = job.isExpired
+            ? "导出文件已过期，请重新生成。"
+            : "正式记忆整理失败，可重试当前任务。"
+        let alert = UIAlertController(
+            title: "导出未完成",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "重新生成", style: .default) { [weak self] _ in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+                return
+            }
+            if job.isExpired {
+                self.requestFormalMemoryMarkdownExport(accountLease: accountLease)
+                return
+            }
+            DreamJourneyBackendClient.shared.retryFormalMemoryMarkdownExportJob(
+                accountLease: accountLease,
+                jobId: job.jobId
+            ) { [weak self] result in
+                guard let self,
+                      AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+                    return
+                }
+                switch result {
+                case .success(let retried):
+                    self.handleFormalMemoryMarkdownExportJob(
+                        retried,
+                        accountLease: accountLease,
+                        remainingPolls: 30
+                    )
+                case .failure(let error):
+                    self.showToast("重新生成失败：\(error.localizedDescription)", type: .error)
+                }
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func downloadFormalMemoryMarkdownExport(
+        _ job: FormalMemoryMarkdownExportJobContract,
+        accountLease: AccountLease
+    ) {
+        DreamJourneyBackendClient.shared.issueFormalMemoryMarkdownDownloadCredential(
+            accountLease: accountLease,
+            jobId: job.jobId
+        ) { [weak self] result in
+            guard let self,
+                  AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+                return
+            }
+            switch result {
+            case .success(let credential):
+                DreamJourneyBackendClient.shared.downloadFormalMemoryMarkdownExport(
+                    accountLease: accountLease,
+                    job: job,
+                    credential: credential
+                ) { [weak self] downloadResult in
+                    guard let self,
+                          AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+                        return
+                    }
+                    switch downloadResult {
+                    case .success(let export):
+                        do {
+                            let fileURL = try FormalMemoryMarkdownTemporaryStore.write(
+                                export,
+                                accountLease: accountLease
+                            )
+                            FormalMemoryMarkdownExportJobStatusStore.remove(accountLease: accountLease)
+                            self.formalMemoryExportStatusSnapshot = nil
+                            self.updateFormalMemoryMarkdownExportRow()
+                            let preview = FormalMemoryMarkdownPreviewViewController(
+                                export: export,
+                                fileURL: fileURL,
+                                accountLease: accountLease
+                            )
+                            if let navigationController = self.navigationController {
+                                navigationController.pushViewController(preview, animated: true)
+                            } else {
+                                self.present(
+                                    UINavigationController(rootViewController: preview),
+                                    animated: true
+                                )
+                            }
+                        } catch {
+                            self.showToast("导出文件保存失败：\(error.localizedDescription)", type: .error)
+                        }
+                    case .failure(let error):
+                        self.showToast("正式记忆下载失败：\(error.localizedDescription)", type: .error)
+                    }
+                }
+            case .failure(let error):
+                self.showToast("导出凭据获取失败：\(error.localizedDescription)", type: .error)
+            }
+        }
     }
 
     private func showAccountDataExport() {
@@ -2016,6 +2592,102 @@ extension ProfileViewController {
 }
 #endif
 
+private final class FormalMemoryMarkdownPreviewViewController: UIViewController {
+    private let export: FormalMemoryMarkdownFileContract
+    private let fileURL: URL
+    private let accountLease: AccountLease
+    private var didRemoveTemporaryFile = false
+
+    init(
+        export: FormalMemoryMarkdownFileContract,
+        fileURL: URL,
+        accountLease: AccountLease
+    ) {
+        self.export = export
+        self.fileURL = fileURL
+        self.accountLease = accountLease
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        removeTemporaryFileIfNeeded()
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "正式记忆"
+        view.backgroundColor = DJDesignTokens.Color.background
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "square.and.arrow.up"),
+            style: .plain,
+            target: self,
+            action: #selector(shareTapped)
+        )
+        navigationItem.rightBarButtonItem?.accessibilityLabel = "分享正式记忆"
+
+        let textView = UITextView()
+        textView.translatesAutoresizingMaskIntoConstraints = false
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.alwaysBounceVertical = true
+        textView.backgroundColor = DJDesignTokens.Color.surface
+        textView.textColor = DJDesignTokens.Color.textPrimary
+        textView.font = UIFont.preferredFont(forTextStyle: .body)
+        textView.adjustsFontForContentSizeCategory = true
+        textView.textContainerInset = UIEdgeInsets(top: 22, left: 18, bottom: 28, right: 18)
+        textView.text = export.markdown
+        textView.accessibilityIdentifier = "formal-memory-markdown-preview"
+        view.addSubview(textView)
+        NSLayoutConstraint.activate([
+            textView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            textView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            textView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            textView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isMovingFromParent || navigationController?.isBeingDismissed == true {
+            removeTemporaryFileIfNeeded()
+        }
+    }
+
+    @objc private func shareTapped() {
+        guard !didRemoveTemporaryFile,
+              FileManager.default.fileExists(atPath: fileURL.path),
+              AccountLeaseRuntime.shared.validate(accountLease, at: .ui).allowed else {
+            removeTemporaryFileIfNeeded()
+            return
+        }
+        let activityViewController = UIActivityViewController(
+            activityItems: [fileURL],
+            applicationActivities: nil
+        )
+        activityViewController.completionWithItemsHandler = { [weak self] _, _, _, _ in
+            self?.removeTemporaryFileIfNeeded()
+        }
+        if let popover = activityViewController.popoverPresentationController {
+            popover.barButtonItem = navigationItem.rightBarButtonItem
+        }
+        present(activityViewController, animated: true)
+    }
+
+    private func removeTemporaryFileIfNeeded() {
+        guard !didRemoveTemporaryFile else { return }
+        didRemoveTemporaryFile = true
+        navigationItem.rightBarButtonItem?.isEnabled = false
+        FormalMemoryMarkdownTemporaryStore.remove(
+            fileURL,
+            accountLease: accountLease
+        )
+    }
+}
+
 private enum ProfileRowAction: Equatable {
     case profileSettings
     case messageCenter
@@ -2025,6 +2697,7 @@ private enum ProfileRowAction: Equatable {
     case publicationVisitor
     case legalCenter
     case dataExport
+    case formalMemoryExport
     case logout
     case accountDeletion
 
@@ -2046,6 +2719,8 @@ private enum ProfileRowAction: Equatable {
             return "法律法规"
         case .dataExport:
             return "导出个人数据"
+        case .formalMemoryExport:
+            return "导出正式记忆"
         case .logout:
             return "退出登录"
         case .accountDeletion:
@@ -2071,6 +2746,8 @@ private enum ProfileRowAction: Equatable {
             return "chevron.right"
         case .dataExport:
             return "square.and.arrow.up"
+        case .formalMemoryExport:
+            return "doc.text"
         case .logout:
             return "rectangle.portrait.and.arrow.right"
         case .accountDeletion:
@@ -2082,7 +2759,7 @@ private enum ProfileRowAction: Equatable {
         switch self {
         case .accountDeletion:
             return true
-        case .profileSettings, .messageCenter, .familyManagement, .voiceClone, .publicationManagementQA, .publicationVisitor, .legalCenter, .dataExport, .logout:
+        case .profileSettings, .messageCenter, .familyManagement, .voiceClone, .publicationManagementQA, .publicationVisitor, .legalCenter, .dataExport, .formalMemoryExport, .logout:
             return false
         }
     }
@@ -2105,6 +2782,8 @@ private enum ProfileRowAction: Equatable {
             return "profile-legal-center-row"
         case .dataExport:
             return "profile-data-export-row"
+        case .formalMemoryExport:
+            return "profile-formal-memory-export-row"
         case .logout:
             return "profile-logout-row"
         case .accountDeletion:

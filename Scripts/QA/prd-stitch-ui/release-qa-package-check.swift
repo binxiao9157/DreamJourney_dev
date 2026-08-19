@@ -561,6 +561,8 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh",
     "Scripts/QA/prd-stitch-ui/formal-memory-library-check.swift",
     "Scripts/QA/prd-stitch-ui/run-formal-memory-library-check.sh",
+    "Scripts/QA/prd-stitch-ui/formal-memory-markdown-export-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-formal-memory-markdown-export-check.sh",
     "Scripts/QA/prd-stitch-ui/run-owner-truth-formal-memory-uiqa-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-echo-trace-export-uiqa-smoke.sh",

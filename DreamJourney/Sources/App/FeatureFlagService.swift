@@ -663,6 +663,7 @@ enum DJFeature: String, CaseIterable {
     case legalCenter
     case accountDeletion
     case accountDataExport
+    case formalMemoryMarkdownExport
     case accountPasswordChange
     case careDashboard
     case careDoctorContact
@@ -736,6 +737,7 @@ final class FeatureFlagService {
         .familyManagement,
         .familySpace,
         .accountDataExport,
+        .formalMemoryMarkdownExport,
         .accountPasswordChange,
         .careDashboard,
         .careDoctorContact,
