@@ -25,9 +25,8 @@ Work Item：`PC-D1`
 
 PC-D1 不能标记为完整完成，剩余任务按顺序为：
 
-1. 从既有 PublicationVersion 创建新 Draft/Version 的修改链路。
-2. ShareGrant 创建、查看和撤销管理。
-3. 发布与 Visitor 的法律、安全、数据地域和真实流量审批。
+1. ShareGrant 创建、查看和撤销管理。
+2. 发布与 Visitor 的法律、安全、数据地域和真实流量审批。
 
 “暂停”当前后端语义用于冲突阻断，不等同于可恢复的产品暂停；在恢复合同明确前不向普通用户暴露可逆暂停操作。
 
@@ -50,7 +49,7 @@ iOS `fb8f615d` 已把现有 lifecycle 合同从 QA-only 展示推进到普通 Ow
 
 ## 下一交接点
 
-继续 PC-D1 的基于既有发布创建新 Draft/Version。不得原地修改不可变版本；ShareGrant 管理在该子闭环后推进，不修改已对齐的三 Tab 或全屏 Echo 视觉。
+继续 PC-D1 的 ShareGrant 创建、查看和撤销管理，不修改已对齐的三 Tab 或全屏 Echo 视觉。
 
 ## 版本审计子闭环补充
 
@@ -70,3 +69,28 @@ Backend `9092957` 与 iOS `29464d7d` 已完成 Owner PublicationVersion 审计�
 - UIQA：`tmp/visual-qa/product-v4/publication-version-audit/uiqa/20260819-pc-d1-version-audit/`。
 - generic iPhoneOS build：`tmp/visual-qa/product-v4/publication-version-audit/iphoneos-generic-build/20260819-pc-d1-version-audit/report.md`。
 - production readiness、schema head `0102`、路由认证和服务重建验证通过。
+
+## 不可变版本修订子闭环补充
+
+Backend `3c9b9a3`、部署热修 `6272bb6`、路由清单提交 `459a5dd` 与 iOS `bae9e9a4` 已完成普通 Owner 版本修订：
+
+1. Owner 只能基于当前唯一 active PublicationVersion 创建修订 Draft；请求携带预期版本 ID/版本号和公开副本文字，不携带 private MemoryVersion/Source 标识。
+2. 服务端从不可变基线版本解析固定 item 集合和顺序，重新验证当前 Owner、Authority Epoch、MemoryVersion current 状态、内容 hash 和第三方复核边界。
+3. 二次确认在同一事务内生成递增版本，将旧 Projection 标为 `superseded`，再建立唯一的新 `active` Projection；旧版本内容保持不可变和可审计。
+4. 并发或陈旧修订失败关闭；同一确认命令在对应版本被后续替代后仍返回原始幂等回执。
+5. iOS 复用已有公开副本编辑、预览和二次确认流程，锁定 item 顺序，并继续使用 AccountLease request/commit fence 阻断账户切换后的旧响应。
+
+验证：
+
+- 后端 96 项 Publication、route-auth、runtime 和 Session 定向测试通过。
+- 部署态临时 PostgreSQL smoke 验证 version 1 -> version 2、旧版本保留、唯一 active Projection、陈旧 Draft 拒绝和旧确认幂等重放。
+- iOS 12 项 Publication 定向 XCTest与静态 scope gate 通过。
+- UIQA 通过：`tmp/visual-qa/product-v4/publication-revision/uiqa/20260819-pc-d1-publication-revision/`。
+- 关键截图：`tmp/visual-qa/product-v4/publication-revision/uiqa/20260819-pc-d1-publication-revision/01-publication-management-m2.png`。
+- generic iPhoneOS build 通过：`tmp/visual-qa/product-v4/publication-revision/iphoneos-generic-build/20260819-pc-d1-publication-revision/report.md`；Bundle ID 为 `com.yxj.dreamjourney.app`，Team 为 `2BTR77V3R8`。
+- Backend `459a5dd` 已部署，schema head 为 `0103`，线上 `/ready`、236 条路由认证、迁移前 `0102` 与迁移后 `0103` 验证备份均通过。
+- 部署时同步重建既有异步 Worker，消除了旧镜像因数据库 head 已到 `0102` 而报 `migrationHeadAhead` 的重启状态；部署后相关 Worker 均为 running。
+
+## 当前交接点
+
+不可变版本修订已关闭。下一项为 ShareGrant 创建、查看和撤销管理；外部发布审批仍单独保留，不用 mock 结果冒充真实用户公开放量。
