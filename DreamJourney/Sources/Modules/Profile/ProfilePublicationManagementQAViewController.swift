@@ -1,9 +1,14 @@
 import UIKit
 
-/// Internal M2 owner view. It exposes only the server-redacted publication
-/// preview and ShareGrant lifecycle, and never routes into private Echo or a
-/// visitor session.
+/// Owner publication management surface. It exposes only server-redacted
+/// previews and ShareGrant lifecycle state, and never routes into private Echo
+/// or a visitor session. Internal UIQA reuses the same view through QA gates.
 final class ProfilePublicationManagementQAViewController: UIViewController {
+
+    private struct PendingWithdrawalConfirmation {
+        let publication: PublicationManagementPublication
+        let accountLease: AccountLease
+    }
 
     private enum LoadState {
         case idle
@@ -22,6 +27,7 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
     private var lifecycleReceipts: [String: PublicationLifecycleReceipt] = [:]
     private var lifecycleFailures: [String: String] = [:]
     private var lifecyclePendingPublicationIDs: Set<String> = []
+    private var pendingWithdrawalConfirmation: PendingWithdrawalConfirmation?
 
     init(
         client: PublicationManagementReaderClient = DreamJourneyBackendClient.shared,
@@ -76,6 +82,7 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
             lifecycleReceipts.removeAll()
             lifecycleFailures.removeAll()
             lifecyclePendingPublicationIDs.removeAll()
+            pendingWithdrawalConfirmation = nil
         }
     }
 
@@ -284,8 +291,10 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
             stack.addArrangedSubview(makePillRow(disclosures))
         }
 
-        if PublicationLifecycleM2QAGate.isEnabled,
-           publication.isWithdrawableInLifecycleQA {
+        if PublicationWithdrawalPresentationPolicy.isAvailable(
+            for: publication,
+            routeAllowed: PublicationManagementM2AccessGate.isLifecycleRouteAllowed
+        ) {
             stack.addArrangedSubview(makeWithdrawalControl(for: publication))
         }
         if let receipt = lifecycleReceipts[publication.publicationID] {
@@ -323,10 +332,56 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
         button.isEnabled = !isPending
         button.accessibilityIdentifier = "profile-publication-management-qa-withdraw"
         button.addAction(UIAction { [weak self] _ in
-            self?.withdraw(publication)
+            self?.requestWithdrawalConfirmation(publication)
         }, for: .touchUpInside)
         stack.addArrangedSubview(button)
         return stack
+    }
+
+    private func requestWithdrawalConfirmation(_ publication: PublicationManagementPublication) {
+        guard PublicationWithdrawalPresentationPolicy.isAvailable(
+            for: publication,
+            routeAllowed: PublicationManagementM2AccessGate.isLifecycleRouteAllowed
+        ), !lifecyclePendingPublicationIDs.contains(publication.publicationID),
+           let accountLease = accountLeaseProvider() else {
+            return
+        }
+
+        pendingWithdrawalConfirmation = PendingWithdrawalConfirmation(
+            publication: publication,
+            accountLease: accountLease
+        )
+
+        let alert = UIAlertController(
+            title: "确认撤回公开内容？",
+            message: "撤回后，现有受邀访问会立即停止。公开索引会继续清理，但已经保存、截图或转发的外部副本无法收回。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel) { [weak self] _ in
+            self?.pendingWithdrawalConfirmation = nil
+        })
+        alert.addAction(UIAlertAction(title: "确认撤回", style: .destructive) { [weak self] _ in
+            self?.completePendingWithdrawalConfirmation()
+        })
+        present(alert, animated: true)
+    }
+
+    private func completePendingWithdrawalConfirmation() {
+        guard let pendingWithdrawalConfirmation else { return }
+        self.pendingWithdrawalConfirmation = nil
+        withdrawConfirmed(
+            pendingWithdrawalConfirmation.publication,
+            accountLease: pendingWithdrawalConfirmation.accountLease
+        )
+    }
+
+    func confirmPendingWithdrawalForUIQA() {
+        guard PublicationLifecycleM2QAGate.isEnabled,
+              pendingWithdrawalConfirmation != nil else {
+            return
+        }
+        presentedViewController?.dismiss(animated: false)
+        completePendingWithdrawalConfirmation()
     }
 
     private func makeLifecycleReceipt(_ receipt: PublicationLifecycleReceipt) -> UIView {
@@ -340,10 +395,14 @@ final class ProfilePublicationManagementQAViewController: UIViewController {
         return label
     }
 
-    private func withdraw(_ publication: PublicationManagementPublication) {
-        guard PublicationLifecycleM2QAGate.isEnabled,
-              !lifecyclePendingPublicationIDs.contains(publication.publicationID),
-              let accountLease = accountLeaseProvider() else {
+    private func withdrawConfirmed(
+        _ publication: PublicationManagementPublication,
+        accountLease: AccountLease
+    ) {
+        guard PublicationWithdrawalPresentationPolicy.isAvailable(
+            for: publication,
+            routeAllowed: PublicationManagementM2AccessGate.isLifecycleRouteAllowed
+        ), !lifecyclePendingPublicationIDs.contains(publication.publicationID) else {
             return
         }
 

@@ -151,10 +151,19 @@ struct PublicationManagementPublication: Equatable {
         return value
     }
 
-    var isWithdrawableInLifecycleQA: Bool {
+    var isWithdrawable: Bool {
         publicationState == "confirmed"
             && projectionState == "active"
             && lifecycleAuthorityEpoch != nil
+    }
+}
+
+enum PublicationWithdrawalPresentationPolicy {
+    static func isAvailable(
+        for publication: PublicationManagementPublication,
+        routeAllowed: Bool
+    ) -> Bool {
+        routeAllowed && publication.isWithdrawable
     }
 }
 
@@ -976,19 +985,19 @@ protocol PublicationLifecycleClient {
 final class PublicationLifecycleUseCase {
     private let client: PublicationLifecycleClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
-    private let isQAGateEnabled: () -> Bool
+    private let isRouteAllowed: () -> Bool
     private var pendingCommandIDs: [String: UUID] = [:]
 
     init(
         client: PublicationLifecycleClient,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
-        isQAGateEnabled: @escaping () -> Bool = {
+        isRouteAllowed: @escaping () -> Bool = {
             PublicationManagementM2AccessGate.isLifecycleRouteAllowed
         }
     ) {
         self.client = client
         self.accountLeaseRuntime = accountLeaseRuntime
-        self.isQAGateEnabled = isQAGateEnabled
+        self.isRouteAllowed = isRouteAllowed
     }
 
     func withdraw(
@@ -996,7 +1005,7 @@ final class PublicationLifecycleUseCase {
         accountLease: AccountLease,
         completion: @escaping (Result<PublicationLifecycleReceipt, Error>) -> Void
     ) {
-        guard isQAGateEnabled() else {
+        guard isRouteAllowed() else {
             completion(.failure(PublicationLifecycleAccessError.disabled))
             return
         }

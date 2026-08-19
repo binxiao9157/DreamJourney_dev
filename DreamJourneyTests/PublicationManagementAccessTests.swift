@@ -160,6 +160,37 @@ final class PublicationManagementAccessTests: XCTestCase {
 }
 
 final class PublicationLifecycleAccessTests: XCTestCase {
+    func testWithdrawalPresentationRequiresOrdinaryLifecycleRouteAndWithdrawableState() throws {
+        let withdrawable = try makeWithdrawablePublication()
+
+        XCTAssertTrue(PublicationWithdrawalPresentationPolicy.isAvailable(
+            for: withdrawable,
+            routeAllowed: true
+        ))
+        XCTAssertFalse(PublicationWithdrawalPresentationPolicy.isAvailable(
+            for: withdrawable,
+            routeAllowed: false
+        ))
+
+        let missingAuthority = try XCTUnwrap(PublicationManagementPublication(json: [
+            "publicationId": UUID().uuidString.lowercased(),
+            "publicationVersionId": UUID().uuidString.lowercased(),
+            "publicationState": "confirmed",
+            "projectionState": "active",
+            "preview": [
+                "title": "院子里的雨声",
+                "body": "这是已确认的公开预览。",
+            ],
+            "requiresSecondConfirmation": false,
+            "thirdPartyReviewRequired": false,
+            "aiDisclosureRequired": true,
+        ]))
+        XCTAssertFalse(PublicationWithdrawalPresentationPolicy.isAvailable(
+            for: missingAuthority,
+            routeAllowed: true
+        ))
+    }
+
     func testWithdrawReusesInMemoryCommandAfterAmbiguousFailure() throws {
         let runtime = makeRuntime(subjectID: "owner-a", vaultID: "vault-a", generation: 4)
         let lease = try XCTUnwrap(runtime.capture(forSubjectId: "owner-a"))
@@ -172,7 +203,7 @@ final class PublicationLifecycleAccessTests: XCTestCase {
         let useCase = PublicationLifecycleUseCase(
             client: client,
             accountLeaseRuntime: runtime,
-            isQAGateEnabled: { true }
+            isRouteAllowed: { true }
         )
 
         let first = expectation(description: "ambiguous failure")
@@ -210,7 +241,7 @@ final class PublicationLifecycleAccessTests: XCTestCase {
         let useCase = PublicationLifecycleUseCase(
             client: client,
             accountLeaseRuntime: runtime,
-            isQAGateEnabled: { false }
+            isRouteAllowed: { false }
         )
 
         let expectation = expectation(description: "disabled")

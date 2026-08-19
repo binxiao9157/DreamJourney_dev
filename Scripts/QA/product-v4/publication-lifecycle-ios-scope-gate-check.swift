@@ -49,9 +49,11 @@ require(
 require(
     managementAccess.contains("final class PublicationLifecycleUseCase")
         && managementAccess.contains("pendingCommandIDs")
+        && managementAccess.contains("PublicationWithdrawalPresentationPolicy")
+        && managementAccess.contains("routeAllowed: Bool")
         && managementAccess.contains("accountLeaseRuntime.validate(accountLease, at: .request)")
         && managementAccess.contains("accountLeaseRuntime.validate(accountLease, at: .commit)"),
-    "lifecycle use case must remain lease-bound and retry idempotent in memory"
+    "ordinary withdrawal presentation and lifecycle use case must remain route-, lease-, and retry-bound"
 )
 require(
     backendClient.contains("/v2/internal/publication-lifecycle/vaults/")
@@ -74,12 +76,15 @@ require(
     "visitor reads must clear in-memory scope on withdrawal/access revocation"
 )
 require(
-    managementView.contains("PublicationLifecycleM2QAGate.isEnabled")
+    managementView.contains("PublicationManagementM2AccessGate.isLifecycleRouteAllowed")
+        && managementView.contains("PublicationWithdrawalPresentationPolicy.isAvailable")
+        && managementView.contains("UIAlertController(")
+        && managementView.contains("撤回后，现有受邀访问会立即停止")
         && managementView.contains("profile-publication-management-qa-withdraw")
         && managementView.contains("profile-publication-management-qa-withdraw-receipt")
         && managementView.contains("stack.accessibilityValue = \"\\(grant.state):\\(grant.useRemaining)\"")
         && managementView.contains("访问阻断已完成；公开索引清理待处理"),
-    "withdrawal control and receipt must be visible only inside the QA shell"
+    "ordinary withdrawal must require the server-managed route, explicit confirmation, and a visible receipt"
 )
 require(
     appDelegate.contains("case .publicationLifecycleM2Smoke")

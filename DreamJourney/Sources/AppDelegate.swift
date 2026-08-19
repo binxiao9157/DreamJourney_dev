@@ -1915,43 +1915,63 @@ private extension AppDelegate {
         withdrawButton.sendActions(for: .touchUpInside)
         DispatchQueue.main.async { [weak self, weak shell, weak fixtureClient] in
             guard let self, let shell, let fixtureClient else { return }
-            let receiptRendered = self.containsUIQAAccessibilityIdentifier(
-                "profile-publication-management-qa-withdraw-receipt",
-                in: shell.view
-            )
-            let grantRevokedRendered = self.firstUIQAView(
-                withAccessibilityIdentifier: "profile-publication-management-qa-grant-row",
-                in: shell.view
-            )?.accessibilityValue == "revoked:0"
-            let completed = managementGateEnabled
-                && visitorGateEnabled
-                && lifecycleGateEnabled
-                && featureFlagDefaultOff
-                && profileEntryVisible
-                && receiptRendered
-                && grantRevokedRendered
-                && fixtureClient.withdrawalObserved
-                && fixtureClient.publicationState == "withdrawn"
-                && fixtureClient.projectionState == "withdrawn"
-            self.writePublicationLifecycleM2SmokeResult(
-                completed: completed,
-                managementGateEnabled: managementGateEnabled,
-                visitorGateEnabled: visitorGateEnabled,
-                lifecycleGateEnabled: lifecycleGateEnabled,
-                featureFlagDefaultOff: featureFlagDefaultOff,
-                profileEntryVisible: profileEntryVisible,
-                withdrawButtonRendered: true,
-                receiptRendered: receiptRendered,
-                grantRevokedRendered: grantRevokedRendered,
-                fixtureWithdrawalObserved: fixtureClient.withdrawalObserved,
-                failureReason: completed ? nil : "publicationLifecycleM2SurfaceMismatch"
-            )
-            print(
-                "[UI_QA] PublicationLifecycleM2Smoke completed " +
-                    "lifecycleGateEnabled=\(lifecycleGateEnabled) " +
-                    "receiptRendered=\(receiptRendered) " +
-                    "grantRevokedRendered=\(grantRevokedRendered)"
-            )
+            guard shell.presentedViewController is UIAlertController else {
+                self.writePublicationLifecycleM2SmokeResult(
+                    completed: false,
+                    managementGateEnabled: managementGateEnabled,
+                    visitorGateEnabled: visitorGateEnabled,
+                    lifecycleGateEnabled: lifecycleGateEnabled,
+                    featureFlagDefaultOff: featureFlagDefaultOff,
+                    profileEntryVisible: profileEntryVisible,
+                    withdrawButtonRendered: true,
+                    receiptRendered: false,
+                    grantRevokedRendered: false,
+                    fixtureWithdrawalObserved: fixtureClient.withdrawalObserved,
+                    failureReason: "withdrawConfirmationUnavailable"
+                )
+                return
+            }
+            shell.confirmPendingWithdrawalForUIQA()
+            DispatchQueue.main.async { [weak self, weak shell, weak fixtureClient] in
+                guard let self, let shell, let fixtureClient else { return }
+                let receiptRendered = self.containsUIQAAccessibilityIdentifier(
+                    "profile-publication-management-qa-withdraw-receipt",
+                    in: shell.view
+                )
+                let grantRevokedRendered = self.firstUIQAView(
+                    withAccessibilityIdentifier: "profile-publication-management-qa-grant-row",
+                    in: shell.view
+                )?.accessibilityValue == "revoked:0"
+                let completed = managementGateEnabled
+                    && visitorGateEnabled
+                    && lifecycleGateEnabled
+                    && featureFlagDefaultOff
+                    && profileEntryVisible
+                    && receiptRendered
+                    && grantRevokedRendered
+                    && fixtureClient.withdrawalObserved
+                    && fixtureClient.publicationState == "withdrawn"
+                    && fixtureClient.projectionState == "withdrawn"
+                self.writePublicationLifecycleM2SmokeResult(
+                    completed: completed,
+                    managementGateEnabled: managementGateEnabled,
+                    visitorGateEnabled: visitorGateEnabled,
+                    lifecycleGateEnabled: lifecycleGateEnabled,
+                    featureFlagDefaultOff: featureFlagDefaultOff,
+                    profileEntryVisible: profileEntryVisible,
+                    withdrawButtonRendered: true,
+                    receiptRendered: receiptRendered,
+                    grantRevokedRendered: grantRevokedRendered,
+                    fixtureWithdrawalObserved: fixtureClient.withdrawalObserved,
+                    failureReason: completed ? nil : "publicationLifecycleM2SurfaceMismatch"
+                )
+                print(
+                    "[UI_QA] PublicationLifecycleM2Smoke completed " +
+                        "lifecycleGateEnabled=\(lifecycleGateEnabled) " +
+                        "receiptRendered=\(receiptRendered) " +
+                        "grantRevokedRendered=\(grantRevokedRendered)"
+                )
+            }
         }
     }
 
