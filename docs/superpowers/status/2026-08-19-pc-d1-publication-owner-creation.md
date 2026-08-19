@@ -1,4 +1,4 @@
-# PC-D1 Publication Owner 创建与撤回子闭环状态
+# PC-D1 Publication Owner 创建、撤回与版本审计子闭环状态
 
 日期：2026-08-19
 状态：`INTERNAL_READY`
@@ -25,7 +25,7 @@ Work Item：`PC-D1`
 
 PC-D1 不能标记为完整完成，剩余任务按顺序为：
 
-1. PublicationVersion 版本审计和从既有版本创建新 Draft/Version 的修改链路。
+1. 从既有 PublicationVersion 创建新 Draft/Version 的修改链路。
 2. ShareGrant 创建、查看和撤销管理。
 3. 发布与 Visitor 的法律、安全、数据地域和真实流量审批。
 
@@ -50,4 +50,23 @@ iOS `fb8f615d` 已把现有 lifecycle 合同从 QA-only 展示推进到普通 Ow
 
 ## 下一交接点
 
-继续 PC-D1 的 PublicationVersion 版本审计和基于既有发布创建新 Draft/Version。不得原地修改不可变版本；ShareGrant 管理在该子闭环后推进，不修改已对齐的三 Tab 或全屏 Echo 视觉。
+继续 PC-D1 的基于既有发布创建新 Draft/Version。不得原地修改不可变版本；ShareGrant 管理在该子闭环后推进，不修改已对齐的三 Tab 或全屏 Echo 视觉。
+
+## 版本审计子闭环补充
+
+Backend `9092957` 与 iOS `29464d7d` 已完成 Owner PublicationVersion 审计：
+
+1. 新增 ordinary/internal Owner-only `GET .../publications/{publicationId}/versions`，按版本号倒序返回不可变公开快照。
+2. 返回内容仅含公开标题、公开正文、AI 披露、快照 hash、确认时间和 Projection 状态；不含 private memory/source、Grant 凭据或 Visitor 身份。
+3. Postgres 查询同时校验 vault、owner subject 和 authority epoch；跨 Owner 请求失败关闭。
+4. iOS 使用 schema-checked typed model、AccountLease request/commit fence 和普通发布管理入口，不持久化版本审计结果，也不将其注入 Echo。
+5. UIQA 自动点击“查看版本记录”，并验证当前版本及公开快照实际渲染。
+
+验证：
+
+- 后端 38 项 Publication/route-auth 定向测试通过，部署态路由清单为 234。
+- 部署态临时 PostgreSQL smoke 通过 Owner 版本审计、跨 Owner 隔离、Visitor CAS、撤权和 Projection block。
+- iOS 11 项 Publication 定向 XCTest、publication shell static gate 和 `git diff --check` 通过。
+- UIQA：`tmp/visual-qa/product-v4/publication-version-audit/uiqa/20260819-pc-d1-version-audit/`。
+- generic iPhoneOS build：`tmp/visual-qa/product-v4/publication-version-audit/iphoneos-generic-build/20260819-pc-d1-version-audit/report.md`。
+- production readiness、schema head `0102`、路由认证和服务重建验证通过。

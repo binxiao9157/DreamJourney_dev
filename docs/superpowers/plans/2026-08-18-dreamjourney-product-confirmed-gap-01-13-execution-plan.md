@@ -27,7 +27,7 @@
 | 当前执行项 | 1 | PC-D1：Publication Owner App 闭环 |
 | 后续待执行 | 3 | PC-D1 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：PC-D1 创建与撤回子闭环 iOS 为 `fb8f615d`，Backend 和服务器均为 `5153db2`，migration head 为 `0102`。后端 PublicationDraft 已支持有序多条 MemoryVersion 与 item 级公开标题、正文、快照 hash 和披露字段；iOS 普通 Owner 已可完成多选创建、公开正文编辑、预览、隐私/AI 披露、二次确认和带风险说明的撤回。撤回复用普通 Owner route、AccountLease、authority epoch 和幂等回执，账户切换后的旧确认失败关闭。部署态 PostgreSQL 已验证 Draft 创建、确认、Owner 隔离和 232 条路由认证。PC-D1 仍为 `IN_PROGRESS`：下一交接点是 PublicationVersion 版本审计和基于既有版本创建新 Draft/Version，随后补 ShareGrant 管理；真实短信 Provider、APNs 真机到达、腾讯 COS、内容安全扫描器、真实视觉 Provider 和发布/Visitor 外部审批分别保留为外部 Gate。
+当前代码与部署交接：PC-D1 创建、撤回和版本审计子闭环 iOS 为 `29464d7d`，Backend 和服务器均为 `9092957`，migration head 为 `0102`。后端 PublicationDraft 已支持有序多条 MemoryVersion 与 item 级公开标题、正文、快照 hash 和披露字段；普通 Owner 已可完成多选创建、公开正文编辑、预览、隐私/AI 披露、二次确认、带风险说明的撤回，并可读取按版本倒序排列的不可变公开快照。版本审计使用 ordinary Owner route、AccountLease 和服务端权限校验，不返回 private memory/source、Grant 凭据或 Visitor 身份。部署态 PostgreSQL 已验证 Draft 创建、确认、版本审计、Owner 隔离、Visitor 生命周期和 234 条路由认证。PC-D1 仍为 `IN_PROGRESS`：下一交接点是基于当前 PublicationVersion 创建新 Draft，二次确认后原子生成递增且不可变的新 PublicationVersion/PublicProjection，随后补 ShareGrant 管理；真实短信 Provider、APNs 真机到达、腾讯 COS、内容安全扫描器、真实视觉 Provider 和发布/Visitor 外部审批分别保留为外部 Gate。
 
 每轮只需读取：
 
@@ -537,7 +537,7 @@ iOS：更新页面范围说明、下载、预览、系统分享、文件保护�
 
 关联：GAP-09、PUB-001。
 
-状态：`IN_PROGRESS`（2026-08-19）。Backend `5153db2` 和 migration `0102` 已完成有序多条 Draft/Version 合同并部署；iOS `f40d13c2/7b2620a4` 已完成 typed client、普通 Owner 多选创建、公开正文编辑、预览、披露和二次确认，`fb8f615d` 完成普通 Owner 撤回二次确认、失败关闭和回执展示。定向 XCTest、静态 Gate、模拟器 UIQA、generic iPhoneOS build、部署态 PostgreSQL smoke 和 232 条路由认证均通过。剩余顺序固定为：版本审计、新 Draft/Version 修改链路、ShareGrant 管理及外部发布审批。详细证据见 `docs/superpowers/status/2026-08-19-pc-d1-publication-owner-creation.md`。
+状态：`IN_PROGRESS`（2026-08-19）。Backend `9092957` 和 migration `0102` 已完成有序多条 Draft/Version 合同、Owner-only 不可变版本审计并部署；iOS `f40d13c2/7b2620a4` 已完成 typed client、普通 Owner 多选创建、公开正文编辑、预览、披露和二次确认，`fb8f615d` 完成普通 Owner 撤回二次确认、失败关闭和回执展示，`29464d7d` 完成版本审计 typed consumer、AccountLease 隔离、普通发布管理入口和 UIQA。定向 XCTest、静态 Gate、模拟器 UIQA、generic iPhoneOS build、部署态 PostgreSQL smoke 和 234 条路由认证均通过。剩余顺序固定为：基于当前版本创建新 Draft/Version、ShareGrant 管理及外部发布审批。详细证据见 `docs/superpowers/status/2026-08-19-pc-d1-publication-owner-creation.md`。
 
 后端：
 
