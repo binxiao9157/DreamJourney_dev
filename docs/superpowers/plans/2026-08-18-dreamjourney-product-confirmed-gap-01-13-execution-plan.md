@@ -3,7 +3,7 @@
 日期：2026-08-18
 状态：`IN_PROGRESS`
 日常开发入口：`CANONICAL_EXECUTION_PLAN`
-执行控制版本：V1.13
+执行控制版本：V1.14
 
 ## 0. 目标和基线
 
@@ -22,12 +22,12 @@
 
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
-| `COMPLETE` | 12 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2、PC-B3 |
+| `COMPLETE` | 13 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2、PC-B3、PC-C2 |
 | `WAITING_EXTERNAL_CONFIGURATION` | 2 | PC-A0：真实短信 Provider 待配置；PC-C1：代码与默认关闭部署完成，真实私有对象存储、内容安全扫描器和视觉 Provider 待配置 |
-| 当前执行项 | 1 | PC-C2：正式记忆 Markdown 导出 |
-| 后续待执行 | 4 | PC-C2 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
+| 当前执行项 | 1 | PC-D1：Publication Owner App 闭环 |
+| 后续待执行 | 3 | PC-D1 之后至 PC-E2，严格按第 12.1 节顺序和 Gate 推进 |
 
-当前代码与部署交接：PC-C1 iOS 为 `0c49b98d`，Backend 和服务器均为 `f936181`，migration head 为 `0100`。TXT/PDF/DOCX/Markdown 已完成上传、隔离解析、来源片段、Candidate 人工确认、正式 Memory、Search Projection、Context、撤权与删除的部署态 PostgreSQL E2E。图片 Provider Adapter 已支持兼容 OCR 文本和严格的 `owner-truth-image-understanding-v1` 合同；描述、OCR 和人物/时间/地点线索写入私有 Source，线索经本体与 hash 校验后只能生成 `inferred`、单条人工确认 Candidate，合同异常或元数据篡改时失败关闭。服务器未配置真实视觉 Provider，当前继续返回不可用状态而不伪造分析结果。执行交接点进入 PC-C2 正式记忆 Markdown 导出；真实短信 Provider、APNs 真机到达、腾讯 COS、内容安全扫描器和真实视觉 Provider 分别保留为外部 Gate。
+当前代码与部署交接：PC-C2 iOS 为 `cc1b3174`，Backend 和服务器均为 `6e21f30`，migration head 为 `0101`。正式记忆导出只读取当前已确认 MemoryVersion，生成带确定性文件名、MIME 和 SHA-256 的 Markdown；Source、Candidate、历史正文、媒体、凭据和内部审计不进入文件。iOS 通过服务端策略展示独立入口，支持状态恢复、取消/重试、受保护临时文件、预览、系统分享和分享/账户生命周期清理；完整账户导出入口保持关闭。部署态 PostgreSQL 已验证 Owner 隔离、current-only 内容范围、hash、取消和 232 条路由认证。执行交接点进入 PC-D1 Publication Owner App 闭环；真实短信 Provider、APNs 真机到达、腾讯 COS、内容安全扫描器、真实视觉 Provider 和发布/Visitor 外部审批分别保留为外部 Gate。
 
 每轮只需读取：
 
@@ -521,11 +521,15 @@ iOS：更新页面范围说明、下载、预览、系统分享、文件保护�
 
 完成定义：用户得到可读 Markdown，客户端没有完整账户导出入口；延期的运维导出不被旧 ZIP Job 误标为完成。
 
+状态：`COMPLETE`（2026-08-19）。Backend `a3051d3` 实现 ExportJob、Owner-only API、current-only Renderer 和 migration `0101`，`99bece9/6e21f30` 收敛部署态 MemoryVersion/DecisionReceipt smoke；`6e21f30` 已部署到 production-postgres。iOS `cc1b3174` 实现 typed client、个人页范围披露、状态恢复、取消/重试、文件保护、预览、分享和临时文件清理。后端 122 个定向合同测试、iOS 2 个定向 XCTest、静态 Gate、arm64 模拟器构建、线上 `/ready`、正式记忆导出 PostgreSQL smoke 和 232 条路由认证 smoke 均通过。完整记录见 `docs/superpowers/status/2026-08-19-pc-c2-formal-memory-markdown-export.md`。当前连续执行交接点为 `PC-D1`。
+
 ### Gate C
 
 - 图片/文档解析和 Candidate handoff 至少完成非真机/部署态闭环，Markdown 可解析。
 - Markdown 内容范围与 MIME、文件名和 iOS 分享一致。
 - 外部图片/文档能力未配置时只阻断相应类型，不伪造成功；音频/视频普通流量保持关闭。
+
+状态：`COMPLETE_WITH_EXTERNAL_GATES`（2026-08-19）。PC-C1 的可配置类型按 runtime fail-closed，PC-C2 的正式记忆 Markdown 已完成代码、部署和非真机验证；真实对象存储、内容安全扫描和视觉 Provider 质量仍作为 PC-C1 外部生产 Gate 单独保留，不阻断 PC-D1 代码开发。
 
 ## 7. Phase D：发布与 Visitor
 
