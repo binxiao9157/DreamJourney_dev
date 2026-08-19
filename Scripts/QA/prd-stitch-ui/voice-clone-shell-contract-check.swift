@@ -44,11 +44,11 @@ for required in [
     "voiceCloneCapability",
     "title: \"音色复刻\"",
     "feature: .voiceCloneShell",
-    "stage: .hiddenReady(",
-    "V4 Closed Pilot 暂不公开音色复刻",
+    "stage: .publicReady(",
+    "已登录用户按服务端授权与音色供应商状态使用。",
     "isVoiceCloneVisible(",
 ] {
-    assertContains(readiness, required, "profile readiness should define the hidden voice clone capability \(required)")
+    assertContains(readiness, required, "profile readiness should define the runtime-gated public voice clone capability \(required)")
 }
 
 for required in [
@@ -144,7 +144,8 @@ for required in [
     "onProfileAccepted",
     "VoiceCloneService.shared.disableVoiceProfileRemote",
     "VoiceCloneService.shared.deleteVoiceProfileRemote",
-    "VoiceCloneService.shared.preferredVoiceCloneProfile(from: profiles, preferredProfileId: currentProfileId)",
+    "VoiceCloneService.shared.preferredVoiceCloneProfile(",
+    "from: inventory.profiles",
     "profile-voice-clone-shell",
 ] {
     assertContains(shell, required, "voice clone shell should render the QA feature surface \(required)")

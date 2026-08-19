@@ -2008,6 +2008,7 @@ final class VoiceCloneService {
     ///   - authorizationConfirmed: 用户已主动确认本人授权
     ///   - retryingProfile: 失败态的既有 profile；仅通过显式 retry generation 重试，绝不生成新 profile ID
     ///   - onProfileAccepted: 后端接收 pending/ready profile 后的即时回调，用于 UI 回显 voiceProfileId
+    ///   - onCreationQuotaUpdated: 新建受理后返回的服务端累计创建配额；训练重试不会触发
     ///   - completion: 结果回调
     func trainVoice(audioURL: URL,
                     speakerId: String? = nil,
@@ -2016,6 +2017,7 @@ final class VoiceCloneService {
                     sampleAuthorization: VoiceCloneSampleAuthorizationContract,
                     retryingProfile: VoiceCloneProfileSnapshot? = nil,
                     onProfileAccepted: ((VoiceCloneProfileSnapshot) -> Void)? = nil,
+                    onCreationQuotaUpdated: ((VoiceCloneCreationQuotaContract) -> Void)? = nil,
                     completion: @escaping (Result<String, VoiceCloneError>) -> Void) {
 
         guard authorizationConfirmed else {
@@ -2092,7 +2094,7 @@ final class VoiceCloneService {
             accountLease: accountLease
         )
 
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "userId": accountLease.subjectId,
             "voiceProfileId": finalSpeakerId,
             "sampleStatus": VoiceCloneSampleStatus.pending.rawValue,
@@ -2112,6 +2114,9 @@ final class VoiceCloneService {
             "language": language,
             "privacyMetadata": ["scope": "generationAllowed"],
         ]
+        if retryRequest == nil {
+            payload["commandId"] = "voice-create-\(trainingOperation.id.uuidString.lowercased())"
+        }
 
         let handleSubmission: (Result<VoiceCloneProfileContract, Error>) -> Void = { [weak self] result in
             guard let self,
@@ -2180,9 +2185,17 @@ final class VoiceCloneService {
             )
         } else {
             DDLogInfo("[VoiceClone] 通过后端提交音色训练: \(finalSpeakerId), scope=\(target.personaScope), digitalHumanId=\(target.digitalHumanId), 音频大小: \(audioData.count) bytes")
-            DreamJourneyBackendClient.shared.saveVoiceCloneProfile(
+            DreamJourneyBackendClient.shared.createVoiceCloneProfile(
                 payload: payload,
-                completion: handleSubmission
+                completion: { result in
+                    switch result {
+                    case .success(let creationResult):
+                        onCreationQuotaUpdated?(creationResult.creationQuota)
+                        handleSubmission(.success(creationResult.profile))
+                    case .failure(let error):
+                        handleSubmission(.failure(error))
+                    }
+                }
             )
         }
     }

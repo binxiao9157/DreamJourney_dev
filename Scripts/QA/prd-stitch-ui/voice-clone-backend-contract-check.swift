@@ -207,7 +207,8 @@ for required in [
 for required in [
     "backendContractEndpoint",
     "/voice/profiles",
-    "DreamJourneyBackendClient.shared.saveVoiceCloneProfile",
+    "DreamJourneyBackendClient.shared.createVoiceCloneProfile",
+    "onCreationQuotaUpdated?(creationResult.creationQuota)",
     "DreamJourneyBackendClient.shared.refreshVoiceCloneProfile",
     "DreamJourneyBackendClient.shared.acceptVoiceCloneQuality",
 ] {

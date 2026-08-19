@@ -11,6 +11,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     }
 
     private var snapshot: VoiceCloneProfileSnapshot
+    private var creationQuota: VoiceCloneCreationQuotaContract?
     private var voiceCloneRuntimeCapability = VoiceCloneRuntimeCapability.localFallback(isBackendConfigured: false)
     private let accountLeaseRuntime = AccountLeaseRuntime.shared
     private let scrollView = UIScrollView()
@@ -23,6 +24,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
     private weak var voiceAvailabilityLabel: UILabel?
     private weak var synthesisStatusValueLabel: UILabel?
     private weak var authorizationHintLabel: UILabel?
+    private weak var creationQuotaValueLabel: UILabel?
     private weak var feedbackLabel: UILabel?
     private weak var submitButton: UIButton?
     private weak var previewButton: UIButton?
@@ -60,6 +62,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         setupLayout()
         renderSnapshot(snapshot, feedback: "先确认授权，再选择本人音频样本提交训练。")
         loadVoiceCloneRuntimeCapability()
+        reloadBackendSnapshot(feedback: "音色状态与创建次数已同步。")
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -266,6 +269,19 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         stack.addArrangedSubview(makeSectionTitle("授权与样本"))
         stack.addArrangedSubview(makeBody("只使用你主动选择的音频样本训练音色。训练、查询、合成、禁用和删除都由后端代理处理。"))
 
+        let authorizationScopeRow = makeInfoRow(
+            title: "授权范围",
+            value: "仅限本人声音与本人确认",
+            accessibilityIdentifier: "profileVoiceCloneAuthorizationScopeValue"
+        )
+        let creationQuotaRow = makeInfoRow(
+            title: "创建次数",
+            value: voiceCreationQuotaText(),
+            accessibilityIdentifier: "profileVoiceCloneCreationQuotaValue"
+        ) { [weak self] label in
+            self?.creationQuotaValueLabel = label
+        }
+
         let authorizationRow = UIStackView()
         authorizationRow.axis = .horizontal
         authorizationRow.alignment = .center
@@ -291,6 +307,8 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         authorizationHint.accessibilityIdentifier = "profileVoiceCloneAuthorizationHint"
         authorizationHintLabel = authorizationHint
 
+        stack.addArrangedSubview(authorizationScopeRow)
+        stack.addArrangedSubview(creationQuotaRow)
         stack.addArrangedSubview(authorizationRow)
         stack.addArrangedSubview(authorizationHint)
 
@@ -380,6 +398,10 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         }
         guard authorizationSwitch.isOn else {
             feedbackLabel?.text = "请先确认本人授权。"
+            return
+        }
+        guard canSubmitVoiceTraining else {
+            feedbackLabel?.text = voiceTrainingAdmissionHint()
             return
         }
 
@@ -694,6 +716,12 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
                     guard self.validateViewOperation(at: .ui) else { return }
                     self.applySnapshot(snapshot, feedback: "后端已接收声音样本，训练中；可稍后刷新状态。")
                 }
+            },
+            onCreationQuotaUpdated: { [weak self] quota in
+                DispatchQueue.main.async {
+                    guard let self, self.validateViewOperation(at: .ui) else { return }
+                    self.applyCreationQuota(quota)
+                }
             }
         ) { [weak self] result in
             guard let self, self.validateViewOperation(at: .runtime) else { return }
@@ -802,14 +830,18 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             return
         }
 
-        DreamJourneyBackendClient.shared.fetchVoiceCloneProfiles(userId: accountLease.subjectId) { [weak self] result in
+        DreamJourneyBackendClient.shared.fetchVoiceCloneProfileInventory(userId: accountLease.subjectId) { [weak self] result in
             guard let self, self.validateViewOperation(at: .runtime) else { return }
             DispatchQueue.main.async {
                 guard self.validateViewOperation(at: .ui) else { return }
                 switch result {
-                case .success(let profiles):
+                case .success(let inventory):
+                    self.applyCreationQuota(inventory.creationQuota)
                     let currentProfileId = self.snapshot.voiceProfileId
-                    let selectedProfile = VoiceCloneService.shared.preferredVoiceCloneProfile(from: profiles, preferredProfileId: currentProfileId)
+                    let selectedProfile = VoiceCloneService.shared.preferredVoiceCloneProfile(
+                        from: inventory.profiles,
+                        preferredProfileId: currentProfileId
+                    )
                     if let selectedProfile {
                         self.applySnapshot(VoiceCloneProfileSnapshot(backendContract: selectedProfile), feedback: feedback)
                     } else {
@@ -874,6 +906,13 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
         updateActionAvailability()
     }
 
+    private func applyCreationQuota(_ quota: VoiceCloneCreationQuotaContract) {
+        creationQuota = quota
+        creationQuotaValueLabel?.text = voiceCreationQuotaText()
+        authorizationHintLabel?.text = voiceTrainingAdmissionHint()
+        updateActionAvailability()
+    }
+
     private func setBusyFeedback(_ text: String) {
         isBusy = true
         feedbackLabel?.text = text
@@ -897,12 +936,34 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
 
     private var canSubmitVoiceTraining: Bool {
         guard voiceCloneRuntimeCapability.canTrain else { return false }
-        return snapshot.sampleStatus != .failed || snapshot.canRetryTraining
+        if snapshot.canRetryTraining {
+            return true
+        }
+        guard snapshot.sampleStatus != .failed,
+              let creationQuota else {
+            return false
+        }
+        return !creationQuota.limitReached
+    }
+
+    private func voiceCreationQuotaText() -> String {
+        guard let creationQuota else {
+            return "正在读取"
+        }
+        return "已创建 \(creationQuota.creationCount)/\(creationQuota.creationLimit)，剩余 \(creationQuota.remainingCount) 次"
     }
 
     private func voiceTrainingAdmissionHint() -> String {
         guard authorizationSwitch.isOn else {
             return "确认授权后才能提交声音样本。"
+        }
+        if !snapshot.canRetryTraining {
+            guard let creationQuota else {
+                return "正在读取服务端创建次数，请稍候。"
+            }
+            guard !creationQuota.limitReached else {
+                return "已达到累计 5 次创建上限；删除或撤销音色不会返还次数。"
+            }
         }
         guard voiceCloneRuntimeCapability.canTrain else {
             switch voiceCloneRuntimeCapability.trainingAdmissionReason {
@@ -943,6 +1004,7 @@ final class ProfileVoiceCloneShellViewController: UIViewController, UIDocumentPi
             && !isBusy
             && authorizationSwitch.isOn
             && canSubmitVoiceTraining
+        submitButton?.isHidden = creationQuota?.limitReached == true && !snapshot.canRetryTraining
         previewButton?.isEnabled = hasValidLease && !isBusy && canPreviewVoice
         acceptQualityButton?.isEnabled = hasValidLease && !isBusy && canAcceptVoiceQuality
         refreshButton?.isEnabled = hasValidLease

@@ -791,8 +791,9 @@ for guard in \
   voice-clone-runtime-fault-injection-smoke-check.swift \
   voice-clone-stale-ready-state-check.swift \
   voice-clone-status-feedback-check.swift \
-  voice-clone-runtime-capability-check.swift \
-  voice-clone-backend-contract-check.swift \
+	  voice-clone-runtime-capability-check.swift \
+	  voice-clone-creation-quota-check.swift \
+	  voice-clone-backend-contract-check.swift \
   digital-human-voice-clone-combo-gate-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift

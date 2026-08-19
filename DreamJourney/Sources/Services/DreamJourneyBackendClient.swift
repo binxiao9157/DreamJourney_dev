@@ -3015,6 +3015,85 @@ struct VoiceCloneSampleAuthorizationContract {
     }
 }
 
+struct VoiceCloneCreationQuotaContract: Equatable {
+    static let currentSchemaVersion = "voice-profile-creation-quota-v1"
+
+    let schemaVersion: String
+    let subjectScope: String
+    let creationLimit: Int
+    let creationCount: Int
+    let remainingCount: Int
+    let limitReached: Bool
+    let deletionRefundsCreation: Bool
+
+    init?(json: [String: Any]?) {
+        guard let json,
+              let schemaVersion = json["schemaVersion"] as? String,
+              schemaVersion == Self.currentSchemaVersion,
+              let subjectScope = json["subjectScope"] as? String,
+              subjectScope == "authenticatedVoiceSubject",
+              let creationLimit = Self.intValue(json["creationLimit"]),
+              creationLimit == 5,
+              let creationCount = Self.intValue(json["creationCount"]),
+              creationCount >= 0,
+              let remainingCount = Self.intValue(json["remainingCount"]),
+              remainingCount == max(0, creationLimit - creationCount),
+              let limitReached = json["limitReached"] as? Bool,
+              limitReached == (creationCount >= creationLimit),
+              let deletionRefundsCreation = json["deletionRefundsCreation"] as? Bool,
+              deletionRefundsCreation == false else {
+            return nil
+        }
+        self.schemaVersion = schemaVersion
+        self.subjectScope = subjectScope
+        self.creationLimit = creationLimit
+        self.creationCount = creationCount
+        self.remainingCount = remainingCount
+        self.limitReached = limitReached
+        self.deletionRefundsCreation = deletionRefundsCreation
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+}
+
+struct VoiceCloneProfileInventoryContract {
+    let profiles: [VoiceCloneProfileContract]
+    let creationQuota: VoiceCloneCreationQuotaContract
+
+    init?(json: [String: Any]) {
+        guard let profileJSONArray = json["profiles"] as? [[String: Any]],
+              let creationQuota = VoiceCloneCreationQuotaContract(
+                json: json["creationQuota"] as? [String: Any]
+              ) else {
+            return nil
+        }
+        self.profiles = profileJSONArray.compactMap(VoiceCloneProfileContract.init(json:))
+        self.creationQuota = creationQuota
+    }
+}
+
+struct VoiceCloneProfileCreationResult {
+    let profile: VoiceCloneProfileContract
+    let creationQuota: VoiceCloneCreationQuotaContract
+
+    init?(json: [String: Any]) {
+        guard let profileJSON = json["profile"] as? [String: Any],
+              let profile = VoiceCloneProfileContract(json: profileJSON),
+              let creationQuota = VoiceCloneCreationQuotaContract(
+                json: json["creationQuota"] as? [String: Any]
+              ) else {
+            return nil
+        }
+        self.profile = profile
+        self.creationQuota = creationQuota
+    }
+}
+
 struct VoiceCloneProfileContract {
     let voiceProfileId: String
     let sampleStatus: VoiceCloneSampleStatus
@@ -6812,6 +6891,15 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         payload: [String: Any],
         completion: @escaping (Result<VoiceCloneProfileContract, Error>) -> Void
     ) {
+        createVoiceCloneProfile(payload: payload) { result in
+            completion(result.map(\.profile))
+        }
+    }
+
+    func createVoiceCloneProfile(
+        payload: [String: Any],
+        completion: @escaping (Result<VoiceCloneProfileCreationResult, Error>) -> Void
+    ) {
         requestJSON(
             path: "/voice/profiles",
             method: .post,
@@ -6820,12 +6908,11 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         ) { result in
             switch result {
             case .success(let object):
-                guard let profileJSON = object["profile"] as? [String: Any],
-                      let profile = VoiceCloneProfileContract(json: profileJSON) else {
+                guard let creationResult = VoiceCloneProfileCreationResult(json: object) else {
                     completion(.failure(ClientError.invalidJSONResponse))
                     return
                 }
-                completion(.success(profile))
+                completion(.success(creationResult))
             case .failure(let error):
                 completion(.failure(error))
             }
@@ -6836,6 +6923,15 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         userId: String,
         completion: @escaping (Result<[VoiceCloneProfileContract], Error>) -> Void
     ) {
+        fetchVoiceCloneProfileInventory(userId: userId) { result in
+            completion(result.map(\.profiles))
+        }
+    }
+
+    func fetchVoiceCloneProfileInventory(
+        userId: String,
+        completion: @escaping (Result<VoiceCloneProfileInventoryContract, Error>) -> Void
+    ) {
         requestJSON(
             path: "/voice/profiles/\(pathComponent(userId))",
             method: .get,
@@ -6845,11 +6941,11 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         ) { result in
             switch result {
             case .success(let object):
-                guard let profileJSONArray = object["profiles"] as? [[String: Any]] else {
+                guard let inventory = VoiceCloneProfileInventoryContract(json: object) else {
                     completion(.failure(ClientError.invalidJSONResponse))
                     return
                 }
-                completion(.success(profileJSONArray.compactMap(VoiceCloneProfileContract.init(json:))))
+                completion(.success(inventory))
             case .failure(let error):
                 completion(.failure(error))
             }
