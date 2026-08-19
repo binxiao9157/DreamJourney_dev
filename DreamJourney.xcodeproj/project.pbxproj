@@ -65,6 +65,7 @@
 		A1A000000000000000000001 /* MemoryArchiveItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000001 /* MemoryArchiveItem.swift */; };
 		A1A000000000000000000002 /* MemoryArchiveRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000002 /* MemoryArchiveRepository.swift */; };
 		A1A000000000000000000003 /* MemoryArchiveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000003 /* MemoryArchiveViewController.swift */; };
+		A1A000000000000000000053 /* OwnerTruthFormalMemoryViewControllers.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000053 /* OwnerTruthFormalMemoryViewControllers.swift */; };
 		A1A000000000000000000004 /* EchoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000004 /* EchoViewModel.swift */; };
 		A1A000000000000000000005 /* EchoViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000005 /* EchoViewController.swift */; };
 		A1A000000000000000000006 /* ProfileCareModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000006 /* ProfileCareModels.swift */; };
@@ -160,6 +161,7 @@
 		D4F000000000000000000006 /* AudioOwnerLeaseCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000107 /* AudioOwnerLeaseCoordinator.swift */; };
 		D5F000000000000000000001 /* OwnerTruthContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000101 /* OwnerTruthContracts.swift */; };
 		D5F000000000000000000002 /* OwnerTruthRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000102 /* OwnerTruthRepository.swift */; };
+		D5F000000000000000000004 /* OwnerTruthFormalMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000104 /* OwnerTruthFormalMemory.swift */; };
 		D5F000000000000000000003 /* OwnerTruthContractsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000103 /* OwnerTruthContractsTests.swift */; };
 		E1AE33CE9FE403E3E6DC1BCF /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ABDBC7F0000C4386BB6B2C5 /* ViewController.swift */; };
 		E6D53A82564EE472B1164972 /* AIRecordingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B8C7B2C35F25BFE0EECF1DC /* AIRecordingViewController.swift */; };
@@ -291,6 +293,7 @@
 		B1B000000000000000000001 /* MemoryArchiveItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveItem.swift; sourceTree = "<group>"; };
 		B1B000000000000000000002 /* MemoryArchiveRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveRepository.swift; sourceTree = "<group>"; };
 		B1B000000000000000000003 /* MemoryArchiveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveViewController.swift; sourceTree = "<group>"; };
+		B1B000000000000000000053 /* OwnerTruthFormalMemoryViewControllers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthFormalMemoryViewControllers.swift; sourceTree = "<group>"; };
 		B1B000000000000000000004 /* EchoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoViewModel.swift; sourceTree = "<group>"; };
 		B1B000000000000000000005 /* EchoViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoViewController.swift; sourceTree = "<group>"; };
 		B1B000000000000000000006 /* ProfileCareModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCareModels.swift; sourceTree = "<group>"; };
@@ -384,6 +387,7 @@
 		D4F000000000000000000107 /* AudioOwnerLeaseCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOwnerLeaseCoordinator.swift; sourceTree = "<group>"; };
 		D5F000000000000000000101 /* OwnerTruthContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthContracts.swift; sourceTree = "<group>"; };
 		D5F000000000000000000102 /* OwnerTruthRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthRepository.swift; sourceTree = "<group>"; };
+		D5F000000000000000000104 /* OwnerTruthFormalMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthFormalMemory.swift; sourceTree = "<group>"; };
 		D5F000000000000000000103 /* OwnerTruthContractsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthContractsTests.swift; sourceTree = "<group>"; };
 		D6AC678D507A1494FFBFDAA0 /* SharedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedModels.swift; sourceTree = "<group>"; };
 		DEB0707389E5BC6A57EAB3BD /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -648,6 +652,7 @@
 				B1B000000000000000000050 /* InAppMessageCenter.swift */,
 				B1B000000000000000000002 /* MemoryArchiveRepository.swift */,
 				B1B000000000000000000003 /* MemoryArchiveViewController.swift */,
+				B1B000000000000000000053 /* OwnerTruthFormalMemoryViewControllers.swift */,
 			);
 			path = Archive;
 			sourceTree = "<group>";
@@ -840,6 +845,7 @@
 			isa = PBXGroup;
 			children = (
 				D5F000000000000000000101 /* OwnerTruthContracts.swift */,
+				D5F000000000000000000104 /* OwnerTruthFormalMemory.swift */,
 				D5F000000000000000000102 /* OwnerTruthRepository.swift */,
 			);
 			path = OwnerTruth;
@@ -1131,6 +1137,7 @@
 				D4F000000000000000000005 /* AudioOwnerLeaseModel.swift in Sources */,
 				D4F000000000000000000006 /* AudioOwnerLeaseCoordinator.swift in Sources */,
 				D5F000000000000000000001 /* OwnerTruthContracts.swift in Sources */,
+				D5F000000000000000000004 /* OwnerTruthFormalMemory.swift in Sources */,
 				D5F000000000000000000002 /* OwnerTruthRepository.swift in Sources */,
 				C7E1B2000000000000000001 /* AccountSessionActor.swift in Sources */,
 				502F2FC9318D2718A929EFD5 /* AppCoordinator.swift in Sources */,
@@ -1233,6 +1240,7 @@
 				A1A000000000000000000039 /* MemoryArchiveMediaReleaseReadiness.swift in Sources */,
 				A1A000000000000000000002 /* MemoryArchiveRepository.swift in Sources */,
 				A1A000000000000000000003 /* MemoryArchiveViewController.swift in Sources */,
+				A1A000000000000000000053 /* OwnerTruthFormalMemoryViewControllers.swift in Sources */,
 				A1A000000000000000000050 /* InAppMessageCenter.swift in Sources */,
 				52B3383F8F4517669DA70A7B /* MemoryDetailViewController.swift in Sources */,
 				FEF405C138F6D1A6B57DD767 /* MemoryEditViewController.swift in Sources */,

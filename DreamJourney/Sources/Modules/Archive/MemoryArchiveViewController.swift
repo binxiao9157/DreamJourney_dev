@@ -843,6 +843,7 @@ final class MemoryArchiveViewController: UIViewController {
     private let analysisPrivacyDisclaimerLabel = PaddingLabel(horizontalInset: 12, verticalInset: 8)
     private let timeLetterReminderButton = UIButton(type: .system)
     private let candidateReviewQAButton = UIButton(type: .system)
+    private let formalMemoryButton = UIButton(type: .system)
     private var isRefreshingFromBackend = false
     private var isRefreshingTimeLetterMailbox = false
     private var activeKindFilter: ArchiveKindFilter?
@@ -1090,6 +1091,7 @@ final class MemoryArchiveViewController: UIViewController {
         configureRemoteSyncCaptionLabel()
         configureTimeLetterReminderButton()
         configureCandidateReviewQAButton()
+        configureFormalMemoryButton()
         configureArchiveFilterButton()
         let bookEntry = makeBookEntryCard()
         let materialsHeader = makeMaterialsHeader()
@@ -1100,6 +1102,7 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.addArrangedSubview(remoteSyncCaptionLabel)
         mainStack.addArrangedSubview(timeLetterReminderButton)
         mainStack.addArrangedSubview(candidateReviewQAButton)
+        mainStack.addArrangedSubview(formalMemoryButton)
         mainStack.addArrangedSubview(bookEntry)
         mainStack.addArrangedSubview(materialsHeader)
         mainStack.addArrangedSubview(primaryCTA)
@@ -1112,6 +1115,7 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.setCustomSpacing(8, after: remoteSyncCaptionLabel)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: timeLetterReminderButton)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: candidateReviewQAButton)
+        mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: formalMemoryButton)
         mainStack.setCustomSpacing(22, after: bookEntry)
         mainStack.setCustomSpacing(10, after: materialsHeader)
         mainStack.setCustomSpacing(18, after: primaryCTA)
@@ -1155,6 +1159,7 @@ final class MemoryArchiveViewController: UIViewController {
         reloadFeatureCards(summary: summary)
         updateTimeLetterReminderButton()
         updateCandidateReviewQAButton()
+        updateFormalMemoryButton()
         updateArchiveFilterButton()
         refreshOwnerTruthMediaTaskStatus()
         reloadArchiveList()
@@ -1803,6 +1808,33 @@ final class MemoryArchiveViewController: UIViewController {
         )
     }
 
+    private func configureFormalMemoryButton() {
+        var configuration = UIButton.Configuration.tinted()
+        configuration.title = "正式记忆"
+        configuration.subtitle = "查看已确认内容与历史版本"
+        configuration.image = UIImage(systemName: "books.vertical")
+        configuration.imagePadding = 10
+        configuration.baseForegroundColor = DJDesignTokens.Color.accentDeep
+        configuration.baseBackgroundColor = DJDesignTokens.Color.surfaceContainer
+        configuration.contentInsets = NSDirectionalEdgeInsets(
+            top: 12,
+            leading: 14,
+            bottom: 12,
+            trailing: 14
+        )
+        formalMemoryButton.configuration = configuration
+        formalMemoryButton.contentHorizontalAlignment = .leading
+        formalMemoryButton.layer.cornerRadius = 8
+        formalMemoryButton.accessibilityIdentifier = "archive-owner-truth-formal-memory"
+        formalMemoryButton.accessibilityLabel = "正式记忆，查看已确认内容与历史版本"
+        formalMemoryButton.isHidden = true
+        formalMemoryButton.addTarget(
+            self,
+            action: #selector(ownerTruthFormalMemoryTapped),
+            for: .touchUpInside
+        )
+    }
+
     private func configureArchiveFilterButton() {
         archiveFilterButton.titleLabel?.font = DJDesignTokens.Font.label(12)
         archiveFilterButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
@@ -1888,6 +1920,12 @@ final class MemoryArchiveViewController: UIViewController {
         candidateReviewQAButton.accessibilityLabel = isVisible ? title : nil
         candidateReviewQAButton.isHidden = !isVisible
         candidateReviewQAButton.isUserInteractionEnabled = isVisible
+    }
+
+    private func updateFormalMemoryButton() {
+        let isVisible = isSelfAutobiographyMode && isOwnerTruthCandidateReviewEnabled
+        formalMemoryButton.isHidden = !isVisible
+        formalMemoryButton.isUserInteractionEnabled = isVisible
     }
 
     private func reloadFeatureCards(summary: (total: Int, photos: Int, audio: Int, text: Int)) {
@@ -3552,6 +3590,17 @@ final class MemoryArchiveViewController: UIViewController {
         }
         navigationController?.pushViewController(
             OwnerTruthCandidateInboxViewController(accountLease: accountLease),
+            animated: true
+        )
+    }
+
+    @objc private func ownerTruthFormalMemoryTapped() {
+        guard isSelfAutobiographyMode && isOwnerTruthCandidateReviewEnabled,
+              let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
+            return
+        }
+        navigationController?.pushViewController(
+            OwnerTruthFormalMemoryListViewController(accountLease: accountLease),
             animated: true
         )
     }

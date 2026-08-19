@@ -9,6 +9,72 @@ import XCTest
 #endif
 
 final class OwnerTruthContractsTests: XCTestCase {
+    func testFormalMemoryDetailKeepsCurrentPlusThreeHistory() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-formal"))
+        let memoryID = "00000000-0000-0000-0000-000000000101"
+        func version(_ number: Int, current: Bool) -> [String: Any] {
+            [
+                "versionId": String(format: "00000000-0000-0000-0000-%012d", number),
+                "versionNumber": number,
+                "status": current ? "current" : "superseded",
+                "decision": number == 1 ? "accepted" : "corrected",
+                "contentSchemaVersion": "owner-truth-v2",
+                "contentHash": String(repeating: String(number), count: 64),
+                "content": ["summary": "第\(number)版记忆"],
+                "sourceCount": number,
+                "createdAt": "2026-08-1\(number)T10:00:00Z",
+            ]
+        }
+        let versions = [version(4, current: true), version(3, current: false), version(2, current: false), version(1, current: false)]
+        let current = versions[0]
+        let detail = try OwnerTruthFormalMemoryDetail(
+            backendJSONObject: [
+                "schemaVersion": "owner-truth-formal-memory-detail-v1",
+                "vaultId": vaultID.rawValue,
+                "memory": [
+                    "memoryId": memoryID,
+                    "memoryKind": "experience",
+                    "perspectiveType": "firstPerson",
+                    "epistemicStatus": "recalled",
+                    "sensitivity": "standard",
+                    "currentVersion": current,
+                    "historyLimit": 3,
+                    "historyTruncated": true,
+                    "versions": versions,
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+
+        XCTAssertEqual(detail.versions.map(\.versionNumber), [4, 3, 2, 1])
+        XCTAssertEqual(detail.memory.currentVersion.summary, "第4版记忆")
+        XCTAssertTrue(detail.historyTruncated)
+    }
+
+    func testFormalMemoryRevisionRequiresSecondConfirmation() throws {
+        let content: [String: OwnerTruthJSONValue] = ["summary": .string("修订后的正式记忆")]
+        XCTAssertThrowsError(
+            try OwnerTruthFormalMemoryRevisionCommand(
+                expectedVersion: 1,
+                expectedContentHash: String(repeating: "a", count: 64),
+                expectedContentSchemaVersion: "owner-truth-v2",
+                contentSchemaVersion: "owner-truth-v2",
+                correctedContent: content,
+                secondConfirmation: false
+            )
+        )
+        let confirmed = try OwnerTruthFormalMemoryRevisionCommand(
+            expectedVersion: 1,
+            expectedContentHash: String(repeating: "a", count: 64),
+            expectedContentSchemaVersion: "owner-truth-v2",
+            contentSchemaVersion: "owner-truth-v2",
+            correctedContent: content,
+            secondConfirmation: true
+        )
+        XCTAssertEqual(confirmed.backendPayload["secondConfirmation"] as? Bool, true)
+        XCTAssertNil(confirmed.backendPayload["ownerSubjectId"])
+    }
+
     func testOntologyKeepsMemoryKindAndPerspectiveOrthogonal() {
         XCTAssertEqual(
             Set(OwnerTruthMemoryKind.allCases),

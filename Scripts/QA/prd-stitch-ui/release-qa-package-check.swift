@@ -265,6 +265,8 @@ assertContains(releaseRegression, "run-release-policy-cache-model-smoke.sh", "re
 assertContains(releaseRegression, "release-policy-cache-contract-check.swift", "release regression should always guard release-policy cache wiring")
 assertContains(releaseRegression, "v4-non-device-release-lanes-check.py", "release regression should guard the V4 unified non-device runner")
 assertContains(releaseRegression, "publication-default-off-shell-gate-check.swift", "release regression should guard the M2 default-off shell")
+assertContains(releaseRegression, "formal-memory-library-check.swift", "release regression should guard the formal-memory library contract")
+assertContains(releaseRegression, "RUN_OWNER_TRUTH_FORMAL_MEMORY_UIQA_SMOKE", "release regression should expose the formal-memory UIQA gate")
 assertContains(releaseRegression, "RUN_RELEASE_POLICY_CACHE_DEPLOYED_SMOKE", "release regression should expose deployed release-policy cache G2 evidence")
 assertContains(releaseRegression, "run-feature-gate-evaluator-model-smoke.sh", "release regression should always model captured route/request policy behavior")
 assertContains(releaseRegression, "captured-feature-policy-gate-check.swift", "release regression should guard cross-repository captured policy wiring")
@@ -557,6 +559,9 @@ let requiredScripts = [
     "Scripts/QA/prd-stitch-ui/installable-simulator-uiqa-bundle-guard-check.swift",
     "Scripts/QA/prd-stitch-ui/run-installable-simulator-uiqa.sh",
     "Scripts/QA/prd-stitch-ui/run-archive-to-echo-smoke.sh",
+    "Scripts/QA/prd-stitch-ui/formal-memory-library-check.swift",
+    "Scripts/QA/prd-stitch-ui/run-formal-memory-library-check.sh",
+    "Scripts/QA/prd-stitch-ui/run-owner-truth-formal-memory-uiqa-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-echo-delayed-reply-notification-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-echo-trace-export-uiqa-smoke.sh",
     "Scripts/QA/prd-stitch-ui/run-echo-trace-evidence-package-export-smoke.sh",

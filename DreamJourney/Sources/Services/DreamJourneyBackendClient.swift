@@ -742,6 +742,20 @@ final class FeatureGateService {
            pathComponents[3] == "candidates" {
             return .ownerTruthCandidateReview
         }
+        if pathComponents.count >= 4,
+           pathComponents[0] == "v2",
+           pathComponents[1] == "vaults",
+           pathComponents[3] == "memories" {
+            if method == .get,
+               pathComponents.count == 4 || pathComponents.count == 5 {
+                return .ownerTruthCandidateReview
+            }
+            if method == .post,
+               pathComponents.count == 6,
+               pathComponents[5] == "revisions" {
+                return .ownerTruthCandidateReview
+            }
+        }
         if method == .post,
            pathComponents.count == 6,
            pathComponents[0] == "v2",
@@ -7604,6 +7618,149 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         }
     }
 
+    func fetchOwnerTruthFormalMemories(
+        vaultID: OwnerTruthVaultID,
+        query: OwnerTruthFormalMemoryQuery,
+        completion: @escaping (Result<OwnerTruthFormalMemoryPage, Error>) -> Void
+    ) {
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane
+            ? nil
+            : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                    reason: decision?.reason ?? "releasePolicyDisabled"
+                )))
+            }
+            return
+        }
+        var parameters = ["limit=\(query.limit)"]
+        if let kind = query.kind {
+            parameters.append("kind=\(queryComponent(kind.rawValue))")
+        }
+        if let text = query.text {
+            parameters.append("query=\(queryComponent(text))")
+        }
+        parameters.append(contentsOf: query.facets.map {
+            "facet=\(queryComponent("\($0.name):\($0.value)"))"
+        })
+        if let cursor = query.cursor {
+            parameters.append("cursor=\(queryComponent(cursor))")
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/memories?"
+            + parameters.joined(separator: "&")
+        requestJSON(
+            path: path,
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            featureDecision: decision,
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthFormalMemoryPage(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func fetchOwnerTruthFormalMemory(
+        vaultID: OwnerTruthVaultID,
+        memoryID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthFormalMemoryDetail, Error>) -> Void
+    ) {
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane
+            ? nil
+            : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                    reason: decision?.reason ?? "releasePolicyDisabled"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/memories/\(pathComponent(memoryID.rawValue.uuidString))",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            featureDecision: decision,
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthFormalMemoryDetail(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func reviseOwnerTruthFormalMemory(
+        vaultID: OwnerTruthVaultID,
+        memoryID: OwnerTruthRecordID,
+        command: OwnerTruthFormalMemoryRevisionCommand,
+        completion: @escaping (Result<OwnerTruthFormalMemoryRevisionReceipt, Error>) -> Void
+    ) {
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane
+            ? nil
+            : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                    reason: decision?.reason ?? "releasePolicyDisabled"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/memories/\(pathComponent(memoryID.rawValue.uuidString))/revisions",
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            featureDecision: decision,
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthFormalMemoryRevisionReceipt(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID,
+                        expectedMemoryID: memoryID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func reviewOwnerTruthCandidate(
         vaultID: OwnerTruthVaultID,
         candidateID: OwnerTruthRecordID,
@@ -12997,6 +13154,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
 }
 
 extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}
+extension DreamJourneyBackendClient: OwnerTruthFormalMemoryClient {}
 extension DreamJourneyBackendClient: OwnerTruthTextSourceCaptureClient {}
 extension DreamJourneyBackendClient: OwnerTruthMediaCaptureClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateReviewClient {}

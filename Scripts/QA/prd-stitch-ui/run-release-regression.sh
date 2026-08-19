@@ -80,6 +80,7 @@ RUN_ARCHIVE_HIDDEN_SHELL_SMOKE="${RUN_ARCHIVE_HIDDEN_SHELL_SMOKE:-0}"
 RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE="${RUN_ARCHIVE_HIDDEN_MEDIA_COMBO_GATE:-0}"
 RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE="${RUN_ARCHIVE_MEDIA_ECHO_CONTEXT_SMOKE:-0}"
 RUN_OWNER_TRUTH_CANDIDATE_PROPOSAL_REVIEW_READY_SMOKE="${RUN_OWNER_TRUTH_CANDIDATE_PROPOSAL_REVIEW_READY_SMOKE:-0}"
+RUN_OWNER_TRUTH_FORMAL_MEMORY_UIQA_SMOKE="${RUN_OWNER_TRUTH_FORMAL_MEMORY_UIQA_SMOKE:-0}"
 RUN_PUBLICATION_LIFECYCLE_M2_UIQA_SMOKE="${RUN_PUBLICATION_LIFECYCLE_M2_UIQA_SMOKE:-0}"
 RUN_P0_PROFILE_CARE_REGRESSION="${RUN_P0_PROFILE_CARE_REGRESSION:-0}"
 RUN_PROFILE_CARE_STATE_SMOKE="${RUN_PROFILE_CARE_STATE_SMOKE:-0}"
@@ -206,6 +207,7 @@ Run ID: \`$RUN_ID\`
 - P0 Archive -> Echo regression gate: \`$RUN_P0_ARCHIVE_ECHO_REGRESSION\`
 - Archive -> Echo simulator smoke: \`$RUN_SIMULATOR_SMOKE\`
 - Owner Truth review-ready focused confirmation UIQA smoke: \`$RUN_OWNER_TRUTH_CANDIDATE_PROPOSAL_REVIEW_READY_SMOKE\`
+- Owner Truth formal-memory list/detail UIQA smoke: \`$RUN_OWNER_TRUTH_FORMAL_MEMORY_UIQA_SMOKE\`
 - Publication lifecycle M2 UIQA smoke: \`$RUN_PUBLICATION_LIFECYCLE_M2_UIQA_SMOKE\`
 - Echo delayed reply notification smoke: \`$RUN_ECHO_DELAYED_REPLY_NOTIFICATION_SMOKE\`
 - Echo trace export UIQA smoke: \`$RUN_ECHO_TRACE_EXPORT_UIQA_SMOKE\`
@@ -792,9 +794,10 @@ for guard in \
   voice-clone-stale-ready-state-check.swift \
   voice-clone-status-feedback-check.swift \
 	  voice-clone-runtime-capability-check.swift \
-	  voice-clone-creation-quota-check.swift \
+  voice-clone-creation-quota-check.swift \
 	  voice-clone-backend-contract-check.swift \
   digital-human-voice-clone-combo-gate-check.swift \
+  formal-memory-library-check.swift \
   final-visual-qa-package-check.swift \
   release-qa-package-check.swift
 do
@@ -1484,6 +1487,17 @@ else
   mkdir -p "$OUTPUT_DIR/owner-truth-candidate-proposal-review-ready-smoke/$RUN_ID"
   echo "Skipped by RUN_OWNER_TRUTH_CANDIDATE_PROPOSAL_REVIEW_READY_SMOKE=0" \
     > "$OUTPUT_DIR/owner-truth-candidate-proposal-review-ready-smoke/$RUN_ID/skipped.txt"
+fi
+
+if [[ "$RUN_OWNER_TRUTH_FORMAL_MEMORY_UIQA_SMOKE" == "1" ]]; then
+  RUN_ID="$RUN_ID" \
+  OUTPUT_ROOT="$OUTPUT_DIR/owner-truth-formal-memory-uiqa-smoke" \
+  DERIVED_DATA_PATH="$OUTPUT_DIR/DerivedDataOwnerTruthFormalMemoryUIQASmoke" \
+  "$SCRIPT_DIR/run-owner-truth-formal-memory-uiqa-smoke.sh"
+else
+  mkdir -p "$OUTPUT_DIR/owner-truth-formal-memory-uiqa-smoke/$RUN_ID"
+  echo "Skipped by RUN_OWNER_TRUTH_FORMAL_MEMORY_UIQA_SMOKE=0" \
+    > "$OUTPUT_DIR/owner-truth-formal-memory-uiqa-smoke/$RUN_ID/skipped.txt"
 fi
 
 if [[ "$RUN_PUBLICATION_LIFECYCLE_M2_UIQA_SMOKE" == "1" ]]; then
