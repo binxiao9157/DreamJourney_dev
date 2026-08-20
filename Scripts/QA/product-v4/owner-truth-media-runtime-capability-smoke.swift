@@ -7,13 +7,17 @@ enum OwnerTruthMediaRuntimeCapabilitySmoke {
             capability: RuntimeCapabilityID.ownerTruthMediaStorage.rawValue,
             releaseVisible: true,
             enabled: true,
-            providerReady: true
+            providerReady: true,
+            externalVerified: true,
+            provider: "cos"
         )
         let processing = snapshot(
             capability: RuntimeCapabilityID.ownerTruthMediaProcessing.rawValue,
             releaseVisible: true,
             enabled: true,
-            providerReady: true
+            providerReady: true,
+            externalVerified: true,
+            provider: "builtInDocumentProcessor"
         )
         let ready = OwnerTruthMediaRuntimeCapability(
             json: runtimeJSON,
@@ -31,7 +35,9 @@ enum OwnerTruthMediaRuntimeCapabilitySmoke {
             capability: RuntimeCapabilityID.ownerTruthMediaStorage.rawValue,
             releaseVisible: false,
             enabled: true,
-            providerReady: true
+            providerReady: true,
+            externalVerified: true,
+            provider: "cos"
         )
         let hidden = OwnerTruthMediaRuntimeCapability(
             json: runtimeJSON,
@@ -42,11 +48,55 @@ enum OwnerTruthMediaRuntimeCapabilitySmoke {
         )
         require(!hidden.canOpenCapture, "release-hidden capture must fail closed")
 
+        let unverifiedStorage = snapshot(
+            capability: RuntimeCapabilityID.ownerTruthMediaStorage.rawValue,
+            releaseVisible: true,
+            enabled: true,
+            providerReady: true,
+            externalVerified: false,
+            provider: "cos"
+        )
+        let internalOnly = OwnerTruthMediaRuntimeCapability(
+            json: runtimeJSON,
+            snapshots: [
+                unverifiedStorage.capability: unverifiedStorage,
+                processing.capability: processing,
+            ]
+        )
+        require(!internalOnly.canOpenCapture, "ordinary users require external verification")
+        require(
+            internalOnly.canOpenCaptureWithInternalEntitlement,
+            "an independent internal entitlement may use an operational provider"
+        )
+
+        let filesystemStorage = snapshot(
+            capability: RuntimeCapabilityID.ownerTruthMediaStorage.rawValue,
+            releaseVisible: true,
+            enabled: true,
+            providerReady: true,
+            externalVerified: true,
+            provider: "filesystem"
+        )
+        let filesystem = OwnerTruthMediaRuntimeCapability(
+            json: runtimeJSON,
+            snapshots: [
+                filesystemStorage.capability: filesystemStorage,
+                processing.capability: processing,
+            ]
+        )
+        require(!filesystem.canOpenCapture, "filesystem must never be a public media provider")
+        require(
+            filesystem.canOpenCaptureWithInternalEntitlement,
+            "filesystem remains available only behind an internal entitlement"
+        )
+
         let unavailableStorage = snapshot(
             capability: RuntimeCapabilityID.ownerTruthMediaStorage.rawValue,
             releaseVisible: true,
             enabled: false,
-            providerReady: false
+            providerReady: false,
+            externalVerified: false,
+            provider: "cos"
         )
         let unavailable = OwnerTruthMediaRuntimeCapability(
             json: runtimeJSON,
@@ -73,7 +123,9 @@ enum OwnerTruthMediaRuntimeCapabilitySmoke {
         capability: String,
         releaseVisible: Bool,
         enabled: Bool,
-        providerReady: Bool
+        providerReady: Bool,
+        externalVerified: Bool,
+        provider: String
     ) -> RuntimeCapabilitySnapshot {
         guard let decoded = RuntimeCapabilitySnapshot(json: [
             "schemaVersion": 1,
@@ -82,17 +134,19 @@ enum OwnerTruthMediaRuntimeCapabilitySmoke {
             "enabled": enabled,
             "providerReady": providerReady,
             "releaseVisible": releaseVisible,
-            "externalVerified": false,
-            "provider": "fixture",
+            "externalVerified": externalVerified,
+            "provider": provider,
             "fallbackMode": "captureDisabled",
-            "reason": enabled ? "externalEvidenceMissing" : "providerConfigurationIncomplete",
+            "reason": enabled
+                ? (externalVerified ? "ready" : "externalEvidenceMissing")
+                : "providerConfigurationIncomplete",
             "providerKind": "privateObjectStorage",
             "operation": "writeReadDeleteWithSafetyScan",
             "dataClass": "ownerPrivateMedia",
             "region": "fixture",
             "retentionPolicyVersion": "ownerTruthMediaRetention-v1",
             "configurationStatus": enabled ? "valid" : "incomplete",
-            "evidenceStatus": "notVerified",
+            "evidenceStatus": externalVerified ? "externallyVerified" : "notVerified",
         ]) else {
             fatalError("fixture runtime snapshot failed to decode")
         }

@@ -23,7 +23,7 @@
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
 | `COMPLETE` | 18 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2、PC-B3、PC-B4、PC-C2、PC-D1、PC-D2、PC-E1、PC-E2 代码闭环 |
-| `WAITING_EXTERNAL_CONFIGURATION` | 2 | PC-A0：真实短信 Provider 待配置；PC-C1：代码与默认关闭部署完成，真实私有对象存储、内容安全扫描器和视觉 Provider 待配置 |
+| `WAITING_EXTERNAL_CONFIGURATION` | 2 | PC-A0：真实短信 Provider 待配置；PC-C1：代码、public/internal 准入隔离与默认关闭完成，真实私有对象存储、内容安全扫描器和视觉 Provider 待配置 |
 | 当前执行项 | 0 | 当前确认版功能代码队列已完成 |
 | 后续待执行 | 0 | 只保留 PC-A0/PC-C1 外部配置、Production Approval 和真机验收 Gate |
 
@@ -501,7 +501,7 @@ iOS：
 
 完成定义：每种已开放媒体都能生成有来源的 Candidate，或如实显示不可用/可重试。
 
-状态：`WAITING_EXTERNAL_CONFIGURATION`（2026-08-19）。代码与默认关闭部署闭环已完成：后端和 iOS 统一支持 TXT/PDF/DOCX/Markdown，Markdown 使用 `text/markdown` 合同并在隔离子进程中解析；图片使用服务端 Provider Adapter，兼容旧 OCR 文本，并为结构化描述、OCR、人物、时间和地点定义严格 V1 合同。结构化线索只生成 `inferred`、单条人工确认 Candidate；Provider 不能直接写 Memory，合同异常、hash 篡改、空结果和失败均不生成 Candidate。Backend `f936181` 已部署，`/ready` 和 runtime capability smoke 通过，线上图像 Provider 保持 `disabled`。部署态 Markdown PostgreSQL E2E 已覆盖上传到删除；真实腾讯 COS、内容安全扫描器、视觉 Provider 质量和删除回执仍为外部 Gate。执行交接点进入 PC-C2；证据见 `docs/superpowers/status/2026-08-19-pc-c1-markdown-document-processing.md` 与 `docs/superpowers/status/2026-08-19-pc-c1-image-understanding-provider-adapter.md`。
+状态：`WAITING_EXTERNAL_CONFIGURATION`（2026-08-20）。代码与默认关闭闭环已完成：后端和 iOS 统一支持 TXT/PDF/DOCX/Markdown，Markdown 使用 `text/markdown` 合同并在隔离子进程中解析；图片使用服务端 Provider Adapter，兼容旧 OCR 文本，并为结构化描述、OCR、人物、时间和地点定义严格 V1 合同。结构化线索只生成 `inferred`、单条人工确认 Candidate；Provider 不能直接写 Memory，合同异常、hash 篡改、空结果和失败均不生成 Candidate。媒体准入已进一步拆成 public/internal 两条独立路径：普通 authenticated Owner 必须同时满足非 filesystem Provider、`externalVerified=true` 和有效证据时间；filesystem 只可由 `closedPilotAdultSelf + 独立媒体 Feature entitlement` 使用；真实 OTP 只改变认证结果，不参与媒体授权。iOS 普通入口和每次请求均消费 `isPubliclyAvailable`，内部 entitlement 才允许 operational-only readiness。`run-backend-pc-c1-media-admission-gate.sh` 与 iOS runtime smoke 已覆盖该边界。真实腾讯 COS、内容安全扫描器、媒体 Worker、视觉 Provider 质量和删除回执仍为外部 Gate；不能把本项标记为生产完成。既有处理证据见 `docs/superpowers/status/2026-08-19-pc-c1-markdown-document-processing.md`、`docs/superpowers/status/2026-08-19-pc-c1-image-understanding-provider-adapter.md`，准入决策与实现记录见 `docs/superpowers/status/2026-08-20-product-confirmed-development-status-and-pc-c1-decision.md`。
 
 ### PC-C2 正式记忆 Markdown 导出
 

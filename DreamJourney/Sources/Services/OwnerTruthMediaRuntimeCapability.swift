@@ -22,17 +22,25 @@ struct OwnerTruthMediaRuntimeCapability: Equatable {
     let contractComplete: Bool
 
     /// A client cannot self-enable this path: both the provider and the
-    /// server-issued cohort decision must be ready in the same response.
+    /// server-issued public decision must be ready in the same response.
     var canOpenCapture: Bool {
         contractComplete
-            && captureSnapshot.isProviderEffectAllowed
-            && captureSnapshot.releaseVisible
+            && Self.isPublicCaptureAvailable(captureSnapshot)
     }
 
     var canReceiveProcessingUpdates: Bool {
         contractComplete
-            && processingSnapshot.isProviderEffectAllowed
-            && processingSnapshot.releaseVisible
+            && processingSnapshot.isPubliclyAvailable
+    }
+
+    /// This does not grant access by itself. Callers must also hold the
+    /// server-issued `closedPilotOwnerCore` media entitlement.
+    var canOpenCaptureWithInternalEntitlement: Bool {
+        contractComplete && captureSnapshot.isProviderOperational
+    }
+
+    var canReceiveProcessingUpdatesWithInternalEntitlement: Bool {
+        contractComplete && processingSnapshot.isProviderOperational
     }
 
     var diagnosticSummary: String {
@@ -93,6 +101,56 @@ struct OwnerTruthMediaRuntimeCapability: Equatable {
 
     func supports(kind: String) -> Bool {
         supportedMediaKinds.contains(kind)
+    }
+
+    static func isCaptureAllowed(
+        snapshot: RuntimeCapabilitySnapshot?,
+        releasePolicyReason: String
+    ) -> Bool {
+        guard let snapshot else { return false }
+        if releasePolicyReason == "closedPilotOwnerCore" {
+            return snapshot.isProviderOperational
+        }
+        return isPublicCaptureAvailable(snapshot)
+    }
+
+    static func isProcessingAllowed(
+        snapshot: RuntimeCapabilitySnapshot?,
+        releasePolicyReason: String
+    ) -> Bool {
+        guard let snapshot else { return false }
+        if releasePolicyReason == "closedPilotOwnerCore" {
+            return snapshot.isProviderOperational
+        }
+        return snapshot.isPubliclyAvailable
+    }
+
+    static func admissionFailureReason(
+        snapshot: RuntimeCapabilitySnapshot?,
+        releasePolicyReason: String
+    ) -> String {
+        guard let snapshot else { return "runtimeCapabilityUnavailable" }
+        if releasePolicyReason == "closedPilotOwnerCore" {
+            return snapshot.isProviderOperational
+                ? "ready"
+                : "capabilityUnavailable"
+        }
+        if snapshot.provider == "filesystem" {
+            return "internalEntitlementRequired"
+        }
+        if !snapshot.externalVerified {
+            return "externalVerificationRequired"
+        }
+        if !snapshot.releaseVisible {
+            return "releasePolicyDisabled"
+        }
+        return snapshot.isProviderOperational ? "ready" : "capabilityUnavailable"
+    }
+
+    private static func isPublicCaptureAvailable(
+        _ snapshot: RuntimeCapabilitySnapshot
+    ) -> Bool {
+        snapshot.provider != "filesystem" && snapshot.isPubliclyAvailable
     }
 
     private static func intValue(_ value: Any?) -> Int? {

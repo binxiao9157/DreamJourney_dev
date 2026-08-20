@@ -938,9 +938,17 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private var isOwnerTruthMediaCaptureEnabled: Bool {
-        isOwnerTruthTextCaptureEnabled
-            && FeatureGateService.shared
-                .isServerPolicyManagedRouteAllowed(.ownerMediaCaptureV1)
+        let decision = FeatureGateService.shared.captureServerPolicyManagedRoute(
+            .ownerMediaCaptureV1
+        )
+        return isOwnerTruthTextCaptureEnabled
+            && decision.allowed
+            && OwnerTruthMediaRuntimeCapability.isCaptureAllowed(
+                snapshot: RuntimeCapabilitySnapshotStore.shared.snapshot(
+                    for: .ownerTruthMediaStorage
+                ),
+                releasePolicyReason: decision.reason
+            )
     }
 
     private var shouldShowOwnerTruthMediaTaskStatus: Bool {

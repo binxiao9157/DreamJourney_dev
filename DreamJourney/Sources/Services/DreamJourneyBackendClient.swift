@@ -6941,6 +6941,36 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             ?? FeatureGateService.shared.requestServerPolicyManagedDecision(for: feature)
     }
 
+    private func ownerTruthMediaAdmissionDecision(
+        _ decision: FeatureDecision,
+        processing: Bool = false
+    ) -> FeatureDecision {
+        let capabilityID: RuntimeCapabilityID = processing
+            ? .ownerTruthMediaProcessing
+            : .ownerTruthMediaStorage
+        let snapshot = RuntimeCapabilitySnapshotStore.shared.snapshot(for: capabilityID)
+        let allowed = processing
+            ? OwnerTruthMediaRuntimeCapability.isProcessingAllowed(
+                snapshot: snapshot,
+                releasePolicyReason: decision.reason
+            )
+            : OwnerTruthMediaRuntimeCapability.isCaptureAllowed(
+                snapshot: snapshot,
+                releasePolicyReason: decision.reason
+            )
+        guard decision.allowed, allowed else {
+            return decision.deniedForRequest(
+                reason: decision.allowed
+                    ? OwnerTruthMediaRuntimeCapability.admissionFailureReason(
+                        snapshot: snapshot,
+                        releasePolicyReason: decision.reason
+                    )
+                    : decision.reason
+            )
+        }
+        return decision
+    }
+
     private func revalidatedRequestFeatureDecision(_ decision: FeatureDecision) -> FeatureDecision {
         qaFeatureDecisionProvider == nil
             ? FeatureGateService.shared.revalidateServerPolicyManagedRequest(decision)
@@ -8191,7 +8221,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         case .image, .document:
             feature = .ownerMediaCaptureV1
         }
-        let decision = requestFeatureDecision(for: feature)
+        let capturedDecision = requestFeatureDecision(for: feature)
+        let decision = feature == .ownerMediaCaptureV1
+            ? ownerTruthMediaAdmissionDecision(capturedDecision)
+            : capturedDecision
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
@@ -8257,7 +8290,9 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             }
             return
         }
-        let decision = requestFeatureDecision(for: .ownerMediaCaptureV1)
+        let decision = ownerTruthMediaAdmissionDecision(
+            requestFeatureDecision(for: .ownerMediaCaptureV1)
+        )
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
@@ -8344,7 +8379,9 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             }
             return
         }
-        let decision = requestFeatureDecision(for: .ownerMediaCaptureV1)
+        let decision = ownerTruthMediaAdmissionDecision(
+            requestFeatureDecision(for: .ownerMediaCaptureV1)
+        )
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
@@ -8395,7 +8432,9 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             }
             return
         }
-        let decision = requestFeatureDecision(for: .ownerMediaCaptureV1)
+        let decision = ownerTruthMediaAdmissionDecision(
+            requestFeatureDecision(for: .ownerMediaCaptureV1)
+        )
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
@@ -8450,7 +8489,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         let feature: DJFeature = pathSuffix == "/processing-retries"
             ? .ownerMediaProcessingV1
             : .ownerMediaCaptureV1
-        let decision = requestFeatureDecision(for: feature)
+        let decision = ownerTruthMediaAdmissionDecision(
+            requestFeatureDecision(for: feature),
+            processing: feature == .ownerMediaProcessingV1
+        )
         guard decision.allowed else {
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
