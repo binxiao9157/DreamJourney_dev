@@ -6,10 +6,10 @@
 
 ## 1. 审计基线
 
-| 工程 | 分支 | 当前 HEAD | 状态 |
+| 工程 | 分支 | 实现/部署提交 | 状态 |
 |---|---|---|---|
-| iOS | `feature/prd-stitch-ui-adaptation` | `7736a7c0` | 已推送基线；本轮 PC-C1 代码和本状态文档待独立提交，其他既有未跟踪文件不纳入 |
-| Backend | `main` | `06b6340` | 已推送并部署基线；本轮 PC-C1 准入修改待独立提交和部署，migration head 不变 |
+| iOS | `feature/prd-stitch-ui-adaptation` | `e5ca2d60` | PC-C1 客户端准入与 QA 已提交并推送；其他既有未跟踪文件未纳入 |
+| Backend | `main` | `e9a136a` | PC-C1 服务端准入已提交、推送并部署；migration head 保持 `0104` |
 
 日常执行依据：
 
@@ -79,10 +79,10 @@
 
 1. 当前开放候选媒体类型为图片、TXT、PDF、DOCX 和 Markdown；音频、视频保持关闭。
 2. 线上 `ownerTruthMediaStorage` 使用服务器本地 `filesystem`，不是腾讯 COS。
-3. Runtime 当前返回：
+3. 修复部署后 Runtime 当前返回：
    - `enabled=true`
    - `providerReady=true`
-   - `releaseVisible=true`
+   - `releaseVisible=false`
    - `externalVerified=false`
    - `provider=filesystem`
    - `region=serverLocal`
@@ -140,7 +140,14 @@ iOS：
 - iPhoneOS Generic Debug 构建通过，使用本机固化覆盖 `PRODUCT_BUNDLE_IDENTIFIER=com.yxj.dreamjourney.app`、`DEVELOPMENT_TEAM=2BTR77V3R8`；报告位于 `tmp/visual-qa/prd-stitch-ui/iphoneos-generic-build/20260820-pc-c1-media-admission-escalated/report.md`。
 - `git diff --check`：通过。
 
-本轮未推送、未部署。线上仍运行 Backend `06b6340` 的旧准入口径；必须从本轮正式提交部署后再跑线上 smoke，才能确认服务器生效。
+部署态验证：
+
+- iOS `e5ca2d60` 与 Backend `e9a136a` 均已推送。
+- 服务器从 `06b6340` fast-forward 到 `e9a136a`，迁移 `0104` 的 dry-run/apply/verify 均为 `ready`、`pendingVersions=[]`。
+- 迁移前后备份服务均成功，部署目录保持 clean，API/PostgreSQL/Redis 均健康。
+- 公网 readiness smoke 通过：database/schema/auth/incident 均为 ready。
+- 一次性普通 Owner Session 返回 `cohort=authenticatedOwner`；`ownerMediaCaptureV1` 为 `enabled=false`、`releaseVisible=false`、`capabilityReady=false`、`reason=externalVerificationRequired`。
+- 同一线上响应确认 `provider=filesystem`、`providerReady=true`、`externalVerified=false`，旧 `ownerTruthMediaCapture` alias 为 `false`；测试 Session 已立即撤销。
 
 ### 5.6 实施完成前的约束
 
@@ -160,11 +167,10 @@ iOS：
 
 ## 7. 后续推荐顺序
 
-1. 提交并部署 PC-C1 准入修改，线上确认当前 filesystem 返回 `externalVerified=false`、普通 Owner 返回 `externalVerificationRequired`。
-2. 接入真实 OTP Provider，但在 Ownership 进入受控 `enforce` 前不放量；上线 smoke 必须证明媒体仍保持关闭。
-3. 完成 COS、内容扫描、文档 Worker、视觉 Provider 和删除回执；外部 smoke 通过后才写入验证时间并开放对应 public capability。
-4. 补齐 Work Item 证据包和 PC-B4 UIQA 证据归档。
-5. 完成 APNs、Publication/Visitor 审批和最终真机验收。
+1. 接入真实 OTP Provider，但在 Ownership 进入受控 `enforce` 前不放量；上线 smoke 必须继续证明媒体保持关闭。
+2. 完成 COS、内容扫描、文档 Worker、视觉 Provider 和删除回执；外部 smoke 通过后才写入验证时间并开放对应 public capability。
+3. 补齐 Work Item 证据包和 PC-B4 UIQA 证据归档。
+4. 完成 APNs、Publication/Visitor 审批和最终真机验收。
 
 在上述外部与真机 Gate 关闭前，正确状态仍是：
 
