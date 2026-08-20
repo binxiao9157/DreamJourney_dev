@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "dreamjourney-product-confirmed-evidence-v1",
+  "workItem": "PC-A4",
+  "status": "COMPLETE_WITH_EXTERNAL_GATE",
+  "capturedAt": "2026-08-20T01:13:29Z",
+  "commits": {
+    "ios": "e52267f9e74ccc5794c744aae0723d2e6f55d3ec",
+    "backendFeature": "080e9b8a71a9e35c9cc5cda4fb2f6ebe60b1a14f"
+  },
+  "deployment": {
+    "backendRevision": "080e9b8a71a9e35c9cc5cda4fb2f6ebe60b1a14f",
+    "migrationHead": "0097",
+    "readiness": "ready"
+  },
+  "checks": [
+    "voice-profile-creation-quota-postgres-smoke",
+    "voice-profile-creation-concurrency-smoke",
+    "ios-voice-profile-quota-tests",
+    "ios-generic-iphoneos-build",
+    "git-diff-check"
+  ],
+  "externalRemaining": [
+    "adult-identity-and-liveness-provider",
+    "production-voice-provider-receipts",
+    "device-audio-acceptance"
+  ],
+  "sourceReport": "docs/superpowers/status/2026-08-19-pc-a4-voice-profile-creation-quota.md",
+  "rollback": "Disable voice clone creation while preserving cumulative creation counters and accepted profiles.",
+  "containsCredentials": false
+}

@@ -1,9 +1,9 @@
 # DreamJourney 产品确认版 GAP-01 至 GAP-13 执行计划
 
 日期：2026-08-18
-状态：`IN_PROGRESS`
+状态：`FUNCTIONAL_CODE_COMPLETE_WITH_EXTERNAL_AND_DEVICE_GATES`
 日常开发入口：`CANONICAL_EXECUTION_PLAN`
-执行控制版本：V1.15
+执行控制版本：V1.16
 
 ## 0. 目标和基线
 
@@ -18,16 +18,16 @@
 
 ### 0.1 当前执行进度
 
-更新时间：2026-08-19
+更新时间：2026-08-20
 
 | 分类 | 数量 | 当前内容 |
 |---|---:|---|
-| `COMPLETE` | 17 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2、PC-B3、PC-B4、PC-C2、PC-D1、PC-D2、PC-E1 代码闭环 |
+| `COMPLETE` | 18 | 文档基线、PC-00-01、PC-00-02、PC-00-03、PC-A1、PC-A2、PC-A3、PC-A4、PC-A5、PC-B1、PC-B2、PC-B3、PC-B4、PC-C2、PC-D1、PC-D2、PC-E1、PC-E2 代码闭环 |
 | `WAITING_EXTERNAL_CONFIGURATION` | 2 | PC-A0：真实短信 Provider 待配置；PC-C1：代码与默认关闭部署完成，真实私有对象存储、内容安全扫描器和视觉 Provider 待配置 |
-| 当前执行项 | 1 | PC-E2：关闭能力零调用与全量回归 |
-| 后续待执行 | 0 | PC-E2 是当前确认版队列最后一个工程闭环；完成后只保留外部配置和真机验收 Gate |
+| 当前执行项 | 0 | 当前确认版功能代码队列已完成 |
+| 后续待执行 | 0 | 只保留 PC-A0/PC-C1 外部配置、Production Approval 和真机验收 Gate |
 
-当前代码与部署交接：PC-E1 iOS 为 `6a49ae44`，Backend 功能提交为 `0c05acf`，稳定 Feature 部署 smoke 为 `9b43a72`；服务器仓库和 API 镜像均已更新到 `9b43a72`，migration head 保持 `0104`。产品与服务端统一使用 `publication`、`publicationGrantManagement`、`publicationVisitor`；旧 Feature 名只在后端兼容层映射，截止时间为 2026-11-30，不产生第二套权限规则。`releaseStage` 仅作为旧客户端兼容元数据，授权和默认关闭均由稳定 Feature 集合决定。后端策略/发布测试、iOS 27 项定向 XCTest、静态 Gate、模拟器 UIQA、generic iPhoneOS build、部署态 PostgreSQL Visitor smoke、readiness、237 条路由认证和稳定 Feature deployed smoke 均通过。当前连续执行交接点为 PC-E2 关闭能力零调用与全量回归；真实短信 Provider、APNs 真机到达、腾讯 COS、内容安全扫描器和真实视觉 Provider继续分别保留为外部 Gate。
+当前代码与部署交接：PC-E2 iOS QA 提交为 `8cd337f1`，Backend 最终部署提交为 `06b6340`；服务器仓库、API 镜像和四个异步 Worker 均已更新，migration head 保持 `0104`。后端 71 项数字人关闭测试、6 项时光信/延迟回复关闭测试、178 项普通能力定向回归、部署态关闭能力 PostgreSQL smoke、稳定 Feature 与命令策略 smoke 均通过；数字人创建/heartbeat、时光信/延迟回复创建与调度、Provider 投递均为零。iOS 最终静态 Gate 和 generic iPhoneOS build 通过，Bundle ID 为 `com.yxj.dreamjourney.app`。readiness 严格报告代码 `3/3 ready`、外部配置 `0/8 blocked`、真机 `0/6 pending`，因此当前生产结论仍为 `NO-GO`。真实短信 Provider、Ownership enforce、APNs、腾讯 COS、内容安全扫描器、媒体 Worker/视觉 Provider、声音身份与 Provider、Publication/Visitor 审批及真机证据继续作为独立 Gate。
 
 每轮只需读取：
 
@@ -605,6 +605,8 @@ iOS：正式记忆多选、公开正文编辑、隐私/AI 披露、预览、二�
 3. 普通任务通知、Echo、档案、正式记忆、家人、音色、发布和 Visitor 回归通过。
 4. readiness 报告分别反映代码完成、外部配置和真机 Gate，不把缺失证据标为成功。
 
+状态：`COMPLETE_WITH_EXTERNAL_AND_DEVICE_GATES`（2026-08-20）。Backend `06b6340` 已部署，migration head 为 `0104`，API `/ready` 通过；四个旧 Worker 镜像同步重建后均为 `ready/idle`。部署态 smoke 证明 6 个关闭命令全部被拒，数字人 Session 创建/续约、时光信/延迟回复创建与调度、Provider 投递均为零。iOS `8cd337f1` 完成证据类别分离 Gate，generic iPhoneOS build 通过。证据见 `artifacts/product-confirmed/20260820-pc-e2/PC-E2/` 和 `docs/superpowers/status/2026-08-20-pc-e2-product-confirmed-final-regression.md`。
+
 ## 9. 外部配置与真机项
 
 以下不阻止非依赖代码开发，但阻止生产完成声明：
@@ -646,6 +648,8 @@ iOS：正式记忆多选、公开正文编辑、隐私/AI 披露、预览、二�
 7. 所有被 Work Item 引用的 PCQ 均有产品 Owner、日期、最终结论和可访问确认凭证。
 8. 所有新增或变更页面均引用 UI-01 至 UI-08 中的设计依据，并完成对应功能/UI Gate；没有新 Stitch/htmlCode 的页面不得声明最终视觉验收完成。
 9. 每个已完成 Work Item 均有脱敏 `manifest.json`、可复现命令、运行态证据（如适用）和可执行回滚说明。
+
+当前完成判定：功能代码队列已按上述定义收敛；第 6 项明确阻止生产完成声明，因此外部配置和真机证据关闭前，本计划只能标记为 `FUNCTIONAL_CODE_COMPLETE_WITH_EXTERNAL_AND_DEVICE_GATES`，不能标记 `PRODUCTION_COMPLETE`。
 
 ## 12. 产品确认后的连续开发队列
 

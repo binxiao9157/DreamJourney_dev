@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "dreamjourney-product-confirmed-evidence-v1",
+  "workItem": "PC-A3",
+  "status": "COMPLETE",
+  "capturedAt": "2026-08-20T01:13:29Z",
+  "commits": {
+    "ios": "b4caa0b40246b59138d919d9fc2749893c1b2316",
+    "backendFeature": "83240f6e9af54044d4b2d94d12af1228596ca68b"
+  },
+  "deployment": {
+    "migrationHead": "0096",
+    "readiness": "ready"
+  },
+  "checks": [
+    "family-private-context-negative-smoke",
+    "visitor-public-projection-routing-smoke",
+    "ios-family-visitor-routing-tests",
+    "ios-generic-iphoneos-build",
+    "git-diff-check"
+  ],
+  "sourceReport": "docs/superpowers/status/2026-08-19-pc-a3-family-visitor-v4-routing.md",
+  "rollback": "Disable family and publication visitor features; preserve revoked grants and authority epochs.",
+  "containsCredentials": false
+}

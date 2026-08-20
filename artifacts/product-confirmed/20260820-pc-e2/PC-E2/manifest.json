@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "dreamjourney-product-confirmed-evidence-v1",
+  "workItem": "PC-E2",
+  "status": "COMPLETE_WITH_EXTERNAL_AND_DEVICE_GATES",
+  "capturedAt": "2026-08-20T01:13:29Z",
+  "commits": {
+    "ios": "8cd337f19f14beaa6fd2b8ea3e01eae67e9427d9",
+    "backendFeature": "c4b03f22dc958f823a6849f6327f165c6c591798",
+    "backendDeployed": "06b63406cd2afab6d050e886c19942b2f50da908"
+  },
+  "deployment": {
+    "backendRevision": "06b63406cd2afab6d050e886c19942b2f50da908",
+    "migrationHead": "0104",
+    "readiness": "ready",
+    "workers": "ready-idle"
+  },
+  "checks": [
+    "backend-digital-human-closure-tests-71",
+    "backend-time-letter-delayed-reply-closure-tests-6",
+    "backend-focused-regression-tests-178",
+    "backend-closed-capabilities-postgres-smoke",
+    "backend-release-policy-command-deployed-smoke",
+    "backend-stable-feature-deployed-smoke",
+    "backend-worker-readiness",
+    "ios-final-closure-gate",
+    "ios-generic-iphoneos-build",
+    "git-diff-check"
+  ],
+  "results": {
+    "digitalHumanSessionCreated": 0,
+    "digitalHumanHeartbeatAccepted": 0,
+    "timeLetterCreated": 0,
+    "delayedReplyCreated": 0,
+    "scheduledDeliveryCount": 0,
+    "providerDeliveryAttempted": false,
+    "codeGateReady": "3/3",
+    "externalGateReady": "0/8",
+    "deviceGateReady": "0/6",
+    "releaseDecision": "noGo"
+  },
+  "externalRemaining": [
+    "production-otp",
+    "ownership-enforce",
+    "private-object-storage-and-media-processing",
+    "vision-provider",
+    "voice-identity-and-provider",
+    "apns-provider",
+    "publication-visitor-approval"
+  ],
+  "deviceRemaining": [
+    "microphone-and-audio-routing",
+    "foreground-background-recovery",
+    "photo-and-file-import",
+    "apns-arrival",
+    "screenshots-and-logs"
+  ],
+  "deploymentSmoke": "artifacts/product-confirmed/20260820-pc-e2/PC-E2/deployment-smoke.json",
+  "readinessReport": "artifacts/product-confirmed/20260820-pc-e2/PC-E2/readiness-report.json",
+  "buildReport": "artifacts/product-confirmed/20260820-pc-e2/PC-E2/build-report.md",
+  "rollback": "artifacts/product-confirmed/20260820-pc-e2/PC-E2/rollback.md",
+  "containsCredentials": false
+}

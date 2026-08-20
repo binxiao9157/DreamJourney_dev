@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "dreamjourney-product-confirmed-evidence-v1",
+  "workItem": "PC-C2",
+  "status": "COMPLETE",
+  "capturedAt": "2026-08-20T01:13:29Z",
+  "commits": {
+    "ios": "cc1b31743997137cc64771486bfcfc7e0a3de1a4",
+    "backendFeature": "a3051d3",
+    "backendDeployed": "6e21f30f893daabe97c26850791f3eeb1ca8a5fc"
+  },
+  "deployment": {
+    "backendRevision": "6e21f30f893daabe97c26850791f3eeb1ca8a5fc",
+    "migrationHead": "0101",
+    "readiness": "ready"
+  },
+  "checks": [
+    "formal-memory-markdown-export-tests",
+    "formal-memory-markdown-postgres-smoke",
+    "route-authentication-postgres-smoke",
+    "ios-formal-memory-export-tests",
+    "ios-simulator-build",
+    "git-diff-check"
+  ],
+  "sourceReport": "docs/superpowers/status/2026-08-19-pc-c2-formal-memory-markdown-export.md",
+  "rollback": "Disable formalMemoryMarkdown creation while preserving completed export receipts and current memories.",
+  "containsCredentials": false
+}

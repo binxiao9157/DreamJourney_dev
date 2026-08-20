@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "dreamjourney-product-confirmed-evidence-v1",
+  "workItem": "PC-D2",
+  "status": "COMPLETE_WITH_EXTERNAL_GATES",
+  "capturedAt": "2026-08-20T01:13:29Z",
+  "commits": {
+    "ios": "17396b9d8c2af3d62d130d71f0f74a71fb212e57",
+    "backendFeature": "836655d",
+    "backendDeployed": "6d44594363d1a97f6bb26655568e3e4eabbdd789"
+  },
+  "deployment": {
+    "backendRevision": "6d44594363d1a97f6bb26655568e3e4eabbdd789",
+    "migrationHead": "0104",
+    "readiness": "ready"
+  },
+  "checks": [
+    "backend-publication-suite-156",
+    "backend-publication-visitor-postgres-smoke",
+    "backend-route-authentication-237",
+    "ios-publication-tests-24",
+    "ios-publication-visitor-uiqa",
+    "ios-generic-iphoneos-build",
+    "git-diff-check"
+  ],
+  "externalRemaining": [
+    "visitor-legal-security-and-data-region-approval"
+  ],
+  "sourceReport": "docs/superpowers/status/2026-08-19-pc-d2-publication-visitor-product-closure.md",
+  "rollback": "Disable visitor admission and revoke active sessions without restoring private-domain fallback.",
+  "containsCredentials": false
+}

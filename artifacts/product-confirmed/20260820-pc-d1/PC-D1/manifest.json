@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "dreamjourney-product-confirmed-evidence-v1",
+  "workItem": "PC-D1",
+  "status": "COMPLETE_WITH_EXTERNAL_GATES",
+  "capturedAt": "2026-08-20T01:13:29Z",
+  "commits": {
+    "ios": "0464e31a8ec98827c6e2f436b356b3634abd32c2",
+    "backendFeature": "9a6d85befc5598b76d2a60a7789a28c2c9b0041d"
+  },
+  "deployment": {
+    "backendRevision": "9a6d85befc5598b76d2a60a7789a28c2c9b0041d",
+    "migrationHead": "0104",
+    "readiness": "ready"
+  },
+  "checks": [
+    "backend-publication-suite-154",
+    "backend-publication-postgres-smoke",
+    "backend-route-authentication-smoke",
+    "ios-publication-tests-12",
+    "ios-publication-management-uiqa",
+    "ios-generic-iphoneos-build",
+    "git-diff-check"
+  ],
+  "externalRemaining": [
+    "publication-legal-security-and-data-region-approval"
+  ],
+  "sourceReport": "docs/superpowers/status/2026-08-19-pc-d1-publication-owner-creation.md",
+  "rollback": "Disable publication and grant creation; preserve immutable versions, revocations and audit receipts.",
+  "containsCredentials": false
+}

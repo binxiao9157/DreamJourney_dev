@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "dreamjourney-product-confirmed-evidence-v1",
+  "workItem": "PC-C1",
+  "status": "WAITING_EXTERNAL_CONFIGURATION",
+  "capturedAt": "2026-08-20T01:13:29Z",
+  "commits": {
+    "ios": "5a88db2e14cfcc1d46cce2081e23aca3c38a04b1",
+    "backendFeature": "f936181bdc5d41ed3424f62a7333acfa8c88dc39"
+  },
+  "deployment": {
+    "backendRevision": "f936181bdc5d41ed3424f62a7333acfa8c88dc39",
+    "migrationHead": "0100",
+    "readiness": "ready",
+    "imageProvider": "disabled"
+  },
+  "checks": [
+    "backend-owner-truth-media-processing-gate",
+    "backend-markdown-postgres-e2e",
+    "backend-image-understanding-contract-tests",
+    "ios-owner-truth-media-policy-test",
+    "ios-generic-iphoneos-build",
+    "git-diff-check"
+  ],
+  "externalRemaining": [
+    "private-object-storage",
+    "content-safety-scanner",
+    "production-media-worker",
+    "vision-provider-quality-and-deletion-receipt"
+  ],
+  "sourceReports": [
+    "docs/superpowers/status/2026-08-19-pc-c1-markdown-document-processing.md",
+    "docs/superpowers/status/2026-08-19-pc-c1-image-understanding-provider-adapter.md"
+  ],
+  "rollback": "Keep affected media capabilities fail-closed; retain local parser and reviewable Candidate data.",
+  "containsCredentials": false
+}

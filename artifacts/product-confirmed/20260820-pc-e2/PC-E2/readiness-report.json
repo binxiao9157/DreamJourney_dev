@@ -1,0 +1,97 @@
+{
+  "code": {
+    "gates": {
+      "backendFinalClosure": {
+        "reason": "verified",
+        "state": "ready"
+      },
+      "genericIPhoneOSBuild": {
+        "reason": "verified",
+        "state": "ready"
+      },
+      "iosFinalClosure": {
+        "reason": "verified",
+        "state": "ready"
+      }
+    },
+    "state": "ready"
+  },
+  "deviceAcceptance": {
+    "gates": {
+      "apnsArrival": {
+        "reason": "deviceEvidenceMissing",
+        "state": "pending"
+      },
+      "audioPlaybackAndInterruption": {
+        "reason": "deviceEvidenceMissing",
+        "state": "pending"
+      },
+      "foregroundBackgroundRecovery": {
+        "reason": "deviceEvidenceMissing",
+        "state": "pending"
+      },
+      "microphonePermissionAndCapture": {
+        "reason": "deviceEvidenceMissing",
+        "state": "pending"
+      },
+      "photoAndFileImport": {
+        "reason": "deviceEvidenceMissing",
+        "state": "pending"
+      },
+      "screenshotsAndLogs": {
+        "reason": "deviceEvidenceMissing",
+        "state": "pending"
+      }
+    },
+    "state": "pending"
+  },
+  "externalConfiguration": {
+    "gates": {
+      "apnsProvider": {
+        "reason": "apnsDisabled",
+        "state": "blocked"
+      },
+      "imageVisionProvider": {
+        "reason": "providerVisionUnsupported",
+        "state": "blocked"
+      },
+      "mediaProcessing": {
+        "reason": "workerDisabled",
+        "state": "blocked"
+      },
+      "ownershipEnforce": {
+        "reason": "shadow",
+        "state": "blocked"
+      },
+      "privateObjectStorage": {
+        "reason": "externalEvidenceMissing",
+        "state": "blocked"
+      },
+      "productionOTP": {
+        "reason": "testAllowlist",
+        "state": "blocked"
+      },
+      "publicationVisitorApproval": {
+        "reason": "externalBlocked",
+        "state": "blocked"
+      },
+      "voiceIdentityAndProvider": {
+        "reason": "externalEvidenceMissing",
+        "state": "blocked"
+      }
+    },
+    "state": "blocked"
+  },
+  "observedAt": "2026-08-20T01:13:29.212277+00:00",
+  "releaseDecision": "noGo",
+  "schemaVersion": 1,
+  "status": "blocked",
+  "summary": {
+    "codeGateCount": 3,
+    "codeReadyCount": 3,
+    "deviceGateCount": 6,
+    "deviceReadyCount": 0,
+    "externalGateCount": 8,
+    "externalReadyCount": 0
+  }
+}

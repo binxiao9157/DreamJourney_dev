@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "dreamjourney-product-confirmed-evidence-v1",
+  "workItem": "PC-B4",
+  "status": "COMPLETE_WITH_DEVICE_GATE",
+  "capturedAt": "2026-08-20T01:13:29Z",
+  "commits": {
+    "ios": "c5720627237360217c327b1ef114e740e8cd9aba",
+    "backendFeature": "fccbc28221fd25903cd6d08c3b42f826d3391699"
+  },
+  "deployment": {
+    "backendRevision": "fccbc28221fd25903cd6d08c3b42f826d3391699",
+    "migrationHead": "0100",
+    "readiness": "ready"
+  },
+  "checks": [
+    "backend-owner-message-postgres-smoke",
+    "ios-authoritative-message-center-gate",
+    "ios-message-center-uiqa",
+    "ios-simulator-build",
+    "git-diff-check"
+  ],
+  "deviceRemaining": [
+    "apns-provider-delivery-and-device-arrival"
+  ],
+  "sourceReport": "docs/superpowers/status/2026-08-19-pc-b4-authoritative-message-center.md",
+  "rollback": "Hide message entry points without deleting server messages or read state.",
+  "containsCredentials": false
+}

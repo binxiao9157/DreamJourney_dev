@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "capturedAt": "2026-08-20T01:13:29Z",
+  "environment": "production-postgres",
+  "backendRevision": "06b63406cd2afab6d050e886c19942b2f50da908",
+  "migrationHead": "0104",
+  "apiReadiness": "ready",
+  "workerState": "ready-idle",
+  "blockedAttemptCount": 6,
+  "digitalHumanSessionCreated": 0,
+  "digitalHumanHeartbeatAccepted": 0,
+  "timeLetterCreated": 0,
+  "delayedReplyCreated": 0,
+  "scheduledDeliveryCount": 0,
+  "providerDeliveryAttempted": false,
+  "releasePolicyCommandMode": "mixed",
+  "familyManagementCanaryDecision": "deny",
+  "stableFeatureContract": "passed",
+  "containsCredentials": false
+}
