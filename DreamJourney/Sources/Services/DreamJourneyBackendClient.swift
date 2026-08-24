@@ -8072,6 +8072,96 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         }
     }
 
+    func fetchOwnerTruthSourceRecords(
+        vaultID: OwnerTruthVaultID,
+        query: OwnerTruthSourceRecordQuery,
+        completion: @escaping (Result<OwnerTruthSourceRecordPage, Error>) -> Void
+    ) {
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane
+            ? nil
+            : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                    reason: decision?.reason ?? "releasePolicyDisabled"
+                )))
+            }
+            return
+        }
+        var parameters = ["limit=\(query.limit)"]
+        if let cursor = query.cursor {
+            parameters.append("cursor=\(queryComponent(cursor))")
+        }
+        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/source-records?"
+            + parameters.joined(separator: "&")
+        requestJSON(
+            path: path,
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            featureDecision: decision,
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthSourceRecordPage(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func fetchOwnerTruthSourceRecord(
+        vaultID: OwnerTruthVaultID,
+        sourceID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthSourceRecordDetail, Error>) -> Void
+    ) {
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane
+            ? nil
+            : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                    reason: decision?.reason ?? "releasePolicyDisabled"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/source-records/\(pathComponent(sourceID.rawValue.uuidString))",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            featureDecision: decision,
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthSourceRecordDetail(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func reviewOwnerTruthCandidate(
         vaultID: OwnerTruthVaultID,
         candidateID: OwnerTruthRecordID,
@@ -14204,6 +14294,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
 
 extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}
 extension DreamJourneyBackendClient: OwnerTruthFormalMemoryClient {}
+extension DreamJourneyBackendClient: OwnerTruthSourceRecordClient {}
 extension DreamJourneyBackendClient: OwnerTruthTextSourceCaptureClient {}
 extension DreamJourneyBackendClient: OwnerTruthMediaCaptureClient {}
 extension DreamJourneyBackendClient: OwnerTruthInterviewCandidateReviewClient {}

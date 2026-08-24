@@ -888,6 +888,7 @@ final class MemoryArchiveViewController: UIViewController {
     private let timeLetterReminderButton = UIButton(type: .system)
     private let candidateReviewQAButton = UIButton(type: .system)
     private let formalMemoryButton = UIButton(type: .system)
+    private let sourceRecordsButton = UIButton(type: .system)
     private let messageCenterBellButton = InAppMessageBellButton(type: .system)
     private var isRefreshingFromBackend = false
     private var isRefreshingTimeLetterMailbox = false
@@ -1148,6 +1149,7 @@ final class MemoryArchiveViewController: UIViewController {
         configureTimeLetterReminderButton()
         configureCandidateReviewQAButton()
         configureFormalMemoryButton()
+        configureSourceRecordsButton()
         configureArchiveFilterButton()
         let bookEntry = makeBookEntryCard()
         let materialsHeader = makeMaterialsHeader()
@@ -1159,6 +1161,7 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.addArrangedSubview(timeLetterReminderButton)
         mainStack.addArrangedSubview(candidateReviewQAButton)
         mainStack.addArrangedSubview(formalMemoryButton)
+        mainStack.addArrangedSubview(sourceRecordsButton)
         mainStack.addArrangedSubview(bookEntry)
         mainStack.addArrangedSubview(materialsHeader)
         mainStack.addArrangedSubview(primaryCTA)
@@ -1172,6 +1175,7 @@ final class MemoryArchiveViewController: UIViewController {
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: timeLetterReminderButton)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: candidateReviewQAButton)
         mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: formalMemoryButton)
+        mainStack.setCustomSpacing(ArchiveLayout.afterRemoteCaptionSpacing, after: sourceRecordsButton)
         mainStack.setCustomSpacing(22, after: bookEntry)
         mainStack.setCustomSpacing(10, after: materialsHeader)
         mainStack.setCustomSpacing(18, after: primaryCTA)
@@ -1253,6 +1257,7 @@ final class MemoryArchiveViewController: UIViewController {
         updateTimeLetterReminderButton()
         updateCandidateReviewQAButton()
         updateFormalMemoryButton()
+        updateSourceRecordsButton()
         updateArchiveFilterButton()
         refreshOwnerTruthMediaTaskStatus()
         reloadArchiveList()
@@ -1928,6 +1933,33 @@ final class MemoryArchiveViewController: UIViewController {
         )
     }
 
+    private func configureSourceRecordsButton() {
+        var configuration = UIButton.Configuration.tinted()
+        configuration.title = "内容记录"
+        configuration.subtitle = "查看每次提交的原始内容与整理状态"
+        configuration.image = UIImage(systemName: "doc.text.magnifyingglass")
+        configuration.imagePadding = 10
+        configuration.baseForegroundColor = DJDesignTokens.Color.accentDeep
+        configuration.baseBackgroundColor = DJDesignTokens.Color.surfaceContainer
+        configuration.contentInsets = NSDirectionalEdgeInsets(
+            top: 12,
+            leading: 14,
+            bottom: 12,
+            trailing: 14
+        )
+        sourceRecordsButton.configuration = configuration
+        sourceRecordsButton.contentHorizontalAlignment = .leading
+        sourceRecordsButton.layer.cornerRadius = 8
+        sourceRecordsButton.accessibilityIdentifier = "archive-owner-truth-source-records"
+        sourceRecordsButton.accessibilityLabel = "内容记录，查看每次提交的原始内容与整理状态"
+        sourceRecordsButton.isHidden = true
+        sourceRecordsButton.addTarget(
+            self,
+            action: #selector(ownerTruthSourceRecordsTapped),
+            for: .touchUpInside
+        )
+    }
+
     private func configureArchiveFilterButton() {
         archiveFilterButton.titleLabel?.font = DJDesignTokens.Font.label(12)
         archiveFilterButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
@@ -1996,6 +2028,12 @@ final class MemoryArchiveViewController: UIViewController {
         let isVisible = isSelfAutobiographyMode && isOwnerTruthCandidateReviewEnabled
         formalMemoryButton.isHidden = !isVisible
         formalMemoryButton.isUserInteractionEnabled = isVisible
+    }
+
+    private func updateSourceRecordsButton() {
+        let isVisible = isSelfAutobiographyMode && isOwnerTruthCandidateReviewEnabled
+        sourceRecordsButton.isHidden = !isVisible
+        sourceRecordsButton.isUserInteractionEnabled = isVisible
     }
 
     private func reloadFeatureCards(summary: (total: Int, photos: Int, audio: Int, text: Int)) {
@@ -3670,6 +3708,17 @@ final class MemoryArchiveViewController: UIViewController {
         )
     }
 
+    @objc private func ownerTruthSourceRecordsTapped() {
+        guard isSelfAutobiographyMode && isOwnerTruthCandidateReviewEnabled,
+              let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
+            return
+        }
+        navigationController?.pushViewController(
+            OwnerTruthSourceRecordListViewController(accountLease: accountLease),
+            animated: true
+        )
+    }
+
     private func captureOwnerTruthCandidateReviewAccountLease() -> AccountLease? {
         guard let userId = UserManager.shared.currentUser?.id,
               !userId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -4097,7 +4146,7 @@ final class MemoryArchiveViewController: UIViewController {
                 return
             }
             self.refreshContent()
-            self.showToast("已提交，整理完成后可在待确认记忆中确认", type: .success)
+            self.showToast("素材已接收，正在整理；完成后会出现在待确认记忆中", type: .success)
         }
         present(entryViewController, animated: true)
     }
@@ -6398,7 +6447,7 @@ final class OwnerTruthInterviewCandidateConfirmationViewController: UIViewContro
     }
 
     static func proposalPreview(for item: OwnerTruthInterviewCandidateReviewItem) -> String {
-        for key in ["summary", "claim", "label", "title", "text"] {
+        for key in ["event", "statement", "expression", "emotion", "summary", "claim", "label", "title", "text"] {
             guard case .string(let rawValue)? = item.candidate.content[key] else { continue }
             let normalized = rawValue
                 .replacingOccurrences(of: "\n", with: " ")

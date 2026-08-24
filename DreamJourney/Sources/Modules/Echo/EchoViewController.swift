@@ -93,6 +93,9 @@ private final class EchoLiveMemoryCaptureCoordinator {
     private var naturalInputUseCase: OwnerTruthInterviewNaturalInputUseCase?
     private var acknowledgementUseCase: OwnerTruthInterviewReviewBatchAcknowledgementUseCase?
     private var admissionUseCase: OwnerTruthInterviewCandidateProposalAdmissionUseCase?
+    private var proposalStatusUseCase: OwnerTruthInterviewCandidateProposalStatusUseCase?
+    private var proposalStatusPollWorkItem: DispatchWorkItem?
+    private var proposalStatusPollAttempt = 0
     private var queuedTurns: [Turn] = []
     private var inFlightTurn: Turn?
     private var ownerTurnCount = 0
@@ -105,6 +108,8 @@ private final class EchoLiveMemoryCaptureCoordinator {
     private var lastAssistantText = ""
     private var lastAssistantOwnerTurnCount = 0
     private static let duplicateOwnerTurnWindow: TimeInterval = 1.0
+    private static let proposalStatusPollInterval: TimeInterval = 1.0
+    private static let maximumProposalStatusPollAttempts = 60
 
     private(set) var state: EchoLiveMemoryCaptureState = .live {
         didSet {
@@ -122,6 +127,10 @@ private final class EchoLiveMemoryCaptureCoordinator {
                     "queuedTurnCount": queuedTurns.count,
                 ]
             )
+            if state.isTerminal {
+                proposalStatusPollWorkItem?.cancel()
+                proposalStatusPollWorkItem = nil
+            }
             onStateChange?(state)
         }
     }
@@ -318,12 +327,92 @@ private final class EchoLiveMemoryCaptureCoordinator {
     ) {
         switch viewState.phase {
         case .admitted:
-            state = .pendingReview
+            guard let receipt = viewState.receipt else {
+                state = .unavailable
+                return
+            }
+            beginCandidateReadinessObservation(reviewBatchID: receipt.reviewBatchID)
         case .unavailable, .failed:
             state = .unavailable
         case .idle, .admitting:
             break
         }
+    }
+
+    private func beginCandidateReadinessObservation(reviewBatchID: OwnerTruthRecordID) {
+        guard proposalStatusUseCase == nil else { return }
+        proposalStatusPollAttempt = 0
+        let useCase = OwnerTruthInterviewCandidateProposalStatusUseCase(
+            accountLease: accountLease,
+            reviewBatchID: reviewBatchID,
+            client: client,
+            releasePolicyAvailable: candidateReviewPolicyAvailable
+        )
+        useCase.onViewStateChange = { [weak self, weak useCase] viewState in
+            DispatchQueue.main.async {
+                guard let self,
+                      let useCase,
+                      useCase === self.proposalStatusUseCase else { return }
+                self.receiveCandidateReadinessState(viewState, useCase: useCase)
+            }
+        }
+        proposalStatusUseCase = useCase
+        useCase.send(.refresh)
+    }
+
+    private func receiveCandidateReadinessState(
+        _ viewState: OwnerTruthInterviewCandidateProposalStatusViewState,
+        useCase: OwnerTruthInterviewCandidateProposalStatusUseCase
+    ) {
+        guard state == .organizing else { return }
+        switch viewState.phase {
+        case .ready:
+            guard let status = viewState.status else {
+                state = .unavailable
+                return
+            }
+            switch status.candidateReviewState {
+            case .reviewReady:
+                state = .pendingReview
+            case .noCandidates:
+                state = .empty
+            case .extractionFailed, .extractionQuarantined:
+                state = .unavailable
+            case .notReady:
+                scheduleCandidateReadinessPoll(useCase)
+            }
+        case .failed:
+            scheduleCandidateReadinessPoll(useCase)
+        case .unavailable:
+            state = .unavailable
+        case .idle, .loading:
+            break
+        }
+    }
+
+    private func scheduleCandidateReadinessPoll(
+        _ useCase: OwnerTruthInterviewCandidateProposalStatusUseCase
+    ) {
+        proposalStatusPollWorkItem?.cancel()
+        proposalStatusPollAttempt += 1
+        guard proposalStatusPollAttempt <= Self.maximumProposalStatusPollAttempts else {
+            state = .unavailable
+            return
+        }
+        let workItem = DispatchWorkItem { [weak self, weak useCase] in
+            guard let self,
+                  let useCase,
+                  self.state == .organizing,
+                  useCase === self.proposalStatusUseCase else {
+                return
+            }
+            useCase.send(.refresh)
+        }
+        proposalStatusPollWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.proposalStatusPollInterval,
+            execute: workItem
+        )
     }
 
     private func normalizedTurn(_ text: String) -> String? {
@@ -7598,7 +7687,7 @@ final class EchoViewController: UIViewController {
             )
         case .pendingReview:
             renderVoiceStatus(
-                text: "已送入待确认记忆，整理完成后可在记忆档案查看",
+                text: "已进入待确认记忆，可在记忆档案查看",
                 isVisible: true,
                 accessibilityIdentifier: "echoLiveMemoryPendingReview"
             )

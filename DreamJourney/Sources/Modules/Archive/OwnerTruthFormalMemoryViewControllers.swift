@@ -47,6 +47,23 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
     private var isLoading = false
     private var isSelectingForPublication = false
     private var selectedPublicationMemoryIDs: Set<OwnerTruthRecordID> = []
+
+    private var memorySections: [(kind: OwnerTruthMemoryKind, items: [OwnerTruthFormalMemoryListItem])] {
+        let kinds = selectedKind.map { [$0] } ?? OwnerTruthMemoryKind.allCases
+        return kinds.compactMap { kind in
+            let sectionItems = items.filter { $0.memoryKind == kind }
+            return sectionItems.isEmpty ? nil : (kind, sectionItems)
+        }
+    }
+
+    private func memory(at indexPath: IndexPath) -> OwnerTruthFormalMemoryListItem? {
+        let sections = memorySections
+        guard sections.indices.contains(indexPath.section),
+              sections[indexPath.section].items.indices.contains(indexPath.row) else {
+            return nil
+        }
+        return sections[indexPath.section].items[indexPath.row]
+    }
     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
     var onPageRenderedForUIQA: ((OwnerTruthFormalMemoryListViewController) -> Void)?
     #endif
@@ -431,12 +448,23 @@ extension OwnerTruthFormalMemoryListViewController: UISearchResultsUpdating {
 }
 
 extension OwnerTruthFormalMemoryListViewController: UITableViewDataSource, UITableViewDelegate {
+    func numberOfSections(in tableView: UITableView) -> Int {
+        memorySections.count + (nextCursor == nil ? 0 : 1)
+    }
+
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        items.count + (nextCursor == nil ? 0 : 1)
+        let sections = memorySections
+        return sections.indices.contains(section) ? sections[section].items.count : 1
+    }
+
+    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        let sections = memorySections
+        guard sections.indices.contains(section) else { return nil }
+        return sections[section].kind.formalMemorySectionTitle
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        if indexPath.row == items.count {
+        guard let item = memory(at: indexPath) else {
             let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
             cell.textLabel?.text = isLoading ? "正在载入..." : "载入更多"
             cell.textLabel?.textAlignment = .center
@@ -444,7 +472,6 @@ extension OwnerTruthFormalMemoryListViewController: UITableViewDataSource, UITab
             cell.accessibilityIdentifier = "owner-truth-formal-memory-load-more"
             return cell
         }
-        let item = items[indexPath.row]
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
         cell.backgroundColor = DJDesignTokens.Color.surface
         cell.textLabel?.text = item.currentVersion.summary
@@ -463,12 +490,11 @@ extension OwnerTruthFormalMemoryListViewController: UITableViewDataSource, UITab
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        if indexPath.row == items.count {
+        guard let item = memory(at: indexPath) else {
             tableView.deselectRow(at: indexPath, animated: true)
             load(reset: false)
             return
         }
-        let item = items[indexPath.row]
         if isSelectingForPublication {
             guard selectedPublicationMemoryIDs.count < PublicationDraftCreateCommand.maximumItemCount
                     || selectedPublicationMemoryIDs.contains(item.id) else {
@@ -501,14 +527,14 @@ extension OwnerTruthFormalMemoryListViewController: UITableViewDataSource, UITab
     }
 
     func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
-        guard isSelectingForPublication, indexPath.row < items.count else { return }
-        selectedPublicationMemoryIDs.remove(items[indexPath.row].id)
+        guard isSelectingForPublication, let item = memory(at: indexPath) else { return }
+        selectedPublicationMemoryIDs.remove(item.id)
         tableView.cellForRow(at: indexPath)?.accessoryType = .none
         updatePublicationSelection()
     }
 
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
-        if indexPath.row == items.count, nextCursor != nil {
+        if memory(at: indexPath) == nil, nextCursor != nil {
             load(reset: false)
         }
     }
@@ -996,12 +1022,396 @@ final class OwnerTruthFormalMemoryEditViewController: UIViewController, UITextVi
     }
 }
 
+final class OwnerTruthSourceRecordListViewController: UIViewController {
+    private let accountLease: AccountLease
+    private let client: OwnerTruthSourceRecordClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let tableView = UITableView(frame: .zero, style: .insetGrouped)
+    private let statusLabel = UILabel()
+    private lazy var refreshButton = UIBarButtonItem(
+        barButtonSystemItem: .refresh,
+        target: self,
+        action: #selector(refreshTapped)
+    )
+    private var records: [OwnerTruthSourceRecord] = []
+    private var nextCursor: String?
+    private var requestGeneration: UInt64 = 0
+    private var isLoading = false
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthSourceRecordClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+    ) {
+        self.accountLease = accountLease
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "内容记录"
+        view.backgroundColor = DJDesignTokens.Color.background
+        navigationItem.rightBarButtonItem = refreshButton
+        configureView()
+        load(reset: true)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+    }
+
+    private var vaultID: OwnerTruthVaultID? {
+        OwnerTruthVaultID(accountLease.vaultId)
+    }
+
+    private func configureView() {
+        tableView.backgroundColor = DJDesignTokens.Color.background
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.accessibilityIdentifier = "owner-truth-source-record-list"
+
+        statusLabel.font = DJDesignTokens.Font.body(15)
+        statusLabel.textColor = DJDesignTokens.Color.textTertiary
+        statusLabel.textAlignment = .center
+        statusLabel.numberOfLines = 0
+        statusLabel.accessibilityIdentifier = "owner-truth-source-record-status"
+
+        view.addSubview(tableView)
+        view.addSubview(statusLabel)
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            tableView.topAnchor.constraint(equalTo: view.topAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            statusLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            statusLabel.leadingAnchor.constraint(
+                equalTo: view.leadingAnchor,
+                constant: DJDesignTokens.Spacing.page
+            ),
+            statusLabel.trailingAnchor.constraint(
+                equalTo: view.trailingAnchor,
+                constant: -DJDesignTokens.Spacing.page
+            ),
+        ])
+    }
+
+    @objc private func refreshTapped() {
+        load(reset: true)
+    }
+
+    private func load(reset: Bool) {
+        guard !isLoading,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+              let vaultID else {
+            failClosedForAccountChange()
+            return
+        }
+        let cursor = reset ? nil : nextCursor
+        guard reset || cursor != nil else { return }
+        let query: OwnerTruthSourceRecordQuery
+        do {
+            query = try OwnerTruthSourceRecordQuery(cursor: cursor, limit: 20)
+        } catch {
+            statusLabel.text = error.localizedDescription
+            statusLabel.isHidden = false
+            return
+        }
+        if reset {
+            requestGeneration &+= 1
+            records = []
+            nextCursor = nil
+            tableView.reloadData()
+        }
+        let generation = requestGeneration
+        isLoading = true
+        refreshButton.isEnabled = false
+        statusLabel.text = reset ? "正在读取内容记录..." : "正在载入更多记录..."
+        statusLabel.isHidden = false
+        client.fetchOwnerTruthSourceRecords(vaultID: vaultID, query: query) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self,
+                      generation == self.requestGeneration,
+                      self.accountLeaseRuntime.validate(self.accountLease, at: .ui).allowed else {
+                    return
+                }
+                self.isLoading = false
+                self.refreshButton.isEnabled = true
+                switch result {
+                case .success(let page):
+                    let knownIDs = Set(self.records.map(\.id))
+                    self.records.append(contentsOf: page.records.filter { !knownIDs.contains($0.id) })
+                    self.nextCursor = page.nextCursor
+                    self.statusLabel.text = self.records.isEmpty
+                        ? "还没有内容记录。你提交的文字或媒体素材会按次保留在这里。"
+                        : nil
+                    self.statusLabel.isHidden = !self.records.isEmpty
+                    self.tableView.reloadData()
+                case .failure(let error):
+                    self.statusLabel.text = "内容记录读取失败。\n\(error.localizedDescription)"
+                    self.statusLabel.isHidden = false
+                }
+            }
+        }
+    }
+
+    private func failClosedForAccountChange() {
+        requestGeneration &+= 1
+        isLoading = false
+        records = []
+        nextCursor = nil
+        tableView.reloadData()
+        statusLabel.text = "账号已变化，请返回后重新进入内容记录。"
+        statusLabel.isHidden = false
+        refreshButton.isEnabled = false
+    }
+}
+
+extension OwnerTruthSourceRecordListViewController: UITableViewDataSource, UITableViewDelegate {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        records.count + (nextCursor == nil ? 0 : 1)
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        guard records.indices.contains(indexPath.row) else {
+            let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+            cell.textLabel?.text = isLoading ? "正在载入..." : "载入更多"
+            cell.textLabel?.textAlignment = .center
+            cell.textLabel?.textColor = DJDesignTokens.Color.accentDeep
+            cell.accessibilityIdentifier = "owner-truth-source-record-load-more"
+            return cell
+        }
+        let record = records[indexPath.row]
+        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        cell.backgroundColor = DJDesignTokens.Color.surface
+        cell.textLabel?.text = record.displayPreview
+        cell.textLabel?.font = DJDesignTokens.Font.body(16)
+        cell.textLabel?.textColor = DJDesignTokens.Color.textPrimary
+        cell.textLabel?.numberOfLines = 2
+        cell.detailTextLabel?.text = "\(record.organizationStatus.title) · \(record.createdAt.formalMemoryDateText)"
+        cell.detailTextLabel?.font = DJDesignTokens.Font.label(12)
+        cell.detailTextLabel?.textColor = record.organizationStatus == .failed
+            ? .systemRed
+            : DJDesignTokens.Color.textTertiary
+        cell.accessoryType = .disclosureIndicator
+        cell.accessibilityIdentifier = "owner-truth-source-record-row"
+        cell.accessibilityLabel = "\(record.displayPreview)，\(record.organizationStatus.title)"
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        guard records.indices.contains(indexPath.row) else {
+            load(reset: false)
+            return
+        }
+        navigationController?.pushViewController(
+            OwnerTruthSourceRecordDetailViewController(
+                accountLease: accountLease,
+                sourceID: records[indexPath.row].id,
+                client: client,
+                accountLeaseRuntime: accountLeaseRuntime
+            ),
+            animated: true
+        )
+    }
+
+    func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        if indexPath.row == records.count, nextCursor != nil {
+            load(reset: false)
+        }
+    }
+}
+
+final class OwnerTruthSourceRecordDetailViewController: UIViewController {
+    private let accountLease: AccountLease
+    private let sourceID: OwnerTruthRecordID
+    private let client: OwnerTruthSourceRecordClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let scrollView = UIScrollView()
+    private let stackView = UIStackView()
+    private let statusLabel = UILabel()
+    private var requestGeneration: UInt64 = 0
+
+    init(
+        accountLease: AccountLease,
+        sourceID: OwnerTruthRecordID,
+        client: OwnerTruthSourceRecordClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+    ) {
+        self.accountLease = accountLease
+        self.sourceID = sourceID
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "内容记录详情"
+        view.backgroundColor = DJDesignTokens.Color.background
+        configureView()
+        load()
+    }
+
+    private func configureView() {
+        scrollView.alwaysBounceVertical = true
+        scrollView.accessibilityIdentifier = "owner-truth-source-record-detail"
+        stackView.axis = .vertical
+        stackView.spacing = 14
+        stackView.isLayoutMarginsRelativeArrangement = true
+        stackView.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 20,
+            leading: DJDesignTokens.Spacing.page,
+            bottom: 30,
+            trailing: DJDesignTokens.Spacing.page
+        )
+        statusLabel.font = DJDesignTokens.Font.body(15)
+        statusLabel.textColor = DJDesignTokens.Color.textTertiary
+        statusLabel.textAlignment = .center
+        statusLabel.numberOfLines = 0
+        stackView.addArrangedSubview(statusLabel)
+        view.addSubview(scrollView)
+        scrollView.addSubview(stackView)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            stackView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            stackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+        ])
+    }
+
+    private func load() {
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+              let vaultID = OwnerTruthVaultID(accountLease.vaultId) else {
+            failClosedForAccountChange()
+            return
+        }
+        requestGeneration &+= 1
+        let generation = requestGeneration
+        statusLabel.text = "正在读取内容记录..."
+        client.fetchOwnerTruthSourceRecord(vaultID: vaultID, sourceID: sourceID) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self,
+                      generation == self.requestGeneration,
+                      self.accountLeaseRuntime.validate(self.accountLease, at: .ui).allowed else {
+                    return
+                }
+                switch result {
+                case .success(let detail):
+                    self.render(detail)
+                case .failure(let error):
+                    self.statusLabel.text = "内容记录读取失败。\n\(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    private func render(_ detail: OwnerTruthSourceRecordDetail) {
+        stackView.arrangedSubviews.forEach {
+            stackView.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
+        stackView.addArrangedSubview(sectionCard(
+            title: detail.record.organizationStatus.title,
+            lines: [
+                "提交时间：\(detail.record.createdAt.formalMemoryDateText)",
+                "候选 \(detail.record.candidateCount) 条 · 待确认 \(detail.record.pendingCount) 条 · 已写入 \(detail.record.confirmedCount) 条 · 已拒绝 \(detail.record.rejectedCount) 条",
+            ],
+            identifier: "owner-truth-source-record-organization"
+        ))
+        stackView.addArrangedSubview(sectionCard(
+            title: "本次原始内容",
+            lines: [detail.text.isEmpty ? "该条记录不包含可显示的文字内容。" : detail.text],
+            identifier: "owner-truth-source-record-original-text"
+        ))
+        var technicalLines = [
+            "素材类型：\(detail.record.sourceKind)",
+            "素材版本：\(detail.record.sourceVersion)",
+        ]
+        if let failureCode = detail.record.failureCode {
+            technicalLines.append("失败原因：\(failureCode)")
+        }
+        stackView.addArrangedSubview(sectionCard(
+            title: "处理信息",
+            lines: technicalLines,
+            identifier: "owner-truth-source-record-processing"
+        ))
+    }
+
+    private func sectionCard(title: String, lines: [String], identifier: String) -> UIView {
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = DJDesignTokens.Font.title(18)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        titleLabel.numberOfLines = 0
+        let bodyLabel = UILabel()
+        bodyLabel.text = lines.joined(separator: "\n")
+        bodyLabel.font = DJDesignTokens.Font.body(14)
+        bodyLabel.textColor = DJDesignTokens.Color.textSecondary
+        bodyLabel.numberOfLines = 0
+        let content = UIStackView(arrangedSubviews: [titleLabel, bodyLabel])
+        content.axis = .vertical
+        content.spacing = 8
+        let card = UIView()
+        card.backgroundColor = DJDesignTokens.Color.surface
+        card.layer.cornerRadius = 8
+        card.layer.borderWidth = 1
+        card.layer.borderColor = DJDesignTokens.Color.accent.withAlphaComponent(0.18).cgColor
+        card.accessibilityIdentifier = identifier
+        card.addSubview(content)
+        content.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            content.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            content.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            content.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            content.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
+        ])
+        return card
+    }
+
+    private func failClosedForAccountChange() {
+        requestGeneration &+= 1
+        statusLabel.text = "账号已变化，请返回后重新进入内容记录。"
+    }
+}
+
 private extension OwnerTruthMemoryKind {
     var formalMemoryTitle: String {
         switch self {
         case .experience: return "经历"
         case .knowledge: return "知识"
         case .emotion: return "感受"
+        }
+    }
+
+    var formalMemorySectionTitle: String {
+        switch self {
+        case .experience: return "经历记忆"
+        case .knowledge: return "知识记忆"
+        case .emotion: return "情感记忆"
         }
     }
 }

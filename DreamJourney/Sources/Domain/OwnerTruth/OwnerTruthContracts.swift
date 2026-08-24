@@ -2543,13 +2543,18 @@ private enum OwnerTruthTextSourceCaptureContract {
     }
 
     static func positiveInt(_ value: Any?) -> Int? {
-        guard !(value is Bool), let value = value as? Int, value > 0 else { return nil }
+        guard !isJSONBoolean(value), let value = value as? Int, value > 0 else { return nil }
         return value
     }
 
     static func nonNegativeInt(_ value: Any?) -> Int? {
-        guard !(value is Bool), let value = value as? Int, value >= 0 else { return nil }
+        guard !isJSONBoolean(value), let value = value as? Int, value >= 0 else { return nil }
         return value
+    }
+
+    private static func isJSONBoolean(_ value: Any?) -> Bool {
+        guard let number = value as? NSNumber else { return false }
+        return CFGetTypeID(number) == CFBooleanGetTypeID()
     }
 
     static func iso8601Date(_ value: Any?) -> Date? {
@@ -4387,7 +4392,7 @@ final class OwnerTruthInterviewCandidateReviewUseCase {
     }
 
     private static func proposalPreview(for candidate: OwnerTruthCandidateInboxItem) -> String {
-        for key in ["summary", "claim", "label", "title", "text"] {
+        for key in ["event", "statement", "expression", "emotion", "summary", "claim", "label", "title", "text"] {
             guard case .string(let rawValue)? = candidate.content[key] else { continue }
             let normalized = rawValue
                 .replacingOccurrences(of: "\n", with: " ")
@@ -4400,7 +4405,7 @@ final class OwnerTruthInterviewCandidateReviewUseCase {
     }
 
     private static func correctionTextKey(for candidate: OwnerTruthCandidateInboxItem) -> String {
-        for key in ["summary", "claim", "label", "title", "text"] where candidate.content[key] != nil {
+        for key in ["event", "statement", "expression", "emotion", "summary", "claim", "label", "title", "text"] where candidate.content[key] != nil {
             return key
         }
         return "summary"
@@ -5104,8 +5109,8 @@ struct OwnerTruthInterviewCandidateProposalStatusViewState: Equatable, Sendable 
 }
 
 /// Lease-fenced, read-only consumer for the formal staging status route. The
-/// default policy is fail-closed and this use case intentionally has no UI
-/// attachment yet; it exists to keep transport/authority semantics stable.
+/// default policy is fail-closed. UI consumers may observe this value-free
+/// status, but never receive Source or Candidate content through this route.
 final class OwnerTruthInterviewCandidateProposalStatusUseCase {
     private let accountLease: AccountLease
     private let vaultID: OwnerTruthVaultID?
@@ -5906,7 +5911,7 @@ final class OwnerTruthInterviewCandidateConfirmationSingleActionUseCase {
     }
 
 private static func correctionTextKey(for candidate: OwnerTruthCandidateInboxItem) -> String {
-        for key in ["summary", "claim", "label", "title", "text"] where candidate.content[key] != nil {
+        for key in ["event", "statement", "expression", "emotion", "summary", "claim", "label", "title", "text"] where candidate.content[key] != nil {
             return key
         }
         return "summary"
@@ -13542,7 +13547,7 @@ final class OwnerTruthCandidateReviewHistoryUseCase {
     }
 
     private static func proposalPreview(for candidate: OwnerTruthCandidateInboxItem) -> String {
-        for key in ["summary", "title", "text", "claim", "label"] {
+        for key in ["event", "statement", "expression", "emotion", "summary", "title", "text", "claim", "label"] {
             guard case .string(let rawValue)? = candidate.content[key] else { continue }
             let normalized = rawValue
                 .replacingOccurrences(of: "\n", with: " ")
@@ -13700,7 +13705,7 @@ final class OwnerTruthMemoryVersionHistoryUseCase {
     }
 
     private static func summary(for content: [String: OwnerTruthJSONValue]) -> String {
-        for key in ["summary", "title", "text", "claim", "label"] {
+        for key in ["event", "statement", "expression", "emotion", "summary", "title", "text", "claim", "label"] {
             guard case .string(let rawValue)? = content[key] else { continue }
             let normalized = rawValue
                 .replacingOccurrences(of: "\n", with: " ")

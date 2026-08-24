@@ -74,7 +74,7 @@ struct OwnerTruthFormalMemoryVersion: Equatable, Sendable, Identifiable {
     }
 
     var summary: String {
-        for key in ["summary", "title", "text", "claim", "label"] {
+        for key in ["event", "statement", "expression", "emotion", "summary", "title", "text", "claim", "label"] {
             guard case .string(let value)? = content[key] else { continue }
             let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
             if !normalized.isEmpty { return normalized }
@@ -83,7 +83,7 @@ struct OwnerTruthFormalMemoryVersion: Equatable, Sendable, Identifiable {
     }
 
     var editableTextKey: String {
-        for key in ["summary", "title", "text", "claim", "label"] {
+        for key in ["event", "statement", "expression", "emotion", "summary", "title", "text", "claim", "label"] {
             if case .string = content[key] { return key }
         }
         return "summary"
@@ -360,6 +360,196 @@ protocol OwnerTruthFormalMemoryClient: AnyObject {
     )
 }
 
+enum OwnerTruthSourceRecordContractError: LocalizedError, Equatable, Sendable {
+    case invalidList(String)
+    case invalidDetail(String)
+    case invalidQuery(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidList(let detail):
+            return "内容记录列表合同无效：\(detail)"
+        case .invalidDetail(let detail):
+            return "内容记录详情合同无效：\(detail)"
+        case .invalidQuery(let detail):
+            return "内容记录分页条件无效：\(detail)"
+        }
+    }
+}
+
+enum OwnerTruthSourceRecordOrganizationStatus: String, Equatable, Sendable {
+    case organizing
+    case awaitingReview
+    case confirmed
+    case reviewed
+    case failed
+    case noMemoryFound
+
+    var title: String {
+        switch self {
+        case .organizing: return "整理中"
+        case .awaitingReview: return "待确认"
+        case .confirmed: return "已写入正式记忆"
+        case .reviewed: return "已完成审核"
+        case .failed: return "整理失败"
+        case .noMemoryFound: return "未整理出记忆"
+        }
+    }
+}
+
+struct OwnerTruthSourceRecord: Equatable, Sendable, Identifiable {
+    let id: OwnerTruthRecordID
+    let sourceKind: String
+    let sourceVersion: Int
+    let state: String
+    let textPreview: String
+    let origin: String?
+    let createdAt: Date
+    let updatedAt: Date
+    let organizationStatus: OwnerTruthSourceRecordOrganizationStatus
+    let extractionStatus: String?
+    let failureCode: String?
+    let candidateCount: Int
+    let pendingCount: Int
+    let confirmedCount: Int
+    let rejectedCount: Int
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let id = OwnerTruthFormalMemoryContract.recordID(object["sourceId"]),
+              let sourceKind = OwnerTruthFormalMemoryContract.requiredString(object["sourceKind"]),
+              let sourceVersion = OwnerTruthFormalMemoryContract.positiveInt(object["sourceVersion"]),
+              let state = OwnerTruthFormalMemoryContract.requiredString(object["state"]),
+              let textPreview = object["textPreview"] as? String,
+              let createdAt = OwnerTruthFormalMemoryContract.date(object["createdAt"]),
+              let updatedAt = OwnerTruthFormalMemoryContract.date(object["updatedAt"]),
+              let rawOrganizationStatus = OwnerTruthFormalMemoryContract.requiredString(
+                object["organizationStatus"]
+              ),
+              let organizationStatus = OwnerTruthSourceRecordOrganizationStatus(
+                rawValue: rawOrganizationStatus
+              ),
+              let candidateCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                object["candidateCount"]
+              ),
+              let pendingCount = OwnerTruthFormalMemoryContract.nonNegativeInt(object["pendingCount"]),
+              let confirmedCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                object["confirmedCount"]
+              ),
+              let rejectedCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                object["rejectedCount"]
+              ),
+              pendingCount + confirmedCount + rejectedCount <= candidateCount else {
+            throw OwnerTruthSourceRecordContractError.invalidList("记录字段缺失或计数越界")
+        }
+        if let value = object["origin"], !(value is NSNull),
+           OwnerTruthFormalMemoryContract.requiredString(value) == nil {
+            throw OwnerTruthSourceRecordContractError.invalidList("来源标识无效")
+        }
+        if let value = object["extractionStatus"], !(value is NSNull),
+           OwnerTruthFormalMemoryContract.requiredString(value) == nil {
+            throw OwnerTruthSourceRecordContractError.invalidList("整理状态无效")
+        }
+        if let value = object["failureCode"], !(value is NSNull),
+           OwnerTruthFormalMemoryContract.requiredString(value) == nil {
+            throw OwnerTruthSourceRecordContractError.invalidList("失败代码无效")
+        }
+        self.id = id
+        self.sourceKind = sourceKind
+        self.sourceVersion = sourceVersion
+        self.state = state
+        self.textPreview = textPreview.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.origin = OwnerTruthFormalMemoryContract.requiredString(object["origin"])
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.organizationStatus = organizationStatus
+        self.extractionStatus = OwnerTruthFormalMemoryContract.requiredString(object["extractionStatus"])
+        self.failureCode = OwnerTruthFormalMemoryContract.requiredString(object["failureCode"])
+        self.candidateCount = candidateCount
+        self.pendingCount = pendingCount
+        self.confirmedCount = confirmedCount
+        self.rejectedCount = rejectedCount
+    }
+
+    var displayPreview: String {
+        textPreview.isEmpty ? "该条记录不包含可显示的文字内容" : textPreview
+    }
+}
+
+struct OwnerTruthSourceRecordPage: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-source-record-list-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let records: [OwnerTruthSourceRecord]
+    let nextCursor: String?
+
+    init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID) throws {
+        guard OwnerTruthFormalMemoryContract.requiredString(object["schemaVersion"]) == Self.schemaVersion,
+              OwnerTruthFormalMemoryContract.requiredString(object["vaultId"]) == expectedVaultID.rawValue,
+              let rows = object["records"] as? [[String: Any]] else {
+            throw OwnerTruthSourceRecordContractError.invalidList("schemaVersion、vaultId 或列表无效")
+        }
+        let records = try rows.map(OwnerTruthSourceRecord.init)
+        guard Set(records.map(\.id)).count == records.count else {
+            throw OwnerTruthSourceRecordContractError.invalidList("列表包含重复记录")
+        }
+        if let rawCursor = object["nextCursor"], !(rawCursor is NSNull),
+           OwnerTruthFormalMemoryContract.requiredString(rawCursor) == nil {
+            throw OwnerTruthSourceRecordContractError.invalidList("分页游标无效")
+        }
+        vaultID = expectedVaultID
+        self.records = records
+        nextCursor = OwnerTruthFormalMemoryContract.requiredString(object["nextCursor"])
+    }
+}
+
+struct OwnerTruthSourceRecordDetail: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-source-record-detail-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let record: OwnerTruthSourceRecord
+    let text: String
+
+    init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID) throws {
+        guard OwnerTruthFormalMemoryContract.requiredString(object["schemaVersion"]) == Self.schemaVersion,
+              OwnerTruthFormalMemoryContract.requiredString(object["vaultId"]) == expectedVaultID.rawValue,
+              let recordObject = object["record"] as? [String: Any],
+              let text = recordObject["text"] as? String else {
+            throw OwnerTruthSourceRecordContractError.invalidDetail("schemaVersion、vaultId 或记录无效")
+        }
+        vaultID = expectedVaultID
+        record = try OwnerTruthSourceRecord(backendJSONObject: recordObject)
+        self.text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+struct OwnerTruthSourceRecordQuery: Equatable, Sendable {
+    let cursor: String?
+    let limit: Int
+
+    init(cursor: String? = nil, limit: Int = 20) throws {
+        let normalizedCursor = cursor?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (1...100).contains(limit) else {
+            throw OwnerTruthSourceRecordContractError.invalidQuery("分页大小必须在 1 到 100 之间")
+        }
+        self.cursor = normalizedCursor?.isEmpty == false ? normalizedCursor : nil
+        self.limit = limit
+    }
+}
+
+protocol OwnerTruthSourceRecordClient: AnyObject {
+    func fetchOwnerTruthSourceRecords(
+        vaultID: OwnerTruthVaultID,
+        query: OwnerTruthSourceRecordQuery,
+        completion: @escaping (Result<OwnerTruthSourceRecordPage, Error>) -> Void
+    )
+
+    func fetchOwnerTruthSourceRecord(
+        vaultID: OwnerTruthVaultID,
+        sourceID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthSourceRecordDetail, Error>) -> Void
+    )
+}
+
 private enum OwnerTruthFormalMemoryContract {
     static func requiredString(_ value: Any?) -> String? {
         guard let value = value as? String else { return nil }
@@ -373,8 +563,15 @@ private enum OwnerTruthFormalMemoryContract {
     }
 
     static func nonNegativeInt(_ value: Any?) -> Int? {
-        guard !(value is Bool), let value = value as? Int, value >= 0 else { return nil }
-        return value
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID(),
+              number.doubleValue.isFinite,
+              number.doubleValue.rounded(.towardZero) == number.doubleValue,
+              number.doubleValue >= 0,
+              number.doubleValue <= Double(Int.max) else {
+            return nil
+        }
+        return number.intValue
     }
 
     static func positiveInt(_ value: Any?) -> Int? {

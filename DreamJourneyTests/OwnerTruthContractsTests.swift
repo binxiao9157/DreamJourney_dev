@@ -51,6 +51,152 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(detail.historyTruncated)
     }
 
+    func testFormalMemoryDetailAcceptsVersionOneFromJSONSerialization() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-formal-json"))
+        let payload: [String: Any] = [
+            "schemaVersion": "owner-truth-formal-memory-detail-v1",
+            "vaultId": vaultID.rawValue,
+            "memory": [
+                "memoryId": "00000000-0000-0000-0000-000000000101",
+                "memoryKind": "experience",
+                "perspectiveType": "firstPerson",
+                "epistemicStatus": "recalled",
+                "sensitivity": "standard",
+                "currentVersion": [
+                    "versionId": "00000000-0000-0000-0000-000000000001",
+                    "versionNumber": 1,
+                    "status": "current",
+                    "decision": "accepted",
+                    "contentSchemaVersion": "owner-truth-v2",
+                    "contentHash": String(repeating: "a", count: 64),
+                    "content": ["summary": "首版正式记忆"],
+                    "sourceCount": 1,
+                    "createdAt": "2026-08-24T12:37:35Z",
+                ],
+                "historyLimit": 3,
+                "historyTruncated": false,
+                "versions": [[
+                    "versionId": "00000000-0000-0000-0000-000000000001",
+                    "versionNumber": 1,
+                    "status": "current",
+                    "decision": "accepted",
+                    "contentSchemaVersion": "owner-truth-v2",
+                    "contentHash": String(repeating: "a", count: 64),
+                    "content": ["summary": "首版正式记忆"],
+                    "sourceCount": 1,
+                    "createdAt": "2026-08-24T12:37:35Z",
+                ]],
+            ],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        let backendObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+
+        let detail = try OwnerTruthFormalMemoryDetail(
+            backendJSONObject: backendObject,
+            expectedVaultID: vaultID
+        )
+
+        XCTAssertEqual(detail.memory.currentVersion.versionNumber, 1)
+        XCTAssertEqual(detail.memory.currentVersion.sourceCount, 1)
+        XCTAssertEqual(detail.memory.currentVersion.summary, "首版正式记忆")
+    }
+
+    func testFormalMemoryVersionUsesTypedV3ContentAsSummaryAndEditableField() throws {
+        let version = try OwnerTruthFormalMemoryVersion(
+            backendJSONObject: [
+                "versionId": "00000000-0000-0000-0000-000000000001",
+                "versionNumber": 1,
+                "status": "current",
+                "decision": "accepted",
+                "contentSchemaVersion": "owner-truth-v3",
+                "contentHash": String(repeating: "a", count: 64),
+                "content": [
+                    "event": "大学毕业后，我第一次独自搬到上海生活。",
+                    "time": ["precision": "year", "value": "2015"],
+                    "facets": [:],
+                ],
+                "sourceCount": 1,
+                "createdAt": "2026-08-24T12:37:35Z",
+            ]
+        )
+
+        XCTAssertEqual(version.summary, "大学毕业后，我第一次独自搬到上海生活。")
+        XCTAssertEqual(version.editableTextKey, "event")
+        XCTAssertEqual(
+            version.content(replacingEditableText: "更正后的经历")["event"],
+            .string("更正后的经历")
+        )
+    }
+
+    func testSourceRecordPageParsesOrganizationAndReviewCounts() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-source-records"))
+        let page = try OwnerTruthSourceRecordPage(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthSourceRecordPage.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "records": [[
+                    "sourceId": "00000000-0000-0000-0000-000000000201",
+                    "sourceKind": "text",
+                    "sourceVersion": 1,
+                    "state": "active",
+                    "textPreview": "我第一次独自搬到上海生活。",
+                    "origin": "archiveTextEntry",
+                    "createdAt": "2026-08-24T12:37:35Z",
+                    "updatedAt": "2026-08-24T12:38:35Z",
+                    "organizationStatus": "awaitingReview",
+                    "extractionStatus": "succeeded",
+                    "failureCode": NSNull(),
+                    "candidateCount": 3,
+                    "pendingCount": 3,
+                    "confirmedCount": 0,
+                    "rejectedCount": 0,
+                ]],
+                "nextCursor": NSNull(),
+            ],
+            expectedVaultID: vaultID
+        )
+
+        XCTAssertEqual(page.records.count, 1)
+        XCTAssertEqual(page.records[0].organizationStatus, .awaitingReview)
+        XCTAssertEqual(page.records[0].pendingCount, 3)
+        XCTAssertEqual(page.records[0].displayPreview, "我第一次独自搬到上海生活。")
+    }
+
+    func testSourceRecordDetailKeepsOriginalTextSeparateFromFormalMemory() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-source-record-detail"))
+        let detail = try OwnerTruthSourceRecordDetail(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthSourceRecordDetail.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "record": [
+                    "sourceId": "00000000-0000-0000-0000-000000000202",
+                    "sourceKind": "text",
+                    "sourceVersion": 1,
+                    "state": "active",
+                    "textPreview": "一段原始输入",
+                    "text": "一段原始输入，完整内容保持不变。",
+                    "origin": NSNull(),
+                    "createdAt": "2026-08-24T12:37:35Z",
+                    "updatedAt": "2026-08-24T12:38:35Z",
+                    "organizationStatus": "confirmed",
+                    "extractionStatus": "succeeded",
+                    "failureCode": NSNull(),
+                    "candidateCount": 2,
+                    "pendingCount": 0,
+                    "confirmedCount": 2,
+                    "rejectedCount": 0,
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+
+        XCTAssertEqual(detail.text, "一段原始输入，完整内容保持不变。")
+        XCTAssertEqual(detail.record.organizationStatus, .confirmed)
+        XCTAssertEqual(detail.record.confirmedCount, 2)
+    }
+
     func testFormalMemoryRevisionRequiresSecondConfirmation() throws {
         let content: [String: OwnerTruthJSONValue] = ["summary": .string("修订后的正式记忆")]
         XCTAssertThrowsError(
@@ -215,6 +361,82 @@ final class OwnerTruthContractsTests: XCTestCase {
                 return XCTFail("expected a text Source state contract failure")
             }
         }
+    }
+
+    func testTextSourceCaptureStateAcceptsJSONNumericEpochsAndRejectsBooleanEpoch() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-owner-a"))
+
+        for authorityEpoch in [0, 1, 2] {
+            let data = Data(
+                """
+                {
+                  "schemaVersion": "owner-truth-text-capture-state-v1",
+                  "vaultId": "vault-owner-a",
+                  "authorityEpoch": \(authorityEpoch)
+                }
+                """.utf8
+            )
+            let response = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: data) as? [String: Any]
+            )
+            let state = try OwnerTruthTextSourceCaptureState(
+                backendJSONObject: response,
+                expectedVaultID: vaultID
+            )
+            XCTAssertEqual(state.authorityEpoch, authorityEpoch)
+        }
+
+        let booleanData = Data(
+            """
+            {
+              "schemaVersion": "owner-truth-text-capture-state-v1",
+              "vaultId": "vault-owner-a",
+              "authorityEpoch": true
+            }
+            """.utf8
+        )
+        let booleanResponse = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: booleanData) as? [String: Any]
+        )
+        XCTAssertThrowsError(
+            try OwnerTruthTextSourceCaptureState(
+                backendJSONObject: booleanResponse,
+                expectedVaultID: vaultID
+            )
+        )
+    }
+
+    func testTextSourceCaptureReceiptAcceptsJSONSourceVersionOneAndEpochZero() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-owner-a"))
+        let data = Data(
+            """
+            {
+              "schemaVersion": "owner-truth-text-capture-response-v1",
+              "vaultId": "vault-owner-a",
+              "source": {
+                "schemaVersion": "owner-truth-create-source-v1",
+                "status": "created",
+                "receiptId": "00000000-0000-0000-0000-000000000102",
+                "sourceId": "00000000-0000-0000-0000-000000000103",
+                "sourceVersion": 1,
+                "authorityEpoch": 0
+              },
+              "candidateExtraction": {"status": "requested"},
+              "acceptedAt": "2026-08-24T10:00:00Z"
+            }
+            """.utf8
+        )
+        let response = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+
+        let receipt = try OwnerTruthTextSourceCaptureReceipt(
+            backendJSONObject: response,
+            expectedVaultID: vaultID
+        )
+
+        XCTAssertEqual(receipt.sourceVersion, 1)
+        XCTAssertEqual(receipt.authorityEpoch, 0)
     }
 
     func testTextSourceCaptureReceiptIsValueMinimizedAndRejectsLeakedContent() throws {
