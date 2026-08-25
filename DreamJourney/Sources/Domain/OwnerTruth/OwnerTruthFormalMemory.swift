@@ -237,6 +237,173 @@ enum OwnerTruthPersonMemoryProfileState: String, Equatable, Sendable {
     case empty
 }
 
+struct OwnerTruthPersonLifeRecord: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-person-life-record-v1"
+    static let algorithmVersion = "person-life-record-plain-text-v1"
+
+    let state: OwnerTruthPersonMemoryProfileState
+    let title: String
+    let text: String?
+    let paragraphs: [String]
+
+    init(title: String, paragraphs: [String]) {
+        self.state = paragraphs.isEmpty ? .empty : .ready
+        self.title = title
+        self.paragraphs = paragraphs
+        self.text = paragraphs.isEmpty ? nil : paragraphs.joined(separator: "\n\n")
+    }
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard OwnerTruthFormalMemoryContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthFormalMemoryContract.requiredString(object["algorithmVersion"])
+                == Self.algorithmVersion,
+              OwnerTruthFormalMemoryContract.requiredString(object["format"]) == "plainText",
+              let rawState = OwnerTruthFormalMemoryContract.requiredString(object["state"]),
+              let state = OwnerTruthPersonMemoryProfileState(rawValue: rawState),
+              let title = OwnerTruthFormalMemoryContract.requiredString(object["title"]),
+              let paragraphCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                object["paragraphCount"]
+              ),
+              let rawParagraphs = object["paragraphs"] as? [String] else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("人生记录字段缺失或越界")
+        }
+        let paragraphs = rawParagraphs.compactMap(OwnerTruthFormalMemoryContract.requiredString)
+        let text = OwnerTruthFormalMemoryContract.requiredString(object["text"])
+        guard paragraphs.count == rawParagraphs.count,
+              paragraphs.count == paragraphCount else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("人生记录段落无效")
+        }
+        switch state {
+        case .ready:
+            guard !paragraphs.isEmpty,
+                  text == paragraphs.joined(separator: "\n\n") else {
+                throw OwnerTruthFormalMemoryContractError.invalidProfile("人生记录正文不完整")
+            }
+        case .empty:
+            guard paragraphs.isEmpty, text == nil else {
+                throw OwnerTruthFormalMemoryContractError.invalidProfile("空人生记录不得携带正文")
+            }
+        }
+        self.state = state
+        self.title = title
+        self.text = text
+        self.paragraphs = paragraphs
+    }
+}
+
+struct OwnerTruthPersonLifeStoryChapter: Equatable, Sendable, Identifiable {
+    let id: String
+    let title: String
+    let text: String
+    let paragraphs: [String]
+    let supportingMemoryIDs: [OwnerTruthRecordID]
+    let supportingMemoryVersionIDs: [OwnerTruthRecordID]
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let id = OwnerTruthFormalMemoryContract.requiredString(object["chapterId"]),
+              let title = OwnerTruthFormalMemoryContract.requiredString(object["title"]),
+              OwnerTruthFormalMemoryContract.requiredString(object["format"]) == "plainText",
+              let paragraphCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                object["paragraphCount"]
+              ),
+              let rawParagraphs = object["paragraphs"] as? [String],
+              let text = OwnerTruthFormalMemoryContract.requiredString(object["text"]),
+              let supportingMemoryCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                object["supportingMemoryCount"]
+              ),
+              let rawMemoryIDs = object["supportingMemoryIds"] as? [String],
+              let rawVersionIDs = object["supportingMemoryVersionIds"] as? [String] else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("人生篇章字段缺失或越界")
+        }
+        let paragraphs = rawParagraphs.compactMap(OwnerTruthFormalMemoryContract.requiredString)
+        let memoryIDs = rawMemoryIDs.compactMap(OwnerTruthFormalMemoryContract.recordID)
+        let versionIDs = rawVersionIDs.compactMap(OwnerTruthFormalMemoryContract.recordID)
+        guard !paragraphs.isEmpty,
+              paragraphs.count == rawParagraphs.count,
+              paragraphs.count == paragraphCount,
+              text == paragraphs.joined(separator: "\n\n"),
+              !memoryIDs.isEmpty,
+              memoryIDs.count == rawMemoryIDs.count,
+              memoryIDs.count == supportingMemoryCount,
+              Set(memoryIDs).count == memoryIDs.count,
+              versionIDs.count == rawVersionIDs.count,
+              versionIDs.count == supportingMemoryCount,
+              Set(versionIDs).count == versionIDs.count else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("人生篇章正文或来源引用无效")
+        }
+        self.id = id
+        self.title = title
+        self.text = text
+        self.paragraphs = paragraphs
+        self.supportingMemoryIDs = memoryIDs
+        self.supportingMemoryVersionIDs = versionIDs
+    }
+}
+
+struct OwnerTruthPersonLifeStory: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-person-life-story-v1"
+    static let algorithmVersion = "person-life-story-chapter-projection-v1"
+
+    let state: OwnerTruthPersonMemoryProfileState
+    let title: String
+    let overview: String?
+    let chapters: [OwnerTruthPersonLifeStoryChapter]
+    let isLegacyFallback: Bool
+
+    init(legacyLifeRecord: OwnerTruthPersonLifeRecord) {
+        state = legacyLifeRecord.state
+        title = legacyLifeRecord.title
+        overview = legacyLifeRecord.text
+        chapters = []
+        isLegacyFallback = true
+    }
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard OwnerTruthFormalMemoryContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthFormalMemoryContract.requiredString(object["algorithmVersion"])
+                == Self.algorithmVersion,
+              OwnerTruthFormalMemoryContract.requiredString(object["format"]) == "plainText",
+              let rawState = OwnerTruthFormalMemoryContract.requiredString(object["state"]),
+              let state = OwnerTruthPersonMemoryProfileState(rawValue: rawState),
+              let title = OwnerTruthFormalMemoryContract.requiredString(object["title"]),
+              let chapterCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                object["chapterCount"]
+              ),
+              let supportingMemoryCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                object["supportingMemoryCount"]
+              ),
+              let rawChapters = object["chapters"] as? [[String: Any]] else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("人生记录篇章契约无效")
+        }
+        let overview = OwnerTruthFormalMemoryContract.requiredString(object["overview"])
+        let chapters = try rawChapters.map(OwnerTruthPersonLifeStoryChapter.init)
+        let memoryIDs = chapters.flatMap(\.supportingMemoryIDs)
+        guard chapters.count == chapterCount,
+              Set(chapters.map(\.id)).count == chapters.count,
+              memoryIDs.count == supportingMemoryCount,
+              Set(memoryIDs).count == memoryIDs.count else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("人生记录篇章或来源存在重复")
+        }
+        switch state {
+        case .ready:
+            guard overview != nil, !chapters.isEmpty, !memoryIDs.isEmpty else {
+                throw OwnerTruthFormalMemoryContractError.invalidProfile("人生记录缺少总览或篇章")
+            }
+        case .empty:
+            guard overview == nil, chapters.isEmpty, memoryIDs.isEmpty else {
+                throw OwnerTruthFormalMemoryContractError.invalidProfile("空人生记录不得携带篇章")
+            }
+        }
+        self.state = state
+        self.title = title
+        self.overview = overview
+        self.chapters = chapters
+        isLegacyFallback = false
+    }
+}
+
 struct OwnerTruthPersonMemoryProfile: Equatable, Sendable {
     static let schemaVersion = "owner-truth-person-memory-profile-v1"
     static let algorithmVersion = "person-memory-dimension-summary-v1"
@@ -246,6 +413,8 @@ struct OwnerTruthPersonMemoryProfile: Equatable, Sendable {
     let profileVersion: String
     let updatedAt: Date?
     let memoryCount: Int
+    let lifeRecord: OwnerTruthPersonLifeRecord
+    let lifeStory: OwnerTruthPersonLifeStory
     let dimensions: [OwnerTruthPersonMemoryDimension]
 
     init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID) throws {
@@ -273,6 +442,73 @@ struct OwnerTruthPersonMemoryProfile: Equatable, Sendable {
               (state == .ready) == (memoryCount > 0) else {
             throw OwnerTruthFormalMemoryContractError.invalidProfile("画像状态与正式记忆数量不一致")
         }
+        let lifeRecord = try Self.parseLifeRecord(
+            from: object,
+            dimensions: dimensions,
+            expectedState: state
+        )
+        let lifeStory = try Self.parseLifeStory(
+            from: object,
+            legacyLifeRecord: lifeRecord,
+            expectedState: state,
+            expectedMemoryCount: memoryCount
+        )
+        let updatedAt = try Self.parseUpdatedAt(from: object, expectedState: state)
+        vaultID = expectedVaultID
+        self.state = state
+        self.profileVersion = profileVersion
+        self.updatedAt = updatedAt
+        self.memoryCount = memoryCount
+        self.lifeRecord = lifeRecord
+        self.lifeStory = lifeStory
+        self.dimensions = dimensions
+    }
+
+    private static func parseLifeRecord(
+        from object: [String: Any],
+        dimensions: [OwnerTruthPersonMemoryDimension],
+        expectedState: OwnerTruthPersonMemoryProfileState
+    ) throws -> OwnerTruthPersonLifeRecord {
+        let lifeRecord: OwnerTruthPersonLifeRecord
+        if let lifeRecordObject = object["lifeRecord"] as? [String: Any] {
+            lifeRecord = try OwnerTruthPersonLifeRecord(backendJSONObject: lifeRecordObject)
+        } else {
+            lifeRecord = OwnerTruthPersonLifeRecord(
+                title: "我的人生记录",
+                paragraphs: dimensions.compactMap(\.narrative)
+            )
+        }
+        guard lifeRecord.state == expectedState else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("人生记录状态与正式记忆不一致")
+        }
+        return lifeRecord
+    }
+
+    private static func parseLifeStory(
+        from object: [String: Any],
+        legacyLifeRecord: OwnerTruthPersonLifeRecord,
+        expectedState: OwnerTruthPersonMemoryProfileState,
+        expectedMemoryCount: Int
+    ) throws -> OwnerTruthPersonLifeStory {
+        let lifeStory: OwnerTruthPersonLifeStory
+        if let lifeStoryObject = object["lifeStory"] as? [String: Any] {
+            lifeStory = try OwnerTruthPersonLifeStory(backendJSONObject: lifeStoryObject)
+            guard lifeStory.chapters.flatMap(\.supportingMemoryIDs).count == expectedMemoryCount else {
+                throw OwnerTruthFormalMemoryContractError.invalidProfile("人生篇章未覆盖全部正式记忆")
+            }
+        } else {
+            lifeStory = OwnerTruthPersonLifeStory(legacyLifeRecord: legacyLifeRecord)
+        }
+        guard lifeStory.state == expectedState else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("人生篇章状态与正式记忆不一致")
+        }
+        return lifeStory
+    }
+
+    private static func parseUpdatedAt(
+        from object: [String: Any],
+        expectedState: OwnerTruthPersonMemoryProfileState
+    ) throws -> Date? {
         let updatedAt: Date?
         if object["updatedAt"] is NSNull || object["updatedAt"] == nil {
             updatedAt = nil
@@ -281,15 +517,11 @@ struct OwnerTruthPersonMemoryProfile: Equatable, Sendable {
         } else {
             throw OwnerTruthFormalMemoryContractError.invalidProfile("画像更新时间无效")
         }
-        guard (state == .empty && updatedAt == nil) || (state == .ready && updatedAt != nil) else {
+        guard (expectedState == .empty && updatedAt == nil)
+                || (expectedState == .ready && updatedAt != nil) else {
             throw OwnerTruthFormalMemoryContractError.invalidProfile("画像状态与更新时间不一致")
         }
-        vaultID = expectedVaultID
-        self.state = state
-        self.profileVersion = profileVersion
-        self.updatedAt = updatedAt
-        self.memoryCount = memoryCount
-        self.dimensions = dimensions
+        return updatedAt
     }
 }
 

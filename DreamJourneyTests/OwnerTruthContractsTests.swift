@@ -28,6 +28,10 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "supportingMemoryIds": ids,
             ]
         }
+        let paragraphs = [
+            "小时候常在老院子里听外祖父讲故事，这些经历让我更重视家人。",
+            "面对复杂工作，我习惯先拆分问题，再逐项验证。",
+        ]
         let profile = try OwnerTruthPersonMemoryProfile(
             backendJSONObject: [
                 "schemaVersion": OwnerTruthPersonMemoryProfile.schemaVersion,
@@ -37,6 +41,21 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "profileVersion": String(repeating: "a", count: 64),
                 "updatedAt": "2026-08-25T10:00:00Z",
                 "memoryCount": 2,
+                "lifeRecord": [
+                    "schemaVersion": OwnerTruthPersonLifeRecord.schemaVersion,
+                    "algorithmVersion": OwnerTruthPersonLifeRecord.algorithmVersion,
+                    "format": "plainText",
+                    "state": "ready",
+                    "title": "我的人生记录",
+                    "paragraphCount": paragraphs.count,
+                    "paragraphs": paragraphs,
+                    "text": paragraphs.joined(separator: "\n\n"),
+                ],
+                "lifeStory": lifeStoryFixture(
+                    paragraphs: paragraphs,
+                    experienceID: experienceID,
+                    knowledgeID: knowledgeID
+                ),
                 "dimensions": [
                     dimension(
                         "lifeExperience",
@@ -65,6 +84,16 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
 
         XCTAssertEqual(profile.memoryCount, 2)
+        XCTAssertEqual(profile.lifeRecord.title, "我的人生记录")
+        XCTAssertEqual(profile.lifeRecord.paragraphs, paragraphs)
+        XCTAssertFalse(profile.lifeRecord.text?.contains("#") == true)
+        XCTAssertEqual(profile.lifeStory.title, "我的人生记录")
+        XCTAssertEqual(profile.lifeStory.chapters.map(\.title), ["家庭与成长", "经验与信念"])
+        XCTAssertEqual(
+            Set(profile.lifeStory.chapters.flatMap(\.supportingMemoryIDs)),
+            Set([recordID(experienceID), recordID(knowledgeID)])
+        )
+        XCTAssertFalse(profile.lifeStory.isLegacyFallback)
         XCTAssertEqual(profile.dimensions.map(\.kind), OwnerTruthPersonMemoryDimensionKind.allCases)
         XCTAssertEqual(profile.dimensions[0].supportingMemoryIDs.count, 1)
         XCTAssertTrue(profile.dimensions[0].narrative?.contains("共同勾勒") == true)
@@ -83,6 +112,16 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "profileVersion": String(repeating: "b", count: 64),
                 "updatedAt": "2026-08-25T10:00:00Z",
                 "memoryCount": 1,
+                "lifeRecord": [
+                    "schemaVersion": OwnerTruthPersonLifeRecord.schemaVersion,
+                    "algorithmVersion": OwnerTruthPersonLifeRecord.algorithmVersion,
+                    "format": "plainText",
+                    "state": "ready",
+                    "title": "我的人生记录",
+                    "paragraphCount": 1,
+                    "paragraphs": ["一段连续的人生记录。"],
+                    "text": "一段连续的人生记录。",
+                ],
                 "dimensions": [[
                     "dimension": "lifeExperience",
                     "title": "经历与人生轨迹",
@@ -7011,6 +7050,53 @@ final class OwnerTruthContractsTests: XCTestCase {
 
     private func recordID(_ rawValue: String) -> OwnerTruthRecordID {
         OwnerTruthRecordID(rawValue: UUID(uuidString: rawValue)!)
+    }
+
+    private func lifeStoryFixture(
+        paragraphs: [String],
+        experienceID: String,
+        knowledgeID: String
+    ) -> [String: Any] {
+        let chapterInputs = [
+            (
+                id: "chapter-family",
+                title: "家庭与成长",
+                paragraph: paragraphs[0],
+                memoryID: experienceID,
+                versionID: "00000000-0000-0000-0000-000000000201"
+            ),
+            (
+                id: "chapter-wisdom",
+                title: "经验与信念",
+                paragraph: paragraphs[1],
+                memoryID: knowledgeID,
+                versionID: "00000000-0000-0000-0000-000000000202"
+            )
+        ]
+        let chapters: [[String: Any]] = chapterInputs.map { input in
+            [
+                "chapterId": input.id,
+                "title": input.title,
+                "format": "plainText",
+                "paragraphCount": 1,
+                "paragraphs": [input.paragraph],
+                "text": input.paragraph,
+                "supportingMemoryCount": 1,
+                "supportingMemoryIds": [input.memoryID],
+                "supportingMemoryVersionIds": [input.versionID]
+            ]
+        }
+        return [
+            "schemaVersion": OwnerTruthPersonLifeStory.schemaVersion,
+            "algorithmVersion": OwnerTruthPersonLifeStory.algorithmVersion,
+            "format": "plainText",
+            "state": "ready",
+            "title": "我的人生记录",
+            "overview": "我的故事从家庭与成长和经验与信念这些篇章展开。",
+            "chapterCount": chapters.count,
+            "supportingMemoryCount": chapters.count,
+            "chapters": chapters
+        ]
     }
 
     private func textSourceCaptureState(

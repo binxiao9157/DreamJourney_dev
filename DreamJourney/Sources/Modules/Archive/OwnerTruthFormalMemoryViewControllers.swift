@@ -6,7 +6,7 @@ final class OwnerTruthPersonMemoryProfileViewController: UIViewController {
     private let formalMemoryClient: OwnerTruthFormalMemoryClient
     private let publicationClient: PublicationDraftWriterClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
-    private let tableView = UITableView(frame: .zero, style: .insetGrouped)
+    private let tableView = UITableView(frame: .zero, style: .plain)
     private let statusLabel = UILabel()
     private lazy var refreshButton = UIBarButtonItem(
         barButtonSystemItem: .refresh,
@@ -72,17 +72,25 @@ final class OwnerTruthPersonMemoryProfileViewController: UIViewController {
         refreshButton.accessibilityIdentifier = "owner-truth-person-memory-profile-refresh"
         refreshButton.accessibilityLabel = "刷新人物记忆归纳"
         detailsButton.accessibilityIdentifier = "owner-truth-person-memory-details"
-        detailsButton.accessibilityLabel = "查看正式记忆明细"
+        detailsButton.accessibilityLabel = "查看逐条已确认记忆"
         navigationItem.rightBarButtonItems = [refreshButton, detailsButton]
     }
 
     private func configureTable() {
         tableView.backgroundColor = DJDesignTokens.Color.background
-        tableView.separatorStyle = .singleLine
+        tableView.separatorStyle = .none
         tableView.rowHeight = UITableView.automaticDimension
-        tableView.estimatedRowHeight = 132
+        tableView.estimatedRowHeight = 360
         tableView.dataSource = self
         tableView.delegate = self
+        tableView.register(
+            OwnerTruthLifeStoryOverviewCell.self,
+            forCellReuseIdentifier: OwnerTruthLifeStoryOverviewCell.reuseIdentifier
+        )
+        tableView.register(
+            OwnerTruthLifeStoryChapterCell.self,
+            forCellReuseIdentifier: OwnerTruthLifeStoryChapterCell.reuseIdentifier
+        )
         tableView.accessibilityIdentifier = "owner-truth-person-memory-profile"
 
         statusLabel.font = DJDesignTokens.Font.body(15)
@@ -158,7 +166,7 @@ final class OwnerTruthPersonMemoryProfileViewController: UIViewController {
                 case .success(let profile):
                     self.profile = profile
                     self.statusLabel.text = profile.state == .empty
-                        ? "还没有正式记忆。确认后的记忆会在这里形成维度归纳。"
+                        ? "还没有正式记忆。确认后的内容会在这里持续整理为一份人生记录。"
                         : nil
                     self.statusLabel.isHidden = profile.state == .ready
                     self.tableView.reloadData()
@@ -190,43 +198,189 @@ extension OwnerTruthPersonMemoryProfileViewController: UITableViewDataSource, UI
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        profile?.dimensions.count ?? 0
-    }
-
-    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        guard let profile else { return nil }
-        return "人物记忆归纳 · \(profile.memoryCount) 条正式记忆"
-    }
-
-    func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        guard let updatedAt = profile?.updatedAt else { return nil }
-        return "最近更新：\(updatedAt.formalMemoryDateText)"
+        guard let profile, profile.lifeStory.state == .ready else { return 0 }
+        return 1 + profile.lifeStory.chapters.count
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        guard let dimension = profile?.dimensions[indexPath.row] else {
+        guard let profile else { return UITableViewCell() }
+        if indexPath.row == 0 {
+            guard let cell = tableView.dequeueReusableCell(
+                withIdentifier: OwnerTruthLifeStoryOverviewCell.reuseIdentifier,
+                for: indexPath
+            ) as? OwnerTruthLifeStoryOverviewCell else {
+                return UITableViewCell()
+            }
+            cell.configure(
+                title: profile.lifeStory.title,
+                overview: profile.lifeStory.overview ?? "",
+                updatedAt: profile.updatedAt
+            )
+            return cell
+        }
+
+        guard profile.lifeStory.chapters.indices.contains(indexPath.row - 1),
+              let cell = tableView.dequeueReusableCell(
+                withIdentifier: OwnerTruthLifeStoryChapterCell.reuseIdentifier,
+                for: indexPath
+              ) as? OwnerTruthLifeStoryChapterCell else {
             return UITableViewCell()
         }
-        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
-        cell.backgroundColor = DJDesignTokens.Color.surface
-        cell.selectionStyle = .none
-        cell.imageView?.image = UIImage(systemName: dimension.kind.systemImageName)
-        cell.imageView?.tintColor = dimension.status == .ready
-            ? DJDesignTokens.Color.accentDeep
-            : DJDesignTokens.Color.textTertiary
-        cell.textLabel?.text = dimension.title
-        cell.textLabel?.font = DJDesignTokens.Font.body(17)
-        cell.textLabel?.textColor = DJDesignTokens.Color.textPrimary
-        cell.detailTextLabel?.text = dimension.narrative ?? "尚未形成足够的已确认记忆"
-        cell.detailTextLabel?.font = DJDesignTokens.Font.body(15)
-        cell.detailTextLabel?.textColor = dimension.status == .ready
-            ? DJDesignTokens.Color.textSecondary
-            : DJDesignTokens.Color.textTertiary
-        cell.detailTextLabel?.numberOfLines = 0
-        cell.accessibilityIdentifier = "owner-truth-person-memory-dimension-\(dimension.kind.rawValue)"
-        cell.accessibilityLabel = "\(dimension.title)，\(dimension.narrative ?? "尚未形成")"
+        let chapterIndex = indexPath.row - 1
+        let chapter = profile.lifeStory.chapters[chapterIndex]
+        cell.configure(
+            chapterNumber: chapterIndex + 1,
+            title: chapter.title,
+            text: chapter.text
+        )
         return cell
     }
+}
+
+private final class OwnerTruthLifeStoryOverviewCell: UITableViewCell {
+    static let reuseIdentifier = "OwnerTruthLifeStoryOverviewCell"
+
+    private let titleLabel = UILabel()
+    private let metadataLabel = UILabel()
+    private let bodyLabel = UILabel()
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        backgroundColor = DJDesignTokens.Color.background
+        selectionStyle = .none
+
+        titleLabel.font = .systemFont(ofSize: 30, weight: .semibold)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        titleLabel.numberOfLines = 0
+
+        metadataLabel.font = DJDesignTokens.Font.body(14)
+        metadataLabel.textColor = DJDesignTokens.Color.textTertiary
+        metadataLabel.numberOfLines = 0
+
+        bodyLabel.textColor = DJDesignTokens.Color.textPrimary
+        bodyLabel.numberOfLines = 0
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, metadataLabel, bodyLabel])
+        stack.axis = .vertical
+        stack.alignment = .fill
+        stack.spacing = 14
+        contentView.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(
+                equalTo: contentView.topAnchor,
+                constant: DJDesignTokens.Spacing.section
+            ),
+            stack.leadingAnchor.constraint(
+                equalTo: contentView.leadingAnchor,
+                constant: DJDesignTokens.Spacing.page
+            ),
+            stack.trailingAnchor.constraint(
+                equalTo: contentView.trailingAnchor,
+                constant: -DJDesignTokens.Spacing.page
+            ),
+            stack.bottomAnchor.constraint(
+                equalTo: contentView.bottomAnchor,
+                constant: -DJDesignTokens.Spacing.section
+            )
+        ])
+        accessibilityIdentifier = "owner-truth-person-life-story-overview"
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(title: String, overview: String, updatedAt: Date?) {
+        titleLabel.text = title
+        if let updatedAt {
+            metadataLabel.text = "由已确认记忆持续整理 · 更新于 \(updatedAt.formalMemoryDateText)"
+        } else {
+            metadataLabel.text = "由已确认记忆持续整理"
+        }
+        bodyLabel.attributedText = lifeStoryAttributedText(overview, fontSize: 18)
+        accessibilityLabel = "\(title)，\(overview)"
+    }
+}
+
+private final class OwnerTruthLifeStoryChapterCell: UITableViewCell {
+    static let reuseIdentifier = "OwnerTruthLifeStoryChapterCell"
+
+    private let chapterLabel = UILabel()
+    private let titleLabel = UILabel()
+    private let bodyLabel = UILabel()
+    private let divider = UIView()
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        backgroundColor = DJDesignTokens.Color.background
+        selectionStyle = .none
+
+        chapterLabel.font = DJDesignTokens.Font.body(13)
+        chapterLabel.textColor = DJDesignTokens.Color.accent
+        chapterLabel.numberOfLines = 1
+
+        titleLabel.font = .systemFont(ofSize: 24, weight: .semibold)
+        titleLabel.textColor = DJDesignTokens.Color.textPrimary
+        titleLabel.numberOfLines = 0
+
+        bodyLabel.textColor = DJDesignTokens.Color.textPrimary
+        bodyLabel.numberOfLines = 0
+
+        divider.backgroundColor = DJDesignTokens.Color.divider.withAlphaComponent(0.55)
+        let stack = UIStackView(arrangedSubviews: [divider, chapterLabel, titleLabel, bodyLabel])
+        stack.axis = .vertical
+        stack.alignment = .fill
+        stack.spacing = 12
+        contentView.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        divider.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            divider.heightAnchor.constraint(equalToConstant: 1),
+            stack.topAnchor.constraint(
+                equalTo: contentView.topAnchor,
+                constant: DJDesignTokens.Spacing.section
+            ),
+            stack.leadingAnchor.constraint(
+                equalTo: contentView.leadingAnchor,
+                constant: DJDesignTokens.Spacing.page
+            ),
+            stack.trailingAnchor.constraint(
+                equalTo: contentView.trailingAnchor,
+                constant: -DJDesignTokens.Spacing.page
+            ),
+            stack.bottomAnchor.constraint(
+                equalTo: contentView.bottomAnchor,
+                constant: -DJDesignTokens.Spacing.section
+            )
+        ])
+        accessibilityIdentifier = "owner-truth-person-life-story-chapter"
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(chapterNumber: Int, title: String, text: String) {
+        chapterLabel.text = "第 \(chapterNumber) 章"
+        titleLabel.text = title
+        bodyLabel.attributedText = lifeStoryAttributedText(text, fontSize: 18)
+        accessibilityLabel = "第 \(chapterNumber) 章，\(title)，\(text)"
+    }
+}
+
+private func lifeStoryAttributedText(_ text: String, fontSize: CGFloat) -> NSAttributedString {
+    let paragraphStyle = NSMutableParagraphStyle()
+    paragraphStyle.lineSpacing = 7
+    paragraphStyle.paragraphSpacing = 16
+    return NSAttributedString(
+        string: text,
+        attributes: [
+            .font: DJDesignTokens.Font.body(fontSize),
+            .foregroundColor: DJDesignTokens.Color.textPrimary,
+            .paragraphStyle: paragraphStyle
+        ]
+    )
 }
 
 final class OwnerTruthFormalMemoryListViewController: UIViewController {
