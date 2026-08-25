@@ -9,6 +9,93 @@ import XCTest
 #endif
 
 final class OwnerTruthContractsTests: XCTestCase {
+    func testPersonMemoryProfileDecodesOneNarrativePerStableDimension() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-person-profile"))
+        let experienceID = "00000000-0000-0000-0000-000000000101"
+        let knowledgeID = "00000000-0000-0000-0000-000000000102"
+        func dimension(
+            _ key: String,
+            title: String,
+            narrative: String? = nil,
+            ids: [String] = []
+        ) -> [String: Any] {
+            [
+                "dimension": key,
+                "title": title,
+                "status": narrative == nil ? "empty" : "ready",
+                "narrative": narrative ?? NSNull(),
+                "supportingMemoryCount": ids.count,
+                "supportingMemoryIds": ids,
+            ]
+        }
+        let profile = try OwnerTruthPersonMemoryProfile(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthPersonMemoryProfile.schemaVersion,
+                "algorithmVersion": OwnerTruthPersonMemoryProfile.algorithmVersion,
+                "state": "ready",
+                "vaultId": vaultID.rawValue,
+                "profileVersion": String(repeating: "a", count: 64),
+                "updatedAt": "2026-08-25T10:00:00Z",
+                "memoryCount": 2,
+                "dimensions": [
+                    dimension(
+                        "lifeExperience",
+                        title: "经历与人生轨迹",
+                        narrative: "这些正式记忆共同勾勒出两段人生经历。",
+                        ids: [experienceID]
+                    ),
+                    dimension(
+                        "knowledgeAndSkills",
+                        title: "知识与经验",
+                        narrative: "目前沉淀出一项经验。",
+                        ids: [knowledgeID]
+                    ),
+                    dimension("emotionsAndAttachments", title: "情感与牵挂"),
+                    dimension(
+                        "importantRelationships",
+                        title: "家庭与社会关系",
+                        narrative: "正式记忆中出现了一位重要人物。",
+                        ids: [experienceID]
+                    ),
+                    dimension("personality", title: "性格特征"),
+                    dimension("valuesAndChoices", title: "价值观与人生选择"),
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+
+        XCTAssertEqual(profile.memoryCount, 2)
+        XCTAssertEqual(profile.dimensions.map(\.kind), OwnerTruthPersonMemoryDimensionKind.allCases)
+        XCTAssertEqual(profile.dimensions[0].supportingMemoryIDs.count, 1)
+        XCTAssertTrue(profile.dimensions[0].narrative?.contains("共同勾勒") == true)
+        XCTAssertEqual(profile.dimensions[2].status, .empty)
+        XCTAssertNil(profile.dimensions[2].narrative)
+    }
+
+    func testPersonMemoryProfileRejectsGroupedRowsMasqueradingAsNarrative() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-person-profile-invalid"))
+        XCTAssertThrowsError(try OwnerTruthPersonMemoryProfile(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthPersonMemoryProfile.schemaVersion,
+                "algorithmVersion": OwnerTruthPersonMemoryProfile.algorithmVersion,
+                "state": "ready",
+                "vaultId": vaultID.rawValue,
+                "profileVersion": String(repeating: "b", count: 64),
+                "updatedAt": "2026-08-25T10:00:00Z",
+                "memoryCount": 1,
+                "dimensions": [[
+                    "dimension": "lifeExperience",
+                    "title": "经历与人生轨迹",
+                    "status": "ready",
+                    "narrative": NSNull(),
+                    "supportingMemoryCount": 1,
+                    "supportingMemoryIds": ["00000000-0000-0000-0000-000000000101"],
+                ]],
+            ],
+            expectedVaultID: vaultID
+        ))
+    }
+
     func testFormalMemoryDetailKeepsCurrentPlusThreeHistory() throws {
         let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-formal"))
         let memoryID = "00000000-0000-0000-0000-000000000101"

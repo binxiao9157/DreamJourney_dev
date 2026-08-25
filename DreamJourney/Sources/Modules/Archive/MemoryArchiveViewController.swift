@@ -3703,7 +3703,7 @@ final class MemoryArchiveViewController: UIViewController {
             return
         }
         navigationController?.pushViewController(
-            OwnerTruthFormalMemoryListViewController(accountLease: accountLease),
+            OwnerTruthPersonMemoryProfileViewController(accountLease: accountLease),
             animated: true
         )
     }

@@ -1,5 +1,234 @@
 import UIKit
 
+final class OwnerTruthPersonMemoryProfileViewController: UIViewController {
+    private let accountLease: AccountLease
+    private let profileClient: OwnerTruthPersonMemoryProfileClient
+    private let formalMemoryClient: OwnerTruthFormalMemoryClient
+    private let publicationClient: PublicationDraftWriterClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let tableView = UITableView(frame: .zero, style: .insetGrouped)
+    private let statusLabel = UILabel()
+    private lazy var refreshButton = UIBarButtonItem(
+        barButtonSystemItem: .refresh,
+        target: self,
+        action: #selector(refreshTapped)
+    )
+    private lazy var detailsButton = UIBarButtonItem(
+        image: UIImage(systemName: "list.bullet.rectangle"),
+        style: .plain,
+        target: self,
+        action: #selector(detailsTapped)
+    )
+    private var profile: OwnerTruthPersonMemoryProfile?
+    private var requestGeneration: UInt64 = 0
+    private var isLoading = false
+    private var hasAppeared = false
+
+    init(
+        accountLease: AccountLease,
+        profileClient: OwnerTruthPersonMemoryProfileClient = DreamJourneyBackendClient.shared,
+        formalMemoryClient: OwnerTruthFormalMemoryClient = DreamJourneyBackendClient.shared,
+        publicationClient: PublicationDraftWriterClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+    ) {
+        self.accountLease = accountLease
+        self.profileClient = profileClient
+        self.formalMemoryClient = formalMemoryClient
+        self.publicationClient = publicationClient
+        self.accountLeaseRuntime = accountLeaseRuntime
+        super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "正式记忆"
+        view.backgroundColor = DJDesignTokens.Color.background
+        configureNavigation()
+        configureTable()
+        load()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+        navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
+        if hasAppeared {
+            load()
+        } else {
+            hasAppeared = true
+        }
+    }
+
+    private var vaultID: OwnerTruthVaultID? {
+        OwnerTruthVaultID(accountLease.vaultId)
+    }
+
+    private func configureNavigation() {
+        refreshButton.accessibilityIdentifier = "owner-truth-person-memory-profile-refresh"
+        refreshButton.accessibilityLabel = "刷新人物记忆归纳"
+        detailsButton.accessibilityIdentifier = "owner-truth-person-memory-details"
+        detailsButton.accessibilityLabel = "查看正式记忆明细"
+        navigationItem.rightBarButtonItems = [refreshButton, detailsButton]
+    }
+
+    private func configureTable() {
+        tableView.backgroundColor = DJDesignTokens.Color.background
+        tableView.separatorStyle = .singleLine
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 132
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.accessibilityIdentifier = "owner-truth-person-memory-profile"
+
+        statusLabel.font = DJDesignTokens.Font.body(15)
+        statusLabel.textColor = DJDesignTokens.Color.textTertiary
+        statusLabel.textAlignment = .center
+        statusLabel.numberOfLines = 0
+        statusLabel.accessibilityIdentifier = "owner-truth-person-memory-profile-status"
+
+        view.addSubview(tableView)
+        view.addSubview(statusLabel)
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            tableView.topAnchor.constraint(equalTo: view.topAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            statusLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            statusLabel.leadingAnchor.constraint(
+                equalTo: view.leadingAnchor,
+                constant: DJDesignTokens.Spacing.page
+            ),
+            statusLabel.trailingAnchor.constraint(
+                equalTo: view.trailingAnchor,
+                constant: -DJDesignTokens.Spacing.page
+            ),
+        ])
+    }
+
+    @objc private func refreshTapped() {
+        load()
+    }
+
+    @objc private func detailsTapped() {
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            failClosedForAccountChange()
+            return
+        }
+        navigationController?.pushViewController(
+            OwnerTruthFormalMemoryListViewController(
+                accountLease: accountLease,
+                client: formalMemoryClient,
+                publicationClient: publicationClient,
+                accountLeaseRuntime: accountLeaseRuntime
+            ),
+            animated: true
+        )
+    }
+
+    private func load() {
+        guard !isLoading,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+              let vaultID else {
+            if !isLoading { failClosedForAccountChange() }
+            return
+        }
+        requestGeneration &+= 1
+        let generation = requestGeneration
+        isLoading = true
+        refreshButton.isEnabled = false
+        statusLabel.text = "正在归纳正式记忆..."
+        statusLabel.isHidden = false
+        profileClient.fetchOwnerTruthPersonMemoryProfile(vaultID: vaultID) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self,
+                      generation == self.requestGeneration,
+                      self.accountLeaseRuntime.validate(self.accountLease, at: .ui).allowed else {
+                    return
+                }
+                self.isLoading = false
+                self.refreshButton.isEnabled = true
+                switch result {
+                case .success(let profile):
+                    self.profile = profile
+                    self.statusLabel.text = profile.state == .empty
+                        ? "还没有正式记忆。确认后的记忆会在这里形成维度归纳。"
+                        : nil
+                    self.statusLabel.isHidden = profile.state == .ready
+                    self.tableView.reloadData()
+                case .failure(let error):
+                    self.profile = nil
+                    self.tableView.reloadData()
+                    self.statusLabel.text = "人物记忆归纳读取失败。\n\(error.localizedDescription)"
+                    self.statusLabel.isHidden = false
+                }
+            }
+        }
+    }
+
+    private func failClosedForAccountChange() {
+        requestGeneration &+= 1
+        isLoading = false
+        profile = nil
+        tableView.reloadData()
+        statusLabel.text = "账号已变化，请返回后重新进入正式记忆。"
+        statusLabel.isHidden = false
+        refreshButton.isEnabled = false
+        detailsButton.isEnabled = false
+    }
+}
+
+extension OwnerTruthPersonMemoryProfileViewController: UITableViewDataSource, UITableViewDelegate {
+    func numberOfSections(in tableView: UITableView) -> Int {
+        profile == nil ? 0 : 1
+    }
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        profile?.dimensions.count ?? 0
+    }
+
+    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        guard let profile else { return nil }
+        return "人物记忆归纳 · \(profile.memoryCount) 条正式记忆"
+    }
+
+    func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+        guard let updatedAt = profile?.updatedAt else { return nil }
+        return "最近更新：\(updatedAt.formalMemoryDateText)"
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        guard let dimension = profile?.dimensions[indexPath.row] else {
+            return UITableViewCell()
+        }
+        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        cell.backgroundColor = DJDesignTokens.Color.surface
+        cell.selectionStyle = .none
+        cell.imageView?.image = UIImage(systemName: dimension.kind.systemImageName)
+        cell.imageView?.tintColor = dimension.status == .ready
+            ? DJDesignTokens.Color.accentDeep
+            : DJDesignTokens.Color.textTertiary
+        cell.textLabel?.text = dimension.title
+        cell.textLabel?.font = DJDesignTokens.Font.body(17)
+        cell.textLabel?.textColor = DJDesignTokens.Color.textPrimary
+        cell.detailTextLabel?.text = dimension.narrative ?? "尚未形成足够的已确认记忆"
+        cell.detailTextLabel?.font = DJDesignTokens.Font.body(15)
+        cell.detailTextLabel?.textColor = dimension.status == .ready
+            ? DJDesignTokens.Color.textSecondary
+            : DJDesignTokens.Color.textTertiary
+        cell.detailTextLabel?.numberOfLines = 0
+        cell.accessibilityIdentifier = "owner-truth-person-memory-dimension-\(dimension.kind.rawValue)"
+        cell.accessibilityLabel = "\(dimension.title)，\(dimension.narrative ?? "尚未形成")"
+        return cell
+    }
+}
+
 final class OwnerTruthFormalMemoryListViewController: UIViewController {
     private let accountLease: AccountLease
     private let client: OwnerTruthFormalMemoryClient
@@ -1412,6 +1641,19 @@ private extension OwnerTruthMemoryKind {
         case .experience: return "经历记忆"
         case .knowledge: return "知识记忆"
         case .emotion: return "情感记忆"
+        }
+    }
+}
+
+private extension OwnerTruthPersonMemoryDimensionKind {
+    var systemImageName: String {
+        switch self {
+        case .lifeExperience: return "clock.arrow.circlepath"
+        case .knowledgeAndSkills: return "lightbulb"
+        case .emotionsAndAttachments: return "heart.text.square"
+        case .importantRelationships: return "person.2"
+        case .personality: return "person.text.rectangle"
+        case .valuesAndChoices: return "compass.drawing"
         }
     }
 }

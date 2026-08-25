@@ -7929,6 +7929,47 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         }
     }
 
+    func fetchOwnerTruthPersonMemoryProfile(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthPersonMemoryProfile, Error>) -> Void
+    ) {
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane
+            ? nil
+            : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                    reason: decision?.reason ?? "releasePolicyDisabled"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/memory-profile",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            featureDecision: decision,
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthPersonMemoryProfile(
+                        backendJSONObject: object,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     func fetchOwnerTruthFormalMemories(
         vaultID: OwnerTruthVaultID,
         query: OwnerTruthFormalMemoryQuery,
@@ -14293,6 +14334,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
 }
 
 extension DreamJourneyBackendClient: OwnerTruthCandidateReviewClient {}
+extension DreamJourneyBackendClient: OwnerTruthPersonMemoryProfileClient {}
 extension DreamJourneyBackendClient: OwnerTruthFormalMemoryClient {}
 extension DreamJourneyBackendClient: OwnerTruthSourceRecordClient {}
 extension DreamJourneyBackendClient: OwnerTruthTextSourceCaptureClient {}

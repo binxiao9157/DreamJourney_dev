@@ -2,6 +2,7 @@ import Foundation
 
 enum OwnerTruthFormalMemoryContractError: LocalizedError, Equatable, Sendable {
     case invalidList(String)
+    case invalidProfile(String)
     case invalidDetail(String)
     case invalidQuery(String)
     case invalidRevision(String)
@@ -10,6 +11,8 @@ enum OwnerTruthFormalMemoryContractError: LocalizedError, Equatable, Sendable {
         switch self {
         case .invalidList(let detail):
             return "正式记忆列表合同无效：\(detail)"
+        case .invalidProfile(let detail):
+            return "人物记忆归纳合同无效：\(detail)"
         case .invalidDetail(let detail):
             return "正式记忆详情合同无效：\(detail)"
         case .invalidQuery(let detail):
@@ -164,6 +167,129 @@ struct OwnerTruthFormalMemoryPage: Equatable, Sendable {
         vaultID = expectedVaultID
         self.memories = memories
         nextCursor = OwnerTruthFormalMemoryContract.requiredString(object["nextCursor"])
+    }
+}
+
+enum OwnerTruthPersonMemoryDimensionKind: String, CaseIterable, Equatable, Sendable {
+    case lifeExperience
+    case knowledgeAndSkills
+    case emotionsAndAttachments
+    case importantRelationships
+    case personality
+    case valuesAndChoices
+}
+
+enum OwnerTruthPersonMemoryDimensionStatus: String, Equatable, Sendable {
+    case ready
+    case empty
+}
+
+struct OwnerTruthPersonMemoryDimension: Equatable, Sendable, Identifiable {
+    var id: OwnerTruthPersonMemoryDimensionKind { kind }
+
+    let kind: OwnerTruthPersonMemoryDimensionKind
+    let title: String
+    let status: OwnerTruthPersonMemoryDimensionStatus
+    let narrative: String?
+    let supportingMemoryIDs: [OwnerTruthRecordID]
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let rawKind = OwnerTruthFormalMemoryContract.requiredString(object["dimension"]),
+              let kind = OwnerTruthPersonMemoryDimensionKind(rawValue: rawKind),
+              let title = OwnerTruthFormalMemoryContract.requiredString(object["title"]),
+              let rawStatus = OwnerTruthFormalMemoryContract.requiredString(object["status"]),
+              let status = OwnerTruthPersonMemoryDimensionStatus(rawValue: rawStatus),
+              let supportingMemoryCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                object["supportingMemoryCount"]
+              ),
+              let rawSupportingMemoryIDs = object["supportingMemoryIds"] as? [String] else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("维度字段缺失或越界")
+        }
+        let supportingMemoryIDs = rawSupportingMemoryIDs.compactMap {
+            OwnerTruthFormalMemoryContract.recordID($0)
+        }
+        guard supportingMemoryIDs.count == rawSupportingMemoryIDs.count,
+              Set(supportingMemoryIDs).count == supportingMemoryIDs.count,
+              supportingMemoryIDs.count == supportingMemoryCount else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("维度证据引用无效")
+        }
+        let narrative = OwnerTruthFormalMemoryContract.requiredString(object["narrative"])
+        switch status {
+        case .ready:
+            guard narrative != nil, !supportingMemoryIDs.isEmpty else {
+                throw OwnerTruthFormalMemoryContractError.invalidProfile("已归纳维度缺少正文或证据")
+            }
+        case .empty:
+            guard narrative == nil, supportingMemoryIDs.isEmpty else {
+                throw OwnerTruthFormalMemoryContractError.invalidProfile("空维度不得携带正文或证据")
+            }
+        }
+        self.kind = kind
+        self.title = title
+        self.status = status
+        self.narrative = narrative
+        self.supportingMemoryIDs = supportingMemoryIDs
+    }
+}
+
+enum OwnerTruthPersonMemoryProfileState: String, Equatable, Sendable {
+    case ready
+    case empty
+}
+
+struct OwnerTruthPersonMemoryProfile: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-person-memory-profile-v1"
+    static let algorithmVersion = "person-memory-dimension-summary-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let state: OwnerTruthPersonMemoryProfileState
+    let profileVersion: String
+    let updatedAt: Date?
+    let memoryCount: Int
+    let dimensions: [OwnerTruthPersonMemoryDimension]
+
+    init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID) throws {
+        guard OwnerTruthFormalMemoryContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthFormalMemoryContract.requiredString(object["algorithmVersion"])
+                == Self.algorithmVersion,
+              OwnerTruthFormalMemoryContract.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let rawState = OwnerTruthFormalMemoryContract.requiredString(object["state"]),
+              let state = OwnerTruthPersonMemoryProfileState(rawValue: rawState),
+              let profileVersion = OwnerTruthFormalMemoryContract.sha256(object["profileVersion"]),
+              let memoryCount = OwnerTruthFormalMemoryContract.nonNegativeInt(object["memoryCount"]),
+              let rawDimensions = object["dimensions"] as? [[String: Any]] else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile(
+                "schemaVersion、vaultId 或画像字段无效"
+            )
+        }
+        let dimensions = try rawDimensions.map(OwnerTruthPersonMemoryDimension.init)
+        guard dimensions.map(\.kind) == OwnerTruthPersonMemoryDimensionKind.allCases else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("人物记忆维度缺失、重复或顺序错误")
+        }
+        let supportingMemoryIDs = Set(dimensions.flatMap(\.supportingMemoryIDs))
+        guard supportingMemoryIDs.count == memoryCount,
+              (state == .ready) == (memoryCount > 0) else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("画像状态与正式记忆数量不一致")
+        }
+        let updatedAt: Date?
+        if object["updatedAt"] is NSNull || object["updatedAt"] == nil {
+            updatedAt = nil
+        } else if let parsed = OwnerTruthFormalMemoryContract.date(object["updatedAt"]) {
+            updatedAt = parsed
+        } else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("画像更新时间无效")
+        }
+        guard (state == .empty && updatedAt == nil) || (state == .ready && updatedAt != nil) else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("画像状态与更新时间不一致")
+        }
+        vaultID = expectedVaultID
+        self.state = state
+        self.profileVersion = profileVersion
+        self.updatedAt = updatedAt
+        self.memoryCount = memoryCount
+        self.dimensions = dimensions
     }
 }
 
@@ -357,6 +483,13 @@ protocol OwnerTruthFormalMemoryClient: AnyObject {
         memoryID: OwnerTruthRecordID,
         command: OwnerTruthFormalMemoryRevisionCommand,
         completion: @escaping (Result<OwnerTruthFormalMemoryRevisionReceipt, Error>) -> Void
+    )
+}
+
+protocol OwnerTruthPersonMemoryProfileClient: AnyObject {
+    func fetchOwnerTruthPersonMemoryProfile(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthPersonMemoryProfile, Error>) -> Void
     )
 }
 
