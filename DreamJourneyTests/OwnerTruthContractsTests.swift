@@ -756,6 +756,97 @@ final class OwnerTruthContractsTests: XCTestCase {
         }
     }
 
+    func testTextSourceCapturePolicyPreflightUsesFreshAuthorizationWithoutRefresh() throws {
+        var authorizationChecks = 0
+        var refreshCount = 0
+        var recaptureCount = 0
+        let preflight = OwnerTruthTextSourceCapturePolicyPreflight(
+            isAuthorized: {
+                authorizationChecks += 1
+                return true
+            },
+            refreshPolicy: { completion in
+                refreshCount += 1
+                completion(true)
+            },
+            recaptureRoutes: {
+                recaptureCount += 1
+            }
+        )
+
+        var result: Result<Void, OwnerTruthTextSourceCapturePolicyPreflightError>?
+        preflight.authorize { result = $0 }
+
+        XCTAssertNoThrow(try XCTUnwrap(result).get())
+        XCTAssertEqual(authorizationChecks, 1)
+        XCTAssertEqual(refreshCount, 0)
+        XCTAssertEqual(recaptureCount, 0)
+    }
+
+    func testTextSourceCapturePolicyPreflightRefreshesExpiredAuthorization() throws {
+        var isAuthorized = false
+        var refreshCount = 0
+        var recaptureCount = 0
+        let preflight = OwnerTruthTextSourceCapturePolicyPreflight(
+            isAuthorized: { isAuthorized },
+            refreshPolicy: { completion in
+                refreshCount += 1
+                completion(true)
+            },
+            recaptureRoutes: {
+                recaptureCount += 1
+                isAuthorized = true
+            }
+        )
+
+        var result: Result<Void, OwnerTruthTextSourceCapturePolicyPreflightError>?
+        preflight.authorize { result = $0 }
+
+        XCTAssertNoThrow(try XCTUnwrap(result).get())
+        XCTAssertEqual(refreshCount, 1)
+        XCTAssertEqual(recaptureCount, 1)
+    }
+
+    func testTextSourceCapturePolicyPreflightKeepsTextEntryOpenWhenRefreshFails() throws {
+        var recaptureCount = 0
+        let preflight = OwnerTruthTextSourceCapturePolicyPreflight(
+            isAuthorized: { false },
+            refreshPolicy: { completion in completion(false) },
+            recaptureRoutes: { recaptureCount += 1 }
+        )
+
+        var result: Result<Void, OwnerTruthTextSourceCapturePolicyPreflightError>?
+        preflight.authorize { result = $0 }
+
+        XCTAssertThrowsError(try XCTUnwrap(result).get()) { error in
+            XCTAssertEqual(
+                error as? OwnerTruthTextSourceCapturePolicyPreflightError,
+                .refreshFailed
+            )
+        }
+        XCTAssertEqual(recaptureCount, 0)
+    }
+
+    func testTextSourceCapturePolicyPreflightFailsClosedAfterDeniedRefresh() throws {
+        var recaptureCount = 0
+        let preflight = OwnerTruthTextSourceCapturePolicyPreflight(
+            isAuthorized: { false },
+            refreshPolicy: { completion in completion(true) },
+            recaptureRoutes: { recaptureCount += 1 }
+        )
+
+        var result: Result<Void, OwnerTruthTextSourceCapturePolicyPreflightError>?
+        preflight.authorize { result = $0 }
+
+        XCTAssertThrowsError(try XCTUnwrap(result).get()) { error in
+            XCTAssertEqual(
+                error as? OwnerTruthTextSourceCapturePolicyPreflightError,
+                .unavailable
+            )
+        }
+        XCTAssertEqual(recaptureCount, 1)
+    }
+
     func testArchiveCreationOptionsKeepOwnerTruthSourceHiddenByDefault() {
         let defaultOptions = MemoryArchiveCreationOption.availableOptions(
             isAudioUploadEnabled: false,

@@ -2302,6 +2302,64 @@ enum OwnerTruthTextSourceCaptureUseCaseError: LocalizedError, Equatable, Sendabl
     }
 }
 
+enum OwnerTruthTextSourceCapturePolicyPreflightError: LocalizedError, Equatable, Sendable {
+    case refreshFailed
+    case unavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .refreshFailed:
+            return "无法更新记忆提交权限，请检查网络后重试"
+        case .unavailable:
+            return "当前账号暂未开放记忆提交或待确认审核"
+        }
+    }
+}
+
+/// Refreshes an expired server policy before a Source write without relaxing
+/// the server-owned admission decision. The caller supplies the concrete
+/// policy store operations so this workflow remains deterministic in tests.
+final class OwnerTruthTextSourceCapturePolicyPreflight {
+    typealias AuthorizationCheck = () -> Bool
+    typealias PolicyRefresh = (@escaping (Bool) -> Void) -> Void
+    typealias RouteRecapture = () -> Void
+    typealias Completion = (Result<Void, OwnerTruthTextSourceCapturePolicyPreflightError>) -> Void
+
+    private let isAuthorized: AuthorizationCheck
+    private let refreshPolicy: PolicyRefresh
+    private let recaptureRoutes: RouteRecapture
+
+    init(
+        isAuthorized: @escaping AuthorizationCheck,
+        refreshPolicy: @escaping PolicyRefresh,
+        recaptureRoutes: @escaping RouteRecapture
+    ) {
+        self.isAuthorized = isAuthorized
+        self.refreshPolicy = refreshPolicy
+        self.recaptureRoutes = recaptureRoutes
+    }
+
+    func authorize(completion: @escaping Completion) {
+        guard !isAuthorized() else {
+            completion(.success(()))
+            return
+        }
+
+        refreshPolicy { [isAuthorized, recaptureRoutes] refreshed in
+            guard refreshed else {
+                completion(.failure(.refreshFailed))
+                return
+            }
+            recaptureRoutes()
+            guard isAuthorized() else {
+                completion(.failure(.unavailable))
+                return
+            }
+            completion(.success(()))
+        }
+    }
+}
+
 struct OwnerTruthTextSourceCaptureViewState: Equatable, Sendable {
     let phase: OwnerTruthTextSourceCapturePhase
     let notice: OwnerTruthTextSourceCaptureNotice?

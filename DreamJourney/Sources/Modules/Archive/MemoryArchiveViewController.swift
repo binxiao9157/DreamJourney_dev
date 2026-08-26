@@ -4142,9 +4142,60 @@ final class MemoryArchiveViewController: UIViewController {
                 self?.isOwnerTruthTextCaptureEnabled == true
             }
         )
+        let requiredFeatures: [DJFeature] = [
+            .ownerTextCaptureV1,
+            .ownerTruthCandidateReview,
+        ]
+        let policyPreflight = OwnerTruthTextSourceCapturePolicyPreflight(
+            isAuthorized: {
+                let now = Date()
+                return requiredFeatures.allSatisfy { feature in
+                    let decision = FeatureGateService.shared
+                        .requestServerPolicyManagedDecision(for: feature)
+                    guard decision.allowed,
+                          let expiresAt = decision.expiresAt else {
+                        return false
+                    }
+                    // Leave enough time for the authority read and Source write
+                    // to use the same fresh policy capture.
+                    return expiresAt.timeIntervalSince(now) > 15
+                }
+            },
+            refreshPolicy: { completion in
+                FeatureGateService.shared.refreshPolicy(for: .ownerTextCaptureV1) { result in
+                    switch result {
+                    case .success:
+                        completion(true)
+                    case .failure:
+                        completion(false)
+                    }
+                }
+            },
+            recaptureRoutes: {
+                requiredFeatures.forEach { feature in
+                    FeatureGateService.shared.captureServerPolicyManagedRoute(feature)
+                }
+            }
+        )
+        let accountLeaseRuntime = self.accountLeaseRuntime
         entryViewController.onSubmitOwnerTruthSource = { text, completion in
-            useCase.submit(text) { result in
-                completion(result.mapError { $0 as Error })
+            policyPreflight.authorize { authorizationResult in
+                DispatchQueue.main.async {
+                    guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+                        completion(.failure(
+                            OwnerTruthTextSourceCaptureUseCaseError.unavailable(.accountUnavailable)
+                        ))
+                        return
+                    }
+                    switch authorizationResult {
+                    case .success:
+                        useCase.submit(text) { result in
+                            completion(result.mapError { $0 as Error })
+                        }
+                    case .failure(let error):
+                        completion(.failure(error))
+                    }
+                }
             }
         }
         entryViewController.onOwnerTruthSourceAccepted = { [weak self] _ in
