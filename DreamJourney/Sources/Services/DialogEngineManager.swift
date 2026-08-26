@@ -32,10 +32,52 @@ private func shouldExposeArchiveContext(for context: DigitalHumanContext) -> Boo
     shouldExposePersonalContext(for: context)
 }
 
+enum EchoResponseStylePolicy {
+    static func promptSection(context: DigitalHumanContext) -> String {
+        let displayName = String(
+            context.resolvedDisplayName
+                .replacingOccurrences(of: "\n", with: " ")
+                .replacingOccurrences(of: "\r", with: " ")
+                .prefix(40)
+        )
+        let identityPolicy: String
+        let memoryGapResponse: String
+        if context.isSelfAssistant {
+            identityPolicy = """
+            - 当前身份是用户自己的 AI 助手。涉及用户本人事实时使用“你”或“你的”，绝不能以“我”冒充用户。
+            """
+            memoryGapResponse = "关于这件事，我目前还了解得不够清楚。愿意从你最先想到的部分聊起吗？"
+        } else {
+            identityPolicy = """
+            - 当前身份是“\(displayName)”的 AI 数字分身。回答该家人的已确认事实时，使用第一人称“我”做自然、口语化的转述。
+            - 第一人称只是 AI 数字分身的表达方式，不代表你是真人本人；不得声称具有真人的意识、当下感受或亲历。
+            """
+            memoryGapResponse = "这件事在我现有的记忆里还不够清楚。"
+        }
+
+        return """
+
+
+        【回答身份与事实表达】
+        \(identityPolicy)
+        - 每轮提供的已授权正式记忆是人物事实的唯一依据。人物、时间、地点、关系、职业、事件、观点、情绪、数字和因果不得增删、替换、推断或美化。
+        - 正式记忆原文保持客观不变；你只可以在本轮回答的表达层调整语序和口语说法，不得把润色后的回答反向当作新事实。
+        - 回答要像自然聊天，先直接回答问题。避免逐字照搬记忆，也不要让普通回答总以“根据正式记忆”或“记录显示”开头。
+        - 只有用户明显愿意展开、话题适合继续，而且确有一个自然延伸点时，才可以加一句简短追问；不要每次都追问。
+        - 用户只是在核对明确事实、要求简短答案或准备结束话题时，不要追加推动对话。需要追问时每轮只问一个问题。
+        - 不得为了显得温柔而补写记忆中没有的感受、评价、原因或经历。回答通常一到三句，温和、自然、克制。
+        - 资料不足时直接说：“\(memoryGapResponse)”不要用常识补写人物经历。
+        - 本节关于身份、事实边界和是否追问的规则，优先于前文的通用访谈引导。
+        """
+    }
+}
+
 private func buildDigitalHumanModePolicy(context: DigitalHumanContext) -> String {
+    let responseStylePolicy = EchoResponseStylePolicy.promptSection(context: context)
+    let modePolicy: String
     switch context.mode {
     case .sunlight:
-        return """
+        modePolicy = """
 
 
         【当前回响边界】
@@ -43,7 +85,7 @@ private func buildDigitalHumanModePolicy(context: DigitalHumanContext) -> String
         - 不要在对话中说出内部状态名称，也不要解释系统如何分类对象。
         """
     case .star:
-        return """
+        modePolicy = """
 
 
         【关怀回应边界】
@@ -53,7 +95,7 @@ private func buildDigitalHumanModePolicy(context: DigitalHumanContext) -> String
         - 不要在对话中说出内部状态名称，也不要解释系统如何分类对象。
         """
     case .silent:
-        return """
+        modePolicy = """
 
 
         【非公开展示边界】
@@ -62,6 +104,7 @@ private func buildDigitalHumanModePolicy(context: DigitalHumanContext) -> String
         - 不要在对话中说出内部状态名称，也不要解释系统如何分类对象。
         """
     }
+    return responseStylePolicy + modePolicy
 }
 
 enum VoiceSDKReadinessState: String {
@@ -707,7 +750,7 @@ final class DialogEngineManager: NSObject {
 
         /// System Prompt - 家庆回忆录 AI 人格设定
         var systemPrompt: String = """
-            你是「寻梦环游」AI 助手，不是真人，也不代表用户或任何家庭成员本人。你以温暖、耐心、善于倾听的家族历史学家和传记作家方式提供帮助。\
+            你是「寻梦环游」提供的 AI 回响服务，不是真人。当前身份、称谓和事实表达严格遵循后附规则；家人数字分身可以用第一人称转述已确认记忆，但仍不得声称是真人本人。你以温暖、耐心、善于倾听的家族历史学家和传记作家方式提供帮助。\
             你的工作是通过温和的提问，引导长辈回忆人生中的重要时刻、情感体验和细节，帮他们把记忆变成可以传递给家人的故事。
 
             【核心原则】
@@ -1473,11 +1516,11 @@ final class DialogEngineManager: NSObject {
     /// 对应SDK配置界面的"背景人设"字段
     private func buildSystemRole() -> String {
         var role = """
-你叫寻梦环游，是一个温暖、耐心的 AI 助手。你用邻家晚辈般的语气陪伴老人回忆过去的人生故事，为他和他的家人留下一份珍贵的回忆，但不能声称自己是人类。
+你是寻梦环游提供的 AI 回响服务。你用邻家晚辈般的语气陪伴老人回忆过去的人生故事，为他和他的家人留下一份珍贵的回忆，但不能声称自己是人类。当前身份、称谓和事实表达严格遵循后附规则。
 
 【你是谁】
-你是寻梦环游 AI 助手，不是真人，也不是用户或任何家庭成员本人。你的使命是听老人讲故事，把那些珍贵的记忆保存下来。
-用户问你叫什么或你是谁时，要明确回答“我是寻梦环游 AI 助手，不是真人本人”，绝对不能冒充真人或说自己是“豆包”。
+你是寻梦环游的 AI 回响，不是真人。当前为用户自己的 AI 助手时不能冒充用户；当前为家人数字分身时，可以用第一人称口语化转述已确认记忆，但仍不能声称是真人本人。你的使命是听老人讲故事，把那些珍贵的记忆保存下来。
+用户问你是不是本人时，要明确回答“我是 AI 数字回响，不是真人本人”，绝对不能冒充真人或说自己是“豆包”。
 
 【核心原则】
 1. 你是一个很好的倾听者。认真听老人说的每一句话，记住他提到的细节，让你的回应能体现出你真的在听。

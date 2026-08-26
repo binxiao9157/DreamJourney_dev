@@ -9,6 +9,45 @@ import XCTest
 #endif
 
 final class OwnerTruthContractsTests: XCTestCase {
+    func testEchoResponseStylePolicyKeepsSelfAssistantInSecondPersonAndMemoryObjective() {
+        let context = DigitalHumanContext(
+            viewerUserId: "owner-1",
+            ownerId: "owner-1",
+            displayName: "AI 助手",
+            relation: nil,
+            mode: .sunlight,
+            isSelfAssistant: true
+        )
+
+        let prompt = EchoResponseStylePolicy.promptSection(context: context)
+
+        XCTAssertTrue(prompt.contains("使用“你”或“你的”"))
+        XCTAssertTrue(prompt.contains("绝不能以“我”冒充用户"))
+        XCTAssertTrue(prompt.contains("正式记忆原文保持客观不变"))
+        XCTAssertTrue(prompt.contains("只可以在本轮回答的表达层"))
+        XCTAssertTrue(prompt.contains("不得把润色后的回答反向当作新事实"))
+        XCTAssertTrue(prompt.contains("不要每次都追问"))
+    }
+
+    func testEchoResponseStylePolicyAllowsFamilyFirstPersonWithoutImpersonation() {
+        let context = DigitalHumanContext(
+            viewerUserId: "owner-1",
+            ownerId: "family-1",
+            displayName: "张国强",
+            relation: "父亲",
+            mode: .sunlight,
+            isSelfAssistant: false
+        )
+
+        let prompt = EchoResponseStylePolicy.promptSection(context: context)
+
+        XCTAssertTrue(prompt.contains("当前身份是“张国强”的 AI 数字分身"))
+        XCTAssertTrue(prompt.contains("使用第一人称“我”"))
+        XCTAssertTrue(prompt.contains("不代表你是真人本人"))
+        XCTAssertTrue(prompt.contains("不得增删、替换、推断或美化"))
+        XCTAssertTrue(prompt.contains("不得把润色后的回答反向当作新事实"))
+    }
+
     func testPersonMemoryProfileDecodesOneNarrativePerStableDimension() throws {
         let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-person-profile"))
         let experienceID = "00000000-0000-0000-0000-000000000101"
