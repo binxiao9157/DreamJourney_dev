@@ -72,6 +72,23 @@ enum EchoResponseStylePolicy {
     }
 }
 
+/// Live starts from the authoritative server memory on each user turn. Its
+/// greeting must therefore stay neutral instead of claiming that a lossy local
+/// transcript summary is a confirmed memory.
+enum LiveSessionGreetingPolicy {
+    static let greetings = [
+        "您好呀，我是寻梦环游。今天想从哪件事开始聊？",
+        "您好，我在这里听着。今天想聊聊什么？",
+        "又见面啦。您慢慢说，今天想先从哪里讲起？",
+        "您好呀，今天有没有什么想和我说的？",
+        "您好，我准备好了。今天想聊一段怎样的回忆？",
+    ]
+
+    static func makeGreeting() -> String {
+        greetings.randomElement() ?? "您好，我在这里听着。今天想聊聊什么？"
+    }
+}
+
 private func buildDigitalHumanModePolicy(context: DigitalHumanContext) -> String {
     let responseStylePolicy = EchoResponseStylePolicy.promptSection(context: context)
     let modePolicy: String
@@ -2712,7 +2729,8 @@ extension DialogEngineManager {
 
     // MARK: - 开场白
 
-    /// 会话建立后发送开场白（有历史时用上下文关联，否则随机）
+    /// 会话建立后发送中性开场白。正式记忆只在当前用户问题确定后由
+    /// V4 Context 检索，不能用本地关键词摘要冒充已确认的跨会话记忆。
     private func sendGreetingIfNeeded() {
         guard let engine = engine else { return }
         guard !suppressGreetingForNextStart else {
@@ -2722,21 +2740,7 @@ extension DialogEngineManager {
             return
         }
 
-        let memory = ConversationMemoryManager.shared.currentMemory
-        let context = DigitalHumanContextStore.shared.current
-        let shouldUseContextualGreeting = shouldExposePersonalContext(for: context)
-        let greeting: String
-
-        // 判断是否有有意义的上下文（四维度摘要至少1个维度）
-        let hasContext = shouldUseContextualGreeting && memory.sessionCount > 0 && memory.lastSummary.hasAnyDimension
-
-        if hasContext {
-            // 有历史记忆 → 上下文关联开场白
-            greeting = generateContextGreeting(memory: memory)
-        } else {
-            // 首次对话或无有意义上下文 → 系统推荐话题
-            greeting = recommendedTopicGreeting()
-        }
+        let greeting = recommendedTopicGreeting()
 
         let payload: [String: Any] = ["content": greeting]
         guard let jsonData = try? JSONSerialization.data(withJSONObject: payload),
@@ -2750,69 +2754,10 @@ extension DialogEngineManager {
         }
     }
 
-    /// 生成上下文关联的开场白（基于四维度摘要 + 知识库，每次随机不重复）
-    private func generateContextGreeting(memory: ConversationMemory) -> String {
-        let summary = memory.lastSummary
-        let sentence = summary.toNaturalSentence()
-
-        // 【KBLite】尝试用知识库丰富开场白
-        let kbHint = KBLiteManager.shared.buildGreetingHint()
-
-        // 有自然摘要时，围绕摘要构造开场白
-        if !sentence.isEmpty {
-            let templates = [
-                "又见面啦！上次您聊到\(sentence)，今天还想接着说说吗？",
-                "您好呀！我还记着\(sentence)呢，后来又想起什么了没？",
-                "您来啦！上次说的\(sentence)可真好，今天想再跟我讲讲吗？",
-                "又见面了！\(sentence)那件事我一直记着呢，还想听听更多。",
-                "您好！上次聊的\(sentence)太有意思了，今天想接着聊吗？",
-            ]
-            return templates.randomElement()!
-        }
-
-        // 如果知识库有人物信息，用人物做开场
-        if !kbHint.isEmpty {
-            let personTemplates: [String] = [
-                "又见面啦！我还记得您说过\(kbHint)，今天想聊聊谁呀？",
-                "您好呀！上次咱们提到\(kbHint)，今天想接着说说吗？",
-                "您来啦！我记着\(kbHint)呢，今天想聊点什么？",
-            ]
-            return personTemplates.randomElement()!
-        }
-
-        // 只有个别维度，直接引用
-        if !summary.person.isEmpty {
-            return "又见面啦！上次您提到的\(summary.person)，后来怎么样了呀？"
-        }
-        if !summary.place.isEmpty {
-            return "您好呀！上次聊到\(summary.place)，今天还想说说那儿的事吗？"
-        }
-        if !summary.event.isEmpty {
-            return "您来啦！上次聊的\(summary.event)，今天想接着讲吗？"
-        }
-        if !summary.time.isEmpty {
-            return "又见面啦！上次您聊起\(summary.time)的事，今天还想继续吗？"
-        }
-
-        // 四维度都为空，回退系统推荐
-        return recommendedTopicGreeting()
-    }
-
-    /// 系统推荐话题开场白（无上下文时使用，每次随机不重复）
+    /// 不读取本地 ConversationMemory/KBLite，避免把未确认或残缺片段
+    /// 表述成“上次记得的事实”。
     private func recommendedTopicGreeting() -> String {
-        let topics = [
-            "您好呀，我是寻梦环游！今天想跟您聊聊天，您小时候最喜欢玩什么呀？",
-            "您好！我是寻梦环游，今天想听您讲讲过去的事。您老家在哪儿呀？",
-            "又见面啦！今天想聊点什么呢？要不跟我说说您最拿手的菜？",
-            "您好呀！我是寻梦环游，今天有没有什么想跟我说的？比如小时候过年是什么样的？",
-            "您好！今天天气不错，您以前这种天气都做什么呀？",
-            "您好呀！我是寻梦环游，您还记不记得第一份工作是做什么的？",
-            "又见面啦！今天想聊点什么？要不讲讲您跟老伴怎么认识的？",
-            "您好！我是寻梦环游，小时候有没有哪种味道让您到现在都忘不了？",
-            "您好呀！今天想听听您的故事，您有什么拿手本事吗？",
-            "您好！我是寻梦环游，您有没有一直记在心里的人，想跟我聊聊？",
-        ]
-        return topics.randomElement()!
+        LiveSessionGreetingPolicy.makeGreeting()
     }
 
     // MARK: - 记忆上下文构建

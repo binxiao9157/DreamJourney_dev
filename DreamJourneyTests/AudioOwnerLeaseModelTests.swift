@@ -6,6 +6,19 @@ import UIKit
 @testable import DreamJourneyCore
 #endif
 
+final class LiveSessionGreetingPolicyTests: XCTestCase {
+    func testGreetingsDoNotClaimUnverifiedPreviousMemory() {
+        XCTAssertFalse(LiveSessionGreetingPolicy.greetings.isEmpty)
+        for greeting in LiveSessionGreetingPolicy.greetings {
+            XCTAssertFalse(greeting.contains("上次"))
+            XCTAssertFalse(greeting.contains("我还记得"))
+            XCTAssertFalse(greeting.contains("我还记着"))
+            XCTAssertFalse(greeting.contains("我记着"))
+            XCTAssertTrue(greeting.hasSuffix("？"))
+        }
+    }
+}
+
 final class AudioOwnerLeaseModelTests: XCTestCase {
     func testDigitalHumanPlaybackPreemptsEchoCaptureAndStaleReleaseCannotClearIt() {
         let clock = ControllableClock(now: Date(timeIntervalSince1970: 1_700_000_000))
