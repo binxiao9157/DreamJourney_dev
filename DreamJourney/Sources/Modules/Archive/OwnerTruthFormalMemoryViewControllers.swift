@@ -14,7 +14,7 @@ final class OwnerTruthPersonMemoryProfileViewController: UIViewController {
         action: #selector(refreshTapped)
     )
     private lazy var detailsButton = UIBarButtonItem(
-        image: UIImage(systemName: "list.bullet.rectangle"),
+        title: "记忆记录",
         style: .plain,
         target: self,
         action: #selector(detailsTapped)
@@ -46,7 +46,7 @@ final class OwnerTruthPersonMemoryProfileViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "正式记忆"
+        title = "人生记录"
         view.backgroundColor = DJDesignTokens.Color.background
         configureNavigation()
         configureTable()
@@ -214,7 +214,9 @@ extension OwnerTruthPersonMemoryProfileViewController: UITableViewDataSource, UI
             cell.configure(
                 title: profile.lifeStory.title,
                 overview: profile.lifeStory.overview ?? "",
-                updatedAt: profile.updatedAt
+                updatedAt: profile.updatedAt,
+                documentVersion: profile.lifeStory.documentVersion,
+                memoryCount: profile.memoryCount
             )
             return cell
         }
@@ -291,12 +293,24 @@ private final class OwnerTruthLifeStoryOverviewCell: UITableViewCell {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func configure(title: String, overview: String, updatedAt: Date?) {
+    func configure(
+        title: String,
+        overview: String,
+        updatedAt: Date?,
+        documentVersion: String?,
+        memoryCount: Int
+    ) {
         titleLabel.text = title
+        let versionText = documentVersion.map { "版本 \($0.prefix(8))" } ?? ""
+        let sourceText = "基于 \(memoryCount) 条已确认记忆"
         if let updatedAt {
-            metadataLabel.text = "由已确认记忆持续整理 · 更新于 \(updatedAt.formalMemoryDateText)"
+            metadataLabel.text = [versionText, sourceText, "更新于 \(updatedAt.formalMemoryDateText)"]
+                .filter { !$0.isEmpty }
+                .joined(separator: " · ")
         } else {
-            metadataLabel.text = "由已确认记忆持续整理"
+            metadataLabel.text = [versionText, sourceText]
+                .filter { !$0.isEmpty }
+                .joined(separator: " · ")
         }
         bodyLabel.attributedText = lifeStoryAttributedText(overview, fontSize: 18)
         accessibilityLabel = "\(title)，\(overview)"
@@ -471,7 +485,7 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "正式记忆"
+        title = "记忆记录"
         view.backgroundColor = DJDesignTokens.Color.background
         configureNavigation()
         configureTable()
@@ -1802,12 +1816,16 @@ private extension OwnerTruthMemoryKind {
 private extension OwnerTruthPersonMemoryDimensionKind {
     var systemImageName: String {
         switch self {
-        case .lifeExperience: return "clock.arrow.circlepath"
-        case .knowledgeAndSkills: return "lightbulb"
-        case .emotionsAndAttachments: return "heart.text.square"
-        case .importantRelationships: return "person.2"
+        case .lifeEvent: return "clock.arrow.circlepath"
+        case .knowledge: return "lightbulb"
+        case .emotion: return "heart.text.square"
+        case .relationship: return "person.2"
         case .personality: return "person.text.rectangle"
-        case .valuesAndChoices: return "compass.drawing"
+        case .value: return "compass.drawing"
+        case .habit: return "repeat"
+        case .goal: return "scope"
+        case .identity: return "person.crop.rectangle.stack"
+        case .reflection: return "text.quote"
         }
     }
 }

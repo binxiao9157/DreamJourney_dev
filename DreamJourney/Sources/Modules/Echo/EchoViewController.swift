@@ -1024,6 +1024,10 @@ final class EchoViewController: UIViewController {
     private static let tencentDigitalHumanBackgroundReleaseGracePeriod: TimeInterval = 8.0
     private static let liveUserInactivityTimeout: TimeInterval = 60
 
+    private var isTypedEchoConversationOpen: Bool {
+        liveMemoryCaptureCoordinator != nil && !isUserControlledLiveSessionOpen
+    }
+
     private struct TencentPCMDriveTestSignal {
         let data: Data
         let sampleRate: Int
@@ -1413,8 +1417,8 @@ final class EchoViewController: UIViewController {
         super.viewWillDisappear(animated)
         if isUserControlledLiveSessionOpen {
             isUserControlledLiveSessionOpen = false
-            finishLiveMemoryCaptureIfNeeded()
         }
+        finishLiveMemoryCaptureIfNeeded()
         cancelEchoTextReplySpeech(reason: "viewWillDisappear")
         cancelCloudDigitalHumanBackgroundRelease(reason: "viewWillDisappear")
         invalidateDigitalHumanLifecycle(reason: "viewWillDisappear")
@@ -3226,6 +3230,9 @@ final class EchoViewController: UIViewController {
 
     private func updatePersonaBadge() {
         let context = DigitalHumanContextStore.shared.current
+        if !context.isSelfAssistant {
+            finishLiveMemoryCaptureIfNeeded()
+        }
         let iconName = context.isSelfAssistant ? "sparkles" : "person.crop.circle.fill"
         let iconConfig = UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
         personaIconView.image = UIImage(systemName: iconName, withConfiguration: iconConfig)
@@ -6762,10 +6769,7 @@ final class EchoViewController: UIViewController {
             updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
             switch handoff.destination {
             case .ownerInterview:
-                presentOwnerTruthInterviewNaturalInputSheet(
-                    presentation: .product,
-                    initialTopic: handoff.question
-                )
+                echoTextQuestionTapped()
             case .familyContribution:
                 presentFamilyContributionForMemoryGap(topic: handoff.question)
             }
@@ -6793,6 +6797,11 @@ final class EchoViewController: UIViewController {
             textField.accessibilityIdentifier = "echoTextQuestionField"
         }
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        if isTypedEchoConversationOpen {
+            alert.addAction(UIAlertAction(title: "结束并整理", style: .default) { [weak self] _ in
+                self?.finishTypedEchoConversation()
+            })
+        }
         alert.addAction(UIAlertAction(title: "发送", style: .default) { [weak self, weak alert] _ in
             let question = alert?.textFields?.first?.text ?? ""
             self?.beginEchoTextQuestion(question)
@@ -6895,6 +6904,11 @@ final class EchoViewController: UIViewController {
         guard acceptedUserTurn else {
             activeVoiceInteractionLifecycleToken = nil
             return
+        }
+        if source == "typed", routeDecision.route == .ownerPrivate {
+            beginLiveMemoryCaptureIfNeeded(accountLease: accountLease)
+            captureLiveOwnerTurn(question)
+            updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
         }
 
         let turnID = digitalHumanConversation.startUserTurn(
@@ -7554,7 +7568,11 @@ final class EchoViewController: UIViewController {
     private func updateOwnerTruthInterviewNaturalInputProductEntryVisibility() {
         let isVisible = isOwnerTruthInterviewNaturalInputProductEntryVisible
         var configuration = ownerTruthInterviewNaturalInputProductEntryButton.configuration
-        if pendingMemoryGapHandoff?.contextKey == currentDigitalHumanRuntimeContextKey() {
+        if isTypedEchoConversationOpen {
+            configuration?.title = "继续文字回响"
+            configuration?.image = UIImage(systemName: "keyboard.fill")
+            ownerTruthInterviewNaturalInputProductEntryButton.accessibilityLabel = "继续文字回响或结束整理"
+        } else if pendingMemoryGapHandoff?.contextKey == currentDigitalHumanRuntimeContextKey() {
             configuration?.title = "继续聊聊"
             configuration?.image = UIImage(systemName: "bubble.left.and.bubble.right.fill")
             ownerTruthInterviewNaturalInputProductEntryButton.accessibilityLabel = "继续补充这段记忆"
@@ -7600,6 +7618,10 @@ final class EchoViewController: UIViewController {
                 }
                 self.renderLiveMemoryCaptureState(state)
                 if state.isTerminal {
+                    if self.liveMemoryCaptureCoordinator === coordinator {
+                        self.liveMemoryCaptureCoordinator = nil
+                        self.updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
+                    }
                     self.retainedLiveMemoryCaptureCoordinators[coordinatorID] = nil
                 }
             }
@@ -7621,7 +7643,19 @@ final class EchoViewController: UIViewController {
     private func finishLiveMemoryCaptureIfNeeded() {
         guard let coordinator = liveMemoryCaptureCoordinator else { return }
         liveMemoryCaptureCoordinator = nil
+        updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
         coordinator.finish()
+    }
+
+    private func finishTypedEchoConversation() {
+        guard isTypedEchoConversationOpen else { return }
+        pendingMemoryGapHandoff = nil
+        renderVoiceStatus(
+            text: "正在整理本次文字对话",
+            isVisible: true,
+            accessibilityIdentifier: "echoTypedMemoryOrganizing"
+        )
+        finishLiveMemoryCaptureIfNeeded()
     }
 
     private func armLiveUserInactivityTimeout(reason: String) {

@@ -374,6 +374,10 @@ enum OwnerTruthMemoryFacetKind: String, CaseIterable, Codable, Equatable, Sendab
     case emotions
     case values
     case personality
+    case habits
+    case goals
+    case identity
+    case reflections
 
     var title: String {
         switch self {
@@ -384,6 +388,10 @@ enum OwnerTruthMemoryFacetKind: String, CaseIterable, Codable, Equatable, Sendab
         case .emotions: return "情绪"
         case .values: return "价值观"
         case .personality: return "性格"
+        case .habits: return "习惯与偏好"
+        case .goals: return "目标与愿望"
+        case .identity: return "身份与角色"
+        case .reflections: return "反思与理解"
         }
     }
 }
@@ -438,7 +446,10 @@ struct OwnerTruthMemoryFacets: Equatable, Sendable {
     let confidence: Double
     private let rawObject: [String: OwnerTruthJSONValue]
 
-    init?(jsonValue: OwnerTruthJSONValue) {
+    init?(
+        jsonValue: OwnerTruthJSONValue,
+        requiredKinds: [OwnerTruthMemoryFacetKind] = OwnerTruthMemoryFacetKind.allCases
+    ) {
         guard case .object(let object) = jsonValue,
               case .number(let confidence)? = object["confidence"],
               confidence.isFinite,
@@ -447,7 +458,15 @@ struct OwnerTruthMemoryFacets: Equatable, Sendable {
         }
         var valuesByKind: [OwnerTruthMemoryFacetKind: [OwnerTruthMemoryFacetValue]] = [:]
         for kind in OwnerTruthMemoryFacetKind.allCases {
-            guard case .array(let values)? = object[kind.rawValue] else {
+            guard let rawValues = object[kind.rawValue] else {
+                // V2/V3 payloads predate the four extended V4 facets. Treat a
+                // missing extended array as "not extracted", while malformed
+                // values that are present still fail closed.
+                guard !requiredKinds.contains(kind) else { return nil }
+                valuesByKind[kind] = []
+                continue
+            }
+            guard case .array(let values) = rawValues else {
                 return nil
             }
             var parsed: [OwnerTruthMemoryFacetValue] = []
@@ -523,8 +542,20 @@ enum OwnerTruthMemoryFacetsState: Equatable, Sendable {
         contentSchemaVersion: String,
         content: [String: OwnerTruthJSONValue]
     ) -> OwnerTruthMemoryFacetsState {
+        let baseKinds: [OwnerTruthMemoryFacetKind] = [
+            .people, .time, .places, .relationships, .emotions, .values, .personality,
+        ]
         switch contentSchemaVersion {
-        case "owner-truth-v2":
+        case "owner-truth-v2", "owner-truth-v3":
+            guard let rawFacets = content["facets"],
+                  let facets = OwnerTruthMemoryFacets(
+                    jsonValue: rawFacets,
+                    requiredKinds: baseKinds
+                  ) else {
+                return .invalid
+            }
+            return .available(facets)
+        case "owner-truth-v4":
             guard let rawFacets = content["facets"],
                   let facets = OwnerTruthMemoryFacets(jsonValue: rawFacets) else {
                 return .invalid
@@ -623,15 +654,20 @@ enum OwnerTruthCandidatePrimaryField: String, Codable, Equatable, Sendable {
     case summary
     case claim
     case label
+    case event
+    case statement
+    case expression
 
-    init(memoryKind: OwnerTruthMemoryKind) {
+    init(memoryKind: OwnerTruthMemoryKind, contentSchemaVersion: String) {
+        let usesTypedField = contentSchemaVersion == "owner-truth-v3"
+            || contentSchemaVersion == "owner-truth-v4"
         switch memoryKind {
         case .experience:
-            self = .summary
+            self = usesTypedField ? .event : .summary
         case .knowledge:
-            self = .claim
+            self = usesTypedField ? .statement : .claim
         case .emotion:
-            self = .label
+            self = usesTypedField ? .expression : .label
         }
     }
 
@@ -640,6 +676,9 @@ enum OwnerTruthCandidatePrimaryField: String, Codable, Equatable, Sendable {
         case .summary: return "记忆描述"
         case .claim: return "观点内容"
         case .label: return "感受标签"
+        case .event: return "经历内容"
+        case .statement: return "知识与经验"
+        case .expression: return "感受描述"
         }
     }
 }
@@ -687,7 +726,10 @@ struct OwnerTruthCandidateInboxItem: Codable, Equatable, Sendable, Identifiable 
             content[key] = parsed
         }
 
-        let primaryField = OwnerTruthCandidatePrimaryField(memoryKind: memoryKind)
+        let primaryField = OwnerTruthCandidatePrimaryField(
+            memoryKind: memoryKind,
+            contentSchemaVersion: contentSchemaVersion
+        )
         guard case .string(let rawPrimaryValue)? = content[primaryField.rawValue],
               !rawPrimaryValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw OwnerTruthRemoteContractError.invalidInbox(
@@ -717,7 +759,10 @@ struct OwnerTruthCandidateInboxItem: Codable, Equatable, Sendable, Identifiable 
     }
 
     var primaryField: OwnerTruthCandidatePrimaryField {
-        OwnerTruthCandidatePrimaryField(memoryKind: memoryKind)
+        OwnerTruthCandidatePrimaryField(
+            memoryKind: memoryKind,
+            contentSchemaVersion: contentSchemaVersion
+        )
     }
 
     var facetsState: OwnerTruthMemoryFacetsState {

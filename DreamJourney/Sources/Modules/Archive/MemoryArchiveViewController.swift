@@ -3618,9 +3618,16 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func autobiographyBookTapped() {
-        let viewController = AutobiographyBookViewController(
-            repository: repository,
-            context: currentArchiveContext
+        guard isSelfAutobiographyMode else {
+            showToast("该家人的正式故事尚未获得可读授权", type: .info)
+            return
+        }
+        guard isOwnerTruthCandidateReviewEnabled,
+              let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
+            return
+        }
+        let viewController = OwnerTruthPersonMemoryProfileViewController(
+            accountLease: accountLease
         )
         viewController.hidesBottomBarWhenPushed = true
         navigationController?.setNavigationBarHidden(false, animated: false)

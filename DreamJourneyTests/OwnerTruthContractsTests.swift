@@ -17,7 +17,8 @@ final class OwnerTruthContractsTests: XCTestCase {
             _ key: String,
             title: String,
             narrative: String? = nil,
-            ids: [String] = []
+            ids: [String] = [],
+            versionIDs: [String] = []
         ) -> [String: Any] {
             [
                 "dimension": key,
@@ -26,6 +27,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "narrative": narrative ?? NSNull(),
                 "supportingMemoryCount": ids.count,
                 "supportingMemoryIds": ids,
+                "supportingMemoryVersionIds": versionIDs,
             ]
         }
         let paragraphs = [
@@ -58,26 +60,47 @@ final class OwnerTruthContractsTests: XCTestCase {
                 ),
                 "dimensions": [
                     dimension(
-                        "lifeExperience",
+                        "lifeEvent",
                         title: "经历与人生轨迹",
                         narrative: "这些正式记忆共同勾勒出两段人生经历。",
-                        ids: [experienceID]
+                        ids: [experienceID],
+                        versionIDs: ["00000000-0000-0000-0000-000000000201"]
                     ),
                     dimension(
-                        "knowledgeAndSkills",
+                        "knowledge",
                         title: "知识与经验",
                         narrative: "目前沉淀出一项经验。",
-                        ids: [knowledgeID]
+                        ids: [knowledgeID],
+                        versionIDs: ["00000000-0000-0000-0000-000000000202"]
                     ),
-                    dimension("emotionsAndAttachments", title: "情感与牵挂"),
+                    dimension("emotion", title: "情感与牵挂"),
                     dimension(
-                        "importantRelationships",
+                        "relationship",
                         title: "家庭与社会关系",
                         narrative: "正式记忆中出现了一位重要人物。",
-                        ids: [experienceID]
+                        ids: [experienceID],
+                        versionIDs: ["00000000-0000-0000-0000-000000000201"]
                     ),
                     dimension("personality", title: "性格特征"),
-                    dimension("valuesAndChoices", title: "价值观与人生选择"),
+                    dimension("value", title: "价值观与人生选择"),
+                    dimension("habit", title: "习惯与偏好"),
+                    dimension("goal", title: "目标与愿望"),
+                    dimension("identity", title: "身份与角色"),
+                    dimension("reflection", title: "反思与人生理解"),
+                ],
+                "memoryModel": [
+                    "schemaVersion": OwnerTruthPersonMemoryModelSummary.schemaVersion,
+                    "algorithmVersion": OwnerTruthPersonMemoryModelSummary.algorithmVersion,
+                    "state": "ready",
+                    "modelVersion": String(repeating: "a", count: 64),
+                    "sourceFingerprint": String(repeating: "b", count: 64),
+                    "memoryCount": 2,
+                    "consolidatedMemoryCount": 2,
+                    "unresolvedConflictCount": 0,
+                    "cognitiveItemCount": 2,
+                    "entityCount": 3,
+                    "relationCount": 2,
+                    "biographyDocumentVersion": String(repeating: "c", count: 64),
                 ],
             ],
             expectedVaultID: vaultID
@@ -99,6 +122,11 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(profile.dimensions[0].narrative?.contains("共同勾勒") == true)
         XCTAssertEqual(profile.dimensions[2].status, .empty)
         XCTAssertNil(profile.dimensions[2].narrative)
+        XCTAssertEqual(profile.memoryModel.modelVersion, profile.profileVersion)
+        XCTAssertEqual(profile.memoryModel.memoryCount, profile.memoryCount)
+        XCTAssertEqual(profile.memoryModel.consolidatedMemoryCount, 2)
+        XCTAssertEqual(profile.memoryModel.unresolvedConflictCount, 0)
+        XCTAssertEqual(profile.memoryModel.biographyDocumentVersion, profile.lifeStory.documentVersion)
     }
 
     func testPersonMemoryProfileRejectsGroupedRowsMasqueradingAsNarrative() throws {
@@ -123,7 +151,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                     "text": "一段连续的人生记录。",
                 ],
                 "dimensions": [[
-                    "dimension": "lifeExperience",
+                    "dimension": "lifeEvent",
                     "title": "经历与人生轨迹",
                     "status": "ready",
                     "narrative": NSNull(),
@@ -1474,6 +1502,93 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(correctedFacets["futureFacetMetadata"], .string("preserved"))
         XCTAssertEqual(correctedFacets["confidence"], .number(1.0))
         XCTAssertEqual(command.correctedValueSchemaVersion, "owner-truth-v2")
+    }
+
+    func testCandidateReviewUseCaseReadsAndCorrectsV4MultiFacetCandidate() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let candidateID = recordID("00000000-0000-0000-0000-000000000094")
+        let sourceID = "00000000-0000-0000-0000-000000000095"
+        let client = CandidateReviewClientSpy()
+        let facetValue: [String: Any] = [
+            "value": "每天写日记",
+            "evidenceMode": "ownerStated",
+            "confidence": 1.0,
+        ]
+        client.inboxResult = .success(try OwnerTruthCandidateInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "candidates": [[
+                    "candidateId": candidateID.rawValue.uuidString.lowercased(),
+                    "sourceId": sourceID,
+                    "memoryKind": "experience",
+                    "perspectiveType": "firstPerson",
+                    "epistemicStatus": "recalled",
+                    "sensitivity": "standard",
+                    "contentSchemaVersion": "owner-truth-v4",
+                    "content": [
+                        "event": "大学毕业后，我开始每天写日记。",
+                        "time": ["start": NSNull(), "end": NSNull(), "precision": "unknown"],
+                        "facets": [
+                            "people": [], "time": [], "places": [], "relationships": [],
+                            "emotions": [], "values": [], "personality": [],
+                            "habits": [facetValue], "goals": [], "identity": [], "reflections": [],
+                            "confidence": 1.0,
+                        ],
+                        "semantic": [
+                            "primaryKind": "lifeEvent",
+                            "facets": ["lifeEvent", "habit"],
+                            "title": "大学毕业后，我开始每天写日记",
+                            "narrative": "大学毕业后，我开始每天写日记。",
+                            "eventTime": ["start": NSNull(), "end": NSNull(), "precision": "unknown"],
+                            "entities": [],
+                            "emotionEvidence": [],
+                        ],
+                    ],
+                    "contentHash": "v4-correction-hash",
+                    "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                    "reviewMode": "single",
+                    "candidateVersion": 1,
+                ]],
+            ],
+            expectedVaultID: vaultID
+        ))
+        client.reviewResult = .success(try decisionResult(
+            candidateID: candidateID,
+            decision: .corrected
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "candidate-review-v4-correct-001" }
+        )
+
+        useCase.send(.refresh)
+
+        let item = try XCTUnwrap(useCase.viewState.items.first)
+        XCTAssertEqual(item.primaryField, .event)
+        XCTAssertEqual(item.primaryFieldTitle, "经历内容")
+        XCTAssertEqual(item.primaryValue, "大学毕业后，我开始每天写日记。")
+        guard case .available(let facets) = item.facetsState else {
+            return XCTFail("V4 facets should be reviewable")
+        }
+        XCTAssertEqual(facets.values(for: .habits).map(\.value), ["每天写日记"])
+
+        useCase.send(.correct(
+            candidateID: candidateID,
+            correctedPrimaryValue: "毕业后，我养成了每天写日记的习惯。",
+            correctedFacetValues: [.habits: ["每天写日记"]]
+        ))
+
+        let command = try XCTUnwrap(client.reviewedCommands.first)
+        XCTAssertEqual(
+            command.correctedValue?["event"],
+            .string("毕业后，我养成了每天写日记的习惯。")
+        )
+        XCTAssertEqual(command.correctedValueSchemaVersion, "owner-truth-v4")
     }
 
     func testCandidateReviewUseCaseMapsStructuredKnowledgeCorrectionAndSources() throws {
@@ -7083,7 +7198,8 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "text": input.paragraph,
                 "supportingMemoryCount": 1,
                 "supportingMemoryIds": [input.memoryID],
-                "supportingMemoryVersionIds": [input.versionID]
+                "supportingMemoryVersionIds": [input.versionID],
+                "facets": [input.id == "chapter-family" ? "relationship" : "knowledge"]
             ]
         }
         return [
@@ -7093,6 +7209,8 @@ final class OwnerTruthContractsTests: XCTestCase {
             "state": "ready",
             "title": "我的人生记录",
             "overview": "我的故事从家庭与成长和经验与信念这些篇章展开。",
+            "documentVersion": String(repeating: "c", count: 64),
+            "sourceFingerprint": String(repeating: "b", count: 64),
             "chapterCount": chapters.count,
             "supportingMemoryCount": chapters.count,
             "chapters": chapters

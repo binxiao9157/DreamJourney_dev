@@ -171,12 +171,16 @@ struct OwnerTruthFormalMemoryPage: Equatable, Sendable {
 }
 
 enum OwnerTruthPersonMemoryDimensionKind: String, CaseIterable, Equatable, Sendable {
-    case lifeExperience
-    case knowledgeAndSkills
-    case emotionsAndAttachments
-    case importantRelationships
+    case lifeEvent
+    case knowledge
+    case emotion
+    case relationship
     case personality
-    case valuesAndChoices
+    case value
+    case habit
+    case goal
+    case identity
+    case reflection
 }
 
 enum OwnerTruthPersonMemoryDimensionStatus: String, Equatable, Sendable {
@@ -192,6 +196,7 @@ struct OwnerTruthPersonMemoryDimension: Equatable, Sendable, Identifiable {
     let status: OwnerTruthPersonMemoryDimensionStatus
     let narrative: String?
     let supportingMemoryIDs: [OwnerTruthRecordID]
+    let supportingMemoryVersionIDs: [OwnerTruthRecordID]
 
     init(backendJSONObject object: [String: Any]) throws {
         guard let rawKind = OwnerTruthFormalMemoryContract.requiredString(object["dimension"]),
@@ -202,15 +207,22 @@ struct OwnerTruthPersonMemoryDimension: Equatable, Sendable, Identifiable {
               let supportingMemoryCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
                 object["supportingMemoryCount"]
               ),
-              let rawSupportingMemoryIDs = object["supportingMemoryIds"] as? [String] else {
+              let rawSupportingMemoryIDs = object["supportingMemoryIds"] as? [String],
+              let rawSupportingVersionIDs = object["supportingMemoryVersionIds"] as? [String] else {
             throw OwnerTruthFormalMemoryContractError.invalidProfile("维度字段缺失或越界")
         }
         let supportingMemoryIDs = rawSupportingMemoryIDs.compactMap {
             OwnerTruthFormalMemoryContract.recordID($0)
         }
+        let supportingVersionIDs = rawSupportingVersionIDs.compactMap {
+            OwnerTruthFormalMemoryContract.recordID($0)
+        }
         guard supportingMemoryIDs.count == rawSupportingMemoryIDs.count,
               Set(supportingMemoryIDs).count == supportingMemoryIDs.count,
-              supportingMemoryIDs.count == supportingMemoryCount else {
+              supportingMemoryIDs.count == supportingMemoryCount,
+              supportingVersionIDs.count == rawSupportingVersionIDs.count,
+              Set(supportingVersionIDs).count == supportingVersionIDs.count,
+              supportingVersionIDs.count == supportingMemoryCount else {
             throw OwnerTruthFormalMemoryContractError.invalidProfile("维度证据引用无效")
         }
         let narrative = OwnerTruthFormalMemoryContract.requiredString(object["narrative"])
@@ -229,6 +241,7 @@ struct OwnerTruthPersonMemoryDimension: Equatable, Sendable, Identifiable {
         self.status = status
         self.narrative = narrative
         self.supportingMemoryIDs = supportingMemoryIDs
+        self.supportingMemoryVersionIDs = supportingVersionIDs
     }
 }
 
@@ -238,8 +251,8 @@ enum OwnerTruthPersonMemoryProfileState: String, Equatable, Sendable {
 }
 
 struct OwnerTruthPersonLifeRecord: Equatable, Sendable {
-    static let schemaVersion = "owner-truth-person-life-record-v1"
-    static let algorithmVersion = "person-life-record-plain-text-v1"
+    static let schemaVersion = "owner-truth-person-life-record-v2"
+    static let algorithmVersion = "person-life-record-from-biography-v2"
 
     let state: OwnerTruthPersonMemoryProfileState
     let title: String
@@ -299,6 +312,7 @@ struct OwnerTruthPersonLifeStoryChapter: Equatable, Sendable, Identifiable {
     let paragraphs: [String]
     let supportingMemoryIDs: [OwnerTruthRecordID]
     let supportingMemoryVersionIDs: [OwnerTruthRecordID]
+    let facets: [String]
 
     init(backendJSONObject object: [String: Any]) throws {
         guard let id = OwnerTruthFormalMemoryContract.requiredString(object["chapterId"]),
@@ -313,7 +327,8 @@ struct OwnerTruthPersonLifeStoryChapter: Equatable, Sendable, Identifiable {
                 object["supportingMemoryCount"]
               ),
               let rawMemoryIDs = object["supportingMemoryIds"] as? [String],
-              let rawVersionIDs = object["supportingMemoryVersionIds"] as? [String] else {
+              let rawVersionIDs = object["supportingMemoryVersionIds"] as? [String],
+              let facets = object["facets"] as? [String] else {
             throw OwnerTruthFormalMemoryContractError.invalidProfile("人生篇章字段缺失或越界")
         }
         let paragraphs = rawParagraphs.compactMap(OwnerTruthFormalMemoryContract.requiredString)
@@ -338,17 +353,20 @@ struct OwnerTruthPersonLifeStoryChapter: Equatable, Sendable, Identifiable {
         self.paragraphs = paragraphs
         self.supportingMemoryIDs = memoryIDs
         self.supportingMemoryVersionIDs = versionIDs
+        self.facets = facets
     }
 }
 
 struct OwnerTruthPersonLifeStory: Equatable, Sendable {
-    static let schemaVersion = "owner-truth-person-life-story-v1"
-    static let algorithmVersion = "person-life-story-chapter-projection-v1"
+    static let schemaVersion = "owner-truth-biography-projection-v1"
+    static let algorithmVersion = "evidence-bound-person-model-v2"
 
     let state: OwnerTruthPersonMemoryProfileState
     let title: String
     let overview: String?
     let chapters: [OwnerTruthPersonLifeStoryChapter]
+    let documentVersion: String?
+    let sourceFingerprint: String?
     let isLegacyFallback: Bool
 
     init(legacyLifeRecord: OwnerTruthPersonLifeRecord) {
@@ -356,6 +374,8 @@ struct OwnerTruthPersonLifeStory: Equatable, Sendable {
         title = legacyLifeRecord.title
         overview = legacyLifeRecord.text
         chapters = []
+        documentVersion = nil
+        sourceFingerprint = nil
         isLegacyFallback = true
     }
 
@@ -378,6 +398,8 @@ struct OwnerTruthPersonLifeStory: Equatable, Sendable {
             throw OwnerTruthFormalMemoryContractError.invalidProfile("人生记录篇章契约无效")
         }
         let overview = OwnerTruthFormalMemoryContract.requiredString(object["overview"])
+        let documentVersion = OwnerTruthFormalMemoryContract.sha256(object["documentVersion"])
+        let sourceFingerprint = OwnerTruthFormalMemoryContract.sha256(object["sourceFingerprint"])
         let chapters = try rawChapters.map(OwnerTruthPersonLifeStoryChapter.init)
         let memoryIDs = chapters.flatMap(\.supportingMemoryIDs)
         guard chapters.count == chapterCount,
@@ -388,11 +410,13 @@ struct OwnerTruthPersonLifeStory: Equatable, Sendable {
         }
         switch state {
         case .ready:
-            guard overview != nil, !chapters.isEmpty, !memoryIDs.isEmpty else {
+            guard overview != nil, !chapters.isEmpty, !memoryIDs.isEmpty,
+                  documentVersion != nil, sourceFingerprint != nil else {
                 throw OwnerTruthFormalMemoryContractError.invalidProfile("人生记录缺少总览或篇章")
             }
         case .empty:
-            guard overview == nil, chapters.isEmpty, memoryIDs.isEmpty else {
+            guard overview == nil, chapters.isEmpty, memoryIDs.isEmpty,
+                  documentVersion != nil, sourceFingerprint != nil else {
                 throw OwnerTruthFormalMemoryContractError.invalidProfile("空人生记录不得携带篇章")
             }
         }
@@ -400,13 +424,73 @@ struct OwnerTruthPersonLifeStory: Equatable, Sendable {
         self.title = title
         self.overview = overview
         self.chapters = chapters
+        self.documentVersion = documentVersion
+        self.sourceFingerprint = sourceFingerprint
         isLegacyFallback = false
     }
 }
 
+struct OwnerTruthPersonMemoryModelSummary: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-person-memory-model-v1"
+    static let algorithmVersion = "evidence-bound-person-model-v2"
+
+    let modelVersion: String
+    let sourceFingerprint: String
+    let memoryCount: Int
+    let consolidatedMemoryCount: Int
+    let unresolvedConflictCount: Int
+    let cognitiveItemCount: Int
+    let entityCount: Int
+    let relationCount: Int
+    let biographyDocumentVersion: String
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard OwnerTruthFormalMemoryContract.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              OwnerTruthFormalMemoryContract.requiredString(object["algorithmVersion"])
+                == Self.algorithmVersion,
+              let modelVersion = OwnerTruthFormalMemoryContract.sha256(object["modelVersion"]),
+              let sourceFingerprint = OwnerTruthFormalMemoryContract.sha256(
+                object["sourceFingerprint"]
+              ),
+              let memoryCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                  object["memoryCount"]
+              ),
+              let consolidatedMemoryCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                  object["consolidatedMemoryCount"]
+              ),
+              let unresolvedConflictCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                  object["unresolvedConflictCount"]
+              ),
+              let cognitiveItemCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                object["cognitiveItemCount"]
+              ),
+              let entityCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                object["entityCount"]
+              ),
+              let relationCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                object["relationCount"]
+              ),
+              let biographyDocumentVersion = OwnerTruthFormalMemoryContract.sha256(
+                object["biographyDocumentVersion"]
+              ) else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("人物记忆模型摘要无效")
+        }
+        self.modelVersion = modelVersion
+        self.sourceFingerprint = sourceFingerprint
+        self.memoryCount = memoryCount
+        self.consolidatedMemoryCount = consolidatedMemoryCount
+        self.unresolvedConflictCount = unresolvedConflictCount
+        self.cognitiveItemCount = cognitiveItemCount
+        self.entityCount = entityCount
+        self.relationCount = relationCount
+        self.biographyDocumentVersion = biographyDocumentVersion
+    }
+}
+
 struct OwnerTruthPersonMemoryProfile: Equatable, Sendable {
-    static let schemaVersion = "owner-truth-person-memory-profile-v1"
-    static let algorithmVersion = "person-memory-dimension-summary-v1"
+    static let schemaVersion = "owner-truth-person-memory-profile-v2"
+    static let algorithmVersion = "evidence-bound-person-model-v2"
 
     let vaultID: OwnerTruthVaultID
     let state: OwnerTruthPersonMemoryProfileState
@@ -416,6 +500,7 @@ struct OwnerTruthPersonMemoryProfile: Equatable, Sendable {
     let lifeRecord: OwnerTruthPersonLifeRecord
     let lifeStory: OwnerTruthPersonLifeStory
     let dimensions: [OwnerTruthPersonMemoryDimension]
+    let memoryModel: OwnerTruthPersonMemoryModelSummary
 
     init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID) throws {
         guard OwnerTruthFormalMemoryContract.requiredString(object["schemaVersion"])
@@ -428,12 +513,16 @@ struct OwnerTruthPersonMemoryProfile: Equatable, Sendable {
               let state = OwnerTruthPersonMemoryProfileState(rawValue: rawState),
               let profileVersion = OwnerTruthFormalMemoryContract.sha256(object["profileVersion"]),
               let memoryCount = OwnerTruthFormalMemoryContract.nonNegativeInt(object["memoryCount"]),
-              let rawDimensions = object["dimensions"] as? [[String: Any]] else {
+              let rawDimensions = object["dimensions"] as? [[String: Any]],
+              let rawMemoryModel = object["memoryModel"] as? [String: Any] else {
             throw OwnerTruthFormalMemoryContractError.invalidProfile(
                 "schemaVersion、vaultId 或画像字段无效"
             )
         }
         let dimensions = try rawDimensions.map(OwnerTruthPersonMemoryDimension.init)
+        let memoryModel = try OwnerTruthPersonMemoryModelSummary(
+            backendJSONObject: rawMemoryModel
+        )
         guard dimensions.map(\.kind) == OwnerTruthPersonMemoryDimensionKind.allCases else {
             throw OwnerTruthFormalMemoryContractError.invalidProfile("人物记忆维度缺失、重复或顺序错误")
         }
@@ -453,6 +542,13 @@ struct OwnerTruthPersonMemoryProfile: Equatable, Sendable {
             expectedState: state,
             expectedMemoryCount: memoryCount
         )
+        guard memoryModel.modelVersion == profileVersion,
+              memoryModel.memoryCount == memoryCount,
+              memoryModel.biographyDocumentVersion == lifeStory.documentVersion else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile(
+                "人物记忆模型、人生记录与正式记忆版本不一致"
+            )
+        }
         let updatedAt = try Self.parseUpdatedAt(from: object, expectedState: state)
         vaultID = expectedVaultID
         self.state = state
@@ -462,6 +558,7 @@ struct OwnerTruthPersonMemoryProfile: Equatable, Sendable {
         self.lifeRecord = lifeRecord
         self.lifeStory = lifeStory
         self.dimensions = dimensions
+        self.memoryModel = memoryModel
     }
 
     private static func parseLifeRecord(
@@ -567,7 +664,10 @@ struct OwnerTruthFormalMemoryFacetFilter: Equatable, Sendable {
     let value: String
 
     init(name: String, value: String) throws {
-        let allowed = Set(["people", "time", "places", "relationships", "emotions", "values", "personality"])
+        let allowed = Set([
+            "people", "time", "places", "relationships", "emotions", "values",
+            "personality", "habits", "goals", "identity", "reflections"
+        ])
         let normalizedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard allowed.contains(name), !normalizedValue.isEmpty else {
             throw OwnerTruthFormalMemoryContractError.invalidQuery("线索筛选无效")
