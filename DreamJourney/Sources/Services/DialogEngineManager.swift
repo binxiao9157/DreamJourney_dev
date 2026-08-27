@@ -202,6 +202,14 @@ enum DialogSessionLifetimePolicy: Equatable, Sendable {
     case userControlledLive
 }
 
+/// Selects who generates the semantic answer for a dialog session. Most
+/// callers keep the provider-owned behavior; Echo Live delegates only answer
+/// generation to DreamJourney so typed and spoken questions share `/echo/answers`.
+enum DialogAnswerAuthority: Equatable, Sendable {
+    case provider
+    case dreamJourneyBackend
+}
+
 enum DialogTextReplyPlaybackError: LocalizedError, Equatable {
     case invalidText
     case sessionBusy
@@ -352,6 +360,7 @@ final class DialogEngineManager: NSObject {
     private(set) var isDialogActive = false
     private(set) var isRecorderPaused = false
     private(set) var sessionLifetimePolicy: DialogSessionLifetimePolicy = .automatic
+    private(set) var answerAuthority: DialogAnswerAuthority = .provider
     var currentTopic: String?
     var currentConfigurationIsProductionReady: Bool { false }
     private(set) var isLocalTTSPlaybackEnabled = true
@@ -480,7 +489,8 @@ final class DialogEngineManager: NSObject {
     func startDialog(
         sendsGreeting: Bool = true,
         usesTurnScopedKnowledgeContext: Bool = false,
-        lifetimePolicy: DialogSessionLifetimePolicy = .automatic
+        lifetimePolicy: DialogSessionLifetimePolicy = .automatic,
+        answerAuthority: DialogAnswerAuthority = .provider
     ) {
         guard isActiveAccountLeaseValid(at: .request),
               let accountLease = boundAccountLease,
@@ -489,6 +499,7 @@ final class DialogEngineManager: NSObject {
         activeDialogBindingHandle = bindingHandle
         self.usesTurnScopedKnowledgeContext = usesTurnScopedKnowledgeContext
         sessionLifetimePolicy = lifetimePolicy
+        self.answerAuthority = answerAuthority
         isRecorderPaused = false
         recordUIQAPromptSnapshot()
         isDialogActive = true
@@ -550,6 +561,24 @@ final class DialogEngineManager: NSObject {
         return true
     }
 
+    @discardableResult
+    func submitLiveAnswerText(
+        _ content: String,
+        traceID: String?,
+        source: String
+    ) -> Bool {
+        let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isDialogActive,
+              isActiveAccountLeaseValid(at: .runtime),
+              answerAuthority == .dreamJourneyBackend,
+              !normalized.isEmpty else {
+            return false
+        }
+        delegate?.onTTSStarted(text: normalized)
+        delegate?.onTTSFinished()
+        return true
+    }
+
     func stopDialog() {
         guard isDialogActive else { return }
         let shouldDeliver = isActiveAccountLeaseValid(at: .runtime)
@@ -567,6 +596,7 @@ final class DialogEngineManager: NSObject {
         isDialogActive = false
         isRecorderPaused = false
         sessionLifetimePolicy = .automatic
+        answerAuthority = .provider
         activeDialogBindingHandle = nil
         activeDialogAccountLease = nil
         usesTurnScopedKnowledgeContext = false
@@ -709,6 +739,7 @@ final class DialogEngineManager: NSObject {
     private var externallyManagedAudioSessionLease: AudioOwnerLease?
     private var pendingTextReplyPlayback: DialogEngineTextReplyPlayback?
     private var textReplyPlaybackFallbackWorkItem: DispatchWorkItem?
+    private var engineAnswerAuthority: DialogAnswerAuthority?
 
     /// 引擎是否就绪（已初始化完成）
     private(set) var isEngineReady = false
@@ -720,6 +751,7 @@ final class DialogEngineManager: NSObject {
     /// ending the provider conversation or the product-level Live session.
     private(set) var isRecorderPaused = false
     private(set) var sessionLifetimePolicy: DialogSessionLifetimePolicy = .automatic
+    private(set) var answerAuthority: DialogAnswerAuthority = .provider
 
     /// AI 是否正在语音播报中（用于判断是否需要打断）
     private(set) var isAISpeaking = false
@@ -1132,6 +1164,7 @@ final class DialogEngineManager: NSObject {
             self.engineBindingId = currentBindingHandle.bindingId
             self.engineCallbackGeneration = callbackGeneration
             self.engineDelegateProxy = delegateProxy
+            self.engineAnswerAuthority = answerAuthority
             self.isEngineReady = true
             print("[DialogEngine] ✅ 引擎初始化成功")
             DDLogInfo("[DialogEngine] 引擎初始化成功")
@@ -1147,7 +1180,8 @@ final class DialogEngineManager: NSObject {
     func startDialog(
         sendsGreeting: Bool = true,
         usesTurnScopedKnowledgeContext: Bool = false,
-        lifetimePolicy: DialogSessionLifetimePolicy = .automatic
+        lifetimePolicy: DialogSessionLifetimePolicy = .automatic,
+        answerAuthority: DialogAnswerAuthority = .provider
     ) {
         guard let accountLease = boundAccountLease,
               let bindingHandle = boundBindingHandle,
@@ -1164,12 +1198,16 @@ final class DialogEngineManager: NSObject {
             requiresEngineRecreationBeforeNextDialog = true
         }
         rotateProviderEngineBeforeNextDialogIfNeeded()
+        if isEngineReady, engineAnswerAuthority != answerAuthority {
+            destroyEngine()
+        }
         let dialogOperationId = UUID()
         activeDialogAccountLease = accountLease
         activeDialogBindingHandle = bindingHandle
         activeDialogOperationId = dialogOperationId
         self.usesTurnScopedKnowledgeContext = usesTurnScopedKnowledgeContext
         sessionLifetimePolicy = lifetimePolicy
+        self.answerAuthority = answerAuthority
         isRecorderPaused = false
         suppressGreetingForNextStart = !sendsGreeting
         // 引擎未就绪时先初始化
@@ -1402,6 +1440,45 @@ final class DialogEngineManager: NSObject {
         return true
     }
 
+    /// Sends the answer generated by DreamJourney `/echo/answers` back into the
+    /// current provider session for TTS. The Dialog engine runs in delegated-chat
+    /// mode, so Fire keeps ASR/TTS while DreamJourney remains the only answer
+    /// authority for Live and typed Echo.
+    @discardableResult
+    func submitLiveAnswerText(
+        _ content: String,
+        traceID: String?,
+        source: String
+    ) -> Bool {
+        let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isDialogActive,
+              sessionLifetimePolicy == .userControlledLive,
+              answerAuthority == .dreamJourneyBackend,
+              let engine,
+              !normalized.isEmpty else {
+            DDLogWarn("[DialogEngine] ignored delegated Live answer: session unavailable")
+            return false
+        }
+        guard let payloadData = try? JSONSerialization.data(
+            withJSONObject: ["content": normalized],
+            options: []
+        ), let payload = String(data: payloadData, encoding: .utf8) else {
+            DDLogError("[DialogEngine] delegated Live answer JSON encoding failed")
+            return false
+        }
+
+        let result = engine.send(SEDirectiveEventChatTtsText, data: payload)
+        guard result == SENoError else {
+            DDLogError("[DialogEngine] delegated Live answer rejected: \(result.rawValue)")
+            return false
+        }
+        DDLogInfo(
+            "[DialogEngine] delegated Live answer submitted " +
+            "source=\(source) traceID=\(traceID ?? "none") bytes=\(normalized.utf8.count)"
+        )
+        return true
+    }
+
     /// 销毁引擎（登出/退出时调用）
     func destroyEngine() {
         invalidateSilenceTimer()
@@ -1417,6 +1494,7 @@ final class DialogEngineManager: NSObject {
         engineBindingId = nil
         engineCallbackGeneration = nil
         engineDelegateProxy = nil
+        engineAnswerAuthority = nil
         activeDialogBindingHandle = nil
         activeDialogOperationId = nil
         providerSessionOperationId = nil
@@ -1428,6 +1506,7 @@ final class DialogEngineManager: NSObject {
         isAISpeaking = false
         isEnding = false
         sessionLifetimePolicy = .automatic
+        answerAuthority = .provider
         usesTurnScopedKnowledgeContext = false
         restoreAudioSessionIfNeeded()
         externallyManagedAudioSessionLease = nil
@@ -1624,6 +1703,17 @@ final class DialogEngineManager: NSObject {
         // Dialog 服务地址
         engine.setStringParam(config.address, forKey: SE_PARAMS_KEY_DIALOG_ADDRESS_STRING)
         engine.setStringParam(config.uri, forKey: SE_PARAMS_KEY_DIALOG_URI_STRING)
+
+        // Fire owns the realtime ASR/TTS transport, while DreamJourney's
+        // `/echo/answers` endpoint owns retrieval and answer generation. This
+        // prevents the provider LLM from answering before formal memory arrives.
+        let dialogWorkMode = answerAuthority == .dreamJourneyBackend
+            ? SEDialogWorkModeDelegateChatTtsText
+            : SEDialogWorkModeDefault
+        engine.setIntParam(
+            Int(dialogWorkMode.rawValue),
+            forKey: SE_PARAMS_KEY_DIALOG_WORK_MODE_INT
+        )
 
         if let headerData = try? JSONSerialization.data(
             withJSONObject: config.requestHeaders,

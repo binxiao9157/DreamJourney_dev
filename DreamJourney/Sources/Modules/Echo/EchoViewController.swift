@@ -4986,7 +4986,8 @@ final class EchoViewController: UIViewController {
             DialogEngineManager.shared.startDialog(
                 sendsGreeting: false,
                 usesTurnScopedKnowledgeContext: true,
-                lifetimePolicy: .userControlledLive
+                lifetimePolicy: .userControlledLive,
+                answerAuthority: .dreamJourneyBackend
             )
         } else {
             configureVoiceRuntimeThenStart(lifecycleToken: lifecycleToken)
@@ -7131,6 +7132,259 @@ final class EchoViewController: UIViewController {
         }
     }
 
+    /// Live and typed Echo share the same answer authority. Fire remains the
+    /// realtime ASR/TTS transport, but it no longer generates an independent
+    /// answer before DreamJourney has retrieved the latest formal memory.
+    private func requestLiveEchoAnswer(
+        question: String,
+        turnID: String,
+        lifecycleToken: DigitalHumanLifecycleToken,
+        accountLease: AccountLease
+    ) {
+        let context = DigitalHumanContextStore.shared.current
+        pendingMemoryGapHandoff = nil
+        updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
+        let routeDecision = echoV4IdentityRouteDecision(
+            for: context,
+            accountLease: accountLease
+        )
+
+        switch routeDecision.route {
+        case .ownerPrivate:
+            guard let expectedIdentity = echoKnowledgeContextIdentity(for: context) else {
+                viewModel.fail("本人记忆身份暂不可用")
+                return
+            }
+            renderVoiceStatus(
+                text: "正在从正式记忆中组织回答",
+                isVisible: true,
+                accessibilityIdentifier: "echoLiveBackendAnswerLoading"
+            )
+            DreamJourneyBackendClient.shared.requestEchoAnswer(
+                userId: expectedIdentity.userId,
+                query: question,
+                personaScope: expectedIdentity.personaScope,
+                digitalHumanId: expectedIdentity.digitalHumanId,
+                personaName: context.resolvedDisplayName,
+                lifecycleMode: context.mode,
+                viewerFamilyMemberID: nil
+            ) { [weak self] result in
+                DispatchQueue.main.async {
+                    guard let self,
+                          self.validateEchoAccountLease(
+                            at: .ui,
+                            expected: accountLease,
+                            reason: "liveEchoAnswerResponse"
+                          ),
+                          self.isCurrentDigitalHumanLifecycleToken(
+                            lifecycleToken,
+                            reason: "liveEchoAnswerResponse"
+                          ),
+                          self.echoKnowledgeContextIdentity(
+                            for: DigitalHumanContextStore.shared.current
+                          ) == expectedIdentity else {
+                        return
+                    }
+                    switch result {
+                    case .success(let answer):
+                        self.lastEchoAnswerGroundingEvidence = OwnerTruthContextCitationQAGate.isEnabled
+                            ? EchoAnswerGroundingQAEvidence(answer: answer)
+                            : nil
+                        let memoryGapHandoff = self.memoryGapHandoff(
+                            for: answer,
+                            question: question,
+                            context: context
+                        )
+                        self.pendingMemoryGapHandoff = memoryGapHandoff
+                        let replyText = self.replyText(
+                            for: answer,
+                            memoryGapHandoff: memoryGapHandoff,
+                            context: context
+                        )
+                        self.deliverLiveEchoAnswer(
+                            replyText,
+                            traceID: answer.contextTraceId,
+                            turnID: turnID,
+                            lifecycleToken: lifecycleToken,
+                            accountLease: accountLease,
+                            source: "backendEchoAnswer"
+                        )
+                        PrivacySafeDiagnostics.log(
+                            subsystem: "Echo",
+                            event: "liveBackendAnswerReceived",
+                            states: [
+                                "provider": answer.provider,
+                                "memoryGrounding": answer.memoryGrounding.outcome.rawValue,
+                                "memoryHandoff": memoryGapHandoff?.destination.rawValue ?? "none",
+                            ],
+                            counts: [
+                                "answerLength": replyText.count,
+                                "citationCount": answer.citations.count,
+                            ],
+                            correlations: ["turn": turnID]
+                        )
+                    case .failure:
+                        self.failLiveEchoAnswer(
+                            message: "回响连接失败，请稍后重试",
+                            lifecycleToken: lifecycleToken
+                        )
+                    }
+                }
+            }
+
+        case .visitorPublic:
+            let expectedContextKey = digitalHumanRuntimeContextKey(for: context)
+            renderVoiceStatus(
+                text: "正在公开回忆中寻找回答",
+                isVisible: true,
+                accessibilityIdentifier: "echoLiveVisitorAnswerLoading"
+            )
+            PublicationVisitorRuntime.shared.makeReadUseCase().answer(question) { [weak self] result in
+                DispatchQueue.main.async {
+                    guard let self,
+                          self.validateEchoAccountLease(
+                            at: .ui,
+                            expected: accountLease,
+                            reason: "liveVisitorAnswerResponse"
+                          ),
+                          self.isCurrentDigitalHumanLifecycleToken(
+                            lifecycleToken,
+                            reason: "liveVisitorAnswerResponse"
+                          ),
+                          self.currentDigitalHumanRuntimeContextKey() == expectedContextKey,
+                          self.echoV4IdentityRouteDecision(
+                            for: DigitalHumanContextStore.shared.current,
+                            accountLease: accountLease
+                          ) == routeDecision else {
+                        return
+                    }
+                    switch result {
+                    case .success(let response):
+                        self.deliverLiveEchoAnswer(
+                            response.answer.text,
+                            traceID: nil,
+                            turnID: turnID,
+                            lifecycleToken: lifecycleToken,
+                            accountLease: accountLease,
+                            source: "visitorPublicAnswer"
+                        )
+                    case .failure:
+                        self.failLiveEchoAnswer(
+                            message: "公开回忆暂不可访问，请重新获取分享授权",
+                            lifecycleToken: lifecycleToken
+                        )
+                    }
+                }
+            }
+
+        case .familyContribution:
+            let handoff = EchoMemoryGapHandoff(
+                question: String(question.prefix(200)),
+                destination: .familyContribution,
+                contextKey: digitalHumanRuntimeContextKey(for: context)
+            )
+            pendingMemoryGapHandoff = handoff
+            updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
+            deliverLiveEchoAnswer(
+                "这位家人尚未向你发布可查询的回忆。如果你愿意，可以分享一段相关故事，交给档案所有者确认。",
+                traceID: nil,
+                turnID: turnID,
+                lifecycleToken: lifecycleToken,
+                accountLease: accountLease,
+                source: "familyContributionBoundary"
+            )
+
+        case .denied:
+            failLiveEchoAnswer(
+                message: "当前身份无权访问这份记忆",
+                lifecycleToken: lifecycleToken
+            )
+        }
+    }
+
+    private func deliverLiveEchoAnswer(
+        _ rawText: String,
+        traceID: String?,
+        turnID: String,
+        lifecycleToken: DigitalHumanLifecycleToken,
+        accountLease: AccountLease,
+        source: String
+    ) {
+        let replyText = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !replyText.isEmpty,
+              validateEchoAccountLease(
+                at: .runtime,
+                expected: accountLease,
+                reason: "deliverLiveEchoAnswer"
+              ),
+              isCurrentDigitalHumanLifecycleToken(
+                lifecycleToken,
+                reason: "deliverLiveEchoAnswer"
+              ),
+              isUserControlledLiveSessionOpen else {
+            return
+        }
+        cancelLiveUserInactivityTimeout()
+
+        if shouldDispatchEchoReplyToTencentProvider {
+            captureLiveAssistantTurn(replyText)
+            guard viewModel.receiveAIReply(replyText) else {
+                failLiveEchoAnswer(
+                    message: "本轮回响状态已变化，请重新提问",
+                    lifecycleToken: lifecycleToken
+                )
+                return
+            }
+            sendEchoReplyToDigitalHumanRuntimeIfReady(replyText, source: source)
+            return
+        }
+
+        pendingAIText = replyText
+        guard DialogEngineManager.shared.submitLiveAnswerText(
+            replyText,
+            traceID: traceID,
+            source: source
+        ) else {
+            pendingAIText = nil
+            failLiveEchoAnswer(
+                message: "回响语音暂不可用，请稍后重试",
+                lifecycleToken: lifecycleToken
+            )
+            return
+        }
+        renderVoiceStatus(
+            text: "正在回响",
+            isVisible: true,
+            accessibilityIdentifier: "echoLiveBackendAnswerSpeaking"
+        )
+        PrivacySafeDiagnostics.log(
+            subsystem: "Echo",
+            event: "liveBackendAnswerSubmitted",
+            states: ["source": source],
+            counts: ["answerLength": replyText.count],
+            correlations: ["turn": turnID]
+        )
+    }
+
+    private func failLiveEchoAnswer(
+        message: String,
+        lifecycleToken: DigitalHumanLifecycleToken
+    ) {
+        guard isCurrentDigitalHumanLifecycleToken(
+            lifecycleToken,
+            reason: "liveEchoAnswerFailure"
+        ) else {
+            return
+        }
+        pendingAIText = nil
+        viewModel.fail(message)
+        renderVoiceStatus(
+            text: message,
+            isVisible: true,
+            accessibilityIdentifier: "echoLiveBackendAnswerFailed"
+        )
+    }
+
     private func presentFamilyContributionEchoBoundary(
         question: String,
         context: DigitalHumanContext,
@@ -8766,7 +9020,8 @@ final class EchoViewController: UIViewController {
                     DialogEngineManager.shared.startDialog(
                         sendsGreeting: !self.routeEchoAudioThroughDigitalHuman,
                         usesTurnScopedKnowledgeContext: true,
-                        lifetimePolicy: .userControlledLive
+                        lifetimePolicy: .userControlledLive,
+                        answerAuthority: .dreamJourneyBackend
                     )
                 } else {
                     self.backendRuntimeTokenApplied = false
@@ -9139,15 +9394,16 @@ extension EchoViewController: DialogEngineDelegate {
                 event: "userTurnStarted",
                 correlations: ["turn": turnID]
             )
-            self.recordEchoContextPacketForUserTurn(
-                text: text,
-                turnID: turnID,
-                lifecycleToken: lifecycleToken,
-                allowsGeneration: !self.viewModel.isWaitingForDelayedReply
-            )
             if self.viewModel.isWaitingForDelayedReply {
                 self.scheduleDelayedReplyNotificationIfNeeded(rawTranscript: text)
                 self.beginDelayedReplyWait()
+            } else {
+                self.requestLiveEchoAnswer(
+                    question: text,
+                    turnID: turnID,
+                    lifecycleToken: lifecycleToken,
+                    accountLease: accountLease
+                )
             }
         }
     }
@@ -9389,7 +9645,8 @@ extension EchoViewController {
         DialogEngineManager.shared.startDialog(
             sendsGreeting: false,
             usesTurnScopedKnowledgeContext: true,
-            lifetimePolicy: .userControlledLive
+            lifetimePolicy: .userControlledLive,
+            answerAuthority: .dreamJourneyBackend
         )
     }
 
