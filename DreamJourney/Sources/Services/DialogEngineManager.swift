@@ -221,6 +221,96 @@ enum DialogAudioSessionOwnershipPolicy {
     }
 }
 
+enum DialogTTSPlaybackTiming {
+    static func expectedDuration(fromSentenceEnd data: Data) -> TimeInterval? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let sentenceDuration = json["sentence_duration"] as? [String: Any],
+              let endTime = sentenceDuration["sentence_end_time"] as? NSNumber else {
+            return nil
+        }
+        let startTime = (sentenceDuration["sentence_start_time"] as? NSNumber)?.doubleValue ?? 0
+        let duration = endTime.doubleValue - startTime
+        return duration > 0 ? duration : nil
+    }
+
+    static func completionDelay(
+        startedAt: Date,
+        expectedDuration: TimeInterval?,
+        now: Date = Date(),
+        tailAllowance: TimeInterval = 0.2
+    ) -> TimeInterval {
+        guard let expectedDuration, expectedDuration > 0 else {
+            return 0.35
+        }
+        let remaining = expectedDuration - max(0, now.timeIntervalSince(startedAt))
+        return max(0.15, remaining + tailAllowance)
+    }
+}
+
+enum DialogPCM16WaveEncoder {
+    static func encode(
+        pcmData: Data,
+        sampleRate: UInt32 = 24_000,
+        channelCount: UInt16 = 1
+    ) -> Data? {
+        let bitsPerSample: UInt16 = 16
+        let bytesPerSample = UInt16(bitsPerSample / 8)
+        let blockAlignment = channelCount * bytesPerSample
+        guard !pcmData.isEmpty,
+              blockAlignment > 0,
+              pcmData.count % Int(blockAlignment) == 0,
+              pcmData.count <= Int(UInt32.max - 36) else {
+            return nil
+        }
+
+        let payloadSize = UInt32(pcmData.count)
+        let byteRate = sampleRate * UInt32(blockAlignment)
+        var result = Data()
+        result.reserveCapacity(44 + pcmData.count)
+        result.append(contentsOf: "RIFF".utf8)
+        appendLittleEndian(36 + payloadSize, to: &result)
+        result.append(contentsOf: "WAVE".utf8)
+        result.append(contentsOf: "fmt ".utf8)
+        appendLittleEndian(UInt32(16), to: &result)
+        appendLittleEndian(UInt16(1), to: &result)
+        appendLittleEndian(channelCount, to: &result)
+        appendLittleEndian(sampleRate, to: &result)
+        appendLittleEndian(byteRate, to: &result)
+        appendLittleEndian(blockAlignment, to: &result)
+        appendLittleEndian(bitsPerSample, to: &result)
+        result.append(contentsOf: "data".utf8)
+        appendLittleEndian(payloadSize, to: &result)
+        result.append(pcmData)
+        return result
+    }
+
+    static func containsAudibleSamples(_ pcmData: Data) -> Bool {
+        guard pcmData.count >= 2 else { return false }
+        return pcmData.withUnsafeBytes { rawBuffer in
+            let bytes = rawBuffer.bindMemory(to: UInt8.self)
+            var offset = 0
+            while offset + 1 < bytes.count {
+                let bits = UInt16(bytes[offset]) | (UInt16(bytes[offset + 1]) << 8)
+                if abs(Int(Int16(bitPattern: bits))) > 8 {
+                    return true
+                }
+                offset += 2
+            }
+            return false
+        }
+    }
+
+    private static func appendLittleEndian<T: FixedWidthInteger>(
+        _ value: T,
+        to data: inout Data
+    ) {
+        var littleEndian = value.littleEndian
+        Swift.withUnsafeBytes(of: &littleEndian) { bytes in
+            data.append(contentsOf: bytes)
+        }
+    }
+}
+
 /// Selects who generates the semantic answer for a dialog session. Most
 /// callers keep the provider-owned behavior; Echo Live delegates only answer
 /// generation to DreamJourney so typed and spoken questions share `/echo/answers`.
@@ -361,6 +451,7 @@ protocol DialogEngineDelegate: AnyObject {
     func onASRResult(text: String, isFinal: Bool)
     func onTTSStarted(text: String)
     func onTTSPlaybackStarted()
+    func onTTSPlaybackInterruptedByUser()
     func onTTSFinished()
     func onChatStreaming(text: String)
     func onError(error: Error)
@@ -369,6 +460,7 @@ protocol DialogEngineDelegate: AnyObject {
 
 extension DialogEngineDelegate {
     func onTTSPlaybackStarted() {}
+    func onTTSPlaybackInterruptedByUser() {}
 }
 
 final class DialogEngineManager: NSObject {
@@ -682,6 +774,63 @@ import AVFoundation
 import CocoaLumberjack
 import SpeechEngineToB
 
+private final class DialogPCMPlaybackController: NSObject, AVAudioPlayerDelegate {
+    private var player: AVAudioPlayer?
+    private var completion: ((Bool) -> Void)?
+
+    @discardableResult
+    func play(
+        pcmData: Data,
+        sampleRate: UInt32 = 24_000,
+        onStarted: () -> Void,
+        completion: @escaping (Bool) -> Void
+    ) -> Bool {
+        stop()
+        guard let waveData = DialogPCM16WaveEncoder.encode(
+            pcmData: pcmData,
+            sampleRate: sampleRate
+        ) else {
+            return false
+        }
+
+        do {
+            let player = try AVAudioPlayer(data: waveData)
+            player.delegate = self
+            player.volume = 1
+            guard player.prepareToPlay(), player.play() else {
+                return false
+            }
+            self.player = player
+            self.completion = completion
+            onStarted()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func stop() {
+        player?.stop()
+        player?.delegate = nil
+        player = nil
+        completion = nil
+    }
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        guard player === self.player else { return }
+        let completion = completion
+        stop()
+        completion?(flag)
+    }
+
+    func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        guard player === self.player else { return }
+        let completion = completion
+        stop()
+        completion?(false)
+    }
+}
+
 // MARK: - 对话结束原因
 
 enum DialogEndReason {
@@ -699,6 +848,7 @@ protocol DialogEngineDelegate: AnyObject {
     func onASRResult(text: String, isFinal: Bool)
     func onTTSStarted(text: String)
     func onTTSPlaybackStarted()
+    func onTTSPlaybackInterruptedByUser()
     func onTTSFinished()
     func onChatStreaming(text: String)
     func onError(error: Error)
@@ -707,6 +857,7 @@ protocol DialogEngineDelegate: AnyObject {
 
 extension DialogEngineDelegate {
     func onTTSPlaybackStarted() {}
+    func onTTSPlaybackInterruptedByUser() {}
 }
 
 private final class DialogEngineProviderDelegateProxy: NSObject, SpeechEngineDelegate {
@@ -741,6 +892,12 @@ private struct DialogEngineTextReplyPlayback {
     let completion: (Result<Void, Error>) -> Void
 }
 
+private enum DelegatedTTSEventPhase {
+    case started
+    case sentenceEnded
+    case streamEnded
+}
+
 // MARK: - DialogEngineManager
 
 /// Dialog 语音对话引擎管理器 - 直接封装火山引擎 SpeechEngineToB SDK
@@ -771,6 +928,14 @@ final class DialogEngineManager: NSObject {
     private var pendingTextReplyPlayback: DialogEngineTextReplyPlayback?
     private var textReplyPlaybackFallbackWorkItem: DispatchWorkItem?
     private var engineAnswerAuthority: DialogAnswerAuthority?
+    private var isDelegatedClientTTSRouteSelected = false
+    private var delegatedClientTTSReplyIDs = Set<String>()
+    private var delegatedServerTTSReplyIDs = Set<String>()
+    private var delegatedClientPlaybackReplyID: String?
+    private var isDelegatedClientTTSSubmissionPending = false
+    private var delegatedClientPlaybackDidStart = false
+    private var delegatedClientDecodedPCM = Data()
+    private let delegatedClientPCMPlayer = DialogPCMPlaybackController()
 
     /// 引擎是否就绪（已初始化完成）
     private(set) var isEngineReady = false
@@ -1119,12 +1284,25 @@ final class DialogEngineManager: NSObject {
 
     /// 客户端主动打断 AI 回复（仅在 AI 正在播报时生效）
     func interruptAI() {
-        guard isDialogActive, isAISpeaking, let engine = engine else { return }
+        interruptAI(notifiesUserInterruption: false)
+    }
+
+    private func interruptAI(notifiesUserInterruption: Bool) {
+        guard isDialogActive,
+              isAISpeaking || isDelegatedClientTTSSubmissionPending,
+              let engine = engine else { return }
         let result = engine.send(SEDirectiveEventClientInterrupt, data: "{}")
         if result == SENoError {
             isAISpeaking = false
+            resetDelegatedClientPlaybackState()
             print("[DialogEngine] ✅ 已打断 AI 播报")
             DDLogInfo("[DialogEngine] 客户端打断 AI")
+            if notifiesUserInterruption,
+               let callbackContext = currentProviderCallbackContext() {
+                deliverProviderCallback(callbackContext) { _, delegate in
+                    delegate.onTTSPlaybackInterruptedByUser()
+                }
+            }
         } else {
             print("[DialogEngine] ⚠️ 打断指令发送失败: \(result.rawValue)")
         }
@@ -1240,6 +1418,7 @@ final class DialogEngineManager: NSObject {
         self.usesTurnScopedKnowledgeContext = usesTurnScopedKnowledgeContext
         sessionLifetimePolicy = lifetimePolicy
         self.answerAuthority = answerAuthority
+        resetDelegatedTTSRoutingState()
         isRecorderPaused = false
         suppressGreetingForNextStart = !sendsGreeting
         // 引擎未就绪时先初始化
@@ -1348,6 +1527,7 @@ final class DialogEngineManager: NSObject {
 
         isEnding = true
         invalidateSilenceTimer()
+        resetDelegatedClientPlaybackState()
         pendingEndReason = reason
 
         // 同步停止引擎（官方推荐）
@@ -1486,6 +1666,7 @@ final class DialogEngineManager: NSObject {
         guard isDialogActive,
               sessionLifetimePolicy == .userControlledLive,
               answerAuthority == .dreamJourneyBackend,
+              isDelegatedClientTTSRouteSelected,
               config.enablePlayer,
               let engine,
               !normalized.isEmpty else {
@@ -1500,16 +1681,234 @@ final class DialogEngineManager: NSObject {
             return false
         }
 
-        let result = engine.send(SEDirectiveEventChatTtsText, data: payload)
+        resetDelegatedClientPlaybackState()
+        isDelegatedClientTTSSubmissionPending = true
+
+        // This SDK build reliably routes SayHello through the same
+        // chat_tts_text stream as the audible Live greeting. ChatTtsText can
+        // be swallowed while the provider-owned answer stream is finishing.
+        let result = engine.send(SEDirectiveEventSayHello, data: payload)
         guard result == SENoError else {
+            isDelegatedClientTTSSubmissionPending = false
             DDLogError("[DialogEngine] delegated Live answer rejected: \(result.rawValue)")
             return false
         }
         DDLogInfo(
-            "[DialogEngine] delegated Live answer submitted " +
+            "[DialogEngine] delegated Live answer submitted directive=sayHello " +
             "source=\(source) traceID=\(traceID ?? "none") bytes=\(normalized.utf8.count)"
         )
         return true
+    }
+
+    private func selectDelegatedClientTTSRouteIfNeeded(force: Bool = false) -> Bool {
+        guard answerAuthority == .dreamJourneyBackend else { return true }
+        guard force || !isDelegatedClientTTSRouteSelected else { return true }
+        guard let engine else { return false }
+
+        let result = engine.send(SEDirectiveDialogUseClientTriggerTts)
+        guard result == SENoError else {
+            DDLogError(
+                "[DialogEngine] delegated Live TTS route selection failed code=\(result.rawValue)"
+            )
+            return false
+        }
+        isDelegatedClientTTSRouteSelected = true
+        DDLogInfo(
+            "[DialogEngine] delegated Live TTS route selected trigger=client force=\(force)"
+        )
+        return true
+    }
+
+    private func resetDelegatedTTSRoutingState() {
+        isDelegatedClientTTSRouteSelected = false
+        delegatedClientTTSReplyIDs.removeAll()
+        delegatedServerTTSReplyIDs.removeAll()
+        resetDelegatedClientPlaybackState()
+    }
+
+    private func resetDelegatedClientPlaybackState() {
+        delegatedClientPCMPlayer.stop()
+        delegatedClientPlaybackReplyID = nil
+        isDelegatedClientTTSSubmissionPending = false
+        delegatedClientPlaybackDidStart = false
+        delegatedClientDecodedPCM.removeAll(keepingCapacity: false)
+    }
+
+    private func acceptsDelegatedTTSEvent(
+        _ data: Data,
+        phase: DelegatedTTSEventPhase
+    ) -> Bool {
+        guard answerAuthority == .dreamJourneyBackend else { return true }
+        guard let metadata = delegatedTTSMetadata(from: data) else {
+            DDLogWarn("[DialogEngine] dropped delegated TTS event without metadata phase=\(phase)")
+            return false
+        }
+
+        switch phase {
+        case .started:
+            let isClientTriggered = metadata.ttsType == "chat_tts_text"
+            guard let replyID = metadata.replyID else {
+                DDLogWarn("[DialogEngine] dropped delegated TTS start without reply ID")
+                return false
+            }
+            if isClientTriggered {
+                resetDelegatedClientPlaybackState()
+                delegatedClientTTSReplyIDs.insert(replyID)
+                delegatedServerTTSReplyIDs.remove(replyID)
+                delegatedClientPlaybackReplyID = replyID
+            } else {
+                delegatedServerTTSReplyIDs.insert(replyID)
+                delegatedClientTTSReplyIDs.remove(replyID)
+            }
+            if !isClientTriggered {
+                DDLogInfo(
+                    "[DialogEngine] ignored provider-owned TTS while backend owns answers " +
+                    "ttsType=\(metadata.ttsType ?? "unknown")"
+                )
+                // The session is already pinned to client-triggered TTS. Sending
+                // ClientInterrupt here also mutes the player for the following
+                // SayHello response, so the ignored server stream must be left
+                // to finish without taking playback ownership.
+            }
+            return isClientTriggered
+
+        case .sentenceEnded:
+            guard let replyID = metadata.replyID else { return false }
+            return delegatedClientTTSReplyIDs.contains(replyID)
+
+        case .streamEnded:
+            guard let replyID = metadata.replyID else { return false }
+            let accepted = delegatedClientTTSReplyIDs.remove(replyID) != nil
+            delegatedServerTTSReplyIDs.remove(replyID)
+            return accepted
+        }
+    }
+
+    private func delegatedTTSMetadata(
+        from data: Data
+    ) -> (replyID: String?, ttsType: String?)? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return (
+            replyID: json["reply_id"] as? String,
+            ttsType: json["tts_type"] as? String
+        )
+    }
+
+    private func appendDelegatedClientDecodedPCM(_ data: Data) {
+        guard answerAuthority == .dreamJourneyBackend else {
+            print("[DialogEngine] dropped decoder PCM reason=answerAuthority")
+            return
+        }
+        guard delegatedClientPlaybackReplyID != nil else {
+            print("[DialogEngine] dropped decoder PCM reason=missingReplyID bytes=\(data.count)")
+            return
+        }
+        guard !data.isEmpty else {
+            print("[DialogEngine] dropped decoder PCM reason=empty")
+            return
+        }
+        let hadData = !delegatedClientDecodedPCM.isEmpty
+        delegatedClientDecodedPCM.append(data)
+        if !hadData {
+            print(
+                "[DialogEngine] decoder PCM first packet bytes=\(data.count) " +
+                "audible=\(DialogPCM16WaveEncoder.containsAudibleSamples(data))"
+            )
+            DDLogInfo(
+                "[DialogEngine] delegated Live decoder received first PCM packet " +
+                "bytes=\(data.count) audible=\(DialogPCM16WaveEncoder.containsAudibleSamples(data))"
+            )
+        }
+    }
+
+    private func playDelegatedClientDecodedPCM(
+        callbackContext: DialogEngineProviderCallbackContext
+    ) {
+        guard let replyID = delegatedClientPlaybackReplyID else {
+            return
+        }
+        let pcmData = delegatedClientDecodedPCM
+        print(
+            "[DialogEngine] decoder PCM synthesis complete bytes=\(pcmData.count) " +
+            "audible=\(DialogPCM16WaveEncoder.containsAudibleSamples(pcmData))"
+        )
+        guard DialogPCM16WaveEncoder.containsAudibleSamples(pcmData) else {
+            resetDelegatedClientPlaybackState()
+            DDLogError("[DialogEngine] delegated Live decoder returned empty or silent PCM")
+            deliverProviderCallback(callbackContext) { _, delegate in
+                delegate.onError(
+                    error: DialogEngineError.sdkError(
+                        code: -1,
+                        message: "回响音频数据为空"
+                    )
+                )
+            }
+            return
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.delegatedClientPlaybackReplyID == replyID else {
+                return
+            }
+            let started = self.delegatedClientPCMPlayer.play(
+                pcmData: pcmData,
+                onStarted: { [weak self] in
+                    guard let self,
+                          self.delegatedClientPlaybackReplyID == replyID else {
+                        return
+                    }
+                    self.delegatedClientPlaybackDidStart = true
+                    self.isAISpeaking = true
+                    DDLogInfo(
+                        "[DialogEngine] delegated Live PCM player started bytes=\(pcmData.count)"
+                    )
+                    self.deliverProviderCallback(callbackContext) { _, delegate in
+                        delegate.onTTSPlaybackStarted()
+                    }
+                },
+                completion: { [weak self] succeeded in
+                    guard let self,
+                          self.delegatedClientPlaybackReplyID == replyID else {
+                        return
+                    }
+                    self.resetDelegatedClientPlaybackState()
+                    self.isAISpeaking = false
+                    if succeeded {
+                        DDLogInfo("[DialogEngine] delegated Live PCM player finished")
+                        self.deliverProviderCallback(callbackContext) { _, delegate in
+                            delegate.onTTSFinished()
+                        }
+                    } else {
+                        DDLogError("[DialogEngine] delegated Live PCM player failed")
+                        self.deliverProviderCallback(callbackContext) { _, delegate in
+                            delegate.onError(
+                                error: DialogEngineError.sdkError(
+                                    code: -2,
+                                    message: "回响音频播放失败"
+                                )
+                            )
+                        }
+                    }
+                }
+            )
+            guard started else {
+                self.resetDelegatedClientPlaybackState()
+                self.isAISpeaking = false
+                DDLogError("[DialogEngine] delegated Live PCM player could not start")
+                self.deliverProviderCallback(callbackContext) { _, delegate in
+                    delegate.onError(
+                        error: DialogEngineError.sdkError(
+                            code: -3,
+                            message: "回响音频未能开始播放"
+                        )
+                    )
+                }
+                return
+            }
+        }
     }
 
     /// 销毁引擎（登出/退出时调用）
@@ -1522,6 +1921,7 @@ final class DialogEngineManager: NSObject {
         textReplyPlaybackFallbackWorkItem?.cancel()
         textReplyPlaybackFallbackWorkItem = nil
         pendingTextReplyPlayback = nil
+        resetDelegatedTTSRoutingState()
         if isDialogActive {
             _ = engine?.send(SEDirectiveSyncStopEngine)
         }
@@ -1753,9 +2153,8 @@ final class DialogEngineManager: NSObject {
         engine.setStringParam(config.address, forKey: SE_PARAMS_KEY_DIALOG_ADDRESS_STRING)
         engine.setStringParam(config.uri, forKey: SE_PARAMS_KEY_DIALOG_URI_STRING)
 
-        // Fire owns the realtime ASR/TTS transport, while DreamJourney's
-        // `/echo/answers` endpoint owns retrieval and answer generation. This
-        // prevents the provider LLM from answering before formal memory arrives.
+        // Fire owns realtime ASR/TTS transport while `/echo/answers` owns
+        // semantic answer generation.
         let dialogWorkMode = answerAuthority == .dreamJourneyBackend
             ? SEDialogWorkModeDelegateChatTtsText
             : SEDialogWorkModeDefault
@@ -1783,6 +2182,19 @@ final class DialogEngineManager: NSObject {
         // 启用内置播放器。数字人接管声音时，SpeechEngine 只负责 ASR/对话文本，
         // 不创建播放器，也不抢腾讯云渲染的远端音频会话。
         engine.setBoolParam(config.enablePlayer, forKey: SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_BOOL)
+        // This SDK build emits continuous silent buffers when the dialog player
+        // callback is enabled. Keep the verified internal speaker path active;
+        // encoded TTS packets provide the playback receipt instead.
+        engine.setBoolParam(
+            false,
+            forKey: SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_AUDIO_CALLBACK_BOOL
+        )
+        let usesApplicationPCMPlayback = answerAuthority == .dreamJourneyBackend
+            && config.enablePlayer
+        engine.setBoolParam(
+            usesApplicationPCMPlayback,
+            forKey: SE_PARAMS_KEY_DIALOG_ENABLE_DECODER_AUDIO_CALLBACK_BOOL
+        )
         engine.setBoolParam(!config.enablePlayer, forKey: SE_PARAMS_KEY_PREVENT_PLAYER_CREATION_BOOL)
         engine.setBoolParam(!config.enablePlayer, forKey: SE_PARAMS_KEY_FULLLINK_DISABLE_TTS_BOOL)
         engine.setBoolParam(false, forKey: SE_PARAMS_KEY_RESET_AUDIOSESSION_BOOL)
@@ -1791,7 +2203,8 @@ final class DialogEngineManager: NSObject {
         print(
             "[DialogEngine] local player config enablePlayer=\(config.enablePlayer), " +
             "preventPlayerCreation=\(!config.enablePlayer), " +
-            "fullLinkDisableTTS=\(!config.enablePlayer)"
+            "fullLinkDisableTTS=\(!config.enablePlayer), " +
+            "applicationPCMPlayback=\(usesApplicationPCMPlayback)"
         )
 
         // 音量回调
@@ -2165,7 +2578,15 @@ extension DialogEngineManager {
             }
         }
 
-        let dataStr = String(data: data, encoding: .utf8) ?? "(binary \(data.count) bytes)"
+        let binaryMessageTypes: Set<SEMessageType> = [
+            SERecorderAudioData,
+            SEPlayerAudioData,
+            SEEventTTSResponse,
+            SEDecoderAudioData,
+        ]
+        let dataStr = binaryMessageTypes.contains(type)
+            ? "(binary \(data.count) bytes)"
+            : (String(data: data, encoding: .utf8) ?? "(binary \(data.count) bytes)")
         print("[DialogEngine] onMessage type=\(type.rawValue), data=\(dataStr.prefix(500))")
 
         if pendingTextReplyPlayback != nil {
@@ -2246,6 +2667,18 @@ extension DialogEngineManager {
             DDLogInfo("[DialogEngine] 对话会话已开始")
             isDialogActive = true
             providerSessionOperationId = callbackContext.dialogOperationId
+            guard selectDelegatedClientTTSRouteIfNeeded() else {
+                deliverProviderCallback(callbackContext) { _, delegate in
+                    delegate.onError(
+                        error: DialogEngineError.sdkError(
+                            code: Int(SEDirectiveDialogUseClientTriggerTts.rawValue),
+                            message: "客户端语音播放路由初始化失败"
+                        )
+                    )
+                }
+                stopDialog(reason: .serverEnded)
+                return
+            }
             if pendingTextReplyPlayback != nil {
                 submitPendingTextReplyPlayback()
                 return
@@ -2333,7 +2766,7 @@ extension DialogEngineManager {
                     print("[DialogEngine] 🎤 AI播报中，忽略ASRInfo回声")
                     return
                 }
-                interruptAI()
+                interruptAI(notifiesUserInterruption: true)
             }
             // 重置静音超时计时器
             deliverProviderCallback(callbackContext) { manager, _ in
@@ -2406,7 +2839,7 @@ extension DialogEngineManager {
                     print("[DialogEngine] 🎤 AI播报中，忽略ASRResponse回声")
                     return
                 }
-                interruptAI()
+                interruptAI(notifiesUserInterruption: true)
             }
             // ASR 识别结果（流式，通过 is_interim 区分中间/最终）
             deliverProviderCallback(callbackContext) { manager, _ in
@@ -2415,6 +2848,20 @@ extension DialogEngineManager {
             if let result = parsedASRResponse {
                 print("[DialogEngine] 🎤 ASRResponse: text=\(result.text), isFinal=\(result.isFinal)")
                 if result.isFinal {
+                    // The provider can restore server-triggered TTS after the
+                    // greeting or a completed turn. Reassert the delegated
+                    // route before its prefetched answer reaches TTS.
+                    guard selectDelegatedClientTTSRouteIfNeeded(force: true) else {
+                        deliverProviderCallback(callbackContext) { _, delegate in
+                            delegate.onError(
+                                error: DialogEngineError.sdkError(
+                                    code: Int(SEDirectiveDialogUseClientTriggerTts.rawValue),
+                                    message: "回响语音路由切换失败"
+                                )
+                            )
+                        }
+                        return
+                    }
                     if let keyword = checkEndKeyword(in: result.text) {
                         print("[DialogEngine] 🛑 ASRResponse 检测到结束关键词: \(keyword)")
                         isEnding = true
@@ -2442,7 +2889,18 @@ extension DialogEngineManager {
                     print("[DialogEngine] 🎤 AI播报中，忽略ChatTextQueryConfirmed回声")
                     return
                 }
-                interruptAI()
+                interruptAI(notifiesUserInterruption: true)
+            }
+            guard selectDelegatedClientTTSRouteIfNeeded(force: true) else {
+                deliverProviderCallback(callbackContext) { _, delegate in
+                    delegate.onError(
+                        error: DialogEngineError.sdkError(
+                            code: Int(SEDirectiveDialogUseClientTriggerTts.rawValue),
+                            message: "回响语音路由切换失败"
+                        )
+                    )
+                }
+                return
             }
             // 用户语音已确认，这是发送给 LLM 的最终文本
             print("[DialogEngine] ✅ 用户语音确认: \(dataStr.prefix(300))")
@@ -2472,8 +2930,14 @@ extension DialogEngineManager {
                 print("[DialogEngine] skipped Fire TTS sentence start; Tencent owns audible playback")
                 return
             }
-            // TTS 句子开始 - 标记 AI 正在播报
-            isAISpeaking = true
+            guard acceptsDelegatedTTSEvent(data, phase: .started) else { return }
+            // Delegated Live waits for the first encoded audio packet before
+            // considering playback interruptible. Other modes preserve the
+            // provider-owned behavior.
+            if sessionLifetimePolicy != .userControlledLive
+                || answerAuthority != .dreamJourneyBackend {
+                isAISpeaking = true
+            }
             if pendingTextReplyPlayback != nil {
                 return
             }
@@ -2501,6 +2965,7 @@ extension DialogEngineManager {
                 print("[DialogEngine] skipped Fire TTS sentence end; Tencent owns audible playback")
                 return
             }
+            guard acceptsDelegatedTTSEvent(data, phase: .sentenceEnded) else { return }
             if pendingTextReplyPlayback != nil {
                 return
             }
@@ -2518,6 +2983,7 @@ extension DialogEngineManager {
                 print("[DialogEngine] skipped Fire TTS ended; Tencent owns audible playback")
                 return
             }
+            guard acceptsDelegatedTTSEvent(data, phase: .streamEnded) else { return }
             DDLogInfo("[DialogEngine] TTS 播放结束")
             if let playback = pendingTextReplyPlayback {
                 isAISpeaking = false
@@ -2526,7 +2992,8 @@ extension DialogEngineManager {
             }
             if sessionLifetimePolicy == .userControlledLive,
                answerAuthority == .dreamJourneyBackend {
-                DDLogInfo("[DialogEngine] delegated Live synthesis ended; awaiting player finish receipt")
+                DDLogInfo("[DialogEngine] delegated Live synthesis ended; starting decoded PCM playback")
+                playDelegatedClientDecodedPCM(callbackContext: callbackContext)
                 return
             }
             isAISpeaking = false
@@ -2534,9 +3001,30 @@ extension DialogEngineManager {
                 delegate.onTTSFinished()
             }
 
+        case SEEventTTSResponse:
+            break
+
+        case SEPlayerAudioData:
+            break
+
+        case SEDecoderAudioData:
+            appendDelegatedClientDecodedPCM(data)
+
         case SEPlayerStartPlayAudio:
             guard config.enablePlayer else {
                 print("[DialogEngine] skipped Fire player start; Tencent owns audible playback")
+                return
+            }
+            if sessionLifetimePolicy == .userControlledLive,
+               answerAuthority == .dreamJourneyBackend {
+                guard delegatedClientPlaybackReplyID != nil else { return }
+                if !delegatedClientPlaybackDidStart {
+                    delegatedClientPlaybackDidStart = true
+                    isAISpeaking = true
+                    deliverProviderCallback(callbackContext) { _, delegate in
+                        delegate.onTTSPlaybackStarted()
+                    }
+                }
                 return
             }
             isAISpeaking = true
@@ -2550,6 +3038,17 @@ extension DialogEngineManager {
                 print("[DialogEngine] skipped Fire player finish; Tencent owns audible playback")
                 return
             }
+            if sessionLifetimePolicy == .userControlledLive,
+               answerAuthority == .dreamJourneyBackend {
+                guard delegatedClientPlaybackReplyID != nil,
+                      delegatedClientPlaybackDidStart else { return }
+                resetDelegatedClientPlaybackState()
+                isAISpeaking = false
+                deliverProviderCallback(callbackContext) { _, delegate in
+                    delegate.onTTSFinished()
+                }
+                return
+            }
             isAISpeaking = false
             DDLogInfo("[DialogEngine] 播放器播放完毕")
             if completeTextReplyPlayback(.success(()), stopsProviderSession: true) {
@@ -2561,6 +3060,11 @@ extension DialogEngineManager {
 
         // MARK: Chat Events
         case SEEventChatResponse:
+            guard answerAuthority != .dreamJourneyBackend else {
+                // In delegated mode `/echo/answers` is the only answer authority.
+                // Provider-side chat text must not overwrite the grounded answer.
+                return
+            }
             // AI 对话流式 chunk —— 拼接到 buffer，不直接展示
             if let text = parseChatText(from: data) {
                 chatBuffer += text
@@ -2572,6 +3076,10 @@ extension DialogEngineManager {
             }
 
         case SEEventChatEnded:
+            guard answerAuthority != .dreamJourneyBackend else {
+                chatBuffer = ""
+                return
+            }
             DDLogInfo("[DialogEngine] Chat 结束")
             // 如果 chatBuffer 有内容但未通过 TTS 展示，展示它
             if !chatBuffer.isEmpty {

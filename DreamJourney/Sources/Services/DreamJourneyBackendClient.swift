@@ -4236,6 +4236,23 @@ struct EchoContextPacket {
     }
 }
 
+struct EchoConversationTurn: Equatable {
+    enum Role: String {
+        case user
+        case assistant
+    }
+
+    let role: Role
+    let text: String
+
+    var requestPayload: [String: Any] {
+        [
+            "role": role.rawValue,
+            "text": text,
+        ]
+    }
+}
+
 struct EchoAnswerCitation: Equatable {
     let source: String
     let refId: String
@@ -7754,6 +7771,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         personaName: String,
         lifecycleMode: DigitalHumanMode,
         viewerFamilyMemberID: String? = nil,
+        recentTurns: [EchoConversationTurn] = [],
         completion: @escaping (Result<EchoAnswer, Error>) -> Void
     ) {
         var payload: [String: Any] = [
@@ -7765,6 +7783,9 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             "personaName": personaName,
             "lifecycleMode": lifecycleMode.rawValue,
         ]
+        if !recentTurns.isEmpty {
+            payload["recentTurns"] = recentTurns.map(\.requestPayload)
+        }
         if let viewerFamilyMemberID,
            !viewerFamilyMemberID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             payload["viewerFamilyMemberID"] = viewerFamilyMemberID

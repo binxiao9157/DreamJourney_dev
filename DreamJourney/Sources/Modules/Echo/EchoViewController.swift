@@ -118,6 +118,41 @@ private struct EchoMemoryGapHandoff {
     let contextKey: String
 }
 
+struct EchoRecentConversationBuffer: Equatable {
+    static let maximumTurnCount = 6
+    static let maximumTurnCharacters = 500
+    static let maximumTotalCharacters = 2_400
+
+    private(set) var turns: [EchoConversationTurn] = []
+
+    mutating func startUserTurn(_ rawText: String) -> [EchoConversationTurn] {
+        let priorTurns = turns
+        append(role: .user, text: rawText)
+        return priorTurns
+    }
+
+    mutating func appendAssistantTurn(_ rawText: String) {
+        append(role: .assistant, text: rawText)
+    }
+
+    mutating func reset() {
+        turns.removeAll(keepingCapacity: true)
+    }
+
+    private mutating func append(role: EchoConversationTurn.Role, text rawText: String) {
+        let normalized = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+        let bounded = String(normalized.prefix(Self.maximumTurnCharacters))
+        let turn = EchoConversationTurn(role: role, text: bounded)
+        guard turns.last != turn else { return }
+        turns.append(turn)
+        while turns.count > Self.maximumTurnCount
+                || turns.reduce(0, { $0 + $1.text.count }) > Self.maximumTotalCharacters {
+            turns.removeFirst()
+        }
+    }
+}
+
 private enum EchoLiveMemoryCaptureState: Equatable {
     case live
     case organizing
@@ -1025,6 +1060,7 @@ final class EchoViewController: UIViewController {
     private var pendingMemoryGapHandoff: EchoMemoryGapHandoff?
     private var currentState: EchoInteractionState = .idle
     private var transcriptEntries: [(text: String, isUser: Bool)] = []
+    private var recentEchoConversation = EchoRecentConversationBuffer()
     private var pendingAIText: String?
     private var digitalHumanReplyPrewarmWorkItem: DispatchWorkItem?
     private var digitalHumanProviderTextOverTimeoutWorkItem: DispatchWorkItem?
@@ -1051,6 +1087,7 @@ final class EchoViewController: UIViewController {
                 cancelLiveUserInactivityTimeout()
                 cancelLivePlaybackReceipt(reason: "liveSessionClosed")
                 activeLiveAudioRouteLease = nil
+                recentEchoConversation.reset()
             }
         }
     }
@@ -1987,6 +2024,7 @@ final class EchoViewController: UIViewController {
         lastEchoRuntimeFallbackReason = nil
         pendingAIText = nil
         transcriptEntries.removeAll()
+        recentEchoConversation.reset()
         resetDigitalHumanReplyDispatchState()
         echoRuntimeDiagnosticsPanelLabel.text = ""
         let accountLease = captureEchoAccountLease(reason: reason)
@@ -2032,6 +2070,7 @@ final class EchoViewController: UIViewController {
         guard validateEchoAccountLease(at: .ui, reason: "digitalHumanContextDidChange") else {
             return
         }
+        recentEchoConversation.reset()
         viewModel.resetTransientStateForAccountRebind()
         if isEchoDelayedReplyProductEnabled, let echoAccountLease {
             _ = viewModel.restoreStoredDelayedReplyIfAvailable(
@@ -7180,6 +7219,9 @@ final class EchoViewController: UIViewController {
             )
             return
         }
+        if !isTypedEchoConversationOpen {
+            recentEchoConversation.reset()
+        }
         guard let accountLease = echoAccountLease,
               validateEchoAccountLease(
                   at: .request,
@@ -7332,6 +7374,7 @@ final class EchoViewController: UIViewController {
             isVisible: true,
             accessibilityIdentifier: "echoBackendAnswerLoading"
         )
+        let recentTurns = recentEchoConversation.startUserTurn(question)
         DreamJourneyBackendClient.shared.requestEchoAnswer(
             userId: expectedIdentity.userId,
             query: question,
@@ -7339,7 +7382,8 @@ final class EchoViewController: UIViewController {
             digitalHumanId: expectedIdentity.digitalHumanId,
             personaName: context.resolvedDisplayName,
             lifecycleMode: context.mode,
-            viewerFamilyMemberID: nil
+            viewerFamilyMemberID: nil,
+            recentTurns: recentTurns
         ) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self,
@@ -7380,6 +7424,7 @@ final class EchoViewController: UIViewController {
                         self.viewModel.fail("本轮回响状态已变化，请重新提问")
                         return
                     }
+                    self.recentEchoConversation.appendAssistantTurn(replyText)
                     PrivacySafeDiagnostics.log(
                         subsystem: "Echo",
                         event: "backendAnswerReceived",
@@ -7520,6 +7565,7 @@ final class EchoViewController: UIViewController {
                 isVisible: true,
                 accessibilityIdentifier: "echoLiveBackendAnswerLoading"
             )
+            let recentTurns = recentEchoConversation.startUserTurn(question)
             DreamJourneyBackendClient.shared.requestEchoAnswer(
                 userId: expectedIdentity.userId,
                 query: question,
@@ -7527,7 +7573,8 @@ final class EchoViewController: UIViewController {
                 digitalHumanId: expectedIdentity.digitalHumanId,
                 personaName: context.resolvedDisplayName,
                 lifecycleMode: context.mode,
-                viewerFamilyMemberID: nil
+                viewerFamilyMemberID: nil,
+                recentTurns: recentTurns
             ) { [weak self] result in
                 DispatchQueue.main.async {
                     guard let self,
@@ -7711,6 +7758,7 @@ final class EchoViewController: UIViewController {
                 )
                 return
             }
+            recentEchoConversation.appendAssistantTurn(replyText)
             beginLivePlaybackReceipt(
                 route: .tencentDigitalHuman,
                 turnID: turnID,
@@ -7747,6 +7795,7 @@ final class EchoViewController: UIViewController {
             )
             return
         }
+        recentEchoConversation.appendAssistantTurn(replyText)
         renderVoiceStatus(
             text: "正在回响",
             isVisible: true,
@@ -8306,6 +8355,7 @@ final class EchoViewController: UIViewController {
             accessibilityIdentifier: "echoTypedMemoryOrganizing"
         )
         finishLiveMemoryCaptureIfNeeded()
+        recentEchoConversation.reset()
     }
 
     private func armLiveUserInactivityTimeout(reason: String) {
@@ -8426,6 +8476,9 @@ final class EchoViewController: UIViewController {
                     return
                 }
                 DialogEngineManager.shared.delegate = self
+                if !self.isUserControlledLiveSessionOpen {
+                    self.recentEchoConversation.reset()
+                }
                 self.isUserControlledLiveSessionOpen = true
                 self.isLiveVoiceTransportSuspended = false
                 self.beginLiveMemoryCaptureIfNeeded(accountLease: accountLease)
@@ -9879,6 +9932,35 @@ extension EchoViewController: DialogEngineDelegate {
                   self.validateEchoAccountLease(at: .ui, reason: "ttsPlaybackStarted"),
                   self.isUserControlledLiveSessionOpen else { return }
             self.acknowledgeLivePlaybackStarted(route: .volcengineLocalTTS)
+        }
+    }
+
+    func onTTSPlaybackInterruptedByUser() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.validateEchoAccountLease(at: .ui, reason: "ttsPlaybackInterrupted"),
+                  let accountLease = self.echoAccountLease,
+                  self.activeVoiceInteractionToken(reason: "ttsPlaybackInterrupted") != nil,
+                  self.isUserControlledLiveSessionOpen else { return }
+            self.cancelLivePlaybackReceipt(reason: "userBargeIn")
+            self.pendingAIText = nil
+            self.stopDigitalHumanAudioLevelMetering()
+            guard self.viewModel.resumeVoiceInteractionAfterReplyInterruption(
+                accountLease: accountLease
+            ) else {
+                PrivacySafeDiagnostics.log(
+                    subsystem: "Echo",
+                    event: "replyInterruptionStateRecoveryRejected",
+                    states: ["reason": "turnIntentRejected"]
+                )
+                return
+            }
+            self.renderVoiceStatus(
+                text: "正在聆听",
+                isVisible: true,
+                accessibilityIdentifier: "echoLiveListeningAfterBargeIn"
+            )
+            self.armLiveUserInactivityTimeout(reason: "ttsPlaybackInterrupted")
         }
     }
 

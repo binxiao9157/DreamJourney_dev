@@ -660,6 +660,21 @@ final class EchoTurnIntentReducerTests: XCTestCase {
         XCTAssertEqual(delivery.currentPhase, .replied)
     }
 
+    func testUserBargeInReturnsSpeakingTurnToListening() {
+        var reducer = EchoTurnIntentReducer()
+        _ = reducer.reduce(.prepareVoiceInteraction)
+        _ = reducer.reduce(.voiceCaptureStarted)
+        _ = reducer.reduce(.userTurnAccepted)
+        _ = reducer.reduce(.replyStarted)
+
+        let interruption = reducer.reduce(.replyInterrupted)
+
+        XCTAssertTrue(interruption.accepted)
+        XCTAssertEqual(interruption.previousPhase, .speaking)
+        XCTAssertEqual(interruption.currentPhase, .listening)
+        XCTAssertTrue(reducer.reduce(.userTurnAccepted).accepted)
+    }
+
     func testStaleReplyCannotResurrectAnIdleTurn() {
         var reducer = EchoTurnIntentReducer()
 
@@ -3194,6 +3209,43 @@ private final class EchoDelayedReplyAnswerReadClientStub: EchoDelayedReplyAnswer
     }
 }
 
+final class EchoRecentConversationBufferTests: XCTestCase {
+    func testNextQuestionReceivesOnlyPriorCompletedConversation() {
+        var buffer = EchoRecentConversationBuffer()
+
+        XCTAssertEqual(buffer.startUserTurn("苹果折叠屏怎么样？"), [])
+        buffer.appendAssistantTurn("可以关注耐用性和系统适配。")
+        let priorTurns = buffer.startUserTurn("那华为的呢？")
+
+        XCTAssertEqual(priorTurns, [
+            EchoConversationTurn(role: .user, text: "苹果折叠屏怎么样？"),
+            EchoConversationTurn(role: .assistant, text: "可以关注耐用性和系统适配。"),
+        ])
+        XCTAssertEqual(buffer.turns.last, EchoConversationTurn(role: .user, text: "那华为的呢？"))
+    }
+
+    func testBufferBoundsTurnsCharactersAndReset() {
+        var buffer = EchoRecentConversationBuffer()
+
+        for index in 0..<8 {
+            _ = buffer.startUserTurn("问题\(index)" + String(repeating: "字", count: 600))
+            buffer.appendAssistantTurn("回答\(index)")
+        }
+
+        XCTAssertLessThanOrEqual(buffer.turns.count, EchoRecentConversationBuffer.maximumTurnCount)
+        XCTAssertTrue(buffer.turns.allSatisfy {
+            $0.text.count <= EchoRecentConversationBuffer.maximumTurnCharacters
+        })
+        XCTAssertLessThanOrEqual(
+            buffer.turns.reduce(0, { $0 + $1.text.count }),
+            EchoRecentConversationBuffer.maximumTotalCharacters
+        )
+
+        buffer.reset()
+        XCTAssertTrue(buffer.turns.isEmpty)
+    }
+}
+
 final class EchoAnswerMemoryGroundingTests: XCTestCase {
     func testParsesMemoryGapHandoffFromNewBackendContract() throws {
         let answer = try XCTUnwrap(EchoAnswer(json: [
@@ -3295,6 +3347,78 @@ final class EchoAnswerMemoryGroundingTests: XCTestCase {
         XCTAssertEqual(
             answer.fallbackReason,
             "owner_truth_context_search_unavailable_no_personal_memory"
+        )
+    }
+}
+
+final class DialogTTSPlaybackTimingTests: XCTestCase {
+    func testParsesProviderSentenceDuration() throws {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "sentence_duration": [
+                "sentence_start_time": 1.25,
+                "sentence_end_time": 5.75,
+            ],
+        ])
+
+        let duration = try XCTUnwrap(
+            DialogTTSPlaybackTiming.expectedDuration(fromSentenceEnd: data)
+        )
+        XCTAssertEqual(duration, 4.5, accuracy: 0.001)
+    }
+
+    func testCompletionDelayKeepsPlaybackOpenUntilExpectedTail() {
+        let startedAt = Date(timeIntervalSince1970: 100)
+        let now = Date(timeIntervalSince1970: 102)
+
+        XCTAssertEqual(
+            DialogTTSPlaybackTiming.completionDelay(
+                startedAt: startedAt,
+                expectedDuration: 5,
+                now: now,
+                tailAllowance: 0.2
+            ),
+            3.2,
+            accuracy: 0.001
+        )
+    }
+
+    func testCompletionDelayUsesBoundedFallbackWithoutDuration() {
+        let startedAt = Date(timeIntervalSince1970: 100)
+
+        XCTAssertEqual(
+            DialogTTSPlaybackTiming.completionDelay(
+                startedAt: startedAt,
+                expectedDuration: nil,
+                now: startedAt
+            ),
+            0.35,
+            accuracy: 0.001
+        )
+    }
+}
+
+final class DialogPCM16WaveEncoderTests: XCTestCase {
+    func testEncodesPCMAsMono24KWave() throws {
+        let pcm = Data([0x01, 0x00, 0xFE, 0xFF])
+        let wave = try XCTUnwrap(DialogPCM16WaveEncoder.encode(pcmData: pcm))
+
+        XCTAssertEqual(String(data: wave[0..<4], encoding: .ascii), "RIFF")
+        XCTAssertEqual(String(data: wave[8..<12], encoding: .ascii), "WAVE")
+        XCTAssertEqual(String(data: wave[36..<40], encoding: .ascii), "data")
+        XCTAssertEqual(wave.count, 48)
+        XCTAssertEqual(Data(wave.suffix(pcm.count)), pcm)
+    }
+
+    func testRejectsOddLengthPCM() {
+        XCTAssertNil(DialogPCM16WaveEncoder.encode(pcmData: Data([0x01])))
+    }
+
+    func testDistinguishesSilentAndAudiblePCM() {
+        XCTAssertFalse(DialogPCM16WaveEncoder.containsAudibleSamples(Data(repeating: 0, count: 8)))
+        XCTAssertTrue(
+            DialogPCM16WaveEncoder.containsAudibleSamples(
+                Data([0x00, 0x00, 0x20, 0x00])
+            )
         )
     }
 }

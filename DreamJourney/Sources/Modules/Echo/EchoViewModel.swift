@@ -210,6 +210,7 @@ enum EchoTurnIntent: Equatable {
     case delayedReplyRestored
     case delayedReplyDue
     case replyStarted
+    case replyInterrupted
     case replyDelivered
     case reset
     case failure
@@ -300,6 +301,13 @@ struct EchoTurnIntentReducer {
             case .starting, .listening, .thinking:
                 return .speaking
             case .idle, .waitingReply, .awaitingReplyDelivery, .speaking, .replied, .failed:
+                return nil
+            }
+        case .replyInterrupted:
+            switch phase {
+            case .starting, .listening, .thinking, .speaking:
+                return .listening
+            case .idle, .waitingReply, .awaitingReplyDelivery, .replied, .failed:
                 return nil
             }
         case .replyDelivered:
@@ -1596,6 +1604,15 @@ final class EchoViewModel {
         memoryManager.recordAITurn(text: normalizedText)
         onTranscriptAppend?(normalizedText, false)
         return true
+    }
+
+    @discardableResult
+    func resumeVoiceInteractionAfterReplyInterruption(accountLease: AccountLease) -> Bool {
+        guard !isNeutralSafetyMode,
+              accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
+            return false
+        }
+        return applyTurnIntent(.replyInterrupted, state: .listening)
     }
 
     @discardableResult
