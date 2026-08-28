@@ -57,6 +57,47 @@ final class EchoLiveAudioRoutePolicyTests: XCTestCase {
     }
 }
 
+final class DialogAudioSessionOwnershipPolicyTests: XCTestCase {
+    func testUserControlledLiveCannotConfigureAudioSessionDirectly() {
+        XCTAssertTrue(
+            DialogAudioSessionOwnershipPolicy.requiresCoordinator(
+                lifetimePolicy: .userControlledLive,
+                hasExternalLease: false
+            )
+        )
+        XCTAssertFalse(
+            DialogAudioSessionOwnershipPolicy.allowsDirectConfiguration(
+                lifetimePolicy: .userControlledLive,
+                hasExternalLease: false
+            )
+        )
+    }
+
+    func testAutomaticLegacySessionMayUseDirectConfigurationWithoutLease() {
+        XCTAssertFalse(
+            DialogAudioSessionOwnershipPolicy.requiresCoordinator(
+                lifetimePolicy: .automatic,
+                hasExternalLease: false
+            )
+        )
+        XCTAssertTrue(
+            DialogAudioSessionOwnershipPolicy.allowsDirectConfiguration(
+                lifetimePolicy: .automatic,
+                hasExternalLease: false
+            )
+        )
+    }
+
+    func testAnyExternalLeaseKeepsRestoreUnderCoordinatorOwnership() {
+        XCTAssertTrue(
+            DialogAudioSessionOwnershipPolicy.requiresCoordinator(
+                lifetimePolicy: .automatic,
+                hasExternalLease: true
+            )
+        )
+    }
+}
+
 final class LiveSessionGreetingPolicyTests: XCTestCase {
     func testGreetingsDoNotClaimUnverifiedPreviousMemory() {
         XCTAssertFalse(LiveSessionGreetingPolicy.greetings.isEmpty)

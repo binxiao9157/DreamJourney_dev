@@ -142,8 +142,10 @@ def main() -> None:
         "private var externallyManagedAudioSessionLease: AudioOwnerLease?",
         "func adoptExternallyManagedAudioSessionLease(_ lease: AudioOwnerLease) -> Bool",
         "AudioSessionCoordinator.shared.isCurrentActiveLease(externallyManagedAudioSessionLease)",
+        "DialogAudioSessionOwnershipPolicy.allowsDirectConfiguration(",
+        "Echo Live 缺少 AudioSessionCoordinator lease",
         "guard configureAudioSession() else",
-        "跳过 AudioSession 恢复：Echo coordinator 持有会话",
+        "跳过 AudioSession 恢复：AudioSessionCoordinator 持有会话",
     ):
         require(required in dialog, f"DialogEngine managed-audio lease guard missing: {required}")
 

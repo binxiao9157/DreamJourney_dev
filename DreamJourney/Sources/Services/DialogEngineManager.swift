@@ -202,6 +202,25 @@ enum DialogSessionLifetimePolicy: Equatable, Sendable {
     case userControlledLive
 }
 
+enum DialogAudioSessionOwnershipPolicy {
+    static func requiresCoordinator(
+        lifetimePolicy: DialogSessionLifetimePolicy,
+        hasExternalLease: Bool
+    ) -> Bool {
+        lifetimePolicy == .userControlledLive || hasExternalLease
+    }
+
+    static func allowsDirectConfiguration(
+        lifetimePolicy: DialogSessionLifetimePolicy,
+        hasExternalLease: Bool
+    ) -> Bool {
+        !requiresCoordinator(
+            lifetimePolicy: lifetimePolicy,
+            hasExternalLease: hasExternalLease
+        )
+    }
+}
+
 /// Selects who generates the semantic answer for a dialog session. Most
 /// callers keep the provider-owned behavior; Echo Live delegates only answer
 /// generation to DreamJourney so typed and spoken questions share `/echo/answers`.
@@ -1495,6 +1514,10 @@ final class DialogEngineManager: NSObject {
 
     /// 销毁引擎（登出/退出时调用）
     func destroyEngine() {
+        let coordinatorOwnedAudioSession = DialogAudioSessionOwnershipPolicy.requiresCoordinator(
+            lifetimePolicy: sessionLifetimePolicy,
+            hasExternalLease: externallyManagedAudioSessionLease != nil
+        )
         invalidateSilenceTimer()
         textReplyPlaybackFallbackWorkItem?.cancel()
         textReplyPlaybackFallbackWorkItem = nil
@@ -1522,7 +1545,7 @@ final class DialogEngineManager: NSObject {
         sessionLifetimePolicy = .automatic
         answerAuthority = .provider
         usesTurnScopedKnowledgeContext = false
-        restoreAudioSessionIfNeeded()
+        restoreAudioSessionIfNeeded(forceCoordinatorOwnership: coordinatorOwnedAudioSession)
         externallyManagedAudioSessionLease = nil
         DDLogInfo("[DialogEngine] 引擎已销毁")
     }
@@ -1553,6 +1576,15 @@ final class DialogEngineManager: NSObject {
             return true
         }
 
+        guard DialogAudioSessionOwnershipPolicy.allowsDirectConfiguration(
+            lifetimePolicy: sessionLifetimePolicy,
+            hasExternalLease: false
+        ) else {
+            DDLogError("[DialogEngine] Echo Live 缺少 AudioSessionCoordinator lease，拒绝直接配置 AVAudioSession")
+            delegate?.onError(error: DialogEngineError.audioSessionFailed)
+            return false
+        }
+
         let session = AVAudioSession.sharedInstance()
         do {
             if session.category != .playAndRecord || session.mode != .voiceChat {
@@ -1577,9 +1609,12 @@ final class DialogEngineManager: NSObject {
         }
     }
 
-    private func restoreAudioSessionIfNeeded() {
-        if externallyManagedAudioSessionLease != nil {
-            DDLogInfo("[DialogEngine] 跳过 AudioSession 恢复：Echo coordinator 持有会话")
+    private func restoreAudioSessionIfNeeded(forceCoordinatorOwnership: Bool = false) {
+        if forceCoordinatorOwnership || DialogAudioSessionOwnershipPolicy.requiresCoordinator(
+            lifetimePolicy: sessionLifetimePolicy,
+            hasExternalLease: externallyManagedAudioSessionLease != nil
+        ) {
+            DDLogInfo("[DialogEngine] 跳过 AudioSession 恢复：AudioSessionCoordinator 持有会话")
             return
         }
         guard !shouldLetExternalTTSOwnAudioSession else {
