@@ -6,6 +6,38 @@ import UIKit
 @testable import DreamJourneyCore
 #endif
 
+final class EchoLiveAudioRoutePolicyTests: XCTestCase {
+    func testTencentIsSelectedOnlyWhenItCanOwnAudioAtSessionStart() {
+        XCTAssertEqual(
+            EchoLiveAudioRoutePolicy.select(
+                wantsDigitalHuman: true,
+                providerCanOwnAudio: true
+            ),
+            .tencentDigitalHuman
+        )
+    }
+
+    func testConnectingTencentKeepsOrdinaryEchoAudible() {
+        XCTAssertEqual(
+            EchoLiveAudioRoutePolicy.select(
+                wantsDigitalHuman: true,
+                providerCanOwnAudio: false
+            ),
+            .volcengineLocalTTS
+        )
+    }
+
+    func testOrdinaryEchoNeverReservesTencentAudio() {
+        XCTAssertEqual(
+            EchoLiveAudioRoutePolicy.select(
+                wantsDigitalHuman: false,
+                providerCanOwnAudio: true
+            ),
+            .volcengineLocalTTS
+        )
+    }
+}
+
 final class LiveSessionGreetingPolicyTests: XCTestCase {
     func testGreetingsDoNotClaimUnverifiedPreviousMemory() {
         XCTAssertFalse(LiveSessionGreetingPolicy.greetings.isEmpty)

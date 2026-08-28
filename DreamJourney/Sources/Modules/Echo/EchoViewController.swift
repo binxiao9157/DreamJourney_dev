@@ -12,6 +12,42 @@ private enum EchoDigitalHumanAudioOwner: String {
     }
 }
 
+enum EchoLiveAudioRoute: Equatable {
+    case volcengineLocalTTS
+    case tencentDigitalHuman
+    case unavailable(reason: String)
+
+    var diagnosticCode: String {
+        switch self {
+        case .volcengineLocalTTS:
+            return "volcengineLocalTTS"
+        case .tencentDigitalHuman:
+            return "tencentDigitalHuman"
+        case .unavailable:
+            return "unavailable"
+        }
+    }
+}
+
+enum EchoLiveAudioRoutePolicy {
+    static func select(
+        wantsDigitalHuman: Bool,
+        providerCanOwnAudio: Bool
+    ) -> EchoLiveAudioRoute {
+        guard wantsDigitalHuman, providerCanOwnAudio else {
+            return .volcengineLocalTTS
+        }
+        return .tencentDigitalHuman
+    }
+}
+
+private struct EchoLiveAudioRouteLease {
+    let id: UUID
+    let route: EchoLiveAudioRoute
+    let accountGeneration: UInt64
+    let contextKey: String
+}
+
 private struct EchoRoleVoiceProfileSelection {
     enum Source: String {
         case selfAssistantDefault
@@ -990,6 +1026,7 @@ final class EchoViewController: UIViewController {
         didSet {
             if !isUserControlledLiveSessionOpen {
                 cancelLiveUserInactivityTimeout()
+                activeLiveAudioRouteLease = nil
             }
         }
     }
@@ -997,6 +1034,7 @@ final class EchoViewController: UIViewController {
     /// recorder/provider transport is recoverable. The next mic tap resumes
     /// transport instead of accidentally committing the whole conversation.
     private var isLiveVoiceTransportSuspended = false
+    private var activeLiveAudioRouteLease: EchoLiveAudioRouteLease?
     private var liveMemoryCaptureCoordinator: EchoLiveMemoryCaptureCoordinator?
     private var retainedLiveMemoryCaptureCoordinators: [UUID: EchoLiveMemoryCaptureCoordinator] = [:]
     private var liveUserInactivityWorkItem: DispatchWorkItem?
@@ -2667,8 +2705,12 @@ final class EchoViewController: UIViewController {
             reason: "runtimeReleased:\(reason)"
         )
         if resetsAudioOwnerToOrdinaryEcho {
-            setDialogEngineLocalTTSPlaybackEnabled(true)
-            setEchoAudioOwner(.volcengineLocalTTS, reason: "release:\(reason)")
+            if scopedActiveLiveAudioRoute == .tencentDigitalHuman {
+                markPinnedLiveAudioRouteUnavailable(reason: "runtimeReleased:\(reason)")
+            } else {
+                setDialogEngineLocalTTSPlaybackEnabled(true)
+                setEchoAudioOwner(.volcengineLocalTTS, reason: "release:\(reason)")
+            }
         }
         if recordsDiagnostics {
             recordEchoRuntimeDiagnosticsSnapshot(reason: "digitalHumanRuntimeReleased:\(reason)")
@@ -3486,7 +3528,80 @@ final class EchoViewController: UIViewController {
         }
     }
 
+    private var scopedActiveLiveAudioRoute: EchoLiveAudioRoute? {
+        guard isUserControlledLiveSessionOpen,
+              let lease = activeLiveAudioRouteLease else {
+            return nil
+        }
+        guard lease.accountGeneration == echoAccountLease?.generation,
+              lease.contextKey == currentDigitalHumanRuntimeContextKey() else {
+            return .unavailable(reason: "liveAudioRouteScopeChanged")
+        }
+        return lease.route
+    }
+
+    @discardableResult
+    private func pinLiveAudioRouteIfNeeded(reason: String) -> EchoLiveAudioRoute {
+        if let route = scopedActiveLiveAudioRoute {
+            return route
+        }
+        guard isUserControlledLiveSessionOpen,
+              let accountGeneration = echoAccountLease?.generation else {
+            return .unavailable(reason: "liveAudioRouteSessionClosed")
+        }
+
+        let selectedRoute = EchoLiveAudioRoutePolicy.select(
+            wantsDigitalHuman: shouldShowDigitalHumanLivePanel,
+            providerCanOwnAudio: tencentDigitalHumanProviderCanOwnAudio
+        )
+        let localPlaybackEnabled = selectedRoute == .volcengineLocalTTS
+        let committedRoute: EchoLiveAudioRoute
+        if setDialogEngineLocalTTSPlaybackEnabled(localPlaybackEnabled) {
+            committedRoute = selectedRoute
+        } else {
+            committedRoute = .unavailable(reason: "dialogPlayerConfigurationRejected")
+        }
+        activeLiveAudioRouteLease = EchoLiveAudioRouteLease(
+            id: UUID(),
+            route: committedRoute,
+            accountGeneration: accountGeneration,
+            contextKey: currentDigitalHumanRuntimeContextKey()
+        )
+        PrivacySafeDiagnostics.log(
+            subsystem: "Echo",
+            event: "liveAudioRoutePinned",
+            states: [
+                "route": committedRoute.diagnosticCode,
+                "reason": reason,
+                "providerReady": String(tencentDigitalHumanProviderCanOwnAudio),
+                "localPlaybackEnabled": String(localPlaybackEnabled),
+            ],
+            correlations: ["routeLease": activeLiveAudioRouteLease?.id.uuidString]
+        )
+        return committedRoute
+    }
+
+    private func markPinnedLiveAudioRouteUnavailable(reason: String) {
+        guard let lease = activeLiveAudioRouteLease else { return }
+        activeLiveAudioRouteLease = EchoLiveAudioRouteLease(
+            id: lease.id,
+            route: .unavailable(reason: reason),
+            accountGeneration: lease.accountGeneration,
+            contextKey: lease.contextKey
+        )
+        setEchoAudioOwner(.fallbackMuted, reason: reason)
+        PrivacySafeDiagnostics.log(
+            subsystem: "Echo",
+            event: "liveAudioRouteUnavailable",
+            states: ["reason": reason],
+            correlations: ["routeLease": lease.id.uuidString]
+        )
+    }
+
     private var routeEchoAudioThroughDigitalHuman: Bool {
+        if isUserControlledLiveSessionOpen {
+            return scopedActiveLiveAudioRoute == .tencentDigitalHuman
+        }
         guard shouldShowDigitalHumanLivePanel,
               tencentDigitalHumanAudioRouteReserved,
               tencentCloudRenderProvidesAudibleTTS else {
@@ -3569,12 +3684,26 @@ final class EchoViewController: UIViewController {
     private func applyEchoAudioRoutePolicy() {
         let shouldRouteThroughDigitalHuman = routeEchoAudioThroughDigitalHuman
         if shouldRouteThroughDigitalHuman {
-            setDialogEngineLocalTTSPlaybackEnabled(false)
+            guard setDialogEngineLocalTTSPlaybackEnabled(false) else {
+                markPinnedLiveAudioRouteUnavailable(reason: "dialogPlayerDisableRejected")
+                digitalHumanStatusDetailLabel.text = "数字人声音暂不可用，请结束本轮后重试"
+                return
+            }
             digitalHumanStatusDetailLabel.text = "腾讯数智人负责声音与口型同步"
             setEchoAudioOwner(.tencentDigitalHuman, reason: "routePolicy")
         } else {
-            if !tencentDigitalHumanAudioRouteReserved {
-                setDialogEngineLocalTTSPlaybackEnabled(true)
+            if case .unavailable(let reason) = scopedActiveLiveAudioRoute {
+                setEchoAudioOwner(.fallbackMuted, reason: reason)
+                digitalHumanStatusDetailLabel.text = "本轮语音播放不可用，请结束后重试"
+                return
+            }
+            let shouldEnableLocalPlayback = isUserControlledLiveSessionOpen
+                || !tencentDigitalHumanAudioRouteReserved
+            if shouldEnableLocalPlayback,
+               !setDialogEngineLocalTTSPlaybackEnabled(true) {
+                markPinnedLiveAudioRouteUnavailable(reason: "dialogPlayerEnableRejected")
+                digitalHumanStatusDetailLabel.text = "普通回响声音暂不可用，请结束后重试"
+                return
             }
             if shouldShowDigitalHumanLivePanel,
                let digitalHumanRuntime,
@@ -4977,6 +5106,11 @@ final class EchoViewController: UIViewController {
         resetDigitalHumanReplyDispatchState()
         muteTencentProviderRemoteAudioForUserCapture(reason: reason)
         viewModel.beginVoiceInteraction()
+        let liveAudioRoute = pinLiveAudioRouteIfNeeded(reason: "resumeVoiceCapture:\(reason)")
+        if case .unavailable = liveAudioRoute {
+            handleBlockedRealtimeVoice(reason: "liveAudioRouteUnavailable")
+            return
+        }
         applyEchoAudioRoutePolicy()
         if DialogEngineManager.shared.isEngineReady {
             guard prepareEchoCaptureAudioSession(reason: "resumeVoiceCapture:\(reason)") else {
@@ -7326,7 +7460,23 @@ final class EchoViewController: UIViewController {
         }
         cancelLiveUserInactivityTimeout()
 
-        if shouldDispatchEchoReplyToTencentProvider {
+        guard let liveAudioRoute = scopedActiveLiveAudioRoute else {
+            failLiveEchoAnswer(
+                message: "本轮语音路由尚未准备完成，请重新开始",
+                lifecycleToken: lifecycleToken
+            )
+            return
+        }
+
+        if liveAudioRoute == .tencentDigitalHuman {
+            guard shouldDispatchEchoReplyToTencentProvider else {
+                markPinnedLiveAudioRouteUnavailable(reason: "tencentRouteLostBeforePlayback")
+                failLiveEchoAnswer(
+                    message: "数字人声音暂不可用，请结束本轮后重试",
+                    lifecycleToken: lifecycleToken
+                )
+                return
+            }
             captureLiveAssistantTurn(replyText)
             guard viewModel.receiveAIReply(replyText) else {
                 failLiveEchoAnswer(
@@ -7336,6 +7486,14 @@ final class EchoViewController: UIViewController {
                 return
             }
             sendEchoReplyToDigitalHumanRuntimeIfReady(replyText, source: source)
+            return
+        }
+
+        if case .unavailable = liveAudioRoute {
+            failLiveEchoAnswer(
+                message: "本轮语音播放不可用，请结束后重试",
+                lifecycleToken: lifecycleToken
+            )
             return
         }
 
@@ -8163,6 +8321,9 @@ final class EchoViewController: UIViewController {
 
     private func degradeTencentDigitalHumanRoute(reason: String) {
         let isQuotaFailure = isDigitalHumanQuotaFailure(reason)
+        if scopedActiveLiveAudioRoute == .tencentDigitalHuman {
+            markPinnedLiveAudioRouteUnavailable(reason: reason)
+        }
         let shouldRecover = !isQuotaFailure
             && shouldRecoverFromDigitalHumanRuntimeFailure(reason: reason)
         invalidateDigitalHumanLifecycle(reason: "routeFailure:\(reason)")
@@ -9012,6 +9173,13 @@ final class EchoViewController: UIViewController {
                 if DialogEngineManager.shared.configure(runtimeConfig: runtimeConfig) {
                     self.backendRuntimeTokenApplied = true
                     self.renderVoiceSDKReadinessPreviewIfNeeded()
+                    let liveAudioRoute = self.pinLiveAudioRouteIfNeeded(
+                        reason: "configureVoiceRuntimeThenStart"
+                    )
+                    if case .unavailable = liveAudioRoute {
+                        self.handleBlockedRealtimeVoice(reason: "liveAudioRouteUnavailable")
+                        return
+                    }
                     self.applyEchoAudioRoutePolicy()
                     guard self.prepareEchoCaptureAudioSession(reason: "configureVoiceRuntimeThenStart") else {
                         self.handleBlockedRealtimeVoice(reason: "audioSessionCoordinatorActivationFailed")
