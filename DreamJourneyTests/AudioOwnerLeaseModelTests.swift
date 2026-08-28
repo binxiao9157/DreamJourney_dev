@@ -36,6 +36,25 @@ final class EchoLiveAudioRoutePolicyTests: XCTestCase {
             .volcengineLocalTTS
         )
     }
+
+    func testPlaybackCannotCompleteBeforeMatchingStartReceipt() {
+        var receipt = EchoLivePlaybackReceiptState(route: .volcengineLocalTTS)
+
+        XCTAssertFalse(receipt.canComplete(for: .volcengineLocalTTS))
+        XCTAssertFalse(receipt.acknowledgeStart(for: .tencentDigitalHuman))
+        XCTAssertFalse(receipt.canComplete(for: .volcengineLocalTTS))
+        XCTAssertTrue(receipt.acknowledgeStart(for: .volcengineLocalTTS))
+        XCTAssertTrue(receipt.canComplete(for: .volcengineLocalTTS))
+    }
+
+    func testTencentReceiptRejectsFirePlaybackCallbacks() {
+        var receipt = EchoLivePlaybackReceiptState(route: .tencentDigitalHuman)
+
+        XCTAssertFalse(receipt.acknowledgeStart(for: .volcengineLocalTTS))
+        XCTAssertTrue(receipt.acknowledgeStart(for: .tencentDigitalHuman))
+        XCTAssertFalse(receipt.canComplete(for: .volcengineLocalTTS))
+        XCTAssertTrue(receipt.canComplete(for: .tencentDigitalHuman))
+    }
 }
 
 final class LiveSessionGreetingPolicyTests: XCTestCase {

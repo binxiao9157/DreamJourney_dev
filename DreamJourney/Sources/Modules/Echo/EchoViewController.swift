@@ -41,11 +41,34 @@ enum EchoLiveAudioRoutePolicy {
     }
 }
 
+struct EchoLivePlaybackReceiptState: Equatable {
+    let route: EchoLiveAudioRoute
+    private(set) var didStart = false
+
+    @discardableResult
+    mutating func acknowledgeStart(for callbackRoute: EchoLiveAudioRoute) -> Bool {
+        guard callbackRoute == route else { return false }
+        didStart = true
+        return true
+    }
+
+    func canComplete(for callbackRoute: EchoLiveAudioRoute) -> Bool {
+        callbackRoute == route && didStart
+    }
+}
+
 private struct EchoLiveAudioRouteLease {
     let id: UUID
     let route: EchoLiveAudioRoute
     let accountGeneration: UInt64
     let contextKey: String
+}
+
+private struct EchoLivePlaybackReceipt {
+    let id: UUID
+    var state: EchoLivePlaybackReceiptState
+    let turnID: String
+    let lifecycleToken: DigitalHumanLifecycleToken
 }
 
 private struct EchoRoleVoiceProfileSelection {
@@ -1026,6 +1049,7 @@ final class EchoViewController: UIViewController {
         didSet {
             if !isUserControlledLiveSessionOpen {
                 cancelLiveUserInactivityTimeout()
+                cancelLivePlaybackReceipt(reason: "liveSessionClosed")
                 activeLiveAudioRouteLease = nil
             }
         }
@@ -1035,6 +1059,8 @@ final class EchoViewController: UIViewController {
     /// transport instead of accidentally committing the whole conversation.
     private var isLiveVoiceTransportSuspended = false
     private var activeLiveAudioRouteLease: EchoLiveAudioRouteLease?
+    private var pendingLivePlaybackReceipt: EchoLivePlaybackReceipt?
+    private var livePlaybackStartTimeoutWorkItem: DispatchWorkItem?
     private var liveMemoryCaptureCoordinator: EchoLiveMemoryCaptureCoordinator?
     private var retainedLiveMemoryCaptureCoordinators: [UUID: EchoLiveMemoryCaptureCoordinator] = [:]
     private var liveUserInactivityWorkItem: DispatchWorkItem?
@@ -1061,6 +1087,7 @@ final class EchoViewController: UIViewController {
     private static let tencentDigitalHumanOpenFailureRecoveryLimit = 1
     private static let tencentDigitalHumanBackgroundReleaseGracePeriod: TimeInterval = 8.0
     private static let liveUserInactivityTimeout: TimeInterval = 60
+    private static let livePlaybackStartTimeout: TimeInterval = 6.0
 
     private var isTypedEchoConversationOpen: Bool {
         liveMemoryCaptureCoordinator != nil && !isUserControlledLiveSessionOpen
@@ -3598,6 +3625,204 @@ final class EchoViewController: UIViewController {
         )
     }
 
+    private func beginLivePlaybackReceipt(
+        route: EchoLiveAudioRoute,
+        turnID: String,
+        lifecycleToken: DigitalHumanLifecycleToken
+    ) {
+        switch route {
+        case .volcengineLocalTTS, .tencentDigitalHuman:
+            break
+        case .unavailable:
+            return
+        }
+
+        cancelLivePlaybackReceipt(reason: "superseded")
+        let receipt = EchoLivePlaybackReceipt(
+            id: UUID(),
+            state: EchoLivePlaybackReceiptState(route: route),
+            turnID: turnID,
+            lifecycleToken: lifecycleToken
+        )
+        pendingLivePlaybackReceipt = receipt
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.handleLivePlaybackStartTimeout(receiptID: receipt.id)
+        }
+        livePlaybackStartTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.livePlaybackStartTimeout,
+            execute: workItem
+        )
+        PrivacySafeDiagnostics.log(
+            subsystem: "Echo",
+            event: "livePlaybackReceiptAwaitingStart",
+            states: ["route": route.diagnosticCode],
+            counts: ["timeoutMs": Int(Self.livePlaybackStartTimeout * 1_000)],
+            correlations: [
+                "receipt": receipt.id.uuidString,
+                "turn": turnID,
+            ]
+        )
+    }
+
+    private func cancelLivePlaybackReceipt(reason: String) {
+        livePlaybackStartTimeoutWorkItem?.cancel()
+        livePlaybackStartTimeoutWorkItem = nil
+        guard let receipt = pendingLivePlaybackReceipt else { return }
+        pendingLivePlaybackReceipt = nil
+        PrivacySafeDiagnostics.log(
+            subsystem: "Echo",
+            event: "livePlaybackReceiptCancelled",
+            states: [
+                "route": receipt.state.route.diagnosticCode,
+                "reason": reason,
+            ],
+            correlations: [
+                "receipt": receipt.id.uuidString,
+                "turn": receipt.turnID,
+            ]
+        )
+    }
+
+    private func acknowledgeLivePlaybackStarted(route: EchoLiveAudioRoute) {
+        guard var receipt = pendingLivePlaybackReceipt,
+              receipt.state.acknowledgeStart(for: route),
+              isCurrentDigitalHumanLifecycleToken(
+                receipt.lifecycleToken,
+                reason: "livePlaybackStarted"
+              ) else {
+            return
+        }
+        pendingLivePlaybackReceipt = receipt
+        livePlaybackStartTimeoutWorkItem?.cancel()
+        livePlaybackStartTimeoutWorkItem = nil
+        PrivacySafeDiagnostics.log(
+            subsystem: "Echo",
+            event: "livePlaybackStarted",
+            states: ["route": route.diagnosticCode],
+            correlations: [
+                "receipt": receipt.id.uuidString,
+                "turn": receipt.turnID,
+            ]
+        )
+    }
+
+    @discardableResult
+    private func completeLivePlaybackReceipt(route: EchoLiveAudioRoute) -> Bool {
+        guard let receipt = pendingLivePlaybackReceipt else { return true }
+        guard receipt.state.route == route else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "Echo",
+                event: "livePlaybackCompletionIgnored",
+                states: [
+                    "callbackRoute": route.diagnosticCode,
+                    "pendingRoute": receipt.state.route.diagnosticCode,
+                    "reason": "routeMismatch",
+                ],
+                correlations: ["receipt": receipt.id.uuidString]
+            )
+            return false
+        }
+        guard receipt.state.canComplete(for: route) else {
+            handleLivePlaybackStartTimeout(receiptID: receipt.id)
+            return false
+        }
+
+        livePlaybackStartTimeoutWorkItem?.cancel()
+        livePlaybackStartTimeoutWorkItem = nil
+        pendingLivePlaybackReceipt = nil
+        PrivacySafeDiagnostics.log(
+            subsystem: "Echo",
+            event: "livePlaybackCompleted",
+            states: ["route": route.diagnosticCode],
+            correlations: [
+                "receipt": receipt.id.uuidString,
+                "turn": receipt.turnID,
+            ]
+        )
+        return true
+    }
+
+    private func handleLivePlaybackStartTimeout(receiptID: UUID) {
+        guard let receipt = pendingLivePlaybackReceipt,
+              receipt.id == receiptID,
+              !receipt.state.didStart,
+              isUserControlledLiveSessionOpen,
+              isCurrentDigitalHumanLifecycleToken(
+                receipt.lifecycleToken,
+                reason: "livePlaybackStartTimeout"
+              ) else {
+            return
+        }
+        livePlaybackStartTimeoutWorkItem?.cancel()
+        livePlaybackStartTimeoutWorkItem = nil
+        pendingLivePlaybackReceipt = nil
+        pendingAIText = nil
+
+        switch receipt.state.route {
+        case .volcengineLocalTTS:
+            DialogEngineManager.shared.interruptAI()
+        case .tencentDigitalHuman:
+            digitalHumanRuntime?.interrupt()
+            digitalHumanConversation.clearProviderRequestAndResumeState()
+            echoRuntimeSessionCoordinator.finishInteraction()
+            releaseEchoAudioOwnerLease(
+                expectedOwner: .tencentDigitalHumanPlayback,
+                reason: "livePlaybackStartTimeout"
+            )
+        case .unavailable:
+            break
+        }
+
+        PrivacySafeDiagnostics.log(
+            subsystem: "Echo",
+            event: "livePlaybackStartTimedOut",
+            states: ["route": receipt.state.route.diagnosticCode],
+            correlations: [
+                "receipt": receipt.id.uuidString,
+                "turn": receipt.turnID,
+            ]
+        )
+        failLiveEchoAnswer(
+            message: "回响语音未能开始播放，请再试一次",
+            lifecycleToken: receipt.lifecycleToken
+        )
+        recoverLiveCaptureAfterPlaybackFailure(
+            route: receipt.state.route,
+            lifecycleToken: receipt.lifecycleToken
+        )
+    }
+
+    private func recoverLiveCaptureAfterPlaybackFailure(
+        route: EchoLiveAudioRoute,
+        lifecycleToken: DigitalHumanLifecycleToken
+    ) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self,
+                  self.isUserControlledLiveSessionOpen,
+                  self.isCurrentDigitalHumanLifecycleToken(
+                    lifecycleToken,
+                    reason: "recoverLiveCaptureAfterPlaybackFailure"
+                  ) else { return }
+
+            if route == .tencentDigitalHuman,
+               self.resumeDialogEngineAfterTencentProviderSpeechIfNeeded(
+                reason: "playbackStartTimeout",
+                lifecycleToken: lifecycleToken
+               ) {
+                return
+            }
+            guard DialogEngineManager.shared.isDialogActive,
+                  self.prepareEchoCaptureAudioSession(reason: "playbackStartTimeoutRecovery"),
+                  DialogEngineManager.shared.resumeRecorder() else {
+                self.resetEchoViewModelToIdle()
+                return
+            }
+            self.viewModel.beginVoiceInteraction()
+            self.armLiveUserInactivityTimeout(reason: "playbackStartTimeoutRecovery")
+        }
+    }
+
     private var routeEchoAudioThroughDigitalHuman: Bool {
         if isUserControlledLiveSessionOpen {
             return scopedActiveLiveAudioRoute == .tencentDigitalHuman
@@ -4919,6 +5144,7 @@ final class EchoViewController: UIViewController {
     }
 
     private func resetDigitalHumanReplyDispatchState() {
+        cancelLivePlaybackReceipt(reason: "digitalHumanDispatchReset")
         digitalHumanConversation.reset(
             cancelPrewarm: cancelDigitalHumanReplyPrewarm,
             cancelTextOverTimeout: cancelTencentDigitalHumanTextOverTimeout
@@ -7485,6 +7711,11 @@ final class EchoViewController: UIViewController {
                 )
                 return
             }
+            beginLivePlaybackReceipt(
+                route: .tencentDigitalHuman,
+                turnID: turnID,
+                lifecycleToken: lifecycleToken
+            )
             sendEchoReplyToDigitalHumanRuntimeIfReady(replyText, source: source)
             return
         }
@@ -7498,11 +7729,17 @@ final class EchoViewController: UIViewController {
         }
 
         pendingAIText = replyText
+        beginLivePlaybackReceipt(
+            route: .volcengineLocalTTS,
+            turnID: turnID,
+            lifecycleToken: lifecycleToken
+        )
         guard DialogEngineManager.shared.submitLiveAnswerText(
             replyText,
             traceID: traceID,
             source: source
         ) else {
+            cancelLivePlaybackReceipt(reason: "providerSubmissionRejected")
             pendingAIText = nil
             failLiveEchoAnswer(
                 message: "回响语音暂不可用，请稍后重试",
@@ -7534,6 +7771,7 @@ final class EchoViewController: UIViewController {
         ) else {
             return
         }
+        cancelLivePlaybackReceipt(reason: "liveEchoAnswerFailed")
         pendingAIText = nil
         viewModel.fail(message)
         renderVoiceStatus(
@@ -8270,11 +8508,15 @@ final class EchoViewController: UIViewController {
                 degradeTencentDigitalHumanRoute(reason: "audioSessionCoordinatorActivationFailed")
                 return
             }
+            acknowledgeLivePlaybackStarted(route: .tencentDigitalHuman)
             digitalHumanLivePanelView?.setInteractionState(.speaking)
             if case .speaking = currentState {
                 renderVoiceStatus(text: "腾讯数智人正在回响", isVisible: true)
             }
         case .completed(let requestID):
+            guard completeLivePlaybackReceipt(route: .tencentDigitalHuman) else {
+                return
+            }
             completeTencentDigitalHumanReplyIfNeeded(requestID: requestID)
         case .ready:
             cancelDigitalHumanRuntimeRecovery()
@@ -8321,6 +8563,7 @@ final class EchoViewController: UIViewController {
 
     private func degradeTencentDigitalHumanRoute(reason: String) {
         let isQuotaFailure = isDigitalHumanQuotaFailure(reason)
+        cancelLivePlaybackReceipt(reason: "digitalHumanRouteFailure")
         if scopedActiveLiveAudioRoute == .tencentDigitalHuman {
             markPinnedLiveAudioRouteUnavailable(reason: reason)
         }
@@ -9630,6 +9873,15 @@ extension EchoViewController: DialogEngineDelegate {
         }
     }
 
+    func onTTSPlaybackStarted() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.validateEchoAccountLease(at: .ui, reason: "ttsPlaybackStarted"),
+                  self.isUserControlledLiveSessionOpen else { return }
+            self.acknowledgeLivePlaybackStarted(route: .volcengineLocalTTS)
+        }
+    }
+
     func onTTSFinished() {
         DispatchQueue.main.async { [weak self] in
             guard let self,
@@ -9637,6 +9889,9 @@ extension EchoViewController: DialogEngineDelegate {
                   let lifecycleToken = self.activeVoiceInteractionToken(reason: "ttsFinished") else { return }
             guard !self.viewModel.isNeutralSafetyMode,
                   !self.viewModel.isWaitingForDelayedReply else { return }
+            guard self.completeLivePlaybackReceipt(route: .volcengineLocalTTS) else {
+                return
+            }
             if self.routeEchoAudioThroughDigitalHuman,
                self.hasTencentDigitalHumanProviderSpeechInFlight {
                 print("[TencentDigitalHuman] waiting for provider TextOver before finishing Echo reply")

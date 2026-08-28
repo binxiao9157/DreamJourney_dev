@@ -341,10 +341,15 @@ protocol DialogEngineDelegate: AnyObject {
     func onDialogStarted()
     func onASRResult(text: String, isFinal: Bool)
     func onTTSStarted(text: String)
+    func onTTSPlaybackStarted()
     func onTTSFinished()
     func onChatStreaming(text: String)
     func onError(error: Error)
     func onDialogEnded(reason: DialogEndReason)
+}
+
+extension DialogEngineDelegate {
+    func onTTSPlaybackStarted() {}
 }
 
 final class DialogEngineManager: NSObject {
@@ -571,10 +576,12 @@ final class DialogEngineManager: NSObject {
         guard isDialogActive,
               isActiveAccountLeaseValid(at: .runtime),
               answerAuthority == .dreamJourneyBackend,
+              isLocalTTSPlaybackEnabled,
               !normalized.isEmpty else {
             return false
         }
         delegate?.onTTSStarted(text: normalized)
+        delegate?.onTTSPlaybackStarted()
         delegate?.onTTSFinished()
         return true
     }
@@ -672,10 +679,15 @@ protocol DialogEngineDelegate: AnyObject {
     func onDialogStarted()
     func onASRResult(text: String, isFinal: Bool)
     func onTTSStarted(text: String)
+    func onTTSPlaybackStarted()
     func onTTSFinished()
     func onChatStreaming(text: String)
     func onError(error: Error)
     func onDialogEnded(reason: DialogEndReason)
+}
+
+extension DialogEngineDelegate {
+    func onTTSPlaybackStarted() {}
 }
 
 private final class DialogEngineProviderDelegateProxy: NSObject, SpeechEngineDelegate {
@@ -902,6 +914,7 @@ final class DialogEngineManager: NSObject {
     /// 当前配置
     private var config = Config()
     var currentConfigurationIsProductionReady: Bool { config.isProductionReady }
+    var isLocalTTSPlaybackEnabled: Bool { config.enablePlayer }
 
     // MARK: - Private
 
@@ -1454,6 +1467,7 @@ final class DialogEngineManager: NSObject {
         guard isDialogActive,
               sessionLifetimePolicy == .userControlledLive,
               answerAuthority == .dreamJourneyBackend,
+              config.enablePlayer,
               let engine,
               !normalized.isEmpty else {
             DDLogWarn("[DialogEngine] ignored delegated Live answer: session unavailable")
@@ -2469,14 +2483,31 @@ extension DialogEngineManager {
                 print("[DialogEngine] skipped Fire TTS ended; Tencent owns audible playback")
                 return
             }
-            isAISpeaking = false
             DDLogInfo("[DialogEngine] TTS 播放结束")
             if let playback = pendingTextReplyPlayback {
+                isAISpeaking = false
                 scheduleTextReplyPlaybackCompletionFallback(playbackID: playback.id)
                 return
             }
+            if sessionLifetimePolicy == .userControlledLive,
+               answerAuthority == .dreamJourneyBackend {
+                DDLogInfo("[DialogEngine] delegated Live synthesis ended; awaiting player finish receipt")
+                return
+            }
+            isAISpeaking = false
             deliverProviderCallback(callbackContext) { _, delegate in
                 delegate.onTTSFinished()
+            }
+
+        case SEPlayerStartPlayAudio:
+            guard config.enablePlayer else {
+                print("[DialogEngine] skipped Fire player start; Tencent owns audible playback")
+                return
+            }
+            isAISpeaking = true
+            DDLogInfo("[DialogEngine] 播放器开始播放")
+            deliverProviderCallback(callbackContext) { _, delegate in
+                delegate.onTTSPlaybackStarted()
             }
 
         case SEPlayerFinishPlayAudio:
