@@ -162,6 +162,16 @@
 		D4F000000000000000000005 /* AudioOwnerLeaseModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000106 /* AudioOwnerLeaseModel.swift */; };
 		D4F000000000000000000006 /* AudioOwnerLeaseCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F000000000000000000107 /* AudioOwnerLeaseCoordinator.swift */; };
 		D5F000000000000000000001 /* OwnerTruthContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000101 /* OwnerTruthContracts.swift */; };
+		E7A000000000000000000001 /* NarrativeContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000000000000000000101 /* NarrativeContracts.swift */; };
+		E7A000000000000000000002 /* NarrativeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000000000000000000102 /* NarrativeModels.swift */; };
+		E7A000000000000000000003 /* NarrativeReaderModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000000000000000000103 /* NarrativeReaderModels.swift */; };
+		E7A000000000000000000004 /* NarrativeStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000000000000000000104 /* NarrativeStateMachine.swift */; };
+		E7A000000000000000000005 /* NarrativeBackendService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000000000000000000105 /* NarrativeBackendService.swift */; };
+		E7A000000000000000000006 /* NarrativeReaderStateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000000000000000000106 /* NarrativeReaderStateStore.swift */; };
+		E7A000000000000000000007 /* NarrativeProjectCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000000000000000000107 /* NarrativeProjectCoordinator.swift */; };
+		E7A000000000000000000008 /* NarrativeSetupViewControllers.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000000000000000000108 /* NarrativeSetupViewControllers.swift */; };
+		E7A000000000000000000009 /* NarrativeWorkbenchViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000000000000000000109 /* NarrativeWorkbenchViewController.swift */; };
+		E7A000000000000000000010 /* NarrativeReaderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000000000000000000110 /* NarrativeReaderViewController.swift */; };
 		D5F000000000000000000002 /* OwnerTruthRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000102 /* OwnerTruthRepository.swift */; };
 		D5F000000000000000000004 /* OwnerTruthFormalMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000104 /* OwnerTruthFormalMemory.swift */; };
 		D5F000000000000000000003 /* OwnerTruthContractsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F000000000000000000103 /* OwnerTruthContractsTests.swift */; };
@@ -393,6 +403,16 @@
 		D5F000000000000000000102 /* OwnerTruthRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthRepository.swift; sourceTree = "<group>"; };
 		D5F000000000000000000104 /* OwnerTruthFormalMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthFormalMemory.swift; sourceTree = "<group>"; };
 		D5F000000000000000000103 /* OwnerTruthContractsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerTruthContractsTests.swift; sourceTree = "<group>"; };
+		E7A000000000000000000101 /* NarrativeContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NarrativeContracts.swift; sourceTree = "<group>"; };
+		E7A000000000000000000102 /* NarrativeModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NarrativeModels.swift; sourceTree = "<group>"; };
+		E7A000000000000000000103 /* NarrativeReaderModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NarrativeReaderModels.swift; sourceTree = "<group>"; };
+		E7A000000000000000000104 /* NarrativeStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NarrativeStateMachine.swift; sourceTree = "<group>"; };
+		E7A000000000000000000105 /* NarrativeBackendService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NarrativeBackendService.swift; sourceTree = "<group>"; };
+		E7A000000000000000000106 /* NarrativeReaderStateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NarrativeReaderStateStore.swift; sourceTree = "<group>"; };
+		E7A000000000000000000107 /* NarrativeProjectCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NarrativeProjectCoordinator.swift; sourceTree = "<group>"; };
+		E7A000000000000000000108 /* NarrativeSetupViewControllers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NarrativeSetupViewControllers.swift; sourceTree = "<group>"; };
+		E7A000000000000000000109 /* NarrativeWorkbenchViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NarrativeWorkbenchViewController.swift; sourceTree = "<group>"; };
+		E7A000000000000000000110 /* NarrativeReaderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NarrativeReaderViewController.swift; sourceTree = "<group>"; };
 		D6AC678D507A1494FFBFDAA0 /* SharedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedModels.swift; sourceTree = "<group>"; };
 		DEB0707389E5BC6A57EAB3BD /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		DF3727699437781613AA5CB5 /* OpenAvatarChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAvatarChatService.swift; sourceTree = "<group>"; };
@@ -482,6 +502,8 @@
 				C7E5A0000000000000000101 /* PublicationManagementAccess.swift */,
 				9B3A23A2BA7FD3D92A7BC975 /* DialogEngineManager.swift */,
 				EF8F1D6D1A0C1160E11C410B /* DreamJourneyBackendClient.swift */,
+				E7A000000000000000000105 /* NarrativeBackendService.swift */,
+				E7A000000000000000000106 /* NarrativeReaderStateStore.swift */,
 				6603143627D340B690FFE39E /* OwnerTruthMediaTaskRecovery.swift */,
 				A9F000000000000000000101 /* BackendAuthSessionStore.swift */,
 				C7E1B0000000000000000101 /* BackendIdentityChallenge.swift */,
@@ -771,6 +793,7 @@
 				B31A3C6EE15574E651C20B65 /* Knowledge */,
 				052E7A6BA81C0A676BE77B9B /* Map */,
 				B384D0334A87D3FC74DEB2E9 /* Memory */,
+				E7A000000000000000000202 /* Narrative */,
 				69A100000000000000000003 /* Profile */,
 			);
 			path = Modules;
@@ -797,6 +820,17 @@
 				56ED8B99EE2B18AC4D06CC30 /* MemoryEditViewController.swift */,
 			);
 			path = Memory;
+			sourceTree = "<group>";
+		};
+		E7A000000000000000000202 /* Narrative */ = {
+			isa = PBXGroup;
+			children = (
+				E7A000000000000000000107 /* NarrativeProjectCoordinator.swift */,
+				E7A000000000000000000108 /* NarrativeSetupViewControllers.swift */,
+				E7A000000000000000000109 /* NarrativeWorkbenchViewController.swift */,
+				E7A000000000000000000110 /* NarrativeReaderViewController.swift */,
+			);
+			path = Narrative;
 			sourceTree = "<group>";
 		};
 		BAEBFA31204DE842BAB734A2 /* TabBar */ = {
@@ -860,9 +894,21 @@
 		D5F000000000000000000202 /* Domain */ = {
 			isa = PBXGroup;
 			children = (
+				E7A000000000000000000201 /* Narrative */,
 				D5F000000000000000000201 /* OwnerTruth */,
 			);
 			path = Domain;
+			sourceTree = "<group>";
+		};
+		E7A000000000000000000201 /* Narrative */ = {
+			isa = PBXGroup;
+			children = (
+				E7A000000000000000000101 /* NarrativeContracts.swift */,
+				E7A000000000000000000102 /* NarrativeModels.swift */,
+				E7A000000000000000000103 /* NarrativeReaderModels.swift */,
+				E7A000000000000000000104 /* NarrativeStateMachine.swift */,
+			);
+			path = Narrative;
 			sourceTree = "<group>";
 		};
 		F9A16ACB58DF276F2BF39DE4 /* DreamJourney */ = {
@@ -1142,6 +1188,16 @@
 				C7E1B3000000000000000001 /* AccountLease.swift in Sources */,
 				D4F000000000000000000005 /* AudioOwnerLeaseModel.swift in Sources */,
 				D4F000000000000000000006 /* AudioOwnerLeaseCoordinator.swift in Sources */,
+				E7A000000000000000000001 /* NarrativeContracts.swift in Sources */,
+				E7A000000000000000000002 /* NarrativeModels.swift in Sources */,
+				E7A000000000000000000003 /* NarrativeReaderModels.swift in Sources */,
+				E7A000000000000000000004 /* NarrativeStateMachine.swift in Sources */,
+				E7A000000000000000000005 /* NarrativeBackendService.swift in Sources */,
+				E7A000000000000000000006 /* NarrativeReaderStateStore.swift in Sources */,
+				E7A000000000000000000007 /* NarrativeProjectCoordinator.swift in Sources */,
+				E7A000000000000000000008 /* NarrativeSetupViewControllers.swift in Sources */,
+				E7A000000000000000000009 /* NarrativeWorkbenchViewController.swift in Sources */,
+				E7A000000000000000000010 /* NarrativeReaderViewController.swift in Sources */,
 				D5F000000000000000000001 /* OwnerTruthContracts.swift in Sources */,
 				D5F000000000000000000004 /* OwnerTruthFormalMemory.swift in Sources */,
 				D5F000000000000000000002 /* OwnerTruthRepository.swift in Sources */,

@@ -672,6 +672,7 @@ enum DJFeature: String, CaseIterable {
     case publicationVisitor
     case publicationGrantManagement
     case publication
+    case narrativeWriting
 }
 
 extension DJFeature {
@@ -701,7 +702,7 @@ final class FeatureFlagService {
 
     private static let storageKey = "dj.featureFlags.enabled"
     private static let storageVersionKey = "dj.featureFlags.schemaVersion"
-    private static let currentStorageVersion = 12
+    private static let currentStorageVersion = 13
     private static let defaultEnabled: Set<DJFeature> = [
         .echoTextInput,
         .profileSettings,
@@ -709,6 +710,7 @@ final class FeatureFlagService {
         .accountDeletion,
     ]
     private static let nonPersistentFeatures: Set<DJFeature> = [
+        .narrativeWriting,
         .echoImageInput,
         .echoGuidedRecommendations,
         .ownerTruthLifeMap,

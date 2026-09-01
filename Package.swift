@@ -41,6 +41,10 @@ let package = Package(
                 "App/AccountSessionActor.swift",
                 "App/AccountLease.swift",
                 "App/AudioOwnerLeaseModel.swift",
+                "Domain/Narrative/NarrativeContracts.swift",
+                "Domain/Narrative/NarrativeModels.swift",
+                "Domain/Narrative/NarrativeReaderModels.swift",
+                "Domain/Narrative/NarrativeStateMachine.swift",
                 "Domain/OwnerTruth/OwnerTruthContracts.swift",
                 "Domain/OwnerTruth/OwnerTruthRepository.swift",
             ]
@@ -59,6 +63,10 @@ let package = Package(
             ],
             sources: [
                 "OwnerTruthCoreContractTests.swift",
+                "NarrativeContractsTests.swift",
+            ],
+            resources: [
+                .process("Fixtures/Narrative"),
             ]
         ),
     ]

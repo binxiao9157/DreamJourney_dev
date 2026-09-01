@@ -721,6 +721,15 @@ enum AccountLifecycleRuntimeRegistry {
                 detailCode: "widgetProjectionTeardownFailed"
             )
         }
+        guard NarrativeReaderStateStore.shared.teardownForAccountLifecycle(
+            oldAccountLease: context.oldAccountLease
+        ) else {
+            return .completed(
+                .failed,
+                remainingLocalData: true,
+                detailCode: "narrativeReaderStateTeardownFailed"
+            )
+        }
         guard AccountDataExportTemporaryStore.teardownForAccountLifecycle(
             oldAccountLease: context.oldAccountLease
         ) else {

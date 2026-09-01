@@ -900,6 +900,8 @@ final class MemoryArchiveViewController: UIViewController {
     private var ownerTruthMediaCandidateHandoffTaskIDs: [Int: UUID] = [:]
     private var ownerTruthMediaCandidateHandoffNextTag = 1
     private var ownerTruthMediaTaskRefreshGeneration: UInt64 = 0
+    private var narrativeProjectCoordinator: NarrativeProjectCoordinator?
+    private var isRefreshingNarrativeWritingPolicy = false
     private let ownerTruthMediaImportQueue = DispatchQueue(
         label: "com.dreamjourney.owner-truth-media-import",
         qos: .userInitiated
@@ -3618,20 +3620,52 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     @objc private func autobiographyBookTapped() {
-        guard isSelfAutobiographyMode else {
-            showToast("该家人的正式故事尚未获得可读授权", type: .info)
+        guard !isRefreshingNarrativeWritingPolicy else {
             return
         }
-        guard isOwnerTruthCandidateReviewEnabled,
-              let accountLease = captureOwnerTruthCandidateReviewAccountLease() else {
-            return
-        }
-        let viewController = OwnerTruthPersonMemoryProfileViewController(
-            accountLease: accountLease
+
+        let preflight = NarrativeWritingAccessPreflight(
+            isAuthorized: {
+                FeatureGateService.shared
+                    .isServerPolicyManagedRouteAllowed(.narrativeWriting)
+            },
+            refreshPolicy: { completion in
+                FeatureGateService.shared.refreshPolicy(for: .narrativeWriting) { result in
+                    completion((try? result.get()) != nil)
+                }
+            }
         )
-        viewController.hidesBottomBarWhenPushed = true
-        navigationController?.setNavigationBarHidden(false, animated: false)
-        navigationController?.pushViewController(viewController, animated: true)
+        isRefreshingNarrativeWritingPolicy = true
+        bookEntryControl?.isUserInteractionEnabled = false
+        preflight.authorize { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isRefreshingNarrativeWritingPolicy = false
+                self.bookEntryControl?.isUserInteractionEnabled = true
+                switch result {
+                case .success:
+                    self.openNarrativeWritingSystem()
+                case .failure(.refreshFailed):
+                    self.showToast("暂时无法确认写作权限，请稍后重试", type: .error)
+                case .failure(.unavailable):
+                    self.showToast("写作系统暂未对当前账号开放", type: .info)
+                }
+            }
+        }
+    }
+
+    private func openNarrativeWritingSystem() {
+        guard let accountLease = captureOwnerTruthCandidateReviewAccountLease(),
+              let navigationController else {
+            return
+        }
+        let coordinator = NarrativeProjectCoordinator(
+            navigationController: navigationController,
+            accountLease: accountLease,
+            context: currentArchiveContext
+        )
+        narrativeProjectCoordinator = coordinator
+        coordinator.start()
     }
 
     @objc private func disabledFeatureTapped() {

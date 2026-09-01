@@ -2601,22 +2601,80 @@ final class DialogEngineAudiblePlaybackPolicyTests: XCTestCase {
         XCTAssertFalse(policy.applicationPCMPlaybackEnabled)
     }
 
-    func testDelegatedPlaybackCompletionWatchdogUsesShortMinimumDelay() {
-        XCTAssertEqual(
-            DialogEngineDelegatedPlaybackCompletionPolicy.fallbackDelay(characterCount: 0),
-            1.5
+    func testDelegatedPlaybackDoesNotInferCompletionFromTextLength() {
+        var state = DialogEngineDelegatedPlaybackState()
+        state.submit()
+
+        XCTAssertTrue(
+            state.apply(.providerAccepted(replyID: "reply-1"))
         )
-        XCTAssertEqual(
-            DialogEngineDelegatedPlaybackCompletionPolicy.fallbackDelay(characterCount: 10),
-            1.5
+        XCTAssertEqual(state.phase, .providerAccepted)
+        XCTAssertTrue(
+            state.apply(.synthesisEnded(replyID: "reply-1"))
+        )
+        XCTAssertEqual(state.phase, .synthesisEnded)
+        XCTAssertFalse(
+            state.phase == .audioFinished,
+            "Synthesis completion must not be treated as player completion"
         )
     }
+}
 
-    func testDelegatedPlaybackCompletionWatchdogCapsLongReplies() {
-        XCTAssertEqual(
-            DialogEngineDelegatedPlaybackCompletionPolicy.fallbackDelay(characterCount: 10_000),
-            5.0
-        )
+final class DialogEngineDelegatedPlaybackStateTests: XCTestCase {
+    func testNormalPhaseSequence() {
+        var state = DialogEngineDelegatedPlaybackState()
+        state.submit()
+
+        XCTAssertTrue(state.apply(.providerAccepted(replyID: "reply-1")))
+        XCTAssertTrue(state.apply(.audioActivityObserved(replyID: "reply-1")))
+        XCTAssertTrue(state.apply(.audioStarted(replyID: "reply-1")))
+        XCTAssertTrue(state.apply(.synthesisEnded(replyID: "reply-1")))
+        XCTAssertTrue(state.apply(.audioFinished(replyID: "reply-1")))
+        XCTAssertEqual(state.phase, .audioFinished)
+    }
+
+    func testFinishBeforeStartIsTerminalAndLateStartIsIgnored() {
+        var state = DialogEngineDelegatedPlaybackState()
+        state.submit()
+
+        XCTAssertTrue(state.apply(.providerAccepted(replyID: "reply-1")))
+        XCTAssertTrue(state.apply(.audioFinished(replyID: "reply-1")))
+        XCTAssertEqual(state.phase, .audioFinished)
+        XCTAssertFalse(state.apply(.audioStarted(replyID: "reply-1")))
+    }
+
+    func testDuplicateProgressIsIdempotent() {
+        var state = DialogEngineDelegatedPlaybackState()
+        state.submit()
+
+        XCTAssertTrue(state.apply(.providerAccepted(replyID: "reply-1")))
+        XCTAssertTrue(state.apply(.providerAccepted(replyID: "reply-1")))
+        XCTAssertTrue(state.apply(.audioActivityObserved(replyID: "reply-1")))
+        XCTAssertTrue(state.apply(.audioStarted(replyID: "reply-1")))
+        XCTAssertTrue(state.apply(.audioStarted(replyID: "reply-1")))
+        XCTAssertTrue(state.apply(.synthesisEnded(replyID: "reply-1")))
+        XCTAssertTrue(state.apply(.synthesisEnded(replyID: "reply-1")))
+    }
+
+    func testWrongReplyIDCannotAdvanceState() {
+        var state = DialogEngineDelegatedPlaybackState()
+        state.submit()
+
+        XCTAssertTrue(state.apply(.providerAccepted(replyID: "reply-1")))
+        XCTAssertTrue(state.apply(.audioActivityObserved(replyID: "reply-1")))
+        XCTAssertFalse(state.apply(.audioStarted(replyID: "reply-2")))
+        XCTAssertEqual(state.phase, .providerAccepted)
+        XCTAssertTrue(state.apply(.audioStarted(replyID: "reply-1")))
+    }
+
+    func testInterruptedPlaybackIsTerminalAndCannotResumeFromLateFinish() {
+        var state = DialogEngineDelegatedPlaybackState()
+        state.submit()
+
+        XCTAssertTrue(state.apply(.providerAccepted(replyID: "reply-1")))
+        XCTAssertTrue(state.apply(.interrupted(replyID: "reply-1")))
+        XCTAssertEqual(state.phase, .interrupted)
+        XCTAssertFalse(state.apply(.audioFinished(replyID: "reply-1")))
     }
 }
 

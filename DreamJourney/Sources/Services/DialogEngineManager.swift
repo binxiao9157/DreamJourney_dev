@@ -332,12 +332,120 @@ struct DialogEngineAudiblePlaybackPolicy: Equatable, Sendable {
     }
 }
 
-/// Recovers the Live state when the provider player omits or reorders its
-/// finish callback. The watchdog never starts another audio output.
-struct DialogEngineDelegatedPlaybackCompletionPolicy: Equatable, Sendable {
-    static func fallbackDelay(characterCount: Int) -> TimeInterval {
-        let normalizedCount = max(0, characterCount)
-        return max(1.5, min(5.0, 1.0 + Double(normalizedCount) * 0.04))
+/// Progress emitted by the provider-owned Live TTS route. The application
+/// never infers playback completion from text length or elapsed time alone.
+enum DialogEngineDelegatedPlaybackProgress: Equatable, Sendable {
+    case providerAccepted(replyID: String)
+    case audioActivityObserved(replyID: String)
+    case audioStarted(replyID: String)
+    case synthesisEnded(replyID: String)
+    case audioFinished(replyID: String)
+    case interrupted(replyID: String?)
+    case failed(replyID: String?, code: String)
+
+    var replyID: String? {
+        switch self {
+        case .providerAccepted(let replyID),
+             .audioActivityObserved(let replyID),
+             .audioStarted(let replyID),
+             .synthesisEnded(let replyID),
+             .audioFinished(let replyID):
+            return replyID
+        case .interrupted(let replyID), .failed(let replyID, _):
+            return replyID
+        }
+    }
+}
+
+enum DialogEngineDelegatedPlaybackPhase: Equatable, Sendable {
+    case idle
+    case submitted
+    case providerAccepted
+    case audioStarted
+    case synthesisEnded
+    case audioFinished
+    case interrupted
+    case failed
+}
+
+/// Pure reducer for the delegated Live playback contract. It makes provider
+/// reply identity and terminal transitions explicit and idempotent.
+struct DialogEngineDelegatedPlaybackState: Equatable, Sendable {
+    private(set) var phase: DialogEngineDelegatedPlaybackPhase = .idle
+    private(set) var replyID: String? = nil
+
+    mutating func reset() {
+        phase = .idle
+        replyID = nil
+    }
+
+    mutating func submit() {
+        phase = .submitted
+        replyID = nil
+    }
+
+    @discardableResult
+    mutating func apply(_ progress: DialogEngineDelegatedPlaybackProgress) -> Bool {
+        switch progress {
+        case .providerAccepted(let nextReplyID):
+            guard !nextReplyID.isEmpty else { return false }
+            guard phase == .submitted || phase == .providerAccepted else { return false }
+            guard replyID == nil || replyID == nextReplyID else { return false }
+            replyID = nextReplyID
+            phase = .providerAccepted
+            return true
+
+        case .audioStarted(let nextReplyID):
+            guard matches(nextReplyID),
+                  phase == .providerAccepted
+                    || phase == .audioStarted
+                    || phase == .synthesisEnded else { return false }
+            phase = .audioStarted
+            return true
+
+        case .audioActivityObserved(let nextReplyID):
+            guard matches(nextReplyID),
+                  phase == .providerAccepted
+                    || phase == .audioStarted
+                    || phase == .synthesisEnded else { return false }
+            return true
+
+        case .synthesisEnded(let nextReplyID):
+            guard matches(nextReplyID),
+                  phase == .providerAccepted
+                    || phase == .audioStarted
+                    || phase == .synthesisEnded else { return false }
+            phase = .synthesisEnded
+            return true
+
+        case .audioFinished(let nextReplyID):
+            guard matches(nextReplyID),
+                  phase == .providerAccepted
+                    || phase == .audioStarted
+                    || phase == .synthesisEnded
+                    || phase == .audioFinished else { return false }
+            phase = .audioFinished
+            return true
+
+        case .interrupted(let nextReplyID):
+            guard phase != .idle,
+                  phase != .audioFinished,
+                  phase != .failed,
+                  nextReplyID == nil || nextReplyID == replyID else { return false }
+            phase = .interrupted
+            return true
+
+        case .failed(let nextReplyID, _):
+            guard phase != .idle,
+                  phase != .audioFinished,
+                  nextReplyID == nil || nextReplyID == replyID else { return false }
+            phase = .failed
+            return true
+        }
+    }
+
+    private func matches(_ nextReplyID: String) -> Bool {
+        !nextReplyID.isEmpty && replyID == nextReplyID
     }
 }
 
@@ -473,6 +581,7 @@ protocol DialogEngineDelegate: AnyObject {
     func onASRResult(text: String, isFinal: Bool)
     func onTTSStarted(text: String)
     func onTTSPlaybackStarted()
+    func onDelegatedPlaybackProgress(_ progress: DialogEngineDelegatedPlaybackProgress)
     func onTTSPlaybackInterruptedByUser()
     func onTTSFinished()
     func onChatStreaming(text: String)
@@ -482,6 +591,7 @@ protocol DialogEngineDelegate: AnyObject {
 
 extension DialogEngineDelegate {
     func onTTSPlaybackStarted() {}
+    func onDelegatedPlaybackProgress(_ progress: DialogEngineDelegatedPlaybackProgress) {}
     func onTTSPlaybackInterruptedByUser() {}
 }
 
@@ -595,7 +705,8 @@ final class DialogEngineManager: NSObject {
     }
 
     func configure(runtimeConfig: RealtimeVoiceRuntimeConfig) -> Bool { !runtimeConfig.isBlocked }
-    func interruptAI() {}
+    @discardableResult
+    func interruptAI() -> Bool { false }
     @discardableResult
     func setLocalTTSPlaybackEnabled(_ enabled: Bool) -> Bool {
         isLocalTTSPlaybackEnabled = enabled
@@ -714,8 +825,14 @@ final class DialogEngineManager: NSObject {
             return false
         }
         delegate?.onTTSStarted(text: normalized)
-        delegate?.onTTSPlaybackStarted()
-        delegate?.onTTSFinished()
+        let replyID = "uiqa-\(UUID().uuidString)"
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.delegate?.onDelegatedPlaybackProgress(.providerAccepted(replyID: replyID))
+            self.delegate?.onDelegatedPlaybackProgress(.audioStarted(replyID: replyID))
+            self.delegate?.onDelegatedPlaybackProgress(.synthesisEnded(replyID: replyID))
+            self.delegate?.onDelegatedPlaybackProgress(.audioFinished(replyID: replyID))
+        }
         return true
     }
 
@@ -870,6 +987,7 @@ protocol DialogEngineDelegate: AnyObject {
     func onASRResult(text: String, isFinal: Bool)
     func onTTSStarted(text: String)
     func onTTSPlaybackStarted()
+    func onDelegatedPlaybackProgress(_ progress: DialogEngineDelegatedPlaybackProgress)
     func onTTSPlaybackInterruptedByUser()
     func onTTSFinished()
     func onChatStreaming(text: String)
@@ -879,6 +997,7 @@ protocol DialogEngineDelegate: AnyObject {
 
 extension DialogEngineDelegate {
     func onTTSPlaybackStarted() {}
+    func onDelegatedPlaybackProgress(_ progress: DialogEngineDelegatedPlaybackProgress) {}
     func onTTSPlaybackInterruptedByUser() {}
 }
 
@@ -955,9 +1074,8 @@ final class DialogEngineManager: NSObject {
     private var delegatedServerTTSReplyIDs = Set<String>()
     private var delegatedClientPlaybackReplyID: String?
     private var isDelegatedClientTTSSubmissionPending = false
-    private var delegatedClientPlaybackDidStart = false
-    private var delegatedClientPlaybackCharacterCount = 0
-    private var delegatedClientPlaybackCompletionFallbackWorkItem: DispatchWorkItem?
+    private var delegatedClientPlaybackState = DialogEngineDelegatedPlaybackState()
+    private var delegatedClientPlaybackAudioActivityObserved = false
     private var delegatedClientDecodedPCM = Data()
     private let delegatedClientPCMPlayer = DialogPCMPlaybackController()
 
@@ -1307,28 +1425,42 @@ final class DialogEngineManager: NSObject {
     }
 
     /// 客户端主动打断 AI 回复（仅在 AI 正在播报时生效）
-    func interruptAI() {
+    @discardableResult
+    func interruptAI() -> Bool {
         interruptAI(notifiesUserInterruption: false)
     }
 
-    private func interruptAI(notifiesUserInterruption: Bool) {
+    @discardableResult
+    private func interruptAI(notifiesUserInterruption: Bool) -> Bool {
         guard isDialogActive,
               isAISpeaking || isDelegatedClientTTSSubmissionPending,
-              let engine = engine else { return }
+              let engine = engine else { return false }
+        let callbackContext = currentProviderCallbackContext()
+        let delegatedLivePlayback = sessionLifetimePolicy == .userControlledLive
+            && answerAuthority == .dreamJourneyBackend
         let result = engine.send(SEDirectiveEventClientInterrupt, data: "{}")
         if result == SENoError {
+            if delegatedLivePlayback, let callbackContext {
+                _ = emitDelegatedPlaybackProgress(
+                    .interrupted(replyID: delegatedClientPlaybackReplyID),
+                    callbackContext: callbackContext
+                )
+            }
             isAISpeaking = false
             resetDelegatedClientPlaybackState()
             print("[DialogEngine] ✅ 已打断 AI 播报")
             DDLogInfo("[DialogEngine] 客户端打断 AI")
             if notifiesUserInterruption,
+               !delegatedLivePlayback,
                let callbackContext = currentProviderCallbackContext() {
                 deliverProviderCallback(callbackContext) { _, delegate in
                     delegate.onTTSPlaybackInterruptedByUser()
                 }
             }
+            return true
         } else {
             print("[DialogEngine] ⚠️ 打断指令发送失败: \(result.rawValue)")
+            return false
         }
     }
 
@@ -1706,7 +1838,7 @@ final class DialogEngineManager: NSObject {
         }
 
         resetDelegatedClientPlaybackState()
-        delegatedClientPlaybackCharacterCount = normalized.count
+        delegatedClientPlaybackState.submit()
         isDelegatedClientTTSSubmissionPending = true
 
         // This SDK build reliably routes SayHello through the same
@@ -1715,6 +1847,7 @@ final class DialogEngineManager: NSObject {
         let result = engine.send(SEDirectiveEventSayHello, data: payload)
         guard result == SENoError else {
             isDelegatedClientTTSSubmissionPending = false
+            delegatedClientPlaybackState.reset()
             DDLogError("[DialogEngine] delegated Live answer rejected: \(result.rawValue)")
             return false
         }
@@ -1752,47 +1885,12 @@ final class DialogEngineManager: NSObject {
     }
 
     private func resetDelegatedClientPlaybackState() {
-        delegatedClientPlaybackCompletionFallbackWorkItem?.cancel()
-        delegatedClientPlaybackCompletionFallbackWorkItem = nil
         delegatedClientPCMPlayer.stop()
         delegatedClientPlaybackReplyID = nil
         isDelegatedClientTTSSubmissionPending = false
-        delegatedClientPlaybackDidStart = false
-        delegatedClientPlaybackCharacterCount = 0
+        delegatedClientPlaybackState.reset()
+        delegatedClientPlaybackAudioActivityObserved = false
         delegatedClientDecodedPCM.removeAll(keepingCapacity: false)
-    }
-
-    private func scheduleDelegatedClientPlaybackCompletionFallback(
-        callbackContext: DialogEngineProviderCallbackContext
-    ) {
-        guard let replyID = delegatedClientPlaybackReplyID else { return }
-        delegatedClientPlaybackCompletionFallbackWorkItem?.cancel()
-        let delay = DialogEngineDelegatedPlaybackCompletionPolicy.fallbackDelay(
-            characterCount: delegatedClientPlaybackCharacterCount
-        )
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self,
-                  self.delegatedClientPlaybackReplyID == replyID else { return }
-            let shouldAcknowledgeStart = !self.delegatedClientPlaybackDidStart
-            self.delegatedClientPlaybackDidStart = true
-            self.isAISpeaking = true
-            if shouldAcknowledgeStart {
-                self.deliverProviderCallback(callbackContext) { _, delegate in
-                    delegate.onTTSPlaybackStarted()
-                }
-            }
-            self.resetDelegatedClientPlaybackState()
-            self.isAISpeaking = false
-            DDLogWarn(
-                "[DialogEngine] delegated Live provider finish callback timed out; " +
-                "completed playback state with watchdog"
-            )
-            self.deliverProviderCallback(callbackContext) { _, delegate in
-                delegate.onTTSFinished()
-            }
-        }
-        delegatedClientPlaybackCompletionFallbackWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     private func acceptsDelegatedTTSEvent(
@@ -1813,9 +1911,14 @@ final class DialogEngineManager: NSObject {
                 return false
             }
             if isClientTriggered {
-                let submittedCharacterCount = delegatedClientPlaybackCharacterCount
-                resetDelegatedClientPlaybackState()
-                delegatedClientPlaybackCharacterCount = submittedCharacterCount
+                guard delegatedClientPlaybackState.phase == .submitted
+                    || delegatedClientPlaybackState.phase == .providerAccepted else {
+                    DDLogWarn(
+                        "[DialogEngine] dropped delegated TTS start without matching submission " +
+                        "replyID=\(replyID) phase=\(delegatedClientPlaybackState.phase)"
+                    )
+                    return false
+                }
                 delegatedClientTTSReplyIDs.insert(replyID)
                 delegatedServerTTSReplyIDs.remove(replyID)
                 delegatedClientPlaybackReplyID = replyID
@@ -1841,10 +1944,29 @@ final class DialogEngineManager: NSObject {
 
         case .streamEnded:
             guard let replyID = metadata.replyID else { return false }
-            let accepted = delegatedClientTTSReplyIDs.remove(replyID) != nil
-            delegatedServerTTSReplyIDs.remove(replyID)
-            return accepted
+            // Keep the client reply bound until the provider player reports
+            // its terminal callback. Synthesis completion is not playback
+            // completion.
+            return delegatedClientTTSReplyIDs.contains(replyID)
         }
+    }
+
+    @discardableResult
+    private func emitDelegatedPlaybackProgress(
+        _ progress: DialogEngineDelegatedPlaybackProgress,
+        callbackContext: DialogEngineProviderCallbackContext
+    ) -> Bool {
+        guard delegatedClientPlaybackState.apply(progress) else {
+            DDLogWarn(
+                "[DialogEngine] ignored delegated playback progress " +
+                "phase=\(delegatedClientPlaybackState.phase) replyID=\(progress.replyID ?? "none")"
+            )
+            return false
+        }
+        deliverProviderCallback(callbackContext) { _, delegate in
+            delegate.onDelegatedPlaybackProgress(progress)
+        }
+        return true
     }
 
     private func delegatedTTSMetadata(
@@ -1923,7 +2045,9 @@ final class DialogEngineManager: NSObject {
                           self.delegatedClientPlaybackReplyID == replyID else {
                         return
                     }
-                    self.delegatedClientPlaybackDidStart = true
+                    _ = self.delegatedClientPlaybackState.apply(
+                        .audioStarted(replyID: replyID)
+                    )
                     self.isAISpeaking = true
                     DDLogInfo(
                         "[DialogEngine] delegated Live PCM player started bytes=\(pcmData.count)"
@@ -3004,6 +3128,14 @@ extension DialogEngineManager {
                 return
             }
             guard acceptsDelegatedTTSEvent(data, phase: .started) else { return }
+            if sessionLifetimePolicy == .userControlledLive,
+               answerAuthority == .dreamJourneyBackend,
+               let replyID = delegatedClientPlaybackReplyID {
+                guard emitDelegatedPlaybackProgress(
+                    .providerAccepted(replyID: replyID),
+                    callbackContext: callbackContext
+                ) else { return }
+            }
             // Delegated Live waits for the first encoded audio packet before
             // considering playback interruptible. Other modes preserve the
             // provider-owned behavior.
@@ -3065,13 +3197,12 @@ extension DialogEngineManager {
             }
             if sessionLifetimePolicy == .userControlledLive,
                answerAuthority == .dreamJourneyBackend {
-                DDLogInfo(
-                    "[DialogEngine] delegated Live synthesis ended; " +
-                    "waiting for provider player completion with watchdog"
-                )
-                scheduleDelegatedClientPlaybackCompletionFallback(
+                guard let replyID = delegatedClientPlaybackReplyID else { return }
+                guard emitDelegatedPlaybackProgress(
+                    .synthesisEnded(replyID: replyID),
                     callbackContext: callbackContext
-                )
+                ) else { return }
+                DDLogInfo("[DialogEngine] delegated Live synthesis ended; awaiting player terminal event")
                 return
             }
             isAISpeaking = false
@@ -3083,6 +3214,18 @@ extension DialogEngineManager {
             break
 
         case SEPlayerAudioData:
+            if sessionLifetimePolicy == .userControlledLive,
+               answerAuthority == .dreamJourneyBackend,
+               let replyID = delegatedClientPlaybackReplyID,
+               !delegatedClientPlaybackAudioActivityObserved,
+               delegatedClientPlaybackState.phase != .idle {
+                if emitDelegatedPlaybackProgress(
+                    .audioActivityObserved(replyID: replyID),
+                    callbackContext: callbackContext
+                ) {
+                    delegatedClientPlaybackAudioActivityObserved = true
+                }
+            }
             break
 
         case SEDecoderAudioData:
@@ -3095,14 +3238,12 @@ extension DialogEngineManager {
             }
             if sessionLifetimePolicy == .userControlledLive,
                answerAuthority == .dreamJourneyBackend {
-                guard delegatedClientPlaybackReplyID != nil else { return }
-                if !delegatedClientPlaybackDidStart {
-                    delegatedClientPlaybackDidStart = true
-                    isAISpeaking = true
-                    deliverProviderCallback(callbackContext) { _, delegate in
-                        delegate.onTTSPlaybackStarted()
-                    }
-                }
+                guard let replyID = delegatedClientPlaybackReplyID,
+                      emitDelegatedPlaybackProgress(
+                        .audioStarted(replyID: replyID),
+                        callbackContext: callbackContext
+                      ) else { return }
+                isAISpeaking = true
                 return
             }
             isAISpeaking = true
@@ -3118,19 +3259,14 @@ extension DialogEngineManager {
             }
             if sessionLifetimePolicy == .userControlledLive,
                answerAuthority == .dreamJourneyBackend {
-                guard delegatedClientPlaybackReplyID != nil else { return }
-                if !delegatedClientPlaybackDidStart {
-                    delegatedClientPlaybackDidStart = true
-                    isAISpeaking = true
-                    deliverProviderCallback(callbackContext) { _, delegate in
-                        delegate.onTTSPlaybackStarted()
-                    }
-                }
+                guard let replyID = delegatedClientPlaybackReplyID,
+                      emitDelegatedPlaybackProgress(
+                        .audioFinished(replyID: replyID),
+                        callbackContext: callbackContext
+                      ) else { return }
+                delegatedClientTTSReplyIDs.remove(replyID)
                 resetDelegatedClientPlaybackState()
                 isAISpeaking = false
-                deliverProviderCallback(callbackContext) { _, delegate in
-                    delegate.onTTSFinished()
-                }
                 return
             }
             isAISpeaking = false
@@ -3187,6 +3323,18 @@ extension DialogEngineManager {
             let msg = parseErrorMessage(from: data)
             print("[DialogEngine] ❌ 引擎错误: \(msg)")
             DDLogError("[DialogEngine] 引擎错误: \(msg)")
+            if sessionLifetimePolicy == .userControlledLive,
+               answerAuthority == .dreamJourneyBackend,
+               delegatedClientPlaybackState.phase != .idle,
+               let replyID = delegatedClientPlaybackReplyID {
+                _ = emitDelegatedPlaybackProgress(
+                    .failed(replyID: replyID, code: msg),
+                    callbackContext: callbackContext
+                )
+                isAISpeaking = false
+                resetDelegatedClientPlaybackState()
+                return
+            }
             if completeTextReplyPlayback(
                 .failure(
                     DialogTextReplyPlaybackError.directiveRejected(

@@ -43,17 +43,88 @@ enum EchoLiveAudioRoutePolicy {
 
 struct EchoLivePlaybackReceiptState: Equatable {
     let route: EchoLiveAudioRoute
-    private(set) var didStart = false
+    private(set) var phase: DialogEngineDelegatedPlaybackPhase = .submitted
+    private(set) var replyID: String? = nil
+
+    var didStart: Bool {
+        phase == .audioStarted
+    }
 
     @discardableResult
     mutating func acknowledgeStart(for callbackRoute: EchoLiveAudioRoute) -> Bool {
         guard callbackRoute == route else { return false }
-        didStart = true
+        guard phase == .submitted
+            || phase == .providerAccepted
+            || phase == .synthesisEnded else { return false }
+        phase = .audioStarted
         return true
     }
 
     func canComplete(for callbackRoute: EchoLiveAudioRoute) -> Bool {
-        callbackRoute == route && didStart
+        guard callbackRoute == route else { return false }
+        return phase == .audioStarted
+            || phase == .synthesisEnded
+            || phase == .audioFinished
+    }
+
+    @discardableResult
+    mutating func apply(
+        _ progress: DialogEngineDelegatedPlaybackProgress,
+        callbackRoute: EchoLiveAudioRoute
+    ) -> Bool {
+        guard callbackRoute == route else { return false }
+        switch progress {
+        case .providerAccepted(let nextReplyID):
+            guard !nextReplyID.isEmpty,
+                  phase == .submitted || phase == .providerAccepted,
+                  replyID == nil || replyID == nextReplyID else { return false }
+            replyID = nextReplyID
+            phase = .providerAccepted
+            return true
+        case .audioActivityObserved(let nextReplyID):
+            guard matches(nextReplyID),
+                  phase == .providerAccepted
+                    || phase == .audioStarted
+                    || phase == .synthesisEnded else { return false }
+            return true
+        case .audioStarted(let nextReplyID):
+            guard matches(nextReplyID),
+                  phase == .providerAccepted
+                    || phase == .audioStarted
+                    || phase == .synthesisEnded else { return false }
+            phase = .audioStarted
+            return true
+        case .synthesisEnded(let nextReplyID):
+            guard matches(nextReplyID),
+                  phase == .providerAccepted
+                    || phase == .audioStarted
+                    || phase == .synthesisEnded else { return false }
+            phase = .synthesisEnded
+            return true
+        case .audioFinished(let nextReplyID):
+            guard matches(nextReplyID),
+                  phase == .providerAccepted
+                    || phase == .audioStarted
+                    || phase == .synthesisEnded
+                    || phase == .audioFinished else { return false }
+            phase = .audioFinished
+            return true
+        case .interrupted(let nextReplyID):
+            guard phase != .audioFinished,
+                  phase != .failed,
+                  nextReplyID == nil || nextReplyID == replyID else { return false }
+            phase = .interrupted
+            return true
+        case .failed(let nextReplyID, _):
+            guard phase != .audioFinished,
+                  nextReplyID == nil || nextReplyID == replyID else { return false }
+            phase = .failed
+            return true
+        }
+    }
+
+    private func matches(_ nextReplyID: String) -> Bool {
+        !nextReplyID.isEmpty && replyID == nextReplyID
     }
 }
 
@@ -69,6 +140,8 @@ private struct EchoLivePlaybackReceipt {
     var state: EchoLivePlaybackReceiptState
     let turnID: String
     let lifecycleToken: DigitalHumanLifecycleToken
+    let submittedAt: Date
+    let answerCharacterCount: Int
 }
 
 private struct EchoRoleVoiceProfileSelection {
@@ -1097,7 +1170,8 @@ final class EchoViewController: UIViewController {
     private var isLiveVoiceTransportSuspended = false
     private var activeLiveAudioRouteLease: EchoLiveAudioRouteLease?
     private var pendingLivePlaybackReceipt: EchoLivePlaybackReceipt?
-    private var livePlaybackStartTimeoutWorkItem: DispatchWorkItem?
+    private var livePlaybackAcceptanceTimeoutWorkItem: DispatchWorkItem?
+    private var livePlaybackTerminalWatchdogWorkItem: DispatchWorkItem?
     private var liveMemoryCaptureCoordinator: EchoLiveMemoryCaptureCoordinator?
     private var retainedLiveMemoryCaptureCoordinators: [UUID: EchoLiveMemoryCaptureCoordinator] = [:]
     private var liveUserInactivityWorkItem: DispatchWorkItem?
@@ -1124,7 +1198,8 @@ final class EchoViewController: UIViewController {
     private static let tencentDigitalHumanOpenFailureRecoveryLimit = 1
     private static let tencentDigitalHumanBackgroundReleaseGracePeriod: TimeInterval = 8.0
     private static let liveUserInactivityTimeout: TimeInterval = 60
-    private static let livePlaybackStartTimeout: TimeInterval = 6.0
+    private static let livePlaybackProviderAcceptanceTimeout: TimeInterval = 6.0
+    private static let livePlaybackTerminalWatchdogTimeout: TimeInterval = 45.0
 
     private var isTypedEchoConversationOpen: Bool {
         liveMemoryCaptureCoordinator != nil && !isUserControlledLiveSessionOpen
@@ -3667,7 +3742,8 @@ final class EchoViewController: UIViewController {
     private func beginLivePlaybackReceipt(
         route: EchoLiveAudioRoute,
         turnID: String,
-        lifecycleToken: DigitalHumanLifecycleToken
+        lifecycleToken: DigitalHumanLifecycleToken,
+        answerCharacterCount: Int
     ) {
         switch route {
         case .volcengineLocalTTS, .tencentDigitalHuman:
@@ -3681,32 +3757,35 @@ final class EchoViewController: UIViewController {
             id: UUID(),
             state: EchoLivePlaybackReceiptState(route: route),
             turnID: turnID,
-            lifecycleToken: lifecycleToken
+            lifecycleToken: lifecycleToken,
+            submittedAt: Date(),
+            answerCharacterCount: max(0, answerCharacterCount)
         )
         pendingLivePlaybackReceipt = receipt
-        let workItem = DispatchWorkItem { [weak self] in
-            self?.handleLivePlaybackStartTimeout(receiptID: receipt.id)
-        }
-        livePlaybackStartTimeoutWorkItem = workItem
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + Self.livePlaybackStartTimeout,
-            execute: workItem
-        )
+        scheduleLivePlaybackAcceptanceTimeout(receiptID: receipt.id)
         PrivacySafeDiagnostics.log(
             subsystem: "Echo",
-            event: "livePlaybackReceiptAwaitingStart",
+            event: "liveAnswerSubmitted",
             states: ["route": route.diagnosticCode],
-            counts: ["timeoutMs": Int(Self.livePlaybackStartTimeout * 1_000)],
+            counts: [
+                "providerAcceptanceTimeoutMs": Int(Self.livePlaybackProviderAcceptanceTimeout * 1_000),
+                "answerCharacterCount": receipt.answerCharacterCount,
+                "elapsedMsSinceSubmit": 0,
+            ],
             correlations: [
-                "receipt": receipt.id.uuidString,
-                "turn": turnID,
+                "receiptID": receipt.id.uuidString,
+                "turnID": turnID,
+                "replyID": nil,
+                "lifecycleGeneration": String(lifecycleToken.generation),
             ]
         )
     }
 
     private func cancelLivePlaybackReceipt(reason: String) {
-        livePlaybackStartTimeoutWorkItem?.cancel()
-        livePlaybackStartTimeoutWorkItem = nil
+        livePlaybackAcceptanceTimeoutWorkItem?.cancel()
+        livePlaybackAcceptanceTimeoutWorkItem = nil
+        livePlaybackTerminalWatchdogWorkItem?.cancel()
+        livePlaybackTerminalWatchdogWorkItem = nil
         guard let receipt = pendingLivePlaybackReceipt else { return }
         pendingLivePlaybackReceipt = nil
         PrivacySafeDiagnostics.log(
@@ -3723,6 +3802,32 @@ final class EchoViewController: UIViewController {
         )
     }
 
+    private func scheduleLivePlaybackAcceptanceTimeout(receiptID: UUID) {
+        livePlaybackAcceptanceTimeoutWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.handleLivePlaybackAcceptanceTimeout(receiptID: receiptID)
+        }
+        livePlaybackAcceptanceTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.livePlaybackProviderAcceptanceTimeout,
+            execute: workItem
+        )
+    }
+
+    private func scheduleLivePlaybackTerminalWatchdog(receiptID: UUID) {
+        livePlaybackAcceptanceTimeoutWorkItem?.cancel()
+        livePlaybackAcceptanceTimeoutWorkItem = nil
+        livePlaybackTerminalWatchdogWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.handleLivePlaybackTerminalWatchdog(receiptID: receiptID)
+        }
+        livePlaybackTerminalWatchdogWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.livePlaybackTerminalWatchdogTimeout,
+            execute: workItem
+        )
+    }
+
     private func acknowledgeLivePlaybackStarted(route: EchoLiveAudioRoute) {
         guard var receipt = pendingLivePlaybackReceipt,
               receipt.state.acknowledgeStart(for: route),
@@ -3733,8 +3838,7 @@ final class EchoViewController: UIViewController {
             return
         }
         pendingLivePlaybackReceipt = receipt
-        livePlaybackStartTimeoutWorkItem?.cancel()
-        livePlaybackStartTimeoutWorkItem = nil
+        scheduleLivePlaybackTerminalWatchdog(receiptID: receipt.id)
         PrivacySafeDiagnostics.log(
             subsystem: "Echo",
             event: "livePlaybackStarted",
@@ -3743,6 +3847,12 @@ final class EchoViewController: UIViewController {
                 "receipt": receipt.id.uuidString,
                 "turn": receipt.turnID,
             ]
+        )
+        PrivacySafeDiagnostics.log(
+            subsystem: "Echo",
+            event: "livePlaybackWatchdogAdvanced",
+            states: ["stage": "terminal", "route": route.diagnosticCode],
+            correlations: ["receipt": receipt.id.uuidString]
         )
     }
 
@@ -3763,12 +3873,19 @@ final class EchoViewController: UIViewController {
             return false
         }
         guard receipt.state.canComplete(for: route) else {
-            handleLivePlaybackStartTimeout(receiptID: receipt.id)
+            PrivacySafeDiagnostics.log(
+                subsystem: "Echo",
+                event: "livePlaybackCompletionIgnored",
+                states: ["reason": "terminalReceiptNotReached"],
+                correlations: ["receipt": receipt.id.uuidString]
+            )
             return false
         }
 
-        livePlaybackStartTimeoutWorkItem?.cancel()
-        livePlaybackStartTimeoutWorkItem = nil
+        livePlaybackAcceptanceTimeoutWorkItem?.cancel()
+        livePlaybackAcceptanceTimeoutWorkItem = nil
+        livePlaybackTerminalWatchdogWorkItem?.cancel()
+        livePlaybackTerminalWatchdogWorkItem = nil
         pendingLivePlaybackReceipt = nil
         PrivacySafeDiagnostics.log(
             subsystem: "Echo",
@@ -3782,53 +3899,314 @@ final class EchoViewController: UIViewController {
         return true
     }
 
-    private func handleLivePlaybackStartTimeout(receiptID: UUID) {
+    private func handleDelegatedPlaybackProgress(
+        _ progress: DialogEngineDelegatedPlaybackProgress,
+        route: EchoLiveAudioRoute
+    ) {
+        guard var receipt = pendingLivePlaybackReceipt,
+              receipt.state.route == route,
+              isCurrentDigitalHumanLifecycleToken(
+                receipt.lifecycleToken,
+                reason: "delegatedPlaybackProgress"
+              ) else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "Echo",
+                event: "delegatedPlaybackProgressIgnored",
+                states: [
+                    "route": route.diagnosticCode,
+                    "reason": "receiptOrLifecycleMismatch",
+                ],
+                correlations: ["reply": progress.replyID]
+            )
+            return
+        }
+
+        guard receipt.state.apply(progress, callbackRoute: route) else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "Echo",
+                event: "delegatedPlaybackProgressIgnored",
+                states: [
+                    "route": route.diagnosticCode,
+                    "phase": String(describing: receipt.state.phase),
+                    "reason": "phaseOrReplyMismatch",
+                ],
+                counts: [
+                    "answerCharacterCount": receipt.answerCharacterCount,
+                    "elapsedMsSinceSubmit": Int(Date().timeIntervalSince(receipt.submittedAt) * 1_000),
+                ],
+                correlations: [
+                    "receipt": receipt.id.uuidString,
+                    "reply": progress.replyID,
+                ]
+            )
+            return
+        }
+        pendingLivePlaybackReceipt = receipt
+
+        switch progress {
+        case .providerAccepted,
+             .audioActivityObserved,
+             .audioStarted,
+             .synthesisEnded:
+            scheduleLivePlaybackTerminalWatchdog(receiptID: receipt.id)
+            logDelegatedPlaybackDiagnostic(progress, receipt: receipt)
+            PrivacySafeDiagnostics.log(
+                subsystem: "Echo",
+                event: "livePlaybackWatchdogAdvanced",
+                states: ["stage": "terminal", "route": route.diagnosticCode],
+                counts: [
+                    "answerCharacterCount": receipt.answerCharacterCount,
+                    "elapsedMsSinceSubmit": Int(Date().timeIntervalSince(receipt.submittedAt) * 1_000),
+                ],
+                correlations: [
+                    "receiptID": receipt.id.uuidString,
+                    "turnID": receipt.turnID,
+                    "replyID": receipt.state.replyID,
+                    "lifecycleGeneration": String(receipt.lifecycleToken.generation),
+                ]
+            )
+        case .audioFinished:
+            logDelegatedPlaybackDiagnostic(progress, receipt: receipt)
+            guard completeLivePlaybackReceipt(route: route) else { return }
+            finishLiveEchoPlaybackAfterReceipt(
+                route: route,
+                lifecycleToken: receipt.lifecycleToken
+            )
+        case .interrupted(let replyID):
+            logDelegatedPlaybackDiagnostic(progress, receipt: receipt)
+            handleLivePlaybackFailure(
+                receiptID: receipt.id,
+                route: route,
+                lifecycleToken: receipt.lifecycleToken,
+                reason: "interrupted",
+                replyID: replyID
+            )
+        case .failed(let replyID, let code):
+            logDelegatedPlaybackDiagnostic(progress, receipt: receipt)
+            handleLivePlaybackFailure(
+                receiptID: receipt.id,
+                route: route,
+                lifecycleToken: receipt.lifecycleToken,
+                reason: "providerFailed:\(code)",
+                replyID: replyID
+            )
+        }
+    }
+
+    private func logDelegatedPlaybackDiagnostic(
+        _ progress: DialogEngineDelegatedPlaybackProgress,
+        receipt: EchoLivePlaybackReceipt
+    ) {
+        let event: String
+        switch progress {
+        case .providerAccepted:
+            event = "delegatedTTSProviderAccepted"
+        case .audioActivityObserved:
+            event = "delegatedTTSAudioActivityObserved"
+        case .audioStarted:
+            event = "delegatedTTSPlayerStarted"
+        case .synthesisEnded:
+            event = "delegatedTTSSynthesisEnded"
+        case .audioFinished:
+            event = "delegatedTTSPlayerFinished"
+        case .interrupted:
+            event = "delegatedTTSInterrupted"
+        case .failed:
+            event = "delegatedTTSFailed"
+        }
+        PrivacySafeDiagnostics.log(
+            subsystem: "Echo",
+            event: event,
+            states: ["route": receipt.state.route.diagnosticCode],
+            counts: [
+                "answerCharacterCount": receipt.answerCharacterCount,
+                "elapsedMsSinceSubmit": Int(Date().timeIntervalSince(receipt.submittedAt) * 1_000),
+            ],
+            correlations: [
+                "receiptID": receipt.id.uuidString,
+                "turnID": receipt.turnID,
+                "replyID": progress.replyID,
+                "lifecycleGeneration": String(receipt.lifecycleToken.generation),
+            ]
+        )
+    }
+
+    private func handleLivePlaybackAcceptanceTimeout(receiptID: UUID) {
         guard let receipt = pendingLivePlaybackReceipt,
               receipt.id == receiptID,
-              !receipt.state.didStart,
+              receipt.state.phase == .submitted,
               isUserControlledLiveSessionOpen,
               isCurrentDigitalHumanLifecycleToken(
                 receipt.lifecycleToken,
-                reason: "livePlaybackStartTimeout"
+                reason: "livePlaybackAcceptanceTimeout"
               ) else {
             return
         }
-        livePlaybackStartTimeoutWorkItem?.cancel()
-        livePlaybackStartTimeoutWorkItem = nil
-        pendingLivePlaybackReceipt = nil
-        pendingAIText = nil
-
+            PrivacySafeDiagnostics.log(
+                subsystem: "Echo",
+                event: "livePlaybackWatchdogExpired",
+            states: [
+                    "route": receipt.state.route.diagnosticCode,
+                    "stage": "providerAcceptance",
+                ],
+                counts: [
+                    "answerCharacterCount": receipt.answerCharacterCount,
+                    "elapsedMsSinceSubmit": Int(Date().timeIntervalSince(receipt.submittedAt) * 1_000),
+                ],
+                correlations: [
+                    "receiptID": receipt.id.uuidString,
+                    "turnID": receipt.turnID,
+                    "replyID": receipt.state.replyID,
+                    "lifecycleGeneration": String(receipt.lifecycleToken.generation),
+                ]
+            )
         switch receipt.state.route {
         case .volcengineLocalTTS:
-            DialogEngineManager.shared.interruptAI()
+            if !DialogEngineManager.shared.interruptAI() {
+                handleLivePlaybackFailure(
+                    receiptID: receipt.id,
+                    route: receipt.state.route,
+                    lifecycleToken: receipt.lifecycleToken,
+                    reason: "providerAcceptanceInterruptRejected",
+                    replyID: nil
+                )
+            }
         case .tencentDigitalHuman:
             digitalHumanRuntime?.interrupt()
-            digitalHumanConversation.clearProviderRequestAndResumeState()
-            echoRuntimeSessionCoordinator.finishInteraction()
-            releaseEchoAudioOwnerLease(
-                expectedOwner: .tencentDigitalHumanPlayback,
-                reason: "livePlaybackStartTimeout"
+            handleLivePlaybackFailure(
+                receiptID: receipt.id,
+                route: receipt.state.route,
+                lifecycleToken: receipt.lifecycleToken,
+                reason: "providerAcceptanceTimeout",
+                replyID: nil
             )
         case .unavailable:
-            break
+            handleLivePlaybackFailure(
+                receiptID: receipt.id,
+                route: receipt.state.route,
+                lifecycleToken: receipt.lifecycleToken,
+                reason: "routeUnavailable",
+                replyID: nil
+            )
         }
+    }
 
+    private func handleLivePlaybackTerminalWatchdog(receiptID: UUID) {
+        guard let receipt = pendingLivePlaybackReceipt,
+              receipt.id == receiptID,
+              receipt.state.phase != .submitted,
+              receipt.state.phase != .audioFinished,
+              receipt.state.phase != .interrupted,
+              receipt.state.phase != .failed,
+              isUserControlledLiveSessionOpen,
+              isCurrentDigitalHumanLifecycleToken(
+                receipt.lifecycleToken,
+                reason: "livePlaybackTerminalWatchdog"
+              ) else {
+            return
+        }
         PrivacySafeDiagnostics.log(
             subsystem: "Echo",
-            event: "livePlaybackStartTimedOut",
-            states: ["route": receipt.state.route.diagnosticCode],
+            event: "livePlaybackWatchdogExpired",
+            states: [
+                "route": receipt.state.route.diagnosticCode,
+                "stage": "terminal",
+            ],
+            counts: [
+                "answerCharacterCount": receipt.answerCharacterCount,
+                "elapsedMsSinceSubmit": Int(Date().timeIntervalSince(receipt.submittedAt) * 1_000),
+            ],
             correlations: [
-                "receipt": receipt.id.uuidString,
-                "turn": receipt.turnID,
+                "receiptID": receipt.id.uuidString,
+                "turnID": receipt.turnID,
+                "replyID": receipt.state.replyID,
+                "lifecycleGeneration": String(receipt.lifecycleToken.generation),
             ]
         )
-        failLiveEchoAnswer(
-            message: "回响语音未能开始播放，请再试一次",
-            lifecycleToken: receipt.lifecycleToken
+        switch receipt.state.route {
+        case .volcengineLocalTTS:
+            if !DialogEngineManager.shared.interruptAI() {
+                handleLivePlaybackFailure(
+                    receiptID: receipt.id,
+                    route: receipt.state.route,
+                    lifecycleToken: receipt.lifecycleToken,
+                    reason: "terminalInterruptRejected",
+                    replyID: receipt.state.replyID
+                )
+            }
+        case .tencentDigitalHuman:
+            digitalHumanRuntime?.interrupt()
+            handleLivePlaybackFailure(
+                receiptID: receipt.id,
+                route: receipt.state.route,
+                lifecycleToken: receipt.lifecycleToken,
+                reason: "terminalTimeout",
+                replyID: receipt.state.replyID
+            )
+        case .unavailable:
+            handleLivePlaybackFailure(
+                receiptID: receipt.id,
+                route: receipt.state.route,
+                lifecycleToken: receipt.lifecycleToken,
+                reason: "routeUnavailable",
+                replyID: receipt.state.replyID
+            )
+        }
+    }
+
+    private func handleLivePlaybackFailure(
+        receiptID: UUID,
+        route: EchoLiveAudioRoute,
+        lifecycleToken: DigitalHumanLifecycleToken,
+        reason: String,
+        replyID: String?
+    ) {
+        guard var receipt = pendingLivePlaybackReceipt,
+              receipt.id == receiptID,
+              receipt.state.route == route,
+              isUserControlledLiveSessionOpen,
+              isCurrentDigitalHumanLifecycleToken(
+                lifecycleToken,
+                reason: "livePlaybackFailure"
+              ) else {
+            return
+        }
+        if receipt.state.phase != .interrupted,
+           receipt.state.phase != .failed {
+            _ = receipt.state.apply(
+                .failed(replyID: replyID, code: reason),
+                callbackRoute: route
+            )
+        }
+        pendingLivePlaybackReceipt = receipt
+        cancelLivePlaybackReceipt(reason: "playbackFailure:\(reason)")
+        pendingAIText = nil
+        PrivacySafeDiagnostics.log(
+            subsystem: "Echo",
+            event: "livePlaybackFailed",
+            states: [
+                "route": route.diagnosticCode,
+                "reason": reason,
+            ],
+            counts: [
+                "answerCharacterCount": receipt.answerCharacterCount,
+                "elapsedMsSinceSubmit": Int(Date().timeIntervalSince(receipt.submittedAt) * 1_000),
+            ],
+            correlations: [
+                "receiptID": receiptID.uuidString,
+                "turnID": receipt.turnID,
+                "replyID": replyID,
+                "lifecycleGeneration": String(receipt.lifecycleToken.generation),
+            ]
+        )
+        renderVoiceStatus(
+            text: "本轮语音播放未完成，已继续聆听",
+            isVisible: true,
+            accessibilityIdentifier: "echoLivePlaybackFailedListening"
         )
         recoverLiveCaptureAfterPlaybackFailure(
-            route: receipt.state.route,
-            lifecycleToken: receipt.lifecycleToken
+            route: route,
+            lifecycleToken: lifecycleToken
         )
     }
 
@@ -3859,6 +4237,15 @@ final class EchoViewController: UIViewController {
             }
             self.viewModel.beginVoiceInteraction()
             self.armLiveUserInactivityTimeout(reason: "playbackStartTimeoutRecovery")
+            PrivacySafeDiagnostics.log(
+                subsystem: "Echo",
+                event: "liveCaptureResumed",
+                states: ["route": route.diagnosticCode],
+                correlations: [
+                    "turnID": self.digitalHumanConversation.currentTurnID ?? "none",
+                    "lifecycleGeneration": String(lifecycleToken.generation),
+                ]
+            )
         }
     }
 
@@ -7762,7 +8149,8 @@ final class EchoViewController: UIViewController {
             beginLivePlaybackReceipt(
                 route: .tencentDigitalHuman,
                 turnID: turnID,
-                lifecycleToken: lifecycleToken
+                lifecycleToken: lifecycleToken,
+                answerCharacterCount: replyText.count
             )
             sendEchoReplyToDigitalHumanRuntimeIfReady(replyText, source: source)
             return
@@ -7777,17 +8165,11 @@ final class EchoViewController: UIViewController {
         }
 
         pendingAIText = replyText
-        beginLivePlaybackReceipt(
-            route: .volcengineLocalTTS,
-            turnID: turnID,
-            lifecycleToken: lifecycleToken
-        )
         guard DialogEngineManager.shared.submitLiveAnswerText(
             replyText,
             traceID: traceID,
             source: source
         ) else {
-            cancelLivePlaybackReceipt(reason: "providerSubmissionRejected")
             pendingAIText = nil
             failLiveEchoAnswer(
                 message: "回响语音暂不可用，请稍后重试",
@@ -7795,6 +8177,12 @@ final class EchoViewController: UIViewController {
             )
             return
         }
+        beginLivePlaybackReceipt(
+            route: .volcengineLocalTTS,
+            turnID: turnID,
+            lifecycleToken: lifecycleToken,
+            answerCharacterCount: replyText.count
+        )
         recentEchoConversation.appendAssistantTurn(replyText)
         renderVoiceStatus(
             text: "正在回响",
@@ -9935,6 +10323,21 @@ extension EchoViewController: DialogEngineDelegate {
         }
     }
 
+    func onDelegatedPlaybackProgress(_ progress: DialogEngineDelegatedPlaybackProgress) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.validateEchoAccountLease(
+                    at: .ui,
+                    reason: "delegatedPlaybackProgress"
+                  ),
+                  self.isUserControlledLiveSessionOpen else { return }
+            self.handleDelegatedPlaybackProgress(
+                progress,
+                route: .volcengineLocalTTS
+            )
+        }
+    }
+
     func onTTSPlaybackInterruptedByUser() {
         DispatchQueue.main.async { [weak self] in
             guard let self,
@@ -9974,43 +10377,67 @@ extension EchoViewController: DialogEngineDelegate {
             guard self.completeLivePlaybackReceipt(route: .volcengineLocalTTS) else {
                 return
             }
-            if self.routeEchoAudioThroughDigitalHuman,
-               self.hasTencentDigitalHumanProviderSpeechInFlight {
-                print("[TencentDigitalHuman] waiting for provider TextOver before finishing Echo reply")
-                return
-            }
-            if !self.isUserControlledLiveSessionOpen {
-                self.releaseEchoAudioOwnerLease(
-                    expectedOwner: .echoLocalPlayback,
-                    reason: "dialogTTSFinished"
-                )
-            }
-            self.stopDigitalHumanAudioLevelMetering()
-            guard self.markEchoReplyDelivered() else {
-                PrivacySafeDiagnostics.log(
-                    subsystem: "Echo",
-                    event: "replyDeliveryRejectedBeforeCaptureResume",
-                    states: ["reason": "turnIntentRejected"]
-                )
-                return
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                guard let self,
-                      self.validateEchoAccountLease(at: .timer, reason: "ttsFinishedResume"),
-                      self.isCurrentDigitalHumanLifecycleToken(
-                        lifecycleToken,
-                        reason: "ttsFinishedResume"
-                      ) else { return }
-                if DialogEngineManager.shared.isDialogActive {
-                    if self.prepareEchoCaptureAudioSession(reason: "dialogTTSFinishedResume") {
-                        self.viewModel.beginVoiceInteraction()
-                        self.armLiveUserInactivityTimeout(reason: "dialogTTSFinishedResume")
-                    } else {
-                        self.resetEchoViewModelToIdle()
-                    }
+            self.finishLiveEchoPlaybackAfterReceipt(
+                route: .volcengineLocalTTS,
+                lifecycleToken: lifecycleToken
+            )
+        }
+    }
+
+    private func finishLiveEchoPlaybackAfterReceipt(
+        route: EchoLiveAudioRoute,
+        lifecycleToken: DigitalHumanLifecycleToken
+    ) {
+        guard !viewModel.isNeutralSafetyMode,
+              !viewModel.isWaitingForDelayedReply else { return }
+        guard activeVoiceInteractionToken(reason: "playbackFinished") != nil else {
+            return
+        }
+        if routeEchoAudioThroughDigitalHuman,
+           hasTencentDigitalHumanProviderSpeechInFlight {
+            print("[TencentDigitalHuman] waiting for provider TextOver before finishing Echo reply")
+            return
+        }
+        if !isUserControlledLiveSessionOpen {
+            releaseEchoAudioOwnerLease(
+                expectedOwner: .echoLocalPlayback,
+                reason: "dialogTTSFinished"
+            )
+        }
+        stopDigitalHumanAudioLevelMetering()
+        guard markEchoReplyDelivered() else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "Echo",
+                event: "replyDeliveryRejectedBeforeCaptureResume",
+                states: ["reason": "turnIntentRejected"]
+            )
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            guard let self,
+                  self.validateEchoAccountLease(at: .timer, reason: "ttsFinishedResume"),
+                  self.isCurrentDigitalHumanLifecycleToken(
+                    lifecycleToken,
+                    reason: "ttsFinishedResume"
+                  ) else { return }
+            if DialogEngineManager.shared.isDialogActive {
+                if self.prepareEchoCaptureAudioSession(reason: "dialogTTSFinishedResume") {
+                    self.viewModel.beginVoiceInteraction()
+                    self.armLiveUserInactivityTimeout(reason: "dialogTTSFinishedResume")
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "Echo",
+                        event: "liveCaptureResumed",
+                        states: ["route": route.diagnosticCode],
+                        correlations: [
+                            "turnID": self.digitalHumanConversation.currentTurnID ?? "none",
+                            "lifecycleGeneration": String(lifecycleToken.generation),
+                        ]
+                    )
                 } else {
                     self.resetEchoViewModelToIdle()
                 }
+            } else {
+                self.resetEchoViewModelToIdle()
             }
         }
     }

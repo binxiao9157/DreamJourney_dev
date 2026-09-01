@@ -398,6 +398,7 @@ final class FeatureGateService {
         .publication,
         .publicationGrantManagement,
         .publicationVisitor,
+        .narrativeWriting,
     ]
 
     private static let serverPolicyManagedGeneralFeatures: Set<DJFeature> = [
@@ -658,6 +659,12 @@ final class FeatureGateService {
             return .publicationVisitor
         }
         let publicationPathComponents = normalizedPath.split(separator: "/")
+        if publicationPathComponents.count >= 4,
+           publicationPathComponents[0] == "v2",
+           publicationPathComponents[1] == "vaults",
+           publicationPathComponents[3] == "narrative-projects" {
+            return .narrativeWriting
+        }
         if publicationPathComponents.count >= 2,
            publicationPathComponents[0] == "v2",
            publicationPathComponents[1] == "publication-grants" {
@@ -13885,6 +13892,101 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                     }
                 }
             }
+    }
+
+    func requestNarrativeJSON(
+        path: String,
+        method: String,
+        payload: [String: Any]? = nil,
+        accountLease: AccountLease,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        requestNarrativeJSON(
+            path: path,
+            method: method,
+            payload: payload,
+            accountLease: accountLease,
+            allowsPolicyRefresh: true,
+            completion: completion
+        )
+    }
+
+    private func requestNarrativeJSON(
+        path: String,
+        method: String,
+        payload: [String: Any]?,
+        accountLease: AccountLease,
+        allowsPolicyRefresh: Bool,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        let httpMethod: HTTPMethod
+        switch method.uppercased() {
+        case "GET": httpMethod = .get
+        case "POST": httpMethod = .post
+        case "DELETE": httpMethod = .delete
+        default:
+            completion(.failure(ClientError.invalidJSONResponse))
+            return
+        }
+        let decision = requestFeatureDecision(for: .narrativeWriting)
+        guard decision.allowed else {
+            if allowsPolicyRefresh,
+               NarrativeWritingPolicyRefreshPolicy.shouldRefresh(after: decision.reason) {
+                FeatureGateService.shared.refreshPolicy(for: .narrativeWriting) { [weak self] result in
+                    guard let self else { return }
+                    guard self.isCurrentAccountLease(
+                        nil,
+                        applicationLease: accountLease,
+                        at: .request
+                    ) else {
+                        completion(.failure(ClientError.accountScopeChanged))
+                        return
+                    }
+                    switch result {
+                    case .success:
+                        let refreshedRoute = FeatureGateService.shared
+                            .captureServerPolicyManagedRoute(.narrativeWriting)
+                        guard refreshedRoute.allowed else {
+                            completion(.failure(ClientError.featurePolicyDenied(
+                                feature: DJFeature.narrativeWriting.rawValue,
+                                reason: refreshedRoute.reason
+                            )))
+                            return
+                        }
+                        self.requestNarrativeJSON(
+                            path: path,
+                            method: method,
+                            payload: payload,
+                            accountLease: accountLease,
+                            allowsPolicyRefresh: false,
+                            completion: completion
+                        )
+                    case .failure(let error):
+                        completion(.failure(error))
+                    }
+                }
+                return
+            }
+            completion(.failure(ClientError.featurePolicyDenied(
+                feature: DJFeature.narrativeWriting.rawValue,
+                reason: String(describing: decision.reason)
+            )))
+            return
+        }
+        requestJSON(
+            path: path,
+            method: httpMethod,
+            payload: payload,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision,
+            additionalHeaders: [
+                "Cache-Control": "no-cache, no-store",
+                "Pragma": "no-cache",
+            ],
+            completion: completion
+        )
     }
 
     private func isCurrentAccountLease(
