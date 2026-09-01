@@ -2586,6 +2586,40 @@ final class DialogEngineScopedTTSVoiceSelectionStoreTests: XCTestCase {
     }
 }
 
+final class DialogEngineAudiblePlaybackPolicyTests: XCTestCase {
+    func testEnabledPlaybackUsesOnlyProviderPlayer() {
+        let policy = DialogEngineAudiblePlaybackPolicy(enablePlayer: true)
+
+        XCTAssertTrue(policy.providerPlayerEnabled)
+        XCTAssertFalse(policy.applicationPCMPlaybackEnabled)
+    }
+
+    func testDisabledPlaybackCreatesNoAudibleOutput() {
+        let policy = DialogEngineAudiblePlaybackPolicy(enablePlayer: false)
+
+        XCTAssertFalse(policy.providerPlayerEnabled)
+        XCTAssertFalse(policy.applicationPCMPlaybackEnabled)
+    }
+
+    func testDelegatedPlaybackCompletionWatchdogUsesShortMinimumDelay() {
+        XCTAssertEqual(
+            DialogEngineDelegatedPlaybackCompletionPolicy.fallbackDelay(characterCount: 0),
+            1.5
+        )
+        XCTAssertEqual(
+            DialogEngineDelegatedPlaybackCompletionPolicy.fallbackDelay(characterCount: 10),
+            1.5
+        )
+    }
+
+    func testDelegatedPlaybackCompletionWatchdogCapsLongReplies() {
+        XCTAssertEqual(
+            DialogEngineDelegatedPlaybackCompletionPolicy.fallbackDelay(characterCount: 10_000),
+            5.0
+        )
+    }
+}
+
 private final class DeferredEchoContextBuildTransport: EchoContextBuildTransport {
     enum TestError: Error {
         case failed

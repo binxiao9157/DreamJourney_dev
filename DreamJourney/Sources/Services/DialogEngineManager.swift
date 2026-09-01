@@ -319,6 +319,28 @@ enum DialogAnswerAuthority: Equatable, Sendable {
     case dreamJourneyBackend
 }
 
+/// Selects exactly one audible output for a dialog session. SpeechEngine's
+/// internal player is the low-latency Live path; decoder PCM must not be
+/// replayed by the app after the same audio has already been heard.
+struct DialogEngineAudiblePlaybackPolicy: Equatable, Sendable {
+    let providerPlayerEnabled: Bool
+    let applicationPCMPlaybackEnabled: Bool
+
+    init(enablePlayer: Bool) {
+        providerPlayerEnabled = enablePlayer
+        applicationPCMPlaybackEnabled = false
+    }
+}
+
+/// Recovers the Live state when the provider player omits or reorders its
+/// finish callback. The watchdog never starts another audio output.
+struct DialogEngineDelegatedPlaybackCompletionPolicy: Equatable, Sendable {
+    static func fallbackDelay(characterCount: Int) -> TimeInterval {
+        let normalizedCount = max(0, characterCount)
+        return max(1.5, min(5.0, 1.0 + Double(normalizedCount) * 0.04))
+    }
+}
+
 enum DialogTextReplyPlaybackError: LocalizedError, Equatable {
     case invalidText
     case sessionBusy
@@ -934,6 +956,8 @@ final class DialogEngineManager: NSObject {
     private var delegatedClientPlaybackReplyID: String?
     private var isDelegatedClientTTSSubmissionPending = false
     private var delegatedClientPlaybackDidStart = false
+    private var delegatedClientPlaybackCharacterCount = 0
+    private var delegatedClientPlaybackCompletionFallbackWorkItem: DispatchWorkItem?
     private var delegatedClientDecodedPCM = Data()
     private let delegatedClientPCMPlayer = DialogPCMPlaybackController()
 
@@ -1682,6 +1706,7 @@ final class DialogEngineManager: NSObject {
         }
 
         resetDelegatedClientPlaybackState()
+        delegatedClientPlaybackCharacterCount = normalized.count
         isDelegatedClientTTSSubmissionPending = true
 
         // This SDK build reliably routes SayHello through the same
@@ -1727,11 +1752,47 @@ final class DialogEngineManager: NSObject {
     }
 
     private func resetDelegatedClientPlaybackState() {
+        delegatedClientPlaybackCompletionFallbackWorkItem?.cancel()
+        delegatedClientPlaybackCompletionFallbackWorkItem = nil
         delegatedClientPCMPlayer.stop()
         delegatedClientPlaybackReplyID = nil
         isDelegatedClientTTSSubmissionPending = false
         delegatedClientPlaybackDidStart = false
+        delegatedClientPlaybackCharacterCount = 0
         delegatedClientDecodedPCM.removeAll(keepingCapacity: false)
+    }
+
+    private func scheduleDelegatedClientPlaybackCompletionFallback(
+        callbackContext: DialogEngineProviderCallbackContext
+    ) {
+        guard let replyID = delegatedClientPlaybackReplyID else { return }
+        delegatedClientPlaybackCompletionFallbackWorkItem?.cancel()
+        let delay = DialogEngineDelegatedPlaybackCompletionPolicy.fallbackDelay(
+            characterCount: delegatedClientPlaybackCharacterCount
+        )
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.delegatedClientPlaybackReplyID == replyID else { return }
+            let shouldAcknowledgeStart = !self.delegatedClientPlaybackDidStart
+            self.delegatedClientPlaybackDidStart = true
+            self.isAISpeaking = true
+            if shouldAcknowledgeStart {
+                self.deliverProviderCallback(callbackContext) { _, delegate in
+                    delegate.onTTSPlaybackStarted()
+                }
+            }
+            self.resetDelegatedClientPlaybackState()
+            self.isAISpeaking = false
+            DDLogWarn(
+                "[DialogEngine] delegated Live provider finish callback timed out; " +
+                "completed playback state with watchdog"
+            )
+            self.deliverProviderCallback(callbackContext) { _, delegate in
+                delegate.onTTSFinished()
+            }
+        }
+        delegatedClientPlaybackCompletionFallbackWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     private func acceptsDelegatedTTSEvent(
@@ -1752,7 +1813,9 @@ final class DialogEngineManager: NSObject {
                 return false
             }
             if isClientTriggered {
+                let submittedCharacterCount = delegatedClientPlaybackCharacterCount
                 resetDelegatedClientPlaybackState()
+                delegatedClientPlaybackCharacterCount = submittedCharacterCount
                 delegatedClientTTSReplyIDs.insert(replyID)
                 delegatedServerTTSReplyIDs.remove(replyID)
                 delegatedClientPlaybackReplyID = replyID
@@ -2181,7 +2244,13 @@ final class DialogEngineManager: NSObject {
 
         // 启用内置播放器。数字人接管声音时，SpeechEngine 只负责 ASR/对话文本，
         // 不创建播放器，也不抢腾讯云渲染的远端音频会话。
-        engine.setBoolParam(config.enablePlayer, forKey: SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_BOOL)
+        let audiblePlaybackPolicy = DialogEngineAudiblePlaybackPolicy(
+            enablePlayer: config.enablePlayer
+        )
+        engine.setBoolParam(
+            audiblePlaybackPolicy.providerPlayerEnabled,
+            forKey: SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_BOOL
+        )
         // This SDK build emits continuous silent buffers when the dialog player
         // callback is enabled. Keep the verified internal speaker path active;
         // encoded TTS packets provide the playback receipt instead.
@@ -2189,14 +2258,18 @@ final class DialogEngineManager: NSObject {
             false,
             forKey: SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_AUDIO_CALLBACK_BOOL
         )
-        let usesApplicationPCMPlayback = answerAuthority == .dreamJourneyBackend
-            && config.enablePlayer
         engine.setBoolParam(
-            usesApplicationPCMPlayback,
+            audiblePlaybackPolicy.applicationPCMPlaybackEnabled,
             forKey: SE_PARAMS_KEY_DIALOG_ENABLE_DECODER_AUDIO_CALLBACK_BOOL
         )
-        engine.setBoolParam(!config.enablePlayer, forKey: SE_PARAMS_KEY_PREVENT_PLAYER_CREATION_BOOL)
-        engine.setBoolParam(!config.enablePlayer, forKey: SE_PARAMS_KEY_FULLLINK_DISABLE_TTS_BOOL)
+        engine.setBoolParam(
+            !audiblePlaybackPolicy.providerPlayerEnabled,
+            forKey: SE_PARAMS_KEY_PREVENT_PLAYER_CREATION_BOOL
+        )
+        engine.setBoolParam(
+            !audiblePlaybackPolicy.providerPlayerEnabled,
+            forKey: SE_PARAMS_KEY_FULLLINK_DISABLE_TTS_BOOL
+        )
         engine.setBoolParam(false, forKey: SE_PARAMS_KEY_RESET_AUDIOSESSION_BOOL)
         engine.setBoolParam(false, forKey: SE_PARAMS_KEY_RESTART_AUDIOSESSION_BOOL)
         engine.setBoolParam(config.enablePlayer, forKey: SE_PARAMS_KEY_RESUME_OTHERS_INTERRUPTED_PLAYBACK_BOOL)
@@ -2204,7 +2277,7 @@ final class DialogEngineManager: NSObject {
             "[DialogEngine] local player config enablePlayer=\(config.enablePlayer), " +
             "preventPlayerCreation=\(!config.enablePlayer), " +
             "fullLinkDisableTTS=\(!config.enablePlayer), " +
-            "applicationPCMPlayback=\(usesApplicationPCMPlayback)"
+            "applicationPCMPlayback=\(audiblePlaybackPolicy.applicationPCMPlaybackEnabled)"
         )
 
         // 音量回调
@@ -2992,8 +3065,13 @@ extension DialogEngineManager {
             }
             if sessionLifetimePolicy == .userControlledLive,
                answerAuthority == .dreamJourneyBackend {
-                DDLogInfo("[DialogEngine] delegated Live synthesis ended; starting decoded PCM playback")
-                playDelegatedClientDecodedPCM(callbackContext: callbackContext)
+                DDLogInfo(
+                    "[DialogEngine] delegated Live synthesis ended; " +
+                    "waiting for provider player completion with watchdog"
+                )
+                scheduleDelegatedClientPlaybackCompletionFallback(
+                    callbackContext: callbackContext
+                )
                 return
             }
             isAISpeaking = false
@@ -3008,7 +3086,7 @@ extension DialogEngineManager {
             break
 
         case SEDecoderAudioData:
-            appendDelegatedClientDecodedPCM(data)
+            break
 
         case SEPlayerStartPlayAudio:
             guard config.enablePlayer else {
@@ -3040,8 +3118,14 @@ extension DialogEngineManager {
             }
             if sessionLifetimePolicy == .userControlledLive,
                answerAuthority == .dreamJourneyBackend {
-                guard delegatedClientPlaybackReplyID != nil,
-                      delegatedClientPlaybackDidStart else { return }
+                guard delegatedClientPlaybackReplyID != nil else { return }
+                if !delegatedClientPlaybackDidStart {
+                    delegatedClientPlaybackDidStart = true
+                    isAISpeaking = true
+                    deliverProviderCallback(callbackContext) { _, delegate in
+                        delegate.onTTSPlaybackStarted()
+                    }
+                }
                 resetDelegatedClientPlaybackState()
                 isAISpeaking = false
                 deliverProviderCallback(callbackContext) { _, delegate in
