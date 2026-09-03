@@ -324,11 +324,45 @@ enum DialogAnswerAuthority: Equatable, Sendable {
 /// replayed by the app after the same audio has already been heard.
 struct DialogEngineAudiblePlaybackPolicy: Equatable, Sendable {
     let providerPlayerEnabled: Bool
+    let providerPlayerAudioCallbackEnabled: Bool
     let applicationPCMPlaybackEnabled: Bool
 
-    init(enablePlayer: Bool) {
+    init(enablePlayer: Bool, usesDelegatedLivePlayback: Bool = false) {
         providerPlayerEnabled = enablePlayer
+        providerPlayerAudioCallbackEnabled = enablePlayer && usesDelegatedLivePlayback
         applicationPCMPlaybackEnabled = false
+    }
+}
+
+/// The recorder resume contract distinguishes a real provider directive from
+/// an already-running recorder and from a rejected/inactive session. A Bool
+/// cannot tell those cases apart at a recovery boundary.
+enum DialogRecorderResumeOutcome: Equatable, Sendable {
+    case directiveSent
+    case alreadyRunning
+    case sessionInactive
+    case directiveRejected(code: Int)
+
+    var isSuccess: Bool {
+        switch self {
+        case .directiveSent, .alreadyRunning:
+            return true
+        case .sessionInactive, .directiveRejected:
+            return false
+        }
+    }
+
+    var diagnosticCode: String {
+        switch self {
+        case .directiveSent:
+            return "directiveSent"
+        case .alreadyRunning:
+            return "alreadyRunning"
+        case .sessionInactive:
+            return "sessionInactive"
+        case .directiveRejected(let code):
+            return "directiveRejected_\(code)"
+        }
     }
 }
 
@@ -788,9 +822,15 @@ final class DialogEngineManager: NSObject {
 
     @discardableResult
     func resumeRecorder() -> Bool {
-        guard isDialogActive else { return false }
+        resumeRecorderOutcome().isSuccess
+    }
+
+    @discardableResult
+    func resumeRecorderOutcome() -> DialogRecorderResumeOutcome {
+        guard isDialogActive else { return .sessionInactive }
+        guard isRecorderPaused else { return .alreadyRunning }
         isRecorderPaused = false
-        return true
+        return .directiveSent
     }
 
     @discardableResult
@@ -803,9 +843,12 @@ final class DialogEngineManager: NSObject {
               isActiveAccountLeaseValid(at: .runtime) else { return false }
         lastSubmittedTurnKnowledgeContextSource = source
         lastSubmittedTurnKnowledgeContextLength = content.utf8.count
-        print(
-            "[DialogEngine][UIQA] turn RAG submitted " +
-            "source=\(source) traceID=\(traceID ?? "none") bytes=\(content.utf8.count)"
+        PrivacySafeDiagnostics.log(
+            subsystem: "DialogEngine",
+            event: "uiQATurnKnowledgeContextSubmitted",
+            states: ["source": source],
+            counts: ["contentBytes": content.utf8.count],
+            correlations: ["traceID": PrivacySafeDiagnostics.correlationHash(traceID)]
         )
         return true
     }
@@ -876,10 +919,13 @@ final class DialogEngineManager: NSObject {
 
         DialogPromptDebugRecorder.record(prompt: prompt)
         let snapshot = DialogPromptDebugRecorder.lastSnapshot
-        print(
-            "[UI_QA] Echo archive prompt containsArchiveContext=\(snapshot?.containsArchiveContext == true) " +
-            "available=\(archiveSnapshot.availableItemCount) " +
-            "entries=\(archiveSnapshot.debugSummary())"
+        PrivacySafeDiagnostics.log(
+            subsystem: "UI_QA",
+            event: "echoArchivePromptRecorded",
+            states: [
+                "containsArchiveContext": snapshot?.containsArchiveContext == true ? "true" : "false"
+            ],
+            counts: ["availableItemCount": archiveSnapshot.availableItemCount]
         )
         #endif
     }
@@ -1069,6 +1115,7 @@ final class DialogEngineManager: NSObject {
     private var pendingTextReplyPlayback: DialogEngineTextReplyPlayback?
     private var textReplyPlaybackFallbackWorkItem: DispatchWorkItem?
     private var engineAnswerAuthority: DialogAnswerAuthority?
+    private var engineUsesDelegatedLivePlayback = false
     private var isDelegatedClientTTSRouteSelected = false
     private var delegatedClientTTSReplyIDs = Set<String>()
     private var delegatedServerTTSReplyIDs = Set<String>()
@@ -1078,6 +1125,14 @@ final class DialogEngineManager: NSObject {
     private var delegatedClientPlaybackAudioActivityObserved = false
     private var delegatedClientDecodedPCM = Data()
     private let delegatedClientPCMPlayer = DialogPCMPlaybackController()
+    private var runtimeSystemRole: String?
+    private var runtimeSpeakingStyle: String?
+    private var runtimeFormalMemorySnapshot: [String: Any]?
+    private var runtimeProjectionCheckpoint: String?
+    private var runtimeProductSessionID: String?
+    private var liveStartSubmittedAt: Date?
+    private var liveStartDirectiveReturnCode: Int?
+    private var liveFirstResponseObserved = false
 
     /// 引擎是否就绪（已初始化完成）
     private(set) var isEngineReady = false
@@ -1420,6 +1475,12 @@ final class DialogEngineManager: NSObject {
         config.resourceID = resourceID
         config.uid = runtimeConfig.uid ?? config.uid
         config.requestHeaders = [header: token]
+        runtimeSystemRole = runtimeConfig.systemRole
+        runtimeSpeakingStyle = runtimeConfig.speakingStyle
+        runtimeFormalMemorySnapshot = runtimeConfig.formalMemorySnapshot
+        runtimeProjectionCheckpoint = runtimeConfig.projectionCheckpoint
+        runtimeProductSessionID = runtimeConfig.productSessionID
+        recordLiveSnapshotDecoded(runtimeConfig)
         DDLogInfo("[DialogEngine] backend realtime proxy ticket applied")
         return true
     }
@@ -1531,6 +1592,8 @@ final class DialogEngineManager: NSObject {
             self.engineCallbackGeneration = callbackGeneration
             self.engineDelegateProxy = delegateProxy
             self.engineAnswerAuthority = answerAuthority
+            self.engineUsesDelegatedLivePlayback = sessionLifetimePolicy == .userControlledLive
+                && answerAuthority == .dreamJourneyBackend
             self.isEngineReady = true
             print("[DialogEngine] ✅ 引擎初始化成功")
             DDLogInfo("[DialogEngine] 引擎初始化成功")
@@ -1564,7 +1627,11 @@ final class DialogEngineManager: NSObject {
             requiresEngineRecreationBeforeNextDialog = true
         }
         rotateProviderEngineBeforeNextDialogIfNeeded()
-        if isEngineReady, engineAnswerAuthority != answerAuthority {
+        let usesDelegatedLivePlayback = lifetimePolicy == .userControlledLive
+            && answerAuthority == .dreamJourneyBackend
+        if isEngineReady,
+           (engineAnswerAuthority != answerAuthority
+            || engineUsesDelegatedLivePlayback != usesDelegatedLivePlayback) {
             destroyEngine()
         }
         let dialogOperationId = UUID()
@@ -1574,6 +1641,9 @@ final class DialogEngineManager: NSObject {
         self.usesTurnScopedKnowledgeContext = usesTurnScopedKnowledgeContext
         sessionLifetimePolicy = lifetimePolicy
         self.answerAuthority = answerAuthority
+        liveStartSubmittedAt = nil
+        liveStartDirectiveReturnCode = nil
+        liveFirstResponseObserved = false
         resetDelegatedTTSRoutingState()
         isRecorderPaused = false
         suppressGreetingForNextStart = !sendsGreeting
@@ -1742,18 +1812,26 @@ final class DialogEngineManager: NSObject {
 
     @discardableResult
     func resumeRecorder() -> Bool {
-        guard isDialogActive, isRecorderPaused, let engine else {
-            return isDialogActive && !isRecorderPaused
+        resumeRecorderOutcome().isSuccess
+    }
+
+    @discardableResult
+    func resumeRecorderOutcome() -> DialogRecorderResumeOutcome {
+        guard isDialogActive else { return .sessionInactive }
+        guard isRecorderPaused else {
+            resetSilenceTimer()
+            return .alreadyRunning
         }
+        guard let engine else { return .sessionInactive }
         let result = engine.send(SEDirectiveResumeRecorder)
         guard result == SENoError else {
             DDLogError("[DialogEngine] ResumeRecorder failed: \(result.rawValue)")
-            return false
+            return .directiveRejected(code: Int(result.rawValue))
         }
         isRecorderPaused = false
         resetSilenceTimer()
         DDLogInfo("[DialogEngine] recorder resumed in existing provider Live session")
-        return true
+        return .directiveSent
     }
 
     /// 播报开场白（对应豆包SDK的 SayHello 事件 3006）
@@ -1763,7 +1841,7 @@ final class DialogEngineManager: NSObject {
         let greeting = content ?? "您好呀，我是寻梦环游，今天想跟您聊聊天，听听您的故事。"
         let json = "{\"content\": \"\(greeting)\"}"
         engine.send(SEDirectiveEventSayHello, data: json)
-        DDLogInfo("[DialogEngine] 开场白已发送: \(greeting)")
+        DDLogInfo("[DialogEngine] greeting submitted characters=\(greeting.count)")
     }
 
     /// 客户端打断AI（对应豆包SDK的 ClientInterrupt 事件 3010）
@@ -2119,6 +2197,10 @@ final class DialogEngineManager: NSObject {
         engineCallbackGeneration = nil
         engineDelegateProxy = nil
         engineAnswerAuthority = nil
+        engineUsesDelegatedLivePlayback = false
+        liveStartSubmittedAt = nil
+        liveStartDirectiveReturnCode = nil
+        liveFirstResponseObserved = false
         activeDialogBindingHandle = nil
         activeDialogOperationId = nil
         providerSessionOperationId = nil
@@ -2369,17 +2451,16 @@ final class DialogEngineManager: NSObject {
         // 启用内置播放器。数字人接管声音时，SpeechEngine 只负责 ASR/对话文本，
         // 不创建播放器，也不抢腾讯云渲染的远端音频会话。
         let audiblePlaybackPolicy = DialogEngineAudiblePlaybackPolicy(
-            enablePlayer: config.enablePlayer
+            enablePlayer: config.enablePlayer,
+            usesDelegatedLivePlayback: sessionLifetimePolicy == .userControlledLive
+                && answerAuthority == .dreamJourneyBackend
         )
         engine.setBoolParam(
             audiblePlaybackPolicy.providerPlayerEnabled,
             forKey: SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_BOOL
         )
-        // This SDK build emits continuous silent buffers when the dialog player
-        // callback is enabled. Keep the verified internal speaker path active;
-        // encoded TTS packets provide the playback receipt instead.
         engine.setBoolParam(
-            false,
+            audiblePlaybackPolicy.providerPlayerAudioCallbackEnabled,
             forKey: SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_AUDIO_CALLBACK_BOOL
         )
         engine.setBoolParam(
@@ -2401,6 +2482,7 @@ final class DialogEngineManager: NSObject {
             "[DialogEngine] local player config enablePlayer=\(config.enablePlayer), " +
             "preventPlayerCreation=\(!config.enablePlayer), " +
             "fullLinkDisableTTS=\(!config.enablePlayer), " +
+            "playerAudioCallback=\(audiblePlaybackPolicy.providerPlayerAudioCallbackEnabled), " +
             "applicationPCMPlayback=\(audiblePlaybackPolicy.applicationPCMPlaybackEnabled)"
         )
 
@@ -2468,7 +2550,7 @@ final class DialogEngineManager: NSObject {
             "dialog": [
                 "bot_name": "寻梦环游",
                 "system_role": systemRole,
-                "speaking_style": speakingStyle,
+                "speaking_style": resolvedSpeakingStyle(),
                 "extra": [
                     "model": "1.2.1.1"               // O2.0版本，精品音色
                 ]
@@ -2485,12 +2567,19 @@ final class DialogEngineManager: NSObject {
         } else {
             print("[DialogEngine] Tencent audio owner active; StartEngine omits Fire TTS config")
         }
+        var livePromptHash: String?
         if !config.systemPrompt.isEmpty {
-            var fullPrompt = config.systemPrompt
+            let providerOwnedLive = answerAuthority == .provider
+                && sessionLifetimePolicy == .userControlledLive
+            var fullPrompt = providerOwnedLive
+                ? (runtimeSystemRole ?? config.systemPrompt)
+                : config.systemPrompt
             let context = DigitalHumanContextStore.shared.current
             fullPrompt += buildDigitalHumanModePolicy(context: context)
-            if shouldExposePersonalContext(for: context),
-               !usesTurnScopedKnowledgeContext {
+            if providerOwnedLive {
+                fullPrompt += buildFormalMemorySnapshotPromptSection()
+            } else if shouldExposePersonalContext(for: context),
+                      !usesTurnScopedKnowledgeContext {
                 // 注入跨会话记忆上下文
                 let memory = ConversationMemoryManager.shared.currentMemory
                 if memory.sessionCount > 0 {
@@ -2506,6 +2595,7 @@ final class DialogEngineManager: NSObject {
             #if DEBUG || UI_QA_SIMULATOR
             DialogPromptDebugRecorder.record(prompt: fullPrompt)
             #endif
+            livePromptHash = recordLivePromptPrepared(systemRole: fullPrompt)
             // 正确写入 dialog 子字典的 system_role（而非 dialogConfig 顶层）
             if var dialog = dialogConfig["dialog"] as? [String: Any] {
                 dialog["system_role"] = fullPrompt
@@ -2541,10 +2631,15 @@ final class DialogEngineManager: NSObject {
             configJSON = "{\"dialog\":{\"bot_name\":\"\(config.botName)\"}}"
         }
 
-        // 启动引擎（SDK 内部自动处理连接、会话、录音）
-        print("[DialogEngine] 发送 StartEngine 指令, data: \(configJSON)")
+        // 启动引擎（SDK 内部自动处理连接、会话、录音）。StartEngine 的
+        // JSON 可能包含正式记忆，日志只保留形状、哈希和返回码。
+        liveStartSubmittedAt = isProviderOwnedLive ? Date() : nil
+        recordLiveStartEngineSubmitted(
+            promptHash: livePromptHash,
+            dialogOperationID: dialogOperationId
+        )
         let startResult = engine.send(SEDirectiveStartEngine, data: configJSON)
-        print("[DialogEngine] StartEngine 返回: \(startResult.rawValue)")
+        liveStartDirectiveReturnCode = Int(startResult.rawValue)
 
         if startResult != SENoError {
             DDLogError("[DialogEngine] StartEngine 失败: \(startResult.rawValue)")
@@ -2576,6 +2671,158 @@ final class DialogEngineManager: NSObject {
         }
 
         print("[DialogEngine] ⏳ 引擎启动中，等待回调...")
+    }
+
+    private func resolvedSpeakingStyle() -> String {
+        guard answerAuthority == .provider,
+              sessionLifetimePolicy == .userControlledLive else {
+            return speakingStyle
+        }
+        return runtimeSpeakingStyle ?? speakingStyle
+    }
+
+    /// The Live ticket contains a bounded, server-built snapshot of the
+    /// current formal memory. It is serialized into the provider role prompt
+    /// so the provider can answer continuously without a per-turn backend hop.
+    private func buildFormalMemorySnapshotPromptSection() -> String {
+        guard let snapshot = runtimeFormalMemorySnapshot,
+              JSONSerialization.isValidJSONObject(snapshot),
+              let data = try? JSONSerialization.data(
+                  withJSONObject: snapshot,
+                  options: [.sortedKeys]
+              ),
+              let json = String(data: data, encoding: .utf8),
+              !json.isEmpty else {
+            return "\n\n【正式记忆快照】\n当前没有可用的已确认正式记忆。事实问题请明确说明不知道，不要猜测。"
+        }
+        return "\n\n【正式记忆快照】\n只允许引用以下服务端已确认事实；不得把助手回应或用户本轮未确认内容当作正式记忆。\n" + json
+    }
+
+    private var isProviderOwnedLive: Bool {
+        sessionLifetimePolicy == .userControlledLive && answerAuthority == .provider
+    }
+
+    private func recordLiveSnapshotDecoded(_ runtimeConfig: RealtimeVoiceRuntimeConfig) {
+        let snapshot = runtimeConfig.formalMemorySnapshot
+        let serialized: String
+        if let snapshot,
+           JSONSerialization.isValidJSONObject(snapshot),
+           let data = try? JSONSerialization.data(withJSONObject: snapshot, options: [.sortedKeys]),
+           let string = String(data: data, encoding: .utf8) {
+            serialized = string
+        } else {
+            serialized = ""
+        }
+        let factCount = (snapshot?["coreFacts"] as? [[String: Any]])?.count ?? 0
+        let snapshotCheckpoint = snapshot?["projectionCheckpoint"] as? String
+        let snapshotContextHash = snapshot?["contextHash"] as? String
+        let contextHashMatches = snapshotContextHash?.isEmpty == false
+            && snapshotContextHash == runtimeConfig.contextHash
+        PrivacySafeDiagnostics.log(
+            subsystem: "DialogEngine",
+            event: "liveSnapshotDecoded",
+            states: [
+                "schemaVersion": (snapshot?["schemaVersion"] as? String) ?? "missing",
+                "contextHashMatch": contextHashMatches ? "true" : "false",
+            ],
+            counts: [
+                "factCount": factCount,
+                "snapshotChars": serialized.count,
+                "snapshotBytes": serialized.utf8.count,
+            ],
+            correlations: [
+                "checkpointHash": PrivacySafeDiagnostics.correlationHash(snapshotCheckpoint),
+                "contextHash": PrivacySafeDiagnostics.correlationHash(snapshotContextHash),
+            ]
+        )
+    }
+
+    @discardableResult
+    private func recordLivePromptPrepared(systemRole: String) -> String? {
+        guard isProviderOwnedLive else { return nil }
+        let normalized = systemRole.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+        let promptHash = PrivacySafeDiagnostics.correlationHash(normalized)
+        let factCount = (runtimeFormalMemorySnapshot?["coreFacts"] as? [[String: Any]])?.count ?? 0
+        PrivacySafeDiagnostics.log(
+            subsystem: "DialogEngine",
+            event: "livePromptPrepared",
+            states: ["formatVersion": "dialog.system_role.v1"],
+            counts: [
+                "promptChars": normalized.count,
+                "promptBytes": normalized.utf8.count,
+                "factCount": factCount,
+            ],
+            correlations: ["promptHash": promptHash]
+        )
+        return promptHash
+    }
+
+    private func recordLiveStartEngineSubmitted(
+        promptHash: String?,
+        dialogOperationID: UUID
+    ) {
+        guard isProviderOwnedLive else { return }
+        PrivacySafeDiagnostics.log(
+            subsystem: "DialogEngine",
+            event: "liveStartEngineSubmitted",
+            states: [
+                "sdkVersion": "0.0.14.6.1-bugfix",
+                "resourceProfileCode": PrivacySafeDiagnostics.safeCode(
+                    config.resourceID,
+                    fallback: "unknown"
+                ),
+                "configShapeVersion": "dialog.system_role.v1",
+            ],
+            correlations: [
+                "promptHash": promptHash,
+                "providerSession": PrivacySafeDiagnostics.correlationHash(
+                    dialogOperationID.uuidString
+                ),
+            ]
+        )
+    }
+
+    private func recordLiveStartEngineAccepted(
+        providerPayload: Data,
+        dialogOperationID: UUID
+    ) {
+        guard isProviderOwnedLive else { return }
+        PrivacySafeDiagnostics.log(
+            subsystem: "DialogEngine",
+            event: "liveStartEngineAccepted",
+            states: [
+                "directiveReturnCode": String(liveStartDirectiveReturnCode ?? -1),
+                "providerCallback": "connectionStarted",
+            ],
+            correlations: [
+                "providerSession": PrivacySafeDiagnostics.correlationHash(
+                    dialogOperationID.uuidString
+                ),
+                "providerConnection": PrivacySafeDiagnostics.correlationHash(providerPayload),
+            ]
+        )
+    }
+
+    private func observeLiveFirstResponseIfNeeded(
+        callbackContext: DialogEngineProviderCallbackContext
+    ) {
+        guard isProviderOwnedLive,
+              !liveFirstResponseObserved,
+              let submittedAt = liveStartSubmittedAt else { return }
+        liveFirstResponseObserved = true
+        PrivacySafeDiagnostics.log(
+            subsystem: "DialogEngine",
+            event: "liveFirstResponseObserved",
+            counts: [
+                "timeToFirstAudioMs": max(0, Int(Date().timeIntervalSince(submittedAt) * 1_000)),
+            ],
+            correlations: [
+                "providerSession": PrivacySafeDiagnostics.correlationHash(
+                    callbackContext.dialogOperationId.uuidString
+                )
+            ]
+        )
     }
 
     private func resolvedTTSSpeaker(for bindingHandle: DialogEngineBindingHandle) -> String {
@@ -2775,16 +3022,9 @@ extension DialogEngineManager {
             }
         }
 
-        let binaryMessageTypes: Set<SEMessageType> = [
-            SERecorderAudioData,
-            SEPlayerAudioData,
-            SEEventTTSResponse,
-            SEDecoderAudioData,
-        ]
-        let dataStr = binaryMessageTypes.contains(type)
-            ? "(binary \(data.count) bytes)"
-            : (String(data: data, encoding: .utf8) ?? "(binary \(data.count) bytes)")
-        print("[DialogEngine] onMessage type=\(type.rawValue), data=\(dataStr.prefix(500))")
+        DDLogVerbose(
+            "[DialogEngine] provider event type=\(type.rawValue) bytes=\(data.count)"
+        )
 
         if pendingTextReplyPlayback != nil {
             switch type {
@@ -2817,13 +3057,19 @@ extension DialogEngineManager {
         switch type {
         // MARK: Connection Events
         case SEEventConnectionStarted:
+            recordLiveStartEngineAccepted(
+                providerPayload: data,
+                dialogOperationID: callbackContext.dialogOperationId
+            )
             print("[DialogEngine] ✅ 连接已建立")
             DDLogInfo("[DialogEngine] 连接已建立")
 
         case SEEventConnectionFailed:
             let msg = parseErrorMessage(from: data)
-            print("[DialogEngine] ❌ 连接失败: \(msg)")
-            DDLogError("[DialogEngine] 连接失败: \(msg)")
+            DDLogError(
+                "[DialogEngine] connection failed type=\(type.rawValue) "
+                    + "payloadBytes=\(data.count) errorHash=\(PrivacySafeDiagnostics.correlationHash(msg))"
+            )
             if completeTextReplyPlayback(
                 .failure(
                     DialogTextReplyPlaybackError.directiveRejected(
@@ -2907,8 +3153,10 @@ extension DialogEngineManager {
 
         case SEEventSessionFailed:
             let msg = parseErrorMessage(from: data)
-            print("[DialogEngine] ❌ 会话失败: \(msg)")
-            DDLogError("[DialogEngine] 会话失败: \(msg)")
+            DDLogError(
+                "[DialogEngine] session failed type=\(type.rawValue) "
+                    + "payloadBytes=\(data.count) errorHash=\(PrivacySafeDiagnostics.correlationHash(msg))"
+            )
             if completeTextReplyPlayback(
                 .failure(
                     DialogTextReplyPlaybackError.directiveRejected(
@@ -2970,10 +3218,16 @@ extension DialogEngineManager {
                 manager.resetSilenceTimer()
             }
             // 解析 ASR 结果
-            print("[DialogEngine] 🎤 ASRInfo raw: \(asrRawStr.prefix(300))")
-
             if let result = parsedASRInfo {
-                print("[DialogEngine] 🎤 ASRInfo parsed: text=\(result.text), isFinal=\(result.isFinal)")
+                PrivacySafeDiagnostics.log(
+                    subsystem: "DialogEngine",
+                    event: "liveASRObserved",
+                    states: ["isFinal": result.isFinal ? "true" : "false"],
+                    counts: [
+                        "textCharacters": result.text.count,
+                        "payloadBytes": data.count,
+                    ]
+                )
                 if result.isFinal {
                     if let keyword = checkEndKeyword(in: result.text) {
                         print("[DialogEngine] 🛑 检测到结束关键词: \(keyword)")
@@ -2990,7 +3244,7 @@ extension DialogEngineManager {
                 }
             } else {
                 // 解析失败，尝试从 raw JSON 中提取任何文本
-                print("[DialogEngine] ⚠️ ASRInfo parseASRResult 返回 nil，尝试 raw 提取")
+                DDLogWarn("[DialogEngine] ASRInfo payload parse failed; trying fallback extraction")
                 if let extractedText = extractAnyText(from: data) {
                     // 检测关键词
                     if let keyword = checkEndKeyword(in: extractedText) {
@@ -3043,7 +3297,15 @@ extension DialogEngineManager {
                 manager.resetSilenceTimer()
             }
             if let result = parsedASRResponse {
-                print("[DialogEngine] 🎤 ASRResponse: text=\(result.text), isFinal=\(result.isFinal)")
+                PrivacySafeDiagnostics.log(
+                    subsystem: "DialogEngine",
+                    event: "liveASRResponseObserved",
+                    states: ["isFinal": result.isFinal ? "true" : "false"],
+                    counts: [
+                        "textCharacters": result.text.count,
+                        "payloadBytes": data.count,
+                    ]
+                )
                 if result.isFinal {
                     // The provider can restore server-triggered TTS after the
                     // greeting or a completed turn. Reassert the delegated
@@ -3100,7 +3362,11 @@ extension DialogEngineManager {
                 return
             }
             // 用户语音已确认，这是发送给 LLM 的最终文本
-            print("[DialogEngine] ✅ 用户语音确认: \(dataStr.prefix(300))")
+            PrivacySafeDiagnostics.log(
+                subsystem: "DialogEngine",
+                event: "liveQueryConfirmed",
+                counts: ["payloadBytes": data.count]
+            )
             deliverProviderCallback(callbackContext) { manager, _ in
                 manager.resetSilenceTimer()
             }
@@ -3236,6 +3502,7 @@ extension DialogEngineManager {
                 print("[DialogEngine] skipped Fire player start; Tencent owns audible playback")
                 return
             }
+            observeLiveFirstResponseIfNeeded(callbackContext: callbackContext)
             if sessionLifetimePolicy == .userControlledLive,
                answerAuthority == .dreamJourneyBackend {
                 guard let replyID = delegatedClientPlaybackReplyID,
@@ -3321,8 +3588,10 @@ extension DialogEngineManager {
 
         case SEEngineError:
             let msg = parseErrorMessage(from: data)
-            print("[DialogEngine] ❌ 引擎错误: \(msg)")
-            DDLogError("[DialogEngine] 引擎错误: \(msg)")
+            DDLogError(
+                "[DialogEngine] engine error type=\(type.rawValue) "
+                    + "payloadBytes=\(data.count) errorHash=\(PrivacySafeDiagnostics.correlationHash(msg))"
+            )
             if sessionLifetimePolicy == .userControlledLive,
                answerAuthority == .dreamJourneyBackend,
                delegatedClientPlaybackState.phase != .idle,
@@ -3355,14 +3624,17 @@ extension DialogEngineManager {
             }
 
         default:
-            print("[DialogEngine] 📨 未处理消息类型: \(type.rawValue), data: \(dataStr.prefix(200))")
             DDLogVerbose("[DialogEngine] 收到消息类型: \(type.rawValue)")
             // 兜底：未知事件中尝试提取 ASR 文本（部分 SDK 版本用不同事件类型发送 ASR 结果）
             if let extracted = extractAnyText(from: data), !extracted.isEmpty {
                 // 只在包含中文字符时才认为是 ASR 结果（避免误抦引擎状态信息）
                 let hasChinese = extracted.unicodeScalars.contains { $0.value >= 0x4E00 && $0.value <= 0x9FFF }
                 if hasChinese {
-                    print("[DialogEngine] 📨 default 分支提取到 ASR 文本: \(extracted)")
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "DialogEngine",
+                        event: "liveFallbackASRObserved",
+                        counts: ["textCharacters": extracted.count]
+                    )
                     deliverProviderCallback(callbackContext) { manager, delegate in
                         manager.resetSilenceTimer()
                         delegate.onASRResult(text: extracted, isFinal: false)
@@ -3644,9 +3916,9 @@ extension DialogEngineManager {
 
         let result = engine.send(SEDirectiveEventSayHello, data: jsonStr)
         if result == SENoError {
-            print("[DialogEngine] ✅ 开场白已发送: \(greeting)")
+            DDLogInfo("[DialogEngine] greeting submitted characters=\(greeting.count)")
         } else {
-            print("[DialogEngine] ⚠️ 开场白发送失败: \(result.rawValue)")
+            DDLogError("[DialogEngine] greeting submission failed code=\(result.rawValue)")
         }
     }
 

@@ -7371,12 +7371,14 @@ struct OwnerTruthInterviewNaturalInputStartCommand: Equatable, Sendable {
     let threadID: OwnerTruthRecordID
     let sessionID: OwnerTruthRecordID
     let entryMode: OwnerTruthInterviewEntryMode
+    let productSessionID: String?
 
     init(
         commandID: String,
         threadID: OwnerTruthRecordID,
         sessionID: OwnerTruthRecordID,
-        entryMode: OwnerTruthInterviewEntryMode = .naturalInput
+        entryMode: OwnerTruthInterviewEntryMode = .naturalInput,
+        productSessionID: String? = nil
     ) throws {
         guard let commandID = OwnerTruthInterviewNaturalInputContract.nonEmptyString(commandID) else {
             throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
@@ -7387,6 +7389,17 @@ struct OwnerTruthInterviewNaturalInputStartCommand: Equatable, Sendable {
         self.threadID = threadID
         self.sessionID = sessionID
         self.entryMode = entryMode
+        let normalizedProductSessionID = productSessionID?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard normalizedProductSessionID?.count ?? 0 <= 128 else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "product session id exceeds maximum length"
+            )
+        }
+        self.productSessionID = normalizedProductSessionID?.isEmpty == false
+            ? normalizedProductSessionID
+            : nil
     }
 
     var backendPayload: [String: Any] {
@@ -7397,6 +7410,9 @@ struct OwnerTruthInterviewNaturalInputStartCommand: Equatable, Sendable {
         ]
         if entryMode != .naturalInput {
             payload["entryMode"] = entryMode.rawValue
+        }
+        if let productSessionID {
+            payload["productSessionId"] = productSessionID
         }
         return payload
     }
@@ -11194,6 +11210,7 @@ final class OwnerTruthInterviewNaturalInputUseCase {
     private let identifierFactory: () -> UUID
     private let entryMode: OwnerTruthInterviewEntryMode
     private let allowsEntryModeTransition: Bool
+    private let productSessionID: String?
     private var operationGeneration: UInt = 0
 
     private(set) var viewState: OwnerTruthInterviewNaturalInputViewState = .idle {
@@ -11209,7 +11226,8 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled },
         identifierFactory: @escaping () -> UUID = UUID.init,
         entryMode: OwnerTruthInterviewEntryMode = .naturalInput,
-        allowsEntryModeTransition: Bool = false
+        allowsEntryModeTransition: Bool = false,
+        productSessionID: String? = nil
     ) {
         self.accountLease = accountLease
         self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
@@ -11219,6 +11237,11 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         self.identifierFactory = identifierFactory
         self.entryMode = entryMode
         self.allowsEntryModeTransition = allowsEntryModeTransition
+        self.productSessionID = productSessionID?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty == false
+            ? productSessionID?.trimmingCharacters(in: .whitespacesAndNewlines)
+            : nil
     }
 
     func send(_ intent: OwnerTruthInterviewNaturalInputIntent) {
@@ -11266,7 +11289,8 @@ final class OwnerTruthInterviewNaturalInputUseCase {
                 commandID: identifierFactory().uuidString.lowercased(),
                 threadID: OwnerTruthRecordID(rawValue: identifierFactory()),
                 sessionID: OwnerTruthRecordID(rawValue: identifierFactory()),
-                entryMode: entryMode
+                entryMode: entryMode,
+                productSessionID: productSessionID
             )
             operationGeneration &+= 1
             let generation = operationGeneration

@@ -680,6 +680,14 @@ enum PrivacySafeDiagnostics {
         return "sha256:" + String(digest.prefix(correlationDigestLength))
     }
 
+    static func correlationHash(_ value: Data) -> String {
+        guard !value.isEmpty else { return "none" }
+        let digest = SHA256.hash(data: value)
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return "sha256:" + String(digest.prefix(correlationDigestLength))
+    }
+
     static func safeCode(_ value: String?, fallback: String = "redacted") -> String {
         let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !normalized.isEmpty,

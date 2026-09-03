@@ -1421,6 +1421,8 @@ final class EchoViewModel {
     private var turnIntentReducer = EchoTurnIntentReducer()
     private var delayedReplyAnswerReconciliationOperationID: String?
 
+    var turnPhase: EchoTurnPhase { turnIntentReducer.phase }
+
     var onStateChange: ((EchoInteractionState) -> Void)?
     var onTranscriptAppend: ((String, Bool) -> Void)?
     var onArchiveContextStatusChange: ((EchoArchiveContextStatus) -> Void)?
@@ -1475,11 +1477,12 @@ final class EchoViewModel {
         _ = applyTurnIntent(.prepareVoiceInteraction, state: .starting)
     }
 
-    func beginVoiceInteraction() {
+    @discardableResult
+    func beginVoiceInteraction() -> Bool {
         context = contextStore.current
         memoryManager.refreshForCurrentContext()
         refreshArchiveContextStatus()
-        _ = applyTurnIntent(.voiceCaptureStarted, state: .listening)
+        return applyTurnIntent(.voiceCaptureStarted, state: .listening)
     }
 
     @discardableResult

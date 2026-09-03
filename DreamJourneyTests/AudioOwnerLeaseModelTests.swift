@@ -43,7 +43,19 @@ final class EchoLiveAudioRoutePolicyTests: XCTestCase {
         XCTAssertFalse(receipt.canComplete(for: .volcengineLocalTTS))
         XCTAssertFalse(receipt.acknowledgeStart(for: .tencentDigitalHuman))
         XCTAssertFalse(receipt.canComplete(for: .volcengineLocalTTS))
-        XCTAssertTrue(receipt.acknowledgeStart(for: .volcengineLocalTTS))
+        XCTAssertTrue(receipt.apply(
+            .providerAccepted(replyID: "reply-1"),
+            callbackRoute: .volcengineLocalTTS
+        ))
+        XCTAssertTrue(receipt.apply(
+            .audioStarted(replyID: "reply-1"),
+            callbackRoute: .volcengineLocalTTS
+        ))
+        XCTAssertFalse(receipt.canComplete(for: .volcengineLocalTTS))
+        XCTAssertTrue(receipt.apply(
+            .audioFinished(replyID: "reply-1"),
+            callbackRoute: .volcengineLocalTTS
+        ))
         XCTAssertTrue(receipt.canComplete(for: .volcengineLocalTTS))
     }
 
@@ -51,8 +63,20 @@ final class EchoLiveAudioRoutePolicyTests: XCTestCase {
         var receipt = EchoLivePlaybackReceiptState(route: .tencentDigitalHuman)
 
         XCTAssertFalse(receipt.acknowledgeStart(for: .volcengineLocalTTS))
-        XCTAssertTrue(receipt.acknowledgeStart(for: .tencentDigitalHuman))
         XCTAssertFalse(receipt.canComplete(for: .volcengineLocalTTS))
+        XCTAssertTrue(receipt.apply(
+            .providerAccepted(replyID: "reply-1"),
+            callbackRoute: .tencentDigitalHuman
+        ))
+        XCTAssertTrue(receipt.apply(
+            .audioStarted(replyID: "reply-1"),
+            callbackRoute: .tencentDigitalHuman
+        ))
+        XCTAssertFalse(receipt.canComplete(for: .tencentDigitalHuman))
+        XCTAssertTrue(receipt.apply(
+            .audioFinished(replyID: "reply-1"),
+            callbackRoute: .tencentDigitalHuman
+        ))
         XCTAssertTrue(receipt.canComplete(for: .tencentDigitalHuman))
     }
 }
@@ -2591,7 +2615,16 @@ final class DialogEngineAudiblePlaybackPolicyTests: XCTestCase {
         let policy = DialogEngineAudiblePlaybackPolicy(enablePlayer: true)
 
         XCTAssertTrue(policy.providerPlayerEnabled)
+        XCTAssertFalse(policy.providerPlayerAudioCallbackEnabled)
         XCTAssertFalse(policy.applicationPCMPlaybackEnabled)
+
+        let delegatedLivePolicy = DialogEngineAudiblePlaybackPolicy(
+            enablePlayer: true,
+            usesDelegatedLivePlayback: true
+        )
+        XCTAssertTrue(delegatedLivePolicy.providerPlayerEnabled)
+        XCTAssertTrue(delegatedLivePolicy.providerPlayerAudioCallbackEnabled)
+        XCTAssertFalse(delegatedLivePolicy.applicationPCMPlaybackEnabled)
     }
 
     func testDisabledPlaybackCreatesNoAudibleOutput() {
@@ -2616,6 +2649,34 @@ final class DialogEngineAudiblePlaybackPolicyTests: XCTestCase {
         XCTAssertFalse(
             state.phase == .audioFinished,
             "Synthesis completion must not be treated as player completion"
+        )
+    }
+}
+
+final class DialogRecorderResumeOutcomeTests: XCTestCase {
+    func testOnlySentOrAlreadyRunningAreSuccessfulRecoveryOutcomes() {
+        XCTAssertTrue(DialogRecorderResumeOutcome.directiveSent.isSuccess)
+        XCTAssertTrue(DialogRecorderResumeOutcome.alreadyRunning.isSuccess)
+        XCTAssertFalse(DialogRecorderResumeOutcome.sessionInactive.isSuccess)
+        XCTAssertFalse(DialogRecorderResumeOutcome.directiveRejected(code: -1).isSuccess)
+    }
+
+    func testRecoveryOutcomeCodesRemainDistinguishable() {
+        XCTAssertEqual(
+            DialogRecorderResumeOutcome.directiveSent.diagnosticCode,
+            "directiveSent"
+        )
+        XCTAssertEqual(
+            DialogRecorderResumeOutcome.alreadyRunning.diagnosticCode,
+            "alreadyRunning"
+        )
+        XCTAssertEqual(
+            DialogRecorderResumeOutcome.sessionInactive.diagnosticCode,
+            "sessionInactive"
+        )
+        XCTAssertEqual(
+            DialogRecorderResumeOutcome.directiveRejected(code: 42).diagnosticCode,
+            "directiveRejected_42"
         )
     }
 }

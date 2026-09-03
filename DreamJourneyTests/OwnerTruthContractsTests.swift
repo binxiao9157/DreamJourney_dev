@@ -8626,8 +8626,22 @@ final class OwnerTruthContractsTests: XCTestCase {
             "providerReady": true,
             "releaseVisible": true,
             "retryable": true,
-            "contractVersion": 4,
+            "contractVersion": 5,
             "expiresAt": "2099-01-01T00:00:00Z",
+            "echoSession": [
+                "productSessionId": "echo_live_stable_001",
+                "targetPersonaId": "subject-1",
+                "projectionCheckpoint": "checkpoint-7",
+                "authorityEpoch": 7,
+                "contextHash": "sha256:context",
+            ],
+            "sessionContext": [
+                "systemRole": "只使用正式记忆",
+                "speakingStyle": "自然、温柔",
+                "formalMemorySnapshot": [
+                    "projectionCheckpoint": "checkpoint-7",
+                ],
+            ],
             "proxy": [
                 "address": "wss://api.example.test",
                 "uri": "/voice/realtime-stream",
@@ -8646,6 +8660,11 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertFalse(config.mobileDirectAllowed)
         XCTAssertEqual(config.proxyAddress, "wss://api.example.test")
         XCTAssertEqual(config.sessionHeader, "X-DreamJourney-Voice-Session")
+        XCTAssertEqual(config.productSessionID, "echo_live_stable_001")
+        XCTAssertEqual(config.projectionCheckpoint, "checkpoint-7")
+        XCTAssertEqual(config.authorityEpoch, 7)
+        XCTAssertEqual(config.systemRole, "只使用正式记忆")
+        XCTAssertEqual(config.formalMemorySnapshot?["projectionCheckpoint"] as? String, "checkpoint-7")
     }
 
     func testRealtimeVoiceRuntimeConfigFailsClosedForDirectExpiredOrIncompleteContract() throws {
@@ -8658,7 +8677,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             "providerReady": true,
             "releaseVisible": true,
             "retryable": true,
-            "contractVersion": 4,
+            "contractVersion": 5,
             "expiresAt": "2099-01-01T00:00:00Z",
             "proxy": [
                 "address": "wss://api.example.test",

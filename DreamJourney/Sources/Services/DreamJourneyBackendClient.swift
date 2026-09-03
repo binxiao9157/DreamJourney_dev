@@ -3143,6 +3143,15 @@ struct RealtimeVoiceRuntimeConfig {
     let sdkResourceID: String?
     let uid: String?
     let expiresAt: Date?
+    let productSessionID: String?
+    let targetPersonaID: String?
+    let projectionCheckpoint: String?
+    let authorityEpoch: Int?
+    let contextHash: String?
+    let sessionContext: [String: Any]?
+    let systemRole: String?
+    let speakingStyle: String?
+    let formalMemorySnapshot: [String: Any]?
 
     private var hasSecureProxyEndpoint: Bool {
         guard let proxyAddress,
@@ -3170,7 +3179,7 @@ struct RealtimeVoiceRuntimeConfig {
             || accessPath != "backendRealtimeProxy"
             || credentialMode != "oneTimeBackendProxyTicket"
             || brokerStatus != "verified"
-            || contractVersion < 4
+            || contractVersion < 5
             || !hasSecureProxyEndpoint
             || sessionToken?.hasPrefix("djv_") != true
             || sessionHeader != "X-DreamJourney-Voice-Session"
@@ -3213,6 +3222,16 @@ struct RealtimeVoiceRuntimeConfig {
         self.sdkResourceID = proxy?["sdkResourceID"] as? String
         self.uid = proxy?["uid"] as? String
         self.expiresAt = Self.iso8601Date(json["expiresAt"])
+        let echoSession = json["echoSession"] as? [String: Any]
+        self.productSessionID = echoSession?["productSessionId"] as? String
+        self.targetPersonaID = echoSession?["targetPersonaId"] as? String
+        self.projectionCheckpoint = echoSession?["projectionCheckpoint"] as? String
+        self.authorityEpoch = Self.intValue(echoSession?["authorityEpoch"])
+        self.contextHash = echoSession?["contextHash"] as? String
+        self.sessionContext = json["sessionContext"] as? [String: Any]
+        self.systemRole = self.sessionContext?["systemRole"] as? String
+        self.speakingStyle = self.sessionContext?["speakingStyle"] as? String
+        self.formalMemorySnapshot = self.sessionContext?["formalMemorySnapshot"] as? [String: Any]
     }
 
     private static func intValue(_ value: Any?) -> Int? {
@@ -7364,12 +7383,34 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
 
     func fetchRealtimeVoiceConfig(
         userId: String,
+        purpose: String = "echoLive",
+        personaScope: String = "personal",
+        targetPersonaId: String? = nil,
+        viewerFamilyMemberID: String? = nil,
+        clientSessionId: String? = nil,
         completion: @escaping (Result<RealtimeVoiceRuntimeConfig, Error>) -> Void
     ) {
+        var payload: [String: Any] = [
+            "userId": userId,
+            "purpose": purpose,
+            "personaScope": personaScope,
+        ]
+        if let targetPersonaId,
+           !targetPersonaId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["targetPersonaId"] = targetPersonaId
+        }
+        if let viewerFamilyMemberID,
+           !viewerFamilyMemberID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["viewerFamilyMemberID"] = viewerFamilyMemberID
+        }
+        if let clientSessionId,
+           !clientSessionId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["clientSessionId"] = clientSessionId
+        }
         requestJSON(
             path: "/voice/realtime-token",
             method: .post,
-            payload: ["userId": userId],
+            payload: payload,
             authPolicy: .userRequired
         ) { result in
             switch result {
