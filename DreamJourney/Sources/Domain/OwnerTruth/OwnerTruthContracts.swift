@@ -631,6 +631,12 @@ struct OwnerTruthCandidateEvidenceReference: Codable, Equatable, Sendable {
         return OwnerTruthRecordID(rawValue: uuid)
     }
 
+    fileprivate static func requiredString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
     fileprivate static func positiveInt(_ value: Any?) -> Int? {
         if let value = value as? Int, value > 0 {
             return value
@@ -648,6 +654,24 @@ struct OwnerTruthCandidateEvidenceReference: Codable, Equatable, Sendable {
         }
         return nil
     }
+
+    fileprivate static func nonNegativeInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value >= 0 {
+            return value
+        }
+        if let value = value as? NSNumber,
+           CFGetTypeID(value) != CFBooleanGetTypeID(),
+           value.doubleValue.rounded() == value.doubleValue,
+           value.intValue >= 0 {
+            return value.intValue
+        }
+        if let value = value as? String,
+           let parsed = Int(value.trimmingCharacters(in: .whitespacesAndNewlines)),
+           parsed >= 0 {
+            return parsed
+        }
+        return nil
+    }
 }
 
 enum OwnerTruthCandidatePrimaryField: String, Codable, Equatable, Sendable {
@@ -661,6 +685,7 @@ enum OwnerTruthCandidatePrimaryField: String, Codable, Equatable, Sendable {
     init(memoryKind: OwnerTruthMemoryKind, contentSchemaVersion: String) {
         let usesTypedField = contentSchemaVersion == "owner-truth-v3"
             || contentSchemaVersion == "owner-truth-v4"
+            || contentSchemaVersion == "owner-truth-v5"
         switch memoryKind {
         case .experience:
             self = usesTypedField ? .event : .summary
@@ -683,6 +708,275 @@ enum OwnerTruthCandidatePrimaryField: String, Codable, Equatable, Sendable {
     }
 }
 
+/// Immutable, Owner-visible preview of the exact ChangeSet the backend will
+/// revalidate under a formal-memory revision lock.  This is deliberately a
+/// typed transport contract rather than a client-side inference of what a
+/// Candidate might do to formal memory.
+struct OwnerTruthCandidateChangeSetFieldDiff: Codable, Equatable, Sendable {
+    let path: String
+    let before: OwnerTruthJSONValue?
+    let after: OwnerTruthJSONValue?
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let path = Self.nonEmptyString(object["path"]) else {
+            throw OwnerTruthRemoteContractError.invalidInbox("ChangeSet field diff misses path")
+        }
+        self.path = path
+        before = try Self.optionalJSONValue(object["before"])
+        after = try Self.optionalJSONValue(object["after"])
+    }
+
+    fileprivate static func optionalJSONValue(_ value: Any?) throws -> OwnerTruthJSONValue? {
+        guard let value, !(value is NSNull) else { return nil }
+        guard let parsed = OwnerTruthJSONValue(backendJSONObject: value) else {
+            throw OwnerTruthRemoteContractError.invalidInbox("ChangeSet field diff contains invalid JSON")
+        }
+        return parsed
+    }
+
+    fileprivate static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+}
+
+struct OwnerTruthCandidateChangeSetFactDiff: Codable, Equatable, Sendable {
+    let before: OwnerTruthJSONValue?
+    let after: OwnerTruthJSONValue?
+    let candidate: OwnerTruthJSONValue
+    let changedFields: [OwnerTruthCandidateChangeSetFieldDiff]
+    let beforeEvidenceCount: Int
+    let candidateEvidenceCount: Int
+    let afterEvidenceCount: Int
+    let addedEvidenceCount: Int
+
+    init(backendJSONObject object: [String: Any]) throws {
+        before = try OwnerTruthCandidateChangeSetFieldDiff.optionalJSONValue(object["before"])
+        after = try OwnerTruthCandidateChangeSetFieldDiff.optionalJSONValue(object["after"])
+        guard let rawCandidate = object["candidate"],
+              let candidate = OwnerTruthJSONValue(backendJSONObject: rawCandidate),
+              let rawChangedFields = object["changedFields"] as? [[String: Any]],
+              let evidence = object["evidence"] as? [String: Any],
+              let beforeEvidenceCount = Self.nonNegativeInt(evidence["beforeCount"]),
+              let candidateEvidenceCount = Self.nonNegativeInt(evidence["candidateCount"]),
+              let afterEvidenceCount = Self.nonNegativeInt(evidence["afterCount"]),
+              let addedEvidenceCount = Self.nonNegativeInt(evidence["addedCount"]) else {
+            throw OwnerTruthRemoteContractError.invalidInbox("ChangeSet fact diff is invalid")
+        }
+        self.candidate = candidate
+        changedFields = try rawChangedFields.map(OwnerTruthCandidateChangeSetFieldDiff.init)
+        self.beforeEvidenceCount = beforeEvidenceCount
+        self.candidateEvidenceCount = candidateEvidenceCount
+        self.afterEvidenceCount = afterEvidenceCount
+        self.addedEvidenceCount = addedEvidenceCount
+    }
+
+    private static func nonNegativeInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value >= 0 { return value }
+        if let value = value as? NSNumber,
+           CFGetTypeID(value) != CFBooleanGetTypeID(),
+           value.doubleValue.rounded() == value.doubleValue,
+           value.intValue >= 0 {
+            return value.intValue
+        }
+        return nil
+    }
+}
+
+struct OwnerTruthCandidateChangeSetOperation: Codable, Equatable, Sendable, Identifiable {
+    let operationIndex: Int
+    let operationKind: String
+    let targetMemoryID: OwnerTruthRecordID?
+    let targetMemoryVersionID: OwnerTruthRecordID?
+    let targetMemoryVersion: Int?
+    let reason: String
+    let changedFields: [String]
+    let factDiff: OwnerTruthCandidateChangeSetFactDiff
+    let anticipatedActivation: String
+
+    var id: Int { operationIndex }
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let operationIndex = Self.nonNegativeInt(object["operationIndex"]),
+              let operationKind = Self.nonEmptyString(object["operationKind"]),
+              let reason = Self.nonEmptyString(object["reason"]),
+              let changedFields = object["changedFields"] as? [String],
+              let factDiffObject = object["factDiff"] as? [String: Any],
+              let anticipatedActivation = Self.nonEmptyString(object["anticipatedActivation"]) else {
+            throw OwnerTruthRemoteContractError.invalidInbox("ChangeSet operation is invalid")
+        }
+        let targetMemoryID = Self.recordID(object["targetMemoryId"])
+        let targetMemoryVersionID = Self.recordID(object["targetMemoryVersionId"])
+        let targetMemoryVersion = Self.positiveInt(object["targetMemoryVersion"])
+        if (targetMemoryID == nil) != (targetMemoryVersionID == nil)
+            || (targetMemoryID == nil) != (targetMemoryVersion == nil) {
+            throw OwnerTruthRemoteContractError.invalidInbox("ChangeSet target version metadata is incomplete")
+        }
+        self.operationIndex = operationIndex
+        self.operationKind = operationKind
+        self.targetMemoryID = targetMemoryID
+        self.targetMemoryVersionID = targetMemoryVersionID
+        self.targetMemoryVersion = targetMemoryVersion
+        self.reason = reason
+        self.changedFields = changedFields
+        self.factDiff = try OwnerTruthCandidateChangeSetFactDiff(backendJSONObject: factDiffObject)
+        self.anticipatedActivation = anticipatedActivation
+    }
+
+    private static func recordID(_ value: Any?) -> OwnerTruthRecordID? {
+        guard let rawValue = value as? String,
+              let uuid = UUID(uuidString: rawValue.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return nil
+        }
+        return OwnerTruthRecordID(rawValue: uuid)
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func positiveInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value > 0 { return value }
+        if let value = value as? NSNumber,
+           CFGetTypeID(value) != CFBooleanGetTypeID(),
+           value.doubleValue.rounded() == value.doubleValue,
+           value.intValue > 0 {
+            return value.intValue
+        }
+        return nil
+    }
+
+    private static func nonNegativeInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value >= 0 { return value }
+        if let value = value as? NSNumber,
+           CFGetTypeID(value) != CFBooleanGetTypeID(),
+           value.doubleValue.rounded() == value.doubleValue,
+           value.intValue >= 0 {
+            return value.intValue
+        }
+        return nil
+    }
+}
+
+struct OwnerTruthCandidateChangeSetDependency: Codable, Equatable, Sendable {
+    let beforeOperationIndex: Int
+    let afterOperationIndex: Int
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let beforeOperationIndex = Self.nonNegativeInt(object["beforeOperationIndex"]),
+              let afterOperationIndex = Self.nonNegativeInt(object["afterOperationIndex"]),
+              beforeOperationIndex != afterOperationIndex else {
+            throw OwnerTruthRemoteContractError.invalidInbox("ChangeSet dependency is invalid")
+        }
+        self.beforeOperationIndex = beforeOperationIndex
+        self.afterOperationIndex = afterOperationIndex
+    }
+
+    private static func nonNegativeInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value >= 0 { return value }
+        if let value = value as? NSNumber,
+           CFGetTypeID(value) != CFBooleanGetTypeID(),
+           value.doubleValue.rounded() == value.doubleValue,
+           value.intValue >= 0 {
+            return value.intValue
+        }
+        return nil
+    }
+}
+
+struct OwnerTruthCandidateChangeSetProposal: Codable, Equatable, Sendable {
+    static let schemaVersion = "owner-truth-memory-changeset-proposal-v1"
+
+    let proposalID: OwnerTruthRecordID
+    let proposalHash: String
+    let candidateContentHash: String
+    let candidateVersion: Int
+    let changeSetID: OwnerTruthRecordID
+    let baseMemoryRevision: Int
+    let operations: [OwnerTruthCandidateChangeSetOperation]
+    let dependencies: [OwnerTruthCandidateChangeSetDependency]
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard Self.nonEmptyString(object["schemaVersion"]) == Self.schemaVersion,
+              let proposalID = Self.recordID(object["proposalId"]),
+              let proposalHash = Self.sha256(object["proposalHash"]),
+              let candidateContentHash = Self.sha256(object["candidateContentHash"]),
+              let candidateVersion = Self.positiveInt(object["candidateVersion"]),
+              let changeSetID = Self.recordID(object["changeSetId"]),
+              let baseMemoryRevision = Self.nonNegativeInt(object["baseMemoryRevision"]),
+              let operationObjects = object["operations"] as? [[String: Any]],
+              !operationObjects.isEmpty,
+              let dependencyObjects = object["dependencies"] as? [[String: Any]] else {
+            throw OwnerTruthRemoteContractError.invalidInbox("ChangeSet proposal is invalid")
+        }
+        let operations = try operationObjects.map(OwnerTruthCandidateChangeSetOperation.init)
+        guard operations.map(\.operationIndex) == Array(operations.indices) else {
+            throw OwnerTruthRemoteContractError.invalidInbox("ChangeSet operation ordering is invalid")
+        }
+        let dependencies = try dependencyObjects.map(OwnerTruthCandidateChangeSetDependency.init)
+        guard dependencies.allSatisfy({
+            $0.beforeOperationIndex < operations.count && $0.afterOperationIndex < operations.count
+        }) else {
+            throw OwnerTruthRemoteContractError.invalidInbox("ChangeSet dependency exceeds operation bounds")
+        }
+        self.proposalID = proposalID
+        self.proposalHash = proposalHash
+        self.candidateContentHash = candidateContentHash
+        self.candidateVersion = candidateVersion
+        self.changeSetID = changeSetID
+        self.baseMemoryRevision = baseMemoryRevision
+        self.operations = operations
+        self.dependencies = dependencies
+    }
+
+    private static func recordID(_ value: Any?) -> OwnerTruthRecordID? {
+        guard let rawValue = value as? String,
+              let uuid = UUID(uuidString: rawValue.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return nil
+        }
+        return OwnerTruthRecordID(rawValue: uuid)
+    }
+
+    private static func sha256(_ value: Any?) -> String? {
+        guard let rawValue = nonEmptyString(value),
+              rawValue.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+            return nil
+        }
+        return rawValue
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func positiveInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value > 0 { return value }
+        if let value = value as? NSNumber,
+           CFGetTypeID(value) != CFBooleanGetTypeID(),
+           value.doubleValue.rounded() == value.doubleValue,
+           value.intValue > 0 {
+            return value.intValue
+        }
+        return nil
+    }
+
+    private static func nonNegativeInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value >= 0 { return value }
+        if let value = value as? NSNumber,
+           CFGetTypeID(value) != CFBooleanGetTypeID(),
+           value.doubleValue.rounded() == value.doubleValue,
+           value.intValue >= 0 {
+            return value.intValue
+        }
+        return nil
+    }
+}
+
 struct OwnerTruthCandidateInboxItem: Codable, Equatable, Sendable, Identifiable {
     let id: OwnerTruthRecordID
     let vaultID: OwnerTruthVaultID
@@ -697,6 +991,7 @@ struct OwnerTruthCandidateInboxItem: Codable, Equatable, Sendable, Identifiable 
     let sourceReferences: [OwnerTruthCandidateEvidenceReference]
     let reviewMode: String
     let candidateVersion: Int
+    let proposedChangeSet: OwnerTruthCandidateChangeSetProposal?
     let createdAt: Date?
 
     init(backendJSONObject object: [String: Any], vaultID: OwnerTruthVaultID) throws {
@@ -755,6 +1050,22 @@ struct OwnerTruthCandidateInboxItem: Codable, Equatable, Sendable, Identifiable 
         self.sourceReferences = sourceReferences
         self.reviewMode = reviewMode
         self.candidateVersion = candidateVersion
+        if let proposalObject = object["proposedChangeSet"] as? [String: Any] {
+            let proposal = try OwnerTruthCandidateChangeSetProposal(backendJSONObject: proposalObject)
+            guard proposal.candidateVersion == candidateVersion,
+                  proposal.candidateContentHash == contentHash else {
+                throw OwnerTruthRemoteContractError.invalidInbox(
+                    "ChangeSet proposal does not bind the displayed Candidate"
+                )
+            }
+            proposedChangeSet = proposal
+        } else if contentSchemaVersion == "owner-truth-v5" {
+            // V5 writes must fail closed in the use case. Keep the Candidate
+            // visible so the owner can refresh, but never synthesize a diff.
+            proposedChangeSet = nil
+        } else {
+            proposedChangeSet = nil
+        }
         self.createdAt = try Self.date(object["createdAt"])
     }
 
@@ -814,6 +1125,10 @@ struct OwnerTruthCandidateInbox: Codable, Equatable, Sendable {
 
     let vaultID: OwnerTruthVaultID
     let candidates: [OwnerTruthCandidateInboxItem]
+    /// Optional during the additive server rollout. When present it is sent
+    /// back on a review write so the server can reject a stale formal-memory
+    /// snapshot instead of silently applying an unrelated change.
+    let memoryRevision: Int?
 
     init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID) throws {
         guard Self.nonEmptyString(object["schemaVersion"]) == Self.schemaVersion,
@@ -825,6 +1140,16 @@ struct OwnerTruthCandidateInbox: Codable, Equatable, Sendable {
         vaultID = expectedVaultID
         candidates = try candidateObjects.map {
             try OwnerTruthCandidateInboxItem(backendJSONObject: $0, vaultID: expectedVaultID)
+        }
+        if let rawRevision = object["memoryRevision"], !(rawRevision is NSNull) {
+            guard let revision = rawRevision as? Int, revision >= 0 else {
+                throw OwnerTruthRemoteContractError.invalidInbox(
+                    "memoryRevision must be a non-negative integer or null"
+                )
+            }
+            memoryRevision = revision
+        } else {
+            memoryRevision = nil
         }
     }
 
@@ -838,6 +1163,7 @@ struct OwnerTruthCandidateInbox: Codable, Equatable, Sendable {
 enum OwnerTruthCandidateMemoryActivationStatus: String, Codable, Equatable, Sendable {
     case current
     case superseded
+    case deduplicated
     case pending
     case notApplicable
 }
@@ -878,6 +1204,13 @@ struct OwnerTruthCandidateReviewHistoryMemoryActivation: Codable, Equatable, Sen
             guard memoryID != nil, memoryVersionID != nil, memoryVersion != nil else {
                 throw OwnerTruthRemoteContractError.invalidInbox(
                     "current or superseded review history requires a MemoryVersion"
+                )
+            }
+        case .deduplicated:
+            let suppliedValues = [memoryID != nil, memoryVersionID != nil, memoryVersion != nil]
+            guard suppliedValues.allSatisfy({ $0 }) || suppliedValues.allSatisfy({ !$0 }) else {
+                throw OwnerTruthRemoteContractError.invalidInbox(
+                    "deduplicated review history must include a complete MemoryVersion or none"
                 )
             }
         case .pending, .notApplicable:
@@ -942,9 +1275,9 @@ struct OwnerTruthCandidateReviewHistoryItem: Codable, Equatable, Sendable, Ident
         )
         switch decision {
         case .accepted, .corrected:
-            guard activation.status != .notApplicable else {
+            guard activation.status != .pending else {
                 throw OwnerTruthRemoteContractError.invalidInbox(
-                    "accepted or corrected review cannot be notApplicable"
+                    "accepted or corrected review cannot remain pending"
                 )
             }
         case .rejected, .invalidated:
@@ -1159,6 +1492,9 @@ struct OwnerTruthCandidateReviewCommand: Equatable, Sendable {
     let correctedValue: [String: OwnerTruthJSONValue]?
     let correctedValueSchemaVersion: String?
     let reasonCode: String
+    let expectedMemoryRevision: Int?
+    let expectedChangeSetID: OwnerTruthRecordID?
+    let expectedProposalHash: String?
 
     init(
         commandID: String,
@@ -1166,11 +1502,17 @@ struct OwnerTruthCandidateReviewCommand: Equatable, Sendable {
         action: OwnerTruthCandidateReviewAction,
         correctedValue: [String: OwnerTruthJSONValue]? = nil,
         correctedValueSchemaVersion: String? = nil,
-        reasonCode: String
+        reasonCode: String,
+        expectedMemoryRevision: Int? = nil,
+        expectedChangeSetID: OwnerTruthRecordID? = nil,
+        expectedProposalHash: String? = nil
     ) throws {
         let normalizedCommandID = commandID.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedReasonCode = reasonCode.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedSchemaVersion = correctedValueSchemaVersion?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedProposalHash = expectedProposalHash?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
         guard !normalizedCommandID.isEmpty else {
             throw OwnerTruthRemoteContractError.invalidCommand("commandId is required")
         }
@@ -1179,6 +1521,22 @@ struct OwnerTruthCandidateReviewCommand: Equatable, Sendable {
         }
         guard !normalizedReasonCode.isEmpty else {
             throw OwnerTruthRemoteContractError.invalidCommand("reasonCode is required")
+        }
+        if let expectedMemoryRevision, expectedMemoryRevision < 0 {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "expectedMemoryRevision must be non-negative when provided"
+            )
+        }
+        if (expectedChangeSetID == nil) != (normalizedProposalHash == nil) {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "expectedChangeSetId and expectedProposalHash must be provided together"
+            )
+        }
+        if let normalizedProposalHash,
+           normalizedProposalHash.range(of: "^[0-9a-f]{64}$", options: .regularExpression) == nil {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "expectedProposalHash must be a lowercase SHA-256 digest"
+            )
         }
         switch action {
         case .correct:
@@ -1199,6 +1557,9 @@ struct OwnerTruthCandidateReviewCommand: Equatable, Sendable {
         self.expectedCandidateVersion = expectedCandidateVersion
         self.action = action
         self.reasonCode = normalizedReasonCode
+        self.expectedMemoryRevision = expectedMemoryRevision
+        self.expectedChangeSetID = expectedChangeSetID
+        self.expectedProposalHash = normalizedProposalHash
     }
 
     var backendPayload: [String: Any] {
@@ -1212,7 +1573,435 @@ struct OwnerTruthCandidateReviewCommand: Equatable, Sendable {
             payload["correctedValue"] = correctedValue.mapValues(\.backendJSONObject)
             payload["correctedValueSchemaVersion"] = correctedValueSchemaVersion
         }
+        if let expectedMemoryRevision {
+            payload["expectedMemoryRevision"] = expectedMemoryRevision
+        }
+        if let expectedChangeSetID, let expectedProposalHash {
+            payload["expectedChangeSetId"] = expectedChangeSetID.rawValue.uuidString.lowercased()
+            payload["expectedProposalHash"] = expectedProposalHash
+        }
         return payload
+    }
+}
+
+// MARK: - Atomic related Candidate ChangeSet groups
+
+/// One explicit Candidate action in an owner-selected dependency group.  The
+/// server rebuilds the actual fact diff from the current formal snapshot; the
+/// client only carries the decision, version fence and an optional correction.
+struct OwnerTruthMemoryChangeSetGroupSelection: Equatable, Sendable {
+    let candidateID: OwnerTruthRecordID
+    let expectedCandidateVersion: Int
+    let action: OwnerTruthCandidateReviewAction
+    let correctedValue: [String: OwnerTruthJSONValue]?
+    let correctedValueSchemaVersion: String?
+    let reasonCode: String
+
+    init(
+        candidateID: OwnerTruthRecordID,
+        expectedCandidateVersion: Int,
+        action: OwnerTruthCandidateReviewAction,
+        correctedValue: [String: OwnerTruthJSONValue]? = nil,
+        correctedValueSchemaVersion: String? = nil,
+        reasonCode: String
+    ) throws {
+        let normalizedReasonCode = reasonCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSchemaVersion = correctedValueSchemaVersion?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard expectedCandidateVersion > 0, !normalizedReasonCode.isEmpty else {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "ChangeSet group selection requires a positive Candidate version and reason code"
+            )
+        }
+        switch action {
+        case .correct:
+            guard let correctedValue, !correctedValue.isEmpty,
+                  let normalizedSchemaVersion, !normalizedSchemaVersion.isEmpty else {
+                throw OwnerTruthRemoteContractError.invalidCommand(
+                    "A grouped correction requires corrected value and schema version"
+                )
+            }
+            self.correctedValue = correctedValue
+            self.correctedValueSchemaVersion = normalizedSchemaVersion
+        case .accept, .reject:
+            guard correctedValue == nil, correctedValueSchemaVersion == nil else {
+                throw OwnerTruthRemoteContractError.invalidCommand(
+                    "Only a grouped correction may carry corrected content"
+                )
+            }
+            self.correctedValue = nil
+            self.correctedValueSchemaVersion = nil
+        }
+        self.candidateID = candidateID
+        self.expectedCandidateVersion = expectedCandidateVersion
+        self.action = action
+        self.reasonCode = normalizedReasonCode
+    }
+
+    var backendPayload: [String: Any] {
+        var payload: [String: Any] = [
+            "candidateId": candidateID.rawValue.uuidString.lowercased(),
+            "expectedCandidateVersion": expectedCandidateVersion,
+            "action": action.rawValue,
+            "reasonCode": reasonCode,
+        ]
+        if let correctedValue, let correctedValueSchemaVersion {
+            payload["correctedValue"] = correctedValue.mapValues(\.backendJSONObject)
+            payload["correctedValueSchemaVersion"] = correctedValueSchemaVersion
+        }
+        return payload
+    }
+}
+
+struct OwnerTruthMemoryChangeSetGroupDependency: Equatable, Sendable {
+    let beforeCandidateID: OwnerTruthRecordID
+    let afterCandidateID: OwnerTruthRecordID
+
+    init(beforeCandidateID: OwnerTruthRecordID, afterCandidateID: OwnerTruthRecordID) throws {
+        guard beforeCandidateID != afterCandidateID else {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "A ChangeSet group dependency cannot target the same Candidate"
+            )
+        }
+        self.beforeCandidateID = beforeCandidateID
+        self.afterCandidateID = afterCandidateID
+    }
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let beforeCandidateID = OwnerTruthCandidateEvidenceReference.recordID(
+            object["beforeCandidateId"]
+        ), let afterCandidateID = OwnerTruthCandidateEvidenceReference.recordID(
+            object["afterCandidateId"]
+        ) else {
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "ChangeSet group dependency is invalid"
+            )
+        }
+        try self.init(beforeCandidateID: beforeCandidateID, afterCandidateID: afterCandidateID)
+    }
+
+    var backendPayload: [String: Any] {
+        [
+            "beforeCandidateId": beforeCandidateID.rawValue.uuidString.lowercased(),
+            "afterCandidateId": afterCandidateID.rawValue.uuidString.lowercased(),
+        ]
+    }
+}
+
+/// Shared command shape for a non-mutating group preview and its terminal,
+/// idempotent confirmation.  Confirmations must bind the exact proposal that
+/// the owner just inspected; a stale preview cannot be silently reused.
+struct OwnerTruthMemoryChangeSetGroupCommand: Equatable, Sendable {
+    let commandID: String
+    let selections: [OwnerTruthMemoryChangeSetGroupSelection]
+    let dependencies: [OwnerTruthMemoryChangeSetGroupDependency]
+    let expectedMemoryRevision: Int?
+    let expectedGroupProposalID: OwnerTruthRecordID?
+    let expectedGroupProposalHash: String?
+
+    init(
+        commandID: String,
+        selections: [OwnerTruthMemoryChangeSetGroupSelection],
+        dependencies: [OwnerTruthMemoryChangeSetGroupDependency],
+        expectedMemoryRevision: Int? = nil,
+        expectedGroupProposalID: OwnerTruthRecordID? = nil,
+        expectedGroupProposalHash: String? = nil
+    ) throws {
+        let normalizedCommandID = commandID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedProposalHash = expectedGroupProposalHash?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !normalizedCommandID.isEmpty, normalizedCommandID.utf8.count <= 128,
+              selections.count >= 2,
+              Set(selections.map(\.candidateID)).count == selections.count,
+              !dependencies.isEmpty else {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "ChangeSet group requires a command ID, two unique Candidates and dependencies"
+            )
+        }
+        let candidateIDs = Set(selections.map(\.candidateID))
+        guard dependencies.allSatisfy({
+            candidateIDs.contains($0.beforeCandidateID)
+                && candidateIDs.contains($0.afterCandidateID)
+        }) else {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "ChangeSet group dependency references an unselected Candidate"
+            )
+        }
+        if let expectedMemoryRevision, expectedMemoryRevision < 0 {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "ChangeSet group memory revision must be non-negative"
+            )
+        }
+        guard (expectedMemoryRevision == nil) == (expectedGroupProposalID == nil),
+              (expectedGroupProposalID == nil) == (normalizedProposalHash == nil) else {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "A ChangeSet group confirmation requires revision, proposal ID and proposal hash together"
+            )
+        }
+        if let normalizedProposalHash,
+           normalizedProposalHash.range(of: "^[0-9a-f]{64}$", options: .regularExpression) == nil {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "ChangeSet group proposal hash must be a lowercase SHA-256 digest"
+            )
+        }
+        self.commandID = normalizedCommandID
+        self.selections = selections
+        self.dependencies = dependencies
+        self.expectedMemoryRevision = expectedMemoryRevision
+        self.expectedGroupProposalID = expectedGroupProposalID
+        self.expectedGroupProposalHash = normalizedProposalHash
+    }
+
+    var backendPayload: [String: Any] {
+        var payload: [String: Any] = [
+            "commandId": commandID,
+            "selections": selections.map(\.backendPayload),
+            "dependencies": dependencies.map(\.backendPayload),
+        ]
+        if let expectedMemoryRevision,
+           let expectedGroupProposalID,
+           let expectedGroupProposalHash {
+            payload["expectedMemoryRevision"] = expectedMemoryRevision
+            payload["expectedGroupProposalId"] = expectedGroupProposalID.rawValue.uuidString.lowercased()
+            payload["expectedGroupProposalHash"] = expectedGroupProposalHash
+        }
+        return payload
+    }
+}
+
+struct OwnerTruthMemoryChangeSetGroupProposalMember: Equatable, Sendable, Identifiable {
+    let operationIndex: Int
+    let candidateID: OwnerTruthRecordID
+    let action: OwnerTruthCandidateReviewAction
+    let reasonCode: String
+    let candidateVersion: Int
+    let proposedChangeSet: OwnerTruthCandidateChangeSetProposal
+    let anticipatedOutcome: String
+    let appliedMemoryRevision: Int
+
+    var id: Int { operationIndex }
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let operationIndex = OwnerTruthCandidateEvidenceReference.nonNegativeInt(
+            object["operationIndex"]
+        ), let candidateID = OwnerTruthCandidateEvidenceReference.recordID(object["candidateId"]),
+              let rawAction = OwnerTruthCandidateEvidenceReference.requiredString(object["action"]),
+              let action = OwnerTruthCandidateReviewAction(rawValue: rawAction),
+              let reasonCode = OwnerTruthCandidateEvidenceReference.requiredString(object["reasonCode"]),
+              let candidateVersion = OwnerTruthCandidateEvidenceReference.positiveInt(
+                object["candidateVersion"]
+              ), let proposalObject = object["proposedChangeSet"] as? [String: Any],
+              let anticipatedOutcome = OwnerTruthCandidateEvidenceReference.requiredString(
+                object["anticipatedOutcome"]
+              ), let appliedMemoryRevision = OwnerTruthCandidateEvidenceReference.nonNegativeInt(
+                object["appliedMemoryRevision"]
+              ) else {
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "ChangeSet group proposal member is invalid"
+            )
+        }
+        let proposedChangeSet = try OwnerTruthCandidateChangeSetProposal(
+            backendJSONObject: proposalObject
+        )
+        guard candidateVersion == proposedChangeSet.candidateVersion,
+              appliedMemoryRevision >= proposedChangeSet.baseMemoryRevision else {
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "ChangeSet group member snapshot is inconsistent"
+            )
+        }
+        self.operationIndex = operationIndex
+        self.candidateID = candidateID
+        self.action = action
+        self.reasonCode = reasonCode
+        self.candidateVersion = candidateVersion
+        self.proposedChangeSet = proposedChangeSet
+        self.anticipatedOutcome = anticipatedOutcome
+        self.appliedMemoryRevision = appliedMemoryRevision
+    }
+}
+
+struct OwnerTruthMemoryChangeSetGroupProposal: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-memory-changeset-group-v1"
+
+    let proposalID: OwnerTruthRecordID
+    let proposalHash: String
+    let vaultID: OwnerTruthVaultID
+    let baseMemoryRevision: Int
+    let members: [OwnerTruthMemoryChangeSetGroupProposalMember]
+    let dependencies: [OwnerTruthMemoryChangeSetGroupDependency]
+
+    init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID) throws {
+        guard OwnerTruthCandidateEvidenceReference.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              let proposalID = OwnerTruthCandidateEvidenceReference.recordID(object["groupProposalId"]),
+              let proposalHash = Self.sha256(object["groupProposalHash"]),
+              OwnerTruthCandidateEvidenceReference.requiredString(object["vaultId"])
+                == expectedVaultID.rawValue,
+              let baseMemoryRevision = OwnerTruthCandidateEvidenceReference.nonNegativeInt(
+                object["baseMemoryRevision"]
+              ), let memberObjects = object["members"] as? [[String: Any]],
+              memberObjects.count >= 2,
+              let dependencyObjects = object["dependencies"] as? [[String: Any]],
+              !dependencyObjects.isEmpty else {
+            throw OwnerTruthRemoteContractError.invalidInbox("ChangeSet group proposal is invalid")
+        }
+        let members = try memberObjects.map(OwnerTruthMemoryChangeSetGroupProposalMember.init)
+        let dependencies = try dependencyObjects.map(OwnerTruthMemoryChangeSetGroupDependency.init)
+        guard members.map(\.operationIndex) == Array(members.indices),
+              Set(members.map(\.candidateID)).count == members.count,
+              dependencies.allSatisfy({ dependency in
+                  members.contains(where: { $0.candidateID == dependency.beforeCandidateID })
+                      && members.contains(where: { $0.candidateID == dependency.afterCandidateID })
+              }) else {
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "ChangeSet group proposal ordering or dependency is invalid"
+            )
+        }
+        self.proposalID = proposalID
+        self.proposalHash = proposalHash
+        self.vaultID = expectedVaultID
+        self.baseMemoryRevision = baseMemoryRevision
+        self.members = members
+        self.dependencies = dependencies
+    }
+
+    private static func sha256(_ value: Any?) -> String? {
+        guard let value = OwnerTruthCandidateEvidenceReference.requiredString(value),
+              value.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+            return nil
+        }
+        return value
+    }
+}
+
+struct OwnerTruthMemoryChangeSetGroupCommitMember: Equatable, Sendable, Identifiable {
+    let candidateID: OwnerTruthRecordID
+    let receiptID: OwnerTruthRecordID
+    let decision: OwnerTruthCandidateDecision
+    let activationOutcome: OwnerTruthMemoryActivationOutcome
+    let memoryID: OwnerTruthRecordID?
+    let memoryVersionID: OwnerTruthRecordID?
+    let memoryVersion: Int?
+
+    var id: OwnerTruthRecordID { candidateID }
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let candidateID = OwnerTruthCandidateEvidenceReference.recordID(object["candidateId"]),
+              let receiptID = OwnerTruthCandidateEvidenceReference.recordID(object["receiptId"]),
+              let rawDecision = OwnerTruthCandidateEvidenceReference.requiredString(object["decision"]),
+              let decision = OwnerTruthCandidateDecision(rawValue: rawDecision),
+              let rawOutcome = OwnerTruthCandidateEvidenceReference.requiredString(
+                object["activationOutcome"]
+              ), let activationOutcome = OwnerTruthMemoryActivationOutcome(rawValue: rawOutcome) else {
+            throw OwnerTruthRemoteContractError.invalidDecision(
+                "ChangeSet group confirmation member is invalid"
+            )
+        }
+        let memoryID = try Self.optionalRecordID(object["memoryId"], field: "memoryId")
+        let memoryVersionID = try Self.optionalRecordID(
+            object["memoryVersionId"],
+            field: "memoryVersionId"
+        )
+        let memoryVersion = try Self.optionalPositiveInt(object["memoryVersion"], field: "memoryVersion")
+        if decision == .accepted || decision == .corrected {
+            guard activationOutcome != .notApplicable,
+                  memoryID != nil,
+                  memoryVersionID != nil,
+                  memoryVersion != nil else {
+                throw OwnerTruthRemoteContractError.invalidDecision(
+                    "Accepted grouped review requires a formal MemoryVersion activation"
+                )
+            }
+        }
+        self.candidateID = candidateID
+        self.receiptID = receiptID
+        self.decision = decision
+        self.activationOutcome = activationOutcome
+        self.memoryID = memoryID
+        self.memoryVersionID = memoryVersionID
+        self.memoryVersion = memoryVersion
+    }
+
+    private static func optionalRecordID(_ value: Any?, field: String) throws -> OwnerTruthRecordID? {
+        guard let value, !(value is NSNull) else { return nil }
+        guard let recordID = OwnerTruthCandidateEvidenceReference.recordID(value) else {
+            throw OwnerTruthRemoteContractError.invalidDecision("\(field) must be a UUID or null")
+        }
+        return recordID
+    }
+
+    private static func optionalPositiveInt(_ value: Any?, field: String) throws -> Int? {
+        guard let value, !(value is NSNull) else { return nil }
+        guard let result = OwnerTruthCandidateEvidenceReference.positiveInt(value) else {
+            throw OwnerTruthRemoteContractError.invalidDecision("\(field) must be a positive integer or null")
+        }
+        return result
+    }
+}
+
+struct OwnerTruthMemoryChangeSetGroupCommitResult: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-memory-changeset-group-commit-result-v1"
+
+    let outcome: OwnerTruthCommandOutcome
+    let groupReceiptID: OwnerTruthRecordID
+    let groupProposalID: OwnerTruthRecordID
+    let groupProposalHash: String
+    let baseMemoryRevision: Int
+    let appliedMemoryRevision: Int
+    let members: [OwnerTruthMemoryChangeSetGroupCommitMember]
+    let projectionEffectCount: Int
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedProposal: OwnerTruthMemoryChangeSetGroupProposal
+    ) throws {
+        guard OwnerTruthCandidateEvidenceReference.requiredString(object["schemaVersion"])
+                == Self.schemaVersion,
+              let rawOutcome = OwnerTruthCandidateEvidenceReference.requiredString(object["status"]),
+              let outcome = OwnerTruthCommandOutcome(rawValue: rawOutcome),
+              let groupReceiptID = OwnerTruthCandidateEvidenceReference.recordID(object["groupReceiptId"]),
+              let groupProposalID = OwnerTruthCandidateEvidenceReference.recordID(
+                object["groupProposalId"]
+              ), groupProposalID == expectedProposal.proposalID,
+              Self.sha256(object["groupProposalHash"]) == expectedProposal.proposalHash,
+              let baseMemoryRevision = OwnerTruthCandidateEvidenceReference.nonNegativeInt(
+                object["baseMemoryRevision"]
+              ), baseMemoryRevision == expectedProposal.baseMemoryRevision,
+              let appliedMemoryRevision = OwnerTruthCandidateEvidenceReference.nonNegativeInt(
+                object["appliedMemoryRevision"]
+              ), appliedMemoryRevision >= baseMemoryRevision,
+              let memberObjects = object["members"] as? [[String: Any]],
+              let projectionEffectCount = OwnerTruthCandidateEvidenceReference.nonNegativeInt(
+                object["projectionEffectCount"]
+              ) else {
+            throw OwnerTruthRemoteContractError.invalidDecision(
+                "ChangeSet group confirmation result is invalid"
+            )
+        }
+        let members = try memberObjects.map(OwnerTruthMemoryChangeSetGroupCommitMember.init)
+        guard Set(members.map(\.candidateID)) == Set(expectedProposal.members.map(\.candidateID)),
+              members.allSatisfy({ $0.decision.isTerminal }) else {
+            throw OwnerTruthRemoteContractError.invalidDecision(
+                "ChangeSet group confirmation members do not match the preview"
+            )
+        }
+        self.outcome = outcome
+        self.groupReceiptID = groupReceiptID
+        self.groupProposalID = groupProposalID
+        self.groupProposalHash = expectedProposal.proposalHash
+        self.baseMemoryRevision = baseMemoryRevision
+        self.appliedMemoryRevision = appliedMemoryRevision
+        self.members = members
+        self.projectionEffectCount = projectionEffectCount
+    }
+
+    private static func sha256(_ value: Any?) -> String? {
+        guard let value = OwnerTruthCandidateEvidenceReference.requiredString(value),
+              value.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+            return nil
+        }
+        return value
     }
 }
 
@@ -1223,6 +2012,8 @@ enum OwnerTruthCommandOutcome: String, Codable, Equatable, Sendable {
 
 enum OwnerTruthMemoryActivationOutcome: String, Codable, Equatable, Sendable {
     case created
+    case revised
+    case duplicate
     case deduplicated
     case notApplicable
 }
@@ -1250,6 +2041,7 @@ struct OwnerTruthCandidateDecisionResult: Codable, Equatable, Sendable {
     let outcome: OwnerTruthCommandOutcome
     let receipt: OwnerTruthCandidateDecisionReceipt
     let memoryActivation: OwnerTruthCandidateMemoryActivation
+    let memoryRevision: Int?
 
     init(backendJSONObject object: [String: Any], expectedCandidateID: OwnerTruthRecordID) throws {
         guard Self.nonEmptyString(object["schemaVersion"]) == Self.schemaVersion,
@@ -1284,6 +2076,17 @@ struct OwnerTruthCandidateDecisionResult: Codable, Equatable, Sendable {
             field: "memoryVersionId"
         )
         let contentHash = try Self.optionalString(activationObject["contentHash"], field: "contentHash")
+        let memoryRevision: Int?
+        if let rawRevision = object["memoryRevision"], !(rawRevision is NSNull) {
+            guard let parsedRevision = rawRevision as? Int, parsedRevision >= 0 else {
+                throw OwnerTruthRemoteContractError.invalidDecision(
+                    "memoryRevision must be a non-negative integer or null"
+                )
+            }
+            memoryRevision = parsedRevision
+        } else {
+            memoryRevision = nil
+        }
         switch decision {
         case .accepted, .corrected:
             guard activationOutcome != .notApplicable,
@@ -1318,6 +2121,7 @@ struct OwnerTruthCandidateDecisionResult: Codable, Equatable, Sendable {
             memoryVersionID: memoryVersionID,
             contentHash: contentHash
         )
+        self.memoryRevision = memoryRevision
     }
 
     private static func nonEmptyString(_ value: Any?) -> String? {
@@ -2695,6 +3499,27 @@ protocol OwnerTruthCandidateReviewClient: AnyObject {
         candidateID: OwnerTruthRecordID,
         command: OwnerTruthCandidateReviewCommand,
         completion: @escaping (Result<OwnerTruthCandidateDecisionResult, Error>) -> Void
+    )
+
+    func previewOwnerTruthCandidateChangeSet(
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        correctedValue: [String: OwnerTruthJSONValue]?,
+        correctedValueSchemaVersion: String?,
+        completion: @escaping (Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void
+    )
+
+    func previewOwnerTruthCandidateChangeSetGroup(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMemoryChangeSetGroupCommand,
+        completion: @escaping (Result<OwnerTruthMemoryChangeSetGroupProposal, Error>) -> Void
+    )
+
+    func confirmOwnerTruthCandidateChangeSetGroup(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMemoryChangeSetGroupCommand,
+        expectedProposal: OwnerTruthMemoryChangeSetGroupProposal,
+        completion: @escaping (Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>) -> Void
     )
 
     func fetchOwnerTruthCandidateReviewHistory(
@@ -7089,6 +7914,16 @@ enum OwnerTruthInterviewNaturalInputReceiptOutcome: String, Equatable, Sendable 
     case resumed
 }
 
+/// Delivery state belongs to the durable Live transcript lane, not to the
+/// audio engine.  ``continuousClientSequence`` is a prefix watermark rather
+/// than a largest-seen sequence, so an out-of-order late turn can never make
+/// a session appear safe to close.
+enum OwnerTruthInterviewNaturalInputDeliveryState: String, Equatable, Sendable {
+    case contiguous
+    case awaitingPriorTurns
+    case closedAfterContiguousDelivery
+}
+
 struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
     static let schemaVersion = "owner-truth-interview-session-command-v1"
 
@@ -7102,6 +7937,9 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
     let boundary: OwnerTruthInterviewSessionBoundary
     let messageID: OwnerTruthRecordID?
     let messageSequence: Int?
+    let clientSequenceNumber: Int?
+    let continuousClientSequence: Int?
+    let deliveryState: OwnerTruthInterviewNaturalInputDeliveryState?
 
     init(
         backendJSONObject object: [String: Any],
@@ -7146,6 +7984,30 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
             receipt["messageSequence"],
             field: "messageSequence"
         )
+        let clientSequenceNumber = try OwnerTruthInterviewNaturalInputContract.optionalPositiveInt(
+            receipt["clientSequenceNumber"],
+            field: "clientSequenceNumber"
+        )
+        let continuousClientSequence = try OwnerTruthInterviewNaturalInputContract.optionalNonNegativeInt(
+            receipt["continuousClientSequence"],
+            field: "continuousClientSequence"
+        )
+        let deliveryState: OwnerTruthInterviewNaturalInputDeliveryState?
+        if let deliveryStateRaw = try OwnerTruthInterviewNaturalInputContract.optionalString(
+            receipt["deliveryState"],
+            field: "deliveryState"
+        ) {
+            guard let parsedDeliveryState = OwnerTruthInterviewNaturalInputDeliveryState(
+                rawValue: deliveryStateRaw
+            ) else {
+                throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                    "deliveryState is unsupported"
+                )
+            }
+            deliveryState = parsedDeliveryState
+        } else {
+            deliveryState = nil
+        }
         guard (messageID == nil) == (messageSequence == nil) else {
             throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
                 "message metadata must be present together or absent together"
@@ -7155,6 +8017,29 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
             throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
                 "resumed session handle must not include message metadata"
             )
+        }
+        if clientSequenceNumber != nil {
+            guard messageID != nil,
+                  continuousClientSequence != nil,
+                  (deliveryState == .contiguous || deliveryState == .awaitingPriorTurns) else {
+                throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                    "Live message delivery metadata is incomplete or invalid"
+                )
+            }
+        }
+        if deliveryState != nil {
+            guard continuousClientSequence != nil else {
+                throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                    "deliveryState requires continuousClientSequence"
+                )
+            }
+            if deliveryState == .closedAfterContiguousDelivery {
+                guard lifecycle == .ended, messageID == nil else {
+                    throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                        "closed delivery state must belong to an ended session"
+                    )
+                }
+            }
         }
 
         vaultID = expectedVaultID
@@ -7167,6 +8052,9 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
         self.boundary = boundary
         self.messageID = messageID
         self.messageSequence = messageSequence
+        self.clientSequenceNumber = clientSequenceNumber
+        self.continuousClientSequence = continuousClientSequence
+        self.deliveryState = deliveryState
     }
 
     func matches(_ command: OwnerTruthInterviewNaturalInputStartCommand) -> Bool {
@@ -7174,6 +8062,8 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
             && sessionID == command.sessionID
             && messageID == nil
             && messageSequence == nil
+            && clientSequenceNumber == nil
+            && deliveryState == nil
     }
 
     func matches(_ command: OwnerTruthInterviewNaturalInputAppendCommand) -> Bool {
@@ -7183,6 +8073,11 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
             && messageSequence != nil
             && threadVersion > command.expectedThreadVersion
             && sessionVersion > command.expectedSessionVersion
+            && (command.clientSequenceNumber == nil || (
+                clientSequenceNumber == command.clientSequenceNumber
+                    && continuousClientSequence != nil
+                    && (deliveryState == .contiguous || deliveryState == .awaitingPriorTurns)
+            ))
     }
 
     func matches(_ command: OwnerTruthInterviewEndCommand) -> Bool {
@@ -7194,6 +8089,10 @@ struct OwnerTruthInterviewNaturalInputReceipt: Equatable, Sendable {
             && messageSequence == nil
             && threadVersion > command.expectedThreadVersion
             && sessionVersion > command.expectedSessionVersion
+            && (command.lastClientSequenceNumber == nil || (
+                continuousClientSequence == command.lastClientSequenceNumber
+                    && deliveryState == .closedAfterContiguousDelivery
+            ))
     }
 
     func matches(_ command: OwnerTruthInterviewBoundaryCommand) -> Bool {
@@ -7258,6 +8157,7 @@ struct OwnerTruthInterviewNaturalInputCurrentSession: Equatable, Sendable {
     let vaultID: OwnerTruthVaultID
     let receipt: OwnerTruthInterviewNaturalInputReceipt?
     let entryMode: OwnerTruthInterviewEntryMode?
+    let productSessionID: String?
 
     init(
         backendJSONObject object: [String: Any],
@@ -7301,9 +8201,15 @@ struct OwnerTruthInterviewNaturalInputCurrentSession: Equatable, Sendable {
             }
             receipt = parsedReceipt
             entryMode = parsedEntryMode
+            productSessionID = try OwnerTruthInterviewNaturalInputContract.optionalOpaqueIdentifier(
+                currentSession["productSessionId"],
+                field: "productSessionId",
+                maximumLength: 128
+            )
         } else {
             receipt = nil
             entryMode = nil
+            productSessionID = nil
         }
         vaultID = expectedVaultID
     }
@@ -7418,14 +8324,71 @@ struct OwnerTruthInterviewNaturalInputStartCommand: Equatable, Sendable {
     }
 }
 
-enum OwnerTruthInterviewNaturalInputMessageRole: String, Equatable, Sendable {
+enum OwnerTruthInterviewNaturalInputMessageRole: String, Codable, Equatable, Sendable {
     case owner
     case assistant
 }
 
-enum OwnerTruthInterviewNaturalInputCaptureMode: String, Equatable, Sendable {
+enum OwnerTruthInterviewNaturalInputCaptureMode: String, Codable, Equatable, Sendable {
     case naturalInput
     case live
+}
+
+/// One locally durable Live transcript turn. It intentionally contains only
+/// the value required to reproduce the idempotent append command after a
+/// process or network interruption; it is not a second conversation store.
+struct OwnerTruthInterviewLiveTurnDelivery: Codable, Equatable, Sendable {
+    let commandID: String
+    let messageID: OwnerTruthRecordID
+    let clientSequenceNumber: Int
+    let role: OwnerTruthInterviewNaturalInputMessageRole
+    let text: String
+    let capturedAt: Date
+
+    init(
+        commandID: String,
+        messageID: OwnerTruthRecordID,
+        clientSequenceNumber: Int,
+        role: OwnerTruthInterviewNaturalInputMessageRole,
+        text: String,
+        capturedAt: Date
+    ) throws {
+        guard let commandID = OwnerTruthInterviewNaturalInputContract.nonEmptyString(commandID),
+              let text = OwnerTruthInterviewNaturalInputContract.nonEmptyString(text),
+              text.count <= OwnerTruthInterviewNaturalInputAppendCommand.maximumCharacterCount,
+              clientSequenceNumber > 0 else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "Live delivery requires bounded text, ids and a positive sequence"
+            )
+        }
+        self.commandID = commandID
+        self.messageID = messageID
+        self.clientSequenceNumber = clientSequenceNumber
+        self.role = role
+        self.text = text
+        self.capturedAt = capturedAt
+    }
+
+    func appendCommand(
+        threadID: OwnerTruthRecordID,
+        sessionID: OwnerTruthRecordID,
+        expectedThreadVersion: Int,
+        expectedSessionVersion: Int
+    ) throws -> OwnerTruthInterviewNaturalInputAppendCommand {
+        try OwnerTruthInterviewNaturalInputAppendCommand(
+            commandID: commandID,
+            threadID: threadID,
+            sessionID: sessionID,
+            messageID: messageID,
+            expectedThreadVersion: expectedThreadVersion,
+            expectedSessionVersion: expectedSessionVersion,
+            text: text,
+            role: role,
+            captureMode: .live,
+            clientSequenceNumber: clientSequenceNumber,
+            capturedAt: capturedAt
+        )
+    }
 }
 
 struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
@@ -7440,6 +8403,11 @@ struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
     let text: String
     let role: OwnerTruthInterviewNaturalInputMessageRole
     let captureMode: OwnerTruthInterviewNaturalInputCaptureMode
+    /// A Live-only monotonic sequence.  It is persisted by the caller before
+    /// transport so a reconnect can replay the same idempotent command.
+    let clientSequenceNumber: Int?
+    /// The local capture time is evidence metadata, never a server clock.
+    let capturedAt: Date?
 
     init(
         commandID: String,
@@ -7450,7 +8418,9 @@ struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
         expectedSessionVersion: Int,
         text: String,
         role: OwnerTruthInterviewNaturalInputMessageRole = .owner,
-        captureMode: OwnerTruthInterviewNaturalInputCaptureMode = .naturalInput
+        captureMode: OwnerTruthInterviewNaturalInputCaptureMode = .naturalInput,
+        clientSequenceNumber: Int? = nil,
+        capturedAt: Date? = nil
     ) throws {
         guard let commandID = OwnerTruthInterviewNaturalInputContract.nonEmptyString(commandID),
               let text = OwnerTruthInterviewNaturalInputContract.nonEmptyString(text),
@@ -7461,6 +8431,16 @@ struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
                 "append command requires non-empty bounded text and positive versions"
             )
         }
+        if clientSequenceNumber != nil || capturedAt != nil {
+            guard captureMode == .live,
+                  let clientSequenceNumber,
+                  clientSequenceNumber > 0,
+                  capturedAt != nil else {
+                throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                    "Live delivery metadata requires a positive sequence and capture time"
+                )
+            }
+        }
         self.commandID = commandID
         self.threadID = threadID
         self.sessionID = sessionID
@@ -7470,6 +8450,8 @@ struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
         self.text = text
         self.role = role
         self.captureMode = captureMode
+        self.clientSequenceNumber = clientSequenceNumber
+        self.capturedAt = capturedAt
     }
 
     var backendPayload: [String: Any] {
@@ -7487,6 +8469,12 @@ struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
         if captureMode != .naturalInput {
             payload["captureMode"] = captureMode.rawValue
         }
+        if let clientSequenceNumber {
+            payload["clientSequenceNumber"] = clientSequenceNumber
+        }
+        if let capturedAt {
+            payload["capturedAt"] = ISO8601DateFormatter().string(from: capturedAt)
+        }
         return payload
     }
 }
@@ -7500,13 +8488,17 @@ struct OwnerTruthInterviewEndCommand: Equatable, Sendable {
     let sessionID: OwnerTruthRecordID
     let expectedThreadVersion: Int
     let expectedSessionVersion: Int
+    /// For Live, the server must have a contiguous prefix through this number
+    /// before it may close and create the one review batch.
+    let lastClientSequenceNumber: Int?
 
     init(
         commandID: String,
         threadID: OwnerTruthRecordID,
         sessionID: OwnerTruthRecordID,
         expectedThreadVersion: Int,
-        expectedSessionVersion: Int
+        expectedSessionVersion: Int,
+        lastClientSequenceNumber: Int? = nil
     ) throws {
         guard let commandID = OwnerTruthInterviewNaturalInputContract.nonEmptyString(commandID),
               expectedThreadVersion > 0,
@@ -7515,20 +8507,30 @@ struct OwnerTruthInterviewEndCommand: Equatable, Sendable {
                 "end command requires a non-empty command id and positive versions"
             )
         }
+        guard lastClientSequenceNumber == nil || lastClientSequenceNumber! > 0 else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "last Live client sequence must be positive when supplied"
+            )
+        }
         self.commandID = commandID
         self.threadID = threadID
         self.sessionID = sessionID
         self.expectedThreadVersion = expectedThreadVersion
         self.expectedSessionVersion = expectedSessionVersion
+        self.lastClientSequenceNumber = lastClientSequenceNumber
     }
 
     var backendPayload: [String: Any] {
-        [
+        var payload: [String: Any] = [
             "commandId": commandID,
             "threadId": threadID.rawValue.uuidString.lowercased(),
             "expectedThreadVersion": expectedThreadVersion,
             "expectedSessionVersion": expectedSessionVersion,
         ]
+        if let lastClientSequenceNumber {
+            payload["lastClientSequenceNumber"] = lastClientSequenceNumber
+        }
+        return payload
     }
 }
 
@@ -7738,6 +8740,16 @@ protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>) -> Void
     )
 
+    /// Product-session scoped lookup is used by Live recovery. The default
+    /// preserves the legacy natural-input client contract for test doubles and
+    /// old in-app QA adapters; the production transport implements the scoped
+    /// route explicitly.
+    func fetchOwnerTruthInterviewNaturalInputCurrentSession(
+        vaultID: OwnerTruthVaultID,
+        productSessionID: String?,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>) -> Void
+    )
+
     func startOwnerTruthInterviewNaturalInput(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewNaturalInputStartCommand,
@@ -7791,6 +8803,19 @@ protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
         sessionID: OwnerTruthRecordID,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputContinuation, Error>) -> Void
     )
+}
+
+extension OwnerTruthInterviewNaturalInputClient {
+    func fetchOwnerTruthInterviewNaturalInputCurrentSession(
+        vaultID: OwnerTruthVaultID,
+        productSessionID _: String?,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>) -> Void
+    ) {
+        fetchOwnerTruthInterviewNaturalInputCurrentSession(
+            vaultID: vaultID,
+            completion: completion
+        )
+    }
 }
 
 // MARK: - Formal pending review-batch acknowledgement
@@ -11155,7 +12180,9 @@ enum OwnerTruthInterviewNaturalInputIntent: Equatable, Sendable {
     case start
     case submit(text: String)
     case submitLiveTurn(text: String, role: OwnerTruthInterviewNaturalInputMessageRole)
+    case submitPersistedLiveTurn(OwnerTruthInterviewLiveTurnDelivery)
     case end
+    case endLive(lastClientSequenceNumber: Int)
     case setBoundary(OwnerTruthInterviewSessionBoundary)
     case recordPacing(OwnerTruthInterviewPacingEvent)
     case pauseForTopicSwitch
@@ -11212,6 +12239,10 @@ final class OwnerTruthInterviewNaturalInputUseCase {
     private let allowsEntryModeTransition: Bool
     private let productSessionID: String?
     private var operationGeneration: UInt = 0
+    /// This is a delivery cursor, not a transcript counter. A durable Live
+    /// outbox may supply its own number; the in-memory path still needs a
+    /// monotonic value while the app stays alive.
+    private var nextLiveClientSequenceNumber = 1
 
     private(set) var viewState: OwnerTruthInterviewNaturalInputViewState = .idle {
         didSet { onViewStateChange?(viewState) }
@@ -11252,8 +12283,12 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             submit(text: text, role: .owner, captureMode: .naturalInput)
         case .submitLiveTurn(let text, let role):
             submit(text: text, role: role, captureMode: .live)
+        case .submitPersistedLiveTurn(let delivery):
+            submitPersistedLiveTurn(delivery)
         case .end:
             end()
+        case .endLive(let lastClientSequenceNumber):
+            end(lastClientSequenceNumber: lastClientSequenceNumber)
         case .setBoundary(let boundary):
             setBoundary(boundary)
         case .recordPacing(let event):
@@ -11278,7 +12313,10 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             continuation: nil,
             notice: nil
         )
-        client.fetchOwnerTruthInterviewNaturalInputCurrentSession(vaultID: vaultID) { [weak self] result in
+        client.fetchOwnerTruthInterviewNaturalInputCurrentSession(
+            vaultID: vaultID,
+            productSessionID: productSessionID
+        ) { [weak self] result in
             self?.receiveCurrentSession(result, vaultID: vaultID, generation: generation)
         }
     }
@@ -11332,6 +12370,12 @@ final class OwnerTruthInterviewNaturalInputUseCase {
                 transitionFailure(.contractMismatch)
                 return
             }
+            guard current.productSessionID == productSessionID else {
+                // Do not let an older backend that ignores the query selector
+                // resume a different Live conversation into this one.
+                transitionFailure(.contractMismatch)
+                return
+            }
             guard currentEntryMode == entryMode else {
                 guard allowsEntryModeTransition else {
                     transitionFailure(.contractMismatch)
@@ -11348,6 +12392,10 @@ final class OwnerTruthInterviewNaturalInputUseCase {
                 latestReceipt: receipt,
                 continuation: nil,
                 notice: nil
+            )
+            nextLiveClientSequenceNumber = max(
+                1,
+                (receipt.continuousClientSequence ?? 0) + 1
             )
             refreshContinuation(vaultID: vaultID, receipt: receipt)
         case .failure:
@@ -11404,6 +12452,15 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         }
         guard let vaultID = beginRequestOrFail() else { return }
         do {
+            let liveSequenceNumber: Int?
+            let capturedAt: Date?
+            if captureMode == .live {
+                liveSequenceNumber = nextLiveClientSequenceNumber
+                capturedAt = Date()
+            } else {
+                liveSequenceNumber = nil
+                capturedAt = nil
+            }
             let command = try OwnerTruthInterviewNaturalInputAppendCommand(
                 commandID: identifierFactory().uuidString.lowercased(),
                 threadID: receipt.threadID,
@@ -11413,7 +12470,9 @@ final class OwnerTruthInterviewNaturalInputUseCase {
                 expectedSessionVersion: receipt.sessionVersion,
                 text: text,
                 role: role,
-                captureMode: captureMode
+                captureMode: captureMode,
+                clientSequenceNumber: liveSequenceNumber,
+                capturedAt: capturedAt
             )
             operationGeneration &+= 1
             let generation = operationGeneration
@@ -11436,12 +12495,46 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         }
     }
 
-    private func end() {
+    private func submitPersistedLiveTurn(_ delivery: OwnerTruthInterviewLiveTurnDelivery) {
+        guard let receipt = viewState.latestReceipt,
+              viewState.phase == .ready else {
+            return
+        }
+        guard let vaultID = beginRequestOrFail() else { return }
+        do {
+            let command = try delivery.appendCommand(
+                threadID: receipt.threadID,
+                sessionID: receipt.sessionID,
+                expectedThreadVersion: receipt.threadVersion,
+                expectedSessionVersion: receipt.sessionVersion
+            )
+            operationGeneration &+= 1
+            let generation = operationGeneration
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .submitting,
+                latestReceipt: receipt,
+                continuation: viewState.continuation,
+                notice: nil
+            )
+            client.appendOwnerTruthInterviewNaturalInput(vaultID: vaultID, command: command) { [weak self] result in
+                self?.receiveAppend(result, vaultID: vaultID, command: command, generation: generation)
+            }
+        } catch {
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .ready,
+                latestReceipt: receipt,
+                continuation: viewState.continuation,
+                notice: .invalidInput
+            )
+        }
+    }
+
+    private func end(lastClientSequenceNumber: Int? = nil) {
         guard let receipt = viewState.latestReceipt,
               viewState.phase == .ready,
               receipt.lifecycle == .active,
               receipt.boundary == .open,
-              receipt.messageSequence != nil else {
+              (receipt.messageSequence != nil || receipt.continuousClientSequence != nil) else {
             return
         }
         guard let vaultID = beginRequestOrFail() else { return }
@@ -11451,7 +12544,13 @@ final class OwnerTruthInterviewNaturalInputUseCase {
                 threadID: receipt.threadID,
                 sessionID: receipt.sessionID,
                 expectedThreadVersion: receipt.threadVersion,
-                expectedSessionVersion: receipt.sessionVersion
+                expectedSessionVersion: receipt.sessionVersion,
+                lastClientSequenceNumber: lastClientSequenceNumber
+                    ?? (entryMode == .live
+                        ? (nextLiveClientSequenceNumber > 1
+                            ? nextLiveClientSequenceNumber - 1
+                            : nil)
+                        : nil)
             )
             operationGeneration &+= 1
             let generation = operationGeneration
@@ -11713,6 +12812,17 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             guard receipt.vaultID == vaultID, receipt.matches(command) else {
                 transitionFailure(.contractMismatch)
                 return
+            }
+            if let deliveredSequence = receipt.continuousClientSequence {
+                nextLiveClientSequenceNumber = max(
+                    nextLiveClientSequenceNumber,
+                    deliveredSequence + 1
+                )
+            } else if let submittedSequence = command.clientSequenceNumber {
+                nextLiveClientSequenceNumber = max(
+                    nextLiveClientSequenceNumber,
+                    submittedSequence + 1
+                )
             }
             viewState = OwnerTruthInterviewNaturalInputViewState(
                 phase: .ready,
@@ -12004,9 +13114,447 @@ private enum OwnerTruthInterviewNaturalInputContract {
         return integer
     }
 
+    static func optionalNonNegativeInt(_ value: Any?, field: String) throws -> Int? {
+        guard let value, !(value is NSNull) else { return nil }
+        let integer: Int?
+        if let value = value as? Int, value >= 0 {
+            integer = value
+        } else if let value = value as? NSNumber,
+                  CFGetTypeID(value) != CFBooleanGetTypeID(),
+                  value.doubleValue.rounded() == value.doubleValue,
+                  value.intValue >= 0 {
+            integer = value.intValue
+        } else {
+            integer = nil
+        }
+        guard let integer else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "\(field) must be a non-negative integer or null"
+            )
+        }
+        return integer
+    }
+
+    static func optionalString(_ value: Any?, field: String) throws -> String? {
+        guard let value, !(value is NSNull) else { return nil }
+        guard let normalized = requiredString(value) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "\(field) must be a non-empty string or null"
+            )
+        }
+        return normalized
+    }
+
+    static func optionalOpaqueIdentifier(
+        _ value: Any?,
+        field: String,
+        maximumLength: Int
+    ) throws -> String? {
+        guard let normalized = try optionalString(value, field: field) else { return nil }
+        guard normalized.utf8.count <= maximumLength,
+              normalized.unicodeScalars.allSatisfy({ scalar in
+                  (65...90).contains(scalar.value)
+                      || (97...122).contains(scalar.value)
+                      || (48...57).contains(scalar.value)
+                      || scalar == "."
+                      || scalar == "_"
+                      || scalar == ":"
+                      || scalar == "-"
+              }) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "\(field) must be a bounded opaque identifier or null"
+            )
+        }
+        return normalized
+    }
+
     static func requiredBool(_ value: Any?) -> Bool? {
         guard let value = value as? Bool else { return nil }
         return value
+    }
+}
+
+// MARK: - Live transcript durable outbox
+
+/// The outbox is intentionally a small, account-scoped replay journal. It is
+/// not a transcript browser and it never creates Candidate or Formal Memory
+/// records locally. The backend remains the sole authority for those states.
+enum OwnerTruthInterviewLiveTurnOutboxError: Error, Equatable {
+    case invalidProductSessionID
+    case invalidPersistenceEnvelope
+    case turnAlreadyAcknowledged
+    case closeSequenceMismatch
+    case storageFailure
+}
+
+struct OwnerTruthInterviewLiveTurnOutboxSnapshot: Equatable, Sendable {
+    let productSessionID: String
+    let ownerTurnCount: Int
+    let lastClientSequenceNumber: Int
+    let closeRequestedLastClientSequenceNumber: Int?
+    let pendingTurns: [OwnerTruthInterviewLiveTurnDelivery]
+
+    var isClosing: Bool { closeRequestedLastClientSequenceNumber != nil }
+}
+
+/// File-backed, product-session isolated queue for unsent Live transcript
+/// turns. It uses a salted account/vault/authority digest as the directory
+/// boundary, and stable command/message IDs as the replay identity.
+final class OwnerTruthInterviewLiveTurnOutboxStore {
+    static let schemaVersion = "owner-truth-live-turn-outbox-v1"
+    static let shared = OwnerTruthInterviewLiveTurnOutboxStore()
+
+    private struct StoredTurn: Codable, Equatable {
+        let delivery: OwnerTruthInterviewLiveTurnDelivery
+        let contentHash: String
+    }
+
+    private struct Envelope: Codable, Equatable {
+        let schemaVersion: String
+        let scopeDigest: String
+        let productSessionID: String
+        var ownerTurnCount: Int
+        var lastClientSequenceNumber: Int
+        var closeRequestedLastClientSequenceNumber: Int?
+        var pendingTurns: [StoredTurn]
+        let createdAt: Date
+        var updatedAt: Date
+    }
+
+    private let rootDirectory: URL
+    private let fileManager: FileManager
+    private let now: () -> Date
+    private let identifierFactory: () -> UUID
+    private let lock = NSLock()
+
+    init(
+        rootDirectory: URL? = nil,
+        fileManager: FileManager = .default,
+        now: @escaping () -> Date = Date.init,
+        identifierFactory: @escaping () -> UUID = UUID.init
+    ) {
+        self.rootDirectory = rootDirectory ?? Self.defaultRootDirectory(fileManager: fileManager)
+        self.fileManager = fileManager
+        self.now = now
+        self.identifierFactory = identifierFactory
+    }
+
+    func load(
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot? {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            guard fileManager.fileExists(atPath: url.path) else { return nil }
+            let envelope = try read(
+                from: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            return Self.snapshot(from: envelope)
+        }
+    }
+
+    @discardableResult
+    func enqueue(
+        role: OwnerTruthInterviewNaturalInputMessageRole,
+        text: String,
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            var envelope = try existingOrNewEnvelope(
+                at: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            guard envelope.closeRequestedLastClientSequenceNumber == nil else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.closeSequenceMismatch
+            }
+            let delivery = try OwnerTruthInterviewLiveTurnDelivery(
+                commandID: identifierFactory().uuidString.lowercased(),
+                messageID: OwnerTruthRecordID(rawValue: identifierFactory()),
+                clientSequenceNumber: envelope.lastClientSequenceNumber + 1,
+                role: role,
+                text: text,
+                capturedAt: now()
+            )
+            envelope.pendingTurns.append(StoredTurn(
+                delivery: delivery,
+                contentHash: Self.contentHash(for: delivery)
+            ))
+            envelope.lastClientSequenceNumber = delivery.clientSequenceNumber
+            if role == .owner {
+                envelope.ownerTurnCount += 1
+            }
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            return Self.snapshot(from: envelope)
+        }
+    }
+
+    @discardableResult
+    func acknowledge(
+        messageID: OwnerTruthRecordID,
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot? {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            guard fileManager.fileExists(atPath: url.path) else { return nil }
+            var envelope = try read(
+                from: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            envelope.pendingTurns.removeAll { $0.delivery.messageID == messageID }
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            return Self.snapshot(from: envelope)
+        }
+    }
+
+    @discardableResult
+    func markClosing(
+        lastClientSequenceNumber: Int,
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            var envelope = try existingOrNewEnvelope(
+                at: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            guard lastClientSequenceNumber > 0,
+                  lastClientSequenceNumber == envelope.lastClientSequenceNumber else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.closeSequenceMismatch
+            }
+            envelope.closeRequestedLastClientSequenceNumber = lastClientSequenceNumber
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            return Self.snapshot(from: envelope)
+        }
+    }
+
+    func remove(
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            if fileManager.fileExists(atPath: url.path) {
+                try fileManager.removeItem(at: url)
+            }
+        }
+    }
+
+    /// Returns a single oldest recoverable product session for the current
+    /// private scope. A completely sent, non-closing queue is intentionally
+    /// not resumed as a new Live session.
+    func recoverableProductSessionID(for accountLease: AccountLease) -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        let directory = scopeDirectoryURL(accountLease: accountLease)
+        guard let urls = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+        let candidates: [(Date, String)] = urls.compactMap { url in
+            guard let data = try? Data(contentsOf: url),
+                  let envelope = try? Self.decoder().decode(Envelope.self, from: data),
+                  envelope.schemaVersion == Self.schemaVersion,
+                  envelope.scopeDigest == Self.scopeDigest(for: accountLease),
+                  Self.isValid(envelope),
+                  (!envelope.pendingTurns.isEmpty
+                    || envelope.closeRequestedLastClientSequenceNumber != nil) else {
+                return nil
+            }
+            return (envelope.createdAt, envelope.productSessionID)
+        }
+        return candidates.sorted { lhs, rhs in
+            lhs.0 == rhs.0 ? lhs.1 < rhs.1 : lhs.0 < rhs.0
+        }.first?.1
+    }
+
+    private func existingOrNewEnvelope(
+        at url: URL,
+        accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> Envelope {
+        if fileManager.fileExists(atPath: url.path) {
+            return try read(
+                from: url,
+                accountLease: accountLease,
+                productSessionID: productSessionID
+            )
+        }
+        let timestamp = now()
+        return Envelope(
+            schemaVersion: Self.schemaVersion,
+            scopeDigest: Self.scopeDigest(for: accountLease),
+            productSessionID: productSessionID,
+            ownerTurnCount: 0,
+            lastClientSequenceNumber: 0,
+            closeRequestedLastClientSequenceNumber: nil,
+            pendingTurns: [],
+            createdAt: timestamp,
+            updatedAt: timestamp
+        )
+    }
+
+    private func read(
+        from url: URL,
+        accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> Envelope {
+        do {
+            let envelope = try Self.decoder().decode(Envelope.self, from: Data(contentsOf: url))
+            guard envelope.schemaVersion == Self.schemaVersion,
+                  envelope.scopeDigest == Self.scopeDigest(for: accountLease),
+                  envelope.productSessionID == productSessionID,
+                  Self.isValid(envelope) else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            return envelope
+        } catch let error as OwnerTruthInterviewLiveTurnOutboxError {
+            throw error
+        } catch {
+            throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+        }
+    }
+
+    private func write(_ envelope: Envelope, to url: URL) throws {
+        guard Self.isValid(envelope) else {
+            throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+        }
+        do {
+            try KnowledgeLocalStoragePolicy.write(try Self.encoder().encode(envelope), to: url)
+        } catch {
+            throw OwnerTruthInterviewLiveTurnOutboxError.storageFailure
+        }
+    }
+
+    private func fileURL(accountLease: AccountLease, productSessionID: String) -> URL {
+        scopeDirectoryURL(accountLease: accountLease)
+            .appendingPathComponent(Self.digest(productSessionID) + ".json", isDirectory: false)
+    }
+
+    private func scopeDirectoryURL(accountLease: AccountLease) -> URL {
+        rootDirectory.appendingPathComponent(Self.scopeDigest(for: accountLease), isDirectory: true)
+    }
+
+    private func withLock<T>(_ body: () throws -> T) throws -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try body()
+    }
+
+    private static func snapshot(from envelope: Envelope) -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        OwnerTruthInterviewLiveTurnOutboxSnapshot(
+            productSessionID: envelope.productSessionID,
+            ownerTurnCount: envelope.ownerTurnCount,
+            lastClientSequenceNumber: envelope.lastClientSequenceNumber,
+            closeRequestedLastClientSequenceNumber: envelope.closeRequestedLastClientSequenceNumber,
+            pendingTurns: envelope.pendingTurns.map(\.delivery)
+        )
+    }
+
+    private static func isValid(_ envelope: Envelope) -> Bool {
+        guard envelope.ownerTurnCount >= 0,
+              envelope.lastClientSequenceNumber >= 0,
+              envelope.closeRequestedLastClientSequenceNumber == nil
+                || envelope.closeRequestedLastClientSequenceNumber == envelope.lastClientSequenceNumber,
+              (try? normalizedProductSessionID(envelope.productSessionID)) != nil else {
+            return false
+        }
+        let sequences = envelope.pendingTurns.map(\.delivery.clientSequenceNumber)
+        guard sequences == sequences.sorted(),
+              Set(sequences).count == sequences.count,
+              sequences.allSatisfy({ $0 > 0 && $0 <= envelope.lastClientSequenceNumber }),
+              Set(envelope.pendingTurns.map(\.delivery.messageID)).count == envelope.pendingTurns.count,
+              envelope.pendingTurns.allSatisfy({
+                  contentHash(for: $0.delivery) == $0.contentHash
+              }) else {
+            return false
+        }
+        return true
+    }
+
+    private static func normalizedProductSessionID(_ value: String) throws -> String {
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty,
+              normalized.utf8.count <= 128,
+              normalized.unicodeScalars.allSatisfy({ scalar in
+                  (65...90).contains(scalar.value)
+                      || (97...122).contains(scalar.value)
+                      || (48...57).contains(scalar.value)
+                      || scalar == "."
+                      || scalar == "_"
+                      || scalar == ":"
+                      || scalar == "-"
+              }) else {
+            throw OwnerTruthInterviewLiveTurnOutboxError.invalidProductSessionID
+        }
+        return normalized
+    }
+
+    private static func contentHash(for delivery: OwnerTruthInterviewLiveTurnDelivery) -> String {
+        digest([
+            "owner-truth-live-turn-v1",
+            delivery.commandID,
+            delivery.messageID.rawValue.uuidString.lowercased(),
+            String(delivery.clientSequenceNumber),
+            delivery.role.rawValue,
+            ISO8601DateFormatter().string(from: delivery.capturedAt),
+            delivery.text,
+        ].map { "\($0.utf8.count):\($0)" }.joined(separator: "|"))
+    }
+
+    private static func scopeDigest(for accountLease: AccountLease) -> String {
+        digest([
+            "owner-truth-live-outbox-scope-v1",
+            accountLease.subjectId,
+            accountLease.vaultId,
+            accountLease.authorityEpoch,
+        ].map { "\($0.utf8.count):\($0)" }.joined(separator: "|"))
+    }
+
+    private static func digest(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func encoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }
+
+    private static func decoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+
+    private static func defaultRootDirectory(fileManager: FileManager) -> URL {
+        let root = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? fileManager.temporaryDirectory
+        return root
+            .appendingPathComponent("DreamJourney", isDirectory: true)
+            .appendingPathComponent("OwnerTruthLiveTurnOutbox", isDirectory: true)
+            .appendingPathComponent("v1", isDirectory: true)
     }
 }
 
@@ -12788,7 +14336,8 @@ enum OwnerTruthCandidateReviewIntent: Equatable, Sendable {
     case correct(
         candidateID: OwnerTruthRecordID,
         correctedPrimaryValue: String,
-        correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]? = nil
+        correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]? = nil,
+        proposedChangeSet: OwnerTruthCandidateChangeSetProposal? = nil
     )
     case reject(candidateID: OwnerTruthRecordID)
 }
@@ -12813,6 +14362,7 @@ enum OwnerTruthCandidateInboxNotice: Equatable, Sendable {
     case batchSelectionRequired
     case batchSelectionInvalid
     case correctionRequired
+    case changeSetPreviewUnavailable
     case candidateSourceInactive
     case candidateVersionChanged
     case reviewResultMismatch
@@ -12827,6 +14377,8 @@ enum OwnerTruthCandidateInboxNotice: Equatable, Sendable {
 struct OwnerTruthCandidateInboxItemViewState: Equatable, Sendable, Identifiable {
     let id: OwnerTruthRecordID
     let proposalPreview: String
+    let content: [String: OwnerTruthJSONValue]
+    let contentSchemaVersion: String
     let primaryField: OwnerTruthCandidatePrimaryField
     let primaryFieldTitle: String
     let primaryValue: String
@@ -12839,8 +14391,10 @@ struct OwnerTruthCandidateInboxItemViewState: Equatable, Sendable, Identifiable 
     let sourceReferences: [OwnerTruthCandidateSourceReferenceViewState]
     let reviewMode: String
     let candidateVersion: Int
+    let proposedChangeSet: OwnerTruthCandidateChangeSetProposal?
     let supportsCorrection: Bool
     let supportsBatchAcceptance: Bool
+    let supportsRelatedGroupReview: Bool
 }
 
 struct OwnerTruthCandidateSourceReferenceViewState: Equatable, Sendable, Identifiable {
@@ -12894,6 +14448,361 @@ struct OwnerTruthCandidateInboxViewState: Equatable, Sendable {
     )
 }
 
+/// Owner-selected V5 Candidates can be reviewed as one explicit dependency
+/// group.  This is intentionally separate from the legacy sequential batch
+/// path: the latter is safe only for unrelated legacy Candidates and must
+/// never claim atomicity.  The group flow exposes a preview before it sends a
+/// binding confirmation, so changing a Candidate or the formal revision makes
+/// the old preview unusable instead of silently applying it.
+///
+/// The candidate is kept alongside its selected action because a grouped
+/// correction must carry the Owner's replacement assertion. The server uses
+/// that assertion to rebuild the V5 envelope for preview and commit; the
+/// client must not resend copied facets, polarity, people, or time fields.
+struct OwnerTruthCandidateRelatedGroupReviewInstruction: Equatable, Sendable {
+    let candidate: OwnerTruthCandidateInboxItemViewState
+    let action: OwnerTruthCandidateReviewAction
+    let correctedValue: [String: OwnerTruthJSONValue]?
+    let correctedValueSchemaVersion: String?
+    let reasonCode: String
+
+    init(
+        candidate: OwnerTruthCandidateInboxItemViewState,
+        action: OwnerTruthCandidateReviewAction,
+        correctedValue: [String: OwnerTruthJSONValue]? = nil,
+        correctedValueSchemaVersion: String? = nil,
+        reasonCode: String
+    ) throws {
+        let normalizedReasonCode = reasonCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSchemaVersion = correctedValueSchemaVersion?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedReasonCode.isEmpty else {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "Related Candidate group actions require a reason code"
+            )
+        }
+        switch action {
+        case .correct:
+            guard let correctedValue, !correctedValue.isEmpty,
+                  let normalizedSchemaVersion, !normalizedSchemaVersion.isEmpty else {
+                throw OwnerTruthRemoteContractError.invalidCommand(
+                    "Related Candidate group corrections require an Owner replacement assertion"
+                )
+            }
+            self.correctedValue = correctedValue
+            self.correctedValueSchemaVersion = normalizedSchemaVersion
+        case .accept, .reject:
+            guard correctedValue == nil, correctedValueSchemaVersion == nil else {
+                throw OwnerTruthRemoteContractError.invalidCommand(
+                    "Only a related Candidate group correction may carry replacement content"
+                )
+            }
+            self.correctedValue = nil
+            self.correctedValueSchemaVersion = nil
+        }
+        self.candidate = candidate
+        self.action = action
+        self.reasonCode = normalizedReasonCode
+    }
+}
+
+enum OwnerTruthCandidateRelatedGroupReviewFailureDisposition: Equatable, Sendable {
+    case stalePreview
+    case unavailable
+    case retryable
+
+    init(error: Error) {
+        if let clientError = error as? any OwnerTruthBackendFailureClassifying {
+            if clientError.ownerTruthFeaturePolicyDenied
+                || clientError.ownerTruthBackendErrorCode == "release_policy_denied"
+                || clientError.ownerTruthBackendErrorCode == "ownerTruthCandidateReviewUnavailable"
+                || clientError.ownerTruthBackendStatusCode.map({
+                    [403, 404, 410].contains($0)
+                }) == true {
+                self = .unavailable
+            } else if clientError.ownerTruthBackendErrorCode == "ownerTruthCandidateVersionConflict"
+                        || clientError.ownerTruthBackendErrorCode == "ownerTruthCandidateReviewConflict"
+                        || clientError.ownerTruthBackendStatusCode == 409 {
+                self = .stalePreview
+            } else {
+                self = .retryable
+            }
+            return
+        }
+
+        if let contractError = error as? OwnerTruthRemoteContractError {
+            switch contractError {
+            case .invalidInbox, .invalidDecision, .invalidCommand:
+                self = .stalePreview
+            default:
+                self = .retryable
+            }
+            return
+        }
+
+        self = .retryable
+    }
+}
+
+final class OwnerTruthCandidateRelatedGroupReviewUseCase {
+    typealias CommandIDFactory = () -> String
+    typealias ConfirmationResult = Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>
+    typealias ConfirmationCompletion = (ConfirmationResult) -> Void
+
+    private let accountLease: AccountLease
+    private let vaultID: OwnerTruthVaultID?
+    private let client: OwnerTruthCandidateReviewClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let qaGateEnabled: () -> Bool
+    private let commandIDFactory: CommandIDFactory
+    private var previewCommandsByProposalID: [
+        OwnerTruthRecordID: OwnerTruthMemoryChangeSetGroupCommand
+    ] = [:]
+    private var confirmationCommandIDsByProposalID: [OwnerTruthRecordID: String] = [:]
+    private var confirmationCompletionsByProposalID: [
+        OwnerTruthRecordID: [ConfirmationCompletion]
+    ] = [:]
+
+    init(
+        accountLease: AccountLease,
+        client: OwnerTruthCandidateReviewClient,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        qaGateEnabled: @escaping () -> Bool = { OwnerTruthCandidateReviewQAGate.isEnabled },
+        commandIDFactory: @escaping CommandIDFactory = { UUID().uuidString.lowercased() }
+    ) {
+        self.accountLease = accountLease
+        self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
+        self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
+        self.qaGateEnabled = qaGateEnabled
+        self.commandIDFactory = commandIDFactory
+    }
+
+    /// Produces a dependency chain in the order the owner sees and explicitly
+    /// selects in the Archive.  The controller describes that order before it
+    /// opens the preview; unrelated Candidates keep using independent review.
+    func preview(
+        candidates: [OwnerTruthCandidateInboxItemViewState],
+        completion: @escaping (Result<OwnerTruthMemoryChangeSetGroupProposal, Error>) -> Void
+    ) {
+        do {
+            let instructions = try candidates.map {
+                try OwnerTruthCandidateRelatedGroupReviewInstruction(
+                    candidate: $0,
+                    action: .accept,
+                    reasonCode: "ownerReviewedRelatedGroup"
+                )
+            }
+            preview(instructions: instructions, completion: completion)
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    /// The owner may accept, correct, or reject separate members in one
+    /// dependency group.  All choices are frozen into the preview command and
+    /// the terminal request only reuses that exact command plus its visible
+    /// proposal binding.
+    func preview(
+        instructions: [OwnerTruthCandidateRelatedGroupReviewInstruction],
+        completion: @escaping (Result<OwnerTruthMemoryChangeSetGroupProposal, Error>) -> Void
+    ) {
+        guard let vaultID = beginRequest(completion: completion) else { return }
+        do {
+            let command = try makePreviewCommand(instructions: instructions)
+            client.previewOwnerTruthCandidateChangeSetGroup(
+                vaultID: vaultID,
+                command: command
+            ) { [weak self] result in
+                guard let self else { return }
+                guard self.accountLeaseRuntime.validate(self.accountLease, at: .commit).allowed else {
+                    completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                        "Account changed while the related Candidate preview was loading"
+                    )))
+                    return
+                }
+                switch result {
+                case .success(let proposal):
+                    guard proposal.vaultID == vaultID,
+                          proposal.members.map(\.candidateID) == command.selections.map(\.candidateID),
+                          proposal.members.map(\.candidateVersion)
+                            == command.selections.map(\.expectedCandidateVersion),
+                          proposal.members.map(\.action) == command.selections.map(\.action),
+                          proposal.dependencies == command.dependencies else {
+                        completion(.failure(OwnerTruthRemoteContractError.invalidInbox(
+                            "Related Candidate preview does not match the requested group"
+                        )))
+                        return
+                    }
+                    self.previewCommandsByProposalID[proposal.proposalID] = command
+                    completion(.success(proposal))
+                case .failure(let error):
+                    completion(.failure(error))
+                }
+            }
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func confirm(
+        proposal: OwnerTruthMemoryChangeSetGroupProposal,
+        completion: @escaping ConfirmationCompletion
+    ) {
+        guard let vaultID = beginRequest(completion: completion) else { return }
+        guard proposal.vaultID == vaultID,
+              let previewCommand = previewCommandsByProposalID[proposal.proposalID] else {
+            completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                "Related Candidate confirmation requires the visible group preview from this session"
+            )))
+            return
+        }
+        if confirmationCompletionsByProposalID[proposal.proposalID] != nil {
+            confirmationCompletionsByProposalID[proposal.proposalID]?.append(completion)
+            return
+        }
+        let commandID = confirmationCommandIDsByProposalID[proposal.proposalID] ?? commandIDFactory()
+        confirmationCommandIDsByProposalID[proposal.proposalID] = commandID
+        do {
+            let command = try OwnerTruthMemoryChangeSetGroupCommand(
+                commandID: commandID,
+                selections: previewCommand.selections,
+                dependencies: previewCommand.dependencies,
+                expectedMemoryRevision: proposal.baseMemoryRevision,
+                expectedGroupProposalID: proposal.proposalID,
+                expectedGroupProposalHash: proposal.proposalHash
+            )
+            confirmationCompletionsByProposalID[proposal.proposalID] = [completion]
+            client.confirmOwnerTruthCandidateChangeSetGroup(
+                vaultID: vaultID,
+                command: command,
+                expectedProposal: proposal
+            ) { [weak self] result in
+                guard let self else { return }
+                guard self.accountLeaseRuntime.validate(self.accountLease, at: .commit).allowed else {
+                    let error = OwnerTruthRemoteContractError.invalidCommand(
+                        "Account changed while the related Candidate confirmation was submitting"
+                    )
+                    self.invalidateProposal(proposal.proposalID)
+                    self.finishConfirmation(
+                        proposalID: proposal.proposalID,
+                        result: .failure(error)
+                    )
+                    return
+                }
+                switch result {
+                case .success(let result):
+                    guard result.members.map(\.candidateID) == proposal.members.map(\.candidateID),
+                          result.members.map(\.decision)
+                            == previewCommand.selections.map({ $0.action.terminalDecision }) else {
+                        let error = OwnerTruthRemoteContractError.invalidDecision(
+                            "Related Candidate confirmation does not match the owner-approved preview"
+                        )
+                        self.invalidateProposal(proposal.proposalID)
+                        self.finishConfirmation(
+                            proposalID: proposal.proposalID,
+                            result: .failure(error)
+                        )
+                        return
+                    }
+                    self.invalidateProposal(proposal.proposalID)
+                    self.finishConfirmation(
+                        proposalID: proposal.proposalID,
+                        result: .success(result)
+                    )
+                case .failure(let error):
+                    if OwnerTruthCandidateRelatedGroupReviewFailureDisposition(error: error)
+                        != .retryable {
+                        self.invalidateProposal(proposal.proposalID)
+                    }
+                    self.finishConfirmation(
+                        proposalID: proposal.proposalID,
+                        result: .failure(error)
+                    )
+                }
+            }
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    static func supportsRelatedGroupReview(
+        _ candidate: OwnerTruthCandidateInboxItemViewState
+    ) -> Bool {
+        candidate.contentSchemaVersion == "owner-truth-v5"
+            && candidate.sensitivity == .standard
+            && candidate.proposedChangeSet != nil
+    }
+
+    private func beginRequest<T>(
+        completion: @escaping (Result<T, Error>) -> Void
+    ) -> OwnerTruthVaultID? {
+        guard qaGateEnabled() else {
+            completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                "Related Candidate review is unavailable for this account"
+            )))
+            return nil
+        }
+        guard let vaultID,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                "Account lease is unavailable for related Candidate review"
+            )))
+            return nil
+        }
+        return vaultID
+    }
+
+    private func finishConfirmation(
+        proposalID: OwnerTruthRecordID,
+        result: ConfirmationResult
+    ) {
+        let completions = confirmationCompletionsByProposalID.removeValue(
+            forKey: proposalID
+        ) ?? []
+        completions.forEach { $0(result) }
+    }
+
+    private func invalidateProposal(_ proposalID: OwnerTruthRecordID) {
+        previewCommandsByProposalID.removeValue(forKey: proposalID)
+        confirmationCommandIDsByProposalID.removeValue(forKey: proposalID)
+    }
+
+    private func makePreviewCommand(
+        instructions: [OwnerTruthCandidateRelatedGroupReviewInstruction]
+    ) throws -> OwnerTruthMemoryChangeSetGroupCommand {
+        let candidates = instructions.map(\.candidate)
+        guard candidates.count >= 2,
+              Set(candidates.map(\.id)).count == candidates.count,
+              candidates.allSatisfy(Self.supportsRelatedGroupReview) else {
+            throw OwnerTruthRemoteContractError.invalidCommand(
+                "Choose at least two distinct V5 standard Candidates with visible change previews"
+            )
+        }
+        let selections = try instructions.map {
+            try OwnerTruthMemoryChangeSetGroupSelection(
+                candidateID: $0.candidate.id,
+                expectedCandidateVersion: $0.candidate.candidateVersion,
+                action: $0.action,
+                correctedValue: $0.correctedValue,
+                correctedValueSchemaVersion: $0.correctedValueSchemaVersion,
+                reasonCode: $0.reasonCode
+            )
+        }
+        let dependencies = try zip(candidates, candidates.dropFirst()).map {
+            try OwnerTruthMemoryChangeSetGroupDependency(
+                beforeCandidateID: $0.0.id,
+                afterCandidateID: $0.1.id
+            )
+        }
+        return try OwnerTruthMemoryChangeSetGroupCommand(
+            commandID: commandIDFactory(),
+            selections: selections,
+            dependencies: dependencies
+        )
+    }
+}
+
 /// Closed-pilot application boundary for Candidate review. It never accepts an
 /// owner identifier from the UI, does not write legacy Archive/KBLite state,
 /// and rejects stale account or stale async completion paths before ViewState
@@ -12918,6 +14827,7 @@ final class OwnerTruthCandidateReviewUseCase {
     // lifetime. They are never persisted; after a restart the server inbox is
     // authoritative and a 409 is explicitly surfaced instead of hidden.
     private var batchCommandIDsByCandidateID: [OwnerTruthRecordID: String] = [:]
+    private var memoryRevision: Int?
     private var operationGeneration: UInt = 0
 
     private(set) var viewState: OwnerTruthCandidateInboxViewState = .idle {
@@ -12953,12 +14863,18 @@ final class OwnerTruthCandidateReviewUseCase {
             submit(candidateID: candidateID, action: .accept, correctedPrimaryValue: nil)
         case .acceptBatch(let candidateIDs):
             submitBatch(candidateIDs: candidateIDs)
-        case .correct(let candidateID, let correctedPrimaryValue, let correctedFacetValues):
+        case .correct(
+            let candidateID,
+            let correctedPrimaryValue,
+            let correctedFacetValues,
+            let proposedChangeSet
+        ):
             submit(
                 candidateID: candidateID,
                 action: .correct,
                 correctedPrimaryValue: correctedPrimaryValue,
-                correctedFacetValues: correctedFacetValues
+                correctedFacetValues: correctedFacetValues,
+                proposedChangeSet: proposedChangeSet
             )
         case .reject(let candidateID):
             submit(candidateID: candidateID, action: .reject, correctedPrimaryValue: nil)
@@ -12985,18 +14901,28 @@ final class OwnerTruthCandidateReviewUseCase {
         candidateID: OwnerTruthRecordID,
         action: OwnerTruthCandidateReviewAction,
         correctedPrimaryValue: String?,
-        correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]? = nil
+        correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]? = nil,
+        proposedChangeSet: OwnerTruthCandidateChangeSetProposal? = nil
     ) {
         guard let vaultID = beginRequestOrFail() else { return }
         guard let candidate = candidatesByID[candidateID] else {
             transitionFailure(.candidateUnavailable)
             return
         }
+        if action == .correct,
+           candidate.contentSchemaVersion == "owner-truth-v5",
+           proposedChangeSet == nil {
+            // A correction can change the target, dependencies and fact diff.
+            // It must be previewed and bound before a review command is sent.
+            transitionFailure(.changeSetPreviewUnavailable)
+            return
+        }
         guard let command = makeCommand(
             candidate: candidate,
             action: action,
             correctedPrimaryValue: correctedPrimaryValue,
-            correctedFacetValues: correctedFacetValues
+            correctedFacetValues: correctedFacetValues,
+            proposedChangeSet: proposedChangeSet
         ) else {
             return
         }
@@ -13021,6 +14947,94 @@ final class OwnerTruthCandidateReviewUseCase {
                 expectedAction: action,
                 generation: generation
             )
+        }
+    }
+
+    /// Builds a correction-specific ChangeSet without writing a review result.
+    /// The caller must render this proposal and pass it back with an explicit
+    /// second confirmation.  A V5 correction therefore cannot silently change
+    /// a target memory after the Owner has inspected an older preview.
+    func previewCorrection(
+        candidateID: OwnerTruthRecordID,
+        correctedPrimaryValue: String,
+        correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]? = nil,
+        completion: @escaping (Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void
+    ) {
+        guard let vaultID = beginRequestOrFail() else {
+            completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                "Candidate correction preview is unavailable"
+            )))
+            return
+        }
+        guard let candidate = candidatesByID[candidateID] else {
+            transitionFailure(.candidateUnavailable)
+            completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                "Candidate is no longer available"
+            )))
+            return
+        }
+        guard candidate.contentSchemaVersion == "owner-truth-v5" else {
+            completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                "Only V5 Candidate corrections require a ChangeSet preview"
+            )))
+            return
+        }
+        guard let correctedValue = correctedContent(
+            candidate: candidate,
+            correctedPrimaryValue: correctedPrimaryValue,
+            correctedFacetValues: correctedFacetValues
+        ) else {
+            completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                "Corrected Candidate content is invalid"
+            )))
+            return
+        }
+        let generation = operationGeneration
+        client.previewOwnerTruthCandidateChangeSet(
+            vaultID: vaultID,
+            candidateID: candidate.id,
+            correctedValue: correctedValue,
+            correctedValueSchemaVersion: candidate.contentSchemaVersion
+        ) { [weak self] result in
+            guard let self else { return }
+            guard generation == self.operationGeneration else {
+                completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                    "Candidate changed while its correction preview was loading"
+                )))
+                return
+            }
+            guard self.accountLeaseRuntime.validate(self.accountLease, at: .commit).allowed else {
+                self.resetForUnavailable(.staleAccountLease)
+                completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                    "Account changed while its correction preview was loading"
+                )))
+                return
+            }
+            guard let current = self.candidatesByID[candidate.id],
+                  current.candidateVersion == candidate.candidateVersion,
+                  current.contentHash == candidate.contentHash else {
+                self.transitionFailure(.candidateVersionChanged)
+                completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                    "Candidate changed before correction preview confirmation"
+                )))
+                return
+            }
+            switch result {
+            case .success(let proposal):
+                guard proposal.candidateVersion == candidate.candidateVersion,
+                      proposal.candidateContentHash == candidate.contentHash,
+                      proposal.baseMemoryRevision >= 0 else {
+                    self.transitionFailure(.changeSetPreviewUnavailable)
+                    completion(.failure(OwnerTruthRemoteContractError.invalidInbox(
+                        "Correction ChangeSet proposal does not bind the displayed Candidate"
+                    )))
+                    return
+                }
+                completion(.success(proposal))
+            case .failure(let error):
+                self.transitionFailure(Self.failureNotice(for: error))
+                completion(.failure(error))
+            }
         }
     }
 
@@ -13161,6 +15175,7 @@ final class OwnerTruthCandidateReviewUseCase {
             candidatesByID.removeValue(forKey: candidate.id)
             orderedCandidateIDs.removeAll { $0 == candidate.id }
             batchCommandIDsByCandidateID.removeValue(forKey: candidate.id)
+            memoryRevision = decision.memoryRevision ?? memoryRevision
             let receipt = Self.receiptViewState(from: decision)
             submitNextBatchCandidate(
                 requestedCandidateIDs: requestedCandidateIDs,
@@ -13202,56 +15217,95 @@ final class OwnerTruthCandidateReviewUseCase {
         action: OwnerTruthCandidateReviewAction,
         correctedPrimaryValue: String?,
         correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]? = nil,
+        proposedChangeSet: OwnerTruthCandidateChangeSetProposal? = nil,
         commandID: String? = nil
     ) -> OwnerTruthCandidateReviewCommand? {
         do {
             let stableCommandID = commandID ?? commandIDFactory()
+            let requiresChangeSetBinding = candidate.contentSchemaVersion == "owner-truth-v5"
+            let effectiveProposal = proposedChangeSet ?? candidate.proposedChangeSet
+            if requiresChangeSetBinding && effectiveProposal == nil {
+                transitionFailure(.changeSetPreviewUnavailable)
+                return nil
+            }
+            let expectedMemoryRevision = effectiveProposal?.baseMemoryRevision ?? memoryRevision
+            let expectedChangeSetID = effectiveProposal?.changeSetID
+            let expectedProposalHash = effectiveProposal?.proposalHash
             switch action {
             case .accept:
                 return try OwnerTruthCandidateReviewCommand(
                     commandID: stableCommandID,
                     expectedCandidateVersion: candidate.candidateVersion,
                     action: .accept,
-                    reasonCode: "ownerReviewed"
+                    reasonCode: "ownerReviewed",
+                    expectedMemoryRevision: expectedMemoryRevision,
+                    expectedChangeSetID: expectedChangeSetID,
+                    expectedProposalHash: expectedProposalHash
                 )
             case .reject:
                 return try OwnerTruthCandidateReviewCommand(
                     commandID: stableCommandID,
                     expectedCandidateVersion: candidate.candidateVersion,
                     action: .reject,
-                    reasonCode: "ownerReviewed"
+                    reasonCode: "ownerReviewed",
+                    expectedMemoryRevision: expectedMemoryRevision,
+                    expectedChangeSetID: expectedChangeSetID,
+                    expectedProposalHash: expectedProposalHash
                 )
             case .correct:
-                let normalizedValue = correctedPrimaryValue?
-                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                guard !normalizedValue.isEmpty else {
-                    transitionFailure(.correctionRequired)
-                    return nil
-                }
-                var correctedValue = candidate.content
-                correctedValue[candidate.primaryField.rawValue] = .string(normalizedValue)
-                if let correctedFacetValues {
-                    guard case .available(let facets) = candidate.facetsState else {
-                        transitionFailure(.requestFailed)
-                        return nil
-                    }
-                    correctedValue["facets"] = facets.ownerCorrectedJSONValue(
-                        valuesByKind: correctedFacetValues
-                    )
-                }
+                guard let correctedValue = correctedContent(
+                    candidate: candidate,
+                    correctedPrimaryValue: correctedPrimaryValue,
+                    correctedFacetValues: correctedFacetValues
+                ) else { return nil }
                 return try OwnerTruthCandidateReviewCommand(
                     commandID: stableCommandID,
                     expectedCandidateVersion: candidate.candidateVersion,
                     action: .correct,
                     correctedValue: correctedValue,
                     correctedValueSchemaVersion: candidate.contentSchemaVersion,
-                    reasonCode: "ownerCorrected"
+                    reasonCode: "ownerCorrected",
+                    expectedMemoryRevision: expectedMemoryRevision,
+                    expectedChangeSetID: expectedChangeSetID,
+                    expectedProposalHash: expectedProposalHash
                 )
             }
         } catch {
             transitionFailure(.requestFailed)
             return nil
         }
+    }
+
+    private func correctedContent(
+        candidate: OwnerTruthCandidateInboxItem,
+        correctedPrimaryValue: String?,
+        correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]?
+    ) -> [String: OwnerTruthJSONValue]? {
+        let normalizedValue = correctedPrimaryValue?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !normalizedValue.isEmpty else {
+            transitionFailure(.correctionRequired)
+            return nil
+        }
+        var correctedValue: [String: OwnerTruthJSONValue]
+        if candidate.contentSchemaVersion == "owner-truth-v5" {
+            // The backend re-normalizes V5 corrections. Send only the owner
+            // assertion and any facet edits the owner explicitly made.
+            correctedValue = [candidate.primaryField.rawValue: .string(normalizedValue)]
+        } else {
+            correctedValue = candidate.content
+            correctedValue[candidate.primaryField.rawValue] = .string(normalizedValue)
+        }
+        if let correctedFacetValues {
+            guard case .available(let facets) = candidate.facetsState else {
+                transitionFailure(.requestFailed)
+                return nil
+            }
+            correctedValue["facets"] = facets.ownerCorrectedJSONValue(
+                valuesByKind: correctedFacetValues
+            )
+        }
+        return correctedValue
     }
 
     private func receiveInbox(
@@ -13298,6 +15352,7 @@ final class OwnerTruthCandidateReviewUseCase {
             candidatesByID = nextCandidates
             orderedCandidateIDs = scopedCandidates.map(\.id)
             batchCommandIDsByCandidateID = retainedBatchCommandIDs
+            memoryRevision = inbox.memoryRevision
             viewState = OwnerTruthCandidateInboxViewState(
                 phase: scopedCandidates.isEmpty ? .empty : .ready,
                 items: currentItems,
@@ -13330,6 +15385,7 @@ final class OwnerTruthCandidateReviewUseCase {
             }
             candidatesByID.removeValue(forKey: candidate.id)
             orderedCandidateIDs.removeAll { $0 == candidate.id }
+            memoryRevision = decision.memoryRevision ?? memoryRevision
             let receipt = Self.receiptViewState(from: decision)
             viewState = OwnerTruthCandidateInboxViewState(
                 phase: orderedCandidateIDs.isEmpty ? .empty : .ready,
@@ -13349,6 +15405,8 @@ final class OwnerTruthCandidateReviewUseCase {
             return OwnerTruthCandidateInboxItemViewState(
                 id: candidate.id,
                 proposalPreview: candidate.primaryValue,
+                content: candidate.content,
+                contentSchemaVersion: candidate.contentSchemaVersion,
                 primaryField: candidate.primaryField,
                 primaryFieldTitle: candidate.primaryField.title,
                 primaryValue: candidate.primaryValue,
@@ -13368,8 +15426,12 @@ final class OwnerTruthCandidateReviewUseCase {
                 },
                 reviewMode: candidate.reviewMode,
                 candidateVersion: candidate.candidateVersion,
+                proposedChangeSet: candidate.proposedChangeSet,
                 supportsCorrection: true,
-                supportsBatchAcceptance: Self.supportsBatchAcceptance(candidate)
+                supportsBatchAcceptance: Self.supportsBatchAcceptance(candidate),
+                supportsRelatedGroupReview: candidate.contentSchemaVersion == "owner-truth-v5"
+                    && candidate.sensitivity == .standard
+                    && candidate.proposedChangeSet != nil
             )
         }
     }
@@ -13470,7 +15532,13 @@ final class OwnerTruthCandidateReviewUseCase {
     private static func supportsBatchAcceptance(
         _ candidate: OwnerTruthCandidateInboxItem
     ) -> Bool {
-        candidate.sensitivity == .standard && candidate.reviewMode == "batch"
+        // A V5 proposal is bound to a single candidate and current formal
+        // revision. V5 candidates therefore use the separate related-group
+        // review flow when they must be confirmed atomically; the legacy
+        // sequential batch action must not misrepresent that guarantee.
+        candidate.contentSchemaVersion != "owner-truth-v5"
+            && candidate.sensitivity == .standard
+            && candidate.reviewMode == "batch"
     }
 
     private static func receiptViewState(
@@ -15905,6 +17973,9 @@ struct OwnerTruthCorrectionResolutionCommand: Equatable, Sendable {
     let correctedValue: [String: OwnerTruthJSONValue]?
     let correctedValueSchemaVersion: String?
     let reasonCode: String
+    let expectedMemoryRevision: Int
+    let expectedChangeSetID: OwnerTruthRecordID
+    let expectedProposalHash: String
 
     init(
         commandID: String,
@@ -15912,7 +17983,8 @@ struct OwnerTruthCorrectionResolutionCommand: Equatable, Sendable {
         action: OwnerTruthCorrectionResolutionAction,
         correctedValue: [String: OwnerTruthJSONValue]? = nil,
         correctedValueSchemaVersion: String? = nil,
-        reasonCode: String
+        reasonCode: String,
+        proposedChangeSet: OwnerTruthCandidateChangeSetProposal
     ) throws {
         let error = OwnerTruthContextCitationContract.correctionResolutionCommandError
         let normalizedCommandID = try OwnerTruthContextCitationContract.opaqueIdentifier(
@@ -15945,6 +18017,10 @@ struct OwnerTruthCorrectionResolutionCommand: Equatable, Sendable {
             self.correctedValueSchemaVersion = nil
         }
 
+        guard proposedChangeSet.candidateVersion == correctionRequestReceipt.candidateVersion else {
+            throw error("ChangeSet preview Candidate version does not match the pending correction request")
+        }
+
         self.commandID = normalizedCommandID
         vaultID = correctionRequestReceipt.vaultID
         correctionRequestID = correctionRequestReceipt.correctionRequestID
@@ -15953,6 +18029,9 @@ struct OwnerTruthCorrectionResolutionCommand: Equatable, Sendable {
         expectedMemoryVersionID = correctionRequestReceipt.expectedMemoryVersionID
         self.action = action
         self.reasonCode = normalizedReasonCode
+        expectedMemoryRevision = proposedChangeSet.baseMemoryRevision
+        expectedChangeSetID = proposedChangeSet.changeSetID
+        expectedProposalHash = proposedChangeSet.proposalHash
     }
 
     var backendPayload: [String: Any] {
@@ -15962,6 +18041,9 @@ struct OwnerTruthCorrectionResolutionCommand: Equatable, Sendable {
             "expectedMemoryVersionId": expectedMemoryVersionID.rawValue.uuidString.lowercased(),
             "action": action.rawValue,
             "reasonCode": reasonCode,
+            "expectedMemoryRevision": expectedMemoryRevision,
+            "expectedChangeSetId": expectedChangeSetID.rawValue.uuidString.lowercased(),
+            "expectedProposalHash": expectedProposalHash,
         ]
         if let correctedValue, let correctedValueSchemaVersion {
             payload["correctedValue"] = correctedValue.mapValues(\.backendJSONObject)
@@ -16472,6 +18554,50 @@ final class OwnerTruthCorrectionResolutionUseCase {
         reasonCode: String
     ) {
         guard let vaultID = beginResolutionOrFail() else { return }
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        viewState = OwnerTruthCorrectionResolutionViewState(
+            phase: .resolving(correctionRequestReceipt.correctionRequestID),
+            notice: nil,
+            latestReceipt: nil
+        )
+        client.previewOwnerTruthCorrectionChangeSet(
+            vaultID: vaultID,
+            candidateID: correctionRequestReceipt.candidateID,
+            correctedValue: correctedValue,
+            correctedValueSchemaVersion: correctedValueSchemaVersion
+        ) { [weak self] result in
+            self?.receivePreview(
+                result,
+                vaultID: vaultID,
+                action: action,
+                correctedValue: correctedValue,
+                correctedValueSchemaVersion: correctedValueSchemaVersion,
+                reasonCode: reasonCode,
+                generation: generation
+            )
+        }
+    }
+
+    private func receivePreview(
+        _ result: Result<OwnerTruthCandidateChangeSetProposal, Error>,
+        vaultID: OwnerTruthVaultID,
+        action: OwnerTruthCorrectionResolutionAction,
+        correctedValue: [String: OwnerTruthJSONValue]?,
+        correctedValueSchemaVersion: String?,
+        reasonCode: String,
+        generation: UInt
+    ) {
+        guard generation == operationGeneration else { return }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            resetForUnavailable(.staleAccountLease)
+            return
+        }
+        guard case .success(let proposal) = result else {
+            transitionFailure(.resolutionFailed)
+            return
+        }
+
         let command: OwnerTruthCorrectionResolutionCommand
         do {
             command = try OwnerTruthCorrectionResolutionCommand(
@@ -16480,7 +18606,8 @@ final class OwnerTruthCorrectionResolutionUseCase {
                 action: action,
                 correctedValue: correctedValue,
                 correctedValueSchemaVersion: correctedValueSchemaVersion,
-                reasonCode: reasonCode
+                reasonCode: reasonCode,
+                proposedChangeSet: proposal
             )
         } catch let error as OwnerTruthRemoteContractError {
             switch error {
@@ -16499,19 +18626,12 @@ final class OwnerTruthCorrectionResolutionUseCase {
             return
         }
 
-        operationGeneration &+= 1
-        let generation = operationGeneration
-        viewState = OwnerTruthCorrectionResolutionViewState(
-            phase: .resolving(command.correctionRequestID),
-            notice: nil,
-            latestReceipt: nil
-        )
         client.resolveOwnerTruthCorrection(
             vaultID: vaultID,
             expectedOwnerSubjectID: accountLease.subjectId,
             command: command
-        ) { [weak self] result in
-            self?.receive(result, command: command, generation: generation)
+        ) { [weak self] resolution in
+            self?.receive(resolution, command: command, generation: generation)
         }
     }
 
@@ -17052,6 +19172,14 @@ protocol OwnerTruthCorrectionRequestClient: AnyObject {
 /// separate route preserves the cited MemoryRecord lineage instead of using the
 /// generic Candidate activation path.
 protocol OwnerTruthCorrectionResolutionClient: AnyObject {
+    func previewOwnerTruthCorrectionChangeSet(
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        correctedValue: [String: OwnerTruthJSONValue]?,
+        correctedValueSchemaVersion: String?,
+        completion: @escaping (Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void
+    )
+
     func resolveOwnerTruthCorrection(
         vaultID: OwnerTruthVaultID,
         expectedOwnerSubjectID: String,

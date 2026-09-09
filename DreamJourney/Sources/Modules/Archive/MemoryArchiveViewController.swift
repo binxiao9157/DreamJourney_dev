@@ -6687,6 +6687,12 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         target: self,
         action: #selector(batchSelectionTapped)
     )
+    private lazy var relatedGroupSelectionButton = UIBarButtonItem(
+        title: "关联确认",
+        style: .plain,
+        target: self,
+        action: #selector(relatedGroupSelectionTapped)
+    )
     private lazy var historyButton = UIBarButtonItem(
         title: "审核记录",
         style: .plain,
@@ -6699,6 +6705,12 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         target: self,
         action: #selector(batchConfirmTapped)
     )
+    private lazy var relatedGroupPreviewButton = UIBarButtonItem(
+        title: "预览关联 0 条",
+        style: .done,
+        target: self,
+        action: #selector(relatedGroupPreviewTapped)
+    )
     private lazy var cancelBatchSelectionButton = UIBarButtonItem(
         title: "取消",
         style: .plain,
@@ -6709,6 +6721,19 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
     private var renderedState: OwnerTruthCandidateInboxViewState = .idle
     private var isSelectingBatch = false
     private var selectedBatchCandidateIDs = Set<OwnerTruthRecordID>()
+    private var isSelectingRelatedGroup = false
+    private var selectedRelatedGroupCandidateIDs = Set<OwnerTruthRecordID>()
+    private var relatedGroupNotice: String?
+    private var isRelatedGroupRequestInFlight = false
+    #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+    private var relatedGroupFailureActionForUIQA: (() -> Void)?
+    #endif
+    private lazy var relatedGroupReviewUseCase = OwnerTruthCandidateRelatedGroupReviewUseCase(
+        accountLease: accountLease,
+        client: candidateClient,
+        accountLeaseRuntime: accountLeaseRuntime,
+        qaGateEnabled: qaGateEnabled
+    )
     var onViewStateRendered: ((OwnerTruthCandidateInboxViewState) -> Void)?
 
     init(
@@ -6748,8 +6773,10 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         view.backgroundColor = DJDesignTokens.Color.background
         refreshButton.accessibilityIdentifier = "owner-truth-candidate-inbox-refresh"
         batchSelectionButton.accessibilityIdentifier = "owner-truth-candidate-inbox-batch-select"
+        relatedGroupSelectionButton.accessibilityIdentifier = "owner-truth-candidate-inbox-related-group-select"
         historyButton.accessibilityIdentifier = "owner-truth-candidate-review-history-open"
         batchConfirmButton.accessibilityIdentifier = "owner-truth-candidate-inbox-batch-confirm"
+        relatedGroupPreviewButton.accessibilityIdentifier = "owner-truth-candidate-inbox-related-group-preview"
         cancelBatchSelectionButton.accessibilityIdentifier = "owner-truth-candidate-inbox-batch-cancel"
         configureHeader()
         configureTableView()
@@ -6872,6 +6899,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         }
         tableView.isUserInteractionEnabled = !isSubmitting
         pruneBatchSelection()
+        pruneRelatedGroupSelection()
         if isSelectingBatch,
            state.latestBatchSummary?.pendingCandidateIDs.isEmpty == true,
            state.latestBatchSummary?.acceptedCount ?? 0 > 0 {
@@ -6917,6 +6945,9 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
     private func formalMemoryNoticeText(
         for state: OwnerTruthCandidateInboxViewState
     ) -> String? {
+        if let relatedGroupNotice {
+            return relatedGroupNotice
+        }
         guard state.latestReceipt?.createdMemoryVersion == true else { return nil }
         switch state.latestReceipt?.decision {
         case .accepted:
@@ -6961,6 +6992,8 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
             return "仅标准候选记忆可批量确认，请逐条审核其余内容"
         case .correctionRequired:
             return "请填写更正后的记忆描述"
+        case .changeSetPreviewUnavailable:
+            return "正式记忆变更预览尚未就绪，请重新载入后确认"
         case .candidateSourceInactive:
             return "候选来源已失效，请重新载入后继续审核"
         case .candidateVersionChanged:
@@ -7011,7 +7044,21 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
     @objc private func batchSelectionTapped() {
         guard renderedState.items.contains(where: \.supportsBatchAcceptance) else { return }
         isSelectingBatch = true
+        isSelectingRelatedGroup = false
         selectedBatchCandidateIDs.removeAll()
+        selectedRelatedGroupCandidateIDs.removeAll()
+        relatedGroupNotice = nil
+        tableView.setEditing(true, animated: true)
+        updateBatchNavigation(isSubmitting: false)
+    }
+
+    @objc private func relatedGroupSelectionTapped() {
+        guard renderedState.items.filter(\.supportsRelatedGroupReview).count >= 2 else { return }
+        isSelectingBatch = false
+        isSelectingRelatedGroup = true
+        selectedBatchCandidateIDs.removeAll()
+        selectedRelatedGroupCandidateIDs.removeAll()
+        relatedGroupNotice = nil
         tableView.setEditing(true, animated: true)
         updateBatchNavigation(isSubmitting: false)
     }
@@ -7034,8 +7081,210 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    @objc private func relatedGroupPreviewTapped() {
+        let selectedItems = orderedSelectedRelatedGroupItems
+        guard selectedItems.count >= 2 else {
+            showRelatedGroupSelectionRequiredAlert()
+            return
+        }
+        presentRelatedGroupActionPicker(
+            items: selectedItems,
+            nextIndex: 0,
+            instructions: []
+        )
+    }
+
+    /// Collect an explicit owner decision for every member before the server
+    /// calculates the group proposal. This keeps mixed accept/correct/reject
+    /// operations inside the same preview and the same atomic confirmation.
+    private func presentRelatedGroupActionPicker(
+        items: [OwnerTruthCandidateInboxItemViewState],
+        nextIndex: Int,
+        instructions: [OwnerTruthCandidateRelatedGroupReviewInstruction]
+    ) {
+        guard items.indices.contains(nextIndex) else {
+            previewRelatedGroup(instructions: instructions)
+            return
+        }
+        let item = items[nextIndex]
+        let alert = UIAlertController(
+            title: "设置第 \(nextIndex + 1) 条关联候选",
+            message: "\(item.primaryValue)\n\n请选择本条在整组提交中的操作。全部操作会先显示正式记忆差异；任一环节不能提交时，整组都不会写入。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "确认", style: .default) { [weak self] _ in
+            self?.continueRelatedGroupActionPicker(
+                item: item,
+                action: .accept,
+                items: items,
+                nextIndex: nextIndex,
+                instructions: instructions
+            )
+        })
+        alert.addAction(UIAlertAction(title: "更正", style: .default) { [weak self] _ in
+            self?.presentRelatedGroupCorrectionEditor(
+                item: item,
+                items: items,
+                nextIndex: nextIndex,
+                instructions: instructions
+            )
+        })
+        alert.addAction(UIAlertAction(title: "拒绝", style: .destructive) { [weak self] _ in
+            self?.continueRelatedGroupActionPicker(
+                item: item,
+                action: .reject,
+                items: items,
+                nextIndex: nextIndex,
+                instructions: instructions
+            )
+        })
+        present(alert, animated: true)
+    }
+
+    private func presentRelatedGroupCorrectionEditor(
+        item: OwnerTruthCandidateInboxItemViewState,
+        items: [OwnerTruthCandidateInboxItemViewState],
+        nextIndex: Int,
+        instructions: [OwnerTruthCandidateRelatedGroupReviewInstruction]
+    ) {
+        let alert = UIAlertController(
+            title: "更正第 \(nextIndex + 1) 条候选",
+            message: "请修改\(item.primaryFieldTitle)。系统会重新整理时间、人物、极性和程度，并在确认前展示新的结构化差异。",
+            preferredStyle: .alert
+        )
+        alert.addTextField { textField in
+            textField.text = item.primaryValue
+            textField.autocapitalizationType = .sentences
+            textField.clearButtonMode = .whileEditing
+        }
+        alert.addAction(UIAlertAction(title: "返回", style: .cancel) { [weak self] _ in
+            self?.presentRelatedGroupActionPicker(
+                items: items,
+                nextIndex: nextIndex,
+                instructions: instructions
+            )
+        })
+        alert.addAction(UIAlertAction(title: "保存更正", style: .default) { [weak self, weak alert] _ in
+            let text = alert?.textFields?.first?.text ?? ""
+            self?.continueRelatedGroupActionPicker(
+                item: item,
+                action: .correct,
+                correctedPrimaryValue: text,
+                items: items,
+                nextIndex: nextIndex,
+                instructions: instructions
+            )
+        })
+        present(alert, animated: true)
+    }
+
+    private func continueRelatedGroupActionPicker(
+        item: OwnerTruthCandidateInboxItemViewState,
+        action: OwnerTruthCandidateReviewAction,
+        correctedPrimaryValue: String? = nil,
+        items: [OwnerTruthCandidateInboxItemViewState],
+        nextIndex: Int,
+        instructions: [OwnerTruthCandidateRelatedGroupReviewInstruction]
+    ) {
+        do {
+            let correctedValue: [String: OwnerTruthJSONValue]?
+            let correctedValueSchemaVersion: String?
+            if action == .correct {
+                let normalizedValue = correctedPrimaryValue?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard !normalizedValue.isEmpty else {
+                    showRelatedGroupCorrectionRequiredAlert(
+                        item: item,
+                        items: items,
+                        nextIndex: nextIndex,
+                        instructions: instructions
+                    )
+                    return
+                }
+                // Never resend a copied V5 envelope. The backend rebuilds the
+                // typed correction from this owner assertion for preview and
+                // terminal confirmation.
+                correctedValue = [item.primaryField.rawValue: .string(normalizedValue)]
+                correctedValueSchemaVersion = item.contentSchemaVersion
+            } else {
+                correctedValue = nil
+                correctedValueSchemaVersion = nil
+            }
+            let instruction = try OwnerTruthCandidateRelatedGroupReviewInstruction(
+                candidate: item,
+                action: action,
+                correctedValue: correctedValue,
+                correctedValueSchemaVersion: correctedValueSchemaVersion,
+                reasonCode: action == .correct
+                    ? "ownerCorrectedRelatedGroup"
+                    : "ownerReviewedRelatedGroup"
+            )
+            presentRelatedGroupActionPicker(
+                items: items,
+                nextIndex: nextIndex + 1,
+                instructions: instructions + [instruction]
+            )
+        } catch {
+            showRelatedGroupRequestFailedAlert()
+        }
+    }
+
+    private func showRelatedGroupCorrectionRequiredAlert(
+        item: OwnerTruthCandidateInboxItemViewState,
+        items: [OwnerTruthCandidateInboxItemViewState],
+        nextIndex: Int,
+        instructions: [OwnerTruthCandidateRelatedGroupReviewInstruction]
+    ) {
+        let alert = UIAlertController(
+            title: "请填写更正内容",
+            message: "更正不能提交为空。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "继续编辑", style: .default) { [weak self] _ in
+            self?.presentRelatedGroupCorrectionEditor(
+                item: item,
+                items: items,
+                nextIndex: nextIndex,
+                instructions: instructions
+            )
+        })
+        present(alert, animated: true)
+    }
+
+    private func previewRelatedGroup(
+        instructions: [OwnerTruthCandidateRelatedGroupReviewInstruction]
+    ) {
+        guard instructions.count >= 2 else {
+            showRelatedGroupSelectionRequiredAlert()
+            return
+        }
+        guard !isRelatedGroupRequestInFlight else { return }
+        isRelatedGroupRequestInFlight = true
+        updateBatchNavigation(isSubmitting: true)
+        relatedGroupReviewUseCase.preview(instructions: instructions) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isRelatedGroupRequestInFlight = false
+                self.updateBatchNavigation(isSubmitting: false)
+                switch result {
+                case .success(let proposal):
+                    self.showRelatedGroupPreview(proposal)
+                case .failure(let error):
+                    self.handleRelatedGroupRequestFailure(error) { [weak self] in
+                        self?.previewRelatedGroup(instructions: instructions)
+                    }
+                }
+            }
+        }
+    }
+
     @objc private func cancelBatchSelectionTapped() {
-        endBatchSelection()
+        if isSelectingRelatedGroup {
+            endRelatedGroupSelection()
+        } else {
+            endBatchSelection()
+        }
     }
 
     private var orderedSelectedBatchCandidateIDs: [OwnerTruthRecordID] {
@@ -7048,6 +7297,12 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         }
     }
 
+    private var orderedSelectedRelatedGroupItems: [OwnerTruthCandidateInboxItemViewState] {
+        renderedState.items.filter {
+            $0.supportsRelatedGroupReview && selectedRelatedGroupCandidateIDs.contains($0.id)
+        }
+    }
+
     private func pruneBatchSelection() {
         let visibleBatchCandidateIDs = Set(
             renderedState.items
@@ -7057,10 +7312,20 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         selectedBatchCandidateIDs.formIntersection(visibleBatchCandidateIDs)
     }
 
+    private func pruneRelatedGroupSelection() {
+        let visibleRelatedCandidateIDs = Set(
+            renderedState.items
+                .filter(\.supportsRelatedGroupReview)
+                .map(\.id)
+        )
+        selectedRelatedGroupCandidateIDs.formIntersection(visibleRelatedCandidateIDs)
+    }
+
     private func restoreBatchSelection() {
-        guard isSelectingBatch else { return }
+        guard isSelectingBatch || isSelectingRelatedGroup else { return }
         for (index, item) in renderedState.items.enumerated()
-        where selectedBatchCandidateIDs.contains(item.id) {
+        where selectedBatchCandidateIDs.contains(item.id)
+            || selectedRelatedGroupCandidateIDs.contains(item.id) {
             tableView.selectRow(
                 at: IndexPath(row: index, section: 0),
                 animated: false,
@@ -7071,7 +7336,15 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
 
     private func updateBatchNavigation(isSubmitting: Bool) {
         refreshButton.isEnabled = !isSubmitting
-        if isSelectingBatch {
+        if isSelectingRelatedGroup {
+            tableView.setEditing(true, animated: false)
+            navigationItem.leftBarButtonItem = cancelBatchSelectionButton
+            navigationItem.rightBarButtonItems = [relatedGroupPreviewButton]
+            relatedGroupPreviewButton.title = "预览关联 (orderedSelectedRelatedGroupItems.count) 条"
+            relatedGroupPreviewButton.isEnabled = !isSubmitting
+                && orderedSelectedRelatedGroupItems.count >= 2
+            cancelBatchSelectionButton.isEnabled = !isSubmitting
+        } else if isSelectingBatch {
             tableView.setEditing(true, animated: false)
             navigationItem.leftBarButtonItem = cancelBatchSelectionButton
             navigationItem.rightBarButtonItems = [batchConfirmButton]
@@ -7082,12 +7355,15 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
             tableView.setEditing(false, animated: false)
             navigationItem.leftBarButtonItem = nil
             var items = [refreshButton, batchSelectionButton]
+            items.append(relatedGroupSelectionButton)
             if sourceIDFilter == nil {
                 items.append(historyButton)
             }
             navigationItem.rightBarButtonItems = items
             batchSelectionButton.isEnabled = !isSubmitting
                 && renderedState.items.contains(where: \.supportsBatchAcceptance)
+            relatedGroupSelectionButton.isEnabled = !isSubmitting
+                && renderedState.items.filter(\.supportsRelatedGroupReview).count >= 2
             historyButton.isEnabled = !isSubmitting
         }
     }
@@ -7095,6 +7371,13 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
     private func endBatchSelection() {
         isSelectingBatch = false
         selectedBatchCandidateIDs.removeAll()
+        tableView.setEditing(false, animated: true)
+        updateBatchNavigation(isSubmitting: false)
+    }
+
+    private func endRelatedGroupSelection() {
+        isSelectingRelatedGroup = false
+        selectedRelatedGroupCandidateIDs.removeAll()
         tableView.setEditing(false, animated: true)
         updateBatchNavigation(isSubmitting: false)
     }
@@ -7109,18 +7392,202 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    private func showRelatedGroupSelectionRequiredAlert() {
+        let alert = UIAlertController(
+            title: "请选择至少两条关联候选",
+            message: "关联确认只用于确实相互依赖的 V5 候选。请按列表顺序选择，系统会先预览每条对正式记忆的影响，再把整组原子提交。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "知道了", style: .default))
+        present(alert, animated: true)
+    }
+
+    private func showRelatedGroupRequestFailedAlert() {
+        let alert = UIAlertController(
+            title: "关联确认暂未完成",
+            message: "预览或提交时发现候选、正式记忆版本或授权状态已变化。不会写入部分结果，请重新载入后再预览。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "知道了", style: .default))
+        present(alert, animated: true)
+    }
+
+    private func handleRelatedGroupRequestFailure(
+        _ error: Error,
+        retry: @escaping () -> Void
+    ) {
+        let disposition = OwnerTruthCandidateRelatedGroupReviewFailureDisposition(error: error)
+        let alert: UIAlertController
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        relatedGroupFailureActionForUIQA = nil
+        #endif
+        switch disposition {
+        case .stalePreview:
+            alert = UIAlertController(
+                title: "预览已过期",
+                message: "候选记忆或正式记忆版本已经变化，本次没有写入任何内容。请重新载入并确认新的变更预览。",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "重新载入", style: .default) { [weak self] _ in
+                self?.useCase.send(.refresh)
+            })
+            #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+            relatedGroupFailureActionForUIQA = { [weak self] in
+                self?.useCase.send(.refresh)
+            }
+            #endif
+        case .unavailable:
+            alert = UIAlertController(
+                title: "关联确认暂不可用",
+                message: "当前账号授权或发布策略已变化，本次没有写入任何内容。请稍后重新进入待确认记忆。",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "知道了", style: .default))
+        case .retryable:
+            alert = UIAlertController(
+                title: "关联确认暂未完成",
+                message: "网络或服务暂时不可用，本次尚未确认写入。你可以保留当前预览并用同一提交请求重试。",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "稍后重试", style: .cancel))
+            alert.addAction(UIAlertAction(title: "重试", style: .default) { _ in
+                retry()
+            })
+            #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+            relatedGroupFailureActionForUIQA = retry
+            #endif
+        }
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        present(alert, animated: true) { [weak self, weak alert] in
+            self?.onRelatedGroupFailureRenderedForUIQA?(
+                disposition,
+                alert?.message ?? ""
+            )
+        }
+        #else
+        present(alert, animated: true)
+        #endif
+    }
+
+    private func showRelatedGroupPreview(
+        _ proposal: OwnerTruthMemoryChangeSetGroupProposal
+    ) {
+        let message = relatedGroupPreviewText(proposal)
+        let alert = UIAlertController(
+            title: "确认关联候选的变更预览",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "返回调整", style: .cancel))
+        alert.addAction(UIAlertAction(title: "原子提交", style: .default) { [weak self] _ in
+            self?.confirmRelatedGroup(proposal)
+        })
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        present(alert, animated: true) { [weak self, weak alert] in
+            self?.onRelatedGroupPreviewRenderedForUIQA?(
+                proposal,
+                alert?.message ?? message
+            )
+        }
+        #else
+        present(alert, animated: true)
+        #endif
+    }
+
+    private func confirmRelatedGroup(
+        _ proposal: OwnerTruthMemoryChangeSetGroupProposal
+    ) {
+        guard !isRelatedGroupRequestInFlight else { return }
+        isRelatedGroupRequestInFlight = true
+        updateBatchNavigation(isSubmitting: true)
+        relatedGroupReviewUseCase.confirm(proposal: proposal) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isRelatedGroupRequestInFlight = false
+                switch result {
+                case .success(let receipt):
+                    let accepted = receipt.members.filter { $0.decision == .accepted }.count
+                    let corrected = receipt.members.filter { $0.decision == .corrected }.count
+                    let rejected = receipt.members.filter { $0.decision == .rejected }.count
+                    self.relatedGroupNotice = "已原子提交 \(receipt.members.count) 条关联候选：确认 \(accepted) 条、更正 \(corrected) 条、拒绝 \(rejected) 条。正式记忆与审核记录已同步更新。"
+                    self.endRelatedGroupSelection()
+                    self.useCase.send(.refresh)
+                case .failure(let error):
+                    self.updateBatchNavigation(isSubmitting: false)
+                    self.handleRelatedGroupRequestFailure(error) { [weak self] in
+                        self?.confirmRelatedGroup(proposal)
+                    }
+                }
+            }
+        }
+    }
+
+    private func relatedGroupPreviewText(
+        _ proposal: OwnerTruthMemoryChangeSetGroupProposal
+    ) -> String {
+        let memberLines = proposal.members.map { member in
+            let operation = member.proposedChangeSet.operations.first
+            let before = groupFactSummary(operation?.factDiff.before) ?? "无现有事实"
+            let after = member.action == .reject
+                ? "不新增正式事实"
+                : (groupFactSummary(operation?.factDiff.after) ?? "不新增正式事实")
+            return "第 \(member.operationIndex + 1) 条（\(groupActionText(member.action))）：\(before) -> \(after)"
+        }
+        let dependencyText = proposal.dependencies.count == 1
+            ? "第 1 条确认成功后才会提交第 2 条。"
+            : "会按显示顺序核验关联关系；任一环节失败，整组都不会提交。"
+        return ([
+            "基于正式记忆第 \(proposal.baseMemoryRevision) 次修订快照。",
+            dependencyText,
+        ] + memberLines).joined(separator: "\n\n")
+    }
+
+    private func groupActionText(_ action: OwnerTruthCandidateReviewAction) -> String {
+        switch action {
+        case .accept: return "确认"
+        case .correct: return "更正"
+        case .reject: return "拒绝"
+        }
+    }
+
+    private func groupFactSummary(_ value: OwnerTruthJSONValue?) -> String? {
+        guard case .object(let object) = value else { return nil }
+        for key in ["event", "statement", "expression", "summary", "claim", "label"] {
+            if case .string(let text)? = object[key] {
+                let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !normalized.isEmpty { return normalized }
+            }
+        }
+        return "结构化事实"
+    }
+
     private func openCandidateDetail(_ item: OwnerTruthCandidateInboxItemViewState) {
         let controller = OwnerTruthCandidateDetailViewController(item: item)
         controller.onAccept = { [weak self, weak controller] in
             controller?.navigationController?.popViewController(animated: true)
             self?.useCase.send(.accept(candidateID: item.id))
         }
-        controller.onCorrect = { [weak self, weak controller] correctedValue, correctedFacetValues in
+        controller.onRequestCorrectionPreview = { [weak self] correctedValue, correctedFacetValues, completion in
+            guard let self else {
+                completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                    "Candidate review is no longer available"
+                )))
+                return
+            }
+            self.useCase.previewCorrection(
+                candidateID: item.id,
+                correctedPrimaryValue: correctedValue,
+                correctedFacetValues: correctedFacetValues,
+                completion: completion
+            )
+        }
+        controller.onCorrect = { [weak self, weak controller] correctedValue, correctedFacetValues, proposal in
             controller?.navigationController?.popViewController(animated: true)
             self?.useCase.send(.correct(
                 candidateID: item.id,
                 correctedPrimaryValue: correctedValue,
-                correctedFacetValues: correctedFacetValues
+                correctedFacetValues: correctedFacetValues,
+                proposedChangeSet: proposal
             ))
         }
         controller.onReject = { [weak self, weak controller] in
@@ -7140,6 +7607,11 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
     var onCandidateDetailRenderedForUIQA: ((OwnerTruthCandidateInboxItemViewState, OwnerTruthCandidateDetailViewController) -> Void)?
     var onHistoryViewStateRenderedForUIQA: ((OwnerTruthCandidateReviewHistoryViewState, OwnerTruthCandidateReviewHistoryViewController) -> Void)?
     var onMemoryVersionHistoryViewStateRenderedForUIQA: ((OwnerTruthMemoryVersionHistoryViewState) -> Void)?
+    var onRelatedGroupPreviewRenderedForUIQA: ((OwnerTruthMemoryChangeSetGroupProposal, String) -> Void)?
+    var onRelatedGroupFailureRenderedForUIQA: ((
+        OwnerTruthCandidateRelatedGroupReviewFailureDisposition,
+        String
+    ) -> Void)?
 
     var formalMemoryNoticeVisibleForUIQA: Bool {
         !formalMemoryNoticeLabel.isHidden && !(formalMemoryNoticeLabel.text ?? "").isEmpty
@@ -7178,6 +7650,95 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         guard OwnerTruthCandidateReviewQAGate.isEnabled else { return }
         historyTapped()
     }
+
+    /// Simulator-only owner choices for the linked-group audit. The real UI
+    /// collects the same instruction objects through its action pickers; this
+    /// hook keeps the smoke deterministic without exposing test controls to a
+    /// production build.
+    func runUIQAPreviewRelatedGroupMixedActions() {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else { return }
+        let items = renderedState.items.filter(\.supportsRelatedGroupReview)
+        guard items.count == 2 else { return }
+        isSelectingBatch = false
+        isSelectingRelatedGroup = true
+        selectedBatchCandidateIDs.removeAll()
+        selectedRelatedGroupCandidateIDs = Set(items.map(\.id))
+        updateBatchNavigation(isSubmitting: false)
+        do {
+            let instructions = [
+                try OwnerTruthCandidateRelatedGroupReviewInstruction(
+                    candidate: items[0],
+                    action: .correct,
+                    correctedValue: [
+                        items[0].primaryField.rawValue: .string(
+                            "我在 2017 年从 A 大学计算机专业毕业。"
+                        ),
+                    ],
+                    correctedValueSchemaVersion: items[0].contentSchemaVersion,
+                    reasonCode: "ownerCorrectedRelatedGroup"
+                ),
+                try OwnerTruthCandidateRelatedGroupReviewInstruction(
+                    candidate: items[1],
+                    action: .reject,
+                    reasonCode: "ownerReviewedRelatedGroup"
+                ),
+            ]
+            previewRelatedGroup(instructions: instructions)
+        } catch {
+            showRelatedGroupRequestFailedAlert()
+        }
+    }
+
+    func runUIQAConfirmRelatedGroup(
+        _ proposal: OwnerTruthMemoryChangeSetGroupProposal
+    ) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else { return }
+        let confirm = { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                self?.confirmRelatedGroup(proposal)
+            }
+        }
+        if let alert = presentedViewController {
+            alert.dismiss(animated: false, completion: confirm)
+        } else {
+            confirm()
+        }
+    }
+
+    func runUIQAConfirmRelatedGroupTwice(
+        _ proposal: OwnerTruthMemoryChangeSetGroupProposal
+    ) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else { return }
+        let confirmTwice = { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                self?.confirmRelatedGroup(proposal)
+                self?.confirmRelatedGroup(proposal)
+            }
+        }
+        if let alert = presentedViewController {
+            alert.dismiss(animated: false, completion: confirmTwice)
+        } else {
+            confirmTwice()
+        }
+    }
+
+    func runUIQAInvokeRelatedGroupFailureAction() {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled,
+              let action = relatedGroupFailureActionForUIQA else {
+            return
+        }
+        relatedGroupFailureActionForUIQA = nil
+        let invoke = {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                action()
+            }
+        }
+        if let alert = presentedViewController {
+            alert.dismiss(animated: false, completion: invoke)
+        } else {
+            invoke()
+        }
+    }
     #endif
 }
 
@@ -7213,16 +7774,31 @@ extension OwnerTruthCandidateInboxViewController: UITableViewDataSource, UITable
             updateBatchNavigation(isSubmitting: false)
             return
         }
+        if isSelectingRelatedGroup {
+            guard item.supportsRelatedGroupReview else {
+                tableView.deselectRow(at: indexPath, animated: false)
+                showRelatedGroupSelectionRequiredAlert()
+                return
+            }
+            selectedRelatedGroupCandidateIDs.insert(item.id)
+            updateBatchNavigation(isSubmitting: false)
+            return
+        }
         tableView.deselectRow(at: indexPath, animated: true)
         openCandidateDetail(item)
     }
 
     func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
-        guard isSelectingBatch,
+        guard (isSelectingBatch || isSelectingRelatedGroup),
               renderedState.items.indices.contains(indexPath.row) else {
             return
         }
-        selectedBatchCandidateIDs.remove(renderedState.items[indexPath.row].id)
+        let item = renderedState.items[indexPath.row]
+        if isSelectingBatch {
+            selectedBatchCandidateIDs.remove(item.id)
+        } else {
+            selectedRelatedGroupCandidateIDs.remove(item.id)
+        }
         updateBatchNavigation(isSubmitting: false)
     }
 
@@ -7230,12 +7806,17 @@ extension OwnerTruthCandidateInboxViewController: UITableViewDataSource, UITable
         _ tableView: UITableView,
         willSelectRowAt indexPath: IndexPath
     ) -> IndexPath? {
-        guard isSelectingBatch,
+        guard (isSelectingBatch || isSelectingRelatedGroup),
               renderedState.items.indices.contains(indexPath.row) else {
             return indexPath
         }
-        guard renderedState.items[indexPath.row].supportsBatchAcceptance else {
-            showBatchSelectionRequiredAlert()
+        let item = renderedState.items[indexPath.row]
+        guard isSelectingBatch ? item.supportsBatchAcceptance : item.supportsRelatedGroupReview else {
+            if isSelectingBatch {
+                showBatchSelectionRequiredAlert()
+            } else {
+                showRelatedGroupSelectionRequiredAlert()
+            }
             return nil
         }
         return indexPath
@@ -7253,7 +7834,16 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
     private var didEmitRenderedForUIQA = false
 
     var onAccept: (() -> Void)?
-    var onCorrect: ((String, [OwnerTruthMemoryFacetKind: [String]]?) -> Void)?
+    var onRequestCorrectionPreview: ((
+        String,
+        [OwnerTruthMemoryFacetKind: [String]]?,
+        @escaping (Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void
+    ) -> Void)?
+    var onCorrect: ((
+        String,
+        [OwnerTruthMemoryFacetKind: [String]]?,
+        OwnerTruthCandidateChangeSetProposal?
+    ) -> Void)?
     var onReject: (() -> Void)?
     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
     var onRenderedForUIQA: ((OwnerTruthCandidateInboxItemViewState) -> Void)?
@@ -7342,6 +7932,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
         contentStack.addArrangedSubview(heading)
         contentStack.addArrangedSubview(introduction)
         contentStack.addArrangedSubview(makePrimaryContentCard())
+        contentStack.addArrangedSubview(makeChangeSetCard())
         contentStack.addArrangedSubview(makeFacetsCard())
         contentStack.addArrangedSubview(makeMetadataCard())
         contentStack.addArrangedSubview(makeSourcesCard())
@@ -7366,6 +7957,57 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
         versionLabel.textColor = DJDesignTokens.Color.textTertiary
 
         return card(containing: [titleLabel, valueLabel, versionLabel])
+    }
+
+    private func makeChangeSetCard() -> UIView {
+        let titleLabel = sectionTitle("本次确认将如何更改正式记忆")
+        guard let proposal = item.proposedChangeSet else {
+            let unavailable = messageLabel(
+                item.contentSchemaVersion == "owner-truth-v5"
+                    ? "正式记忆变更预览尚未加载。为避免确认到未知版本，本条暂不能提交，请返回后重新载入。"
+                    : "该历史候选尚未提供正式记忆变更预览。"
+            )
+            unavailable.accessibilityIdentifier = "owner-truth-candidate-changeset-unavailable"
+            return card(containing: [titleLabel, unavailable])
+        }
+
+        var rows: [UIView] = [titleLabel]
+        let revisionLabel = messageLabel("基于正式记忆第 (proposal.baseMemoryRevision) 次修订快照")
+        revisionLabel.accessibilityIdentifier = "owner-truth-candidate-changeset-base-revision"
+        rows.append(revisionLabel)
+        for operation in proposal.operations {
+            let operationTitle = UILabel()
+            operationTitle.text = operationTitleText(operation.operationKind)
+            operationTitle.font = DJDesignTokens.Font.body(15)
+            operationTitle.textColor = DJDesignTokens.Color.textPrimary
+            operationTitle.numberOfLines = 0
+            rows.append(operationTitle)
+
+            if let targetVersion = operation.targetMemoryVersion {
+                rows.append(messageLabel("目标：正式记忆第 (targetVersion) 版"))
+            } else {
+                rows.append(messageLabel("目标：新建一条独立正式记忆"))
+            }
+            let beforeText = factSummary(operation.factDiff.before)
+            let afterText = factSummary(operation.factDiff.after)
+            if let beforeText {
+                rows.append(messageLabel("确认前：(beforeText)"))
+            }
+            if let afterText {
+                rows.append(messageLabel("确认后：(afterText)"))
+            }
+            if !operation.factDiff.changedFields.isEmpty {
+                let paths = operation.factDiff.changedFields.map(\.path).joined(separator: "、")
+                rows.append(messageLabel("字段变化：(paths)"))
+            }
+            rows.append(messageLabel(
+                "证据：\(operation.factDiff.beforeEvidenceCount) → \(operation.factDiff.afterEvidenceCount) 条"
+            ))
+        }
+        if !proposal.dependencies.isEmpty {
+            rows.append(messageLabel("本次变更包含前后依赖关系，系统会按显示顺序核验。"))
+        }
+        return card(containing: rows)
     }
 
     private func makeMetadataCard() -> UIView {
@@ -7545,6 +8187,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
             selector: #selector(acceptTapped)
         )
         acceptButton.accessibilityIdentifier = "owner-truth-candidate-detail-accept"
+        setChangeSetActionAvailability(acceptButton)
         stack.addArrangedSubview(acceptButton)
 
         if item.supportsCorrection {
@@ -7557,6 +8200,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
             correctionButton.layer.borderWidth = 1
             correctionButton.layer.borderColor = DJDesignTokens.Color.accent.withAlphaComponent(0.32).cgColor
             correctionButton.accessibilityIdentifier = "owner-truth-candidate-detail-correct"
+            setChangeSetActionAvailability(correctionButton)
             stack.addArrangedSubview(correctionButton)
         }
 
@@ -7567,8 +8211,45 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
             selector: #selector(rejectTapped)
         )
         rejectButton.accessibilityIdentifier = "owner-truth-candidate-detail-reject"
+        setChangeSetActionAvailability(rejectButton)
         stack.addArrangedSubview(rejectButton)
         return stack
+    }
+
+    private func setChangeSetActionAvailability(_ button: UIButton) {
+        guard item.contentSchemaVersion == "owner-truth-v5", item.proposedChangeSet == nil else {
+            return
+        }
+        button.isEnabled = false
+        button.alpha = 0.45
+    }
+
+    private func operationTitleText(_ operationKind: String) -> String {
+        switch operationKind {
+        case "add": return "新增一条正式记忆"
+        case "addEvidence": return "为现有正式记忆补充证据"
+        case "refine": return "补充现有正式记忆的缺失细节"
+        case "temporalChange": return "新增一条与原记录有关的时间变化"
+        case "correct": return "修订指定正式记忆版本"
+        case "dispute": return "保留一条与现有事实相冲突的待辨记录"
+        case "duplicate": return "识别为已有正式记忆，不新增版本"
+        case "noPersonalFact": return "不写入跨会话正式记忆"
+        default: return "更新正式记忆"
+        }
+    }
+
+    private func factSummary(_ value: OwnerTruthJSONValue?) -> String? {
+        guard let value else { return nil }
+        guard case .object(let object) = value else { return "结构化事实" }
+        for key in ["event", "statement", "expression", "summary", "claim", "label"] {
+            if case .string(let rawValue)? = object[key] {
+                let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !normalized.isEmpty {
+                    return normalized
+                }
+            }
+        }
+        return "结构化事实"
     }
 
     private func card(containing views: [UIView]) -> UIView {
@@ -7690,7 +8371,79 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
         } else {
             correctedFacetValues = nil
         }
-        onCorrect?(value, correctedFacetValues)
+        guard item.contentSchemaVersion == "owner-truth-v5" else {
+            onCorrect?(value, correctedFacetValues, nil)
+            return
+        }
+        guard let onRequestCorrectionPreview else {
+            correctionErrorLabel.text = "暂时无法生成更正方案，请返回后重新载入。"
+            correctionErrorLabel.isHidden = false
+            return
+        }
+        correctionErrorLabel.text = "正在生成更正后的正式记忆差异…"
+        correctionErrorLabel.textColor = DJDesignTokens.Color.textTertiary
+        correctionErrorLabel.isHidden = false
+        onRequestCorrectionPreview(value, correctedFacetValues) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let proposal):
+                    self.correctionErrorLabel.isHidden = true
+                    self.presentCorrectionPreview(
+                        proposal,
+                        correctedValue: value,
+                        correctedFacetValues: correctedFacetValues
+                    )
+                case .failure:
+                    self.correctionErrorLabel.textColor = .systemRed
+                    self.correctionErrorLabel.text = "更正方案未生成，未写入任何正式记忆。请重新载入后再试。"
+                    self.correctionErrorLabel.isHidden = false
+                }
+            }
+        }
+    }
+
+    private func presentCorrectionPreview(
+        _ proposal: OwnerTruthCandidateChangeSetProposal,
+        correctedValue: String,
+        correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]?
+    ) {
+        let alert = UIAlertController(
+            title: "核对更正方案",
+            message: correctionPreviewMessage(proposal),
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "继续编辑", style: .cancel))
+        alert.addAction(UIAlertAction(title: "确认写入", style: .default) { [weak self] _ in
+            self?.onCorrect?(correctedValue, correctedFacetValues, proposal)
+        })
+        present(alert, animated: true)
+    }
+
+    private func correctionPreviewMessage(
+        _ proposal: OwnerTruthCandidateChangeSetProposal
+    ) -> String {
+        var lines = ["基于正式记忆第 \(proposal.baseMemoryRevision) 次修订快照。"]
+        for operation in proposal.operations.prefix(3) {
+            lines.append(operationTitleText(operation.operationKind))
+            if let before = factSummary(operation.factDiff.before) {
+                lines.append("确认前：\(before)")
+            }
+            if let after = factSummary(operation.factDiff.after) {
+                lines.append("确认后：\(after)")
+            }
+            if !operation.factDiff.changedFields.isEmpty {
+                lines.append("字段：\(operation.factDiff.changedFields.map(\.path).joined(separator: "、"))")
+            }
+            lines.append("证据：\(operation.factDiff.beforeEvidenceCount) → \(operation.factDiff.afterEvidenceCount) 条")
+        }
+        if proposal.operations.count > 3 {
+            lines.append("其余 \(proposal.operations.count - 3) 项变更将在确认时一并校验。")
+        }
+        if !proposal.dependencies.isEmpty {
+            lines.append("本次包含前后依赖，系统会按方案整体校验。")
+        }
+        return lines.joined(separator: "\n")
     }
 
     @objc private func acceptTapped() {
@@ -7842,9 +8595,11 @@ private final class OwnerTruthCandidateInboxCell: UITableViewCell {
         summaryLabel.text = item.proposalPreview
         metadataLabel.text = "\(memoryKindText(item.memoryKind)) · \(perspectiveText(item.perspective)) · \(epistemicText(item.epistemicStatus))"
         evidenceLabel.text = "\(item.evidenceCount) 条证据 · \(sensitivityText(item.sensitivity))"
-        reviewBadgeLabel.text = item.supportsBatchAcceptance
-            ? "可批量确认"
-            : (item.reviewMode == "single" ? "待本人确认" : "待确认")
+        reviewBadgeLabel.text = item.supportsRelatedGroupReview
+            ? "可关联确认"
+            : (item.supportsBatchAcceptance
+                ? "可批量确认"
+                : (item.reviewMode == "single" ? "待本人确认" : "待确认"))
         accessibilityIdentifier = "owner-truth-candidate-inbox-item"
         accessibilityLabel = "候选记忆，\(item.proposalPreview)，\(item.evidenceCount) 条证据，\(reviewBadgeLabel.text ?? "待确认")"
     }
@@ -8214,6 +8969,7 @@ private final class OwnerTruthCandidateReviewHistoryCell: UITableViewCell {
     ) -> String {
         switch status {
         case .current: return "已形成正式记忆"
+        case .deduplicated: return "已合并到已有正式记忆"
         case .superseded: return "正式记忆已有新版本"
         case .pending: return "等待形成正式记忆"
         case .notApplicable: return "未写入正式记忆"
@@ -9685,6 +10441,33 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
         }
     }
 
+    func previewOwnerTruthCandidateChangeSet(
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        correctedValue: [String: OwnerTruthJSONValue]?,
+        correctedValueSchemaVersion: String?,
+        completion: @escaping (Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void
+    ) {
+        completion(.failure(CandidateInboxUIQAClientError.invalidReview))
+    }
+
+    func previewOwnerTruthCandidateChangeSetGroup(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMemoryChangeSetGroupCommand,
+        completion: @escaping (Result<OwnerTruthMemoryChangeSetGroupProposal, Error>) -> Void
+    ) {
+        completion(.failure(CandidateInboxUIQAClientError.invalidReview))
+    }
+
+    func confirmOwnerTruthCandidateChangeSetGroup(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMemoryChangeSetGroupCommand,
+        expectedProposal: OwnerTruthMemoryChangeSetGroupProposal,
+        completion: @escaping (Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>) -> Void
+    ) {
+        completion(.failure(CandidateInboxUIQAClientError.invalidReview))
+    }
+
     private func candidateObject(_ candidateID: String) -> [String: Any] {
         let isFirstCandidate = candidateID
             == "00000000-0000-0000-0000-000000000151"
@@ -9740,6 +10523,1064 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
 private enum CandidateInboxUIQAClientError: Error {
     case invalidVault
     case invalidReview
+}
+
+/// A separate, simulator-only proof for the linked V5 review path. It uses a
+/// synthetic account and an in-memory client so no user data or network is
+/// involved, while still driving the Archive controller's preview, atomic
+/// confirmation, history and formal-version UIKit surfaces.
+struct OwnerTruthCandidateRelatedGroupUIQASmokeResult: Codable {
+    static let fileName = "owner-truth-candidate-related-group-uiqa-result.json"
+
+    let completed: Bool
+    let qaGateEnabled: Bool
+    let linkedCandidatesVisible: Bool
+    let relatedGroupSelectionVisible: Bool
+    let groupPreviewVisible: Bool
+    let previewShowsCorrectedStatement: Bool
+    let previewShowsRejectedNoWrite: Bool
+    let correctionPayloadOnlyPrimaryField: Bool
+    let atomicCommitSubmitted: Bool
+    let atomicCommitAppliedOnce: Bool
+    let correctedReceiptVisible: Bool
+    let rejectedReceiptVisible: Bool
+    let formalMemoryPresentationVisible: Bool
+    let candidateRemovedAfterCommit: Bool
+    let reviewHistoryVisible: Bool
+    let correctedHistoryVisible: Bool
+    let rejectedHistoryVisible: Bool
+    let memoryVersionHistoryVisible: Bool
+    let memoryVersionHistoryCurrentStateVisible: Bool
+    let launchArguments: [String]
+    let failureReason: String?
+
+    func writeToDocuments(fileManager: FileManager = .default) throws -> URL {
+        let documentsURL = try fileManager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let resultURL = documentsURL.appendingPathComponent(Self.fileName, isDirectory: false)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(self).write(to: resultURL, options: [.atomic])
+        return resultURL
+    }
+}
+
+enum OwnerTruthCandidateRelatedGroupUIQASmoke {
+    static let resilienceLaunchArgument = "DJRunOwnerTruthCandidateRelatedGroupResilience"
+
+    static func makeViewController(
+        accountLease: AccountLease
+    ) -> OwnerTruthCandidateInboxViewController {
+        if ProcessInfo.processInfo.arguments.contains(resilienceLaunchArgument) {
+            return OwnerTruthCandidateRelatedGroupResilienceUIQASmoke.makeViewController(
+                accountLease: accountLease
+            )
+        }
+        let client = CandidateRelatedGroupUIQAClient(
+            vaultID: OwnerTruthVaultID(accountLease.vaultId)
+        )
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: accountLease,
+            client: client,
+            qaGateEnabled: { OwnerTruthCandidateReviewQAGate.isEnabled }
+        )
+        let scenario = CandidateRelatedGroupUIQAScenario(client: client)
+        controller.onViewStateRendered = { [weak controller] state in
+            scenario.consume(state, controller: controller)
+        }
+        controller.onRelatedGroupPreviewRenderedForUIQA = { [weak controller] proposal, message in
+            scenario.consumePreview(
+                proposal,
+                message: message,
+                controller: controller
+            )
+        }
+        controller.onHistoryViewStateRenderedForUIQA = { state, historyController in
+            scenario.consumeHistory(state, controller: historyController)
+        }
+        controller.onMemoryVersionHistoryViewStateRenderedForUIQA = { state in
+            scenario.consumeMemoryVersionHistory(state)
+        }
+        return controller
+    }
+
+    static func writeFailure(_ reason: String) {
+        let result = OwnerTruthCandidateRelatedGroupUIQASmokeResult(
+            completed: false,
+            qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+            linkedCandidatesVisible: false,
+            relatedGroupSelectionVisible: false,
+            groupPreviewVisible: false,
+            previewShowsCorrectedStatement: false,
+            previewShowsRejectedNoWrite: false,
+            correctionPayloadOnlyPrimaryField: false,
+            atomicCommitSubmitted: false,
+            atomicCommitAppliedOnce: false,
+            correctedReceiptVisible: false,
+            rejectedReceiptVisible: false,
+            formalMemoryPresentationVisible: false,
+            candidateRemovedAfterCommit: false,
+            reviewHistoryVisible: false,
+            correctedHistoryVisible: false,
+            rejectedHistoryVisible: false,
+            memoryVersionHistoryVisible: false,
+            memoryVersionHistoryCurrentStateVisible: false,
+            launchArguments: [
+                QALaunchScenario.ownerTruthCandidateRelatedGroupSmoke.rawValue,
+                OwnerTruthCandidateReviewQAGate.launchArgument,
+            ],
+            failureReason: reason
+        )
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] OwnerTruthCandidateRelatedGroupSmoke failed result=\(resultURL.path) reason=\(reason)")
+        } catch {
+            print("[UI_QA] OwnerTruthCandidateRelatedGroupSmoke failed reason=\(reason) write=\(error.localizedDescription)")
+        }
+    }
+}
+
+private final class CandidateRelatedGroupUIQAScenario {
+    private let client: CandidateRelatedGroupUIQAClient
+    private var didWrite = false
+    private var didStart = false
+    private var didConfirm = false
+    private var linkedCandidatesVisible = false
+    private var relatedGroupSelectionVisible = false
+    private var groupPreviewVisible = false
+    private var previewShowsCorrectedStatement = false
+    private var previewShowsRejectedNoWrite = false
+    private var correctionPayloadOnlyPrimaryField = false
+    private var formalMemoryPresentationVisible = false
+    private var candidateRemovedAfterCommit = false
+    private var correctedReceiptVisible = false
+    private var rejectedReceiptVisible = false
+    private var reviewHistoryVisible = false
+    private var correctedHistoryVisible = false
+    private var rejectedHistoryVisible = false
+
+    init(client: CandidateRelatedGroupUIQAClient) {
+        self.client = client
+    }
+
+    func consume(
+        _ state: OwnerTruthCandidateInboxViewState,
+        controller: OwnerTruthCandidateInboxViewController?
+    ) {
+        if case .ready = state.phase,
+           !didStart {
+            let linkedItems = state.items.filter(\.supportsRelatedGroupReview)
+            linkedCandidatesVisible = linkedItems.count == 2
+            guard linkedCandidatesVisible else {
+                writeFailure("linkedCandidatesUnavailable")
+                return
+            }
+            didStart = true
+            relatedGroupSelectionVisible = true
+            DispatchQueue.main.async { [weak controller] in
+                controller?.runUIQAPreviewRelatedGroupMixedActions()
+            }
+            return
+        }
+
+        guard !didWrite,
+              didConfirm,
+              case .empty = state.phase,
+              state.items.isEmpty else {
+            return
+        }
+        candidateRemovedAfterCommit = true
+        let notice = controller?.formalMemoryNoticeTextForUIQA ?? ""
+        formalMemoryPresentationVisible = controller?.formalMemoryNoticeVisibleForUIQA == true
+            && notice.contains("更正 1 条")
+            && notice.contains("拒绝 1 条")
+        correctedReceiptVisible = client.reviewedDecision(for: client.firstCandidateID) == .corrected
+        rejectedReceiptVisible = client.reviewedDecision(for: client.secondCandidateID) == .rejected
+        guard formalMemoryPresentationVisible,
+              correctedReceiptVisible,
+              rejectedReceiptVisible,
+              client.didCommitAtomically,
+              client.atomicApplyCount == 1 else {
+            writeFailure("atomicCommitPresentationMismatch")
+            return
+        }
+        DispatchQueue.main.async { [weak controller] in
+            controller?.runUIQAOpenHistory()
+        }
+    }
+
+    func consumePreview(
+        _ proposal: OwnerTruthMemoryChangeSetGroupProposal,
+        message: String,
+        controller: OwnerTruthCandidateInboxViewController?
+    ) {
+        guard !didWrite, !didConfirm else { return }
+        groupPreviewVisible = controller?.presentedViewController is UIAlertController
+        previewShowsCorrectedStatement = message.contains("2017 年从 A 大学计算机专业毕业")
+        previewShowsRejectedNoWrite = message.contains("第 2 条（拒绝）：无现有事实 -> 不新增正式事实")
+        correctionPayloadOnlyPrimaryField = client.lastCorrectionPayloadOnlyPrimaryField
+        guard groupPreviewVisible,
+              previewShowsCorrectedStatement,
+              previewShowsRejectedNoWrite,
+              correctionPayloadOnlyPrimaryField else {
+            writeFailure("relatedGroupPreviewContractMismatch")
+            return
+        }
+        didConfirm = true
+        DispatchQueue.main.async { [weak controller] in
+            controller?.runUIQAConfirmRelatedGroup(proposal)
+        }
+    }
+
+    func consumeHistory(
+        _ state: OwnerTruthCandidateReviewHistoryViewState,
+        controller: OwnerTruthCandidateReviewHistoryViewController?
+    ) {
+        guard !didWrite else { return }
+        if state.phase == .failed || state.phase == .unavailable {
+            writeFailure("relatedGroupReviewHistoryUnavailable")
+            return
+        }
+        guard state.phase == .ready else { return }
+        reviewHistoryVisible = state.items.count == 2
+        correctedHistoryVisible = state.items.contains {
+            $0.id == client.firstCandidateID && $0.decision == .corrected && $0.memoryID != nil
+        }
+        rejectedHistoryVisible = state.items.contains {
+            $0.id == client.secondCandidateID && $0.decision == .rejected && $0.memoryID == nil
+        }
+        guard reviewHistoryVisible, correctedHistoryVisible, rejectedHistoryVisible else {
+            writeFailure("relatedGroupReviewHistoryContractMismatch")
+            return
+        }
+        DispatchQueue.main.async { [weak controller] in
+            controller?.runUIQAOpenFirstMemoryVersionHistory()
+        }
+    }
+
+    func consumeMemoryVersionHistory(_ state: OwnerTruthMemoryVersionHistoryViewState) {
+        guard !didWrite else { return }
+        if state.phase == .failed || state.phase == .unavailable {
+            writeFailure("relatedGroupMemoryVersionHistoryUnavailable")
+            return
+        }
+        guard state.phase == .ready else { return }
+        let currentStateVisible = state.items.count == 1
+            && state.items.first?.status == .current
+            && state.items.first?.decision == .corrected
+            && state.items.first?.summary.contains("2017 年从 A 大学计算机专业毕业") == true
+        guard currentStateVisible else {
+            writeFailure("relatedGroupMemoryVersionHistoryContractMismatch")
+            return
+        }
+
+        didWrite = true
+        let result = OwnerTruthCandidateRelatedGroupUIQASmokeResult(
+            completed: OwnerTruthCandidateReviewQAGate.isEnabled
+                && linkedCandidatesVisible
+                && relatedGroupSelectionVisible
+                && groupPreviewVisible
+                && previewShowsCorrectedStatement
+                && previewShowsRejectedNoWrite
+                && correctionPayloadOnlyPrimaryField
+                && didConfirm
+                && client.didCommitAtomically
+                && client.atomicApplyCount == 1
+                && correctedReceiptVisible
+                && rejectedReceiptVisible
+                && formalMemoryPresentationVisible
+                && candidateRemovedAfterCommit
+                && reviewHistoryVisible
+                && correctedHistoryVisible
+                && rejectedHistoryVisible
+                && currentStateVisible,
+            qaGateEnabled: OwnerTruthCandidateReviewQAGate.isEnabled,
+            linkedCandidatesVisible: linkedCandidatesVisible,
+            relatedGroupSelectionVisible: relatedGroupSelectionVisible,
+            groupPreviewVisible: groupPreviewVisible,
+            previewShowsCorrectedStatement: previewShowsCorrectedStatement,
+            previewShowsRejectedNoWrite: previewShowsRejectedNoWrite,
+            correctionPayloadOnlyPrimaryField: correctionPayloadOnlyPrimaryField,
+            atomicCommitSubmitted: didConfirm,
+            atomicCommitAppliedOnce: client.didCommitAtomically && client.atomicApplyCount == 1,
+            correctedReceiptVisible: correctedReceiptVisible,
+            rejectedReceiptVisible: rejectedReceiptVisible,
+            formalMemoryPresentationVisible: formalMemoryPresentationVisible,
+            candidateRemovedAfterCommit: candidateRemovedAfterCommit,
+            reviewHistoryVisible: reviewHistoryVisible,
+            correctedHistoryVisible: correctedHistoryVisible,
+            rejectedHistoryVisible: rejectedHistoryVisible,
+            memoryVersionHistoryVisible: true,
+            memoryVersionHistoryCurrentStateVisible: currentStateVisible,
+            launchArguments: [
+                QALaunchScenario.ownerTruthCandidateRelatedGroupSmoke.rawValue,
+                OwnerTruthCandidateReviewQAGate.launchArgument,
+            ],
+            failureReason: nil
+        )
+        do {
+            let resultURL = try result.writeToDocuments()
+            print("[UI_QA] OwnerTruthCandidateRelatedGroupSmoke completed result=\(resultURL.path)")
+        } catch {
+            print("[UI_QA] OwnerTruthCandidateRelatedGroupSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    private func writeFailure(_ reason: String) {
+        guard !didWrite else { return }
+        didWrite = true
+        OwnerTruthCandidateRelatedGroupUIQASmoke.writeFailure(reason)
+    }
+}
+
+struct OwnerTruthCandidateRelatedGroupResilienceUIQASmokeResult: Codable {
+    static let fileName = "owner-truth-candidate-related-group-resilience-uiqa-result.json"
+
+    let completed: Bool
+    let previewRevisionRendered: Bool
+    let duplicateTapSuppressed: Bool
+    let transientFailureRendered: Bool
+    let retryCommandStable: Bool
+    let staleConflictRendered: Bool
+    let repreviewRequired: Bool
+    let refreshedRevisionRendered: Bool
+    let finalCommandRotated: Bool
+    let atomicCommitAppliedOnce: Bool
+    let launchArguments: [String]
+    let failureReason: String?
+
+    func writeToDocuments(fileManager: FileManager = .default) throws -> URL {
+        let documentsURL = try fileManager.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let resultURL = documentsURL.appendingPathComponent(Self.fileName)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(self).write(to: resultURL, options: [.atomic])
+        return resultURL
+    }
+}
+
+enum OwnerTruthCandidateRelatedGroupResilienceUIQASmoke {
+    static func makeViewController(
+        accountLease: AccountLease
+    ) -> OwnerTruthCandidateInboxViewController {
+        let client = CandidateRelatedGroupUIQAClient(
+            vaultID: OwnerTruthVaultID(accountLease.vaultId),
+            mode: .resilience
+        )
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: accountLease,
+            client: client,
+            qaGateEnabled: { OwnerTruthCandidateReviewQAGate.isEnabled }
+        )
+        let scenario = CandidateRelatedGroupResilienceUIQAScenario(client: client)
+        controller.onViewStateRendered = { [weak controller] state in
+            scenario.consume(state, controller: controller)
+        }
+        controller.onRelatedGroupPreviewRenderedForUIQA = { [weak controller] proposal, message in
+            scenario.consumePreview(proposal, message: message, controller: controller)
+        }
+        controller.onRelatedGroupFailureRenderedForUIQA = { [weak controller] disposition, message in
+            scenario.consumeFailure(disposition, message: message, controller: controller)
+        }
+        return controller
+    }
+
+    static func writeFailure(_ reason: String) {
+        write(OwnerTruthCandidateRelatedGroupResilienceUIQASmokeResult(
+            completed: false,
+            previewRevisionRendered: false,
+            duplicateTapSuppressed: false,
+            transientFailureRendered: false,
+            retryCommandStable: false,
+            staleConflictRendered: false,
+            repreviewRequired: false,
+            refreshedRevisionRendered: false,
+            finalCommandRotated: false,
+            atomicCommitAppliedOnce: false,
+            launchArguments: launchArguments,
+            failureReason: reason
+        ))
+    }
+
+    static func write(_ result: OwnerTruthCandidateRelatedGroupResilienceUIQASmokeResult) {
+        do {
+            let resultURL = try result.writeToDocuments()
+            let outcome = result.completed ? "completed" : "failed"
+            print("[UI_QA] OwnerTruthCandidateRelatedGroupResilienceSmoke \(outcome) result=\(resultURL.path)")
+        } catch {
+            print("[UI_QA] OwnerTruthCandidateRelatedGroupResilienceSmoke failed reason=resultWrite error=\(error.localizedDescription)")
+        }
+    }
+
+    private static var launchArguments: [String] {
+        [
+            QALaunchScenario.ownerTruthCandidateRelatedGroupSmoke.rawValue,
+            OwnerTruthCandidateRelatedGroupUIQASmoke.resilienceLaunchArgument,
+            OwnerTruthCandidateReviewQAGate.launchArgument,
+        ]
+    }
+}
+
+private final class CandidateRelatedGroupResilienceUIQAScenario {
+    private let client: CandidateRelatedGroupUIQAClient
+    private var didStart = false
+    private var awaitingReload = false
+    private var didWrite = false
+    private var firstProposalID: OwnerTruthRecordID?
+    private var previewRevisionRendered = false
+    private var duplicateTapSuppressed = false
+    private var transientFailureRendered = false
+    private var retryCommandStable = false
+    private var staleConflictRendered = false
+    private var repreviewRequired = false
+    private var refreshedRevisionRendered = false
+
+    init(client: CandidateRelatedGroupUIQAClient) {
+        self.client = client
+    }
+
+    func consume(
+        _ state: OwnerTruthCandidateInboxViewState,
+        controller: OwnerTruthCandidateInboxViewController?
+    ) {
+        guard !didWrite else { return }
+        if case .ready = state.phase,
+           state.items.count == 2,
+           !didStart {
+            NSLog("[UI_QA] OwnerTruthGroupResilience initial-ready")
+            didStart = true
+            DispatchQueue.main.async { [weak controller] in
+                controller?.runUIQAPreviewRelatedGroupMixedActions()
+            }
+            return
+        }
+        if case .ready = state.phase,
+           state.items.count == 2,
+           awaitingReload,
+           client.currentMemoryRevision == 10 {
+            NSLog("[UI_QA] OwnerTruthGroupResilience refreshed-ready")
+            awaitingReload = false
+            repreviewRequired = client.previewRequestCount == 1
+                && client.confirmationRequestCount == 2
+            DispatchQueue.main.async { [weak controller] in
+                controller?.runUIQAPreviewRelatedGroupMixedActions()
+            }
+            return
+        }
+        guard case .empty = state.phase,
+              client.didCommitAtomically else {
+            return
+        }
+        finish()
+    }
+
+    func consumePreview(
+        _ proposal: OwnerTruthMemoryChangeSetGroupProposal,
+        message: String,
+        controller: OwnerTruthCandidateInboxViewController?
+    ) {
+        guard !didWrite else { return }
+        if client.previewRequestCount == 1 {
+            NSLog("[UI_QA] OwnerTruthGroupResilience initial-preview")
+            firstProposalID = proposal.proposalID
+            previewRevisionRendered = message.contains("第 9 次修订快照")
+            guard previewRevisionRendered else {
+                fail("initialRevisionNotRendered")
+                return
+            }
+            DispatchQueue.main.async { [weak controller, weak client] in
+                controller?.runUIQAConfirmRelatedGroupTwice(proposal)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    client?.completeDeferredFirstConfirmationWithTimeout()
+                }
+            }
+            return
+        }
+        guard client.previewRequestCount == 2 else {
+            fail("unexpectedPreviewCount")
+            return
+        }
+        NSLog("[UI_QA] OwnerTruthGroupResilience refreshed-preview")
+        refreshedRevisionRendered = message.contains("第 10 次修订快照")
+            && proposal.proposalID != firstProposalID
+        guard refreshedRevisionRendered else {
+            fail("refreshedRevisionNotRendered")
+            return
+        }
+        DispatchQueue.main.async { [weak controller] in
+            controller?.runUIQAConfirmRelatedGroup(proposal)
+        }
+    }
+
+    func consumeFailure(
+        _ disposition: OwnerTruthCandidateRelatedGroupReviewFailureDisposition,
+        message: String,
+        controller: OwnerTruthCandidateInboxViewController?
+    ) {
+        guard !didWrite else { return }
+        switch disposition {
+        case .retryable:
+            NSLog("[UI_QA] OwnerTruthGroupResilience transient-failure")
+            duplicateTapSuppressed = client.confirmationRequestCount == 1
+            transientFailureRendered = message.contains("尚未确认写入")
+                && message.contains("同一提交请求重试")
+            guard duplicateTapSuppressed, transientFailureRendered else {
+                fail("transientFailureStateMismatch")
+                return
+            }
+            DispatchQueue.main.async { [weak controller] in
+                controller?.runUIQAInvokeRelatedGroupFailureAction()
+            }
+        case .stalePreview:
+            NSLog("[UI_QA] OwnerTruthGroupResilience stale-preview")
+            retryCommandStable = client.confirmationCommandIDs.count == 2
+                && client.confirmationCommandIDs[0] == client.confirmationCommandIDs[1]
+            staleConflictRendered = message.contains("版本已经变化")
+                && message.contains("没有写入任何内容")
+            guard retryCommandStable, staleConflictRendered else {
+                fail("staleConflictStateMismatch")
+                return
+            }
+            awaitingReload = true
+            DispatchQueue.main.async { [weak controller] in
+                controller?.runUIQAInvokeRelatedGroupFailureAction()
+            }
+        case .unavailable:
+            fail("unexpectedUnavailableFailure")
+        }
+    }
+
+    private func finish() {
+        guard !didWrite else { return }
+        didWrite = true
+        let finalCommandRotated = client.confirmationCommandIDs.count == 3
+            && client.confirmationCommandIDs[2] != client.confirmationCommandIDs[0]
+        let atomicCommitAppliedOnce = client.atomicApplyCount == 1
+        let completed = previewRevisionRendered
+            && duplicateTapSuppressed
+            && transientFailureRendered
+            && retryCommandStable
+            && staleConflictRendered
+            && repreviewRequired
+            && refreshedRevisionRendered
+            && finalCommandRotated
+            && atomicCommitAppliedOnce
+        OwnerTruthCandidateRelatedGroupResilienceUIQASmoke.write(
+            OwnerTruthCandidateRelatedGroupResilienceUIQASmokeResult(
+                completed: completed,
+                previewRevisionRendered: previewRevisionRendered,
+                duplicateTapSuppressed: duplicateTapSuppressed,
+                transientFailureRendered: transientFailureRendered,
+                retryCommandStable: retryCommandStable,
+                staleConflictRendered: staleConflictRendered,
+                repreviewRequired: repreviewRequired,
+                refreshedRevisionRendered: refreshedRevisionRendered,
+                finalCommandRotated: finalCommandRotated,
+                atomicCommitAppliedOnce: atomicCommitAppliedOnce,
+                launchArguments: [
+                    QALaunchScenario.ownerTruthCandidateRelatedGroupSmoke.rawValue,
+                    OwnerTruthCandidateRelatedGroupUIQASmoke.resilienceLaunchArgument,
+                    OwnerTruthCandidateReviewQAGate.launchArgument,
+                ],
+                failureReason: completed ? nil : "resilienceAssertionsFailed"
+            )
+        )
+    }
+
+    private func fail(_ reason: String) {
+        guard !didWrite else { return }
+        didWrite = true
+        OwnerTruthCandidateRelatedGroupResilienceUIQASmoke.writeFailure(reason)
+    }
+}
+
+private enum CandidateRelatedGroupUIQAMode: Equatable {
+    case happyPath
+    case resilience
+}
+
+private struct CandidateRelatedGroupUIQAFailure: OwnerTruthBackendFailureClassifying {
+    let ownerTruthBackendStatusCode: Int?
+    let ownerTruthBackendErrorCode: String?
+    let ownerTruthFeaturePolicyDenied = false
+}
+
+private final class CandidateRelatedGroupUIQAClient: OwnerTruthCandidateReviewClient {
+    private let vaultID: OwnerTruthVaultID?
+    private let mode: CandidateRelatedGroupUIQAMode
+    let firstCandidateID = OwnerTruthRecordID(
+        rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000311")!
+    )
+    let secondCandidateID = OwnerTruthRecordID(
+        rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000312")!
+    )
+    private let sourceID = "00000000-0000-0000-0000-000000000313"
+    private let correctedStatement = "我在 2017 年从 A 大学计算机专业毕业。"
+    private var pendingCandidateIDs: [OwnerTruthRecordID]
+    private var reviewedDecisions: [OwnerTruthRecordID: OwnerTruthCandidateDecision] = [:]
+    private var lastProposal: OwnerTruthMemoryChangeSetGroupProposal?
+    private var cachedCommitResult: OwnerTruthMemoryChangeSetGroupCommitResult?
+    private var generation = 0
+    private var deferredFirstConfirmation: ((
+        Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>
+    ) -> Void)?
+    private(set) var lastCorrectionPayloadOnlyPrimaryField = false
+    private(set) var didCommitAtomically = false
+    private(set) var atomicApplyCount = 0
+    private(set) var previewRequestCount = 0
+    private(set) var confirmationRequestCount = 0
+    private(set) var confirmationCommandIDs: [String] = []
+
+    init(
+        vaultID: OwnerTruthVaultID?,
+        mode: CandidateRelatedGroupUIQAMode = .happyPath
+    ) {
+        self.vaultID = vaultID
+        self.mode = mode
+        pendingCandidateIDs = [firstCandidateID, secondCandidateID]
+    }
+
+    var currentMemoryRevision: Int { 9 + generation }
+    var currentCandidateVersion: Int { 3 + generation }
+
+    func reviewedDecision(for candidateID: OwnerTruthRecordID) -> OwnerTruthCandidateDecision? {
+        reviewedDecisions[candidateID]
+    }
+
+    func fetchOwnerTruthCandidateInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthCandidateInbox, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID else {
+            completion(.failure(CandidateInboxUIQAClientError.invalidVault))
+            return
+        }
+        do {
+            completion(.success(try OwnerTruthCandidateInbox(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "memoryRevision": currentMemoryRevision,
+                    "candidates": pendingCandidateIDs.map { candidateObject($0) },
+                ],
+                expectedVaultID: vaultID
+            )))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func reviewOwnerTruthCandidate(
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        command: OwnerTruthCandidateReviewCommand,
+        completion: @escaping (Result<OwnerTruthCandidateDecisionResult, Error>) -> Void
+    ) {
+        completion(.failure(CandidateInboxUIQAClientError.invalidReview))
+    }
+
+    func previewOwnerTruthCandidateChangeSet(
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        correctedValue: [String: OwnerTruthJSONValue]?,
+        correctedValueSchemaVersion: String?,
+        completion: @escaping (Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void
+    ) {
+        completion(.failure(CandidateInboxUIQAClientError.invalidReview))
+    }
+
+    func previewOwnerTruthCandidateChangeSetGroup(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMemoryChangeSetGroupCommand,
+        completion: @escaping (Result<OwnerTruthMemoryChangeSetGroupProposal, Error>) -> Void
+    ) {
+        previewRequestCount += 1
+        guard self.vaultID == vaultID,
+              command.selections.map(\.candidateID) == [firstCandidateID, secondCandidateID],
+              command.selections.map(\.expectedCandidateVersion)
+                == [currentCandidateVersion, currentCandidateVersion],
+              command.selections.map(\.action) == [.correct, .reject],
+              command.dependencies.count == 1,
+              command.dependencies.first?.beforeCandidateID == firstCandidateID,
+              command.dependencies.first?.afterCandidateID == secondCandidateID else {
+            completion(.failure(CandidateInboxUIQAClientError.invalidReview))
+            return
+        }
+        let correction = command.selections[0]
+        guard correction.correctedValue?.count == 1,
+              case .string(let statement)? = correction.correctedValue?["statement"],
+              statement == correctedStatement,
+              correction.correctedValueSchemaVersion == "owner-truth-v5",
+              command.selections[1].correctedValue == nil,
+              command.selections[1].correctedValueSchemaVersion == nil else {
+            completion(.failure(CandidateInboxUIQAClientError.invalidReview))
+            return
+        }
+        lastCorrectionPayloadOnlyPrimaryField = true
+        do {
+            let proposal = try makeProposal(vaultID: vaultID, command: command)
+            lastProposal = proposal
+            completion(.success(proposal))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func confirmOwnerTruthCandidateChangeSetGroup(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMemoryChangeSetGroupCommand,
+        expectedProposal: OwnerTruthMemoryChangeSetGroupProposal,
+        completion: @escaping (Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID,
+              let lastProposal,
+              expectedProposal == lastProposal,
+              command.expectedMemoryRevision == lastProposal.baseMemoryRevision,
+              command.expectedGroupProposalID == lastProposal.proposalID,
+              command.expectedGroupProposalHash == lastProposal.proposalHash else {
+            completion(.failure(CandidateInboxUIQAClientError.invalidReview))
+            return
+        }
+        confirmationRequestCount += 1
+        confirmationCommandIDs.append(command.commandID)
+        if mode == .resilience {
+            if confirmationRequestCount == 1 {
+                deferredFirstConfirmation = completion
+                return
+            }
+            if confirmationRequestCount == 2 {
+                generation = 1
+                completion(.failure(CandidateRelatedGroupUIQAFailure(
+                    ownerTruthBackendStatusCode: 409,
+                    ownerTruthBackendErrorCode: "ownerTruthCandidateReviewConflict"
+                )))
+                return
+            }
+        }
+        if let cachedCommitResult {
+            completion(.success(cachedCommitResult))
+            return
+        }
+        do {
+            let result = try makeCommitResult(proposal: lastProposal)
+            // Mutate only after the full typed terminal response is valid.
+            // This models the all-or-nothing server boundary for the UIKit path.
+            pendingCandidateIDs.removeAll()
+            reviewedDecisions = [
+                firstCandidateID: .corrected,
+                secondCandidateID: .rejected,
+            ]
+            cachedCommitResult = result
+            didCommitAtomically = true
+            atomicApplyCount += 1
+            completion(.success(result))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func completeDeferredFirstConfirmationWithTimeout() {
+        let completion = deferredFirstConfirmation
+        deferredFirstConfirmation = nil
+        completion?(.failure(URLError(.timedOut)))
+    }
+
+    func fetchOwnerTruthCandidateReviewHistory(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthCandidateReviewHistory, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID, didCommitAtomically else {
+            completion(.failure(CandidateInboxUIQAClientError.invalidReview))
+            return
+        }
+        do {
+            let reviews: [[String: Any]] = [
+                [
+                    "candidate": candidateObject(firstCandidateID, statementOverride: correctedStatement),
+                    "decision": OwnerTruthCandidateDecision.corrected.rawValue,
+                    "decidedAt": "2026-09-08T10:30:00Z",
+                    "memoryActivation": [
+                        "status": OwnerTruthCandidateMemoryActivationStatus.current.rawValue,
+                        "memoryId": formalMemoryID,
+                        "memoryVersionId": formalMemoryVersionID,
+                        "memoryVersion": 1,
+                    ],
+                ],
+                [
+                    "candidate": candidateObject(secondCandidateID),
+                    "decision": OwnerTruthCandidateDecision.rejected.rawValue,
+                    "decidedAt": "2026-09-08T10:30:01Z",
+                    "memoryActivation": [
+                        "status": OwnerTruthCandidateMemoryActivationStatus.notApplicable.rawValue,
+                        "memoryId": NSNull(),
+                        "memoryVersionId": NSNull(),
+                        "memoryVersion": NSNull(),
+                    ],
+                ],
+            ]
+            completion(.success(try OwnerTruthCandidateReviewHistory(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthCandidateReviewHistory.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "reviews": reviews,
+                ],
+                expectedVaultID: vaultID
+            )))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func fetchOwnerTruthMemoryVersionHistory(
+        vaultID: OwnerTruthVaultID,
+        memoryID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthMemoryVersionHistory, Error>) -> Void
+    ) {
+        guard self.vaultID == vaultID,
+              didCommitAtomically,
+              memoryID.rawValue.uuidString.lowercased() == formalMemoryID else {
+            completion(.failure(CandidateInboxUIQAClientError.invalidReview))
+            return
+        }
+        do {
+            completion(.success(try OwnerTruthMemoryVersionHistory(
+                backendJSONObject: [
+                    "schemaVersion": OwnerTruthMemoryVersionHistory.schemaVersion,
+                    "vaultId": vaultID.rawValue,
+                    "memoryKind": OwnerTruthMemoryKind.knowledge.rawValue,
+                    "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+                    "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
+                    "sensitivity": OwnerTruthSensitivityLevel.standard.rawValue,
+                    "memoryStatus": "active",
+                    "versions": [[
+                        "versionNumber": 1,
+                        "status": OwnerTruthMemoryVersionHistoryStatus.current.rawValue,
+                        "decision": OwnerTruthCandidateDecision.corrected.rawValue,
+                        "contentSchemaVersion": "owner-truth-v5",
+                        "content": ["statement": correctedStatement],
+                        "sourceCount": 1,
+                        "createdAt": "2026-09-08T10:30:00Z",
+                    ]],
+                ],
+                expectedVaultID: vaultID
+            )))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    private var formalMemoryID: String {
+        "00000000-0000-0000-0000-000000000321"
+    }
+
+    private var formalMemoryVersionID: String {
+        "00000000-0000-0000-0000-000000000322"
+    }
+
+    private func candidateObject(
+        _ candidateID: OwnerTruthRecordID,
+        statementOverride: String? = nil
+    ) -> [String: Any] {
+        let isFirst = candidateID == firstCandidateID
+        let statement = statementOverride ?? (isFirst
+            ? "我在 2016 年从 A 大学计算机专业毕业。"
+            : "毕业后我在上海从事软件研发工作。")
+        let content: [String: Any] = ["statement": statement]
+        let contentHash = String(repeating: isFirst ? "c" : "d", count: 64)
+        let proposalHash = String(repeating: isFirst ? "e" : "f", count: 64)
+        return [
+            "candidateId": candidateID.rawValue.uuidString.lowercased(),
+            "sourceId": sourceID,
+            "memoryKind": OwnerTruthMemoryKind.knowledge.rawValue,
+            "perspectiveType": OwnerTruthPerspectiveType.firstPerson.rawValue,
+            "epistemicStatus": OwnerTruthEpistemicStatus.recalled.rawValue,
+            "sensitivity": OwnerTruthSensitivityLevel.standard.rawValue,
+            "contentSchemaVersion": "owner-truth-v5",
+            "content": content,
+            "contentHash": contentHash,
+            "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+            "reviewMode": "single",
+            "candidateVersion": currentCandidateVersion,
+            "proposedChangeSet": changeSetPayload(
+                candidateID: candidateID,
+                content: content,
+                contentHash: contentHash,
+                proposalHash: proposalHash
+            ),
+        ]
+    }
+
+    private func changeSetPayload(
+        candidateID: OwnerTruthRecordID,
+        content: [String: Any],
+        contentHash: String,
+        proposalHash: String
+    ) -> [String: Any] {
+        let isFirst = candidateID == firstCandidateID
+        return [
+            "schemaVersion": OwnerTruthCandidateChangeSetProposal.schemaVersion,
+            "proposalId": isFirst
+                ? "00000000-0000-0000-0000-000000000314"
+                : "00000000-0000-0000-0000-000000000315",
+            "proposalHash": proposalHash,
+            "candidateContentHash": contentHash,
+            "candidateVersion": currentCandidateVersion,
+            "changeSetId": isFirst
+                ? "00000000-0000-0000-0000-000000000316"
+                : "00000000-0000-0000-0000-000000000317",
+            "baseMemoryRevision": currentMemoryRevision,
+            "operations": [changeSetOperation(content: content)],
+            "dependencies": [],
+        ]
+    }
+
+    private func changeSetOperation(content: [String: Any]) -> [String: Any] {
+        [
+            "operationIndex": 0,
+            "operationKind": "add",
+            "targetMemoryId": NSNull(),
+            "targetMemoryVersionId": NSNull(),
+            "targetMemoryVersion": NSNull(),
+            "reason": "newFact",
+            "changedFields": ["content"],
+            "factDiff": [
+                "before": NSNull(),
+                "after": content,
+                "candidate": content,
+                "changedFields": [[
+                    "path": "content",
+                    "before": NSNull(),
+                    "after": content,
+                ]],
+                "evidence": [
+                    "beforeCount": 0,
+                    "candidateCount": 1,
+                    "afterCount": 1,
+                    "addedCount": 1,
+                ],
+            ],
+            "anticipatedActivation": "created",
+        ]
+    }
+
+    private func makeProposal(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMemoryChangeSetGroupCommand
+    ) throws -> OwnerTruthMemoryChangeSetGroupProposal {
+        let members: [[String: Any]] = command.selections.enumerated().map { index, selection in
+            let candidate = candidateObject(selection.candidateID)
+            let originalContent = candidate["content"] as? [String: Any] ?? [:]
+            let afterContent: [String: Any]
+            if selection.action == .correct,
+               let correctedValue = selection.correctedValue {
+                afterContent = correctedValue.mapValues(\.backendJSONObject)
+            } else {
+                afterContent = originalContent
+            }
+            let contentHash = candidate["contentHash"] as? String ?? ""
+            let proposalHash = candidate["proposedChangeSet"] as? [String: Any]
+            let candidateProposalHash = proposalHash?["proposalHash"] as? String ?? ""
+            return [
+                "operationIndex": index,
+                "candidateId": selection.candidateID.rawValue.uuidString.lowercased(),
+                "action": selection.action.rawValue,
+                "reasonCode": selection.reasonCode,
+                "candidateVersion": selection.expectedCandidateVersion,
+                "proposedChangeSet": [
+                    "schemaVersion": OwnerTruthCandidateChangeSetProposal.schemaVersion,
+                    "proposalId": memberProposalID(index: index),
+                    "proposalHash": candidateProposalHash,
+                    "candidateContentHash": contentHash,
+                    "candidateVersion": selection.expectedCandidateVersion,
+                    "changeSetId": memberChangeSetID(index: index),
+                    "baseMemoryRevision": currentMemoryRevision,
+                    "operations": [changeSetOperation(content: afterContent)],
+                    "dependencies": [],
+                ],
+                "anticipatedOutcome": "created",
+                "appliedMemoryRevision": currentMemoryRevision + 1 + index,
+            ]
+        }
+        return try OwnerTruthMemoryChangeSetGroupProposal(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthMemoryChangeSetGroupProposal.schemaVersion,
+                "groupProposalId": groupProposalID,
+                "groupProposalHash": String(
+                    repeating: generation == 0 ? "a" : "b",
+                    count: 64
+                ),
+                "vaultId": vaultID.rawValue,
+                "baseMemoryRevision": currentMemoryRevision,
+                "members": members,
+                "dependencies": command.dependencies.map(\.backendPayload),
+            ],
+            expectedVaultID: vaultID
+        )
+    }
+
+    private var groupProposalID: String {
+        generation == 0
+            ? "00000000-0000-0000-0000-000000000320"
+            : "00000000-0000-0000-0000-000000000330"
+    }
+
+    private func memberProposalID(index: Int) -> String {
+        let suffix = generation == 0
+            ? (index == 0 ? 318 : 319)
+            : (index == 0 ? 331 : 332)
+        return String(format: "00000000-0000-0000-0000-%012d", suffix)
+    }
+
+    private func memberChangeSetID(index: Int) -> String {
+        let suffix = generation == 0
+            ? (index == 0 ? 323 : 324)
+            : (index == 0 ? 333 : 334)
+        return String(format: "00000000-0000-0000-0000-%012d", suffix)
+    }
+
+    private func makeCommitResult(
+        proposal: OwnerTruthMemoryChangeSetGroupProposal
+    ) throws -> OwnerTruthMemoryChangeSetGroupCommitResult {
+        let payload: [String: Any] = [
+            "schemaVersion": OwnerTruthMemoryChangeSetGroupCommitResult.schemaVersion,
+            "status": OwnerTruthCommandOutcome.created.rawValue,
+            "groupReceiptId": "00000000-0000-0000-0000-000000000325",
+            "groupProposalId": proposal.proposalID.rawValue.uuidString.lowercased(),
+            "groupProposalHash": proposal.proposalHash,
+            "baseMemoryRevision": proposal.baseMemoryRevision,
+            "appliedMemoryRevision": proposal.baseMemoryRevision + 1,
+            "members": proposal.members.enumerated().map { index, member in
+                let activatesMemory = member.action != .reject
+                return [
+                    "candidateId": member.candidateID.rawValue.uuidString.lowercased(),
+                    "receiptId": index == 0
+                        ? "00000000-0000-0000-0000-000000000326"
+                        : "00000000-0000-0000-0000-000000000327",
+                    "decision": member.action.terminalDecision.rawValue,
+                    "activationOutcome": activatesMemory
+                        ? OwnerTruthMemoryActivationOutcome.created.rawValue
+                        : OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+                    "memoryId": activatesMemory ? formalMemoryID : NSNull(),
+                    "memoryVersionId": activatesMemory ? formalMemoryVersionID : NSNull(),
+                    "memoryVersion": activatesMemory ? 1 : NSNull(),
+                ] as [String: Any]
+            },
+            "projectionEffectCount": 1,
+        ]
+        return try OwnerTruthMemoryChangeSetGroupCommitResult(
+            backendJSONObject: payload,
+            expectedProposal: proposal
+        )
+    }
 }
 
 struct OwnerTruthInterviewCandidateReviewUIQASmokeResult: Codable {

@@ -3171,6 +3171,30 @@ struct RealtimeVoiceRuntimeConfig {
         return true
     }
 
+    /// The provider receives the formal-memory snapshot only once, at native
+    /// Live start.  Bind that payload to the server-issued session envelope so
+    /// a stale or mismatched snapshot cannot silently answer under a newer
+    /// checkpoint or authorization epoch.
+    private var hasBoundFormalMemorySnapshot: Bool {
+        guard contractVersion >= 5,
+              let formalMemorySnapshot,
+              formalMemorySnapshot["schemaVersion"] as? String == "formal-memory-conversation-v2",
+              let snapshotCheckpoint = formalMemorySnapshot["projectionCheckpoint"] as? String,
+              let projectionCheckpoint,
+              snapshotCheckpoint == projectionCheckpoint,
+              let snapshotAuthorityEpoch = Self.intValue(formalMemorySnapshot["authorityEpoch"]),
+              let authorityEpoch,
+              snapshotAuthorityEpoch == authorityEpoch,
+              let snapshotContextHash = formalMemorySnapshot["contextHash"] as? String,
+              let contextHash,
+              snapshotContextHash == contextHash,
+              formalMemorySnapshot["coreFacts"] is [Any],
+              formalMemorySnapshot["coverage"] is [String: Any] else {
+            return false
+        }
+        return true
+    }
+
     var isBlocked: Bool {
         status == "blocked"
             || credentialMode == "blockedStaticCredential"
@@ -3180,6 +3204,7 @@ struct RealtimeVoiceRuntimeConfig {
             || credentialMode != "oneTimeBackendProxyTicket"
             || brokerStatus != "verified"
             || contractVersion < 5
+            || !hasBoundFormalMemorySnapshot
             || !hasSecureProxyEndpoint
             || sessionToken?.hasPrefix("djv_") != true
             || sessionHeader != "X-DreamJourney-Voice-Session"
@@ -6812,6 +6837,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
     private let qaCurrentUserIDProvider: (() -> String?)?
     private let qaPrivateAccessAllowedProvider: (() -> Bool)?
     private let qaFeatureDecisionProvider: ((DJFeature) -> FeatureDecision)?
+    private let qaRuntimeCapabilitySnapshotProvider: ((RuntimeCapabilityID) -> RuntimeCapabilitySnapshot?)?
     private let authSessionStore = BackendAuthSessionStore.shared
     private let accountSessionActor = AccountSessionActor.shared
     private let accountLeaseRuntime: AccountLeaseRuntime
@@ -6991,7 +7017,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         let capabilityID: RuntimeCapabilityID = processing
             ? .ownerTruthMediaProcessing
             : .ownerTruthMediaStorage
-        let snapshot = RuntimeCapabilitySnapshotStore.shared.snapshot(for: capabilityID)
+        let snapshot = runtimeCapabilitySnapshot(for: capabilityID)
         let allowed = processing
             ? OwnerTruthMediaRuntimeCapability.isProcessingAllowed(
                 snapshot: snapshot,
@@ -7014,6 +7040,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         return decision
     }
 
+    private func runtimeCapabilitySnapshot(
+        for capabilityID: RuntimeCapabilityID
+    ) -> RuntimeCapabilitySnapshot? {
+        qaRuntimeCapabilitySnapshotProvider?(capabilityID)
+            ?? RuntimeCapabilitySnapshotStore.shared.snapshot(for: capabilityID)
+    }
+
     private func revalidatedRequestFeatureDecision(_ decision: FeatureDecision) -> FeatureDecision {
         qaFeatureDecisionProvider == nil
             ? FeatureGateService.shared.revalidateServerPolicyManagedRequest(decision)
@@ -7031,6 +7064,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         qaCurrentUserIDProvider = nil
         qaPrivateAccessAllowedProvider = nil
         qaFeatureDecisionProvider = nil
+        qaRuntimeCapabilitySnapshotProvider = nil
         accountLeaseRuntime = .shared
     }
 
@@ -7044,6 +7078,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         currentUserID: @escaping () -> String?,
         privateAccessAllowed: @escaping () -> Bool,
         featureDecision: @escaping (DJFeature) -> FeatureDecision,
+        runtimeCapabilitySnapshot: @escaping (RuntimeCapabilityID) -> RuntimeCapabilitySnapshot? = { _ in nil },
         accountLeaseRuntime: AccountLeaseRuntime
     ) -> DreamJourneyBackendClient {
         DreamJourneyBackendClient(
@@ -7053,6 +7088,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             currentUserID: currentUserID,
             privateAccessAllowed: privateAccessAllowed,
             featureDecision: featureDecision,
+            runtimeCapabilitySnapshot: runtimeCapabilitySnapshot,
             accountLeaseRuntime: accountLeaseRuntime
         )
     }
@@ -7064,6 +7100,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         currentUserID: @escaping () -> String?,
         privateAccessAllowed: @escaping () -> Bool,
         featureDecision: @escaping (DJFeature) -> FeatureDecision,
+        runtimeCapabilitySnapshot: @escaping (RuntimeCapabilityID) -> RuntimeCapabilitySnapshot?,
         accountLeaseRuntime: AccountLeaseRuntime
     ) {
         baseURL = qaBaseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -7073,6 +7110,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         qaCurrentUserIDProvider = currentUserID
         qaPrivateAccessAllowedProvider = privateAccessAllowed
         qaFeatureDecisionProvider = featureDecision
+        qaRuntimeCapabilitySnapshotProvider = runtimeCapabilitySnapshot
         self.accountLeaseRuntime = accountLeaseRuntime
     }
     #endif
@@ -7820,6 +7858,8 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         lifecycleMode: DigitalHumanMode,
         viewerFamilyMemberID: String? = nil,
         recentTurns: [EchoConversationTurn] = [],
+        productSessionID: String? = nil,
+        clientTurnID: String? = nil,
         completion: @escaping (Result<EchoAnswer, Error>) -> Void
     ) {
         var payload: [String: Any] = [
@@ -7833,6 +7873,14 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         ]
         if !recentTurns.isEmpty {
             payload["recentTurns"] = recentTurns.map(\.requestPayload)
+        }
+        if let productSessionID,
+           !productSessionID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["productSessionId"] = productSessionID
+        }
+        if let clientTurnID,
+           !clientTurnID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["clientTurnId"] = clientTurnID
         }
         if let viewerFamilyMemberID,
            !viewerFamilyMemberID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -8305,6 +8353,169 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                     completion(.success(try OwnerTruthCandidateDecisionResult(
                         backendJSONObject: object,
                         expectedCandidateID: candidateID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func previewOwnerTruthCandidateChangeSet(
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        correctedValue: [String: OwnerTruthJSONValue]?,
+        correctedValueSchemaVersion: String?,
+        completion: @escaping (Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void
+    ) {
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane
+            ? nil
+            : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthCandidateReview",
+                    reason: decision?.reason ?? "releasePolicyDisabled"
+                )))
+            }
+            return
+        }
+        let payload: [String: Any]?
+        switch (correctedValue, correctedValueSchemaVersion) {
+        case (nil, nil):
+            payload = [:]
+        case let (.some(value), .some(schemaVersion)) where !schemaVersion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty:
+            payload = [
+                "correctedValue": value.mapValues(\.backendJSONObject),
+                "correctedValueSchemaVersion": schemaVersion,
+            ]
+        default:
+            DispatchQueue.main.async {
+                completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                    "ChangeSet correction preview requires both corrected value and schema version"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/candidates/\(pathComponent(candidateID.rawValue.uuidString))/changeset-preview",
+            method: .post,
+            payload: payload,
+            authPolicy: .userRequired,
+            featureDecision: decision,
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
+        ) { result in
+            switch result {
+            case .success(let object):
+                guard let proposalObject = object["proposedChangeSet"] as? [String: Any] else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                do {
+                    completion(.success(try OwnerTruthCandidateChangeSetProposal(
+                        backendJSONObject: proposalObject
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func previewOwnerTruthCandidateChangeSetGroup(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMemoryChangeSetGroupCommand,
+        completion: @escaping (Result<OwnerTruthMemoryChangeSetGroupProposal, Error>) -> Void
+    ) {
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane
+            ? nil
+            : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthCandidateReview",
+                    reason: decision?.reason ?? "releasePolicyDisabled"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/memory-changeset-groups/preview",
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            featureDecision: decision,
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
+        ) { result in
+            switch result {
+            case .success(let object):
+                guard let proposalObject = object["groupProposal"] as? [String: Any] else {
+                    completion(.failure(ClientError.invalidJSONResponse))
+                    return
+                }
+                do {
+                    completion(.success(try OwnerTruthMemoryChangeSetGroupProposal(
+                        backendJSONObject: proposalObject,
+                        expectedVaultID: vaultID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func confirmOwnerTruthCandidateChangeSetGroup(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMemoryChangeSetGroupCommand,
+        expectedProposal: OwnerTruthMemoryChangeSetGroupProposal,
+        completion: @escaping (Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>) -> Void
+    ) {
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane
+            ? nil
+            : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
+            DispatchQueue.main.async {
+                completion(.failure(ClientError.featurePolicyDenied(
+                    feature: "ownerTruthCandidateReview",
+                    reason: decision?.reason ?? "releasePolicyDisabled"
+                )))
+            }
+            return
+        }
+        guard command.expectedMemoryRevision == expectedProposal.baseMemoryRevision,
+              command.expectedGroupProposalID == expectedProposal.proposalID,
+              command.expectedGroupProposalHash == expectedProposal.proposalHash else {
+            DispatchQueue.main.async {
+                completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                    "Related Candidate confirmation is not bound to its visible preview"
+                )))
+            }
+            return
+        }
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/memory-changeset-groups/confirm",
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            featureDecision: decision,
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthMemoryChangeSetGroupCommitResult(
+                        backendJSONObject: object,
+                        expectedProposal: expectedProposal
                     )))
                 } catch {
                     completion(.failure(error))
@@ -9425,6 +9636,18 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         vaultID: OwnerTruthVaultID,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>) -> Void
     ) {
+        fetchOwnerTruthInterviewNaturalInputCurrentSession(
+            vaultID: vaultID,
+            productSessionID: nil,
+            completion: completion
+        )
+    }
+
+    func fetchOwnerTruthInterviewNaturalInputCurrentSession(
+        vaultID: OwnerTruthVaultID,
+        productSessionID: String?,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>) -> Void
+    ) {
         let transport = ownerTruthInterviewNaturalInputTransport()
         switch transport {
         case .unavailable(let reason):
@@ -9439,7 +9662,16 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             break
         }
 
-        let path = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions/current"
+        let basePath = "/v2/vaults/\(pathComponent(vaultID.rawValue))/interview-sessions/current"
+        let path: String
+        if let productSessionID = productSessionID?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !productSessionID.isEmpty {
+            // `pathComponent` deliberately escapes query separators too, so a
+            // server-selected opaque ID cannot widen this read's scope.
+            path = basePath + "?productSessionId=\(pathComponent(productSessionID))"
+        } else {
+            path = basePath
+        }
         let additionalHeaders: [String: String]
         let featureDecision: FeatureDecision?
         switch transport {
@@ -10459,6 +10691,22 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 completion(.failure(error))
             }
         }
+    }
+
+    func previewOwnerTruthCorrectionChangeSet(
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        correctedValue: [String: OwnerTruthJSONValue]?,
+        correctedValueSchemaVersion: String?,
+        completion: @escaping (Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void
+    ) {
+        previewOwnerTruthCandidateChangeSet(
+            vaultID: vaultID,
+            candidateID: candidateID,
+            correctedValue: correctedValue,
+            correctedValueSchemaVersion: correctedValueSchemaVersion,
+            completion: completion
+        )
     }
 
     func resolveOwnerTruthCorrection(

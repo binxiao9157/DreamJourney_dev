@@ -995,7 +995,7 @@ final class EchoApplicationCoordinatorTests: XCTestCase {
         )
 
         XCTAssertTrue(packet.contextAuthority?.isStrictOwnerTruthAuthority == true)
-        XCTAssertEqual(packet.contextAuthority?.cohort, "closedPilotAdultSelf")
+        XCTAssertEqual(packet.contextAuthority?.cohort, EchoContextAuthorityEnvelope.strictCohort)
         XCTAssertEqual(packet.contextAuthority?.authorityGeneration.count, 64)
     }
 
@@ -3379,6 +3379,7 @@ final class EchoRecentConversationBufferTests: XCTestCase {
 
     func testBufferBoundsTurnsCharactersAndReset() {
         var buffer = EchoRecentConversationBuffer()
+        let firstProductSessionID = buffer.productSessionID
 
         for index in 0..<8 {
             _ = buffer.startUserTurn("问题\(index)" + String(repeating: "字", count: 600))
@@ -3396,6 +3397,7 @@ final class EchoRecentConversationBufferTests: XCTestCase {
 
         buffer.reset()
         XCTAssertTrue(buffer.turns.isEmpty)
+        XCTAssertNotEqual(buffer.productSessionID, firstProductSessionID)
     }
 }
 

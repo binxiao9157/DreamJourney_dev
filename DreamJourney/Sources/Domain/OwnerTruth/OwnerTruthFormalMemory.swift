@@ -250,6 +250,39 @@ enum OwnerTruthPersonMemoryProfileState: String, Equatable, Sendable {
     case empty
 }
 
+struct OwnerTruthPersonMemoryParagraphEvidence: Equatable, Sendable {
+    let paragraphIndex: Int
+    let supportingMemoryIDs: [OwnerTruthRecordID]
+    let supportingMemoryVersionIDs: [OwnerTruthRecordID]
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard let paragraphIndex = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                object["paragraphIndex"]
+              ),
+              let supportingMemoryCount = OwnerTruthFormalMemoryContract.nonNegativeInt(
+                object["supportingMemoryCount"]
+              ),
+              let rawMemoryIDs = object["supportingMemoryIds"] as? [String],
+              let rawVersionIDs = object["supportingMemoryVersionIds"] as? [String] else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("人生段落证据字段无效")
+        }
+        let memoryIDs = rawMemoryIDs.compactMap(OwnerTruthFormalMemoryContract.recordID)
+        let versionIDs = rawVersionIDs.compactMap(OwnerTruthFormalMemoryContract.recordID)
+        guard !memoryIDs.isEmpty,
+              memoryIDs.count == rawMemoryIDs.count,
+              memoryIDs.count == supportingMemoryCount,
+              Set(memoryIDs).count == memoryIDs.count,
+              versionIDs.count == rawVersionIDs.count,
+              versionIDs.count == supportingMemoryCount,
+              Set(versionIDs).count == versionIDs.count else {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("人生段落证据引用无效")
+        }
+        self.paragraphIndex = paragraphIndex
+        self.supportingMemoryIDs = memoryIDs
+        self.supportingMemoryVersionIDs = versionIDs
+    }
+}
+
 struct OwnerTruthPersonLifeRecord: Equatable, Sendable {
     static let schemaVersion = "owner-truth-person-life-record-v2"
     static let algorithmVersion = "person-life-record-from-biography-v2"
@@ -258,12 +291,14 @@ struct OwnerTruthPersonLifeRecord: Equatable, Sendable {
     let title: String
     let text: String?
     let paragraphs: [String]
+    let paragraphEvidence: [OwnerTruthPersonMemoryParagraphEvidence]
 
     init(title: String, paragraphs: [String]) {
         self.state = paragraphs.isEmpty ? .empty : .ready
         self.title = title
         self.paragraphs = paragraphs
         self.text = paragraphs.isEmpty ? nil : paragraphs.joined(separator: "\n\n")
+        self.paragraphEvidence = []
     }
 
     init(backendJSONObject object: [String: Any]) throws {
@@ -283,8 +318,20 @@ struct OwnerTruthPersonLifeRecord: Equatable, Sendable {
         }
         let paragraphs = rawParagraphs.compactMap(OwnerTruthFormalMemoryContract.requiredString)
         let text = OwnerTruthFormalMemoryContract.requiredString(object["text"])
+        let paragraphEvidence: [OwnerTruthPersonMemoryParagraphEvidence]
+        if let rawParagraphEvidence = object["paragraphEvidence"] as? [[String: Any]] {
+            paragraphEvidence = try rawParagraphEvidence.map(
+                OwnerTruthPersonMemoryParagraphEvidence.init
+            )
+        } else {
+            paragraphEvidence = []
+        }
         guard paragraphs.count == rawParagraphs.count,
-              paragraphs.count == paragraphCount else {
+              paragraphs.count == paragraphCount,
+              paragraphEvidence.isEmpty || (
+                paragraphEvidence.count == paragraphs.count
+                && paragraphEvidence.map(\.paragraphIndex) == Array(paragraphs.indices)
+              ) else {
             throw OwnerTruthFormalMemoryContractError.invalidProfile("人生记录段落无效")
         }
         switch state {
@@ -302,6 +349,7 @@ struct OwnerTruthPersonLifeRecord: Equatable, Sendable {
         self.title = title
         self.text = text
         self.paragraphs = paragraphs
+        self.paragraphEvidence = paragraphEvidence
     }
 }
 
@@ -313,6 +361,7 @@ struct OwnerTruthPersonLifeStoryChapter: Equatable, Sendable, Identifiable {
     let supportingMemoryIDs: [OwnerTruthRecordID]
     let supportingMemoryVersionIDs: [OwnerTruthRecordID]
     let facets: [String]
+    let paragraphEvidence: [OwnerTruthPersonMemoryParagraphEvidence]
 
     init(backendJSONObject object: [String: Any]) throws {
         guard let id = OwnerTruthFormalMemoryContract.requiredString(object["chapterId"]),
@@ -334,6 +383,14 @@ struct OwnerTruthPersonLifeStoryChapter: Equatable, Sendable, Identifiable {
         let paragraphs = rawParagraphs.compactMap(OwnerTruthFormalMemoryContract.requiredString)
         let memoryIDs = rawMemoryIDs.compactMap(OwnerTruthFormalMemoryContract.recordID)
         let versionIDs = rawVersionIDs.compactMap(OwnerTruthFormalMemoryContract.recordID)
+        let paragraphEvidence: [OwnerTruthPersonMemoryParagraphEvidence]
+        if let rawParagraphEvidence = object["paragraphEvidence"] as? [[String: Any]] {
+            paragraphEvidence = try rawParagraphEvidence.map(
+                OwnerTruthPersonMemoryParagraphEvidence.init
+            )
+        } else {
+            paragraphEvidence = []
+        }
         guard !paragraphs.isEmpty,
               paragraphs.count == rawParagraphs.count,
               paragraphs.count == paragraphCount,
@@ -344,7 +401,11 @@ struct OwnerTruthPersonLifeStoryChapter: Equatable, Sendable, Identifiable {
               Set(memoryIDs).count == memoryIDs.count,
               versionIDs.count == rawVersionIDs.count,
               versionIDs.count == supportingMemoryCount,
-              Set(versionIDs).count == versionIDs.count else {
+              Set(versionIDs).count == versionIDs.count,
+              paragraphEvidence.isEmpty || (
+                paragraphEvidence.count == paragraphs.count
+                && paragraphEvidence.map(\.paragraphIndex) == Array(paragraphs.indices)
+              ) else {
             throw OwnerTruthFormalMemoryContractError.invalidProfile("人生篇章正文或来源引用无效")
         }
         self.id = id
@@ -354,6 +415,7 @@ struct OwnerTruthPersonLifeStoryChapter: Equatable, Sendable, Identifiable {
         self.supportingMemoryIDs = memoryIDs
         self.supportingMemoryVersionIDs = versionIDs
         self.facets = facets
+        self.paragraphEvidence = paragraphEvidence
     }
 }
 

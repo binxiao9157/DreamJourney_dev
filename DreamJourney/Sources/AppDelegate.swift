@@ -393,6 +393,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runOwnerMediaTaskStatusSmoke() }
         case .ownerTruthCandidateInboxSmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthCandidateInboxSmoke() }
+        case .ownerTruthCandidateRelatedGroupSmoke:
+            scheduleUIQAScenario(scenario) { $0.runOwnerTruthCandidateRelatedGroupSmoke() }
         case .ownerTruthFormalMemorySmoke:
             scheduleUIQAScenario(scenario) { $0.runOwnerTruthFormalMemorySmoke() }
         case .ownerTruthInterviewCandidateReviewSmoke:
@@ -2827,6 +2829,46 @@ private extension AppDelegate {
         keyWindow.rootViewController = UINavigationController(rootViewController: controller)
         keyWindow.makeKeyAndVisible()
         print("[UI_QA] OwnerTruthCandidateInboxSmoke started")
+    }
+
+    func runOwnerTruthCandidateRelatedGroupSmoke(retryCount: Int = 0) {
+        guard OwnerTruthCandidateReviewQAGate.isEnabled else {
+            OwnerTruthCandidateRelatedGroupUIQASmoke.writeFailure("qaGateDisabled")
+            return
+        }
+        guard let userID = UserManager.shared.currentUser?.id,
+              let accountLease = AccountLeaseRuntime.shared.capture(forSubjectId: userID),
+              accountLease.subjectId == userID,
+              AccountLeaseRuntime.shared.validate(accountLease, at: .request).allowed else {
+            guard retryCount < 20 else {
+                OwnerTruthCandidateRelatedGroupUIQASmoke.writeFailure("accountLeaseUnavailable")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerTruthCandidateRelatedGroupSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+        guard let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }),
+              keyWindow.rootViewController is WarmTabBarController else {
+            guard retryCount < 20 else {
+                OwnerTruthCandidateRelatedGroupUIQASmoke.writeFailure("mainRootUnavailable")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.runOwnerTruthCandidateRelatedGroupSmoke(retryCount: retryCount + 1)
+            }
+            return
+        }
+        let controller = OwnerTruthCandidateRelatedGroupUIQASmoke.makeViewController(
+            accountLease: accountLease
+        )
+        keyWindow.rootViewController = UINavigationController(rootViewController: controller)
+        keyWindow.makeKeyAndVisible()
+        print("[UI_QA] OwnerTruthCandidateRelatedGroupSmoke started")
     }
 
     func runOwnerTruthFormalMemorySmoke(retryCount: Int = 0) {

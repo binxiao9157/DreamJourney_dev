@@ -115,6 +115,7 @@ enum QALaunchScenario: String, CaseIterable {
     case ownerMediaUnifiedCreationSmoke = "DJRunOwnerMediaUnifiedCreationSmoke"
     case ownerMediaTaskStatusSmoke = "DJRunOwnerMediaTaskStatusSmoke"
     case ownerTruthCandidateInboxSmoke = "DJRunOwnerTruthCandidateInboxSmoke"
+    case ownerTruthCandidateRelatedGroupSmoke = "DJRunOwnerTruthCandidateRelatedGroupSmoke"
     case ownerTruthFormalMemorySmoke = "DJRunOwnerTruthFormalMemorySmoke"
     case ownerTruthInterviewCandidateReviewSmoke = "DJRunOwnerTruthInterviewCandidateReviewSmoke"
     case ownerTruthInterviewSessionStateSmoke = "DJRunOwnerTruthInterviewSessionStateSmoke"
@@ -181,6 +182,7 @@ enum QALaunchScenario: String, CaseIterable {
         .ownerMediaUnifiedCreationSmoke,
         .ownerMediaTaskStatusSmoke,
         .ownerTruthCandidateInboxSmoke,
+        .ownerTruthCandidateRelatedGroupSmoke,
         .ownerTruthFormalMemorySmoke,
         .ownerTruthInterviewCandidateReviewSmoke,
         .ownerTruthInterviewSessionStateSmoke,
@@ -251,6 +253,7 @@ enum QALaunchScenario: String, CaseIterable {
              .ownerMediaUnifiedCreationSmoke,
              .ownerMediaTaskStatusSmoke,
              .ownerTruthCandidateInboxSmoke,
+             .ownerTruthCandidateRelatedGroupSmoke,
              .ownerTruthFormalMemorySmoke,
              .ownerTruthInterviewCandidateReviewSmoke,
              .ownerTruthInterviewSessionStateSmoke,

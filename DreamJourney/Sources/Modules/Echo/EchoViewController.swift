@@ -222,6 +222,7 @@ struct EchoRecentConversationBuffer: Equatable {
     static let maximumTotalCharacters = 2_400
 
     private(set) var turns: [EchoConversationTurn] = []
+    private(set) var productSessionID = UUID().uuidString
 
     mutating func startUserTurn(_ rawText: String) -> [EchoConversationTurn] {
         let priorTurns = turns
@@ -235,6 +236,7 @@ struct EchoRecentConversationBuffer: Equatable {
 
     mutating func reset() {
         turns.removeAll(keepingCapacity: true)
+        productSessionID = UUID().uuidString
     }
 
     private mutating func append(role: EchoConversationTurn.Role, text rawText: String) {
@@ -273,14 +275,20 @@ private enum EchoLiveMemoryCaptureState: Equatable {
 /// become evidence for a pending memory candidate.
 private final class EchoLiveMemoryCaptureCoordinator {
     private struct Turn: Equatable {
-        let role: OwnerTruthInterviewNaturalInputMessageRole
-        let text: String
+        let delivery: OwnerTruthInterviewLiveTurnDelivery
+
+        var role: OwnerTruthInterviewNaturalInputMessageRole { delivery.role }
+        var text: String { delivery.text }
     }
 
     let id = UUID()
     private let accountLease: AccountLease
     private let client: DreamJourneyBackendClient
-    private let productSessionID: String?
+    private let productSessionID: String
+    private let liveTurnOutboxStore: OwnerTruthInterviewLiveTurnOutboxStore
+    /// Disk work must never happen on Volcengine's audio/ASR callback queue.
+    /// This serial queue also preserves the local client sequence order.
+    private let persistenceQueue = DispatchQueue(label: "com.dreamjourney.echo.live-memory-outbox")
     private let naturalInputPolicyAvailable: () -> Bool
     private let candidateReviewPolicyAvailable: () -> Bool
     private var naturalInputUseCase: OwnerTruthInterviewNaturalInputUseCase?
@@ -292,7 +300,13 @@ private final class EchoLiveMemoryCaptureCoordinator {
     private var queuedTurns: [Turn] = []
     private var inFlightTurn: Turn?
     private var ownerTurnCount = 0
+    private var capturedOwnerTurnCount = 0
     private var persistedOwnerTurnCount = 0
+    private var lastClientSequenceNumber = 0
+    private var pendingPersistenceCount = 0
+    private var isAcknowledgingInFlightTurn = false
+    private var closeRequestPersisted = false
+    private var isClearingCompletedOutbox = false
     private var isFinishing = false
     private var didRequestEnd = false
     private var didBeginOrganization = false
@@ -338,14 +352,21 @@ private final class EchoLiveMemoryCaptureCoordinator {
         accountLease: AccountLease,
         client: DreamJourneyBackendClient = .shared,
         productSessionID: String? = nil,
+        liveTurnOutboxStore: OwnerTruthInterviewLiveTurnOutboxStore = .shared,
         naturalInputPolicyAvailable: @escaping () -> Bool,
         candidateReviewPolicyAvailable: @escaping () -> Bool
     ) {
         self.accountLease = accountLease
         self.client = client
-        self.productSessionID = productSessionID
+        let normalizedProductSessionID = productSessionID?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        self.productSessionID = normalizedProductSessionID?.isEmpty == false
+            ? normalizedProductSessionID!
+            : "echo_live_\(UUID().uuidString.lowercased())"
+        self.liveTurnOutboxStore = liveTurnOutboxStore
         self.naturalInputPolicyAvailable = naturalInputPolicyAvailable
         self.candidateReviewPolicyAvailable = candidateReviewPolicyAvailable
+        restoreDurableTurnsIfNeeded()
     }
 
     func appendOwnerTurn(_ text: String) {
@@ -358,45 +379,154 @@ private final class EchoLiveMemoryCaptureCoordinator {
         }
         lastOwnerText = normalized
         lastOwnerTurnAt = now
-        ownerTurnCount += 1
+        capturedOwnerTurnCount += 1
         turnSegments(normalized).forEach {
-            enqueue(Turn(role: .owner, text: $0))
+            persistAndEnqueue(role: .owner, text: $0)
         }
     }
 
     func appendAssistantTurn(_ text: String) {
         guard acceptsTurns,
-              ownerTurnCount > 0,
+              capturedOwnerTurnCount > 0,
               let normalized = normalizedTurn(text) else {
             return
         }
         guard normalized != lastAssistantText
-                || lastAssistantOwnerTurnCount != ownerTurnCount else {
+                || lastAssistantOwnerTurnCount != capturedOwnerTurnCount else {
             return
         }
         lastAssistantText = normalized
-        lastAssistantOwnerTurnCount = ownerTurnCount
+        lastAssistantOwnerTurnCount = capturedOwnerTurnCount
         turnSegments(normalized).forEach {
-            enqueue(Turn(role: .assistant, text: $0))
+            persistAndEnqueue(role: .assistant, text: $0)
         }
     }
 
     func finish() {
         guard state == .live, !isFinishing else { return }
         isFinishing = true
-        if ownerTurnCount == 0 {
+        if ownerTurnCount == 0, pendingPersistenceCount == 0 {
             queuedTurns.removeAll()
             state = .empty
             return
         }
-        ensureNaturalInputSession()
-        advanceNaturalInputPipeline()
+        persistCloseRequestIfReady()
     }
 
-    private func enqueue(_ turn: Turn) {
-        queuedTurns.append(turn)
-        ensureNaturalInputSession()
-        advanceNaturalInputPipeline()
+    private func restoreDurableTurnsIfNeeded() {
+        do {
+            guard let snapshot = try liveTurnOutboxStore.load(
+                for: accountLease,
+                productSessionID: productSessionID
+            ) else {
+                return
+            }
+            ownerTurnCount = snapshot.ownerTurnCount
+            capturedOwnerTurnCount = snapshot.ownerTurnCount
+            lastClientSequenceNumber = snapshot.lastClientSequenceNumber
+            queuedTurns = snapshot.pendingTurns.map(Turn.init(delivery:))
+            persistedOwnerTurnCount = max(
+                0,
+                snapshot.ownerTurnCount - snapshot.pendingTurns.filter { $0.role == .owner }.count
+            )
+            isFinishing = snapshot.isClosing
+            closeRequestPersisted = snapshot.isClosing
+            if !queuedTurns.isEmpty || isFinishing {
+                ensureNaturalInputSession()
+                DispatchQueue.main.async { [weak self] in
+                    self?.advanceNaturalInputPipeline()
+                }
+            }
+        } catch {
+            state = .unavailable
+        }
+    }
+
+    private func persistAndEnqueue(
+        role: OwnerTruthInterviewNaturalInputMessageRole,
+        text: String
+    ) {
+        pendingPersistenceCount += 1
+        let accountLease = accountLease
+        let productSessionID = productSessionID
+        let store = liveTurnOutboxStore
+        persistenceQueue.async { [weak self] in
+            let result = Result {
+                try store.enqueue(
+                    role: role,
+                    text: text,
+                    for: accountLease,
+                    productSessionID: productSessionID
+                )
+            }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.pendingPersistenceCount = max(0, self.pendingPersistenceCount - 1)
+                switch result {
+                case .success(let snapshot):
+                    self.ownerTurnCount = snapshot.ownerTurnCount
+                    self.lastClientSequenceNumber = snapshot.lastClientSequenceNumber
+                    self.applyPendingTurns(snapshot.pendingTurns)
+                    self.ensureNaturalInputSession()
+                    self.persistCloseRequestIfReady()
+                    self.advanceNaturalInputPipeline()
+                case .failure:
+                    self.state = .unavailable
+                }
+            }
+        }
+    }
+
+    private func applyPendingTurns(_ deliveries: [OwnerTruthInterviewLiveTurnDelivery]) {
+        let inFlightMessageID = inFlightTurn?.delivery.messageID
+        let queuedMessageIDs = Set(queuedTurns.map { $0.delivery.messageID })
+        for delivery in deliveries where delivery.messageID != inFlightMessageID
+            && !queuedMessageIDs.contains(delivery.messageID) {
+            queuedTurns.append(Turn(delivery: delivery))
+        }
+        queuedTurns.sort {
+            $0.delivery.clientSequenceNumber < $1.delivery.clientSequenceNumber
+        }
+    }
+
+    private func persistCloseRequestIfReady() {
+        guard state == .live,
+              isFinishing,
+              pendingPersistenceCount == 0,
+              ownerTurnCount > 0,
+              !closeRequestPersisted else {
+            return
+        }
+        let lastClientSequenceNumber = max(
+            self.lastClientSequenceNumber,
+            queuedTurns.last?.delivery.clientSequenceNumber ?? 0,
+            inFlightTurn?.delivery.clientSequenceNumber ?? 0
+        )
+        guard lastClientSequenceNumber > 0 else { return }
+        let accountLease = accountLease
+        let productSessionID = productSessionID
+        let store = liveTurnOutboxStore
+        closeRequestPersisted = true
+        persistenceQueue.async { [weak self] in
+            let result = Result {
+                try store.markClosing(
+                    lastClientSequenceNumber: lastClientSequenceNumber,
+                    for: accountLease,
+                    productSessionID: productSessionID
+                )
+            }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success:
+                    self.ensureNaturalInputSession()
+                    self.advanceNaturalInputPipeline()
+                case .failure:
+                    self.closeRequestPersisted = false
+                    self.state = .unavailable
+                }
+            }
+        }
     }
 
     private func ensureNaturalInputSession() {
@@ -423,17 +553,13 @@ private final class EchoLiveMemoryCaptureCoordinator {
         switch viewState.phase {
         case .ready:
             if let completedTurn = inFlightTurn,
-               viewState.latestReceipt?.messageID != nil {
-                if queuedTurns.first == completedTurn {
-                    queuedTurns.removeFirst()
-                }
-                if completedTurn.role == .owner {
-                    persistedOwnerTurnCount += 1
-                }
-                inFlightTurn = nil
+               let receiptMessageID = viewState.latestReceipt?.messageID,
+               receiptMessageID == completedTurn.delivery.messageID {
+                acknowledgePersistedTurn(completedTurn)
+                return
             }
             if viewState.latestReceipt?.lifecycle == .ended {
-                beginPendingMemoryOrganization(receipt: viewState.latestReceipt)
+                clearCompletedOutboxThenBeginOrganization(receipt: viewState.latestReceipt)
                 return
             }
             DispatchQueue.main.async { [weak self] in
@@ -450,17 +576,89 @@ private final class EchoLiveMemoryCaptureCoordinator {
         guard state == .live,
               let useCase = naturalInputUseCase,
               useCase.viewState.phase == .ready,
-              inFlightTurn == nil else {
+              inFlightTurn == nil,
+              !isAcknowledgingInFlightTurn else {
             return
         }
         if let turn = queuedTurns.first {
             inFlightTurn = turn
-            useCase.send(.submitLiveTurn(text: turn.text, role: turn.role))
+            useCase.send(.submitPersistedLiveTurn(turn.delivery))
             return
         }
-        guard isFinishing, persistedOwnerTurnCount > 0, !didRequestEnd else { return }
+        guard isFinishing,
+              closeRequestPersisted,
+              persistedOwnerTurnCount > 0,
+              !didRequestEnd,
+              lastClientSequenceNumber > 0 else {
+            return
+        }
         didRequestEnd = true
-        useCase.send(.end)
+        useCase.send(.endLive(lastClientSequenceNumber: lastClientSequenceNumber))
+    }
+
+    private func acknowledgePersistedTurn(_ completedTurn: Turn) {
+        guard !isAcknowledgingInFlightTurn else { return }
+        isAcknowledgingInFlightTurn = true
+        let accountLease = accountLease
+        let productSessionID = productSessionID
+        let store = liveTurnOutboxStore
+        persistenceQueue.async { [weak self] in
+            let result = Result {
+                try store.acknowledge(
+                    messageID: completedTurn.delivery.messageID,
+                    for: accountLease,
+                    productSessionID: productSessionID
+                )
+            }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isAcknowledgingInFlightTurn = false
+                switch result {
+                case .success:
+                    if self.queuedTurns.first == completedTurn {
+                        self.queuedTurns.removeFirst()
+                    }
+                    if completedTurn.role == .owner {
+                        self.persistedOwnerTurnCount += 1
+                    }
+                    self.inFlightTurn = nil
+                    self.advanceNaturalInputPipeline()
+                case .failure:
+                    // Keep the in-flight item in the durable journal. A later
+                    // resume will replay the same command instead of guessing
+                    // whether the server accepted it.
+                    self.state = .unavailable
+                }
+            }
+        }
+    }
+
+    private func clearCompletedOutboxThenBeginOrganization(
+        receipt: OwnerTruthInterviewNaturalInputReceipt?
+    ) {
+        guard !isClearingCompletedOutbox else { return }
+        isClearingCompletedOutbox = true
+        let accountLease = accountLease
+        let productSessionID = productSessionID
+        let store = liveTurnOutboxStore
+        persistenceQueue.async { [weak self] in
+            let result = Result {
+                try store.remove(for: accountLease, productSessionID: productSessionID)
+            }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isClearingCompletedOutbox = false
+                switch result {
+                case .success:
+                    self.beginPendingMemoryOrganization(receipt: receipt)
+                case .failure:
+                    // The server has ended the session, but keeping an
+                    // unreadable local journal is safer than pretending the
+                    // recovery state was cleared.
+                    self.state = .unavailable
+                }
+            }
+        }
     }
 
     private func beginPendingMemoryOrganization(
@@ -8092,6 +8290,8 @@ final class EchoViewController: UIViewController {
             accessibilityIdentifier: "echoBackendAnswerLoading"
         )
         let recentTurns = recentEchoConversation.startUserTurn(question)
+        let productSessionID = recentEchoConversation.productSessionID
+        let clientTurnID = UUID().uuidString
         DreamJourneyBackendClient.shared.requestEchoAnswer(
             userId: expectedIdentity.userId,
             query: question,
@@ -8100,7 +8300,9 @@ final class EchoViewController: UIViewController {
             personaName: context.resolvedDisplayName,
             lifecycleMode: context.mode,
             viewerFamilyMemberID: nil,
-            recentTurns: recentTurns
+            recentTurns: recentTurns,
+            productSessionID: productSessionID,
+            clientTurnID: clientTurnID
         ) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self,
@@ -8276,6 +8478,8 @@ final class EchoViewController: UIViewController {
                 accessibilityIdentifier: "echoLiveBackendAnswerLoading"
             )
             let recentTurns = recentEchoConversation.startUserTurn(question)
+            let productSessionID = recentEchoConversation.productSessionID
+            let clientTurnID = UUID().uuidString
             DreamJourneyBackendClient.shared.requestEchoAnswer(
                 userId: expectedIdentity.userId,
                 query: question,
@@ -8284,7 +8488,9 @@ final class EchoViewController: UIViewController {
                 personaName: context.resolvedDisplayName,
                 lifecycleMode: context.mode,
                 viewerFamilyMemberID: nil,
-                recentTurns: recentTurns
+                recentTurns: recentTurns,
+                productSessionID: productSessionID,
+                clientTurnID: clientTurnID
             ) { [weak self] result in
                 DispatchQueue.main.async {
                     guard let self,
@@ -10197,6 +10403,14 @@ final class EchoViewController: UIViewController {
         }
 
         let context = DigitalHumanContextStore.shared.current
+        if context.isSelfAssistant,
+           liveProductSessionID == nil {
+            // A crashed/temporarily disconnected Live session must resume the
+            // same product conversation before starting a new one. The lookup
+            // is account/vault/authority scoped and returns no transcript.
+            liveProductSessionID = OwnerTruthInterviewLiveTurnOutboxStore.shared
+                .recoverableProductSessionID(for: accountLease)
+        }
         let personaScope = context.isSelfAssistant ? "personal" : "family"
         let targetPersonaId = context.isSelfAssistant
             ? accountLease.subjectId
@@ -10229,7 +10443,20 @@ final class EchoViewController: UIViewController {
             switch result {
             case .success(let runtimeConfig):
                 if DialogEngineManager.shared.configure(runtimeConfig: runtimeConfig) {
-                    self.liveProductSessionID = runtimeConfig.productSessionID ?? self.liveProductSessionID
+                    let requestedProductSessionID = self.liveProductSessionID
+                    let resolvedProductSessionID = runtimeConfig.productSessionID
+                        ?? requestedProductSessionID
+                    if let requestedProductSessionID,
+                       let runtimeProductSessionID = runtimeConfig.productSessionID,
+                       requestedProductSessionID != runtimeProductSessionID {
+                        // Never attach a locally durable transcript to a
+                        // provider runtime that was issued for another product
+                        // session. Keep the local journal for an explicit
+                        // recovery rather than mixing two conversations.
+                        self.handleBlockedRealtimeVoice(reason: "productSessionMismatch")
+                        return
+                    }
+                    self.liveProductSessionID = resolvedProductSessionID
                     self.backendRuntimeTokenApplied = true
                     self.renderVoiceSDKReadinessPreviewIfNeeded()
                     let liveAudioRoute = self.pinLiveAudioRouteIfNeeded(
@@ -10246,7 +10473,7 @@ final class EchoViewController: UIViewController {
                     }
                     self.beginLiveMemoryCaptureIfNeeded(
                         accountLease: accountLease,
-                        productSessionID: runtimeConfig.productSessionID
+                        productSessionID: resolvedProductSessionID
                     )
                     DialogEngineManager.shared.startDialog(
                         sendsGreeting: true,

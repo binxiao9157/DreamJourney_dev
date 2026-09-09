@@ -91,6 +91,24 @@ final class OwnerTruthContractsTests: XCTestCase {
                     "paragraphCount": paragraphs.count,
                     "paragraphs": paragraphs,
                     "text": paragraphs.joined(separator: "\n\n"),
+                    "paragraphEvidence": [
+                        [
+                            "paragraphIndex": 0,
+                            "supportingMemoryCount": 1,
+                            "supportingMemoryIds": [experienceID],
+                            "supportingMemoryVersionIds": [
+                                "00000000-0000-0000-0000-000000000201"
+                            ],
+                        ],
+                        [
+                            "paragraphIndex": 1,
+                            "supportingMemoryCount": 1,
+                            "supportingMemoryIds": [knowledgeID],
+                            "supportingMemoryVersionIds": [
+                                "00000000-0000-0000-0000-000000000202"
+                            ],
+                        ],
+                    ],
                 ],
                 "lifeStory": lifeStoryFixture(
                     paragraphs: paragraphs,
@@ -148,6 +166,11 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(profile.memoryCount, 2)
         XCTAssertEqual(profile.lifeRecord.title, "我的人生记录")
         XCTAssertEqual(profile.lifeRecord.paragraphs, paragraphs)
+        XCTAssertEqual(profile.lifeRecord.paragraphEvidence.map(\.paragraphIndex), [0, 1])
+        XCTAssertEqual(
+            profile.lifeRecord.paragraphEvidence[0].supportingMemoryIDs,
+            [recordID(experienceID)]
+        )
         XCTAssertFalse(profile.lifeRecord.text?.contains("#") == true)
         XCTAssertEqual(profile.lifeStory.title, "我的人生记录")
         XCTAssertEqual(profile.lifeStory.chapters.map(\.title), ["家庭与成长", "经验与信念"])
@@ -1048,6 +1071,159 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(candidate.facetsState, .legacyNotAvailable)
     }
 
+    func testV5CandidateDecodesBoundOwnerVisibleChangeSetDiff() throws {
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-owner-v5-preview"))
+        let candidateID = "00000000-0000-0000-0000-000000000071"
+        let sourceID = "00000000-0000-0000-0000-000000000072"
+        let targetMemoryID = "00000000-0000-0000-0000-000000000073"
+        let targetVersionID = "00000000-0000-0000-0000-000000000074"
+        let proposalID = "00000000-0000-0000-0000-000000000075"
+        let changeSetID = "00000000-0000-0000-0000-000000000076"
+        let candidateHash = String(repeating: "a", count: 64)
+        let proposalHash = String(repeating: "b", count: 64)
+        let candidateContent: [String: Any] = [
+            "statement": "我在 2016 年从 A 大学计算机专业毕业。",
+            "qualifiers": ["validTime": ["expression": "2016 年"]],
+        ]
+        let inbox = try OwnerTruthCandidateInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "memoryRevision": 9,
+                "candidates": [[
+                    "candidateId": candidateID,
+                    "sourceId": sourceID,
+                    "memoryKind": "knowledge",
+                    "perspectiveType": "firstPerson",
+                    "epistemicStatus": "recalled",
+                    "sensitivity": "standard",
+                    "contentSchemaVersion": "owner-truth-v5",
+                    "content": candidateContent,
+                    "contentHash": candidateHash,
+                    "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                    "reviewMode": "single",
+                    "candidateVersion": 3,
+                    "proposedChangeSet": [
+                        "schemaVersion": OwnerTruthCandidateChangeSetProposal.schemaVersion,
+                        "proposalId": proposalID,
+                        "proposalHash": proposalHash,
+                        "candidateContentHash": candidateHash,
+                        "candidateVersion": 3,
+                        "changeSetId": changeSetID,
+                        "baseMemoryRevision": 9,
+                        "operations": [[
+                            "operationIndex": 0,
+                            "operationKind": "correct",
+                            "targetMemoryId": targetMemoryID,
+                            "targetMemoryVersionId": targetVersionID,
+                            "targetMemoryVersion": 2,
+                            "reason": "explicitCorrectionTarget",
+                            "changedFields": ["content", "evidenceRefs"],
+                            "factDiff": [
+                                "before": ["statement": "我在 B 大学毕业。"],
+                                "after": candidateContent,
+                                "candidate": candidateContent,
+                                "changedFields": [[
+                                    "path": "content",
+                                    "before": ["statement": "我在 B 大学毕业。"],
+                                    "after": candidateContent,
+                                ]],
+                                "evidence": [
+                                    "beforeCount": 1,
+                                    "candidateCount": 1,
+                                    "afterCount": 2,
+                                    "addedCount": 1,
+                                ],
+                            ],
+                            "anticipatedActivation": "revise",
+                        ]],
+                        "dependencies": [],
+                    ],
+                ]],
+            ],
+            expectedVaultID: vaultID
+        )
+
+        let proposal = try XCTUnwrap(inbox.candidates.first?.proposedChangeSet)
+        XCTAssertEqual(proposal.changeSetID.rawValue.uuidString.lowercased(), changeSetID)
+        XCTAssertEqual(proposal.baseMemoryRevision, 9)
+        XCTAssertEqual(proposal.operations.first?.targetMemoryVersion, 2)
+        XCTAssertEqual(proposal.operations.first?.factDiff.beforeEvidenceCount, 1)
+        XCTAssertEqual(proposal.operations.first?.factDiff.afterEvidenceCount, 2)
+    }
+
+    func testV5CorrectionPreviewDoesNotSubmitUntilBoundProposalConfirmed() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000171")
+        let client = CandidateReviewClientSpy()
+        let inbox = try v5CandidateInbox(vaultID: lease.vaultId, candidateID: candidateID)
+        let proposal = try XCTUnwrap(inbox.candidates.first?.proposedChangeSet)
+        client.inboxResult = .success(inbox)
+        client.changeSetPreviewResult = .success(proposal)
+        client.reviewResult = .success(try decisionResult(candidateID: candidateID, decision: .corrected))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "candidate-review-v5-preview-confirm-001" }
+        )
+
+        useCase.send(.refresh)
+        var previewedProposal: OwnerTruthCandidateChangeSetProposal?
+        useCase.previewCorrection(
+            candidateID: candidateID,
+            correctedPrimaryValue: "我在 2016 年从 A 大学计算机专业毕业。"
+        ) { result in
+            switch result {
+            case .success(let proposal):
+                previewedProposal = proposal
+            case .failure(let error):
+                XCTFail("expected V5 correction preview: \(error)")
+            }
+        }
+
+        XCTAssertEqual(client.reviewedCommands.count, 0)
+        let boundProposal = try XCTUnwrap(previewedProposal)
+        useCase.send(.correct(
+            candidateID: candidateID,
+            correctedPrimaryValue: "我在 2016 年从 A 大学计算机专业毕业。",
+            proposedChangeSet: boundProposal
+        ))
+
+        let command = try XCTUnwrap(client.reviewedCommands.first)
+        XCTAssertEqual(command.action, .correct)
+        XCTAssertEqual(command.expectedChangeSetID, boundProposal.changeSetID)
+        XCTAssertEqual(command.expectedProposalHash, boundProposal.proposalHash)
+        XCTAssertEqual(useCase.viewState.notice, .candidateCorrected)
+    }
+
+    func testV5CorrectionWithoutPreviewCannotSubmitReviewCommand() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000172")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try v5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateID: candidateID
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.refresh)
+        useCase.send(.correct(
+            candidateID: candidateID,
+            correctedPrimaryValue: "我在 2016 年从 A 大学计算机专业毕业。"
+        ))
+
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+        XCTAssertEqual(useCase.viewState.phase, .failed)
+        XCTAssertEqual(useCase.viewState.notice, .changeSetPreviewUnavailable)
+    }
+
     func testCandidateInboxDecodesV2FacetsAndDoesNotTreatMissingFacetsAsSuccess() throws {
         let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-owner-v2"))
         let sourceID = "00000000-0000-0000-0000-000000000091"
@@ -1371,6 +1547,36 @@ final class OwnerTruthContractsTests: XCTestCase {
                 action: .accept,
                 correctedValue: ["summary": .string("不应发送")],
                 reasonCode: "ownerReviewed"
+            )
+        )
+
+        let changeSetID = OwnerTruthRecordID(
+            rawValue: UUID(uuidString: "00000000-0000-0000-0000-000000000077")!
+        )
+        let bound = try OwnerTruthCandidateReviewCommand(
+            commandID: "candidate-bound-preview-001",
+            expectedCandidateVersion: 2,
+            action: .accept,
+            reasonCode: "ownerReviewed",
+            expectedMemoryRevision: 9,
+            expectedChangeSetID: changeSetID,
+            expectedProposalHash: String(repeating: "c", count: 64)
+        )
+        XCTAssertEqual(
+            bound.backendPayload["expectedChangeSetId"] as? String,
+            changeSetID.rawValue.uuidString.lowercased()
+        )
+        XCTAssertEqual(
+            bound.backendPayload["expectedProposalHash"] as? String,
+            String(repeating: "c", count: 64)
+        )
+        XCTAssertThrowsError(
+            try OwnerTruthCandidateReviewCommand(
+                commandID: "candidate-incomplete-preview-001",
+                expectedCandidateVersion: 1,
+                action: .accept,
+                reasonCode: "ownerReviewed",
+                expectedChangeSetID: changeSetID
             )
         )
     }
@@ -1945,6 +2151,351 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.latestBatchSummary?.acceptedCandidateIDs, [firstBatchID, secondBatchID])
         XCTAssertTrue(useCase.viewState.latestBatchSummary?.pendingCandidateIDs.isEmpty == true)
         XCTAssertTrue(useCase.viewState.latestReceipt?.createdMemoryVersion == true)
+    }
+
+    func testRelatedCandidateGroupPreviewAndConfirmationStayBoundToTheSameV5Snapshot() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstID = recordID("00000000-0000-0000-0000-000000000271")
+        let secondID = recordID("00000000-0000-0000-0000-000000000272")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try relatedV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        ))
+        client.changeSetGroupPreviewResult = .success(try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        ))
+        client.changeSetGroupCommitResult = .success(try relatedGroupCommitResult(
+            proposal: try relatedGroupProposal(
+                vaultID: lease.vaultId,
+                candidateIDs: [firstID, secondID]
+            )
+        ))
+
+        let inboxUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        inboxUseCase.send(.refresh)
+        let items = inboxUseCase.viewState.items
+        XCTAssertEqual(items.count, 2)
+        XCTAssertTrue(items.allSatisfy(\.supportsRelatedGroupReview))
+        XCTAssertFalse(items.contains(where: \.supportsBatchAcceptance))
+
+        var commandIndex = 0
+        let groupUseCase = OwnerTruthCandidateRelatedGroupReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: {
+                defer { commandIndex += 1 }
+                return "related-group-command-\(commandIndex)"
+            }
+        )
+        var previewResult: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+        groupUseCase.preview(candidates: items) { previewResult = $0 }
+        let proposal = try XCTUnwrap(try previewResult?.get())
+
+        XCTAssertEqual(client.previewedGroupCommands.count, 1)
+        XCTAssertEqual(client.previewedGroupCommands[0].selections.map(\.candidateID), [firstID, secondID])
+        XCTAssertEqual(client.previewedGroupCommands[0].dependencies.map(\.beforeCandidateID), [firstID])
+        XCTAssertEqual(client.previewedGroupCommands[0].dependencies.map(\.afterCandidateID), [secondID])
+
+        var commitResult: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+        groupUseCase.confirm(proposal: proposal) { commitResult = $0 }
+        let receipt = try XCTUnwrap(try commitResult?.get())
+
+        XCTAssertEqual(receipt.members.map(\.candidateID), [firstID, secondID])
+        XCTAssertEqual(client.confirmedGroupCommands.count, 1)
+        XCTAssertEqual(
+            client.confirmedGroupCommands[0].expectedGroupProposalID,
+            proposal.proposalID
+        )
+        XCTAssertEqual(
+            client.confirmedGroupCommands[0].expectedGroupProposalHash,
+            proposal.proposalHash
+        )
+        XCTAssertEqual(
+            client.confirmedGroupCommands[0].expectedMemoryRevision,
+            proposal.baseMemoryRevision
+        )
+    }
+
+    func testRelatedCandidateGroupBindsMixedOwnerActionsAndOnlySendsChangedCorrectionText() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstID = recordID("00000000-0000-0000-0000-000000000606")
+        let secondID = recordID("00000000-0000-0000-0000-000000000607")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try relatedV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        ))
+
+        let inboxUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        inboxUseCase.send(.refresh)
+        let items = inboxUseCase.viewState.items
+        let correctedPrimaryValue = "我在 2016 年从 A 大学计算机专业毕业。"
+        let correctedContent: [String: OwnerTruthJSONValue] = [
+            try XCTUnwrap(items.last?.primaryField).rawValue: .string(correctedPrimaryValue),
+        ]
+        let instructions = try [
+            OwnerTruthCandidateRelatedGroupReviewInstruction(
+                candidate: try XCTUnwrap(items.first),
+                action: .reject,
+                reasonCode: "ownerReviewedRelatedGroup"
+            ),
+            OwnerTruthCandidateRelatedGroupReviewInstruction(
+                candidate: try XCTUnwrap(items.last),
+                action: .correct,
+                correctedValue: correctedContent,
+                correctedValueSchemaVersion: try XCTUnwrap(items.last?.contentSchemaVersion),
+                reasonCode: "ownerCorrectedRelatedGroup"
+            ),
+        ]
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID],
+            actions: [.reject, .correct]
+        )
+        client.changeSetGroupPreviewResult = .success(proposal)
+        client.changeSetGroupCommitResult = .success(
+            try relatedGroupCommitResult(proposal: proposal)
+        )
+
+        let groupUseCase = OwnerTruthCandidateRelatedGroupReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "related-group-mixed-command" }
+        )
+        var previewResult: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+        groupUseCase.preview(instructions: instructions) { previewResult = $0 }
+        let visibleProposal = try XCTUnwrap(try previewResult?.get())
+
+        XCTAssertEqual(
+            client.previewedGroupCommands.last?.selections.map(\.action),
+            [.reject, .correct]
+        )
+        XCTAssertEqual(
+            client.previewedGroupCommands.last?.selections.last?.correctedValue?[
+                try XCTUnwrap(items.last?.primaryField).rawValue
+            ],
+            .string(correctedPrimaryValue)
+        )
+        XCTAssertEqual(client.previewedGroupCommands.last?.selections.last?.correctedValue?.count, 1)
+
+        var commitResult: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+        groupUseCase.confirm(proposal: visibleProposal) { commitResult = $0 }
+        let receipt = try XCTUnwrap(try commitResult?.get())
+
+        XCTAssertEqual(receipt.members.map(\.decision), [.rejected, .corrected])
+        XCTAssertEqual(
+            client.confirmedGroupCommands.last?.selections.map(\.action),
+            [.reject, .correct]
+        )
+    }
+
+    func testRelatedCandidateGroupCoalescesDuplicateConfirmationWhileReceiptIsPending() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstID = recordID("00000000-0000-0000-0000-000000000608")
+        let secondID = recordID("00000000-0000-0000-0000-000000000609")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try relatedV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        ))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        )
+        client.changeSetGroupPreviewResult = .success(proposal)
+        client.deferChangeSetGroupCommit = true
+
+        let inboxUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        inboxUseCase.send(.refresh)
+        let groupUseCase = OwnerTruthCandidateRelatedGroupReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "related-group-duplicate-command" }
+        )
+        var previewResult: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+        groupUseCase.preview(candidates: inboxUseCase.viewState.items) { previewResult = $0 }
+        let visibleProposal = try XCTUnwrap(try previewResult?.get())
+
+        var firstResult: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+        var duplicateResult: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+        groupUseCase.confirm(proposal: visibleProposal) { firstResult = $0 }
+        groupUseCase.confirm(proposal: visibleProposal) { duplicateResult = $0 }
+
+        XCTAssertEqual(client.confirmedGroupCommands.count, 1)
+        XCTAssertNil(firstResult)
+        XCTAssertNil(duplicateResult)
+
+        client.completeDeferredChangeSetGroupCommit(.success(
+            try relatedGroupCommitResult(proposal: visibleProposal)
+        ))
+
+        XCTAssertNotNil(try firstResult?.get())
+        XCTAssertNotNil(try duplicateResult?.get())
+        XCTAssertEqual(client.confirmedGroupCommands.count, 1)
+    }
+
+    func testRelatedCandidateGroupRetryReusesCommandAfterTransientFailure() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstID = recordID("00000000-0000-0000-0000-000000000610")
+        let secondID = recordID("00000000-0000-0000-0000-000000000611")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try relatedV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        ))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        )
+        client.changeSetGroupPreviewResult = .success(proposal)
+        client.changeSetGroupCommitResults = [
+            .failure(URLError(.timedOut)),
+            .success(try relatedGroupCommitResult(proposal: proposal)),
+        ]
+
+        let inboxUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        inboxUseCase.send(.refresh)
+        var commandIndex = 0
+        let groupUseCase = OwnerTruthCandidateRelatedGroupReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: {
+                defer { commandIndex += 1 }
+                return "related-group-retry-command-\(commandIndex)"
+            }
+        )
+        var previewResult: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+        groupUseCase.preview(candidates: inboxUseCase.viewState.items) { previewResult = $0 }
+        let visibleProposal = try XCTUnwrap(try previewResult?.get())
+
+        var firstResult: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+        groupUseCase.confirm(proposal: visibleProposal) { firstResult = $0 }
+        XCTAssertThrowsError(try firstResult?.get())
+        guard case .failure(let firstError)? = firstResult else {
+            return XCTFail("expected the first related-group confirmation to fail")
+        }
+        XCTAssertEqual(
+            OwnerTruthCandidateRelatedGroupReviewFailureDisposition(
+                error: firstError
+            ),
+            .retryable
+        )
+
+        var retryResult: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+        groupUseCase.confirm(proposal: visibleProposal) { retryResult = $0 }
+
+        XCTAssertNotNil(try retryResult?.get())
+        XCTAssertEqual(client.confirmedGroupCommands.count, 2)
+        XCTAssertEqual(
+            client.confirmedGroupCommands[0].commandID,
+            client.confirmedGroupCommands[1].commandID
+        )
+    }
+
+    func testRelatedCandidateGroupConflictInvalidatesPreviewBeforeRetry() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstID = recordID("00000000-0000-0000-0000-000000000612")
+        let secondID = recordID("00000000-0000-0000-0000-000000000613")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try relatedV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        ))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        )
+        client.changeSetGroupPreviewResult = .success(proposal)
+        let conflict = DreamJourneyBackendClient.ClientError.backendError(
+            statusCode: 409,
+            context: .init(
+                code: "ownerTruthCandidateReviewConflict",
+                detail: "formal memory revision changed"
+            )
+        )
+        client.changeSetGroupCommitResults = [
+            .failure(conflict),
+            .success(try relatedGroupCommitResult(proposal: proposal)),
+        ]
+
+        let inboxUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        inboxUseCase.send(.refresh)
+        var commandIndex = 0
+        let groupUseCase = OwnerTruthCandidateRelatedGroupReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: {
+                defer { commandIndex += 1 }
+                return "related-group-conflict-command-\(commandIndex)"
+            }
+        )
+        let items = inboxUseCase.viewState.items
+        var previewResult: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+        groupUseCase.preview(candidates: items) { previewResult = $0 }
+        let visibleProposal = try XCTUnwrap(try previewResult?.get())
+
+        var conflictResult: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+        groupUseCase.confirm(proposal: visibleProposal) { conflictResult = $0 }
+        XCTAssertThrowsError(try conflictResult?.get())
+        XCTAssertEqual(
+            OwnerTruthCandidateRelatedGroupReviewFailureDisposition(error: conflict),
+            .stalePreview
+        )
+
+        var staleRetryResult: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+        groupUseCase.confirm(proposal: visibleProposal) { staleRetryResult = $0 }
+        XCTAssertThrowsError(try staleRetryResult?.get())
+        XCTAssertEqual(client.confirmedGroupCommands.count, 1)
+
+        var refreshedPreviewResult: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+        groupUseCase.preview(candidates: items) { refreshedPreviewResult = $0 }
+        let refreshedProposal = try XCTUnwrap(try refreshedPreviewResult?.get())
+        var refreshedCommitResult: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+        groupUseCase.confirm(proposal: refreshedProposal) { refreshedCommitResult = $0 }
+
+        XCTAssertNotNil(try refreshedCommitResult?.get())
+        XCTAssertEqual(client.confirmedGroupCommands.count, 2)
+        XCTAssertNotEqual(
+            client.confirmedGroupCommands[0].commandID,
+            client.confirmedGroupCommands[1].commandID
+        )
     }
 
     func testCandidateReviewUseCaseStopsPartialBatchOnConflictAndRetainsStableRetryCommand() throws {
@@ -4248,6 +4799,204 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertNil(ordinaryStart.backendPayload["entryMode"])
     }
 
+    func testInterviewLiveDeliveryCarriesStableSequenceAndCloseWatermark() throws {
+        let threadID = recordID("00000000-0000-0000-0000-000000000183")
+        let sessionID = recordID("00000000-0000-0000-0000-000000000184")
+        let capturedAt = Date(timeIntervalSince1970: 1_725_000_000)
+        let delivery = try OwnerTruthInterviewLiveTurnDelivery(
+            commandID: "live-delivery-command-001",
+            messageID: recordID("00000000-0000-0000-0000-000000000185"),
+            clientSequenceNumber: 3,
+            role: .owner,
+            text: "我想补充大学毕业后的第一份工作。",
+            capturedAt: capturedAt
+        )
+
+        let append = try delivery.appendCommand(
+            threadID: threadID,
+            sessionID: sessionID,
+            expectedThreadVersion: 4,
+            expectedSessionVersion: 5
+        )
+        let end = try OwnerTruthInterviewEndCommand(
+            commandID: "live-end-command-001",
+            threadID: threadID,
+            sessionID: sessionID,
+            expectedThreadVersion: 5,
+            expectedSessionVersion: 6,
+            lastClientSequenceNumber: 3
+        )
+
+        XCTAssertEqual(append.backendPayload["captureMode"] as? String, "live")
+        XCTAssertEqual(append.backendPayload["clientSequenceNumber"] as? Int, 3)
+        XCTAssertEqual(
+            append.backendPayload["capturedAt"] as? String,
+            ISO8601DateFormatter().string(from: capturedAt)
+        )
+        XCTAssertEqual(end.backendPayload["lastClientSequenceNumber"] as? Int, 3)
+    }
+
+    func testLiveTurnOutboxPersistsReplaysAndIsolatesAccountScope() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let rootDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-live-outbox-test-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootDirectory) }
+        let timestamp = Date(timeIntervalSince1970: 1_725_000_000)
+        let identifiers = [
+            UUID(uuidString: "00000000-0000-0000-0000-000000000301")!,
+            UUID(uuidString: "00000000-0000-0000-0000-000000000302")!,
+            UUID(uuidString: "00000000-0000-0000-0000-000000000303")!,
+            UUID(uuidString: "00000000-0000-0000-0000-000000000304")!,
+        ]
+        var identifierIndex = 0
+        let store = OwnerTruthInterviewLiveTurnOutboxStore(
+            rootDirectory: rootDirectory,
+            now: { timestamp },
+            identifierFactory: {
+                defer { identifierIndex += 1 }
+                return identifiers[identifierIndex]
+            }
+        )
+        let productSessionID = "echo_live_recovery_001"
+
+        let first = try store.enqueue(
+            role: .owner,
+            text: "我小时候在乡下长大。",
+            for: lease,
+            productSessionID: productSessionID
+        )
+        let second = try store.enqueue(
+            role: .assistant,
+            text: "那段生活里，您最常想起的是什么？",
+            for: lease,
+            productSessionID: productSessionID
+        )
+        XCTAssertEqual(first.lastClientSequenceNumber, 1)
+        XCTAssertEqual(second.lastClientSequenceNumber, 2)
+        XCTAssertEqual(second.ownerTurnCount, 1)
+        XCTAssertEqual(second.pendingTurns.map(\.clientSequenceNumber), [1, 2])
+
+        let restoredStore = OwnerTruthInterviewLiveTurnOutboxStore(
+            rootDirectory: rootDirectory,
+            now: { timestamp }
+        )
+        let restored = try XCTUnwrap(restoredStore.load(
+            for: lease,
+            productSessionID: productSessionID
+        ))
+        XCTAssertEqual(restored.pendingTurns, second.pendingTurns)
+
+        let acknowledged = try XCTUnwrap(restoredStore.acknowledge(
+            messageID: restored.pendingTurns[0].messageID,
+            for: lease,
+            productSessionID: productSessionID
+        ))
+        XCTAssertEqual(acknowledged.pendingTurns.map(\.clientSequenceNumber), [2])
+        let closing = try restoredStore.markClosing(
+            lastClientSequenceNumber: 2,
+            for: lease,
+            productSessionID: productSessionID
+        )
+        XCTAssertTrue(closing.isClosing)
+        XCTAssertEqual(restoredStore.recoverableProductSessionID(for: lease), productSessionID)
+        XCTAssertThrowsError(try restoredStore.enqueue(
+            role: .owner,
+            text: "关闭后不得追加。",
+            for: lease,
+            productSessionID: productSessionID
+        ))
+
+        let otherLease = AccountLease(
+            subjectId: "owner-b",
+            vaultId: lease.vaultId,
+            sessionId: "session-other",
+            generation: lease.generation,
+            generationId: UUID(uuidString: "00000000-0000-0000-0000-000000000399")!,
+            authorityEpoch: lease.authorityEpoch
+        )
+        XCTAssertNil(try restoredStore.load(for: otherLease, productSessionID: productSessionID))
+        try restoredStore.remove(for: lease, productSessionID: productSessionID)
+        XCTAssertNil(restoredStore.recoverableProductSessionID(for: lease))
+    }
+
+    func testInterviewLiveUseCaseQueriesTheSelectedProductSession() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.scopedCurrentSessionHandler = { _, requestedProductSessionID in
+            XCTAssertEqual(requestedProductSessionID, "echo_live_scope_001")
+            return Result {
+                try OwnerTruthInterviewNaturalInputCurrentSession(
+                    backendJSONObject: [
+                        "schemaVersion": OwnerTruthInterviewNaturalInputCurrentSession.schemaVersion,
+                        "vaultId": vaultID.rawValue,
+                        "currentSession": NSNull(),
+                    ],
+                    expectedVaultID: vaultID
+                )
+            }
+        }
+        client.startHandler = { command in
+            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        }
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            entryMode: .live,
+            productSessionID: "echo_live_scope_001"
+        )
+
+        useCase.send(.start)
+
+        XCTAssertEqual(client.requestedCurrentProductSessionID, "echo_live_scope_001")
+        XCTAssertEqual(client.startCommand?.productSessionID, "echo_live_scope_001")
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+    }
+
+    func testInterviewLiveUseCaseRejectsCurrentSessionFromAnotherProductSession() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let client = InterviewNaturalInputClientSpy()
+        client.scopedCurrentSessionHandler = { _, _ in
+            Result {
+                try OwnerTruthInterviewNaturalInputCurrentSession(
+                    backendJSONObject: [
+                        "schemaVersion": OwnerTruthInterviewNaturalInputCurrentSession.schemaVersion,
+                        "vaultId": vaultID.rawValue,
+                        "currentSession": [
+                            "status": "resumed",
+                            "threadId": "00000000-0000-0000-0000-000000000186",
+                            "sessionId": "00000000-0000-0000-0000-000000000187",
+                            "threadVersion": 4,
+                            "sessionVersion": 4,
+                            "state": "active",
+                            "boundary": "open",
+                            "entryMode": "live",
+                            "productSessionId": "echo_live_other_product",
+                        ],
+                    ],
+                    expectedVaultID: vaultID
+                )
+            }
+        }
+        let useCase = OwnerTruthInterviewNaturalInputUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            entryMode: .live,
+            productSessionID: "echo_live_expected_product"
+        )
+
+        useCase.send(.start)
+
+        XCTAssertEqual(useCase.viewState.phase, .failed)
+        XCTAssertEqual(useCase.viewState.notice, .contractMismatch)
+        XCTAssertNil(client.startCommand)
+    }
+
     func testInterviewBoundaryCommandUsesBoundedPayloadAndMatchesValueMinimizedReceipt() throws {
         let (_, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
@@ -5825,13 +6574,15 @@ final class OwnerTruthContractsTests: XCTestCase {
             backendJSONObject: correctionRequestReceiptResponse(for: requestCommand),
             expectedCommand: requestCommand
         )
+        let proposedChangeSet = try correctionChangeSetProposal(for: requestReceipt)
         let command = try OwnerTruthCorrectionResolutionCommand(
             commandID: "owner-truth-correction-resolution-001",
             correctionRequestReceipt: requestReceipt,
             action: .correct,
             correctedValue: ["summary": .string(correctedSummary)],
             correctedValueSchemaVersion: "owner-truth-v1",
-            reasonCode: "ownerConfirmedCorrection"
+            reasonCode: "ownerConfirmedCorrection",
+            proposedChangeSet: proposedChangeSet
         )
 
         XCTAssertEqual(command.vaultID, try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)))
@@ -5839,7 +6590,16 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(command.candidateID, requestReceipt.candidateID)
         XCTAssertEqual(command.expectedCandidateVersion, requestReceipt.candidateVersion)
         XCTAssertEqual(command.expectedMemoryVersionID, requestReceipt.expectedMemoryVersionID)
+        XCTAssertEqual(command.expectedMemoryRevision, proposedChangeSet.baseMemoryRevision)
+        XCTAssertEqual(command.expectedChangeSetID, proposedChangeSet.changeSetID)
+        XCTAssertEqual(command.expectedProposalHash, proposedChangeSet.proposalHash)
         XCTAssertEqual(command.backendPayload["action"] as? String, "correct")
+        XCTAssertEqual(command.backendPayload["expectedMemoryRevision"] as? Int, proposedChangeSet.baseMemoryRevision)
+        XCTAssertEqual(
+            command.backendPayload["expectedChangeSetId"] as? String,
+            proposedChangeSet.changeSetID.rawValue.uuidString.lowercased()
+        )
+        XCTAssertEqual(command.backendPayload["expectedProposalHash"] as? String, proposedChangeSet.proposalHash)
         XCTAssertEqual(
             (command.backendPayload["correctedValue"] as? [String: Any])?["summary"] as? String,
             correctedSummary
@@ -5883,13 +6643,15 @@ final class OwnerTruthContractsTests: XCTestCase {
             backendJSONObject: correctionRequestReceiptResponse(for: requestCommand),
             expectedCommand: requestCommand
         )
+        let proposedChangeSet = try correctionChangeSetProposal(for: requestReceipt)
         let command = try OwnerTruthCorrectionResolutionCommand(
             commandID: "owner-truth-correction-resolution-invalid",
             correctionRequestReceipt: requestReceipt,
             action: .correct,
             correctedValue: ["summary": .string("已更正的私密摘要")],
             correctedValueSchemaVersion: "owner-truth-v1",
-            reasonCode: "ownerConfirmedCorrection"
+            reasonCode: "ownerConfirmedCorrection",
+            proposedChangeSet: proposedChangeSet
         )
 
         var rawResponse = correctionResolutionReceiptResponse(for: command)
@@ -5942,13 +6704,16 @@ final class OwnerTruthContractsTests: XCTestCase {
             backendJSONObject: correctionRequestReceiptResponse(for: requestCommand),
             expectedCommand: requestCommand
         )
+        let proposedChangeSet = try correctionChangeSetProposal(for: requestReceipt)
         let expectedCommand = try OwnerTruthCorrectionResolutionCommand(
             commandID: "owner-truth-correction-resolution-stale",
             correctionRequestReceipt: requestReceipt,
             action: .reject,
-            reasonCode: "ownerRejectedCorrection"
+            reasonCode: "ownerRejectedCorrection",
+            proposedChangeSet: proposedChangeSet
         )
         let client = CorrectionResolutionClientSpy()
+        client.changeSetPreviewResult = .success(proposedChangeSet)
         client.deferResolution = true
         let useCase = OwnerTruthCorrectionResolutionUseCase(
             accountLease: lease,
@@ -5966,6 +6731,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             reasonCode: expectedCommand.reasonCode
         ))
         XCTAssertEqual(useCase.viewState.phase, .resolving(requestReceipt.correctionRequestID))
+        XCTAssertEqual(client.previewedCandidateIDs, [requestReceipt.candidateID])
         XCTAssertEqual(client.requestedCommands, [expectedCommand])
 
         runtime.publish(session: accountSession(
@@ -7036,6 +7802,45 @@ final class OwnerTruthContractsTests: XCTestCase {
         ]
     }
 
+    private func correctionChangeSetProposal(
+        for receipt: OwnerTruthCorrectionRequestReceipt
+    ) throws -> OwnerTruthCandidateChangeSetProposal {
+        let candidate = ["statement": "更正后的候选事实"]
+        return try OwnerTruthCandidateChangeSetProposal(backendJSONObject: [
+            "schemaVersion": OwnerTruthCandidateChangeSetProposal.schemaVersion,
+            "proposalId": "00000000-0000-0000-0000-000000000356",
+            "proposalHash": digest("correction-resolution-proposal"),
+            "candidateContentHash": digest("correction-resolution-candidate"),
+            "candidateVersion": receipt.candidateVersion,
+            "changeSetId": "00000000-0000-0000-0000-000000000357",
+            "baseMemoryRevision": 11,
+            "operations": [[
+                "operationIndex": 0,
+                "operationKind": "add",
+                "reason": "newFact",
+                "changedFields": ["content", "evidenceRefs"],
+                "factDiff": [
+                    "before": NSNull(),
+                    "after": candidate,
+                    "candidate": candidate,
+                    "changedFields": [[
+                        "path": "content",
+                        "before": NSNull(),
+                        "after": candidate,
+                    ]],
+                    "evidence": [
+                        "beforeCount": 0,
+                        "candidateCount": 1,
+                        "afterCount": 1,
+                        "addedCount": 1,
+                    ],
+                ],
+                "anticipatedActivation": "create",
+            ]],
+            "dependencies": [],
+        ])
+    }
+
     private func verifiedAnswerCitationReceipt(
         for lease: AccountLease,
         query: String,
@@ -7836,7 +8641,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         vaultID: OwnerTruthVaultID,
         start: OwnerTruthInterviewNaturalInputStartCommand
     ) throws -> OwnerTruthInterviewNaturalInputReceipt {
-        try OwnerTruthInterviewNaturalInputReceipt(
+        return try OwnerTruthInterviewNaturalInputReceipt(
             backendJSONObject: [
                 "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
                 "vaultId": vaultID.rawValue,
@@ -7858,21 +8663,27 @@ final class OwnerTruthContractsTests: XCTestCase {
         vaultID: OwnerTruthVaultID,
         append: OwnerTruthInterviewNaturalInputAppendCommand
     ) throws -> OwnerTruthInterviewNaturalInputReceipt {
-        try OwnerTruthInterviewNaturalInputReceipt(
+        var receipt: [String: Any] = [
+            "status": OwnerTruthCommandOutcome.created.rawValue,
+            "threadId": append.threadID.rawValue.uuidString,
+            "sessionId": append.sessionID.rawValue.uuidString,
+            "threadVersion": append.expectedThreadVersion + 1,
+            "sessionVersion": append.expectedSessionVersion + 1,
+            "state": OwnerTruthInterviewSessionLifecycle.active.rawValue,
+            "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
+            "messageId": append.messageID.rawValue.uuidString,
+            "messageSequence": 1,
+        ]
+        if let clientSequenceNumber = append.clientSequenceNumber {
+            receipt["clientSequenceNumber"] = clientSequenceNumber
+            receipt["continuousClientSequence"] = clientSequenceNumber
+            receipt["deliveryState"] = OwnerTruthInterviewNaturalInputDeliveryState.contiguous.rawValue
+        }
+        return try OwnerTruthInterviewNaturalInputReceipt(
             backendJSONObject: [
                 "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
                 "vaultId": vaultID.rawValue,
-                "receipt": [
-                    "status": OwnerTruthCommandOutcome.created.rawValue,
-                    "threadId": append.threadID.rawValue.uuidString,
-                    "sessionId": append.sessionID.rawValue.uuidString,
-                    "threadVersion": append.expectedThreadVersion + 1,
-                    "sessionVersion": append.expectedSessionVersion + 1,
-                    "state": OwnerTruthInterviewSessionLifecycle.active.rawValue,
-                    "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
-                    "messageId": append.messageID.rawValue.uuidString,
-                    "messageSequence": 1,
-                ],
+                "receipt": receipt,
             ],
             expectedVaultID: vaultID
         )
@@ -7882,22 +8693,27 @@ final class OwnerTruthContractsTests: XCTestCase {
         vaultID: OwnerTruthVaultID,
         end: OwnerTruthInterviewEndCommand
     ) throws -> OwnerTruthInterviewNaturalInputReceipt {
-        try OwnerTruthInterviewNaturalInputReceipt(
+        var receipt: [String: Any] = [
+            "status": OwnerTruthCommandOutcome.created.rawValue,
+            "threadId": end.threadID.rawValue.uuidString,
+            "sessionId": end.sessionID.rawValue.uuidString,
+            "threadVersion": end.expectedThreadVersion + 1,
+            // The server may create the hidden session-exit batch in
+            // the same unit of work, so clients must accept the
+            // current post-batch version rather than assume +1.
+            "sessionVersion": end.expectedSessionVersion + 2,
+            "state": OwnerTruthInterviewSessionLifecycle.ended.rawValue,
+            "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
+        ]
+        if let lastClientSequenceNumber = end.lastClientSequenceNumber {
+            receipt["continuousClientSequence"] = lastClientSequenceNumber
+            receipt["deliveryState"] = OwnerTruthInterviewNaturalInputDeliveryState.closedAfterContiguousDelivery.rawValue
+        }
+        return try OwnerTruthInterviewNaturalInputReceipt(
             backendJSONObject: [
                 "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
                 "vaultId": vaultID.rawValue,
-                "receipt": [
-                    "status": OwnerTruthCommandOutcome.created.rawValue,
-                    "threadId": end.threadID.rawValue.uuidString,
-                    "sessionId": end.sessionID.rawValue.uuidString,
-                    "threadVersion": end.expectedThreadVersion + 1,
-                    // The server may create the hidden session-exit batch in
-                    // the same unit of work, so clients must accept the
-                    // current post-batch version rather than assume +1.
-                    "sessionVersion": end.expectedSessionVersion + 2,
-                    "state": OwnerTruthInterviewSessionLifecycle.ended.rawValue,
-                    "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
-                ],
+                "receipt": receipt,
             ],
             expectedVaultID: vaultID
         )
@@ -8165,6 +8981,296 @@ final class OwnerTruthContractsTests: XCTestCase {
                 (id: candidateID, reviewMode: reviewMode, sensitivity: .standard),
             ],
             sourceID: sourceID
+        )
+    }
+
+    private func v5CandidateInbox(
+        vaultID: String,
+        candidateID: OwnerTruthRecordID
+    ) throws -> OwnerTruthCandidateInbox {
+        let expectedVaultID = try XCTUnwrap(OwnerTruthVaultID(vaultID))
+        let sourceID = "00000000-0000-0000-0000-000000000173"
+        let targetMemoryID = "00000000-0000-0000-0000-000000000174"
+        let targetVersionID = "00000000-0000-0000-0000-000000000175"
+        let proposalID = "00000000-0000-0000-0000-000000000176"
+        let changeSetID = "00000000-0000-0000-0000-000000000177"
+        let candidateHash = String(repeating: "a", count: 64)
+        let proposalHash = String(repeating: "b", count: 64)
+        let content: [String: Any] = [
+            "statement": "我在 2016 年从 A 大学计算机专业毕业。",
+            "qualifiers": ["validTime": ["expression": "2016 年"]],
+        ]
+        return try OwnerTruthCandidateInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                "vaultId": vaultID,
+                "memoryRevision": 9,
+                "candidates": [[
+                    "candidateId": candidateID.rawValue.uuidString.lowercased(),
+                    "sourceId": sourceID,
+                    "memoryKind": "knowledge",
+                    "perspectiveType": "firstPerson",
+                    "epistemicStatus": "recalled",
+                    "sensitivity": "standard",
+                    "contentSchemaVersion": "owner-truth-v5",
+                    "content": content,
+                    "contentHash": candidateHash,
+                    "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                    "reviewMode": "single",
+                    "candidateVersion": 3,
+                    "proposedChangeSet": [
+                        "schemaVersion": OwnerTruthCandidateChangeSetProposal.schemaVersion,
+                        "proposalId": proposalID,
+                        "proposalHash": proposalHash,
+                        "candidateContentHash": candidateHash,
+                        "candidateVersion": 3,
+                        "changeSetId": changeSetID,
+                        "baseMemoryRevision": 9,
+                        "operations": [[
+                            "operationIndex": 0,
+                            "operationKind": "correct",
+                            "targetMemoryId": targetMemoryID,
+                            "targetMemoryVersionId": targetVersionID,
+                            "targetMemoryVersion": 2,
+                            "reason": "explicitCorrectionTarget",
+                            "changedFields": ["content", "evidenceRefs"],
+                            "factDiff": [
+                                "before": ["statement": "我在 B 大学毕业。"],
+                                "after": content,
+                                "candidate": content,
+                                "changedFields": [[
+                                    "path": "content",
+                                    "before": ["statement": "我在 B 大学毕业。"],
+                                    "after": content,
+                                ]],
+                                "evidence": [
+                                    "beforeCount": 1,
+                                    "candidateCount": 1,
+                                    "afterCount": 2,
+                                    "addedCount": 1,
+                                ],
+                            ],
+                            "anticipatedActivation": "revise",
+                        ]],
+                        "dependencies": [],
+                    ],
+                ]],
+            ],
+            expectedVaultID: expectedVaultID
+        )
+    }
+
+    private func relatedV5CandidateInbox(
+        vaultID: String,
+        candidateIDs: [OwnerTruthRecordID]
+    ) throws -> OwnerTruthCandidateInbox {
+        let expectedVaultID = try XCTUnwrap(OwnerTruthVaultID(vaultID))
+        guard candidateIDs.count == 2 else {
+            throw OwnerTruthRemoteContractError.invalidInbox("related group fixture requires two Candidates")
+        }
+        let sourceID = "00000000-0000-0000-0000-000000000273"
+        let candidates = candidateIDs.enumerated().map { index, candidateID -> [String: Any] in
+            let contentHash = String(repeating: index == 0 ? "c" : "d", count: 64)
+            let proposalHash = String(repeating: index == 0 ? "e" : "f", count: 64)
+            let content: [String: Any] = [
+                "statement": index == 0
+                    ? "我在 2016 年从 A 大学计算机专业毕业。"
+                    : "毕业后我在上海从事软件研发工作。",
+            ]
+            return [
+                "candidateId": candidateID.rawValue.uuidString.lowercased(),
+                "sourceId": sourceID,
+                "memoryKind": "knowledge",
+                "perspectiveType": "firstPerson",
+                "epistemicStatus": "recalled",
+                "sensitivity": "standard",
+                "contentSchemaVersion": "owner-truth-v5",
+                "content": content,
+                "contentHash": contentHash,
+                "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                "reviewMode": "single",
+                "candidateVersion": 3,
+                "proposedChangeSet": [
+                    "schemaVersion": OwnerTruthCandidateChangeSetProposal.schemaVersion,
+                    "proposalId": index == 0
+                        ? "00000000-0000-0000-0000-000000000274"
+                        : "00000000-0000-0000-0000-000000000275",
+                    "proposalHash": proposalHash,
+                    "candidateContentHash": contentHash,
+                    "candidateVersion": 3,
+                    "changeSetId": index == 0
+                        ? "00000000-0000-0000-0000-000000000276"
+                        : "00000000-0000-0000-0000-000000000277",
+                    "baseMemoryRevision": 9 + index,
+                    "operations": [[
+                        "operationIndex": 0,
+                        "operationKind": "add",
+                        "targetMemoryId": NSNull(),
+                        "targetMemoryVersionId": NSNull(),
+                        "targetMemoryVersion": NSNull(),
+                        "reason": "newFact",
+                        "changedFields": ["content"],
+                        "factDiff": [
+                            "before": NSNull(),
+                            "after": content,
+                            "candidate": content,
+                            "changedFields": [[
+                                "path": "content",
+                                "before": NSNull(),
+                                "after": content,
+                            ]],
+                            "evidence": [
+                                "beforeCount": 0,
+                                "candidateCount": 1,
+                                "afterCount": 1,
+                                "addedCount": 1,
+                            ],
+                        ],
+                        "anticipatedActivation": "created",
+                    ]],
+                    "dependencies": [],
+                ],
+            ]
+        }
+        return try OwnerTruthCandidateInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                "vaultId": vaultID,
+                "memoryRevision": 9,
+                "candidates": candidates,
+            ],
+            expectedVaultID: expectedVaultID
+        )
+    }
+
+    private func relatedGroupProposal(
+        vaultID: String,
+        candidateIDs: [OwnerTruthRecordID],
+        actions: [OwnerTruthCandidateReviewAction]? = nil
+    ) throws -> OwnerTruthMemoryChangeSetGroupProposal {
+        let expectedVaultID = try XCTUnwrap(OwnerTruthVaultID(vaultID))
+        let inbox = try relatedV5CandidateInbox(vaultID: vaultID, candidateIDs: candidateIDs)
+        guard inbox.candidates.count == 2 else {
+            throw OwnerTruthRemoteContractError.invalidInbox("related group fixture is invalid")
+        }
+        let effectiveActions = actions ?? Array(repeating: .accept, count: candidateIDs.count)
+        guard effectiveActions.count == candidateIDs.count else {
+            throw OwnerTruthRemoteContractError.invalidInbox("related group actions are invalid")
+        }
+        let candidateObjects = try candidateIDs.enumerated().map { index, candidateID -> [String: Any] in
+            let candidate = try XCTUnwrap(inbox.candidates.first(where: { $0.id == candidateID }))
+            let proposal = try XCTUnwrap(candidate.proposedChangeSet)
+            let content = candidate.content.mapValues(\.backendJSONObject)
+            let action = effectiveActions[index]
+            return [
+                "operationIndex": index,
+                "candidateId": candidateID.rawValue.uuidString.lowercased(),
+                "action": action.rawValue,
+                "reasonCode": action == .correct
+                    ? "ownerCorrectedRelatedGroup"
+                    : "ownerReviewedRelatedGroup",
+                "candidateVersion": candidate.candidateVersion,
+                "proposedChangeSet": [
+                    "schemaVersion": OwnerTruthCandidateChangeSetProposal.schemaVersion,
+                    "proposalId": proposal.proposalID.rawValue.uuidString.lowercased(),
+                    "proposalHash": proposal.proposalHash,
+                    "candidateContentHash": proposal.candidateContentHash,
+                    "candidateVersion": proposal.candidateVersion,
+                    "changeSetId": proposal.changeSetID.rawValue.uuidString.lowercased(),
+                    "baseMemoryRevision": proposal.baseMemoryRevision,
+                    "operations": [[
+                        "operationIndex": 0,
+                        "operationKind": "add",
+                        "targetMemoryId": NSNull(),
+                        "targetMemoryVersionId": NSNull(),
+                        "targetMemoryVersion": NSNull(),
+                        "reason": "newFact",
+                        "changedFields": ["content"],
+                        "factDiff": [
+                            "before": NSNull(),
+                            "after": content,
+                            "candidate": content,
+                            "changedFields": [[
+                                "path": "content",
+                                "before": NSNull(),
+                                "after": content,
+                            ]],
+                            "evidence": [
+                                "beforeCount": 0,
+                                "candidateCount": 1,
+                                "afterCount": 1,
+                                "addedCount": 1,
+                            ],
+                        ],
+                        "anticipatedActivation": "created",
+                    ]],
+                    "dependencies": [],
+                ],
+                "anticipatedOutcome": "created",
+                "appliedMemoryRevision": 10 + index,
+            ]
+        }
+        return try OwnerTruthMemoryChangeSetGroupProposal(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthMemoryChangeSetGroupProposal.schemaVersion,
+                "groupProposalId": "00000000-0000-0000-0000-000000000278",
+                "groupProposalHash": String(repeating: "9", count: 64),
+                "vaultId": vaultID,
+                "baseMemoryRevision": 9,
+                "members": candidateObjects,
+                "dependencies": [[
+                    "beforeCandidateId": candidateIDs[0].rawValue.uuidString.lowercased(),
+                    "afterCandidateId": candidateIDs[1].rawValue.uuidString.lowercased(),
+                ]],
+            ],
+            expectedVaultID: expectedVaultID
+        )
+    }
+
+    private func relatedGroupCommitResult(
+        proposal: OwnerTruthMemoryChangeSetGroupProposal
+    ) throws -> OwnerTruthMemoryChangeSetGroupCommitResult {
+        let activatingMemberCount = proposal.members.filter { $0.action != .reject }.count
+        let payload: [String: Any] = [
+                "schemaVersion": OwnerTruthMemoryChangeSetGroupCommitResult.schemaVersion,
+                "status": OwnerTruthCommandOutcome.created.rawValue,
+                "groupReceiptId": "00000000-0000-0000-0000-000000000279",
+                "groupProposalId": proposal.proposalID.rawValue.uuidString.lowercased(),
+                "groupProposalHash": proposal.proposalHash,
+                "baseMemoryRevision": proposal.baseMemoryRevision,
+                "appliedMemoryRevision": proposal.baseMemoryRevision + activatingMemberCount,
+                "members": proposal.members.enumerated().map { index, member in
+                    let activatesMemory = member.action != .reject
+                    let memoryID: Any = activatesMemory
+                        ? (index == 0
+                            ? "00000000-0000-0000-0000-000000000282"
+                            : "00000000-0000-0000-0000-000000000283")
+                        : NSNull()
+                    let memoryVersionID: Any = activatesMemory
+                        ? (index == 0
+                            ? "00000000-0000-0000-0000-000000000284"
+                            : "00000000-0000-0000-0000-000000000285")
+                        : NSNull()
+                    let memoryVersion: Any = activatesMemory ? 1 : NSNull()
+                    return [
+                        "candidateId": member.candidateID.rawValue.uuidString.lowercased(),
+                        "receiptId": index == 0
+                            ? "00000000-0000-0000-0000-000000000280"
+                            : "00000000-0000-0000-0000-000000000281",
+                        "decision": member.action.terminalDecision.rawValue,
+                        "activationOutcome": activatesMemory
+                            ? OwnerTruthMemoryActivationOutcome.created.rawValue
+                            : OwnerTruthMemoryActivationOutcome.notApplicable.rawValue,
+                        "memoryId": memoryID,
+                        "memoryVersionId": memoryVersionID,
+                        "memoryVersion": memoryVersion,
+                    ]
+                },
+                "projectionEffectCount": activatingMemberCount,
+        ]
+        return try OwnerTruthMemoryChangeSetGroupCommitResult(
+            backendJSONObject: payload,
+            expectedProposal: proposal
         )
     }
 
@@ -8639,7 +9745,15 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "systemRole": "只使用正式记忆",
                 "speakingStyle": "自然、温柔",
                 "formalMemorySnapshot": [
+                    "schemaVersion": "formal-memory-conversation-v2",
                     "projectionCheckpoint": "checkpoint-7",
+                    "authorityEpoch": 7,
+                    "contextHash": "sha256:context",
+                    "coreFacts": [],
+                    "coverage": [
+                        "eligibleFactCount": 0,
+                        "omittedFactCount": 0,
+                    ],
                 ],
             ],
             "proxy": [
@@ -8665,6 +9779,18 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(config.authorityEpoch, 7)
         XCTAssertEqual(config.systemRole, "只使用正式记忆")
         XCTAssertEqual(config.formalMemorySnapshot?["projectionCheckpoint"] as? String, "checkpoint-7")
+
+        var mismatchedSnapshot = json
+        var sessionContext = try XCTUnwrap(
+            mismatchedSnapshot["sessionContext"] as? [String: Any]
+        )
+        var snapshot = try XCTUnwrap(
+            sessionContext["formalMemorySnapshot"] as? [String: Any]
+        )
+        snapshot["contextHash"] = "sha256:stale"
+        sessionContext["formalMemorySnapshot"] = snapshot
+        mismatchedSnapshot["sessionContext"] = sessionContext
+        XCTAssertTrue(try XCTUnwrap(RealtimeVoiceRuntimeConfig(json: mismatchedSnapshot)).isBlocked)
     }
 
     func testRealtimeVoiceRuntimeConfigFailsClosedForDirectExpiredOrIncompleteContract() throws {
@@ -10024,6 +11150,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             currentUserID: { lease.subjectId },
             privateAccessAllowed: { true },
             featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            runtimeCapabilitySnapshot: Self.ownerTruthHTTPTestRuntimeCapabilitySnapshot,
             accountLeaseRuntime: runtime
         )
         OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
@@ -10104,6 +11231,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             currentUserID: { lease.subjectId },
             privateAccessAllowed: { true },
             featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            runtimeCapabilitySnapshot: Self.ownerTruthHTTPTestRuntimeCapabilitySnapshot,
             accountLeaseRuntime: runtime
         )
         OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
@@ -10183,6 +11311,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             currentUserID: { lease.subjectId },
             privateAccessAllowed: { true },
             featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            runtimeCapabilitySnapshot: Self.ownerTruthHTTPTestRuntimeCapabilitySnapshot,
             accountLeaseRuntime: runtime
         )
         OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
@@ -10252,6 +11381,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             currentUserID: { lease.subjectId },
             privateAccessAllowed: { true },
             featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            runtimeCapabilitySnapshot: Self.ownerTruthHTTPTestRuntimeCapabilitySnapshot,
             accountLeaseRuntime: runtime
         )
         var deferredLoader: OwnerTruthReviewReadyHTTPURLProtocol?
@@ -11288,9 +12418,9 @@ final class OwnerTruthContractsTests: XCTestCase {
         let content = Data(repeating: 0x56, count: 128)
         let command = try OwnerTruthMediaUploadIntentCommand(
             expectedAuthorityEpoch: 0,
-            mediaKind: .document,
-            fileName: "family-notes.pdf",
-            contentType: "application/pdf",
+            mediaKind: .image,
+            fileName: "family-photo.jpg",
+            contentType: "image/jpeg",
             content: content,
             allowExternalProcessing: true
         )
@@ -11959,6 +13089,31 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private static func ownerTruthHTTPTestRuntimeCapabilitySnapshot(
+        _ capabilityID: RuntimeCapabilityID
+    ) -> RuntimeCapabilitySnapshot? {
+        RuntimeCapabilitySnapshot(json: [
+            "schemaVersion": 1,
+            "capability": capabilityID.rawValue,
+            "implemented": true,
+            "enabled": true,
+            "providerReady": true,
+            "releaseVisible": true,
+            "externalVerified": true,
+            "provider": "qa-object-store",
+            "fallbackMode": "none",
+            "reason": "ready",
+            "providerKind": "qa",
+            "operation": "ownerTruthMedia",
+            "dataClass": "synthetic",
+            "region": "test",
+            "retentionPolicyVersion": "qa-v1",
+            "configurationStatus": "ready",
+            "evidenceStatus": "verified",
+            "controlState": "legacy",
+        ])
+    }
+
     private func waitForOwnerTruthHTTPUI(
         timeout: TimeInterval,
         until condition: @escaping () -> Bool
@@ -12219,14 +13374,26 @@ private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
     var historyResult: Result<OwnerTruthCandidateReviewHistory, Error>?
     var memoryVersionHistoryResult: Result<OwnerTruthMemoryVersionHistory, Error>?
     var reviewResult: Result<OwnerTruthCandidateDecisionResult, Error>?
+    var changeSetPreviewResult: Result<OwnerTruthCandidateChangeSetProposal, Error>?
+    var changeSetGroupPreviewResult: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+    var changeSetGroupCommitResult: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+    var changeSetGroupCommitResults: [
+        Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>
+    ] = []
     var reviewResults: [Result<OwnerTruthCandidateDecisionResult, Error>] = []
     var deferInbox = false
     var deferHistory = false
     var deferMemoryVersionHistory = false
+    var deferChangeSetGroupCommit = false
     private var deferredInboxCompletion: ((Result<OwnerTruthCandidateInbox, Error>) -> Void)?
     private var deferredHistoryCompletion: ((Result<OwnerTruthCandidateReviewHistory, Error>) -> Void)?
     private var deferredMemoryVersionHistoryCompletion: ((Result<OwnerTruthMemoryVersionHistory, Error>) -> Void)?
+    private var deferredChangeSetGroupCommitCompletion: ((
+        Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>
+    ) -> Void)?
     private(set) var reviewedCommands: [OwnerTruthCandidateReviewCommand] = []
+    private(set) var previewedGroupCommands: [OwnerTruthMemoryChangeSetGroupCommand] = []
+    private(set) var confirmedGroupCommands: [OwnerTruthMemoryChangeSetGroupCommand] = []
 
     func fetchOwnerTruthCandidateInbox(
         vaultID: OwnerTruthVaultID,
@@ -12277,6 +13444,55 @@ private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
         } else {
             completion(reviewResult ?? .failure(CandidateReviewClientSpyError.missingReviewResult))
         }
+    }
+
+    func previewOwnerTruthCandidateChangeSet(
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        correctedValue: [String: OwnerTruthJSONValue]?,
+        correctedValueSchemaVersion: String?,
+        completion: @escaping (Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void
+    ) {
+        completion(changeSetPreviewResult ?? .failure(CandidateReviewClientSpyError.missingReviewResult))
+    }
+
+    func previewOwnerTruthCandidateChangeSetGroup(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMemoryChangeSetGroupCommand,
+        completion: @escaping (Result<OwnerTruthMemoryChangeSetGroupProposal, Error>) -> Void
+    ) {
+        previewedGroupCommands.append(command)
+        completion(changeSetGroupPreviewResult ?? .failure(
+            CandidateReviewClientSpyError.missingReviewResult
+        ))
+    }
+
+    func confirmOwnerTruthCandidateChangeSetGroup(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMemoryChangeSetGroupCommand,
+        expectedProposal: OwnerTruthMemoryChangeSetGroupProposal,
+        completion: @escaping (Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>) -> Void
+    ) {
+        confirmedGroupCommands.append(command)
+        if deferChangeSetGroupCommit {
+            deferredChangeSetGroupCommitCompletion = completion
+            return
+        }
+        if !changeSetGroupCommitResults.isEmpty {
+            completion(changeSetGroupCommitResults.removeFirst())
+            return
+        }
+        completion(changeSetGroupCommitResult ?? .failure(
+            CandidateReviewClientSpyError.missingReviewResult
+        ))
+    }
+
+    func completeDeferredChangeSetGroupCommit(
+        _ result: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>
+    ) {
+        let completion = deferredChangeSetGroupCommitCompletion
+        deferredChangeSetGroupCommitCompletion = nil
+        completion?(result)
     }
 
     func completeDeferredInbox(_ result: Result<OwnerTruthCandidateInbox, Error>) {
@@ -12888,6 +14104,7 @@ private enum InterviewOrchestrationClientSpyError: Error {
 
 private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalInputClient {
     var currentSessionHandler: ((OwnerTruthVaultID) -> Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>)?
+    var scopedCurrentSessionHandler: ((OwnerTruthVaultID, String?) -> Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>)?
     var startHandler: ((OwnerTruthInterviewNaturalInputStartCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var appendHandler: ((OwnerTruthInterviewNaturalInputAppendCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var endHandler: ((OwnerTruthInterviewEndCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
@@ -12917,6 +14134,7 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
     private(set) var topicSwitchCommand: OwnerTruthInterviewPauseForTopicSwitchCommand?
     private(set) var restoreDoNotAskCommand: OwnerTruthInterviewRestoreDoNotAskCommand?
     private(set) var restoreCooldownCommand: OwnerTruthInterviewRestoreCooldownCommand?
+    private(set) var requestedCurrentProductSessionID: String?
 
     func fetchOwnerTruthInterviewNaturalInputCurrentSession(
         vaultID: OwnerTruthVaultID,
@@ -12938,6 +14156,22 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
         } catch {
             completion(.failure(error))
         }
+    }
+
+    func fetchOwnerTruthInterviewNaturalInputCurrentSession(
+        vaultID: OwnerTruthVaultID,
+        productSessionID: String?,
+        completion: @escaping (Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>) -> Void
+    ) {
+        requestedCurrentProductSessionID = productSessionID
+        if let scopedCurrentSessionHandler {
+            completion(scopedCurrentSessionHandler(vaultID, productSessionID))
+            return
+        }
+        fetchOwnerTruthInterviewNaturalInputCurrentSession(
+            vaultID: vaultID,
+            completion: completion
+        )
     }
 
     func startOwnerTruthInterviewNaturalInput(
@@ -13128,10 +14362,23 @@ private enum CorrectionRequestClientSpyError: Error {
 }
 
 private final class CorrectionResolutionClientSpy: OwnerTruthCorrectionResolutionClient {
+    var changeSetPreviewResult: Result<OwnerTruthCandidateChangeSetProposal, Error>?
     var resolutionResult: Result<OwnerTruthCorrectionResolutionReceipt, Error>?
     var deferResolution = false
     private var deferredResolutionCompletion: ((Result<OwnerTruthCorrectionResolutionReceipt, Error>) -> Void)?
+    private(set) var previewedCandidateIDs: [OwnerTruthRecordID] = []
     private(set) var requestedCommands: [OwnerTruthCorrectionResolutionCommand] = []
+
+    func previewOwnerTruthCorrectionChangeSet(
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        correctedValue: [String: OwnerTruthJSONValue]?,
+        correctedValueSchemaVersion: String?,
+        completion: @escaping (Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void
+    ) {
+        previewedCandidateIDs.append(candidateID)
+        completion(changeSetPreviewResult ?? .failure(CorrectionResolutionClientSpyError.missingPreviewResult))
+    }
 
     func resolveOwnerTruthCorrection(
         vaultID: OwnerTruthVaultID,
@@ -13155,5 +14402,6 @@ private final class CorrectionResolutionClientSpy: OwnerTruthCorrectionResolutio
 }
 
 private enum CorrectionResolutionClientSpyError: Error {
+    case missingPreviewResult
     case missingResolutionResult
 }
