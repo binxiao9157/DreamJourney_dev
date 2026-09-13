@@ -517,7 +517,10 @@ extension MemoryArchiveItem {
     }
 
     var isPublicBackendSyncEligible: Bool {
-        kind == .text || kind == .timeLetter
+        // Plain text now enters the V4 Source -> Candidate -> review lane.
+        // Retrying it through the retired public Archive endpoint creates an
+        // unrelated 409 loop after an otherwise successful submission.
+        kind == .timeLetter
     }
 
     func enforcingLocalOnlyPhotoTransferState() -> MemoryArchiveItem {

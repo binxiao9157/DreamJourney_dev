@@ -753,6 +753,14 @@ final class FeatureGateService {
            pathComponents[3] == "candidates" {
             return .ownerTruthCandidateReview
         }
+        if method == .get,
+           pathComponents.count == 6,
+           pathComponents[0] == "v2",
+           pathComponents[1] == "vaults",
+           pathComponents[3] == "candidates",
+           pathComponents[5] == "decision-result" {
+            return .ownerTruthCandidateReview
+        }
         if pathComponents.count >= 4,
            pathComponents[0] == "v2",
            pathComponents[1] == "vaults",
@@ -3147,11 +3155,14 @@ struct RealtimeVoiceRuntimeConfig {
     let targetPersonaID: String?
     let projectionCheckpoint: String?
     let authorityEpoch: Int?
+    let memoryRevision: Int?
     let contextHash: String?
+    let providerContextHash: String?
     let sessionContext: [String: Any]?
     let systemRole: String?
     let speakingStyle: String?
     let formalMemorySnapshot: [String: Any]?
+    let providerRoleText: String?
 
     private var hasSecureProxyEndpoint: Bool {
         guard let proxyAddress,
@@ -3176,18 +3187,28 @@ struct RealtimeVoiceRuntimeConfig {
     /// a stale or mismatched snapshot cannot silently answer under a newer
     /// checkpoint or authorization epoch.
     private var hasBoundFormalMemorySnapshot: Bool {
-        guard contractVersion >= 5,
+        guard contractVersion >= 7,
               let formalMemorySnapshot,
-              formalMemorySnapshot["schemaVersion"] as? String == "formal-memory-conversation-v2",
+              formalMemorySnapshot["schemaVersion"] as? String == "formal-memory-conversation-v3",
               let snapshotCheckpoint = formalMemorySnapshot["projectionCheckpoint"] as? String,
               let projectionCheckpoint,
               snapshotCheckpoint == projectionCheckpoint,
               let snapshotAuthorityEpoch = Self.intValue(formalMemorySnapshot["authorityEpoch"]),
               let authorityEpoch,
               snapshotAuthorityEpoch == authorityEpoch,
+              let snapshotMemoryRevision = Self.intValue(formalMemorySnapshot["memoryRevision"]),
+              let memoryRevision,
+              snapshotMemoryRevision == memoryRevision,
               let snapshotContextHash = formalMemorySnapshot["contextHash"] as? String,
               let contextHash,
               snapshotContextHash == contextHash,
+              let providerRoleText,
+              !providerRoleText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              providerRoleText == formalMemorySnapshot["providerRoleText"] as? String,
+              let snapshotProviderHash = formalMemorySnapshot["providerContextHash"] as? String,
+              let providerContextHash,
+              snapshotProviderHash == providerContextHash,
+              snapshotProviderHash == Self.sha256(providerRoleText),
               formalMemorySnapshot["coreFacts"] is [Any],
               formalMemorySnapshot["coverage"] is [String: Any] else {
             return false
@@ -3203,7 +3224,7 @@ struct RealtimeVoiceRuntimeConfig {
             || accessPath != "backendRealtimeProxy"
             || credentialMode != "oneTimeBackendProxyTicket"
             || brokerStatus != "verified"
-            || contractVersion < 5
+            || contractVersion < 7
             || !hasBoundFormalMemorySnapshot
             || !hasSecureProxyEndpoint
             || sessionToken?.hasPrefix("djv_") != true
@@ -3252,11 +3273,14 @@ struct RealtimeVoiceRuntimeConfig {
         self.targetPersonaID = echoSession?["targetPersonaId"] as? String
         self.projectionCheckpoint = echoSession?["projectionCheckpoint"] as? String
         self.authorityEpoch = Self.intValue(echoSession?["authorityEpoch"])
+        self.memoryRevision = Self.intValue(echoSession?["memoryRevision"])
         self.contextHash = echoSession?["contextHash"] as? String
+        self.providerContextHash = echoSession?["providerContextHash"] as? String
         self.sessionContext = json["sessionContext"] as? [String: Any]
         self.systemRole = self.sessionContext?["systemRole"] as? String
         self.speakingStyle = self.sessionContext?["speakingStyle"] as? String
         self.formalMemorySnapshot = self.sessionContext?["formalMemorySnapshot"] as? [String: Any]
+        self.providerRoleText = self.sessionContext?["providerRoleText"] as? String
     }
 
     private static func intValue(_ value: Any?) -> Int? {
@@ -3264,6 +3288,11 @@ struct RealtimeVoiceRuntimeConfig {
         if let value = value as? NSNumber { return value.intValue }
         if let value = value as? String { return Int(value) }
         return nil
+    }
+
+    private static func sha256(_ value: String) -> String {
+        let digest = SHA256.hash(data: Data(value.utf8))
+        return "sha256:" + digest.map { String(format: "%02x", $0) }.joined()
     }
 
     private static func iso8601Date(_ value: Any?) -> Date? {
@@ -6837,11 +6866,21 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
     private let qaCurrentUserIDProvider: (() -> String?)?
     private let qaPrivateAccessAllowedProvider: (() -> Bool)?
     private let qaFeatureDecisionProvider: ((DJFeature) -> FeatureDecision)?
+    private let qaFeatureDecisionRevalidator: ((FeatureDecision) -> FeatureDecision)?
+    private let qaAuthSessionRefresher: ((
+        BackendAuthSessionContract,
+        @escaping (BackendAuthSessionContract?) -> Void
+    ) -> Void)?
     private let qaRuntimeCapabilitySnapshotProvider: ((RuntimeCapabilityID) -> RuntimeCapabilitySnapshot?)?
+    private let qaCandidateInboxDiagnosticSink: ((OwnerTruthCandidateInboxDiagnosticEvent) -> Void)?
+    private let qaCandidateInboxPolicyRefresher: ((
+        @escaping (Result<Void, Error>) -> Void
+    ) -> Void)?
+    private let candidateInboxPolicyTimeout: TimeInterval
     private let authSessionStore = BackendAuthSessionStore.shared
     private let accountSessionActor = AccountSessionActor.shared
     private let accountLeaseRuntime: AccountLeaseRuntime
-    private let releasePolicyStore = ReleasePolicyStore.shared
+    private let releasePolicyStore: ReleasePolicyStore
     private let recoveryRuntimePolicyStore = RecoveryRuntimePolicyStore.shared
     private let authRefreshQueue = DispatchQueue(label: "com.dreamjourney.backend-auth-refresh")
     private struct AuthRefreshGroup {
@@ -6852,8 +6891,283 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
     private struct AuthRefreshClientReference: @unchecked Sendable {
         let value: DreamJourneyBackendClient
     }
+    private final class CandidateInboxReadAttemptState: @unchecked Sendable {
+        private let lock = NSLock()
+        private var latestAttempt: Int
+        private let intentStartedAt: Date
+        private let deadline: Date
+        private var candidateGETCount: Int
+        private var policyFetchCount: Int
+        private var authRecoveryCount: Int
+
+        init(context: OwnerTruthCandidateInboxReadContext) {
+            latestAttempt = max(1, context.attempt)
+            intentStartedAt = context.intentStartedAt
+            deadline = context.deadline
+            candidateGETCount = context.candidateGETCount
+            policyFetchCount = context.policyFetchCount
+            authRecoveryCount = context.authRecoveryCount
+        }
+
+        func record(_ attempt: Int) {
+            lock.lock()
+            latestAttempt = max(latestAttempt, max(1, attempt))
+            lock.unlock()
+        }
+
+        func context(traceID: String) -> OwnerTruthCandidateInboxReadContext {
+            lock.lock()
+            let attempt = latestAttempt
+            let candidateGETCountSnapshot = candidateGETCount
+            let policyFetchCountSnapshot = policyFetchCount
+            let authRecoveryCountSnapshot = authRecoveryCount
+            lock.unlock()
+            return OwnerTruthCandidateInboxReadContext(
+                traceID: traceID,
+                attempt: attempt,
+                intentStartedAt: intentStartedAt,
+                deadline: deadline,
+                candidateGETCount: candidateGETCountSnapshot,
+                policyFetchCount: policyFetchCountSnapshot,
+                authRecoveryCount: authRecoveryCountSnapshot
+            )
+        }
+
+        func claimPolicyRefresh() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            guard Date() < deadline, policyFetchCount < 1 else { return false }
+            policyFetchCount += 1
+            return true
+        }
+
+        func claimCandidateGET() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            guard Date() < deadline, candidateGETCount < 2 else { return false }
+            candidateGETCount += 1
+            return true
+        }
+
+        func claimAuthenticationRecovery() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            guard Date() < deadline, authRecoveryCount < 1 else {
+                return false
+            }
+            authRecoveryCount += 1
+            return true
+        }
+
+        var isWithinDeadline: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return Date() < deadline
+        }
+    }
+
+    private final class CandidateInboxReadCompletionGate: @unchecked Sendable {
+        private let lock = NSLock()
+        private var finished = false
+        private var timeoutWorkItem: DispatchWorkItem?
+
+        func installTimeout(_ workItem: DispatchWorkItem) {
+            lock.lock()
+            if finished {
+                lock.unlock()
+                workItem.cancel()
+                return
+            }
+            timeoutWorkItem = workItem
+            lock.unlock()
+        }
+
+        func complete(
+            _ outcome: OwnerTruthCandidateInboxReadOutcome,
+            deliver: (OwnerTruthCandidateInboxReadOutcome) -> Void
+        ) {
+            lock.lock()
+            guard !finished else {
+                lock.unlock()
+                return
+            }
+            finished = true
+            let workItem = timeoutWorkItem
+            timeoutWorkItem = nil
+            lock.unlock()
+            workItem?.cancel()
+            deliver(outcome)
+        }
+    }
+
+    private final class ReviewWriteTransportExposureTracker: @unchecked Sendable {
+        private let lock = NSLock()
+        private var didExposeRequest = false
+
+        func markExposed() {
+            lock.lock()
+            didExposeRequest = true
+            lock.unlock()
+        }
+
+        var exposure: OwnerTruthCandidateReviewTransportExposure {
+            lock.lock()
+            let exposed = didExposeRequest
+            lock.unlock()
+            return exposed ? .exposed : .notExposed
+        }
+    }
+
+    private final class CandidatePolicyRefreshCompletionGate: @unchecked Sendable {
+        private let lock = NSLock()
+        private var completed = false
+
+        func claimCompletion() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !completed else { return false }
+            completed = true
+            return true
+        }
+    }
+
+    private final class CandidateInboxTaskLifecycleProbe: @unchecked Sendable {
+        private static let retentionLock = NSLock()
+        private static var retained: [ObjectIdentifier: CandidateInboxTaskLifecycleProbe] = [:]
+
+        private let lock = NSLock()
+        private var resumeObserver: NSObjectProtocol?
+        private var finishObserver: NSObjectProtocol?
+        private var boundRequestID: ObjectIdentifier?
+        private var resumedBeforeBinding: Set<ObjectIdentifier> = []
+        private var finishedBeforeBinding: Set<ObjectIdentifier> = []
+        private var didEmitResume = false
+        private var didFinish = false
+        private var onTaskResumed: (() -> Void)?
+
+        init(onTaskResumed: @escaping () -> Void) {
+            self.onTaskResumed = onTaskResumed
+            resumeObserver = NotificationCenter.default.addObserver(
+                forName: Request.didResumeTaskNotification,
+                object: nil,
+                queue: nil
+            ) { [weak self] notification in
+                self?.receiveResume(notification)
+            }
+            finishObserver = NotificationCenter.default.addObserver(
+                forName: Request.didFinishNotification,
+                object: nil,
+                queue: nil
+            ) { [weak self] notification in
+                self?.receiveFinish(notification)
+            }
+        }
+
+        func bind(to request: Request) {
+            let requestID = ObjectIdentifier(request)
+            var callback: (() -> Void)?
+            var finished = false
+            lock.lock()
+            boundRequestID = requestID
+            if resumedBeforeBinding.contains(requestID), !didEmitResume {
+                didEmitResume = true
+                callback = onTaskResumed
+            }
+            finished = finishedBeforeBinding.contains(requestID)
+            resumedBeforeBinding.removeAll()
+            finishedBeforeBinding.removeAll()
+            lock.unlock()
+            if !finished {
+                Self.retain(self, for: requestID)
+            }
+            callback?()
+            if finished {
+                finish()
+            }
+        }
+
+        func finish() {
+            let resumeToken: NSObjectProtocol?
+            let finishToken: NSObjectProtocol?
+            let requestID: ObjectIdentifier?
+            lock.lock()
+            guard !didFinish else {
+                lock.unlock()
+                return
+            }
+            didFinish = true
+            resumeToken = resumeObserver
+            finishToken = finishObserver
+            requestID = boundRequestID
+            resumeObserver = nil
+            finishObserver = nil
+            onTaskResumed = nil
+            resumedBeforeBinding.removeAll()
+            finishedBeforeBinding.removeAll()
+            lock.unlock()
+            if let resumeToken { NotificationCenter.default.removeObserver(resumeToken) }
+            if let finishToken { NotificationCenter.default.removeObserver(finishToken) }
+            if let requestID { Self.release(requestID) }
+        }
+
+        deinit {
+            finish()
+        }
+
+        private func receiveResume(_ notification: Notification) {
+            guard let request = notification.request else { return }
+            let requestID = ObjectIdentifier(request)
+            var callback: (() -> Void)?
+            lock.lock()
+            if let boundRequestID {
+                if boundRequestID == requestID, !didEmitResume {
+                    didEmitResume = true
+                    callback = onTaskResumed
+                }
+            } else {
+                resumedBeforeBinding.insert(requestID)
+            }
+            lock.unlock()
+            callback?()
+        }
+
+        private func receiveFinish(_ notification: Notification) {
+            guard let request = notification.request else { return }
+            let requestID = ObjectIdentifier(request)
+            var shouldFinish = false
+            lock.lock()
+            if let boundRequestID {
+                shouldFinish = boundRequestID == requestID
+            } else {
+                finishedBeforeBinding.insert(requestID)
+            }
+            lock.unlock()
+            if shouldFinish { finish() }
+        }
+
+        private static func retain(
+            _ probe: CandidateInboxTaskLifecycleProbe,
+            for requestID: ObjectIdentifier
+        ) {
+            retentionLock.lock()
+            retained[requestID] = probe
+            retentionLock.unlock()
+        }
+
+        private static func release(_ requestID: ObjectIdentifier) {
+            retentionLock.lock()
+            retained.removeValue(forKey: requestID)
+            retentionLock.unlock()
+        }
+    }
     private var activeAuthRefreshGroup: AuthRefreshGroup?
     private var pendingAuthRefreshGroups: [AuthRefreshGroup] = []
+    private let candidatePolicyRefreshQueue = DispatchQueue(
+        label: "com.dreamjourney.candidate-policy-refresh"
+    )
+    private var candidatePolicyRefreshWaiters: [
+        String: [(Result<Void, Error>) -> Void]
+    ] = [:]
 
     var isProfileSyncConfigured: Bool {
         hasExplicitBaseURL
@@ -7048,7 +7362,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
     }
 
     private func revalidatedRequestFeatureDecision(_ decision: FeatureDecision) -> FeatureDecision {
-        qaFeatureDecisionProvider == nil
+        if let qaFeatureDecisionRevalidator {
+            return qaFeatureDecisionRevalidator(decision)
+        }
+        return qaFeatureDecisionProvider == nil
             ? FeatureGateService.shared.revalidateServerPolicyManagedRequest(decision)
             : decision
     }
@@ -7064,8 +7381,14 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         qaCurrentUserIDProvider = nil
         qaPrivateAccessAllowedProvider = nil
         qaFeatureDecisionProvider = nil
+        qaFeatureDecisionRevalidator = nil
+        qaAuthSessionRefresher = nil
         qaRuntimeCapabilitySnapshotProvider = nil
+        qaCandidateInboxDiagnosticSink = nil
+        qaCandidateInboxPolicyRefresher = nil
+        candidateInboxPolicyTimeout = 15
         accountLeaseRuntime = .shared
+        releasePolicyStore = .shared
     }
 
     #if DEBUG || UI_QA_SIMULATOR
@@ -7078,8 +7401,19 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         currentUserID: @escaping () -> String?,
         privateAccessAllowed: @escaping () -> Bool,
         featureDecision: @escaping (DJFeature) -> FeatureDecision,
+        featureDecisionRevalidator: ((FeatureDecision) -> FeatureDecision)? = nil,
+        authSessionRefresher: ((
+            BackendAuthSessionContract,
+            @escaping (BackendAuthSessionContract?) -> Void
+        ) -> Void)? = nil,
         runtimeCapabilitySnapshot: @escaping (RuntimeCapabilityID) -> RuntimeCapabilitySnapshot? = { _ in nil },
-        accountLeaseRuntime: AccountLeaseRuntime
+        accountLeaseRuntime: AccountLeaseRuntime,
+        releasePolicyStore: ReleasePolicyStore = .shared,
+        candidateInboxDiagnosticSink: ((OwnerTruthCandidateInboxDiagnosticEvent) -> Void)? = nil,
+        candidateInboxPolicyRefresher: ((
+            @escaping (Result<Void, Error>) -> Void
+        ) -> Void)? = nil,
+        candidateInboxPolicyTimeout: TimeInterval = 15
     ) -> DreamJourneyBackendClient {
         DreamJourneyBackendClient(
             qaBaseURL: baseURL,
@@ -7088,8 +7422,14 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             currentUserID: currentUserID,
             privateAccessAllowed: privateAccessAllowed,
             featureDecision: featureDecision,
+            featureDecisionRevalidator: featureDecisionRevalidator,
+            authSessionRefresher: authSessionRefresher,
             runtimeCapabilitySnapshot: runtimeCapabilitySnapshot,
-            accountLeaseRuntime: accountLeaseRuntime
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyStore: releasePolicyStore,
+            candidateInboxDiagnosticSink: candidateInboxDiagnosticSink,
+            candidateInboxPolicyRefresher: candidateInboxPolicyRefresher,
+            candidateInboxPolicyTimeout: candidateInboxPolicyTimeout
         )
     }
 
@@ -7100,8 +7440,19 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         currentUserID: @escaping () -> String?,
         privateAccessAllowed: @escaping () -> Bool,
         featureDecision: @escaping (DJFeature) -> FeatureDecision,
+        featureDecisionRevalidator: ((FeatureDecision) -> FeatureDecision)?,
+        authSessionRefresher: ((
+            BackendAuthSessionContract,
+            @escaping (BackendAuthSessionContract?) -> Void
+        ) -> Void)?,
         runtimeCapabilitySnapshot: @escaping (RuntimeCapabilityID) -> RuntimeCapabilitySnapshot?,
-        accountLeaseRuntime: AccountLeaseRuntime
+        accountLeaseRuntime: AccountLeaseRuntime,
+        releasePolicyStore: ReleasePolicyStore,
+        candidateInboxDiagnosticSink: ((OwnerTruthCandidateInboxDiagnosticEvent) -> Void)?,
+        candidateInboxPolicyRefresher: ((
+            @escaping (Result<Void, Error>) -> Void
+        ) -> Void)?,
+        candidateInboxPolicyTimeout: TimeInterval
     ) {
         baseURL = qaBaseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         hasExplicitBaseURL = true
@@ -7110,8 +7461,14 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         qaCurrentUserIDProvider = currentUserID
         qaPrivateAccessAllowedProvider = privateAccessAllowed
         qaFeatureDecisionProvider = featureDecision
+        qaFeatureDecisionRevalidator = featureDecisionRevalidator
+        qaAuthSessionRefresher = authSessionRefresher
         qaRuntimeCapabilitySnapshotProvider = runtimeCapabilitySnapshot
+        qaCandidateInboxDiagnosticSink = candidateInboxDiagnosticSink
+        qaCandidateInboxPolicyRefresher = candidateInboxPolicyRefresher
+        self.candidateInboxPolicyTimeout = max(0.01, candidateInboxPolicyTimeout)
         self.accountLeaseRuntime = accountLeaseRuntime
+        self.releasePolicyStore = releasePolicyStore
     }
     #endif
 
@@ -7174,6 +7531,30 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         knownPolicyRevision: Int = 0,
         completion: @escaping (Result<BackendReleasePolicySnapshot, Error>) -> Void
     ) {
+        fetchReleasePolicyForCandidateInbox(
+            audience: audience,
+            cohort: cohort,
+            clientBuild: clientBuild,
+            knownPolicyRevision: knownPolicyRevision,
+            applicationLease: nil,
+            diagnosticTraceID: nil,
+            diagnosticAttempt: 1,
+            diagnosticAttemptState: nil,
+            completion: completion
+        )
+    }
+
+    private func fetchReleasePolicyForCandidateInbox(
+        audience: String,
+        cohort: String,
+        clientBuild: Int,
+        knownPolicyRevision: Int,
+        applicationLease: AccountLease? = nil,
+        diagnosticTraceID: String? = nil,
+        diagnosticAttempt: Int = 1,
+        diagnosticAttemptState: CandidateInboxReadAttemptState? = nil,
+        completion: @escaping (Result<BackendReleasePolicySnapshot, Error>) -> Void
+    ) {
         let normalizedAudience = audience.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let normalizedCohort = cohort.trimmingCharacters(in: .whitespacesAndNewlines)
         let requestedScope = releasePolicyCacheScope(
@@ -7181,7 +7562,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             audience: normalizedAudience,
             cohort: normalizedCohort
         )
-        let sessionUserID = authSessionStore.currentSession?.userId
+        let sessionUserID = currentAuthenticatedSession?.userId
         let path = "/v2/release-policy"
             + "?audience=\(queryComponent(normalizedAudience))"
             + "&cohort=\(queryComponent(normalizedCohort))"
@@ -7192,7 +7573,11 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             method: .get,
             payload: nil,
             authPolicy: sessionUserID == nil ? .publicRequest : .userRequired,
-            sessionUserId: sessionUserID
+            applicationLease: applicationLease,
+            sessionUserId: sessionUserID,
+            diagnosticTraceID: diagnosticTraceID,
+            diagnosticAttempt: diagnosticAttempt,
+            diagnosticAttemptState: diagnosticAttemptState
         ) { result in
             switch result {
             case .success(let json):
@@ -7208,6 +7593,28 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                         cohort: normalizedCohort
                     ) else {
                         throw BackendReleasePolicyContractError.accountScopeChanged
+                    }
+                    let current = self.releasePolicyStore.evaluate(
+                        scope: requestedScope,
+                        risk: .ownerTextCore
+                    )
+                    let currentRevision = current.policyRevision ?? -1
+                    let currentEmergencyRevision = current.emergencyRevision ?? -1
+                    let isOlder = snapshot.policyRevision < currentRevision
+                        || snapshot.emergencyRevision < currentEmergencyRevision
+                    let conflictsAtSameRevision = snapshot.policyRevision == currentRevision
+                        && current.policyVersion != nil
+                        && current.policyVersion != snapshot.policyVersion
+                    guard !isOlder, !conflictsAtSameRevision else {
+                        self.logRequestStage(
+                            traceID: diagnosticTraceID,
+                            attempt: diagnosticAttempt,
+                            event: "policyResponseDiscarded",
+                            stage: "policyCache",
+                            reason: isOlder ? "olderRevision" : "revisionConflict"
+                        )
+                        completion(.success(snapshot))
+                        return
                     }
                     try self.releasePolicyStore.save(
                         payload: payload,
@@ -7268,7 +7675,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         cohort: String
     ) -> ReleasePolicyCacheScope {
         ReleasePolicyCacheScope(
-            accountUserId: authSessionStore.currentSession?.userId,
+            accountUserId: currentAuthenticatedSession?.userId,
             appBuild: String(max(0, clientBuild)),
             audience: audience,
             cohort: cohort
@@ -7926,17 +8333,201 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         vaultID: OwnerTruthVaultID,
         completion: @escaping (Result<OwnerTruthCandidateInbox, Error>) -> Void
     ) {
+        guard let accountLease = accountLeaseRuntime.capture(forSubjectId: currentUserID) else {
+            completion(.failure(ClientError.accountScopeChanged))
+            return
+        }
+        fetchOwnerTruthCandidateInbox(
+            accountLease: accountLease,
+            vaultID: vaultID,
+            completion: completion
+        )
+    }
+
+    func fetchOwnerTruthCandidateInbox(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthCandidateInbox, Error>) -> Void
+    ) {
+        fetchOwnerTruthCandidateInbox(
+            accountLease: accountLease,
+            vaultID: vaultID,
+            readContext: OwnerTruthCandidateInboxReadContext(),
+            completion: completion
+        )
+    }
+
+    func fetchOwnerTruthCandidateInbox(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        readContext: OwnerTruthCandidateInboxReadContext,
+        completion: @escaping (Result<OwnerTruthCandidateInbox, Error>) -> Void
+    ) {
+        fetchOwnerTruthCandidateInboxRead(
+            accountLease: accountLease,
+            vaultID: vaultID,
+            readContext: readContext
+        ) { outcome in
+            completion(outcome.result)
+        }
+    }
+
+    func fetchOwnerTruthCandidateInboxRead(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        readContext: OwnerTruthCandidateInboxReadContext,
+        completion: @escaping (OwnerTruthCandidateInboxReadOutcome) -> Void
+    ) {
+        let attemptState = CandidateInboxReadAttemptState(context: readContext)
+        let completionGate = CandidateInboxReadCompletionGate()
+        let finish: (OwnerTruthCandidateInboxReadOutcome) -> Void = { outcome in
+            completionGate.complete(outcome, deliver: completion)
+        }
+        let timeoutWorkItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            let effectiveContext = attemptState.context(traceID: readContext.traceID)
+            self.logCandidateInboxRead(
+                event: "requestFailed",
+                stage: "intentDeadline",
+                readContext: effectiveContext,
+                reason: "candidateReadDeadlineExceeded"
+            )
+            finish(OwnerTruthCandidateInboxReadOutcome(
+                readContext: effectiveContext,
+                result: .failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                    reason: "candidateReadDeadlineExceeded"
+                ))
+            ))
+        }
+        completionGate.installTimeout(timeoutWorkItem)
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + max(0, readContext.deadline.timeIntervalSinceNow),
+            execute: timeoutWorkItem
+        )
+        fetchOwnerTruthCandidateInbox(
+            accountLease: accountLease,
+            vaultID: vaultID,
+            allowsPolicyRecapture: true,
+            readContext: readContext,
+            attemptState: attemptState,
+            completion: finish
+        )
+    }
+
+    private func fetchOwnerTruthCandidateInbox(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        allowsPolicyRecapture: Bool,
+        readContext: OwnerTruthCandidateInboxReadContext,
+        attemptState: CandidateInboxReadAttemptState,
+        completion: @escaping (OwnerTruthCandidateInboxReadOutcome) -> Void
+    ) {
+        attemptState.record(readContext.attempt)
+        logCandidateInboxRead(
+            event: "candidateClientEntered",
+            stage: "adapter",
+            readContext: readContext
+        )
         let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
         let decision = isQALane
             ? nil
             : requestFeatureDecision(for: .ownerTruthCandidateReview)
         guard isQALane || decision?.allowed == true else {
-            DispatchQueue.main.async {
-                completion(.failure(ClientError.featurePolicyDenied(
-                    feature: "ownerTruthCandidateReview",
-                    reason: decision?.reason ?? "releasePolicyDisabled"
-                )))
+            if ["expiredPolicyCache", "capturedPolicyExpired", "policyVersionChanged"]
+                .contains(decision?.reason ?? ""),
+               allowsPolicyRecapture,
+               attemptState.claimPolicyRefresh(),
+               accountLeaseRuntime.validate(accountLease, at: .request).allowed {
+                let refreshContext = readContext.nextAttempt
+                attemptState.record(refreshContext.attempt)
+                logCandidateInboxRead(
+                    event: "policyRefreshStarted",
+                    stage: "policyRefresh",
+                    readContext: refreshContext,
+                    reason: "expiredPolicyCache"
+                )
+                refreshCandidateInboxPolicy(
+                    accountLease: accountLease,
+                    readContext: refreshContext,
+                    attemptState: attemptState
+                ) { [weak self] result in
+                    guard let self else { return }
+                    guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                        completion(OwnerTruthCandidateInboxReadOutcome(
+                            readContext: attemptState.context(traceID: readContext.traceID),
+                            result: .failure(ClientError.accountScopeChanged)
+                        ))
+                        return
+                    }
+                    switch result {
+                    case .success:
+                        self.logCandidateInboxRead(
+                            event: "policyRefreshCompleted",
+                            stage: "policyRefresh",
+                            readContext: refreshContext
+                        )
+                        self.fetchOwnerTruthCandidateInbox(
+                            accountLease: accountLease,
+                            vaultID: vaultID,
+                            allowsPolicyRecapture: false,
+                            readContext: refreshContext,
+                            attemptState: attemptState,
+                            completion: completion
+                        )
+                    case .failure:
+                        self.logCandidateInboxRead(
+                            event: "policyRefreshFailed",
+                            stage: "policyRefresh",
+                            readContext: refreshContext,
+                            reason: "policyRefreshFailed"
+                        )
+                        completion(OwnerTruthCandidateInboxReadOutcome(
+                            readContext: attemptState.context(traceID: readContext.traceID),
+                            result: .failure(ClientError.featurePolicyDenied(
+                                feature: "ownerTruthCandidateReview",
+                                reason: "policyRefreshFailed"
+                            ))
+                        ))
+                    }
+                }
+                return
             }
+            logCandidateInboxRead(
+                event: "requestDenied",
+                stage: "featureInitial",
+                readContext: readContext,
+                reason: decision?.reason ?? "releasePolicyDisabled"
+            )
+            DispatchQueue.main.async {
+                completion(OwnerTruthCandidateInboxReadOutcome(
+                    readContext: attemptState.context(traceID: readContext.traceID),
+                    result: .failure(ClientError.featurePolicyDenied(
+                        feature: "ownerTruthCandidateReview",
+                        reason: decision?.reason ?? "releasePolicyDisabled"
+                    ))
+                ))
+            }
+            return
+        }
+        guard attemptState.claimCandidateGET() else {
+            logCandidateInboxRead(
+                event: "requestDenied",
+                stage: "readBudget",
+                readContext: attemptState.context(traceID: readContext.traceID),
+                reason: attemptState.isWithinDeadline
+                    ? "candidateReadBudgetExhausted"
+                    : "candidateReadDeadlineExceeded"
+            )
+            completion(OwnerTruthCandidateInboxReadOutcome(
+                readContext: attemptState.context(traceID: readContext.traceID),
+                result: .failure(ClientError.featurePolicyDenied(
+                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                    reason: attemptState.isWithinDeadline
+                        ? "candidateReadBudgetExhausted"
+                        : "candidateReadDeadlineExceeded"
+                ))
+            ))
             return
         }
         requestJSON(
@@ -7944,23 +8535,320 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             method: .get,
             payload: nil,
             authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
             featureDecision: decision,
-            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:],
+            diagnosticTraceID: readContext.traceID,
+            diagnosticAttempt: readContext.attempt,
+            diagnosticAttemptState: attemptState
         ) { result in
+            let effectiveReadContext = attemptState.context(traceID: readContext.traceID)
             switch result {
             case .success(let object):
                 do {
-                    completion(.success(try OwnerTruthCandidateInbox(
+                    let inbox = try OwnerTruthCandidateInbox(
                         backendJSONObject: object,
                         expectedVaultID: vaultID
-                    )))
+                    )
+                    self.logCandidateInboxRead(
+                        event: "inboxContractDecoded",
+                        stage: "typedDecode",
+                        readContext: effectiveReadContext,
+                        count: inbox.candidates.count
+                    )
+                    completion(OwnerTruthCandidateInboxReadOutcome(
+                        readContext: effectiveReadContext,
+                        result: .success(inbox)
+                    ))
                 } catch {
-                    completion(.failure(error))
+                    self.logCandidateInboxRead(
+                        event: "requestFailed",
+                        stage: "typedDecode",
+                        readContext: effectiveReadContext,
+                        reason: "contractMismatch"
+                    )
+                    completion(OwnerTruthCandidateInboxReadOutcome(
+                        readContext: effectiveReadContext,
+                        result: .failure(error)
+                    ))
                 }
             case .failure(let error):
-                completion(.failure(error))
+                if allowsPolicyRecapture,
+                   case .featurePolicyDenied(_, let reason)? = error as? ClientError,
+                   ["expiredPolicyCache", "capturedPolicyExpired", "policyVersionChanged"]
+                    .contains(reason),
+                   attemptState.claimPolicyRefresh(),
+                   self.accountLeaseRuntime.validate(accountLease, at: .request).allowed {
+                    let refreshContext = effectiveReadContext.nextAttempt
+                    attemptState.record(refreshContext.attempt)
+                    self.logCandidateInboxRead(
+                        event: "policyRefreshStarted",
+                        stage: "policyRefresh",
+                        readContext: refreshContext,
+                        reason: reason
+                    )
+                    self.refreshCandidateInboxPolicy(
+                        accountLease: accountLease,
+                        readContext: refreshContext,
+                        attemptState: attemptState
+                    ) { [weak self] refreshResult in
+                        guard let self else { return }
+                        guard self.accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+                            completion(OwnerTruthCandidateInboxReadOutcome(
+                                readContext: attemptState.context(traceID: readContext.traceID),
+                                result: .failure(ClientError.accountScopeChanged)
+                            ))
+                            return
+                        }
+                        switch refreshResult {
+                        case .success:
+                            self.logCandidateInboxRead(
+                                event: "policyRefreshCompleted",
+                                stage: "policyRefresh",
+                                readContext: refreshContext
+                            )
+                            self.fetchOwnerTruthCandidateInbox(
+                                accountLease: accountLease,
+                                vaultID: vaultID,
+                                allowsPolicyRecapture: false,
+                                readContext: refreshContext,
+                                attemptState: attemptState,
+                                completion: completion
+                            )
+                        case .failure:
+                            self.logCandidateInboxRead(
+                                event: "policyRefreshFailed",
+                                stage: "policyRefresh",
+                                readContext: refreshContext,
+                                reason: "policyRefreshFailed"
+                            )
+                            completion(OwnerTruthCandidateInboxReadOutcome(
+                                readContext: attemptState.context(traceID: readContext.traceID),
+                                result: .failure(ClientError.featurePolicyDenied(
+                                    feature: "ownerTruthCandidateReview",
+                                    reason: "policyRefreshFailed"
+                                ))
+                            ))
+                        }
+                    }
+                    return
+                }
+                if allowsPolicyRecapture,
+                   case .featurePolicyDenied(_, let reason)? = error as? ClientError,
+                   reason == "accountGenerationChanged",
+                   self.accountLeaseRuntime.validate(accountLease, at: .request).allowed {
+                    self.fetchOwnerTruthCandidateInbox(
+                        accountLease: accountLease,
+                        vaultID: vaultID,
+                        allowsPolicyRecapture: false,
+                        readContext: effectiveReadContext.nextAttempt,
+                        attemptState: attemptState,
+                        completion: completion
+                    )
+                    return
+                }
+                self.logCandidateInboxRead(
+                    event: "requestFailed",
+                    stage: "adapterCompletion",
+                    readContext: effectiveReadContext,
+                    reason: self.candidateInboxFailureCode(error)
+                )
+                completion(OwnerTruthCandidateInboxReadOutcome(
+                    readContext: effectiveReadContext,
+                    result: .failure(error)
+                ))
             }
         }
+    }
+
+    private func refreshCandidateInboxPolicy(
+        accountLease: AccountLease,
+        readContext: OwnerTruthCandidateInboxReadContext,
+        attemptState: CandidateInboxReadAttemptState,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        if let qaCandidateInboxPolicyRefresher {
+            qaCandidateInboxPolicyRefresher(completion)
+            return
+        }
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            completion(.failure(ClientError.accountScopeChanged))
+            return
+        }
+        let feature = DJFeature.ownerTruthCandidateReview
+        let clientBuild = FeatureGateService.shared.clientBuild
+        let scopeKey = PrivacySafeDiagnostics.correlationHash(
+            [
+                accountLease.subjectId,
+                accountLease.vaultId,
+                accountLease.sessionId,
+                String(accountLease.generation),
+                accountLease.generationId.uuidString.lowercased(),
+                accountLease.authorityEpoch,
+                String(clientBuild),
+                feature.backendReleasePolicyAudience,
+                feature.backendReleasePolicyCohort,
+            ].joined(separator: "|")
+        )
+        var shouldStart = false
+        candidatePolicyRefreshQueue.sync {
+            if candidatePolicyRefreshWaiters[scopeKey] != nil {
+                candidatePolicyRefreshWaiters[scopeKey, default: []].append(completion)
+            } else {
+                candidatePolicyRefreshWaiters[scopeKey] = [completion]
+                shouldStart = true
+            }
+        }
+        guard shouldStart else {
+            logCandidateInboxRead(
+                event: "policyRefreshJoined",
+                stage: "policyRefresh",
+                readContext: readContext
+            )
+            return
+        }
+        let cached = cachedReleasePolicyEvaluation(
+            risk: .ownerTextCore,
+            clientBuild: clientBuild,
+            audience: feature.backendReleasePolicyAudience,
+            cohort: feature.backendReleasePolicyCohort
+        )
+        let completionGate = CandidatePolicyRefreshCompletionGate()
+        let finish: (Result<Void, Error>) -> Void = { [weak self] result in
+            guard let self, completionGate.claimCompletion() else { return }
+            let waiters = self.candidatePolicyRefreshQueue.sync {
+                self.candidatePolicyRefreshWaiters.removeValue(forKey: scopeKey) ?? []
+            }
+            waiters.forEach { $0(result) }
+        }
+        DispatchQueue.global(qos: .utility).asyncAfter(
+            deadline: .now() + candidateInboxPolicyTimeout
+        ) {
+            finish(.failure(URLError(.timedOut)))
+        }
+        fetchReleasePolicyForCandidateInbox(
+            audience: feature.backendReleasePolicyAudience,
+            cohort: feature.backendReleasePolicyCohort,
+            clientBuild: clientBuild,
+            knownPolicyRevision: cached.policyRevision ?? 0,
+            applicationLease: accountLease,
+            diagnosticTraceID: readContext.traceID,
+            diagnosticAttempt: readContext.attempt,
+            diagnosticAttemptState: attemptState
+        ) { [weak self] result in
+            guard self != nil else { return }
+            finish(result.map { _ in () })
+        }
+    }
+
+    private func logCandidateInboxRead(
+        event: String,
+        stage: String,
+        readContext: OwnerTruthCandidateInboxReadContext,
+        reason: String? = nil,
+        count: Int? = nil,
+        httpStatus: Int? = nil,
+        durationMilliseconds: Int? = nil
+    ) {
+        var states = ["stage": stage]
+        if let reason {
+            states["reason"] = PrivacySafeDiagnostics.safeCode(reason, fallback: "unknown")
+        }
+        var counts: [String: Int] = [:]
+        if let count { counts["candidateCount"] = count }
+        counts["attempt"] = readContext.attempt
+        counts["eventEpochMilliseconds"] = Int(Date().timeIntervalSince1970 * 1_000)
+        if let httpStatus { counts["httpStatus"] = httpStatus }
+        if let durationMilliseconds { counts["durationMilliseconds"] = durationMilliseconds }
+        qaCandidateInboxDiagnosticSink?(OwnerTruthCandidateInboxDiagnosticEvent(
+            traceID: readContext.traceID,
+            attempt: readContext.attempt,
+            event: event,
+            stage: stage,
+            reason: reason.map { PrivacySafeDiagnostics.safeCode($0, fallback: "unknown") },
+            httpStatus: httpStatus,
+            durationMilliseconds: durationMilliseconds
+        ))
+        PrivacySafeDiagnostics.log(
+            subsystem: "CandidateInbox",
+            event: event,
+            states: states,
+            counts: counts,
+            correlations: ["trace": readContext.traceID]
+        )
+    }
+
+    private func candidateInboxFailureCode(_ error: Error) -> String {
+        if let alamofireError = error as? AFError,
+           let underlyingError = alamofireError.underlyingError {
+            return candidateInboxFailureCode(underlyingError)
+        }
+        if let clientError = error as? ClientError {
+            switch clientError {
+            case .userAuthenticationRequired: return "authenticationRequired"
+            case .sessionUpgradeRequired: return "sessionUpgradeRequired"
+            case .accountScopeChanged: return "accountScopeChanged"
+            case .featurePolicyDenied(_, let reason):
+                return ["accountGenerationChanged", "capturedPolicyExpired", "policyVersionChanged"]
+                    .contains(reason) ? reason : "permissionDenied"
+            case .recoveryAccessDenied: return "recoveryRestricted"
+            case .invalidJSONResponse, .unsupportedJSONRoot: return "jsonContractMismatch"
+            case .backendError(let statusCode, _):
+                return "http\(statusCode ?? 0)"
+            }
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .cancelled: return "cancelled"
+            case .notConnectedToInternet: return "offline"
+            case .timedOut: return "timeout"
+            case .cannotFindHost, .dnsLookupFailed: return "dns"
+            case .cannotConnectToHost, .networkConnectionLost: return "connection"
+            case .secureConnectionFailed, .serverCertificateUntrusted: return "tls"
+            default: return "transport"
+            }
+        }
+        return error is OwnerTruthRemoteContractError ? "contractMismatch" : "unknown"
+    }
+
+    private func logRequestStage(
+        traceID: String?,
+        attempt: Int = 1,
+        event: String,
+        stage: String,
+        reason: String? = nil,
+        count: Int? = nil,
+        httpStatus: Int? = nil,
+        durationMilliseconds: Int? = nil
+    ) {
+        guard let traceID else { return }
+        var states = ["stage": stage]
+        if let reason {
+            states["reason"] = PrivacySafeDiagnostics.safeCode(reason, fallback: "unknown")
+        }
+        var counts: [String: Int] = [:]
+        if let count { counts["responseBytes"] = count }
+        counts["attempt"] = max(1, attempt)
+        counts["eventEpochMilliseconds"] = Int(Date().timeIntervalSince1970 * 1_000)
+        if let httpStatus { counts["httpStatus"] = httpStatus }
+        if let durationMilliseconds { counts["durationMilliseconds"] = durationMilliseconds }
+        qaCandidateInboxDiagnosticSink?(OwnerTruthCandidateInboxDiagnosticEvent(
+            traceID: traceID,
+            attempt: max(1, attempt),
+            event: event,
+            stage: stage,
+            reason: reason.map { PrivacySafeDiagnostics.safeCode($0, fallback: "unknown") },
+            httpStatus: httpStatus,
+            durationMilliseconds: durationMilliseconds
+        ))
+        PrivacySafeDiagnostics.log(
+            subsystem: "CandidateInbox",
+            event: event,
+            states: states,
+            counts: counts,
+            correlations: ["trace": traceID]
+        )
     }
 
     func fetchOwnerTruthCandidateReviewHistory(
@@ -8344,6 +9232,8 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             method: .post,
             payload: command.backendPayload,
             authPolicy: .userRequired,
+            allowsRefresh: false,
+            allowsRecoveryRefresh: false,
             featureDecision: decision,
             additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
         ) { result in
@@ -8360,6 +9250,112 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             case .failure(let error):
                 completion(.failure(error))
             }
+        }
+    }
+
+    func lookupOwnerTruthCandidateDecisionResult(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        commandID: String,
+        completion: @escaping (Result<OwnerTruthCandidateDecisionLookupResult, Error>) -> Void
+    ) {
+        let normalizedCommandID = commandID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedCommandID.isEmpty else {
+            completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
+                "Decision lookup requires its original command identifier"
+            )))
+            return
+        }
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane
+            ? nil
+            : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
+            completion(.failure(ClientError.featurePolicyDenied(
+                feature: "ownerTruthCandidateReview",
+                reason: decision?.reason ?? "releasePolicyDisabled"
+            )))
+            return
+        }
+        var headers = isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
+        headers["X-DreamJourney-Review-Command-Id"] = normalizedCommandID
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/candidates/\(pathComponent(candidateID.rawValue.uuidString))/decision-result",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision,
+            additionalHeaders: headers
+        ) { result in
+            switch result {
+            case .success(let object):
+                do {
+                    completion(.success(try OwnerTruthCandidateDecisionLookupResult(
+                        backendJSONObject: object,
+                        expectedCandidateID: candidateID
+                    )))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func reviewOwnerTruthCandidateWrite(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        command: OwnerTruthCandidateReviewCommand,
+        completion: @escaping (OwnerTruthCandidateReviewTransportOutcome) -> Void
+    ) {
+        guard accountLease.subjectId == currentUserID,
+              accountLease.vaultId == vaultID.rawValue,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            completion(.notSent(ClientError.accountScopeChanged))
+            return
+        }
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane
+            ? nil
+            : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
+            completion(.notSent(ClientError.featurePolicyDenied(
+                feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                reason: decision?.reason ?? "releasePolicyDisabled"
+            )))
+            return
+        }
+        let exposureTracker = ReviewWriteTransportExposureTracker()
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/candidates/\(pathComponent(candidateID.rawValue.uuidString))/decisions",
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            allowsRefresh: false,
+            allowsRecoveryRefresh: false,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision,
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:],
+            reviewWriteExposureTracker: exposureTracker
+        ) { result in
+            let typedResult = result.flatMap { object in
+                Result {
+                    try OwnerTruthCandidateDecisionResult(
+                        backendJSONObject: object,
+                        expectedCandidateID: candidateID
+                    )
+                }
+            }
+            completion(OwnerTruthCandidateReviewTransportOutcome.classify(
+                typedResult,
+                exposure: exposureTracker.exposure
+            ))
         }
     }
 
@@ -8523,6 +9519,114 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             case .failure(let error):
                 completion(.failure(error))
             }
+        }
+    }
+
+    func confirmOwnerTruthCandidateChangeSetGroupWrite(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMemoryChangeSetGroupCommand,
+        expectedProposal: OwnerTruthMemoryChangeSetGroupProposal,
+        completion: @escaping (OwnerTruthMemoryChangeSetGroupReviewTransportOutcome) -> Void
+    ) {
+        guard accountLease.subjectId == currentUserID,
+              accountLease.vaultId == vaultID.rawValue,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            completion(.notSent(ClientError.accountScopeChanged))
+            return
+        }
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane ? nil : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
+            completion(.notSent(ClientError.featurePolicyDenied(
+                feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                reason: decision?.reason ?? "releasePolicyDisabled"
+            )))
+            return
+        }
+        guard command.expectedMemoryRevision == expectedProposal.baseMemoryRevision,
+              command.expectedGroupProposalID == expectedProposal.proposalID,
+              command.expectedGroupProposalHash == expectedProposal.proposalHash else {
+            completion(.notSent(OwnerTruthRemoteContractError.invalidCommand(
+                "Related Candidate confirmation is not bound to its visible preview"
+            )))
+            return
+        }
+        let exposureTracker = ReviewWriteTransportExposureTracker()
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/memory-changeset-groups/confirm",
+            method: .post,
+            payload: command.backendPayload,
+            authPolicy: .userRequired,
+            allowsRefresh: false,
+            allowsRecoveryRefresh: false,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision,
+            additionalHeaders: isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:],
+            reviewWriteExposureTracker: exposureTracker
+        ) { result in
+            let typedResult = result.flatMap { object in
+                Result {
+                    try OwnerTruthMemoryChangeSetGroupCommitResult(
+                        backendJSONObject: object,
+                        expectedProposal: expectedProposal
+                    )
+                }
+            }
+            completion(OwnerTruthMemoryChangeSetGroupReviewTransportOutcome.classify(
+                typedResult,
+                exposure: exposureTracker.exposure
+            ))
+        }
+    }
+
+    func lookupOwnerTruthCandidateChangeSetGroupDecisionResult(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        commandID: String,
+        expectedBinding: OwnerTruthMemoryChangeSetGroupBinding,
+        completion: @escaping (
+            Result<OwnerTruthMemoryChangeSetGroupDecisionLookupResult, Error>
+        ) -> Void
+    ) {
+        let normalizedCommandID = commandID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedCommandID.isEmpty,
+              accountLease.subjectId == currentUserID,
+              accountLease.vaultId == vaultID.rawValue,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            completion(.failure(ClientError.accountScopeChanged))
+            return
+        }
+        let isQALane = OwnerTruthCandidateReviewQAGate.isEnabled
+        let decision = isQALane ? nil : requestFeatureDecision(for: .ownerTruthCandidateReview)
+        guard isQALane || decision?.allowed == true else {
+            completion(.failure(ClientError.featurePolicyDenied(
+                feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                reason: decision?.reason ?? "releasePolicyDisabled"
+            )))
+            return
+        }
+        var headers = isQALane ? ["X-DreamJourney-QA-Owner-Truth": "1"] : [:]
+        headers["X-DreamJourney-Review-Command-Id"] = normalizedCommandID
+        requestJSON(
+            path: "/v2/vaults/\(pathComponent(vaultID.rawValue))/memory-changeset-groups/decision-result",
+            method: .get,
+            payload: nil,
+            authPolicy: .userRequired,
+            applicationLease: accountLease,
+            sessionUserId: accountLease.subjectId,
+            featureDecision: decision,
+            additionalHeaders: headers
+        ) { result in
+            completion(result.flatMap { object in
+                Result {
+                    try OwnerTruthMemoryChangeSetGroupDecisionLookupResult(
+                        backendJSONObject: object,
+                        expectedBinding: expectedBinding
+                    )
+                }
+            })
         }
     }
 
@@ -13733,8 +14837,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         sessionUserId: String? = nil,
         featureDecision: FeatureDecision? = nil,
         additionalHeaders: [String: String] = [:],
+        diagnosticTraceID: String? = nil,
+        diagnosticAttempt: Int = 1,
+        diagnosticAttemptState: CandidateInboxReadAttemptState? = nil,
+        reviewWriteExposureTracker: ReviewWriteTransportExposureTracker? = nil,
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
+        diagnosticAttemptState?.record(diagnosticAttempt)
         let endpoint = EndpointDescriptor(
             path: path,
             method: method,
@@ -13748,6 +14857,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         switch endpoint.authPolicy {
         case .userRequired:
             guard canEnterPrivateUI else {
+                logRequestStage(
+                    traceID: diagnosticTraceID,
+                    attempt: diagnosticAttempt,
+                    event: "requestDenied",
+                    stage: "privateUI",
+                    reason: "privateUIClosed"
+                )
                 DispatchQueue.main.async {
                     completion(.failure(ClientError.userAuthenticationRequired))
                 }
@@ -13755,12 +14871,26 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             }
             let currentSession = currentAuthenticatedSession
             guard let authenticatedSession = currentSession else {
+                logRequestStage(
+                    traceID: diagnosticTraceID,
+                    attempt: diagnosticAttempt,
+                    event: "requestDenied",
+                    stage: "authentication",
+                    reason: "sessionMissing"
+                )
                 DispatchQueue.main.async {
                     completion(.failure(ClientError.userAuthenticationRequired))
                 }
                 return
             }
             guard authenticatedSession.isPrivateAccessEligible else {
+                logRequestStage(
+                    traceID: diagnosticTraceID,
+                    attempt: diagnosticAttempt,
+                    event: "requestDenied",
+                    stage: "authentication",
+                    reason: "sessionIneligible"
+                )
                 DispatchQueue.main.async {
                     completion(.failure(ClientError.sessionUpgradeRequired(
                         minimumBuild: nil,
@@ -13770,6 +14900,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 return
             }
             guard endpoint.sessionUserAssertions.allSatisfy({ $0 == authenticatedSession.userId }) else {
+                logRequestStage(
+                    traceID: diagnosticTraceID,
+                    attempt: diagnosticAttempt,
+                    event: "requestDenied",
+                    stage: "authenticationScope",
+                    reason: "subjectMismatch"
+                )
                 DispatchQueue.main.async {
                     completion(.failure(ClientError.accountScopeChanged))
                 }
@@ -13777,6 +14914,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             }
             if let requiredAuthSession,
                currentSession?.matchesCASIdentity(requiredAuthSession) != true {
+                logRequestStage(
+                    traceID: diagnosticTraceID,
+                    attempt: diagnosticAttempt,
+                    event: "requestDenied",
+                    stage: "credentialCAS",
+                    reason: "credentialSuperseded"
+                )
                 DispatchQueue.main.async {
                     completion(.failure(ClientError.accountScopeChanged))
                 }
@@ -13789,6 +14933,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 session: requestAuthSession,
                 currentUserId: currentUserID
             ) else {
+                logRequestStage(
+                    traceID: diagnosticTraceID,
+                    attempt: diagnosticAttempt,
+                    event: "requestDenied",
+                    stage: "backendLease",
+                    reason: "backendLeaseRejected"
+                )
                 DispatchQueue.main.async {
                     completion(.failure(ClientError.accountScopeChanged))
                 }
@@ -13799,12 +14950,25 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 ?? accountLeaseRuntime.capture(forSubjectId: selectedSession.userId)
             guard let capturedApplicationLease,
                   accountLeaseRuntime.validate(capturedApplicationLease, at: .request).allowed else {
+                logRequestStage(
+                    traceID: diagnosticTraceID,
+                    attempt: diagnosticAttempt,
+                    event: "requestDenied",
+                    stage: "applicationLease",
+                    reason: "applicationLeaseRejected"
+                )
                 DispatchQueue.main.async {
                     completion(.failure(ClientError.accountScopeChanged))
                 }
                 return
             }
             requestApplicationLease = capturedApplicationLease
+            logRequestStage(
+                traceID: diagnosticTraceID,
+                attempt: diagnosticAttempt,
+                event: "authChecked",
+                stage: "preflight"
+            )
         case .publicRequest, .refreshExchange:
             requestAuthSession = nil
             requestAccountLease = nil
@@ -13844,6 +15008,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                             sessionUserId: sessionUserId,
                             featureDecision: featureDecision,
                             additionalHeaders: additionalHeaders,
+                            diagnosticTraceID: diagnosticTraceID,
+                            diagnosticAttempt: diagnosticAttempt + 1,
+                            diagnosticAttemptState: diagnosticAttemptState,
+                            reviewWriteExposureTracker: reviewWriteExposureTracker,
                             completion: completion
                         )
                     case .failure:
@@ -13871,6 +15039,12 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             }
             return
         }
+        logRequestStage(
+            traceID: diagnosticTraceID,
+            attempt: diagnosticAttempt,
+            event: "recoveryChecked",
+            stage: "preflight"
+        )
 
         let gatedFeature = FeatureGateService.shared.featureForRequest(
             path: path,
@@ -13912,6 +15086,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             preparedFeatureDecision = nil
         }
         if let preparedFeatureDecision, !preparedFeatureDecision.allowed {
+            logRequestStage(
+                traceID: diagnosticTraceID,
+                attempt: diagnosticAttempt,
+                event: "requestDenied",
+                stage: "featureRevalidated",
+                reason: preparedFeatureDecision.reason
+            )
             DispatchQueue.main.async {
                 completion(.failure(ClientError.featurePolicyDenied(
                     feature: preparedFeatureDecision.feature.rawValue,
@@ -13920,6 +15101,12 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             }
             return
         }
+        logRequestStage(
+            traceID: diagnosticTraceID,
+            attempt: diagnosticAttempt,
+            event: "featureRevalidated",
+            stage: "preflight"
+        )
 
         let url = "\(baseURL)\(endpoint.path)"
         var baselineHeaders = authHeaders(for: endpoint.authPolicy, session: requestAuthSession) ?? HTTPHeaders()
@@ -13948,7 +15135,21 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             }
             requestHeaders = headers
         }
+        let lifecycleProbe: CandidateInboxTaskLifecycleProbe?
+        if diagnosticTraceID != nil {
+            lifecycleProbe = CandidateInboxTaskLifecycleProbe { [weak self] in
+                self?.logRequestStage(
+                    traceID: diagnosticTraceID,
+                    attempt: diagnosticAttempt,
+                    event: "taskResumed",
+                    stage: "transport"
+                )
+            }
+        } else {
+            lifecycleProbe = nil
+        }
         let dataRequest: DataRequest
+        reviewWriteExposureTracker?.markExposed()
         if let bodyData {
             guard let rawURL = URL(string: url) else {
                 DispatchQueue.main.async {
@@ -13972,9 +15173,46 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 headers: requestHeaders
             )
         }
+        logRequestStage(
+            traceID: diagnosticTraceID,
+            attempt: diagnosticAttempt,
+            event: "requestCreated",
+            stage: "transport"
+        )
+        lifecycleProbe?.bind(to: dataRequest)
+        let transportStartedAt = Date()
         dataRequest
+            .onURLSessionTaskCreation { [weak self] _ in
+                self?.logRequestStage(
+                    traceID: diagnosticTraceID,
+                    attempt: diagnosticAttempt,
+                    event: "taskCreated",
+                    stage: "transport"
+                )
+            }
             .validate(statusCode: 200..<300)
             .responseData(queue: .global(qos: .utility)) { response in
+                let duration = max(0, Int(Date().timeIntervalSince(transportStartedAt) * 1_000))
+                self.logRequestStage(
+                    traceID: diagnosticTraceID,
+                    attempt: diagnosticAttempt,
+                    event: "transportCompleted",
+                    stage: "transport",
+                    reason: response.error.map(self.candidateInboxFailureCode),
+                    count: response.data?.count,
+                    durationMilliseconds: duration
+                )
+                if let httpResponse = response.response {
+                    self.logRequestStage(
+                        traceID: diagnosticTraceID,
+                        attempt: diagnosticAttempt,
+                        event: "responseReceived",
+                        stage: "http",
+                        count: response.data?.count,
+                        httpStatus: httpResponse.statusCode,
+                        durationMilliseconds: duration
+                    )
+                }
                 guard self.isCurrentAccountLease(
                     requestAccountLease,
                     applicationLease: requestApplicationLease,
@@ -14006,6 +15244,12 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                             accountLease: requestAccountLease,
                             applicationLease: requestApplicationLease,
                             completion: completion
+                        )
+                        self.logRequestStage(
+                            traceID: diagnosticTraceID,
+                            attempt: diagnosticAttempt,
+                            event: "jsonDecoded",
+                            stage: "json"
                         )
                     } catch {
                         self.deliverRequestResult(
@@ -14068,6 +15312,25 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                        authPolicy == .userRequired,
                        let requestAuthSession,
                        let currentSession = self.currentAuthenticatedSession {
+                        if let diagnosticAttemptState {
+                            let isCandidateRead = path.hasPrefix("/v2/vaults/")
+                                && path.hasSuffix("/candidates")
+                            guard diagnosticAttemptState.claimAuthenticationRecovery(),
+                                  !isCandidateRead || diagnosticAttemptState.claimCandidateGET() else {
+                                self.deliverRequestResult(
+                                    .failure(ClientError.featurePolicyDenied(
+                                        feature: DJFeature.ownerTruthCandidateReview.rawValue,
+                                        reason: diagnosticAttemptState.isWithinDeadline
+                                            ? "candidateReadBudgetExhausted"
+                                            : "candidateReadDeadlineExceeded"
+                                    )),
+                                    accountLease: requestAccountLease,
+                                    applicationLease: requestApplicationLease,
+                                    completion: completion
+                                )
+                                return
+                            }
+                        }
                         if currentSession.isValidRefreshSuccessor(of: requestAuthSession) {
                             self.requestJSON(
                                 path: path,
@@ -14083,8 +15346,11 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                                 accountLease: requestAccountLease,
                                 applicationLease: requestApplicationLease,
                                 sessionUserId: sessionUserId,
-                                featureDecision: preparedFeatureDecision,
+                                featureDecision: nil,
                                 additionalHeaders: additionalHeaders,
+                                diagnosticTraceID: diagnosticTraceID,
+                                diagnosticAttempt: diagnosticAttempt + 1,
+                                diagnosticAttemptState: diagnosticAttemptState,
                                 completion: completion
                             )
                             return
@@ -14130,8 +15396,11 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                                     accountLease: requestAccountLease,
                                     applicationLease: requestApplicationLease,
                                     sessionUserId: sessionUserId,
-                                    featureDecision: preparedFeatureDecision,
+                                    featureDecision: nil,
                                     additionalHeaders: additionalHeaders,
+                                    diagnosticTraceID: diagnosticTraceID,
+                                    diagnosticAttempt: diagnosticAttempt + 1,
+                                    diagnosticAttemptState: diagnosticAttemptState,
                                     completion: completion
                                 )
                             } else {
@@ -14435,6 +15704,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         for capturedSession: BackendAuthSessionContract,
         completion: @escaping (BackendAuthSessionContract?) -> Void
     ) {
+        if let qaAuthSessionRefresher {
+            qaAuthSessionRefresher(capturedSession, completion)
+            return
+        }
         guard let credential = accountCredentialSnapshot(for: capturedSession) else {
             authSessionStore.clear(ifCurrentMatches: capturedSession)
             UserManager.shared.invalidateBackendSession(for: capturedSession.userId)

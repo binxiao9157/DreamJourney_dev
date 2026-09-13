@@ -111,7 +111,7 @@ xcodebuild \
   -sdk iphonesimulator \
   -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath "$DERIVED_DATA_PATH" \
-  "${XCCONFIG_ARGS[@]}" \
+  ${XCCONFIG_ARGS[@]+"${XCCONFIG_ARGS[@]}"} \
   "${BUILD_SETTINGS[@]}" \
   build > "$BUILD_LOG"
 

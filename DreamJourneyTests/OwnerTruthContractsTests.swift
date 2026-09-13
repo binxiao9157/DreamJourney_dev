@@ -9,6 +9,4402 @@ import XCTest
 #endif
 
 final class OwnerTruthContractsTests: XCTestCase {
+    func testLiveCaptureDuplicateEndedContinuationDoesNotRegressOrReadmit() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = InterviewNaturalInputClientSpy()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000701")
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("echo-live-duplicate-ended-\(UUID().uuidString)", isDirectory: true)
+        let suiteName = "echo-live-follow-up-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        client.startHandler = { [unowned self] command in
+            Result { try self.interviewNaturalInputReceipt(
+                vaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+                start: command
+            ) }
+        }
+        client.appendHandler = { [unowned self] command in
+            Result { try self.interviewNaturalInputReceipt(
+                vaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+                append: command
+            ) }
+        }
+        client.endHandler = { [unowned self] command in
+            Result { try self.interviewNaturalInputReceipt(
+                vaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+                end: command
+            ) }
+        }
+        client.continuationHandler = { [unowned self] _ in
+            Result {
+                try self.interviewNaturalInputContinuation(
+                    vaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId)),
+                    state: .ended,
+                    canContinue: false,
+                    canContinueLater: true
+                )
+            }
+        }
+        client.pendingReviewInboxHandler = { [unowned self] in
+            Result {
+                let end = try XCTUnwrap(client.endCommand)
+                return try self.pendingReviewBatchInbox(vaultID: lease.vaultId, batches: [(
+                    reviewBatchID: reviewBatchID,
+                    threadID: end.threadID,
+                    sessionID: end.sessionID,
+                    reviewBatchVersion: 1,
+                    sessionVersion: end.expectedSessionVersion + 2
+                )])
+            }
+        }
+        client.acknowledgementHandler = { [unowned self] command in
+            Result {
+                try self.pendingReviewBatchAcknowledgementReceipt(
+                    vaultID: lease.vaultId,
+                    reviewBatchID: command.reviewBatchID,
+                    threadID: command.threadID,
+                    sessionID: command.sessionID,
+                    reviewBatchVersion: command.expectedReviewBatchVersion + 1,
+                    sessionVersion: command.expectedSessionVersion + 1
+                )
+            }
+        }
+        client.admissionHandler = { [unowned self] command in
+            Result {
+                try self.candidateProposalAdmissionReceipt(
+                    vaultID: lease.vaultId,
+                    reviewBatchID: command.reviewBatchID
+                )
+            }
+        }
+        client.proposalStatusHandler = { [unowned self] requestedReviewBatchID in
+            Result {
+                try self.interviewCandidateProposalStatus(
+                    vaultID: lease.vaultId,
+                    reviewBatchID: requestedReviewBatchID,
+                    candidateExtractionState: .succeeded,
+                    candidateReviewState: .reviewReady
+                )
+            }
+        }
+
+        let coordinator = EchoLiveMemoryCaptureCoordinator(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            productSessionID: "echo-live-duplicate-ended",
+            liveTurnOutboxStore: OwnerTruthInterviewLiveTurnOutboxStore(rootDirectory: root),
+            followUpStore: EchoLiveMemoryFollowUpStore(defaults: defaults),
+            completionCheckpointStore: EchoLiveMemoryCompletionCheckpointStore(
+                rootDirectory: root.appendingPathComponent("completion", isDirectory: true)
+            ),
+            organizationStatusTimeout: 1,
+            naturalInputPolicyAvailable: { true },
+            candidateReviewPolicyAvailable: { true }
+        )
+        var states: [EchoLiveMemoryCaptureState] = []
+        coordinator.onStateChange = { states.append($0) }
+
+        coordinator.appendOwnerTurn("这是一段合成测试记忆。")
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { client.appendCommand != nil })
+        coordinator.finish()
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { coordinator.state == .pendingReview })
+
+        XCTAssertEqual(client.acknowledgementCommands.count, 1)
+        XCTAssertEqual(client.admissionCommands.count, 1)
+        XCTAssertEqual(client.proposalStatusRequestCount, 1)
+        guard let queuedIndex = states.firstIndex(of: .queued) else {
+            return XCTFail("expected queued state")
+        }
+        XCTAssertFalse(states.dropFirst(queuedIndex + 1).contains(.saving))
+    }
+
+    func testLiveCompletionCheckpointReplaysOriginalEndAckAndAdmissionCommandsAfterCrash() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let threadID = recordID("00000000-0000-0000-0000-000000000711")
+        let sessionID = recordID("00000000-0000-0000-0000-000000000712")
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000713")
+        let endCommand = try OwnerTruthInterviewEndCommand(
+            commandID: "end-command-stable",
+            threadID: threadID,
+            sessionID: sessionID,
+            expectedThreadVersion: 3,
+            expectedSessionVersion: 4,
+            lastClientSequenceNumber: 2
+        )
+        let endReceipt = try interviewNaturalInputReceipt(vaultID: vaultID, end: endCommand)
+        let acknowledgementCommand = try OwnerTruthInterviewReviewBatchAcknowledgementCommand(
+            commandID: "ack-command-stable",
+            reviewBatchID: reviewBatchID,
+            threadID: threadID,
+            sessionID: sessionID,
+            expectedSessionVersion: endReceipt.sessionVersion,
+            expectedReviewBatchVersion: 1
+        )
+        let acknowledgementReceipt = try pendingReviewBatchAcknowledgementReceipt(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            threadID: threadID,
+            sessionID: sessionID,
+            reviewBatchVersion: 2,
+            sessionVersion: endReceipt.sessionVersion + 1
+        )
+        let admissionCommand = try OwnerTruthInterviewCandidateProposalAdmissionCommand(
+            commandID: "admit-command-stable",
+            reviewBatchID: reviewBatchID,
+            expectedReviewBatchVersion: acknowledgementReceipt.reviewBatchVersion
+        )
+
+        enum CrashStage: String, CaseIterable {
+            case end
+            case acknowledgement
+            case admission
+        }
+
+        for stage in CrashStage.allCases {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent("echo-live-checkpoint-\(stage.rawValue)-\(UUID().uuidString)")
+            let defaultsName = "echo-live-checkpoint-follow-up-\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+            defer {
+                try? FileManager.default.removeItem(at: root)
+                defaults.removePersistentDomain(forName: defaultsName)
+            }
+            let store = EchoLiveMemoryCompletionCheckpointStore(rootDirectory: root)
+            let productSessionID = "checkpoint-replay-\(stage.rawValue)"
+            try store.prepareEnd(endCommand, productSessionID: productSessionID, for: lease)
+            if stage != .end {
+                try store.acceptEnd(endReceipt, productSessionID: productSessionID, for: lease)
+                try store.prepareAcknowledgement(
+                    acknowledgementCommand,
+                    productSessionID: productSessionID,
+                    for: lease
+                )
+            }
+            if stage == .admission {
+                try store.acceptAcknowledgement(
+                    acknowledgementReceipt,
+                    productSessionID: productSessionID,
+                    for: lease
+                )
+                try store.prepareAdmission(
+                    admissionCommand,
+                    productSessionID: productSessionID,
+                    for: lease
+                )
+            }
+
+            let client = InterviewNaturalInputClientSpy()
+            client.endHandler = { [unowned self] command in
+                Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, end: command) }
+            }
+            client.pendingReviewInboxHandler = { [unowned self] in
+                Result {
+                    try self.pendingReviewBatchInbox(vaultID: lease.vaultId, batches: [(
+                        reviewBatchID: reviewBatchID,
+                        threadID: threadID,
+                        sessionID: sessionID,
+                        reviewBatchVersion: 1,
+                        sessionVersion: endReceipt.sessionVersion
+                    )])
+                }
+            }
+            client.acknowledgementHandler = { [unowned self] command in
+                Result {
+                    try self.pendingReviewBatchAcknowledgementReceipt(
+                        vaultID: lease.vaultId,
+                        reviewBatchID: command.reviewBatchID,
+                        threadID: command.threadID,
+                        sessionID: command.sessionID,
+                        reviewBatchVersion: command.expectedReviewBatchVersion + 1,
+                        sessionVersion: command.expectedSessionVersion + 1
+                    )
+                }
+            }
+            client.admissionHandler = { [unowned self] command in
+                Result {
+                    try self.candidateProposalAdmissionReceipt(
+                        vaultID: lease.vaultId,
+                        reviewBatchID: command.reviewBatchID
+                    )
+                }
+            }
+            client.proposalStatusHandler = { [unowned self] requestedReviewBatchID in
+                Result {
+                    try self.interviewCandidateProposalStatus(
+                        vaultID: lease.vaultId,
+                        reviewBatchID: requestedReviewBatchID,
+                        candidateExtractionState: .succeeded,
+                        candidateReviewState: .reviewReady
+                    )
+                }
+            }
+
+            let coordinator = EchoLiveMemoryCaptureCoordinator(
+                accountLease: lease,
+                client: client,
+                accountLeaseRuntime: runtime,
+                productSessionID: productSessionID,
+                liveTurnOutboxStore: OwnerTruthInterviewLiveTurnOutboxStore(
+                    rootDirectory: root.appendingPathComponent("outbox")
+                ),
+                followUpStore: EchoLiveMemoryFollowUpStore(defaults: defaults),
+                completionCheckpointStore: store,
+                organizationStatusTimeout: 1,
+                naturalInputPolicyAvailable: { true },
+                candidateReviewPolicyAvailable: { true }
+            )
+
+            XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { coordinator.state == .pendingReview })
+            switch stage {
+            case .end:
+                XCTAssertEqual(client.endCommands, [endCommand])
+            case .acknowledgement:
+                XCTAssertTrue(client.endCommands.isEmpty)
+                XCTAssertEqual(client.acknowledgementCommands, [acknowledgementCommand])
+            case .admission:
+                XCTAssertTrue(client.endCommands.isEmpty)
+                XCTAssertTrue(client.acknowledgementCommands.isEmpty)
+                XCTAssertEqual(client.admissionCommands, [admissionCommand])
+            }
+            XCTAssertTrue(client.startCommands.isEmpty)
+        }
+    }
+
+    func testLiveRecoveryEntryDiscoversEveryCompletionCheckpointWithoutKnownSessionID() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let threadID = recordID("00000000-0000-0000-0000-00000000071a")
+        let sessionID = recordID("00000000-0000-0000-0000-00000000071b")
+        let reviewBatchID = recordID("00000000-0000-0000-0000-00000000071c")
+        let endCommand = try OwnerTruthInterviewEndCommand(
+            commandID: "discovered-end-command",
+            threadID: threadID,
+            sessionID: sessionID,
+            expectedThreadVersion: 3,
+            expectedSessionVersion: 4,
+            lastClientSequenceNumber: 2
+        )
+        let endReceipt = try interviewNaturalInputReceipt(vaultID: vaultID, end: endCommand)
+        let acknowledgementCommand = try OwnerTruthInterviewReviewBatchAcknowledgementCommand(
+            commandID: "discovered-ack-command",
+            reviewBatchID: reviewBatchID,
+            threadID: threadID,
+            sessionID: sessionID,
+            expectedSessionVersion: endReceipt.sessionVersion,
+            expectedReviewBatchVersion: 1
+        )
+        let acknowledgementReceipt = try pendingReviewBatchAcknowledgementReceipt(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            threadID: threadID,
+            sessionID: sessionID,
+            reviewBatchVersion: 2,
+            sessionVersion: endReceipt.sessionVersion + 1
+        )
+        let admissionCommand = try OwnerTruthInterviewCandidateProposalAdmissionCommand(
+            commandID: "discovered-admit-command",
+            reviewBatchID: reviewBatchID,
+            expectedReviewBatchVersion: acknowledgementReceipt.reviewBatchVersion
+        )
+        let admissionReceipt = try candidateProposalAdmissionReceipt(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID
+        )
+
+        let phases: [EchoLiveMemoryCompletionPhase] = [
+            .endPrepared,
+            .ended,
+            .acknowledgementPrepared,
+            .acknowledged,
+            .admissionPrepared,
+            .admitted,
+        ]
+        for phase in phases {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent("echo-live-discovery-\(phase.rawValue)-\(UUID().uuidString)")
+            let defaultsName = "echo-live-discovery-follow-up-\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+            defer {
+                try? FileManager.default.removeItem(at: root)
+                defaults.removePersistentDomain(forName: defaultsName)
+            }
+            let checkpointStore = EchoLiveMemoryCompletionCheckpointStore(rootDirectory: root)
+            let outboxStore = OwnerTruthInterviewLiveTurnOutboxStore(
+                rootDirectory: root.appendingPathComponent("outbox")
+            )
+            let followUpStore = EchoLiveMemoryFollowUpStore(defaults: defaults)
+            let productSessionID = "discovered-\(phase.rawValue)"
+            try checkpointStore.prepareEnd(endCommand, productSessionID: productSessionID, for: lease)
+            if phase != .endPrepared {
+                try checkpointStore.acceptEnd(endReceipt, productSessionID: productSessionID, for: lease)
+            }
+            if [.acknowledgementPrepared, .acknowledged, .admissionPrepared, .admitted].contains(phase) {
+                try checkpointStore.prepareAcknowledgement(
+                    acknowledgementCommand,
+                    productSessionID: productSessionID,
+                    for: lease
+                )
+            }
+            if [.acknowledged, .admissionPrepared, .admitted].contains(phase) {
+                try checkpointStore.acceptAcknowledgement(
+                    acknowledgementReceipt,
+                    productSessionID: productSessionID,
+                    for: lease
+                )
+            }
+            if [.admissionPrepared, .admitted].contains(phase) {
+                try checkpointStore.prepareAdmission(
+                    admissionCommand,
+                    productSessionID: productSessionID,
+                    for: lease
+                )
+            }
+            if phase == .admitted {
+                try checkpointStore.acceptAdmission(
+                    admissionReceipt,
+                    productSessionID: productSessionID,
+                    for: lease
+                )
+            }
+
+            let client = InterviewNaturalInputClientSpy()
+            client.endHandler = { [unowned self] command in
+                Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, end: command) }
+            }
+            client.pendingReviewInboxHandler = { [unowned self] in
+                Result {
+                    try self.pendingReviewBatchInbox(vaultID: lease.vaultId, batches: [(
+                        reviewBatchID: reviewBatchID,
+                        threadID: threadID,
+                        sessionID: sessionID,
+                        reviewBatchVersion: 1,
+                        sessionVersion: endReceipt.sessionVersion
+                    )])
+                }
+            }
+            client.acknowledgementHandler = { [unowned self] command in
+                Result {
+                    try self.pendingReviewBatchAcknowledgementReceipt(
+                        vaultID: lease.vaultId,
+                        reviewBatchID: command.reviewBatchID,
+                        threadID: command.threadID,
+                        sessionID: command.sessionID,
+                        reviewBatchVersion: command.expectedReviewBatchVersion + 1,
+                        sessionVersion: command.expectedSessionVersion + 1
+                    )
+                }
+            }
+            client.admissionHandler = { [unowned self] command in
+                Result {
+                    try self.candidateProposalAdmissionReceipt(
+                        vaultID: lease.vaultId,
+                        reviewBatchID: command.reviewBatchID
+                    )
+                }
+            }
+            client.proposalStatusHandler = { [unowned self] requestedReviewBatchID in
+                Result {
+                    try self.interviewCandidateProposalStatus(
+                        vaultID: lease.vaultId,
+                        reviewBatchID: requestedReviewBatchID,
+                        candidateExtractionState: .succeeded,
+                        candidateReviewState: .reviewReady
+                    )
+                }
+            }
+
+            let result = EchoLiveMemoryRecoveryService().resumePendingWorkflows(
+                accountLease: lease,
+                excluding: [],
+                client: client,
+                accountLeaseRuntime: runtime,
+                liveTurnOutboxStore: outboxStore,
+                followUpStore: followUpStore,
+                completionCheckpointStore: checkpointStore,
+                organizationStatusTimeout: 1,
+                naturalInputPolicyAvailable: { true },
+                candidateReviewPolicyAvailable: { true }
+            )
+            XCTAssertEqual(result.coordinators.count, 1, phase.rawValue)
+            XCTAssertTrue(result.blockedRecords.isEmpty, phase.rawValue)
+            XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+                result.coordinators.first?.state == .pendingReview
+            }, phase.rawValue)
+            XCTAssertTrue(client.startCommands.isEmpty, phase.rawValue)
+        }
+    }
+
+    func testLiveRecoveryEntryBlocksUnclosedAndLegacyClosingOutboxes() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("echo-live-discovery-blocked-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let outbox = OwnerTruthInterviewLiveTurnOutboxStore(rootDirectory: root)
+        let openSessionID = "legacy-open-session"
+        let closingSessionID = "legacy-closing-session"
+        _ = try outbox.enqueue(
+            role: .owner,
+            text: "隔离合成内容一。",
+            for: lease,
+            productSessionID: openSessionID
+        )
+        let closing = try outbox.enqueue(
+            role: .owner,
+            text: "隔离合成内容二。",
+            for: lease,
+            productSessionID: closingSessionID
+        )
+        _ = try outbox.markClosing(
+            lastClientSequenceNumber: closing.lastClientSequenceNumber,
+            for: lease,
+            productSessionID: closingSessionID
+        )
+        let result = EchoLiveMemoryRecoveryService().resumePendingWorkflows(
+            accountLease: lease,
+            excluding: [],
+            client: InterviewNaturalInputClientSpy(),
+            accountLeaseRuntime: runtime,
+            liveTurnOutboxStore: outbox,
+            followUpStore: EchoLiveMemoryFollowUpStore(
+                defaults: try XCTUnwrap(UserDefaults(suiteName: "blocked-\(UUID().uuidString)"))
+            ),
+            completionCheckpointStore: EchoLiveMemoryCompletionCheckpointStore(
+                rootDirectory: root.appendingPathComponent("completion")
+            ),
+            naturalInputPolicyAvailable: { true },
+            candidateReviewPolicyAvailable: { true }
+        )
+        XCTAssertTrue(result.coordinators.isEmpty)
+        XCTAssertEqual(
+            Dictionary(uniqueKeysWithValues: result.blockedRecords.map {
+                ($0.productSessionID, $0.reason)
+            }),
+            [
+                openSessionID: .unclosedLegacySession,
+                closingSessionID: .closingOutboxMissingCheckpoint,
+            ]
+        )
+    }
+
+    func testLiveRecoveryClassifiesCheckpointFailuresPerWorkflowWithoutRepairOrReplay() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let threadID = recordID("00000000-0000-0000-0000-00000000072a")
+        let sessionID = recordID("00000000-0000-0000-0000-00000000072b")
+        let endCommand = try OwnerTruthInterviewEndCommand(
+            commandID: "checkpoint-scan-end-command",
+            threadID: threadID,
+            sessionID: sessionID,
+            expectedThreadVersion: 3,
+            expectedSessionVersion: 4,
+            lastClientSequenceNumber: 1
+        )
+        let cases: [(String, EchoLiveMemoryRecoveryBlockReason, (([String: Any]) -> [String: Any])?)] = [
+            ("decode", .checkpointDecodeInvalid, nil),
+            ("schema", .checkpointSchemaUnsupported, { object in
+                var changed = object
+                changed["schemaVersion"] = "echo-live-memory-completion-v0"
+                return changed
+            }),
+            ("scope", .checkpointScopeMismatch, { object in
+                var changed = object
+                changed["productSessionID"] = "foreign-product-session"
+                return changed
+            }),
+        ]
+
+        for (name, expectedReason, mutation) in cases {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent("echo-live-checkpoint-scan-\(name)-\(UUID().uuidString)")
+            let defaultsName = "echo-live-checkpoint-scan-\(name)-\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+            defer {
+                try? FileManager.default.removeItem(at: root)
+                defaults.removePersistentDomain(forName: defaultsName)
+            }
+            let outbox = OwnerTruthInterviewLiveTurnOutboxStore(
+                rootDirectory: root.appendingPathComponent("outbox")
+            )
+            let checkpointStore = EchoLiveMemoryCompletionCheckpointStore(
+                rootDirectory: root.appendingPathComponent("completion")
+            )
+            let productSessionID = "checkpoint-scan-\(name)"
+            let snapshot = try outbox.enqueue(
+                role: .owner,
+                text: "隔离合成检查点内容。",
+                for: lease,
+                productSessionID: productSessionID
+            )
+            _ = try outbox.markClosing(
+                lastClientSequenceNumber: snapshot.lastClientSequenceNumber,
+                for: lease,
+                productSessionID: productSessionID
+            )
+            try checkpointStore.prepareEnd(
+                endCommand,
+                productSessionID: productSessionID,
+                for: lease
+            )
+            let checkpointURL = try XCTUnwrap(
+                FileManager.default.enumerator(
+                    at: root.appendingPathComponent("completion"),
+                    includingPropertiesForKeys: nil
+                )?.compactMap { $0 as? URL }.first { $0.pathExtension == "json" }
+            )
+            let originalData = try Data(contentsOf: checkpointURL)
+            if let mutation {
+                let object = try XCTUnwrap(
+                    JSONSerialization.jsonObject(with: originalData) as? [String: Any]
+                )
+                let changed = try XCTUnwrap(mutation(object))
+                try JSONSerialization.data(withJSONObject: changed, options: [.sortedKeys])
+                    .write(to: checkpointURL, options: .atomic)
+            } else {
+                try Data("{".utf8).write(to: checkpointURL, options: .atomic)
+            }
+
+            let client = InterviewNaturalInputClientSpy()
+            let result = EchoLiveMemoryRecoveryService().resumePendingWorkflows(
+                accountLease: lease,
+                excluding: [],
+                client: client,
+                accountLeaseRuntime: runtime,
+                liveTurnOutboxStore: outbox,
+                followUpStore: EchoLiveMemoryFollowUpStore(defaults: defaults),
+                completionCheckpointStore: checkpointStore,
+                naturalInputPolicyAvailable: { true },
+                candidateReviewPolicyAvailable: { true }
+            )
+
+            XCTAssertTrue(result.coordinators.isEmpty, name)
+            XCTAssertEqual(
+                result.blockedRecords,
+                [EchoLiveMemoryRecoveryBlockedRecord(
+                    productSessionID: productSessionID,
+                    reason: expectedReason
+                )],
+                name
+            )
+            XCTAssertTrue(client.endCommands.isEmpty, name)
+            XCTAssertNotNil(try outbox.load(for: lease, productSessionID: productSessionID), name)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: checkpointURL.path), name)
+        }
+    }
+
+    func testLiveRecoveryUnreadableCheckpointDoesNotBlockIndependentCandidateRead() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("echo-live-checkpoint-unreadable-\(UUID().uuidString)")
+        let defaultsName = "echo-live-checkpoint-unreadable-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            defaults.removePersistentDomain(forName: defaultsName)
+        }
+        let productSessionID = "checkpoint-unreadable-x"
+        let outbox = OwnerTruthInterviewLiveTurnOutboxStore(
+            rootDirectory: root.appendingPathComponent("outbox")
+        )
+        let checkpointStore = EchoLiveMemoryCompletionCheckpointStore(
+            rootDirectory: root.appendingPathComponent("completion")
+        )
+        let snapshot = try outbox.enqueue(
+            role: .owner,
+            text: "隔离合成旧任务。",
+            for: lease,
+            productSessionID: productSessionID
+        )
+        _ = try outbox.markClosing(
+            lastClientSequenceNumber: snapshot.lastClientSequenceNumber,
+            for: lease,
+            productSessionID: productSessionID
+        )
+        let threadID = recordID("00000000-0000-0000-0000-00000000073a")
+        let sessionID = recordID("00000000-0000-0000-0000-00000000073b")
+        try checkpointStore.prepareEnd(
+            OwnerTruthInterviewEndCommand(
+                commandID: "checkpoint-unreadable-end",
+                threadID: threadID,
+                sessionID: sessionID,
+                expectedThreadVersion: 1,
+                expectedSessionVersion: 1,
+                lastClientSequenceNumber: 1
+            ),
+            productSessionID: productSessionID,
+            for: lease
+        )
+        let checkpointURL = try XCTUnwrap(
+            FileManager.default.enumerator(
+                at: root.appendingPathComponent("completion"),
+                includingPropertiesForKeys: nil
+            )?.compactMap { $0 as? URL }.first { $0.pathExtension == "json" }
+        )
+        try FileManager.default.removeItem(at: checkpointURL)
+        try FileManager.default.createDirectory(at: checkpointURL, withIntermediateDirectories: false)
+
+        let recoveryClient = InterviewNaturalInputClientSpy()
+        let result = EchoLiveMemoryRecoveryService().resumePendingWorkflows(
+            accountLease: lease,
+            excluding: [],
+            client: recoveryClient,
+            accountLeaseRuntime: runtime,
+            liveTurnOutboxStore: outbox,
+            followUpStore: EchoLiveMemoryFollowUpStore(defaults: defaults),
+            completionCheckpointStore: checkpointStore,
+            naturalInputPolicyAvailable: { true },
+            candidateReviewPolicyAvailable: { true }
+        )
+        XCTAssertEqual(result.blockedRecords.first?.reason, .checkpointUnreadable)
+        XCTAssertTrue(recoveryClient.endCommands.isEmpty)
+
+        let candidateClient = CandidateReviewClientSpy()
+        candidateClient.inboxResult = .success(try OwnerTruthCandidateInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                "vaultId": lease.vaultId,
+                "memoryRevision": 3,
+                "candidates": [],
+            ],
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        ))
+        let candidateUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: candidateClient,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        candidateUseCase.send(.refresh)
+
+        XCTAssertEqual(candidateUseCase.viewState.phase, .empty)
+        XCTAssertEqual(candidateClient.inboxRequestCount, 1)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: checkpointURL.path))
+    }
+
+    func testLegacyClosingOutboxNeverStartsReplacementSessionWithoutReplayableEndCommand() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let cases: [(name: String, acknowledgePendingTurn: Bool)] = [
+            ("empty", true),
+            ("pending", false),
+        ]
+
+        for testCase in cases {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent("echo-live-legacy-close-\(testCase.name)-\(UUID().uuidString)")
+            let defaultsName = "echo-live-legacy-close-follow-up-\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+            defer {
+                try? FileManager.default.removeItem(at: root)
+                defaults.removePersistentDomain(forName: defaultsName)
+            }
+            let outbox = OwnerTruthInterviewLiveTurnOutboxStore(rootDirectory: root)
+            let productSessionID = "legacy-close-\(testCase.name)"
+            let enqueued = try outbox.enqueue(
+                role: .owner,
+                text: "仅用于旧版关闭恢复边界的合成内容。",
+                for: lease,
+                productSessionID: productSessionID
+            )
+            _ = try outbox.markClosing(
+                lastClientSequenceNumber: enqueued.lastClientSequenceNumber,
+                for: lease,
+                productSessionID: productSessionID
+            )
+            if testCase.acknowledgePendingTurn {
+                _ = try outbox.acknowledge(
+                    messageID: try XCTUnwrap(enqueued.pendingTurns.first?.messageID),
+                    for: lease,
+                    productSessionID: productSessionID
+                )
+            }
+
+            let client = InterviewNaturalInputClientSpy()
+            let coordinator = EchoLiveMemoryCaptureCoordinator(
+                accountLease: lease,
+                client: client,
+                accountLeaseRuntime: runtime,
+                productSessionID: productSessionID,
+                liveTurnOutboxStore: outbox,
+                followUpStore: EchoLiveMemoryFollowUpStore(defaults: defaults),
+                completionCheckpointStore: EchoLiveMemoryCompletionCheckpointStore(
+                    rootDirectory: root.appendingPathComponent("completion")
+                ),
+                organizationStatusTimeout: 1,
+                naturalInputPolicyAvailable: { true },
+                candidateReviewPolicyAvailable: { true }
+            )
+
+            XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
+                coordinator.state == .statusUnknown || coordinator.state == .unavailable
+            })
+            XCTAssertEqual(coordinator.state, .statusUnknown)
+            XCTAssertTrue(client.startCommands.isEmpty)
+            XCTAssertTrue(client.endCommands.isEmpty)
+        }
+    }
+
+    func testLiveCaptureStatusTimeoutLeavesObserverActiveWithoutInfiniteSaving() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = InterviewNaturalInputClientSpy()
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000702")
+        client.deferProposalStatus = true
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "echo-live-timeout-\(UUID().uuidString)"))
+        let coordinator = EchoLiveMemoryCaptureCoordinator(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            productSessionID: "echo-live-timeout",
+            followUpStore: EchoLiveMemoryFollowUpStore(defaults: defaults),
+            organizationStatusTimeout: 0.05,
+            naturalInputPolicyAvailable: { true },
+            candidateReviewPolicyAvailable: { true }
+        )
+
+        coordinator.resumeOrganization(reviewBatchID: reviewBatchID)
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) { coordinator.state == .statusUnknown })
+        XCTAssertEqual(client.proposalStatusRequestCount, 1)
+
+        client.completeDeferredProposalStatus(.success(try interviewCandidateProposalStatus(
+            vaultID: lease.vaultId,
+            reviewBatchID: reviewBatchID,
+            candidateExtractionState: .succeeded,
+            candidateReviewState: .reviewReady
+        )))
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) { coordinator.state == .pendingReview })
+    }
+
+    func testLiveCaptureMapsNoCandidatesFailureAndQuarantineToDistinctTerminalStates() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let cases: [(
+            name: String,
+            extraction: OwnerTruthInterviewCandidateProposalExtractionState,
+            review: OwnerTruthInterviewCandidateProposalReviewState,
+            expected: EchoLiveMemoryCaptureState
+        )] = [
+            ("no-candidates", .succeeded, .noCandidates, .empty),
+            ("failed", .failed, .extractionFailed, .terminalFailure(code: nil)),
+            ("quarantined", .quarantined, .extractionQuarantined, .quarantined),
+        ]
+
+        for testCase in cases {
+            let reviewBatchID = recordID(UUID().uuidString)
+            let client = InterviewNaturalInputClientSpy()
+            client.proposalStatusHandler = { [unowned self] requestedReviewBatchID in
+                Result {
+                    try self.interviewCandidateProposalStatus(
+                        vaultID: lease.vaultId,
+                        reviewBatchID: requestedReviewBatchID,
+                        candidateExtractionState: testCase.extraction,
+                        candidateReviewState: testCase.review
+                    )
+                }
+            }
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent("echo-live-terminal-\(testCase.name)-\(UUID().uuidString)")
+            let defaultsName = "echo-live-terminal-follow-up-\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+            defer {
+                try? FileManager.default.removeItem(at: root)
+                defaults.removePersistentDomain(forName: defaultsName)
+            }
+            let coordinator = EchoLiveMemoryCaptureCoordinator(
+                accountLease: lease,
+                client: client,
+                accountLeaseRuntime: runtime,
+                productSessionID: "terminal-\(testCase.name)",
+                liveTurnOutboxStore: OwnerTruthInterviewLiveTurnOutboxStore(rootDirectory: root),
+                followUpStore: EchoLiveMemoryFollowUpStore(defaults: defaults),
+                completionCheckpointStore: EchoLiveMemoryCompletionCheckpointStore(
+                    rootDirectory: root.appendingPathComponent("completion")
+                ),
+                organizationStatusTimeout: 1,
+                naturalInputPolicyAvailable: { true },
+                candidateReviewPolicyAvailable: { true }
+            )
+
+            coordinator.resumeOrganization(reviewBatchID: reviewBatchID)
+            XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
+                coordinator.state == testCase.expected
+            }, testCase.name)
+            XCTAssertEqual(client.proposalStatusRequestCount, 1, testCase.name)
+        }
+    }
+
+    func testCandidateInboxRefreshIsSingleFlightWithOneBoundedTrailingRead() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = CandidateReviewClientSpy()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000703")
+        let inbox = try v5CandidateInbox(vaultID: lease.vaultId, candidateID: candidateID)
+        client.deferInbox = true
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        for _ in 0..<10 { useCase.send(.refresh) }
+        XCTAssertEqual(client.inboxRequestCount, 1)
+        client.deferInbox = false
+        client.inboxResult = .success(inbox)
+        client.completeDeferredInbox(.success(inbox))
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) { client.inboxRequestCount == 2 })
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.items.map(\.id), [candidateID])
+    }
+
+    func testCandidateInboxStaleReadReleasesOnlyItsOwnSingleFlightAfterReviewMutation() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = CandidateReviewClientSpy()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000707")
+        let inbox = try v5CandidateInbox(vaultID: lease.vaultId, candidateID: candidateID)
+        client.inboxResult = .success(inbox)
+        client.reviewResult = .success(try decisionResult(
+            candidateID: candidateID,
+            decision: .accepted
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.refresh)
+        let binding = try XCTUnwrap(useCase.viewState.items.first?.reviewBinding)
+        client.deferInbox = true
+        useCase.send(.refresh)
+        XCTAssertEqual(client.inboxRequestCount, 2)
+
+        useCase.send(.accept(candidateID: candidateID, displayedBinding: binding))
+        client.completeDeferredInbox(.success(inbox))
+
+        client.deferInbox = false
+        client.inboxResult = .success(inbox)
+        useCase.send(.refresh)
+        XCTAssertEqual(client.inboxRequestCount, 3)
+        XCTAssertEqual(useCase.viewState.items.map(\.id), [candidateID])
+    }
+
+    func testRelatedGroupCredentialRotationInvalidatesVisiblePreviewBeforeWrite() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstID = recordID("00000000-0000-0000-0000-000000000708")
+        let secondID = recordID("00000000-0000-0000-0000-000000000709")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try relatedV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        ))
+        let inboxUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        inboxUseCase.send(.refresh)
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        )
+        client.changeSetGroupPreviewResult = .success(proposal)
+        client.changeSetGroupCommitResult = .success(try relatedGroupCommitResult(proposal: proposal))
+        let groupUseCase = OwnerTruthCandidateRelatedGroupReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        var previewResult: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+        groupUseCase.preview(candidates: inboxUseCase.viewState.items) { previewResult = $0 }
+        let visibleProposal = try XCTUnwrap(try previewResult?.get())
+
+        runtime.publish(session: accountSession(
+            subjectId: lease.subjectId,
+            vaultId: lease.vaultId,
+            generation: lease.generation,
+            generationID: lease.generationId,
+            sessionID: "session-related-group-rotated"
+        ))
+        var confirmation: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+        groupUseCase.confirm(proposal: visibleProposal) { confirmation = $0 }
+
+        XCTAssertThrowsError(try confirmation?.get())
+        XCTAssertTrue(client.confirmedGroupCommands.isEmpty)
+    }
+
+    func testRelatedGroupLatePreviewCannotRestoreConfirmationAfterCredentialRotation() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateIDs = [
+            recordID("00000000-0000-0000-0000-00000000070a"),
+            recordID("00000000-0000-0000-0000-00000000070b"),
+        ]
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try relatedV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: candidateIDs
+        ))
+        let inboxUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        inboxUseCase.send(.refresh)
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: candidateIDs
+        )
+        client.changeSetGroupPreviewResult = .success(proposal)
+        client.changeSetGroupCommitResult = .success(try relatedGroupCommitResult(proposal: proposal))
+        client.deferChangeSetGroupPreview = true
+        let useCase = OwnerTruthCandidateRelatedGroupReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        var firstPreview: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+        useCase.preview(candidates: inboxUseCase.viewState.items) { firstPreview = $0 }
+        XCTAssertEqual(client.previewedGroupCommands.count, 1)
+
+        runtime.publish(session: accountSession(
+            subjectId: lease.subjectId,
+            vaultId: lease.vaultId,
+            generation: lease.generation,
+            generationID: lease.generationId,
+            sessionID: "session-related-preview-rotated"
+        ))
+        var rotationResult: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+        useCase.preview(candidates: inboxUseCase.viewState.items) { rotationResult = $0 }
+        XCTAssertThrowsError(try rotationResult?.get())
+        client.completeDeferredChangeSetGroupPreview(.success(proposal))
+        XCTAssertThrowsError(try firstPreview?.get())
+
+        client.deferChangeSetGroupPreview = false
+        var refreshedPreview: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+        useCase.preview(candidates: inboxUseCase.viewState.items) { refreshedPreview = $0 }
+        let visibleProposal = try XCTUnwrap(try refreshedPreview?.get())
+        var confirmation: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+        useCase.confirm(proposal: visibleProposal) { confirmation = $0 }
+        XCTAssertNotNil(try confirmation?.get())
+        XCTAssertEqual(client.confirmedGroupCommands.count, 1)
+    }
+
+    func testCandidateInboxCredentialRotationInvalidatesOldReviewBindingAndRereadsOnce() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = CandidateReviewClientSpy()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000704")
+        let inbox = try v5CandidateInbox(vaultID: lease.vaultId, candidateID: candidateID)
+        client.inboxResult = .success(inbox)
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        var invalidatedLease: AccountLease?
+        useCase.onReviewContextInvalidated = { invalidatedLease = $0 }
+
+        useCase.send(.refresh)
+        let oldBinding = try XCTUnwrap(useCase.viewState.items.first?.reviewBinding)
+        runtime.publish(session: accountSession(
+            subjectId: lease.subjectId,
+            vaultId: lease.vaultId,
+            generation: lease.generation,
+            generationID: lease.generationId,
+            sessionID: "session-rotated"
+        ))
+        client.deferInbox = true
+        useCase.send(.refresh)
+
+        XCTAssertEqual(invalidatedLease?.sessionId, "session-rotated")
+        XCTAssertTrue(useCase.viewState.items.isEmpty)
+        XCTAssertEqual(client.inboxRequestCount, 2)
+        XCTAssertEqual(client.requestedInboxLeases.last?.sessionId, "session-rotated")
+
+        useCase.send(.accept(candidateID: candidateID, displayedBinding: oldBinding))
+        XCTAssertEqual(useCase.viewState.notice, .candidateUnavailable)
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+
+        client.completeDeferredInbox(.success(inbox))
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.items.map(\.id), [candidateID])
+    }
+
+    func testCandidateInboxDropsPreRotationResponseAndCommitsOnlySuccessorRead() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = CandidateReviewClientSpy()
+        let staleCandidateID = recordID("00000000-0000-0000-0000-000000000705")
+        let freshCandidateID = recordID("00000000-0000-0000-0000-000000000706")
+        let staleInbox = try v5CandidateInbox(vaultID: lease.vaultId, candidateID: staleCandidateID)
+        let freshInbox = try v5CandidateInbox(vaultID: lease.vaultId, candidateID: freshCandidateID)
+        client.deferInbox = true
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.refresh)
+        runtime.publish(session: accountSession(
+            subjectId: lease.subjectId,
+            vaultId: lease.vaultId,
+            generation: lease.generation,
+            generationID: lease.generationId,
+            sessionID: "session-rotated"
+        ))
+        useCase.send(.refresh)
+        client.deferInbox = false
+        client.inboxResult = .success(freshInbox)
+        client.completeDeferredInbox(.success(staleInbox))
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
+            client.inboxRequestCount == 2 && useCase.viewState.phase == .ready
+        })
+        XCTAssertEqual(useCase.viewState.items.map(\.id), [freshCandidateID])
+        XCTAssertFalse(useCase.viewState.items.map(\.id).contains(staleCandidateID))
+        XCTAssertEqual(client.requestedInboxLeases.map(\.sessionId), ["session-1", "session-rotated"])
+    }
+
+    func testCandidateInboxTrueAccountSwitchBlocksReadWithoutCreatingTransport() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try v5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateID: recordID("00000000-0000-0000-0000-000000000707")
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        useCase.send(.refresh)
+        XCTAssertEqual(client.inboxRequestCount, 1)
+
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        useCase.send(.refresh)
+
+        XCTAssertEqual(client.inboxRequestCount, 1)
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .accountUnavailable)
+        XCTAssertTrue(useCase.viewState.items.isEmpty)
+    }
+
+    func testCandidateInboxMapsReadFailuresWithoutRetainingReviewableCandidates() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let failures: [(Error, OwnerTruthCandidateInboxNotice)] = [
+            (URLError(.notConnectedToInternet), .networkUnavailable),
+            (URLError(.timedOut), .networkUnavailable),
+            (URLError(.cancelled), .cancelledOrSuperseded),
+            (DreamJourneyBackendClient.ClientError.userAuthenticationRequired, .authenticationUnavailable),
+            (DreamJourneyBackendClient.ClientError.featurePolicyDenied(
+                feature: "ownerTruthCandidateReview",
+                reason: "releasePolicyDisabled"
+            ), .permissionUnavailable),
+            (DreamJourneyBackendClient.ClientError.invalidJSONResponse, .contractMismatch),
+            (OwnerTruthRemoteContractError.invalidInbox("synthetic contract mismatch"), .contractMismatch),
+        ]
+
+        for (error, expectedNotice) in failures {
+            let client = CandidateReviewClientSpy()
+            client.inboxResult = .failure(error)
+            let useCase = OwnerTruthCandidateReviewUseCase(
+                accountLease: lease,
+                client: client,
+                accountLeaseRuntime: runtime,
+                qaGateEnabled: { true }
+            )
+
+            useCase.send(.refresh)
+
+            XCTAssertEqual(useCase.viewState.phase, .failed)
+            XCTAssertEqual(useCase.viewState.notice, expectedNotice)
+            XCTAssertTrue(useCase.viewState.items.isEmpty)
+            XCTAssertTrue(client.reviewedCommands.isEmpty)
+        }
+    }
+
+    func testRealHTTPClientRecapturesPolicyOnceAfter401CredentialSuccessorChangesGeneration() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let firstSession = try makeOwnerTruthHTTPTestAuthSession(
+            userID: lease.subjectId,
+            sessionID: "owner-truth-http-session-1",
+            tokenFamilyID: "owner-truth-http-family-a",
+            sessionVersion: 1,
+            accessTokenSuffix: "first"
+        )
+        let successorSession = try makeOwnerTruthHTTPTestAuthSession(
+            userID: lease.subjectId,
+            sessionID: "owner-truth-http-session-2",
+            parentSessionID: firstSession.sessionId,
+            tokenFamilyID: "owner-truth-http-family-a",
+            sessionVersion: 2,
+            accessTokenSuffix: "second"
+        )
+        var activeSession = firstSession
+        var featureGeneration = firstSession.sessionId
+        var captureCount = 0
+        var revalidationReasons: [String] = []
+        let policy = FeatureGatePolicySnapshot(
+            accessMode: .useCachedPolicy,
+            policyVersion: "candidate-policy-v1",
+            policyRevision: 7,
+            emergencyRevision: 2,
+            expiresAt: Date().addingTimeInterval(600),
+            featureEnabled: true,
+            releaseVisible: true,
+            reason: "candidateReviewEnabled"
+        )
+        let evaluator = FeatureGateEvaluator()
+        let session = try makeOwnerTruthHTTPTestSession()
+        var diagnosticEvents: [OwnerTruthCandidateInboxDiagnosticEvent] = []
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: session,
+            authenticatedSession: { activeSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: { feature in
+                captureCount += 1
+                return evaluator.capture(
+                    feature: feature,
+                    risk: .ownerTextCore,
+                    purpose: .request,
+                    localEnabled: true,
+                    qaSyntheticOverride: false,
+                    accountGeneration: featureGeneration,
+                    policy: policy
+                )
+            },
+            featureDecisionRevalidator: { decision in
+                let revalidated = evaluator.revalidateForRequest(
+                    captured: decision,
+                    localEnabled: true,
+                    accountGeneration: featureGeneration,
+                    currentPolicy: policy
+                )
+                revalidationReasons.append(revalidated.reason)
+                return revalidated
+            },
+            accountLeaseRuntime: runtime,
+            candidateInboxDiagnosticSink: { diagnosticEvents.append($0) }
+        )
+        let successPayload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "memoryRevision": 66,
+            "candidates": [],
+        ])
+        var transportCount = 0
+        OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
+            transportCount += 1
+            if transportCount == 1 {
+                activeSession = successorSession
+                featureGeneration = successorSession.sessionId
+                runtime.publish(session: self.accountSession(
+                    subjectId: lease.subjectId,
+                    vaultId: lease.vaultId,
+                    generation: lease.generation,
+                    generationID: lease.generationId,
+                    sessionID: "session-rotated"
+                ))
+                loader.respond(
+                    statusCode: 401,
+                    body: Data("{\"code\":\"access_expired\",\"detail\":\"expired\"}".utf8)
+                )
+            } else {
+                loader.respond(statusCode: 200, body: successPayload)
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        var result: Result<OwnerTruthCandidateInbox, Error>?
+        client.fetchOwnerTruthCandidateInbox(
+            accountLease: lease,
+            vaultID: vaultID
+        ) { result = $0 }
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { result != nil })
+        XCTAssertEqual(try XCTUnwrap(result).get().candidates, [])
+        XCTAssertEqual(transportCount, 2)
+        XCTAssertEqual(captureCount, 2)
+        XCTAssertEqual(revalidationReasons, ["capturedPolicyRevalidated"])
+        XCTAssertEqual(
+            OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.map {
+                $0.value(forHTTPHeaderField: "Authorization")
+            },
+            ["Bearer \(firstSession.accessToken)", "Bearer \(successorSession.accessToken)"]
+        )
+        XCTAssertEqual(Set(diagnosticEvents.map(\.traceID)).count, 1)
+        XCTAssertEqual(Set(diagnosticEvents.map(\.attempt)), [1, 2])
+        XCTAssertFalse(diagnosticEvents.contains { $0.attempt > 2 })
+        XCTAssertEqual(
+            diagnosticEvents.filter { $0.event == "responseReceived" }.map {
+                "\($0.attempt):\($0.httpStatus ?? 0)"
+            },
+            ["1:401", "2:200"]
+        )
+        let firstHTTPIndex = try XCTUnwrap(
+            diagnosticEvents.firstIndex {
+                $0.event == "responseReceived" && $0.httpStatus == 401
+            }
+        )
+        XCTAssertFalse(
+            diagnosticEvents.dropFirst(firstHTTPIndex + 1).contains { $0.attempt == 1 },
+            "A credential successor must advance the shared read attempt before policy recovery"
+        )
+        for attempt in [1, 2] {
+            let names = Set(diagnosticEvents.filter { $0.attempt == attempt }.map(\.event))
+            XCTAssertTrue(names.contains("requestCreated"))
+            XCTAssertTrue(names.contains("taskCreated"))
+            XCTAssertTrue(names.contains("taskResumed"))
+            XCTAssertTrue(names.contains("transportCompleted"))
+            XCTAssertTrue(names.contains("responseReceived"))
+        }
+        XCTAssertFalse(diagnosticEvents.contains { $0.event == "transportStarted" })
+    }
+
+    @MainActor
+    func testCandidateInboxUIKitPolicyRecaptureAdvancesAttemptWithoutCreatingDeniedTask() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let evaluator = FeatureGateEvaluator()
+        let policy = FeatureGatePolicySnapshot(
+            accessMode: .useCachedPolicy,
+            policyVersion: "candidate-policy-recapture-v1",
+            policyRevision: 8,
+            emergencyRevision: 2,
+            expiresAt: Date().addingTimeInterval(600),
+            featureEnabled: true,
+            releaseVisible: true,
+            reason: "candidateReviewEnabled"
+        )
+        let currentGeneration = "policy-generation-current"
+        var captureCount = 0
+        var events: [OwnerTruthCandidateInboxDiagnosticEvent] = []
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: { feature in
+                captureCount += 1
+                return evaluator.capture(
+                    feature: feature,
+                    risk: .ownerTextCore,
+                    purpose: .request,
+                    localEnabled: true,
+                    qaSyntheticOverride: false,
+                    accountGeneration: captureCount == 1
+                        ? "policy-generation-stale"
+                        : currentGeneration,
+                    policy: policy
+                )
+            },
+            featureDecisionRevalidator: { decision in
+                evaluator.revalidateForRequest(
+                    captured: decision,
+                    localEnabled: true,
+                    accountGeneration: currentGeneration,
+                    currentPolicy: policy
+                )
+            },
+            accountLeaseRuntime: runtime,
+            candidateInboxDiagnosticSink: { events.append($0) }
+        )
+        let successPayload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "memoryRevision": 66,
+            "candidates": [],
+        ])
+        OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
+            loader.respond(statusCode: 200, body: successPayload)
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+        var renderedState: OwnerTruthCandidateInboxViewState?
+        controller.onViewStateRendered = { state in
+            if state.phase == .empty { renderedState = state }
+        }
+
+        controller.loadViewIfNeeded()
+
+        XCTAssertTrue(
+            waitForOwnerTruthHTTPUI(timeout: 3) { renderedState != nil },
+            "paths=\(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.compactMap { $0.url?.path }); events=\(events)"
+        )
+        XCTAssertEqual(captureCount, 2)
+        XCTAssertEqual(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.count, 1)
+        let finalContext = try XCTUnwrap(renderedState?.readContext)
+        XCTAssertEqual(
+            finalContext.attempt,
+            2,
+            "events=\(events)"
+        )
+        XCTAssertEqual(Set(events.map(\.traceID)), [finalContext.traceID])
+        XCTAssertEqual(Set(events.map(\.attempt)), [1, 2])
+        XCTAssertTrue(events.contains {
+            $0.event == "requestDenied"
+                && $0.reason == "accountGenerationChanged"
+                && $0.attempt == 1
+        })
+        XCTAssertFalse(events.contains {
+            $0.event == "requestCreated" && $0.attempt == 1
+        })
+        XCTAssertTrue(events.contains {
+            $0.event == "responseReceived"
+                && $0.httpStatus == 200
+                && $0.attempt == finalContext.attempt
+        })
+        XCTAssertTrue(events.contains {
+            $0.event == "taskResumed" && $0.attempt == finalContext.attempt
+        })
+        XCTAssertTrue(events.contains {
+            $0.event == "inboxContractDecoded"
+                && $0.attempt == finalContext.attempt
+        })
+    }
+
+    @MainActor
+    func testCandidateInboxUIKitRecoversOneExpiredPolicyCacheBeforeFirstGET() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let evaluator = FeatureGateEvaluator()
+        var policy = FeatureGatePolicySnapshot(
+            accessMode: .useCachedPolicy,
+            policyVersion: "candidate-expired-policy",
+            policyRevision: 10,
+            emergencyRevision: 1,
+            expiresAt: Date().addingTimeInterval(-30),
+            featureEnabled: true,
+            releaseVisible: true,
+            reason: "candidateReviewEnabled"
+        )
+        var policyRefreshCount = 0
+        var events: [OwnerTruthCandidateInboxDiagnosticEvent] = []
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: { feature in
+                evaluator.capture(
+                    feature: feature,
+                    risk: .ownerTextCore,
+                    purpose: .request,
+                    localEnabled: true,
+                    qaSyntheticOverride: false,
+                    accountGeneration: authSession.sessionId,
+                    policy: policy
+                )
+            },
+            featureDecisionRevalidator: { decision in
+                evaluator.revalidateForRequest(
+                    captured: decision,
+                    localEnabled: true,
+                    accountGeneration: authSession.sessionId,
+                    currentPolicy: policy
+                )
+            },
+            accountLeaseRuntime: runtime,
+            candidateInboxDiagnosticSink: { events.append($0) },
+            candidateInboxPolicyRefresher: { completion in
+                policyRefreshCount += 1
+                policy = FeatureGatePolicySnapshot(
+                    accessMode: .useCachedPolicy,
+                    policyVersion: "candidate-refreshed-policy",
+                    policyRevision: 11,
+                    emergencyRevision: 1,
+                    expiresAt: Date().addingTimeInterval(300),
+                    featureEnabled: true,
+                    releaseVisible: true,
+                    reason: "candidateReviewEnabled"
+                )
+                completion(.success(()))
+            }
+        )
+        let payload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "memoryRevision": 66,
+            "candidates": [],
+        ])
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            XCTAssertEqual(request.url?.path, "/v2/vaults/\(vaultID.rawValue)/candidates")
+            loader.respond(statusCode: 200, body: payload)
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+        var rendered: OwnerTruthCandidateInboxViewState?
+        controller.onViewStateRendered = { state in
+            if state.phase == .empty { rendered = state }
+        }
+        controller.loadViewIfNeeded()
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { rendered != nil })
+        XCTAssertEqual(policyRefreshCount, 1)
+        XCTAssertEqual(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.count, 1)
+        XCTAssertEqual(rendered?.readContext?.attempt, 2)
+        XCTAssertEqual(Set(events.map(\.traceID)).count, 1)
+        XCTAssertTrue(events.contains {
+            $0.event == "policyRefreshStarted" && $0.attempt == 2
+        })
+        XCTAssertTrue(events.contains {
+            $0.event == "responseReceived" && $0.httpStatus == 200 && $0.attempt == 2
+        })
+    }
+
+    @MainActor
+    func testCandidateInboxUIKitRecoversThroughRealPolicyHTTPDecodeStoreAndGET() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let evaluator = FeatureGateEvaluator()
+        let clientBuild = FeatureGateService.shared.clientBuild
+        let defaultsName = "candidate-policy-real-recovery-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+        defer { defaults.removePersistentDomain(forName: defaultsName) }
+        let store = ReleasePolicyStore(userDefaults: defaults)
+        let scope = ReleasePolicyCacheScope(
+            accountUserId: lease.subjectId,
+            appBuild: String(clientBuild),
+            audience: "owner",
+            cohort: "authenticatedOwner"
+        )
+        let expiredPolicy: [String: Any] = [
+            "schemaVersion": 1,
+            "policyVersion": "candidate-expired-real-v1",
+            "policyRevision": 10,
+            "issuedAt": "2025-01-01T00:00:00Z",
+            "expiresAt": "2026-01-01T00:00:00Z",
+            "minClient": 1,
+            "emergencyRevision": 1,
+            "audience": "owner",
+            "cohort": "authenticatedOwner",
+            "source": "server",
+            "shadowMode": false,
+            "snapshotDecision": "allow",
+            "features": [[
+                "feature": DJFeature.ownerTruthCandidateReview.backendReleasePolicyFeature,
+                "enabled": true,
+                "releaseVisible": true,
+                "audience": "owner",
+                "cohort": "authenticatedOwner",
+                "requiredGates": ["G0"],
+                "reason": "candidateReviewEnabled",
+            ]],
+        ]
+        try store.save(
+            payload: JSONSerialization.data(withJSONObject: expiredPolicy, options: [.sortedKeys]),
+            policySchemaVersion: 1,
+            policyVersion: "candidate-expired-real-v1",
+            policyRevision: 10,
+            emergencyRevision: 1,
+            scope: scope,
+            fetchedAt: ISO8601DateFormatter().date(from: "2025-01-01T00:00:00Z")!,
+            expiresAt: ISO8601DateFormatter().date(from: "2026-01-01T00:00:00Z")!
+        )
+        let policySnapshot = {
+            BackendCachedReleasePolicyEvaluation(
+                cache: store.evaluate(scope: scope, risk: .ownerTextCore),
+                risk: .ownerTextCore
+            ).featureGatePolicySnapshot(for: .ownerTruthCandidateReview)
+        }
+        let captureDecision: (DJFeature) -> FeatureDecision = { feature in
+            evaluator.capture(
+                feature: feature,
+                risk: .ownerTextCore,
+                purpose: .request,
+                localEnabled: true,
+                qaSyntheticOverride: false,
+                accountGeneration: authSession.sessionId,
+                policy: policySnapshot()
+            )
+        }
+        var events: [OwnerTruthCandidateInboxDiagnosticEvent] = []
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: captureDecision,
+            featureDecisionRevalidator: { decision in
+                evaluator.revalidateForRequest(
+                    captured: decision,
+                    localEnabled: true,
+                    accountGeneration: authSession.sessionId,
+                    currentPolicy: policySnapshot()
+                )
+            },
+            accountLeaseRuntime: runtime,
+            releasePolicyStore: store,
+            candidateInboxDiagnosticSink: { events.append($0) }
+        )
+        let freshPolicy: [String: Any] = [
+            "schemaVersion": 1,
+            "policyVersion": "candidate-fresh-real-v2",
+            "policyRevision": 11,
+            "issuedAt": "2025-01-01T00:00:00Z",
+            "expiresAt": "2099-01-01T00:00:00Z",
+            "minClient": 1,
+            "emergencyRevision": 1,
+            "audience": "owner",
+            "cohort": "authenticatedOwner",
+            "source": "server",
+            "shadowMode": false,
+            "snapshotDecision": "allow",
+            "features": [[
+                "feature": DJFeature.ownerTruthCandidateReview.backendReleasePolicyFeature,
+                "enabled": true,
+                "releaseVisible": true,
+                "audience": "owner",
+                "cohort": "authenticatedOwner",
+                "requiredGates": ["G0"],
+                "reason": "candidateReviewEnabled",
+            ]],
+        ]
+        let inboxPayload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "memoryRevision": 66,
+            "candidates": [],
+        ])
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            switch request.url?.path {
+            case "/v2/release-policy":
+                loader.respond(
+                    statusCode: 200,
+                    body: try! JSONSerialization.data(withJSONObject: freshPolicy)
+                )
+            case "/v2/vaults/\(vaultID.rawValue)/candidates":
+                loader.respond(statusCode: 200, body: inboxPayload)
+            default:
+                XCTFail("Unexpected request path: \(request.url?.path ?? "nil")")
+                loader.fail(URLError(.unsupportedURL))
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { captureDecision(.ownerTruthCandidateReview).allowed },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+        var rendered: OwnerTruthCandidateInboxViewState?
+        controller.onViewStateRendered = { state in
+            if state.phase == .empty { rendered = state }
+        }
+        controller.loadViewIfNeeded()
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { rendered != nil })
+        XCTAssertEqual(
+            OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.compactMap { $0.url?.path },
+            ["/v2/release-policy", "/v2/vaults/\(vaultID.rawValue)/candidates"]
+        )
+        XCTAssertEqual(rendered?.readContext?.attempt, 2)
+        XCTAssertEqual(policySnapshot().policyVersion, "candidate-fresh-real-v2")
+        XCTAssertTrue(events.contains {
+            $0.event == "responseReceived" && $0.httpStatus == 200 && $0.attempt == 2
+        })
+        XCTAssertEqual(Set(events.map(\.traceID)).count, 1)
+    }
+
+    @MainActor
+    func testCandidateInboxRealPolicyDisabledStopsBeforeCandidateGET() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let defaultsName = "candidate-policy-disabled-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+        defer { defaults.removePersistentDomain(forName: defaultsName) }
+        let store = ReleasePolicyStore(userDefaults: defaults)
+        let scope = candidateReleasePolicyScope(lease: lease)
+        try saveCandidateReleasePolicy(
+            candidateReleasePolicyPayload(
+                version: "candidate-expired-disabled-v1",
+                revision: 20,
+                expiresAt: "2026-09-13T00:00:00Z"
+            ),
+            store: store,
+            scope: scope
+        )
+        var events: [OwnerTruthCandidateInboxDiagnosticEvent] = []
+        let harness = try makeCandidatePolicyTestClient(
+            runtime: runtime,
+            lease: lease,
+            authSession: { authSession },
+            store: store,
+            eventSink: { events.append($0) }
+        )
+        let disabledPolicy = candidateReleasePolicyPayload(
+            version: "candidate-disabled-v2",
+            revision: 21,
+            expiresAt: "2099-01-01T00:00:00Z",
+            enabled: false
+        )
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            XCTAssertEqual(request.url?.path, "/v2/release-policy")
+            loader.respond(
+                statusCode: 200,
+                body: try! JSONSerialization.data(withJSONObject: disabledPolicy)
+            )
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: harness.client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { harness.decision(.ownerTruthCandidateReview).allowed },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+        useCase.send(.refresh)
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+            useCase.viewState.phase == .unavailable
+        })
+        XCTAssertEqual(
+            OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.compactMap { $0.url?.path },
+            ["/v2/release-policy"]
+        )
+        XCTAssertEqual(harness.snapshot().policyVersion, "candidate-disabled-v2")
+        XCTAssertTrue(events.contains {
+            $0.event == "requestDenied" && $0.stage == "featureInitial"
+        })
+    }
+
+    @MainActor
+    func testCandidateInboxPolicyTimeoutReleasesSingleFlightAndLateResultCannotRollback() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let defaultsName = "candidate-policy-timeout-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+        defer { defaults.removePersistentDomain(forName: defaultsName) }
+        let store = ReleasePolicyStore(userDefaults: defaults)
+        let scope = candidateReleasePolicyScope(lease: lease)
+        try saveCandidateReleasePolicy(
+            candidateReleasePolicyPayload(
+                version: "candidate-expired-timeout-v1",
+                revision: 30,
+                expiresAt: "2026-09-13T00:00:00Z"
+            ),
+            store: store,
+            scope: scope
+        )
+        let harness = try makeCandidatePolicyTestClient(
+            runtime: runtime,
+            lease: lease,
+            authSession: { authSession },
+            store: store,
+            policyTimeout: 0.03
+        )
+        let stalePolicy = candidateReleasePolicyPayload(
+            version: "candidate-late-v2",
+            revision: 31,
+            expiresAt: "2099-01-01T00:00:00Z"
+        )
+        let freshPolicy = candidateReleasePolicyPayload(
+            version: "candidate-fresh-v3",
+            revision: 32,
+            expiresAt: "2099-01-01T00:00:00Z"
+        )
+        let inboxPayload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "memoryRevision": 70,
+            "candidates": [],
+        ])
+        var policyRequestCount = 0
+        var firstPolicyLoader: OwnerTruthReviewReadyHTTPURLProtocol?
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            switch request.url?.path {
+            case "/v2/release-policy":
+                policyRequestCount += 1
+                if policyRequestCount == 1 {
+                    firstPolicyLoader = loader
+                } else {
+                    loader.respond(
+                        statusCode: 200,
+                        body: try! JSONSerialization.data(withJSONObject: freshPolicy)
+                    )
+                }
+            case "/v2/vaults/\(vaultID.rawValue)/candidates":
+                loader.respond(statusCode: 200, body: inboxPayload)
+            default:
+                XCTFail("Unexpected request path: \(request.url?.path ?? "nil")")
+                loader.fail(URLError(.unsupportedURL))
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: harness.client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { harness.decision(.ownerTruthCandidateReview).allowed },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+        useCase.send(.refresh)
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            policyRequestCount == 1 && useCase.viewState.phase == .unavailable
+        })
+
+        useCase.send(.refresh)
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+            policyRequestCount == 2 && useCase.viewState.phase == .empty
+        })
+        XCTAssertEqual(harness.snapshot().policyVersion, "candidate-fresh-v3")
+
+        firstPolicyLoader?.respond(
+            statusCode: 200,
+            body: try JSONSerialization.data(withJSONObject: stalePolicy)
+        )
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertEqual(harness.snapshot().policyVersion, "candidate-fresh-v3")
+        XCTAssertEqual(
+            OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.filter {
+                $0.url?.path.hasSuffix("/candidates") == true
+            }.count,
+            1
+        )
+    }
+
+    @MainActor
+    func testCandidateInboxPolicyRefreshIsSingleFlightForSameLeaseScope() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let defaultsName = "candidate-policy-single-flight-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+        defer { defaults.removePersistentDomain(forName: defaultsName) }
+        let store = ReleasePolicyStore(userDefaults: defaults)
+        let scope = candidateReleasePolicyScope(lease: lease)
+        try saveCandidateReleasePolicy(
+            candidateReleasePolicyPayload(
+                version: "candidate-expired-single-v1",
+                revision: 40,
+                expiresAt: "2026-09-13T00:00:00Z"
+            ),
+            store: store,
+            scope: scope
+        )
+        let harness = try makeCandidatePolicyTestClient(
+            runtime: runtime,
+            lease: lease,
+            authSession: { authSession },
+            store: store
+        )
+        let freshPolicy = candidateReleasePolicyPayload(
+            version: "candidate-single-v2",
+            revision: 41,
+            expiresAt: "2099-01-01T00:00:00Z"
+        )
+        let inboxPayload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "memoryRevision": 80,
+            "candidates": [],
+        ])
+        var policyLoader: OwnerTruthReviewReadyHTTPURLProtocol?
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            switch request.url?.path {
+            case "/v2/release-policy":
+                policyLoader = loader
+            case "/v2/vaults/\(vaultID.rawValue)/candidates":
+                loader.respond(statusCode: 200, body: inboxPayload)
+            default:
+                XCTFail("Unexpected request path: \(request.url?.path ?? "nil")")
+                loader.fail(URLError(.unsupportedURL))
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let first = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: harness.client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { harness.decision(.ownerTruthCandidateReview).allowed }
+        )
+        let second = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: harness.client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { harness.decision(.ownerTruthCandidateReview).allowed }
+        )
+        first.send(.refresh)
+        second.send(.refresh)
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { policyLoader != nil })
+        XCTAssertEqual(
+            OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.filter {
+                $0.url?.path == "/v2/release-policy"
+            }.count,
+            1
+        )
+        policyLoader?.respond(
+            statusCode: 200,
+            body: try JSONSerialization.data(withJSONObject: freshPolicy)
+        )
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+            first.viewState.phase == .empty && second.viewState.phase == .empty
+        })
+        XCTAssertEqual(
+            OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.filter {
+                $0.url?.path.hasSuffix("/candidates") == true
+            }.count,
+            2
+        )
+    }
+
+    @MainActor
+    func testCandidateInboxLatePolicyResponseAfterAccountSwitchCannotAuthorizeOldRead() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let defaultsName = "candidate-policy-account-switch-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+        defer { defaults.removePersistentDomain(forName: defaultsName) }
+        let store = ReleasePolicyStore(userDefaults: defaults)
+        let scope = candidateReleasePolicyScope(lease: lease)
+        try saveCandidateReleasePolicy(
+            candidateReleasePolicyPayload(
+                version: "candidate-expired-switch-v1",
+                revision: 50,
+                expiresAt: "2026-09-13T00:00:00Z"
+            ),
+            store: store,
+            scope: scope
+        )
+        let harness = try makeCandidatePolicyTestClient(
+            runtime: runtime,
+            lease: lease,
+            authSession: { authSession },
+            store: store
+        )
+        let freshPolicy = candidateReleasePolicyPayload(
+            version: "candidate-switch-v2",
+            revision: 51,
+            expiresAt: "2099-01-01T00:00:00Z"
+        )
+        var policyLoader: OwnerTruthReviewReadyHTTPURLProtocol?
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            XCTAssertEqual(request.url?.path, "/v2/release-policy")
+            policyLoader = loader
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: harness.client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { harness.decision(.ownerTruthCandidateReview).allowed }
+        )
+        useCase.send(.refresh)
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { policyLoader != nil })
+
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-00000000b420")!
+        ))
+        policyLoader?.respond(
+            statusCode: 200,
+            body: try JSONSerialization.data(withJSONObject: freshPolicy)
+        )
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+            useCase.viewState.phase == .unavailable || useCase.viewState.phase == .failed
+        })
+        XCTAssertEqual(
+            OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.filter {
+                $0.url?.path.hasSuffix("/candidates") == true
+            }.count,
+            0
+        )
+        XCTAssertEqual(harness.snapshot().policyVersion, "candidate-expired-switch-v1")
+    }
+
+    @MainActor
+    func testCandidateInboxPolicyAuthAndSnapshotBehindShareOneBoundedReadBudget() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let firstSession = try makeOwnerTruthHTTPTestAuthSession(
+            userID: lease.subjectId,
+            sessionID: "candidate-budget-session-1",
+            tokenFamilyID: "candidate-budget-family",
+            sessionVersion: 1,
+            accessTokenSuffix: "candidate-budget-first"
+        )
+        let successorSession = try makeOwnerTruthHTTPTestAuthSession(
+            userID: lease.subjectId,
+            sessionID: "candidate-budget-session-2",
+            parentSessionID: firstSession.sessionId,
+            tokenFamilyID: "candidate-budget-family",
+            sessionVersion: 2,
+            accessTokenSuffix: "candidate-budget-second"
+        )
+        var activeSession = firstSession
+        var authenticationRefreshCount = 0
+        let defaultsName = "candidate-policy-auth-version-budget-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+        defer { defaults.removePersistentDomain(forName: defaultsName) }
+        let store = ReleasePolicyStore(userDefaults: defaults)
+        let scope = candidateReleasePolicyScope(lease: lease)
+        try saveCandidateReleasePolicy(
+            candidateReleasePolicyPayload(
+                version: "candidate-budget-baseline-v1",
+                revision: 60,
+                expiresAt: "2099-01-01T00:00:00Z"
+            ),
+            store: store,
+            scope: scope
+        )
+        var events: [OwnerTruthCandidateInboxDiagnosticEvent] = []
+        let harness = try makeCandidatePolicyTestClient(
+            runtime: runtime,
+            lease: lease,
+            authSession: { activeSession },
+            authSessionRefresher: { captured, completion in
+                authenticationRefreshCount += 1
+                XCTAssertTrue(captured.matchesCASIdentity(firstSession))
+                activeSession = successorSession
+                DispatchQueue.main.async { completion(successorSession) }
+            },
+            store: store,
+            eventSink: { events.append($0) }
+        )
+        let initialInbox = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "memoryRevision": 101,
+            "candidates": [],
+        ])
+        let staleInbox = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "memoryRevision": 100,
+            "candidates": [],
+        ])
+        let refreshedPolicy = candidateReleasePolicyPayload(
+            version: "candidate-budget-refreshed-v3",
+            revision: 62,
+            expiresAt: "2099-01-01T00:00:00Z"
+        )
+        var candidateRequestCount = 0
+        var policyRequestCount = 0
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            switch request.url?.path {
+            case "/v2/release-policy":
+                policyRequestCount += 1
+                loader.respond(
+                    statusCode: 200,
+                    body: try! JSONSerialization.data(withJSONObject: refreshedPolicy)
+                )
+            case "/v2/vaults/\(vaultID.rawValue)/candidates":
+                candidateRequestCount += 1
+                switch candidateRequestCount {
+                case 1:
+                    loader.respond(statusCode: 200, body: initialInbox)
+                case 2:
+                    loader.respond(
+                        statusCode: 401,
+                        body: Data("{\"code\":\"access_expired\",\"detail\":\"expired\"}".utf8)
+                    )
+                case 3:
+                    loader.respond(statusCode: 200, body: staleInbox)
+                default:
+                    XCTFail("Candidate GET exceeded the shared intent budget")
+                    loader.fail(URLError(.cancelled))
+                }
+            default:
+                XCTFail("Unexpected request path: \(request.url?.path ?? "nil")")
+                loader.fail(URLError(.unsupportedURL))
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: harness.client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { harness.decision(.ownerTruthCandidateReview).allowed },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+        useCase.send(.refresh)
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+            useCase.viewState.phase == .empty
+        })
+        let initialTrace = try XCTUnwrap(useCase.viewState.readContext?.traceID)
+
+        try saveCandidateReleasePolicy(
+            candidateReleasePolicyPayload(
+                version: "candidate-budget-expired-v2",
+                revision: 61,
+                expiresAt: "2026-09-13T00:00:00Z"
+            ),
+            store: store,
+            scope: scope
+        )
+        useCase.send(.refresh)
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+            useCase.viewState.phase == .failed
+        })
+        XCTAssertEqual(policyRequestCount, 1)
+        XCTAssertEqual(authenticationRefreshCount, 1)
+        XCTAssertEqual(candidateRequestCount, 3, "one baseline GET plus two bounded recovery GETs")
+        let finalContext = try XCTUnwrap(useCase.viewState.readContext)
+        XCTAssertNotEqual(finalContext.traceID, initialTrace)
+        XCTAssertEqual(finalContext.candidateGETCount, 2)
+        XCTAssertEqual(finalContext.policyFetchCount, 1)
+        XCTAssertEqual(finalContext.authRecoveryCount, 1)
+        let finalEvents = events.filter { $0.traceID == finalContext.traceID }
+        XCTAssertEqual(Set(finalEvents.map(\.attempt)), [1, 2, 3, 4])
+        XCTAssertEqual(
+            finalEvents.map(\.attempt),
+            finalEvents.map(\.attempt).sorted(),
+            "attempts must remain monotonic across policy, auth, and local budget refusal"
+        )
+        XCTAssertTrue(finalEvents.contains {
+            $0.event == "requestDenied"
+                && $0.stage == "readBudget"
+                && $0.reason == "candidateReadBudgetExhausted"
+        })
+    }
+
+    func testRealHTTPReview401IsUnknownAndNeverRefreshesOrRepostsWriteCommand() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006d1")
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        var authRefreshCount = 0
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            authSessionRefresher: { _, completion in
+                authRefreshCount += 1
+                completion(authSession)
+            },
+            accountLeaseRuntime: runtime
+        )
+        let command = try OwnerTruthCandidateReviewCommand(
+            commandID: "candidate-review-write-no-retry-401",
+            expectedCandidateVersion: 1,
+            action: .accept,
+            reasonCode: "ownerReviewed",
+            expectedMemoryRevision: 7,
+            expectedChangeSetID: recordID("00000000-0000-0000-0000-0000000006d2"),
+            expectedProposalHash: String(repeating: "a", count: 64)
+        )
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertTrue(request.url?.path.hasSuffix("/decisions") == true)
+            loader.respond(
+                statusCode: 401,
+                body: Data("{\"code\":\"access_expired\"}".utf8)
+            )
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        var outcome: OwnerTruthCandidateReviewTransportOutcome?
+        client.reviewOwnerTruthCandidateWrite(
+            accountLease: lease,
+            vaultID: vaultID,
+            candidateID: candidateID,
+            command: command
+        ) { outcome = $0 }
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { outcome != nil })
+        XCTAssertEqual(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.count, 1)
+        XCTAssertEqual(authRefreshCount, 0)
+        guard case .outcomeUnknown = outcome else {
+            return XCTFail("An exposed 401 cannot prove the write was not committed")
+        }
+    }
+
+    func testRealHTTPRelatedGroup401NeverRefreshesOrRepostsAndUsesReadOnlyLookup() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let candidateIDs = [
+            recordID("00000000-0000-0000-0000-0000000007b1"),
+            recordID("00000000-0000-0000-0000-0000000007b2"),
+        ]
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: candidateIDs
+        )
+        let command = try OwnerTruthMemoryChangeSetGroupCommand(
+            commandID: "related-group-real-http-unknown",
+            selections: proposal.members.map {
+                try OwnerTruthMemoryChangeSetGroupSelection(
+                    candidateID: $0.candidateID,
+                    expectedCandidateVersion: $0.candidateVersion,
+                    action: $0.action,
+                    reasonCode: $0.reasonCode
+                )
+            },
+            dependencies: proposal.dependencies,
+            expectedMemoryRevision: proposal.baseMemoryRevision,
+            expectedGroupProposalID: proposal.proposalID,
+            expectedGroupProposalHash: proposal.proposalHash
+        )
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        var authRefreshCount = 0
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            authSessionRefresher: { _, completion in
+                authRefreshCount += 1
+                completion(authSession)
+            },
+            accountLeaseRuntime: runtime
+        )
+        var postCount = 0
+        var lookupCount = 0
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            switch (request.httpMethod, request.url?.path ?? "") {
+            case ("POST", let path) where path.hasSuffix("/memory-changeset-groups/confirm"):
+                postCount += 1
+                loader.respond(
+                    statusCode: 401,
+                    body: Data("{\"code\":\"access_expired\"}".utf8)
+                )
+            case ("GET", let path) where path.hasSuffix("/memory-changeset-groups/decision-result"):
+                lookupCount += 1
+                XCTAssertEqual(
+                    request.value(forHTTPHeaderField: "X-DreamJourney-Review-Command-Id"),
+                    command.commandID
+                )
+                loader.respond(
+                    statusCode: 200,
+                    body: try! JSONSerialization.data(withJSONObject: [
+                        "schemaVersion": OwnerTruthMemoryChangeSetGroupDecisionLookupResult.schemaVersion,
+                        "status": OwnerTruthMemoryChangeSetGroupDecisionLookupStatus.notObserved.rawValue,
+                        "result": NSNull(),
+                    ])
+                )
+            default:
+                XCTFail("Unexpected request \(request.httpMethod ?? "") \(request.url?.path ?? "")")
+                loader.fail(URLError(.badURL))
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        var writeOutcome: OwnerTruthMemoryChangeSetGroupReviewTransportOutcome?
+        client.confirmOwnerTruthCandidateChangeSetGroupWrite(
+            accountLease: lease,
+            vaultID: vaultID,
+            command: command,
+            expectedProposal: proposal
+        ) { writeOutcome = $0 }
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { writeOutcome != nil })
+        guard case .outcomeUnknown = writeOutcome else {
+            return XCTFail("An exposed group 401 must remain outcome-unknown")
+        }
+
+        var lookupResult: Result<OwnerTruthMemoryChangeSetGroupDecisionLookupResult, Error>?
+        client.lookupOwnerTruthCandidateChangeSetGroupDecisionResult(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: command.commandID,
+            expectedBinding: OwnerTruthMemoryChangeSetGroupBinding(proposal: proposal)
+        ) { lookupResult = $0 }
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { lookupResult != nil })
+        XCTAssertEqual(try lookupResult?.get().status, .notObserved)
+        XCTAssertEqual(postCount, 1)
+        XCTAssertEqual(lookupCount, 1)
+        XCTAssertEqual(authRefreshCount, 0)
+    }
+
+    func testRealHTTPReviewAccountChangeAfterTransportExposureRemainsUnknown() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006d3")
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        let command = try OwnerTruthCandidateReviewCommand(
+            commandID: "candidate-review-exposed-account-change",
+            expectedCandidateVersion: 1,
+            action: .accept,
+            reasonCode: "ownerReviewed",
+            expectedMemoryRevision: 7,
+            expectedChangeSetID: recordID("00000000-0000-0000-0000-0000000006d4"),
+            expectedProposalHash: String(repeating: "a", count: 64)
+        )
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            XCTAssertEqual(request.httpMethod, "POST")
+            runtime.publish(session: self.accountSession(
+                subjectId: "owner-b",
+                vaultId: "vault-b",
+                generation: 2,
+                generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000202")!
+            ))
+            loader.respond(statusCode: 200, body: Data("{}".utf8))
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        var outcome: OwnerTruthCandidateReviewTransportOutcome?
+        client.reviewOwnerTruthCandidateWrite(
+            accountLease: lease,
+            vaultID: vaultID,
+            candidateID: candidateID,
+            command: command
+        ) { outcome = $0 }
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { outcome != nil })
+        XCTAssertEqual(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.count, 1)
+        guard case .outcomeUnknown = outcome else {
+            return XCTFail("Account change after transport handoff must preserve the original command")
+        }
+    }
+
+    func testRealHTTPReviewDecodeFailureAfterSuccessResponseRemainsUnknown() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006d5")
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        let command = try OwnerTruthCandidateReviewCommand(
+            commandID: "candidate-review-exposed-decode-failure",
+            expectedCandidateVersion: 1,
+            action: .accept,
+            reasonCode: "ownerReviewed",
+            expectedMemoryRevision: 7,
+            expectedChangeSetID: recordID("00000000-0000-0000-0000-0000000006d6"),
+            expectedProposalHash: String(repeating: "a", count: 64)
+        )
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            XCTAssertEqual(request.httpMethod, "POST")
+            loader.respond(statusCode: 200, body: Data("{}".utf8))
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        var outcome: OwnerTruthCandidateReviewTransportOutcome?
+        client.reviewOwnerTruthCandidateWrite(
+            accountLease: lease,
+            vaultID: vaultID,
+            candidateID: candidateID,
+            command: command
+        ) { outcome = $0 }
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { outcome != nil })
+        XCTAssertEqual(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.count, 1)
+        guard case .outcomeUnknown = outcome else {
+            return XCTFail("A malformed success response cannot prove whether the command committed")
+        }
+    }
+
+    func testRealHTTPUnknownReviewUsesReadOnlyResultLookupWithoutReposting() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006e1")
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let initialObject = sequentialV5CandidateInboxJSONObject(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 12,
+            proposalGeneration: 3
+        )
+        let initialInbox = try OwnerTruthCandidateInbox(
+            backendJSONObject: initialObject,
+            expectedVaultID: vaultID
+        )
+        let binding = try XCTUnwrap(initialInbox.candidates.first).proposedChangeSet.map {
+            OwnerTruthCandidateReviewBinding(
+                candidateID: candidateID,
+                candidateVersion: 1,
+                candidateContentHash: String(repeating: "a", count: 64),
+                proposal: $0
+            )
+        }
+        let expectedBinding = try XCTUnwrap(binding)
+        let emptyObject = sequentialV5CandidateInboxJSONObject(
+            vaultID: lease.vaultId,
+            candidateIDs: [],
+            memoryRevision: 13,
+            proposalGeneration: 4
+        )
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        var inboxGETCount = 0
+        var decisionPOSTCount = 0
+        var decisionLookupGETCount = 0
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            switch (request.httpMethod, request.url?.path ?? "") {
+            case ("GET", let path) where path.hasSuffix("/candidates"):
+                inboxGETCount += 1
+                let object = inboxGETCount == 1 ? initialObject : emptyObject
+                loader.respond(
+                    statusCode: 200,
+                    body: try! JSONSerialization.data(withJSONObject: object)
+                )
+            case ("POST", let path) where path.hasSuffix("/decisions"):
+                decisionPOSTCount += 1
+                loader.fail(URLError(.networkConnectionLost))
+            case ("GET", let path) where path.hasSuffix("/decision-result"):
+                decisionLookupGETCount += 1
+                XCTAssertEqual(
+                    request.value(forHTTPHeaderField: "X-DreamJourney-Review-Command-Id"),
+                    "candidate-review-real-http-unknown"
+                )
+                let lookupObject: [String: Any] = [
+                    "schemaVersion": OwnerTruthCandidateDecisionLookupResult.schemaVersion,
+                    "result": "found",
+                    "expectedCandidateVersion": expectedBinding.candidateVersion,
+                    "candidateBeforeHash": expectedBinding.candidateContentHash,
+                    "expectedChangeSetId": expectedBinding.changeSetID.rawValue.uuidString.lowercased(),
+                    "expectedProposalHash": expectedBinding.proposalHash,
+                    "decisionResult": [
+                        "schemaVersion": "owner-truth-candidate-decision-memory-v1",
+                        "status": "created",
+                        "receipt": [
+                            "receiptId": "00000000-0000-0000-0000-0000000006ef",
+                            "candidateId": candidateID.rawValue.uuidString.lowercased(),
+                            "decision": "accepted",
+                            "candidateVersion": 2,
+                            "candidateBeforeHash": expectedBinding.candidateContentHash,
+                            "candidateAfterHash": String(repeating: "e", count: 64),
+                            "correctedValueId": NSNull(),
+                        ],
+                        "memoryActivation": [
+                            "status": "created",
+                            "memoryId": "00000000-0000-0000-0000-0000000006f1",
+                            "memoryVersionId": "00000000-0000-0000-0000-0000000006f2",
+                            "contentHash": String(repeating: "f", count: 64),
+                        ],
+                        "memoryRevision": 13,
+                    ],
+                ]
+                loader.respond(
+                    statusCode: 200,
+                    body: try! JSONSerialization.data(withJSONObject: lookupObject)
+                )
+            default:
+                XCTFail("Unexpected request \(request.httpMethod ?? "") \(request.url?.path ?? "")")
+                loader.fail(URLError(.badURL))
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "candidate-review-real-http-unknown" },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+        var operationOutcome: OwnerTruthCandidateReviewOperationOutcome?
+        useCase.onReviewOperationOutcome = { _, outcome in operationOutcome = outcome }
+
+        useCase.send(.refresh)
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { useCase.viewState.phase == .ready })
+        let item = try XCTUnwrap(useCase.viewState.items.first)
+        useCase.send(.accept(
+            candidateID: candidateID,
+            displayedBinding: try XCTUnwrap(item.reviewBinding)
+        ))
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+            if case .committed = operationOutcome { return true }
+            return false
+        })
+        XCTAssertEqual(decisionPOSTCount, 1)
+        XCTAssertEqual(decisionLookupGETCount, 1)
+        XCTAssertEqual(inboxGETCount, 2)
+        XCTAssertEqual(
+            OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.filter {
+                $0.httpMethod == "POST" && $0.url?.path.hasSuffix("/decisions") == true
+            }.count,
+            1
+        )
+    }
+
+    func testCandidateInboxTransportFailureNeverReportsHTTPResponse() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        var events: [OwnerTruthCandidateInboxDiagnosticEvent] = []
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime,
+            candidateInboxDiagnosticSink: { events.append($0) }
+        )
+        OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
+            loader.fail(URLError(.cannotFindHost))
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let context = OwnerTruthCandidateInboxReadContext(
+            traceID: "candidate-read-dns-trace",
+            attempt: 1
+        )
+        var result: Result<OwnerTruthCandidateInbox, Error>?
+        client.fetchOwnerTruthCandidateInbox(
+            accountLease: lease,
+            vaultID: vaultID,
+            readContext: context
+        ) { result = $0 }
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { result != nil })
+        XCTAssertThrowsError(try result?.get())
+        XCTAssertEqual(Set(events.map(\.traceID)), [context.traceID])
+        XCTAssertFalse(events.contains { $0.event == "responseReceived" })
+        let completion = try XCTUnwrap(events.last(where: { $0.event == "transportCompleted" }))
+        XCTAssertEqual(completion.reason, "dns")
+        XCTAssertNil(completion.httpStatus)
+    }
+
+    func testCandidateInboxTransportFailuresKeepHTTPResponseAbsentAndClassifySafely() throws {
+        let cases: [(name: String, code: URLError.Code, reason: String)] = [
+            ("dns", .cannotFindHost, "dns"),
+            ("offline", .notConnectedToInternet, "offline"),
+            ("tls", .secureConnectionFailed, "tls"),
+            ("cancelled", .cancelled, "cancelled"),
+        ]
+
+        for testCase in cases {
+            let (runtime, lease) = try makeActiveRuntime()
+            let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+            let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+            var events: [OwnerTruthCandidateInboxDiagnosticEvent] = []
+            let client = DreamJourneyBackendClient.makeQATestClient(
+                baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+                session: try makeOwnerTruthHTTPTestSession(),
+                authenticatedSession: { authSession },
+                currentUserID: { lease.subjectId },
+                privateAccessAllowed: { true },
+                featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+                accountLeaseRuntime: runtime,
+                candidateInboxDiagnosticSink: { events.append($0) }
+            )
+            OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
+                loader.fail(URLError(testCase.code))
+            }
+
+            let context = OwnerTruthCandidateInboxReadContext(
+                traceID: "candidate-read-transport-\(testCase.name)",
+                attempt: 1
+            )
+            var result: Result<OwnerTruthCandidateInbox, Error>?
+            client.fetchOwnerTruthCandidateInbox(
+                accountLease: lease,
+                vaultID: vaultID,
+                readContext: context
+            ) { result = $0 }
+
+            XCTAssertTrue(
+                waitForOwnerTruthHTTPUI(timeout: 2) { result != nil },
+                testCase.name
+            )
+            XCTAssertThrowsError(try result?.get(), testCase.name)
+            XCTAssertEqual(Set(events.map(\.traceID)), [context.traceID], testCase.name)
+            XCTAssertTrue(events.contains { $0.event == "requestCreated" }, testCase.name)
+            XCTAssertTrue(events.contains { $0.event == "taskCreated" }, testCase.name)
+            XCTAssertTrue(events.contains { $0.event == "taskResumed" }, testCase.name)
+            XCTAssertFalse(events.contains { $0.event == "responseReceived" }, testCase.name)
+            XCTAssertFalse(events.contains { $0.httpStatus != nil }, testCase.name)
+            XCTAssertEqual(
+                events.last(where: { $0.event == "transportCompleted" })?.reason,
+                testCase.reason,
+                testCase.name
+            )
+            OwnerTruthReviewReadyHTTPURLProtocol.reset()
+        }
+    }
+
+    @MainActor
+    func testCandidateInboxUIKitCommitKeepsUseCaseReadTrace() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try v5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateID: recordID("00000000-0000-0000-0000-00000000070c")
+        ))
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        var renderedState: OwnerTruthCandidateInboxViewState?
+        controller.onViewStateRendered = { renderedState = $0 }
+
+        controller.loadViewIfNeeded()
+
+        let requested = try XCTUnwrap(client.requestedInboxReadContexts.first)
+        XCTAssertEqual(renderedState?.phase, .ready)
+        XCTAssertEqual(renderedState?.readContext, requested)
+        XCTAssertEqual(renderedState?.readContext?.attempt, 1)
+    }
+
+    @MainActor
+    func testCandidateInboxUIKitFirstSuccessUsesOneTraceAndAttempt() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        var events: [OwnerTruthCandidateInboxDiagnosticEvent] = []
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime,
+            candidateInboxDiagnosticSink: { events.append($0) }
+        )
+        let successPayload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "memoryRevision": 66,
+            "candidates": [],
+        ])
+        OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
+            loader.respond(statusCode: 200, body: successPayload)
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+        var renderedState: OwnerTruthCandidateInboxViewState?
+        controller.onViewStateRendered = { state in
+            if state.phase == .empty { renderedState = state }
+        }
+
+        controller.loadViewIfNeeded()
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { renderedState != nil })
+        let finalContext = try XCTUnwrap(renderedState?.readContext)
+        XCTAssertEqual(finalContext.attempt, 1)
+        XCTAssertEqual(Set(events.map(\.traceID)), [finalContext.traceID])
+        XCTAssertEqual(Set(events.map(\.attempt)), [1])
+        for event in [
+            "requestCreated",
+            "taskCreated",
+            "taskResumed",
+            "transportCompleted",
+            "responseReceived",
+            "jsonDecoded",
+            "inboxContractDecoded",
+        ] {
+            XCTAssertTrue(events.contains { $0.event == event }, event)
+        }
+        XCTAssertEqual(
+            events.last(where: { $0.event == "responseReceived" })?.httpStatus,
+            200
+        )
+    }
+
+    @MainActor
+    func testCandidateInboxUIKitCommitUsesSuccessfulCredentialRecoveryAttempt() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let firstSession = try makeOwnerTruthHTTPTestAuthSession(
+            userID: lease.subjectId,
+            sessionID: "owner-truth-ui-session-1",
+            tokenFamilyID: "owner-truth-ui-family",
+            sessionVersion: 1,
+            accessTokenSuffix: "ui-first"
+        )
+        let successorSession = try makeOwnerTruthHTTPTestAuthSession(
+            userID: lease.subjectId,
+            sessionID: "owner-truth-ui-session-2",
+            parentSessionID: firstSession.sessionId,
+            tokenFamilyID: "owner-truth-ui-family",
+            sessionVersion: 2,
+            accessTokenSuffix: "ui-second"
+        )
+        var activeSession = firstSession
+        var events: [OwnerTruthCandidateInboxDiagnosticEvent] = []
+        let session = try makeOwnerTruthHTTPTestSession()
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: session,
+            authenticatedSession: { activeSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime,
+            candidateInboxDiagnosticSink: { events.append($0) }
+        )
+        let successPayload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "memoryRevision": 66,
+            "candidates": [],
+        ])
+        var transportCount = 0
+        OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
+            transportCount += 1
+            if transportCount == 1 {
+                activeSession = successorSession
+                loader.respond(
+                    statusCode: 401,
+                    body: Data("{\"code\":\"access_expired\",\"detail\":\"expired\"}".utf8)
+                )
+            } else {
+                loader.respond(statusCode: 200, body: successPayload)
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+        var renderedState: OwnerTruthCandidateInboxViewState?
+        controller.onViewStateRendered = { state in
+            if state.phase == .empty {
+                renderedState = state
+            }
+        }
+
+        controller.loadViewIfNeeded()
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { renderedState != nil })
+        XCTAssertEqual(
+            transportCount,
+            2,
+            "paths=\(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.compactMap { $0.url?.path })"
+        )
+        XCTAssertEqual(
+            renderedState?.readContext?.attempt,
+            2,
+            "events=\(events)"
+        )
+        let finalAttempt = try XCTUnwrap(renderedState?.readContext?.attempt)
+        XCTAssertTrue(events.contains {
+            $0.event == "inboxContractDecoded"
+                && $0.stage == "typedDecode"
+                && $0.attempt == finalAttempt
+        })
+        XCTAssertTrue(events.contains {
+            $0.event == "jsonDecoded"
+                && $0.stage == "json"
+                && $0.attempt == finalAttempt
+        })
+    }
+
+    @MainActor
+    func testCandidateInboxUIKitCommitUsesActualCredentialRefreshAttempt() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let firstSession = try makeOwnerTruthHTTPTestAuthSession(
+            userID: lease.subjectId,
+            sessionID: "owner-truth-refresh-session-1",
+            tokenFamilyID: "owner-truth-refresh-family",
+            sessionVersion: 1,
+            accessTokenSuffix: "refresh-first"
+        )
+        let successorSession = try makeOwnerTruthHTTPTestAuthSession(
+            userID: lease.subjectId,
+            sessionID: "owner-truth-refresh-session-2",
+            parentSessionID: firstSession.sessionId,
+            tokenFamilyID: "owner-truth-refresh-family",
+            sessionVersion: 2,
+            accessTokenSuffix: "refresh-second"
+        )
+        var activeSession = firstSession
+        var refreshCount = 0
+        var events: [OwnerTruthCandidateInboxDiagnosticEvent] = []
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { activeSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            authSessionRefresher: { captured, completion in
+                refreshCount += 1
+                XCTAssertTrue(captured.matchesCASIdentity(firstSession))
+                activeSession = successorSession
+                DispatchQueue.main.async { completion(successorSession) }
+            },
+            accountLeaseRuntime: runtime,
+            candidateInboxDiagnosticSink: { events.append($0) }
+        )
+        let successPayload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+            "vaultId": vaultID.rawValue,
+            "memoryRevision": 66,
+            "candidates": [],
+        ])
+        var transportCount = 0
+        OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
+            transportCount += 1
+            if transportCount == 1 {
+                loader.respond(
+                    statusCode: 401,
+                    body: Data("{\"code\":\"access_expired\",\"detail\":\"expired\"}".utf8)
+                )
+            } else {
+                loader.respond(statusCode: 200, body: successPayload)
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+        var renderedState: OwnerTruthCandidateInboxViewState?
+        controller.onViewStateRendered = { state in
+            if state.phase == .empty { renderedState = state }
+        }
+
+        controller.loadViewIfNeeded()
+
+        XCTAssertTrue(
+            waitForOwnerTruthHTTPUI(timeout: 3) { renderedState != nil },
+            "paths=\(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.compactMap { $0.url?.path }); events=\(events)"
+        )
+        XCTAssertEqual(refreshCount, 1)
+        XCTAssertEqual(
+            transportCount,
+            2,
+            "paths=\(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.compactMap { $0.url?.path })"
+        )
+        let finalContext = try XCTUnwrap(renderedState?.readContext)
+        XCTAssertEqual(
+            finalContext.attempt,
+            2,
+            "events=\(events)"
+        )
+        XCTAssertEqual(Set(events.map(\.traceID)), [finalContext.traceID])
+        XCTAssertEqual(Set(events.map(\.attempt)), [1, 2])
+        XCTAssertEqual(
+            events.filter { $0.event == "responseReceived" }.map {
+                "\($0.attempt):\($0.httpStatus ?? 0)"
+            },
+            ["1:401", "2:200"]
+        )
+        XCTAssertTrue(events.contains {
+            $0.event == "inboxContractDecoded"
+                && $0.stage == "typedDecode"
+                && $0.attempt == finalContext.attempt
+        })
+        XCTAssertEqual(
+            OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.map {
+                $0.value(forHTTPHeaderField: "Authorization")
+            },
+            ["Bearer \(firstSession.accessToken)", "Bearer \(successorSession.accessToken)"]
+        )
+    }
+
+    func testCandidateInboxTaskCreatedButCancelledBeforeResumeDoesNotClaimTransportStarted() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        var events: [OwnerTruthCandidateInboxDiagnosticEvent] = []
+        let session = try makeOwnerTruthHTTPTestSession(startRequestsImmediately: false)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: session,
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime,
+            candidateInboxDiagnosticSink: { events.append($0) }
+        )
+        OwnerTruthReviewReadyHTTPURLProtocol.install { _, _ in
+            XCTFail("A suspended request must not reach the controlled upstream")
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        client.fetchOwnerTruthCandidateInbox(
+            accountLease: lease,
+            vaultID: vaultID
+        ) { _ in }
+
+        let requestWasCreated = waitForOwnerTruthHTTPUI(timeout: 2) {
+            events.contains { $0.event == "requestCreated" }
+        }
+        let cancellationFinished = expectation(description: "cancel suspended requests")
+        session.cancelAllRequests {
+            cancellationFinished.fulfill()
+        }
+        wait(for: [cancellationFinished], timeout: 2)
+        XCTAssertTrue(requestWasCreated)
+        XCTAssertFalse(events.contains { $0.event == "taskCreated" })
+        XCTAssertFalse(events.contains { $0.event == "taskResumed" })
+        XCTAssertFalse(events.contains { $0.event == "transportStarted" })
+        XCTAssertFalse(events.contains { $0.event == "responseReceived" })
+        XCTAssertNil(events.last(where: { $0.event == "transportCompleted" })?.httpStatus)
+    }
+
+    func testBackendBuilderConfidenceOnlyChangeUsesRawTypedValueAndRemainsReviewable() throws {
+        let operation = try backendBuilderPrecisionOperation(caseName: "confidenceOnly")
+        let presentation = try XCTUnwrap(operation.factDiff.changedFields.first?.structuredPresentation)
+        let confidence = try XCTUnwrap(
+            presentation.changes.first(where: { $0.path.hasSuffix("facets.habits[0].confidence") })
+        )
+
+        XCTAssertEqual(operation.recognizedKind, .correct)
+        XCTAssertTrue(presentation.isComplete)
+        XCTAssertTrue(presentation.hasActualChange)
+        XCTAssertTrue(confidence.hasChanged)
+        XCTAssertNotEqual(confidence.beforeText, confidence.afterText)
+        XCTAssertTrue(confidence.beforeText.contains("0.721"))
+        XCTAssertTrue(confidence.afterText.contains("0.724"))
+        XCTAssertEqual(operation.reviewability, .reviewable)
+    }
+
+    func testBackendBuilderTimeAndConfidenceChangesAreBothVisibleAndBound() throws {
+        let operation = try backendBuilderPrecisionOperation(caseName: "timePlusConfidence")
+        let presentation = try XCTUnwrap(operation.factDiff.changedFields.first?.structuredPresentation)
+        let paths = Set(presentation.changes.map(\.path))
+
+        XCTAssertTrue(paths.contains(where: { $0.hasSuffix("qualifiers.validTime.expression") }))
+        XCTAssertTrue(paths.contains(where: { $0.hasSuffix("facets.habits[0].confidence") }))
+        XCTAssertEqual(operation.reviewability, .reviewable)
+    }
+
+    func testBackendBuilderConfidenceOnlyProposalKeepsDisplayedBindingOnSubmit() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try backendBuilderCandidateInbox(
+            fixture: backendBuilderPrecisionFixture(caseName: "confidenceOnly"),
+            vaultID: lease.vaultId
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        useCase.send(.refresh)
+        let item = try XCTUnwrap(useCase.viewState.items.first)
+        let binding = try XCTUnwrap(item.reviewBinding)
+        client.reviewResult = .success(try decisionResult(candidateID: item.id, decision: .accepted))
+
+        useCase.send(.accept(candidateID: item.id, displayedBinding: binding))
+
+        let command = try XCTUnwrap(client.reviewedCommands.first)
+        XCTAssertEqual(command.expectedCandidateVersion, binding.candidateVersion)
+        XCTAssertEqual(command.expectedMemoryRevision, binding.baseMemoryRevision)
+        XCTAssertEqual(command.expectedChangeSetID, binding.changeSetID)
+        XCTAssertEqual(command.expectedProposalHash, binding.proposalHash)
+    }
+
+    func testBackendBuilderTemporalQualifiersChangeIsReviewable() throws {
+        let operation = try backendBuilderStructuredDiffOperation(caseName: "temporal")
+
+        XCTAssertEqual(operation.recognizedKind, .temporalChange)
+        XCTAssertEqual(operation.factDiff.changedFields.map(\.path), ["qualifiers"])
+        XCTAssertEqual(operation.reviewability, .reviewable)
+        XCTAssertTrue(
+            try XCTUnwrap(operation.factDiff.changedFields.first?.before?.ownerTruthFieldPreviewText)
+                .contains("2016年")
+        )
+    }
+
+    func testBackendBuilderStructuredCorrectionDoesNotHideTimeOnlyChange() throws {
+        let operation = try backendBuilderStructuredDiffOperation(caseName: "structuredCorrection")
+        let field = try XCTUnwrap(operation.factDiff.changedFields.first)
+        let before = try XCTUnwrap(field.before?.ownerTruthFieldPreviewText)
+        let after = try XCTUnwrap(field.after?.ownerTruthFieldPreviewText)
+
+        XCTAssertEqual(operation.recognizedKind, .correct)
+        XCTAssertNotEqual(before, after)
+        XCTAssertTrue(before.contains("2016年"))
+        XCTAssertTrue(after.contains("2018年"))
+    }
+
+    func testBackendBuilderAllEightOperationsUseActualActivationAndRemainReviewable() throws {
+        let expected: [(String, OwnerTruthCandidateChangeSetOperationKind, String)] = [
+            ("add", .add, "create"),
+            ("addEvidence", .addEvidence, "revise"),
+            ("refine", .refine, "revise"),
+            ("temporal", .temporalChange, "createRelated"),
+            ("structuredCorrection", .correct, "revise"),
+            ("dispute", .dispute, "createContradictory"),
+            ("duplicate", .duplicate, "noNewVersion"),
+            ("noPersonalFact", .noPersonalFact, "notApplicable"),
+        ]
+
+        for (caseName, kind, activation) in expected {
+            let operation = try backendBuilderStructuredDiffOperation(caseName: caseName)
+            XCTAssertEqual(operation.recognizedKind, kind, caseName)
+            XCTAssertEqual(operation.anticipatedActivation, activation, caseName)
+            let reasons = operation.factDiff.changedFields.compactMap { field in
+                field.structuredPresentation.incompleteReason.map { reason in
+                    "\(field.path):\(reason)"
+                }
+            }
+            XCTAssertEqual(operation.reviewability, .reviewable, "\(caseName): \(reasons)")
+        }
+    }
+
+    func testStructuredDiffPreservesNullEmptyAndFieldPresenceStates() {
+        let before: OwnerTruthJSONValue = .object([
+            "emptyArray": .array([]),
+            "emptyString": .string(""),
+            "explicitNull": .null,
+            "removed": .string("旧值"),
+        ])
+        let after: OwnerTruthJSONValue = .object([
+            "emptyArray": .array([.string("新增")]),
+            "emptyObject": .object([:]),
+            "emptyString": .string("有值"),
+            "explicitNull": .string("非空"),
+            "added": .bool(true),
+        ])
+        let presentation = OwnerTruthStructuredDiffPresentation.build(
+            path: "content",
+            before: before,
+            after: after
+        )
+        let rows = Dictionary(uniqueKeysWithValues: presentation.changes.map { ($0.path, $0) })
+
+        XCTAssertTrue(presentation.isComplete)
+        XCTAssertEqual(rows["content.emptyArray[0]"]?.beforeText, "未设置")
+        XCTAssertEqual(rows["content.emptyArray[0]"]?.afterText, "新增")
+        XCTAssertEqual(rows["content.emptyObject"]?.beforeText, "未设置")
+        XCTAssertEqual(rows["content.emptyObject"]?.afterText, "空对象")
+        XCTAssertEqual(rows["content.emptyString"]?.beforeText, "空字符串")
+        XCTAssertEqual(rows["content.explicitNull"]?.beforeText, "无")
+        XCTAssertEqual(rows["content.added"]?.beforeText, "未设置")
+        XCTAssertEqual(rows["content.removed"]?.afterText, "未设置")
+    }
+
+    func testStructuredDiffPreservesArrayOrderDuplicatesAndTypeChanges() {
+        let presentation = OwnerTruthStructuredDiffPresentation.build(
+            path: "content.values",
+            before: .array([.string("甲"), .string("甲"), .number(2)]),
+            after: .array([.number(2), .string("甲"), .string("甲")])
+        )
+        let rows = Dictionary(uniqueKeysWithValues: presentation.changes.map { ($0.path, $0) })
+
+        XCTAssertTrue(presentation.isComplete)
+        XCTAssertEqual(rows["content.values[0]"]?.beforeText, "甲")
+        XCTAssertEqual(rows["content.values[0]"]?.afterText, "2.0")
+        XCTAssertEqual(rows["content.values[2]"]?.beforeText, "2.0")
+        XCTAssertEqual(rows["content.values[2]"]?.afterText, "甲")
+        XCTAssertNil(rows["content.values[1]"])
+    }
+
+    func testStructuredDiffDisambiguatesArraySeparatorsTypesAndNullText() {
+        let presentation = OwnerTruthStructuredDiffPresentation.build(
+            path: "content",
+            before: .object([
+                "array": .array([.string("甲，乙")]),
+                "number": .number(1),
+                "nullable": .null,
+            ]),
+            after: .object([
+                "array": .array([.string("甲"), .string("乙")]),
+                "number": .string("1.0"),
+                "nullable": .string("无"),
+            ])
+        )
+        let rows = Dictionary(uniqueKeysWithValues: presentation.changes.map { ($0.path, $0) })
+
+        XCTAssertTrue(presentation.isComplete)
+        XCTAssertTrue(presentation.hasActualChange)
+        XCTAssertEqual(rows["content.array[0]"]?.beforeText, "甲，乙")
+        XCTAssertEqual(rows["content.array[0]"]?.afterText, "甲")
+        XCTAssertEqual(rows["content.array[1]"]?.beforeText, "未设置")
+        XCTAssertEqual(rows["content.array[1]"]?.afterText, "乙")
+        XCTAssertEqual(rows["content.number"]?.beforeText, "数字 1.0")
+        XCTAssertEqual(rows["content.number"]?.afterText, "文字 \"1.0\"")
+        XCTAssertEqual(rows["content.nullable"]?.beforeText, "空值 null")
+        XCTAssertEqual(rows["content.nullable"]?.afterText, "文字 \"无\"")
+    }
+
+    func testStructuredDiffPreservesSmallRoundTripNumericDifferences() {
+        let changed = OwnerTruthStructuredDiffPresentation.build(
+            path: "content.confidence",
+            before: .number(0.72101),
+            after: .number(0.72102)
+        )
+        let unchanged = OwnerTruthStructuredDiffPresentation.build(
+            path: "content.confidence",
+            before: .number(0.72101),
+            after: .number(0.72101)
+        )
+
+        XCTAssertTrue(changed.isComplete)
+        XCTAssertTrue(changed.hasActualChange)
+        XCTAssertEqual(changed.changes.first?.beforeText, "0.72101")
+        XCTAssertEqual(changed.changes.first?.afterText, "0.72102")
+        XCTAssertTrue(unchanged.isComplete)
+        XCTAssertFalse(unchanged.hasActualChange)
+    }
+
+    func testStructuredDiffHandlesLargeNumbersDecimalsAndBooleansWithoutLossyIntConversion() {
+        let presentation = OwnerTruthStructuredDiffPresentation.build(
+            path: "content",
+            before: .object([
+                "large": .number(Double.greatestFiniteMagnitude),
+                "decimal": .number(0.12345678901234566),
+                "flag": .bool(false),
+            ]),
+            after: .object([
+                "large": .number(Double.greatestFiniteMagnitude / 2),
+                "decimal": .number(0.5),
+                "flag": .bool(true),
+            ])
+        )
+
+        XCTAssertTrue(presentation.isComplete)
+        XCTAssertEqual(
+            presentation.changes.first(where: { $0.path.hasSuffix("decimal") })?.beforeText,
+            "0.12345678901234566"
+        )
+        XCTAssertEqual(presentation.changes.first(where: { $0.path.hasSuffix("flag") })?.afterText, "是")
+        XCTAssertFalse(presentation.changes.first(where: { $0.path.hasSuffix("large") })?.beforeText.isEmpty ?? true)
+    }
+
+    func testStructuredDiffFailsClosedWhenSafePresentationBudgetIsExceeded() {
+        var deeplyNested: OwnerTruthJSONValue = .string("值")
+        for index in 0..<14 {
+            deeplyNested = .object(["level\(index)": deeplyNested])
+        }
+        let presentation = OwnerTruthStructuredDiffPresentation.build(
+            path: "content",
+            before: nil,
+            after: deeplyNested
+        )
+
+        XCTAssertFalse(presentation.isComplete)
+        XCTAssertNotNil(presentation.incompleteReason)
+        XCTAssertTrue(presentation.changes.isEmpty)
+    }
+
+    func testStructuredDiffKeepsUnchangedContextWithoutCallingItAnActualChange() {
+        let presentation = OwnerTruthStructuredDiffPresentation.build(
+            path: "content.statement",
+            before: .string("同一事实"),
+            after: .string("同一事实")
+        )
+
+        XCTAssertTrue(presentation.isComplete)
+        XCTAssertFalse(presentation.hasActualChange)
+        XCTAssertEqual(presentation.changes.count, 1)
+        XCTAssertFalse(presentation.changes[0].hasChanged)
+    }
+
+    @MainActor
+    func testBackendBuilderStructuredCorrectionRendersExactTimeChangeInUIKit() throws {
+        let controller = OwnerTruthCandidateDetailViewController(
+            item: try v5CandidateDetailItemFromBackendBuilder(caseName: "structuredCorrection")
+        )
+        controller.loadViewIfNeeded()
+        let rendered = allLabelText(in: controller.view)
+
+        XCTAssertTrue(rendered.contains("字段变化：有效时间｜确认前：2016年｜确认后：2018年"))
+        XCTAssertEqual(
+            button(in: controller.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled,
+            true
+        )
+    }
+
+    @MainActor
+    func testBackendBuilderTemporalQualifiersRenderExactChangesInUIKit() throws {
+        let controller = OwnerTruthCandidateDetailViewController(
+            item: try v5CandidateDetailItemFromBackendBuilder(caseName: "temporal")
+        )
+        controller.loadViewIfNeeded()
+        let rendered = allLabelText(in: controller.view)
+
+        XCTAssertTrue(rendered.contains("字段变化：当前适用性｜确认前：historical｜确认后：current"))
+        XCTAssertTrue(rendered.contains("字段变化：倾向｜确认前：positive｜确认后：negative"))
+        XCTAssertTrue(rendered.contains("字段变化：有效时间｜确认前：2016年｜确认后：无"))
+        XCTAssertEqual(
+            button(in: controller.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled,
+            true
+        )
+    }
+
+    @MainActor
+    func testBackendBuilderCorrectionAlertShowsExactStructuredTimeDifference() throws {
+        let item = try v5CandidateDetailItemFromBackendBuilder(caseName: "structuredCorrection")
+        let proposal = try XCTUnwrap(item.proposedChangeSet)
+        let controller = OwnerTruthCandidateDetailViewController(item: item)
+        let window = UIWindow(frame: UIScreen.main.bounds)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        controller.loadViewIfNeeded()
+
+        var renderedMessage: String?
+        controller.onCorrectionPreviewRenderedForUIQA = { renderedProposal, message in
+            XCTAssertEqual(renderedProposal, proposal)
+            renderedMessage = message
+        }
+        controller.runUIQAShowCorrectionPreview(proposal)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.35))
+
+        let message = try XCTUnwrap(renderedMessage)
+        let preview = try XCTUnwrap(controller.presentedViewController)
+        XCTAssertEqual(preview.view.accessibilityIdentifier, "owner-truth-correction-preview")
+        XCTAssertTrue(
+            try XCTUnwrap(textView(
+                in: preview.view,
+                identifier: "owner-truth-correction-preview-content"
+            )).isScrollEnabled
+        )
+        XCTAssertTrue(message.contains("基于正式记忆第 5 次修订快照"))
+        XCTAssertTrue(message.contains("字段变化：有效时间｜确认前：2016年｜确认后：2018年"))
+    }
+
+    @MainActor
+    func testBackendBuilderTimeAndConfidenceRenderCompletelyInUIKitDetail() throws {
+        let controller = OwnerTruthCandidateDetailViewController(
+            item: try v5CandidateDetailItemFromPrecisionBuilder(caseName: "timePlusConfidence")
+        )
+        controller.loadViewIfNeeded()
+        let rendered = allLabelText(in: controller.view)
+
+        XCTAssertTrue(rendered.contains("字段变化：有效时间｜确认前：2016年｜确认后：2018年"))
+        XCTAssertTrue(rendered.contains("字段变化：习惯与偏好可信度｜确认前：0.721｜确认后：0.724"))
+        XCTAssertEqual(
+            button(in: controller.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled,
+            true
+        )
+    }
+
+    @MainActor
+    func testBackendBuilderTimeAndConfidenceRenderCompletelyInCorrectionPreview() throws {
+        let item = try v5CandidateDetailItemFromPrecisionBuilder(caseName: "timePlusConfidence")
+        let proposal = try XCTUnwrap(item.proposedChangeSet)
+        let controller = OwnerTruthCandidateDetailViewController(item: item)
+        let window = UIWindow(frame: UIScreen.main.bounds)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        controller.loadViewIfNeeded()
+
+        var renderedMessage: String?
+        controller.onCorrectionPreviewRenderedForUIQA = { renderedProposal, message in
+            XCTAssertEqual(renderedProposal, proposal)
+            renderedMessage = message
+        }
+        controller.runUIQAShowCorrectionPreview(proposal)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.35))
+
+        let message = try XCTUnwrap(renderedMessage)
+        XCTAssertTrue(message.contains("字段变化：有效时间｜确认前：2016年｜确认后：2018年"))
+        XCTAssertTrue(message.contains("字段变化：习惯与偏好可信度｜确认前：0.721｜确认后：0.724"))
+    }
+
+    @MainActor
+    func testBackendBuilderTimeAndConfidenceRenderForNonFirstRelatedMember() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let proposal = try backendBuilderPrecisionRelatedGroupProposal(vaultID: lease.vaultId)
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: CandidateReviewClientSpy(),
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        let window = UIWindow(frame: UIScreen.main.bounds)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        controller.loadViewIfNeeded()
+
+        var renderedMessage: String?
+        controller.onRelatedGroupPreviewRenderedForUIQA = { renderedProposal, message in
+            XCTAssertEqual(renderedProposal, proposal)
+            renderedMessage = message
+        }
+        controller.runUIQAShowRelatedGroupPreview(proposal)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.35))
+
+        let message = try XCTUnwrap(renderedMessage)
+        XCTAssertTrue(message.contains("第 2 条（确认）"))
+        XCTAssertTrue(message.contains("字段变化：有效时间｜确认前：2016年｜确认后：2018年"))
+        XCTAssertTrue(message.contains("字段变化：习惯与偏好可信度｜确认前：0.721｜确认后：0.724"))
+    }
+
+    @MainActor
+    func testBackendBuilderRelatedGroupAlertShowsNonFirstStructuredOperationCompletely() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let proposal = try backendBuilderStructuredRelatedGroupProposal(
+            vaultID: lease.vaultId
+        )
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: CandidateReviewClientSpy(),
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        let window = UIWindow(frame: UIScreen.main.bounds)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        controller.loadViewIfNeeded()
+
+        var renderedMessage: String?
+        controller.onRelatedGroupPreviewRenderedForUIQA = { renderedProposal, message in
+            XCTAssertEqual(renderedProposal, proposal)
+            renderedMessage = message
+        }
+        controller.runUIQAShowRelatedGroupPreview(proposal)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.35))
+
+        let message = try XCTUnwrap(renderedMessage)
+        let preview = try XCTUnwrap(controller.presentedViewController)
+        XCTAssertEqual(preview.view.accessibilityIdentifier, "owner-truth-related-group-preview")
+        XCTAssertTrue(
+            try XCTUnwrap(textView(
+                in: preview.view,
+                identifier: "owner-truth-related-group-preview-content"
+            )).isScrollEnabled
+        )
+        XCTAssertTrue(message.contains("第 1 条（拒绝）：拒绝候选，不新增正式事实"))
+        XCTAssertTrue(message.contains("第 2 条（确认）"))
+        XCTAssertTrue(message.contains("字段变化：有效时间｜确认前：2016年｜确认后：2018年"))
+    }
+
+    @MainActor
+    func testRelatedGroupUseCaseRejectsIncompleteProposalBeforeProductionRequest() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let items = try [
+            v5CandidateDetailItemFromBackendBuilder(caseName: "temporal"),
+            v5CandidateDetailItemFromBackendBuilder(caseName: "structuredCorrection"),
+        ]
+        let client = CandidateReviewClientSpy()
+        let incompleteProposal = try backendBuilderStructuredRelatedGroupProposal(
+            vaultID: lease.vaultId,
+            secondOperationKind: "futureUnknownOperation"
+        )
+        client.changeSetGroupPreviewResult = .success(incompleteProposal)
+        let useCase = OwnerTruthCandidateRelatedGroupReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        let instructions = try [
+            OwnerTruthCandidateRelatedGroupReviewInstruction(
+                candidate: items[0],
+                action: .reject,
+                reasonCode: "ownerReviewedRelatedGroup"
+            ),
+            OwnerTruthCandidateRelatedGroupReviewInstruction(
+                candidate: items[1],
+                action: .accept,
+                reasonCode: "ownerReviewedRelatedGroup"
+            ),
+        ]
+        var previewResult: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+        useCase.preview(instructions: instructions) { previewResult = $0 }
+        let visibleProposal = try XCTUnwrap(try previewResult?.get())
+
+        var confirmationResult: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+        useCase.confirm(proposal: visibleProposal) { confirmationResult = $0 }
+
+        XCTAssertThrowsError(try confirmationResult?.get())
+        XCTAssertTrue(client.confirmedGroupCommands.isEmpty)
+    }
+
+    func testCandidateChangeSetPreviewRendersValuesInsteadOfPlaceholderNames() {
+        let texts = [
+            OwnerTruthCandidateDetailViewController.changeSetBaseRevisionText(12),
+            OwnerTruthCandidateDetailViewController.changeSetTargetVersionText(3),
+            OwnerTruthCandidateDetailViewController.changeSetBeforeText("蓝桥"),
+            OwnerTruthCandidateDetailViewController.changeSetAfterText("青禾"),
+            OwnerTruthCandidateDetailViewController.changeSetChangedFieldsText("content、evidenceRefs"),
+        ]
+
+        XCTAssertEqual(texts[0], "基于正式记忆第 12 次修订快照")
+        XCTAssertEqual(texts[1], "目标：正式记忆第 3 版")
+        XCTAssertEqual(texts[2], "确认前：蓝桥")
+        XCTAssertEqual(texts[3], "确认后：青禾")
+        XCTAssertEqual(texts[4], "字段变化：content、evidenceRefs")
+        XCTAssertFalse(texts.joined(separator: "\n").contains("proposal."))
+        XCTAssertFalse(texts.joined(separator: "\n").contains("afterText"))
+    }
+
+    func testRelatedGroupPreviewTitleRendersTwoAndThreeSelectedCandidates() {
+        XCTAssertEqual(
+            OwnerTruthCandidateInboxViewController.relatedGroupPreviewButtonTitle(2),
+            "预览关联 2 条"
+        )
+        XCTAssertEqual(
+            OwnerTruthCandidateInboxViewController.relatedGroupPreviewButtonTitle(3),
+            "预览关联 3 条"
+        )
+    }
+
+    func testV5CandidateUsesPreservedFacetEnvelopeInsteadOfUnsupportedState() throws {
+        let candidateID = recordID("00000000-0000-0000-0000-000000000171")
+        let inbox = try v5CandidateInbox(
+            vaultID: "vault-owner-v5-facets",
+            candidateID: candidateID
+        )
+
+        guard case .available(let facets) = try XCTUnwrap(inbox.candidates.first).facetsState else {
+            return XCTFail("owner-truth-v5 must expose its preserved facets envelope")
+        }
+        XCTAssertEqual(facets.values(for: .people).first?.value, "外公")
+        XCTAssertEqual(facets.values(for: .places).first?.evidenceMode, .inferred)
+    }
+
+    @MainActor
+    func testV5CandidateDetailRendersBoundProposalAndFacetsThroughActualUIKitController() throws {
+        let item = try v5CandidateDetailItem()
+        let controller = OwnerTruthCandidateDetailViewController(item: item)
+
+        controller.loadViewIfNeeded()
+
+        let renderedText = allLabelText(in: controller.view)
+        XCTAssertTrue(renderedText.contains("基于正式记忆第 9 次修订快照"))
+        XCTAssertTrue(renderedText.contains("确认后：我在 2016 年从 A 大学计算机专业毕业。"))
+        XCTAssertTrue(renderedText.contains("证据：1 → 2 条"))
+        XCTAssertTrue(renderedText.contains("外公（本人表达）"))
+        XCTAssertTrue(renderedText.contains("杭州（系统推断）"))
+        XCTAssertFalse(renderedText.contains("proposal.baseMemoryRevision"))
+        XCTAssertFalse(renderedText.contains("(afterText)"))
+        XCTAssertFalse(renderedText.contains("当前版本暂不展示或编辑"))
+        XCTAssertEqual(
+            button(in: controller.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled,
+            true
+        )
+    }
+
+    @MainActor
+    func testV5CandidateDetailBlocksUnknownOperationInsteadOfSubmittingOpaqueChange() throws {
+        let item = try v5CandidateDetailItem(operationKind: "futureUnknownOperation")
+        let controller = OwnerTruthCandidateDetailViewController(item: item)
+
+        controller.loadViewIfNeeded()
+
+        XCTAssertTrue(allLabelText(in: controller.view).contains("变更预览不完整"))
+        XCTAssertEqual(
+            button(in: controller.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled,
+            false
+        )
+    }
+
+    @MainActor
+    func testV5PrimaryCorrectionDoesNotResubmitUnchangedInferredFacets() throws {
+        let controller = OwnerTruthCandidateDetailViewController(item: try v5CandidateDetailItem())
+        var submittedFacets: [OwnerTruthMemoryFacetKind: [String]]?
+        controller.onRequestCorrectionPreview = { _, facets, completion in
+            submittedFacets = facets
+            completion(.failure(OwnerTruthRemoteContractError.invalidCommand("stop after capture")))
+        }
+        controller.loadViewIfNeeded()
+
+        button(in: controller.view, identifier: "owner-truth-candidate-detail-correct")?
+            .sendActions(for: .touchUpInside)
+        textView(in: controller.view, identifier: "owner-truth-candidate-correction-input")?.text =
+            "我在 2017 年从 A 大学计算机专业毕业。"
+        button(in: controller.view, identifier: "owner-truth-candidate-correction-submit")?
+            .sendActions(for: .touchUpInside)
+
+        XCTAssertNil(submittedFacets)
+    }
+
+    func testV5ReviewRejectsAProposalThatWasNotTheDisplayedSnapshot() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000171")
+        let client = CandidateReviewClientSpy()
+        let inbox = try v5CandidateInbox(vaultID: lease.vaultId, candidateID: candidateID)
+        client.inboxResult = .success(inbox)
+        client.reviewResult = .success(try decisionResult(
+            candidateID: candidateID,
+            decision: .corrected,
+            candidateBeforeHash: String(repeating: "a", count: 64)
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.refresh)
+        let staleProposal = try staleV5Proposal()
+        let staleBinding = OwnerTruthCandidateReviewBinding(
+            candidateID: candidateID,
+            candidateVersion: 3,
+            candidateContentHash: String(repeating: "a", count: 64),
+            proposal: staleProposal
+        )
+        useCase.send(.correct(
+            candidateID: candidateID,
+            correctedPrimaryValue: "我在 2017 年从 A 大学计算机专业毕业。",
+            proposedChangeSet: staleProposal,
+            displayedBinding: staleBinding
+        ))
+
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+        XCTAssertEqual(useCase.viewState.notice, .candidateVersionChanged)
+    }
+
+    @MainActor
+    func testV5CandidateDetailRendersAllEightOperationKindsWithTheirOwnSemantics() throws {
+        let expected: [(String, String)] = [
+            ("add", "目标：新建一条独立正式记忆"),
+            ("addEvidence", "目标：正式记忆第 2 版"),
+            ("refine", "目标：正式记忆第 2 版"),
+            ("temporalChange", "目标：正式记忆第 2 版"),
+            ("correct", "目标：正式记忆第 2 版"),
+            ("dispute", "目标：正式记忆第 2 版"),
+            ("duplicate", "识别为已有正式记忆，不新增版本"),
+            ("noPersonalFact", "确认后：不写入跨会话正式记忆"),
+        ]
+
+        for (kind, semanticText) in expected {
+            let controller = OwnerTruthCandidateDetailViewController(
+                item: try v5CandidateDetailItem(operationKind: kind)
+            )
+            controller.loadViewIfNeeded()
+            let rendered = allLabelText(in: controller.view)
+            XCTAssertTrue(rendered.contains(semanticText), "missing \(kind): \(semanticText)")
+            XCTAssertEqual(
+                button(in: controller.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled,
+                true,
+                "valid \(kind) must remain reviewable"
+            )
+        }
+    }
+
+    @MainActor
+    func testV5CandidateDetailBlocksMissingAfterTargetAndOpaqueFactShapes() throws {
+        let invalidItems = [
+            try v5CandidateDetailItem(operationKind: "add", omitRequiredAfter: true),
+            try v5CandidateDetailItem(operationKind: "correct", omitRequiredTarget: true),
+            try v5CandidateDetailItem(operationKind: "correct", opaqueAfter: true),
+        ]
+
+        for item in invalidItems {
+            let controller = OwnerTruthCandidateDetailViewController(item: item)
+            controller.loadViewIfNeeded()
+            XCTAssertTrue(allLabelText(in: controller.view).contains("变更预览不完整"))
+            XCTAssertEqual(
+                button(in: controller.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled,
+                false
+            )
+        }
+    }
+
+    @MainActor
+    func testV5CandidateDetailShowsEveryOperationInsteadOfOnlyTheFirstThree() throws {
+        let controller = OwnerTruthCandidateDetailViewController(
+            item: try v5CandidateDetailItem(operationKind: "correct", operationCount: 5)
+        )
+        controller.loadViewIfNeeded()
+
+        for index in 0..<5 {
+            XCTAssertNotNil(buttonOrLabel(
+                in: controller.view,
+                identifier: "owner-truth-candidate-operation-\(index)-after"
+            ))
+        }
+        XCTAssertFalse(allLabelText(in: controller.view).contains("其余 2 项"))
+    }
+
+    @MainActor
+    func testV5CandidateDetailPreservesPlaceholderLikeWordsAndLongTextAsFacts() throws {
+        let statement = "afterText（不是占位符）\n这是一段合法事实，包含括号、换行和代码 proposal.baseMemoryRevision，" +
+            String(repeating: "长中文内容", count: 40)
+        let controller = OwnerTruthCandidateDetailViewController(
+            item: try v5CandidateDetailItem(operationKind: "add", statement: statement)
+        )
+        controller.loadViewIfNeeded()
+
+        XCTAssertTrue(allLabelText(in: controller.view).contains(statement))
+    }
+
+    @MainActor
+    func testV5LongCandidateDetailCanScrollToBoundAcceptActionOnSmallViewport() throws {
+        let statement = String(repeating: "这是一段需要完整核对的长中文事实。", count: 80)
+        let controller = OwnerTruthCandidateDetailViewController(
+            item: try v5CandidateDetailItem(operationKind: "add", statement: statement)
+        )
+        controller.loadViewIfNeeded()
+        controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 568)
+        controller.view.setNeedsLayout()
+        controller.view.layoutIfNeeded()
+
+        XCTAssertTrue(controller.contentIsScrollableForUIQA)
+        XCTAssertTrue(controller.scrollToAcceptActionForUIQA())
+        XCTAssertEqual(
+            button(in: controller.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled,
+            true
+        )
+    }
+
+    @MainActor
+    func testV5RefineRendersTheProposedFormalFactInsteadOfRepeatingCandidateText() throws {
+        let candidateText = "我在 A 大学毕业。"
+        let finalText = "我在 2016 年从 A 大学计算机专业毕业。"
+        let controller = OwnerTruthCandidateDetailViewController(item: try v5CandidateDetailItem(
+            operationKind: "refine",
+            statement: candidateText,
+            finalStatement: finalText
+        ))
+        controller.loadViewIfNeeded()
+
+        let rendered = allLabelText(in: controller.view)
+        XCTAssertTrue(rendered.contains("确认后：\(finalText)"))
+        XCTAssertFalse(rendered.contains("确认后：\(candidateText)"))
+    }
+
+    @MainActor
+    func testV5FacetOnlyDiffIsReadableAndReviewable() throws {
+        let controller = OwnerTruthCandidateDetailViewController(item: try v5CandidateDetailItem(
+            operationKind: "refine",
+            facetOnlyDiff: true
+        ))
+        controller.loadViewIfNeeded()
+
+        let rendered = allLabelText(in: controller.view)
+        XCTAssertTrue(rendered.contains("字段变化：情绪内容｜确认前：平静｜确认后：安心"))
+        XCTAssertTrue(rendered.contains("字段变化：情绪证据方式｜确认前：inferred｜确认后：ownerStated"))
+        XCTAssertTrue(rendered.contains("字段变化：情绪可信度｜确认前：0.72｜确认后：1.0"))
+        XCTAssertEqual(
+            button(in: controller.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled,
+            true
+        )
+    }
+
+    func testV5FacetStatesDistinguishNonEmptyEmptyMissingMalformedAndFutureSchema() throws {
+        let emptyFacets: [String: OwnerTruthJSONValue] = Dictionary(
+            uniqueKeysWithValues: OwnerTruthMemoryFacetKind.allCases.map { ($0.rawValue, .array([])) }
+        ).merging(["confidence": .number(0.5)]) { _, new in new }
+        guard case .available(let parsedEmpty) = OwnerTruthMemoryFacetsState.resolve(
+            contentSchemaVersion: "owner-truth-v5",
+            content: ["facets": .object(emptyFacets)]
+        ) else { return XCTFail("valid empty V5 facets must be available") }
+        XCTAssertTrue(parsedEmpty.isEmpty)
+
+        XCTAssertEqual(
+            OwnerTruthMemoryFacetsState.resolve(
+                contentSchemaVersion: "owner-truth-v5",
+                content: [:]
+            ),
+            .invalid
+        )
+        XCTAssertEqual(
+            OwnerTruthMemoryFacetsState.resolve(
+                contentSchemaVersion: "owner-truth-v5",
+                content: ["facets": .string("malformed")]
+            ),
+            .invalid
+        )
+        XCTAssertEqual(
+            OwnerTruthMemoryFacetsState.resolve(
+                contentSchemaVersion: "owner-truth-v6",
+                content: ["facets": .object(emptyFacets)]
+            ),
+            .unsupportedSchema("owner-truth-v6")
+        )
+
+        let item = try XCTUnwrap(try v5CandidateInbox(
+            vaultID: "vault-v5-non-empty",
+            candidateID: recordID("00000000-0000-0000-0000-000000000171")
+        ).candidates.first)
+        guard case .available(let nonEmpty) = item.facetsState else {
+            return XCTFail("non-empty V5 facets must be available")
+        }
+        XCTAssertFalse(nonEmpty.isEmpty)
+    }
+
+    @MainActor
+    func testV5CorrectionOnlySubmitsFacetGroupsTheOwnerActuallyChanged() throws {
+        let controller = OwnerTruthCandidateDetailViewController(item: try v5CandidateDetailItem())
+        var submittedFacets: [OwnerTruthMemoryFacetKind: [String]]?
+        controller.onRequestCorrectionPreview = { _, facets, completion in
+            submittedFacets = facets
+            completion(.failure(OwnerTruthRemoteContractError.invalidCommand("captured")))
+        }
+        controller.loadViewIfNeeded()
+        button(in: controller.view, identifier: "owner-truth-candidate-detail-correct")?
+            .sendActions(for: .touchUpInside)
+        textView(in: controller.view, identifier: "owner-truth-candidate-correction-input")?.text =
+            "我在 2017 年从 A 大学计算机专业毕业。"
+        textField(in: controller.view, identifier: "owner-truth-candidate-facet-people-input")?.text =
+            "外公，母亲"
+        button(in: controller.view, identifier: "owner-truth-candidate-correction-submit")?
+            .sendActions(for: .touchUpInside)
+
+        XCTAssertEqual(submittedFacets?.keys.sorted(by: { $0.rawValue < $1.rawValue }), [.people])
+        XCTAssertEqual(submittedFacets?[.people], ["外公", "母亲"])
+    }
+
+    @MainActor
+    func testV5CorrectionPreviewDropsOlderOutOfOrderUIKitCompletion() throws {
+        let controller = OwnerTruthCandidateDetailViewController(item: try v5CandidateDetailItem())
+        var completions: [(Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void] = []
+        controller.onRequestCorrectionPreview = { _, _, completion in
+            completions.append(completion)
+        }
+        let window = UIWindow(frame: UIScreen.main.bounds)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        controller.loadViewIfNeeded()
+
+        button(in: controller.view, identifier: "owner-truth-candidate-detail-correct")?
+            .sendActions(for: .touchUpInside)
+        textView(in: controller.view, identifier: "owner-truth-candidate-correction-input")?.text =
+            "第一次更正"
+        button(in: controller.view, identifier: "owner-truth-candidate-correction-submit")?
+            .sendActions(for: .touchUpInside)
+        textView(in: controller.view, identifier: "owner-truth-candidate-correction-input")?.text =
+            "第二次更正"
+        button(in: controller.view, identifier: "owner-truth-candidate-correction-submit")?
+            .sendActions(for: .touchUpInside)
+
+        XCTAssertEqual(completions.count, 2)
+        let firstProposal = try XCTUnwrap(try v5CandidateInbox(
+            vaultID: "vault-out-of-order",
+            candidateID: recordID("00000000-0000-0000-0000-000000000171"),
+            finalStatement: "第一次更正"
+        ).candidates.first?.proposedChangeSet)
+        let secondProposal = try XCTUnwrap(try v5CandidateInbox(
+            vaultID: "vault-out-of-order",
+            candidateID: recordID("00000000-0000-0000-0000-000000000171"),
+            finalStatement: "第二次更正"
+        ).candidates.first?.proposedChangeSet)
+
+        completions[0](.success(firstProposal))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertNil(controller.presentedViewController)
+
+        completions[1](.success(secondProposal))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.10))
+        let preview = try XCTUnwrap(controller.presentedViewController)
+        XCTAssertEqual(preview.view.accessibilityIdentifier, "owner-truth-correction-preview")
+        let message = try XCTUnwrap(textView(
+            in: preview.view,
+            identifier: "owner-truth-correction-preview-content"
+        )?.text)
+        XCTAssertTrue(message.contains("第二次更正"))
+        XCTAssertFalse(message.contains("第一次更正"))
+    }
+
+    func testV5DisplayedBindingRejectsCandidateRefreshToANewProposal() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000171")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try v5CandidateInbox(vaultID: lease.vaultId, candidateID: candidateID))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        useCase.send(.refresh)
+        let displayedBinding = try XCTUnwrap(useCase.viewState.items.first?.reviewBinding)
+
+        client.inboxResult = .success(try v5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateID: candidateID,
+            statement: "刷新后的另一个方案",
+            candidateHash: String(repeating: "d", count: 64),
+            proposalHash: String(repeating: "e", count: 64)
+        ))
+        useCase.send(.refresh)
+        useCase.send(.accept(candidateID: candidateID, displayedBinding: displayedBinding))
+
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+        XCTAssertEqual(useCase.viewState.notice, .candidateVersionChanged)
+    }
+
+    func testV5ValidDisplayedBindingIsCopiedToTheActualReviewRequest() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000171")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try v5CandidateInbox(vaultID: lease.vaultId, candidateID: candidateID))
+        client.reviewResult = .success(try decisionResult(candidateID: candidateID, decision: .accepted))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        useCase.send(.refresh)
+        let item = try XCTUnwrap(useCase.viewState.items.first)
+        let binding = try XCTUnwrap(item.reviewBinding)
+
+        useCase.send(.accept(candidateID: candidateID, displayedBinding: binding))
+
+        let command = try XCTUnwrap(client.reviewedCommands.first)
+        XCTAssertEqual(command.expectedCandidateVersion, binding.candidateVersion)
+        XCTAssertEqual(command.expectedMemoryRevision, binding.baseMemoryRevision)
+        XCTAssertEqual(command.expectedChangeSetID, binding.changeSetID)
+        XCTAssertEqual(command.expectedProposalHash, binding.proposalHash)
+    }
+
+    func testV5UseCaseCannotBypassInvalidOperationPreviewValidation() throws {
+        for inbox in [
+            try v5CandidateInbox(
+                vaultID: "vault-invalid-operation",
+                candidateID: recordID("00000000-0000-0000-0000-000000000171"),
+                operationKind: "futureUnknownOperation"
+            ),
+            try v5CandidateInbox(
+                vaultID: "vault-invalid-operation",
+                candidateID: recordID("00000000-0000-0000-0000-000000000171"),
+                operationKind: "add",
+                omitRequiredAfter: true
+            ),
+        ] {
+            let runtime = AccountLeaseRuntime(authorityEpoch: "9")
+            runtime.publish(session: accountSession(
+                subjectId: "subject-invalid-operation",
+                vaultId: "vault-invalid-operation",
+                generation: 1,
+                generationID: UUID()
+            ))
+            let lease = try XCTUnwrap(runtime.capture(forSubjectId: "subject-invalid-operation"))
+            let client = CandidateReviewClientSpy()
+            client.inboxResult = .success(inbox)
+            let useCase = OwnerTruthCandidateReviewUseCase(
+                accountLease: lease,
+                client: client,
+                accountLeaseRuntime: runtime,
+                qaGateEnabled: { true }
+            )
+            useCase.send(.refresh)
+            let item = try XCTUnwrap(useCase.viewState.items.first)
+
+            useCase.send(.accept(candidateID: item.id, displayedBinding: item.reviewBinding))
+
+            XCTAssertTrue(client.reviewedCommands.isEmpty)
+            XCTAssertEqual(useCase.viewState.notice, .changeSetPreviewUnavailable)
+        }
+    }
+
+    func testPartialFacetCorrectionPreservesUntouchedInferenceAndOverallConfidence() throws {
+        let inbox = try v5CandidateInbox(
+            vaultID: "vault-partial-facet-correction",
+            candidateID: recordID("00000000-0000-0000-0000-000000000171")
+        )
+        let candidate = try XCTUnwrap(inbox.candidates.first)
+        guard case .available(let facets) = candidate.facetsState else {
+            return XCTFail("expected V5 facets")
+        }
+
+        let corrected = facets.ownerCorrectedJSONValue(valuesByKind: [
+            .people: ["外公", "母亲"],
+        ], markOverallOwnerConfirmed: false)
+        let reparsed = try XCTUnwrap(OwnerTruthMemoryFacets(jsonValue: corrected))
+
+        XCTAssertEqual(reparsed.confidence, 0.88)
+        XCTAssertEqual(reparsed.values(for: .places).first?.value, "杭州")
+        XCTAssertEqual(reparsed.values(for: .places).first?.evidenceMode, .inferred)
+        XCTAssertEqual(reparsed.values(for: .places).first?.confidence, 0.72)
+        XCTAssertEqual(reparsed.values(for: .people).map(\.value), ["外公", "母亲"])
+        XCTAssertTrue(reparsed.values(for: .people).allSatisfy { $0.evidenceMode == .ownerStated })
+    }
+
+    func testProductionLiveGroundingPlanUsesSessionSnapshotWithoutPerTurnBackendAnswer() {
+        let plan = DialogLiveGroundingPlan.sessionSnapshot
+
+        XCTAssertFalse(plan.usesTurnScopedKnowledgeContext)
+        XCTAssertEqual(plan.lifetimePolicy, .userControlledLive)
+        XCTAssertEqual(plan.answerAuthority, .provider)
+        XCTAssertFalse(plan.usesBackendAnswerPerTurn)
+    }
+
+    func testProviderOwnedLiveTurnDoesNotDispatchBackendAnswer() {
+        XCTAssertFalse(DialogLiveAnswerDispatchPolicy.shouldRequestBackendAnswer(
+            isUserControlledLiveSessionOpen: true,
+            lifetimePolicy: .userControlledLive,
+            answerAuthority: .provider
+        ))
+
+        XCTAssertTrue(DialogLiveAnswerDispatchPolicy.shouldRequestBackendAnswer(
+            isUserControlledLiveSessionOpen: false,
+            lifetimePolicy: .userControlledLive,
+            answerAuthority: .provider
+        ))
+        XCTAssertTrue(DialogLiveAnswerDispatchPolicy.shouldRequestBackendAnswer(
+            isUserControlledLiveSessionOpen: true,
+            lifetimePolicy: .automatic,
+            answerAuthority: .provider
+        ))
+        XCTAssertTrue(DialogLiveAnswerDispatchPolicy.shouldRequestBackendAnswer(
+            isUserControlledLiveSessionOpen: true,
+            lifetimePolicy: .userControlledLive,
+            answerAuthority: .dreamJourneyBackend
+        ))
+    }
+
+    func testLiveMemoryFollowUpStorePersistsOpaqueCoordinatesPerAccount() throws {
+        let suiteName = "EchoLiveMemoryFollowUpStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = EchoLiveMemoryFollowUpStore(
+            defaults: defaults,
+            now: { Date(timeIntervalSince1970: 1_725_979_200) }
+        )
+        let firstLease = AccountLease(
+            subjectId: "subject-a",
+            vaultId: "vault-a",
+            sessionId: "session-a",
+            generation: 1,
+            generationId: UUID(),
+            authorityEpoch: "7"
+        )
+        let secondLease = AccountLease(
+            subjectId: "subject-b",
+            vaultId: "vault-b",
+            sessionId: "session-b",
+            generation: 1,
+            generationId: UUID(),
+            authorityEpoch: "7"
+        )
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000001")
+
+        try store.upsert(
+            productSessionID: "echo_live_follow_up_001",
+            reviewBatchID: reviewBatchID,
+            for: firstLease
+        )
+
+        XCTAssertEqual(store.records(for: firstLease).count, 1)
+        XCTAssertEqual(store.records(for: firstLease).first?.reviewBatchID, reviewBatchID.rawValue)
+        XCTAssertTrue(store.records(for: secondLease).isEmpty)
+
+        try store.remove(productSessionID: "echo_live_follow_up_001", for: firstLease)
+        XCTAssertTrue(store.records(for: firstLease).isEmpty)
+    }
+
+    func testPlainTextArchiveItemDoesNotRetryRetiredPublicArchiveEndpoint() {
+        let text = MemoryArchiveItem(
+            kind: .text,
+            title: "synthetic text",
+            note: "synthetic evidence",
+            ownerUserId: "owner-synthetic"
+        )
+        let timeLetter = MemoryArchiveItem(
+            kind: .timeLetter,
+            title: "synthetic letter",
+            note: "synthetic delivery",
+            ownerUserId: "owner-synthetic"
+        )
+
+        XCTAssertFalse(text.isPublicBackendSyncEligible)
+        XCTAssertTrue(timeLetter.isPublicBackendSyncEligible)
+    }
+
+    func testProviderLiveStartConfigUsesCanonicalSingleDialogStartSession() throws {
+        let role = "服务端最终角色正文\nF001 本科毕业于甲大学。"
+        let documentedStartSession: [String: Any] = [
+            "asr": [
+                "audio_info": ["format": "pcm", "sample_rate": 16_000, "channel": 1],
+                "extra": ["enable_custom_vad": true],
+            ],
+            "dialog": [
+                "bot_name": "寻梦环游",
+                "system_role": "stale",
+                "speaking_style": "自然、温和",
+                "extra": ["model": "1.2.1.1"],
+            ],
+            "tts": [
+                "speaker": "synthetic-speaker",
+                "audio_config": ["speech_rate": -20, "loudness_rate": 10],
+            ],
+        ]
+
+        let bound = try DialogProviderLiveStartConfigBuilder.applying(
+            providerRoleText: role,
+            to: documentedStartSession
+        )
+        let encoded = try DialogProviderLiveStartConfigBuilder.encodedStartConfig(
+            bound,
+            expectedProviderRoleText: role
+        )
+        let submitted = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(encoded.utf8)) as? [String: Any]
+        )
+        let dialog = try XCTUnwrap(submitted["dialog"] as? [String: Any])
+        let dialogExtra = try XCTUnwrap(dialog["extra"] as? [String: Any])
+
+        XCTAssertEqual(
+            DialogProviderLiveStartConfigBuilder.submittedRoleText(in: submitted),
+            role
+        )
+        XCTAssertEqual(dialog["system_role"] as? String, role)
+        XCTAssertEqual(dialogExtra["model"] as? String, "1.2.1.1")
+        XCTAssertNotNil(submitted["asr"] as? [String: Any])
+        XCTAssertNotNil(submitted["tts"] as? [String: Any])
+        XCTAssertNil(dialog["dialog"])
+        XCTAssertNil(dialog["asr"])
+        XCTAssertNil(dialog["tts"])
+    }
+
+    func testProviderLiveStartConfigRejectsLegacyDoubleDialogWrapper() {
+        let role = "服务端最终角色正文"
+        let legacyDoubleWrapper: [String: Any] = [
+            "dialog": [
+                "asr": ["audio_info": ["format": "pcm"]],
+                "dialog": [
+                    "bot_name": "寻梦环游",
+                    "system_role": role,
+                    "speaking_style": "自然",
+                    "extra": ["model": "1.2.1.1"],
+                ],
+                "tts": ["speaker": "synthetic-speaker"],
+            ],
+        ]
+        XCTAssertThrowsError(
+            try DialogProviderLiveStartConfigBuilder.encodedStartConfig(
+                legacyDoubleWrapper,
+                expectedProviderRoleText: role
+            )
+        )
+    }
+
+    func testProviderLiveStartConfigRejectsMissingEmptyTypedOrTamperedRole() throws {
+        let role = "服务端最终角色正文"
+        let base: [String: Any] = [
+            "asr": ["audio_info": ["format": "pcm"]],
+            "dialog": [
+                "bot_name": "寻梦环游",
+                "speaking_style": "自然",
+                "extra": ["model": "1.2.1.1"],
+            ],
+        ]
+
+        XCTAssertThrowsError(
+            try DialogProviderLiveStartConfigBuilder.encodedStartConfig(
+                base,
+                expectedProviderRoleText: role
+            )
+        )
+        for invalidRole: Any in ["", "   ", 42] {
+            var invalid = base
+            var dialog = try XCTUnwrap(invalid["dialog"] as? [String: Any])
+            dialog["system_role"] = invalidRole
+            invalid["dialog"] = dialog
+            XCTAssertThrowsError(
+                try DialogProviderLiveStartConfigBuilder.encodedStartConfig(
+                    invalid,
+                    expectedProviderRoleText: role
+                )
+            )
+        }
+
+        let canonical = try DialogProviderLiveStartConfigBuilder.applying(
+            providerRoleText: "different",
+            to: base
+        )
+        XCTAssertThrowsError(
+            try DialogProviderLiveStartConfigBuilder.encodedStartConfig(
+                canonical,
+                expectedProviderRoleText: role
+            )
+        )
+    }
+
+    func testProviderLiveCanonicalConfigKeepsModelASRTTSAndObservedEndpointing() throws {
+        let config = DialogProviderLiveStartConfigBuilder.makeCanonicalStartConfig(
+            systemRole: "synthetic role",
+            speakingStyle: "synthetic style",
+            model: "1.2.1.1",
+            ttsSpeaker: "synthetic-speaker",
+            hotwords: ["synthetic-hotword"]
+        )
+        let asr = try XCTUnwrap(config["asr"] as? [String: Any])
+        let asrExtra = try XCTUnwrap(asr["extra"] as? [String: Any])
+        let dialog = try XCTUnwrap(config["dialog"] as? [String: Any])
+        let dialogExtra = try XCTUnwrap(dialog["extra"] as? [String: Any])
+        let tts = try XCTUnwrap(config["tts"] as? [String: Any])
+        let audioConfig = try XCTUnwrap(tts["audio_config"] as? [String: Any])
+
+        XCTAssertEqual(dialogExtra["model"] as? String, "1.2.1.1")
+        XCTAssertEqual(asrExtra["end_smooth_window_ms"] as? Int, 1_500)
+        XCTAssertEqual(asrExtra["enable_custom_vad"] as? Bool, true)
+        XCTAssertEqual(asr["hot_words"] as? [String], ["synthetic-hotword"])
+        XCTAssertEqual(tts["speaker"] as? String, "synthetic-speaker")
+        XCTAssertEqual(audioConfig["speech_rate"] as? Int, -20)
+        XCTAssertEqual(audioConfig["loudness_rate"] as? Int, 10)
+        XCTAssertNil(dialog["asr"])
+        XCTAssertNil(dialog["tts"])
+    }
+
+    func testProviderLiveStartConfigRejectsMisplacedModelASRAndMalformedTTS() throws {
+        let role = "synthetic role"
+        let canonical = DialogProviderLiveStartConfigBuilder.makeCanonicalStartConfig(
+            systemRole: role,
+            speakingStyle: "synthetic style",
+            model: "1.2.1.1",
+            ttsSpeaker: "synthetic-speaker",
+            hotwords: []
+        )
+
+        var missingRootASR = canonical
+        missingRootASR.removeValue(forKey: "asr")
+        XCTAssertThrowsError(
+            try DialogProviderLiveStartConfigBuilder.encodedStartConfig(
+                missingRootASR,
+                expectedProviderRoleText: role
+            )
+        )
+
+        var misplacedModel = canonical
+        var dialog = try XCTUnwrap(misplacedModel["dialog"] as? [String: Any])
+        dialog.removeValue(forKey: "extra")
+        misplacedModel["dialog"] = dialog
+        misplacedModel["model"] = "1.2.1.1"
+        XCTAssertThrowsError(
+            try DialogProviderLiveStartConfigBuilder.encodedStartConfig(
+                misplacedModel,
+                expectedProviderRoleText: role
+            )
+        )
+
+        var malformedTTS = canonical
+        malformedTTS["tts"] = ["speaker": "synthetic-speaker"]
+        XCTAssertThrowsError(
+            try DialogProviderLiveStartConfigBuilder.encodedStartConfig(
+                malformedTTS,
+                expectedProviderRoleText: role
+            )
+        )
+    }
+
+    func testProviderTurnCorrelationSeparatesQuestionsRepliesAndReconnects() throws {
+        let firstGeneration = UUID()
+        let secondGeneration = UUID()
+        var state = DialogProviderTurnCorrelationState()
+        state.beginSession(generation: firstGeneration)
+
+        XCTAssertEqual(
+            state.observeQuestion(id: "question-1", generation: firstGeneration),
+            1
+        )
+        XCTAssertEqual(
+            state.observeQuestion(id: "question-1", generation: firstGeneration),
+            1
+        )
+        XCTAssertEqual(
+            state.observeQuestion(id: "question-2", generation: firstGeneration),
+            2
+        )
+        XCTAssertEqual(
+            state.observeReply(
+                questionID: "question-1",
+                replyID: "reply-stale",
+                generation: firstGeneration
+            ),
+            .staleQuestion
+        )
+        XCTAssertEqual(
+            state.observeReply(
+                questionID: "question-2",
+                replyID: "reply-2",
+                generation: firstGeneration
+            ),
+            .matched
+        )
+        XCTAssertEqual(state.currentReplyID, "reply-2")
+        XCTAssertEqual(
+            state.observeReply(
+                questionID: "question-2",
+                replyID: "reply-from-old-connection",
+                generation: secondGeneration
+            ),
+            .staleGeneration
+        )
+
+        state.beginSession(generation: secondGeneration)
+        XCTAssertEqual(state.turnSequence, 0)
+        XCTAssertNil(state.currentQuestionID)
+        XCTAssertNil(state.currentReplyID)
+    }
+
+    func testProviderEventMetadataAcceptsIdentifierOnlyASRAndNestedReplyIDs() throws {
+        let identifierOnly = Data(#"{"payload":{"question_id":"question-only"}}"#.utf8)
+        let asrMetadata = DialogProviderEventMetadata(data: identifierOnly)
+        XCTAssertEqual(asrMetadata.questionID, "question-only")
+        XCTAssertNil(asrMetadata.replyID)
+
+        let nestedReply = Data(
+            #"{"result":{"questionId":"question-2","reply_id":"reply-2","ttsType":"sentence"}}"#.utf8
+        )
+        let replyMetadata = DialogProviderEventMetadata(data: nestedReply)
+        XCTAssertEqual(replyMetadata.questionID, "question-2")
+        XCTAssertEqual(replyMetadata.replyID, "reply-2")
+        XCTAssertEqual(replyMetadata.ttsType, "sentence")
+    }
+
+    func testChatRAGTextEncoderUsesExternalRAGArrayStringAndRejectsOversize() throws {
+        let payload = try DialogChatRAGTextPayloadEncoder.encode(
+            content: "合成人物本科毕业于甲大学。"
+        )
+        let outer = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any]
+        )
+        XCTAssertNil(outer["content"])
+        let externalRAG = try XCTUnwrap(outer["external_rag"] as? String)
+        let entries = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(externalRAG.utf8))
+                as? [[String: String]]
+        )
+        XCTAssertEqual(entries, [[
+            "title": "已确认正式事实",
+            "content": "合成人物本科毕业于甲大学。",
+        ]])
+
+        XCTAssertThrowsError(
+            try DialogChatRAGTextPayloadEncoder.encode(
+                content: String(repeating: "合成", count: 4_096)
+            )
+        )
+    }
+
+    #if DEBUG
+    func testT06InspectorReadsActualSDKRolePathAndSameHash() throws {
+        let role = DialogT06DiagnosticMode.syntheticProviderRoleText
+        let payload = DialogProviderLiveStartConfigBuilder.makeCanonicalStartConfig(
+            systemRole: role,
+            speakingStyle: "synthetic style",
+            model: "1.2.1.1",
+            ttsSpeaker: "synthetic-speaker",
+            hotwords: []
+        )
+        let frame = try makeT06ClientEventFrame(payload: payload)
+
+        let observation = try XCTUnwrap(
+            DialogT06SDKFrameInspector.inspect(
+                frame: frame,
+                expectedRoleText: role,
+                expectedProviderContextHash: DialogT06DiagnosticMode.providerContextHash,
+                expectedFieldPath: DialogT06DiagnosticMode.expectedRolePath
+            )
+        )
+
+        XCTAssertEqual(observation.event, 100)
+        XCTAssertEqual(observation.fieldPath, "dialog.system_role")
+        XCTAssertEqual(observation.roleByteCount, role.utf8.count)
+        XCTAssertEqual(observation.roleHash, DialogT06DiagnosticMode.providerContextHash)
+        XCTAssertTrue(observation.modelFieldPresent)
+        XCTAssertFalse(observation.hasLegacyDialogWrapper)
+        XCTAssertTrue(observation.contractMatches)
+    }
+
+    func testT06InspectorReadsLockedSDKSequenceAndSessionEnvelope() throws {
+        let role = DialogT06DiagnosticMode.syntheticProviderRoleText
+        let payload = DialogProviderLiveStartConfigBuilder.makeCanonicalStartConfig(
+            systemRole: role,
+            speakingStyle: "synthetic style",
+            model: "1.2.1.1",
+            ttsSpeaker: "synthetic-speaker",
+            hotwords: []
+        )
+        let frame = try makeT06ClientEventFrame(
+            payload: payload,
+            sequence: 1,
+            sessionID: "75a6126e-427f-49a1-a2c1-621143cb9db3"
+        )
+
+        let observation = try XCTUnwrap(
+            DialogT06SDKFrameInspector.inspect(
+                frame: frame,
+                expectedRoleText: role,
+                expectedProviderContextHash: DialogT06DiagnosticMode.providerContextHash,
+                expectedFieldPath: DialogT06DiagnosticMode.expectedRolePath
+            )
+        )
+
+        XCTAssertEqual(observation.event, 100)
+        XCTAssertEqual(observation.fieldPath, "dialog.system_role")
+        XCTAssertTrue(observation.contractMatches)
+    }
+
+    func testT06InspectorRejectsLegacyDoubleDialogRoleWrapper() throws {
+        let role = DialogT06DiagnosticMode.syntheticProviderRoleText
+        let frame = try makeT06ClientEventFrame(payload: [
+            "dialog": [
+                "asr": ["extra": ["enable_custom_vad": true]],
+                "dialog": [
+                    "bot_name": "寻梦环游",
+                    "system_role": role,
+                    "speaking_style": "synthetic style",
+                    "extra": ["model": "1.2.1.1"],
+                ],
+                "tts": ["speaker": "synthetic-speaker"],
+            ],
+        ])
+
+        let observation = try XCTUnwrap(
+            DialogT06SDKFrameInspector.inspect(
+                frame: frame,
+                expectedRoleText: role,
+                expectedProviderContextHash: DialogT06DiagnosticMode.providerContextHash,
+                expectedFieldPath: DialogT06DiagnosticMode.expectedRolePath
+            )
+        )
+
+        XCTAssertEqual(observation.fieldPath, "dialog.dialog.system_role")
+        XCTAssertTrue(observation.roleMatchesExpected)
+        XCTAssertTrue(observation.hashMatchesExpected)
+        XCTAssertFalse(observation.fieldPathMatchesExpected)
+        XCTAssertFalse(observation.contractMatches)
+    }
+
+    func testT06InspectorAcceptsGzipAndRejectsWrongEventOrFragment() throws {
+        let role = DialogT06DiagnosticMode.syntheticProviderRoleText
+        let payload = DialogProviderLiveStartConfigBuilder.makeCanonicalStartConfig(
+            systemRole: role,
+            speakingStyle: "synthetic style",
+            model: "1.2.1.1",
+            ttsSpeaker: "synthetic-speaker",
+            hotwords: []
+        )
+        let gzipFrame = try makeT06ClientEventFrame(payload: payload, compressed: true)
+        XCTAssertTrue(
+            try XCTUnwrap(
+                DialogT06SDKFrameInspector.inspect(
+                    frame: gzipFrame,
+                    expectedRoleText: role,
+                    expectedProviderContextHash: DialogT06DiagnosticMode.providerContextHash,
+                    expectedFieldPath: DialogT06DiagnosticMode.expectedRolePath
+                )
+            ).contractMatches
+        )
+
+        let wrongEvent = try makeT06ClientEventFrame(payload: payload, event: 1)
+        XCTAssertNil(
+            DialogT06SDKFrameInspector.inspect(
+                frame: wrongEvent,
+                expectedRoleText: role,
+                expectedProviderContextHash: DialogT06DiagnosticMode.providerContextHash,
+                expectedFieldPath: DialogT06DiagnosticMode.expectedRolePath
+            )
+        )
+        XCTAssertNil(
+            DialogT06SDKFrameInspector.inspect(
+                frame: gzipFrame.dropLast(),
+                expectedRoleText: role,
+                expectedProviderContextHash: DialogT06DiagnosticMode.providerContextHash,
+                expectedFieldPath: DialogT06DiagnosticMode.expectedRolePath
+            )
+        )
+    }
+
+    func testT06DiagnosticSyntheticOverrideIsOffInNormalTestLaunch() {
+        XCTAssertFalse(DialogT06DiagnosticMode.isEnabled)
+    }
+
+    private func makeT06ClientEventFrame(
+        payload: [String: Any],
+        event: Int = 100,
+        compressed: Bool = false,
+        sequence: Int? = nil,
+        sessionID: String? = nil
+    ) throws -> Data {
+        let json = try JSONSerialization.data(withJSONObject: payload)
+        let body = compressed
+            ? try XCTUnwrap(DialogT06SDKFrameInspector.gzipForTesting(json))
+            : json
+        let flags: UInt8 = sequence == nil ? 0x04 : 0x05
+        var frame = Data([0x11, 0x10 | flags, compressed ? 0x11 : 0x10, 0x00])
+        if let sequence {
+            var sequenceValue = UInt32(sequence).bigEndian
+            frame.append(Data(bytes: &sequenceValue, count: MemoryLayout<UInt32>.size))
+        }
+        var eventValue = UInt32(event).bigEndian
+        var sizeValue = UInt32(body.count).bigEndian
+        frame.append(Data(bytes: &eventValue, count: MemoryLayout<UInt32>.size))
+        let resolvedSessionID = sessionID ?? (
+            event == DialogT06SDKFrameInspector.startSessionEvent
+                ? "75a6126e-427f-49a1-a2c1-621143cb9db3"
+                : nil
+        )
+        if let sessionID = resolvedSessionID {
+            let sessionData = Data(sessionID.utf8)
+            var sessionSize = UInt32(sessionData.count).bigEndian
+            frame.append(Data(bytes: &sessionSize, count: MemoryLayout<UInt32>.size))
+            frame.append(sessionData)
+        }
+        frame.append(Data(bytes: &sizeValue, count: MemoryLayout<UInt32>.size))
+        frame.append(body)
+        return frame
+    }
+    #endif
+
     func testEchoResponseStylePolicyKeepsSelfAssistantInSecondPersonAndMemoryObjective() {
         let context = DigitalHumanContext(
             viewerUserId: "owner-1",
@@ -1160,7 +5556,12 @@ final class OwnerTruthContractsTests: XCTestCase {
         let proposal = try XCTUnwrap(inbox.candidates.first?.proposedChangeSet)
         client.inboxResult = .success(inbox)
         client.changeSetPreviewResult = .success(proposal)
-        client.reviewResult = .success(try decisionResult(candidateID: candidateID, decision: .corrected))
+        client.reviewResult = .success(try decisionResult(
+            candidateID: candidateID,
+            decision: .corrected,
+            candidateBeforeHash: String(repeating: "a", count: 64),
+            candidateVersion: 4
+        ))
         let useCase = OwnerTruthCandidateReviewUseCase(
             accountLease: lease,
             client: client,
@@ -1185,10 +5586,17 @@ final class OwnerTruthContractsTests: XCTestCase {
 
         XCTAssertEqual(client.reviewedCommands.count, 0)
         let boundProposal = try XCTUnwrap(previewedProposal)
+        let binding = OwnerTruthCandidateReviewBinding(
+            candidateID: candidateID,
+            candidateVersion: 3,
+            candidateContentHash: String(repeating: "a", count: 64),
+            proposal: boundProposal
+        )
         useCase.send(.correct(
             candidateID: candidateID,
             correctedPrimaryValue: "我在 2016 年从 A 大学计算机专业毕业。",
-            proposedChangeSet: boundProposal
+            proposedChangeSet: boundProposal,
+            displayedBinding: binding
         ))
 
         let command = try XCTUnwrap(client.reviewedCommands.first)
@@ -1679,6 +6087,1407 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(useCase.viewState.notice, .candidateAccepted)
         XCTAssertEqual(useCase.viewState.latestReceipt?.decision, .accepted)
         XCTAssertTrue(useCase.viewState.latestReceipt?.createdMemoryVersion == true)
+    }
+
+    func testCandidateReviewRefreshesRemainingProposalAfterOneV5Decision() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstID = recordID("00000000-0000-0000-0000-0000000006a1")
+        let secondID = recordID("00000000-0000-0000-0000-0000000006a2")
+        let client = CandidateReviewClientSpy()
+        client.inboxResults = [
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [firstID, secondID],
+                memoryRevision: 9,
+                proposalGeneration: 1
+            )),
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [secondID],
+                memoryRevision: 10,
+                proposalGeneration: 2
+            )),
+        ]
+        client.reviewResults = [
+            .success(try decisionResult(
+                candidateID: firstID,
+                decision: .accepted,
+                memoryRevision: 10,
+                candidateBeforeHash: String(repeating: "a", count: 64)
+            )),
+            .success(try decisionResult(
+                candidateID: secondID,
+                decision: .accepted,
+                memoryRevision: 11,
+                candidateBeforeHash: String(repeating: "a", count: 64)
+            )),
+        ]
+        var commandIndex = 0
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: {
+                defer { commandIndex += 1 }
+                return "candidate-review-sequential-\(commandIndex)"
+            }
+        )
+
+        useCase.send(.refresh)
+        let firstBinding = try XCTUnwrap(
+            useCase.viewState.items.first(where: { $0.id == firstID })?.reviewBinding
+        )
+        let staleSecondBinding = try XCTUnwrap(
+            useCase.viewState.items.first(where: { $0.id == secondID })?.reviewBinding
+        )
+        useCase.send(.accept(candidateID: firstID, displayedBinding: firstBinding))
+
+        XCTAssertEqual(client.inboxRequestCount, 2)
+        let refreshedSecond = try XCTUnwrap(useCase.viewState.items.first)
+        let refreshedBinding = try XCTUnwrap(refreshedSecond.reviewBinding)
+        XCTAssertEqual(refreshedSecond.id, secondID)
+        XCTAssertEqual(refreshedBinding.baseMemoryRevision, 10)
+        XCTAssertNotEqual(refreshedBinding.proposalHash, staleSecondBinding.proposalHash)
+
+        useCase.send(.accept(candidateID: secondID, displayedBinding: staleSecondBinding))
+        XCTAssertEqual(client.reviewedCommands.count, 1)
+        XCTAssertEqual(useCase.viewState.notice, .candidateVersionChanged)
+
+        useCase.send(.accept(candidateID: secondID, displayedBinding: refreshedBinding))
+        XCTAssertEqual(client.reviewedCommands.count, 2)
+        XCTAssertEqual(client.reviewedCommands.last?.expectedMemoryRevision, 10)
+    }
+
+    @MainActor
+    func testCandidateInboxUIKitRequiresFreshSecondPreviewAfterFirstCommit() throws {
+        UIView.setAnimationsEnabled(false)
+        defer { UIView.setAnimationsEnabled(true) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstID = recordID("00000000-0000-0000-0000-0000000006a1")
+        let secondID = recordID("00000000-0000-0000-0000-0000000006a2")
+        let client = CandidateReviewClientSpy()
+        client.inboxResults = [
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [firstID, secondID],
+                memoryRevision: 9,
+                proposalGeneration: 1
+            )),
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [secondID],
+                memoryRevision: 10,
+                proposalGeneration: 2
+            )),
+        ]
+        client.reviewResults = [
+            .success(try decisionResult(
+                candidateID: firstID,
+                decision: .accepted,
+                memoryRevision: 10,
+                candidateBeforeHash: String(repeating: "a", count: 64)
+            )),
+            .success(try decisionResult(
+                candidateID: secondID,
+                decision: .accepted,
+                memoryRevision: 11,
+                candidateBeforeHash: String(repeating: "a", count: 64)
+            )),
+        ]
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+        let navigationController = ImmediateNavigationController(rootViewController: controller)
+        let windowScene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        )
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        controller.loadViewIfNeeded()
+
+        let firstTable = try XCTUnwrap(
+            buttonOrLabel(in: controller.view, identifier: "owner-truth-candidate-inbox-list")
+                as? UITableView
+        )
+        firstTable.delegate?.tableView?(firstTable, didSelectRowAt: IndexPath(row: 0, section: 0))
+        let firstDetail = try XCTUnwrap(
+            navigationController.topViewController as? OwnerTruthCandidateDetailViewController
+        )
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
+            navigationController.transitionCoordinator == nil
+        })
+        XCTAssertTrue(firstDetail.renderedTextForUIQA.contains("基于正式记忆第 9 次修订快照"))
+        XCTAssertTrue(
+            button(in: firstDetail.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled
+                == true
+        )
+        firstDetail.onAccept?()
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
+            client.inboxRequestCount == 2 && navigationController.topViewController === controller
+        })
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
+            navigationController.transitionCoordinator == nil
+        })
+        XCTAssertEqual(client.reviewedCommands.count, 1)
+
+        let refreshedTable = try XCTUnwrap(
+            buttonOrLabel(in: controller.view, identifier: "owner-truth-candidate-inbox-list")
+                as? UITableView
+        )
+        refreshedTable.delegate?.tableView?(
+            refreshedTable,
+            didSelectRowAt: IndexPath(row: 0, section: 0)
+        )
+        let secondDetail = try XCTUnwrap(
+            navigationController.topViewController as? OwnerTruthCandidateDetailViewController
+        )
+        let secondRenderedText = secondDetail.renderedTextForUIQA
+        XCTAssertTrue(secondRenderedText.contains("第二条合成审核事实"))
+        XCTAssertTrue(secondRenderedText.contains("基于正式记忆第 10 次修订快照"))
+        XCTAssertFalse(secondRenderedText.contains("基于正式记忆第 9 次修订快照"))
+        attachUIKitEvidence(
+            view: window,
+            name: "T01-second-candidate-fresh-preview"
+        )
+
+        secondDetail.onAccept?()
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
+            client.reviewedCommands.count == 2
+                && navigationController.topViewController === controller
+        })
+        XCTAssertEqual(client.reviewedCommands.map(\.expectedMemoryRevision), [9, 10])
+        XCTAssertEqual(Set(client.reviewedCommands.map(\.commandID)).count, 2)
+    }
+
+    @MainActor
+    func testCandidateInboxUIKitKeepsSecondDetailWhenPolicyExpiresBeforeWrite() throws {
+        UIView.setAnimationsEnabled(false)
+        defer { UIView.setAnimationsEnabled(true) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstID = recordID("00000000-0000-0000-0000-0000000006a1")
+        let secondID = recordID("00000000-0000-0000-0000-0000000006a2")
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let evaluator = FeatureGateEvaluator()
+        var policy = FeatureGatePolicySnapshot(
+            accessMode: .useCachedPolicy,
+            policyVersion: "candidate-write-visible-failure-v1",
+            policyRevision: 1,
+            emergencyRevision: 1,
+            expiresAt: Date().addingTimeInterval(300),
+            featureEnabled: true,
+            releaseVisible: true,
+            reason: "candidateReviewEnabled"
+        )
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: { feature in
+                evaluator.capture(
+                    feature: feature,
+                    risk: .ownerTextCore,
+                    purpose: .request,
+                    localEnabled: true,
+                    qaSyntheticOverride: false,
+                    accountGeneration: authSession.sessionId,
+                    policy: policy
+                )
+            },
+            featureDecisionRevalidator: { decision in
+                evaluator.revalidateForRequest(
+                    captured: decision,
+                    localEnabled: true,
+                    accountGeneration: authSession.sessionId,
+                    currentPolicy: policy
+                )
+            },
+            accountLeaseRuntime: runtime
+        )
+        let initialInbox = sequentialV5CandidateInboxJSONObject(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID],
+            memoryRevision: 9,
+            proposalGeneration: 1
+        )
+        let refreshedInbox = sequentialV5CandidateInboxJSONObject(
+            vaultID: lease.vaultId,
+            candidateIDs: [secondID],
+            memoryRevision: 10,
+            proposalGeneration: 2
+        )
+        let firstDecision: [String: Any] = [
+            "schemaVersion": "owner-truth-candidate-decision-memory-v1",
+            "status": "created",
+            "receipt": [
+                "receiptId": "00000000-0000-0000-0000-0000000006af",
+                "candidateId": firstID.rawValue.uuidString.lowercased(),
+                "decision": "accepted",
+                "candidateVersion": 2,
+                "candidateBeforeHash": String(repeating: "a", count: 64),
+                "candidateAfterHash": String(repeating: "e", count: 64),
+                "correctedValueId": NSNull(),
+            ],
+            "memoryActivation": [
+                "status": "created",
+                "memoryId": "00000000-0000-0000-0000-0000000006b0",
+                "memoryVersionId": "00000000-0000-0000-0000-0000000006b1",
+                "contentHash": String(repeating: "f", count: 64),
+            ],
+            "memoryRevision": 10,
+        ]
+        var inboxGETCount = 0
+        var decisionPOSTCount = 0
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            switch (request.httpMethod, request.url?.path ?? "") {
+            case ("GET", let path) where path.hasSuffix("/candidates"):
+                inboxGETCount += 1
+                loader.respond(
+                    statusCode: 200,
+                    body: try! JSONSerialization.data(
+                        withJSONObject: inboxGETCount == 1 ? initialInbox : refreshedInbox
+                    )
+                )
+            case ("POST", let path) where path.hasSuffix("/decisions"):
+                decisionPOSTCount += 1
+                loader.respond(
+                    statusCode: 200,
+                    body: try! JSONSerialization.data(withJSONObject: firstDecision)
+                )
+            default:
+                XCTFail("Unexpected request \(request.httpMethod ?? "") \(request.url?.path ?? "")")
+                loader.fail(URLError(.badURL))
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+        var renderedInboxState: OwnerTruthCandidateInboxViewState?
+        controller.onViewStateRendered = { renderedInboxState = $0 }
+        let navigationController = ImmediateNavigationController(rootViewController: controller)
+        let windowScene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        )
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        controller.loadViewIfNeeded()
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            inboxGETCount == 1
+                && renderedInboxState?.items.count == 2
+                && renderedInboxState?.items.first?.reviewBinding?.baseMemoryRevision == 9
+        })
+
+        let firstTable = try XCTUnwrap(
+            buttonOrLabel(in: controller.view, identifier: "owner-truth-candidate-inbox-list")
+                as? UITableView
+        )
+        firstTable.delegate?.tableView?(firstTable, didSelectRowAt: IndexPath(row: 0, section: 0))
+        let firstDetail = try XCTUnwrap(
+            navigationController.topViewController as? OwnerTruthCandidateDetailViewController
+        )
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
+            navigationController.transitionCoordinator == nil
+        })
+        firstDetail.onAccept?()
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            inboxGETCount == 2
+                && decisionPOSTCount == 1
+                && navigationController.topViewController === controller
+                && renderedInboxState?.items.first?.reviewBinding?.baseMemoryRevision == 10
+        })
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
+            navigationController.transitionCoordinator == nil
+        })
+
+        let refreshedTable = try XCTUnwrap(
+            buttonOrLabel(in: controller.view, identifier: "owner-truth-candidate-inbox-list")
+                as? UITableView
+        )
+        refreshedTable.delegate?.tableView?(
+            refreshedTable,
+            didSelectRowAt: IndexPath(row: 0, section: 0)
+        )
+        let secondDetail = try XCTUnwrap(
+            navigationController.topViewController as? OwnerTruthCandidateDetailViewController
+        )
+        XCTAssertTrue(secondDetail.renderedTextForUIQA.contains("基于正式记忆第 10 次修订快照"))
+        policy = FeatureGatePolicySnapshot(
+            accessMode: .useCachedPolicy,
+            policyVersion: "candidate-write-visible-failure-v1",
+            policyRevision: 1,
+            emergencyRevision: 1,
+            expiresAt: Date().addingTimeInterval(-30),
+            featureEnabled: true,
+            releaseVisible: true,
+            reason: "candidateReviewEnabled"
+        )
+        secondDetail.onAccept?()
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            secondDetail.presentedViewController is UIAlertController
+        })
+        XCTAssertEqual(decisionPOSTCount, 1)
+        XCTAssertTrue(navigationController.topViewController === secondDetail)
+        let alert = try XCTUnwrap(secondDetail.presentedViewController as? UIAlertController)
+        XCTAssertEqual(alert.title, "本条尚未完成提交")
+        XCTAssertFalse((alert.message ?? "").contains("已确认"))
+        XCTAssertTrue(secondDetail.view.isUserInteractionEnabled)
+        attachUIKitEvidence(
+            view: window,
+            name: "T02-second-candidate-policy-rejected-before-send"
+        )
+    }
+
+    func testCandidateReviewUnknownOutcomeCommitsOnlyAfterReadOnlyLookupFound() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006b1")
+        let client = CandidateReviewClientSpy()
+        client.inboxResults = [
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [candidateID],
+                memoryRevision: 12,
+                proposalGeneration: 3
+            )),
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [],
+                memoryRevision: 13,
+                proposalGeneration: 4
+            )),
+        ]
+        client.reviewTransportOutcomes = [
+            .outcomeUnknown(URLError(.networkConnectionLost)),
+        ]
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "candidate-review-unknown-found" }
+        )
+        var operationOutcome: OwnerTruthCandidateReviewOperationOutcome?
+        useCase.onReviewOperationOutcome = { _, outcome in operationOutcome = outcome }
+
+        useCase.send(.refresh)
+        let item = try XCTUnwrap(useCase.viewState.items.first)
+        let binding = try XCTUnwrap(item.reviewBinding)
+        client.decisionLookupResults = [.success(try decisionLookupResult(
+            candidateID: candidateID,
+            commandBinding: binding,
+            decision: .accepted,
+            appliedMemoryRevision: 13
+        ))]
+
+        useCase.send(.accept(candidateID: candidateID, displayedBinding: binding))
+
+        XCTAssertEqual(client.reviewedCommands.map(\.commandID), ["candidate-review-unknown-found"])
+        XCTAssertEqual(client.decisionLookupCommandIDs, ["candidate-review-unknown-found"])
+        guard case .committed(let receipt, let notice) = operationOutcome else {
+            return XCTFail("Only a bound read-only lookup may commit the unknown review")
+        }
+        XCTAssertEqual(notice, .candidateAccepted)
+        XCTAssertEqual(receipt.decision, .accepted)
+        XCTAssertEqual(useCase.viewState.phase, .empty)
+    }
+
+    func testCandidateReviewNotObservedRemainsUnknownAndNeverReposts() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006b2")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 14,
+            proposalGeneration: 4
+        ))
+        client.reviewTransportOutcomes = [
+            .outcomeUnknown(URLError(.timedOut)),
+        ]
+        client.decisionLookupResults = [
+            .success(try decisionLookupNotObserved(candidateID: candidateID)),
+            .success(try decisionLookupNotObserved(candidateID: candidateID)),
+        ]
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "candidate-review-unknown-not-observed" },
+            pendingResultStore: store
+        )
+        useCase.send(.refresh)
+        let item = try XCTUnwrap(useCase.viewState.items.first)
+        useCase.send(.accept(
+            candidateID: candidateID,
+            displayedBinding: try XCTUnwrap(item.reviewBinding)
+        ))
+        XCTAssertEqual(useCase.viewState.notice, .reviewOutcomeUnknown)
+        XCTAssertEqual(client.reviewedCommands.count, 1)
+        XCTAssertEqual(client.decisionLookupCommandIDs.count, 1)
+        XCTAssertEqual(
+            try store.records(subjectID: lease.subjectId, vaultID: lease.vaultId).count,
+            1
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(client.reviewedCommands.count, 1)
+        XCTAssertEqual(client.decisionLookupCommandIDs.count, 2)
+        XCTAssertEqual(useCase.viewState.notice, .reviewOutcomeUnknown)
+    }
+
+    func testCandidateReviewNotObservedBlocksASecondWriteIntent() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006b7")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 14,
+            proposalGeneration: 4
+        ))
+        client.reviewTransportOutcomes = [
+            .outcomeUnknown(URLError(.networkConnectionLost)),
+        ]
+        client.decisionLookupResults = [
+            .success(try decisionLookupNotObserved(candidateID: candidateID)),
+            .success(try decisionLookupNotObserved(candidateID: candidateID)),
+        ]
+        var commandOrdinal = 0
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: {
+                commandOrdinal += 1
+                return "candidate-review-unresolved-\(commandOrdinal)"
+            },
+            pendingResultStore: store
+        )
+
+        useCase.send(.refresh)
+        let binding = try XCTUnwrap(useCase.viewState.items.first?.reviewBinding)
+        useCase.send(.accept(candidateID: candidateID, displayedBinding: binding))
+        useCase.send(.accept(candidateID: candidateID, displayedBinding: binding))
+
+        XCTAssertEqual(client.reviewedCommands.map(\.commandID), ["candidate-review-unresolved-1"])
+        XCTAssertEqual(client.decisionLookupCommandIDs, [
+            "candidate-review-unresolved-1",
+            "candidate-review-unresolved-1",
+        ])
+        XCTAssertEqual(
+            try store.records(subjectID: lease.subjectId, vaultID: lease.vaultId).map(\.commandID),
+            ["candidate-review-unresolved-1"]
+        )
+        XCTAssertEqual(useCase.viewState.notice, .reviewOutcomeUnknown)
+    }
+
+    func testCandidateReviewInFlightAndTimedOutLookupBlockAnotherCandidateWrite() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstID = recordID("00000000-0000-0000-0000-0000000006b4")
+        let secondID = recordID("00000000-0000-0000-0000-0000000006b5")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID],
+            memoryRevision: 14,
+            proposalGeneration: 4
+        ))
+        client.reviewTransportOutcomes = [
+            .outcomeUnknown(URLError(.networkConnectionLost)),
+        ]
+        client.deferDecisionLookup = true
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "candidate-review-inflight-lookup" },
+            pendingResultStore: store
+        )
+
+        useCase.send(.refresh)
+        let items = useCase.viewState.items
+        let firstBinding = try XCTUnwrap(items.first { $0.id == firstID }?.reviewBinding)
+        let secondBinding = try XCTUnwrap(items.first { $0.id == secondID }?.reviewBinding)
+        useCase.send(.accept(candidateID: firstID, displayedBinding: firstBinding))
+        useCase.send(.reject(candidateID: secondID, displayedBinding: secondBinding))
+
+        XCTAssertEqual(client.reviewedCommands.count, 1)
+        XCTAssertEqual(client.decisionLookupCommandIDs, ["candidate-review-inflight-lookup"])
+        XCTAssertEqual(
+            try store.records(subjectID: lease.subjectId, vaultID: lease.vaultId).count,
+            1
+        )
+
+        client.completeDeferredDecisionLookup(.failure(URLError(.timedOut)))
+        XCTAssertEqual(useCase.viewState.notice, .reviewOutcomeUnknown)
+        useCase.send(.reject(candidateID: secondID, displayedBinding: secondBinding))
+
+        XCTAssertEqual(client.reviewedCommands.count, 1)
+        XCTAssertEqual(client.decisionLookupCommandIDs, [
+            "candidate-review-inflight-lookup",
+            "candidate-review-inflight-lookup",
+        ])
+        XCTAssertEqual(
+            try store.records(subjectID: lease.subjectId, vaultID: lease.vaultId).count,
+            1
+        )
+    }
+
+    @MainActor
+    func testCandidateInboxUIKitKeepsUnknownReviewReadOnlyAfterNotObserved() throws {
+        UIView.setAnimationsEnabled(false)
+        defer { UIView.setAnimationsEnabled(true) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006c7")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 18,
+            proposalGeneration: 5
+        ))
+        client.reviewTransportOutcomes = [
+            .outcomeUnknown(URLError(.networkConnectionLost)),
+        ]
+        client.decisionLookupResults = [
+            .success(try decisionLookupNotObserved(candidateID: candidateID)),
+        ]
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        let navigationController = ImmediateNavigationController(rootViewController: controller)
+        let windowScene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        )
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        controller.loadViewIfNeeded()
+
+        let table = try XCTUnwrap(
+            buttonOrLabel(in: controller.view, identifier: "owner-truth-candidate-inbox-list")
+                as? UITableView
+        )
+        table.delegate?.tableView?(table, didSelectRowAt: IndexPath(row: 0, section: 0))
+        let detail = try XCTUnwrap(
+            navigationController.topViewController as? OwnerTruthCandidateDetailViewController
+        )
+        detail.onAccept?()
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            detail.presentedViewController is UIAlertController
+        })
+        XCTAssertEqual(client.reviewedCommands.count, 1)
+        XCTAssertEqual(client.decisionLookupCommandIDs.count, 1)
+        XCTAssertEqual(
+            try store.records(subjectID: lease.subjectId, vaultID: lease.vaultId).count,
+            1
+        )
+        XCTAssertTrue(detail.view.isUserInteractionEnabled)
+        XCTAssertFalse(detail.navigationItem.hidesBackButton)
+        XCTAssertFalse(try XCTUnwrap(
+            button(in: detail.view, identifier: "owner-truth-candidate-detail-accept")
+        ).isEnabled)
+
+        detail.presentedViewController?.dismiss(animated: false)
+        detail.onAccept?()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+
+        XCTAssertEqual(client.reviewedCommands.count, 1)
+        XCTAssertEqual(client.decisionLookupCommandIDs.count, 1)
+        XCTAssertTrue(navigationController.topViewController === detail)
+        attachUIKitEvidence(view: window, name: "U01-unknown-review-remains-read-only")
+    }
+
+    @MainActor
+    func testCandidateInboxUIKitEndsDetailWaitWhenAccountChangesAfterWriteBeforeLookup() throws {
+        UIView.setAnimationsEnabled(false)
+        defer { UIView.setAnimationsEnabled(true) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let candidateID = recordID("00000000-0000-0000-0000-0000000007c1")
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        let inboxObject = sequentialV5CandidateInboxJSONObject(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 21,
+            proposalGeneration: 8
+        )
+        var decisionPOSTCount = 0
+        var lookupGETCount = 0
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            switch (request.httpMethod, request.url?.path ?? "") {
+            case ("GET", let path) where path.hasSuffix("/candidates"):
+                loader.respond(
+                    statusCode: 200,
+                    body: try! JSONSerialization.data(withJSONObject: inboxObject)
+                )
+            case ("POST", let path) where path.hasSuffix("/decisions"):
+                decisionPOSTCount += 1
+                runtime.publish(session: self.accountSession(
+                    subjectId: "owner-r2-successor",
+                    vaultId: "vault-r2-successor",
+                    generation: 2,
+                    generationID: UUID(uuidString: "00000000-0000-0000-0000-0000000007c2")!
+                ))
+                loader.fail(URLError(.networkConnectionLost))
+            case ("GET", let path) where path.hasSuffix("/decision-result"):
+                lookupGETCount += 1
+                loader.fail(URLError(.cancelled))
+            default:
+                XCTFail("Unexpected request \(request.httpMethod ?? "") \(request.url?.path ?? "")")
+                loader.fail(URLError(.badURL))
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        var renderedState: OwnerTruthCandidateInboxViewState?
+        controller.onViewStateRendered = { renderedState = $0 }
+        let navigationController = ImmediateNavigationController(rootViewController: controller)
+        let windowScene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        )
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        controller.loadViewIfNeeded()
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            renderedState?.items.count == 1
+        })
+        let table = try XCTUnwrap(
+            buttonOrLabel(in: controller.view, identifier: "owner-truth-candidate-inbox-list")
+                as? UITableView
+        )
+        table.delegate?.tableView?(table, didSelectRowAt: IndexPath(row: 0, section: 0))
+        let detail = try XCTUnwrap(
+            navigationController.topViewController as? OwnerTruthCandidateDetailViewController
+        )
+
+        detail.onAccept?()
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            detail.presentedViewController is UIAlertController
+        })
+        XCTAssertEqual(decisionPOSTCount, 1)
+        XCTAssertEqual(lookupGETCount, 0)
+        XCTAssertEqual(
+            try store.records(subjectID: lease.subjectId, vaultID: vaultID.rawValue).count,
+            1
+        )
+        XCTAssertTrue(detail.view.isUserInteractionEnabled)
+        XCTAssertFalse(detail.navigationItem.hidesBackButton)
+        XCTAssertFalse(try XCTUnwrap(
+            button(in: detail.view, identifier: "owner-truth-candidate-detail-accept")
+        ).isEnabled)
+        XCTAssertTrue(navigationController.topViewController === detail)
+    }
+
+    @MainActor
+    func testCandidateInboxUIKitEndsDetailWaitWhenAccountChangesWhileLookupIsInFlight() throws {
+        UIView.setAnimationsEnabled(false)
+        defer { UIView.setAnimationsEnabled(true) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let candidateID = recordID("00000000-0000-0000-0000-0000000007c3")
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        let inboxObject = sequentialV5CandidateInboxJSONObject(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 22,
+            proposalGeneration: 9
+        )
+        var decisionPOSTCount = 0
+        var lookupLoader: OwnerTruthReviewReadyHTTPURLProtocol?
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            switch (request.httpMethod, request.url?.path ?? "") {
+            case ("GET", let path) where path.hasSuffix("/candidates"):
+                loader.respond(
+                    statusCode: 200,
+                    body: try! JSONSerialization.data(withJSONObject: inboxObject)
+                )
+            case ("POST", let path) where path.hasSuffix("/decisions"):
+                decisionPOSTCount += 1
+                loader.fail(URLError(.networkConnectionLost))
+            case ("GET", let path) where path.hasSuffix("/decision-result"):
+                lookupLoader = loader
+            default:
+                XCTFail("Unexpected request \(request.httpMethod ?? "") \(request.url?.path ?? "")")
+                loader.fail(URLError(.badURL))
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        var renderedState: OwnerTruthCandidateInboxViewState?
+        controller.onViewStateRendered = { renderedState = $0 }
+        let navigationController = ImmediateNavigationController(rootViewController: controller)
+        let windowScene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        )
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        controller.loadViewIfNeeded()
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            renderedState?.items.count == 1
+        })
+        let table = try XCTUnwrap(
+            buttonOrLabel(in: controller.view, identifier: "owner-truth-candidate-inbox-list")
+                as? UITableView
+        )
+        table.delegate?.tableView?(table, didSelectRowAt: IndexPath(row: 0, section: 0))
+        let detail = try XCTUnwrap(
+            navigationController.topViewController as? OwnerTruthCandidateDetailViewController
+        )
+        detail.onAccept?()
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { lookupLoader != nil })
+
+        runtime.publish(session: self.accountSession(
+            subjectId: "owner-r2-late-successor",
+            vaultId: "vault-r2-late-successor",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-0000000007c4")!
+        ))
+        lookupLoader?.respond(
+            statusCode: 200,
+            body: try JSONSerialization.data(withJSONObject: [
+                "schemaVersion": OwnerTruthCandidateDecisionLookupResult.schemaVersion,
+                "result": "notObserved",
+            ])
+        )
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            detail.presentedViewController is UIAlertController
+        })
+        XCTAssertEqual(decisionPOSTCount, 1)
+        XCTAssertEqual(
+            OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.filter {
+                $0.httpMethod == "POST" && $0.url?.path.hasSuffix("/decisions") == true
+            }.count,
+            1
+        )
+        XCTAssertEqual(
+            try store.records(subjectID: lease.subjectId, vaultID: vaultID.rawValue).count,
+            1
+        )
+        XCTAssertTrue(detail.view.isUserInteractionEnabled)
+        XCTAssertFalse(detail.navigationItem.hidesBackButton)
+        XCTAssertFalse(try XCTUnwrap(
+            button(in: detail.view, identifier: "owner-truth-candidate-detail-accept")
+        ).isEnabled)
+        XCTAssertTrue(navigationController.topViewController === detail)
+    }
+
+    @MainActor
+    func testCandidateInboxOverallDeadlineFinishesInFlightReadAndLateResponseCannotOwnRefresh() throws {
+        UIView.setAnimationsEnabled(false)
+        defer { UIView.setAnimationsEnabled(true) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        var events: [OwnerTruthCandidateInboxDiagnosticEvent] = []
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime,
+            candidateInboxDiagnosticSink: { events.append($0) }
+        )
+        let lateCandidateID = recordID("00000000-0000-0000-0000-0000000007d1")
+        let lateObject = sequentialV5CandidateInboxJSONObject(
+            vaultID: lease.vaultId,
+            candidateIDs: [lateCandidateID],
+            memoryRevision: 99,
+            proposalGeneration: 30
+        )
+        let freshObject: [String: Any] = [
+            "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+            "vaultId": lease.vaultId,
+            "memoryRevision": 23,
+            "candidates": [],
+        ]
+        var firstLoader: OwnerTruthReviewReadyHTTPURLProtocol?
+        var candidateGETCount = 0
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            guard request.httpMethod == "GET",
+                  request.url?.path.hasSuffix("/candidates") == true else {
+                XCTFail("Unexpected request \(request.httpMethod ?? "") \(request.url?.path ?? "")")
+                loader.fail(URLError(.badURL))
+                return
+            }
+            candidateGETCount += 1
+            if candidateGETCount == 1 {
+                firstLoader = loader
+            } else {
+                loader.respond(
+                    statusCode: 200,
+                    body: try! JSONSerialization.data(withJSONObject: freshObject)
+                )
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+        var contextOrdinal = 0
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            inboxReadContextFactory: {
+                contextOrdinal += 1
+                let now = Date()
+                return OwnerTruthCandidateInboxReadContext(
+                    traceID: "candidate-overall-deadline-\(contextOrdinal)",
+                    intentStartedAt: now,
+                    deadline: now.addingTimeInterval(contextOrdinal == 1 ? 0.05 : 1)
+                )
+            },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+        var renderedState: OwnerTruthCandidateInboxViewState?
+        controller.onViewStateRendered = { renderedState = $0 }
+        controller.loadViewIfNeeded()
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) { firstLoader != nil })
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
+            renderedState?.phase == .failed
+                && renderedState?.readContext?.traceID == "candidate-overall-deadline-1"
+        })
+        XCTAssertTrue(events.contains {
+            $0.traceID == "candidate-overall-deadline-1"
+                && $0.stage == "intentDeadline"
+                && $0.reason == "candidateReadDeadlineExceeded"
+        })
+
+        controller.runUIQARefreshCandidateInbox()
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
+            candidateGETCount == 2
+                && renderedState?.phase == .empty
+                && renderedState?.readContext?.traceID == "candidate-overall-deadline-2"
+        })
+
+        firstLoader?.respond(
+            statusCode: 200,
+            body: try JSONSerialization.data(withJSONObject: lateObject)
+        )
+        RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+
+        XCTAssertEqual(candidateGETCount, 2)
+        XCTAssertEqual(renderedState?.phase, .empty)
+        XCTAssertEqual(renderedState?.items.count, 0)
+        XCTAssertEqual(renderedState?.readContext?.traceID, "candidate-overall-deadline-2")
+    }
+
+    func testCandidateReviewLocalGuardCompletesTheDetailIntentWithoutWriting() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006b8")
+        let missingCandidateID = recordID("00000000-0000-0000-0000-0000000006b9")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 14,
+            proposalGeneration: 4
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        var outcome: OwnerTruthCandidateReviewOperationOutcome?
+        useCase.onReviewOperationOutcome = { _, value in outcome = value }
+
+        useCase.send(.refresh)
+        useCase.send(.accept(candidateID: missingCandidateID, displayedBinding: nil))
+
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+        XCTAssertEqual(outcome, .notSent(.candidateUnavailable))
+    }
+
+    func testCandidateReviewAccountChangeBeforeWriteIsNotSentAndCompletesIntent() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006c1")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 14,
+            proposalGeneration: 4
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+        var operationEvent: OwnerTruthCandidateReviewOperationEvent?
+        useCase.onReviewOperationEvent = { operationEvent = $0 }
+
+        useCase.send(.refresh)
+        let binding = try XCTUnwrap(useCase.viewState.items.first?.reviewBinding)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        ))
+        useCase.send(.accept(candidateID: candidateID, displayedBinding: binding))
+
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+        XCTAssertEqual(useCase.viewState.phase, .unavailable)
+        XCTAssertEqual(useCase.viewState.notice, .accountUnavailable)
+        XCTAssertEqual(operationEvent?.candidateID, candidateID)
+        XCTAssertEqual(operationEvent?.outcome, .notSent(.accountUnavailable))
+    }
+
+    func testCandidateReviewDoubleTapCreatesOneWriteAndKeepsOriginalReceipt() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006c2")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 14,
+            proposalGeneration: 4
+        ))
+        client.deferReviewWrite = true
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+        )
+
+        useCase.send(.refresh)
+        let binding = try XCTUnwrap(useCase.viewState.items.first?.reviewBinding)
+        useCase.send(.accept(candidateID: candidateID, displayedBinding: binding))
+        useCase.send(.accept(candidateID: candidateID, displayedBinding: binding))
+
+        XCTAssertEqual(client.reviewedCommands.count, 1)
+        XCTAssertEqual(useCase.viewState.phase, .submitting(candidateID))
+
+        client.completeDeferredReviewWrite(.committed(try decisionResult(
+            candidateID: candidateID,
+            decision: .accepted,
+            memoryRevision: 15,
+            candidateBeforeHash: String(repeating: "a", count: 64),
+            candidateVersion: 2
+        )))
+
+        XCTAssertEqual(client.reviewedCommands.count, 1)
+        XCTAssertEqual(useCase.viewState.notice, .candidateAccepted)
+        XCTAssertEqual(useCase.viewState.latestReceipt?.decision, .accepted)
+    }
+
+    func testCandidateReviewSnapshotBehindRecoveryHasOneAutomaticRetryBudget() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateA = recordID("00000000-0000-0000-0000-0000000006ba")
+        let candidateB = recordID("00000000-0000-0000-0000-0000000006bb")
+        let client = CandidateReviewClientSpy()
+        client.inboxResults = [
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [candidateA, candidateB],
+                memoryRevision: 20,
+                proposalGeneration: 1
+            )),
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [candidateB],
+                memoryRevision: 20,
+                proposalGeneration: 2
+            )),
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [candidateB],
+                memoryRevision: 20,
+                proposalGeneration: 3
+            )),
+        ]
+        client.reviewTransportOutcomes = [
+            .committed(try decisionResult(
+                candidateID: candidateA,
+                decision: .accepted,
+                memoryRevision: 21,
+                candidateBeforeHash: String(repeating: "a", count: 64)
+            )),
+        ]
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+
+        useCase.send(.refresh)
+        let binding = try XCTUnwrap(useCase.viewState.items.first?.reviewBinding)
+        useCase.send(.accept(candidateID: candidateA, displayedBinding: binding))
+
+        XCTAssertEqual(client.inboxRequestCount, 3)
+        XCTAssertEqual(useCase.viewState.notice, .candidateVersionChanged)
+        XCTAssertEqual(useCase.viewState.items.map(\.id), [candidateB])
+    }
+
+    func testCandidateReviewRejectsAReceiptWhoseCandidateVersionDidNotAdvanceExactlyOnce() throws {
+        for returnedVersion in [1, 3, 99] {
+            let (runtime, lease) = try makeActiveRuntime()
+            let candidateID = recordID(UUID().uuidString)
+            let client = CandidateReviewClientSpy()
+            client.inboxResult = .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [candidateID],
+                memoryRevision: 30,
+                proposalGeneration: 1
+            ))
+            client.reviewTransportOutcomes = [
+                .committed(try decisionResult(
+                    candidateID: candidateID,
+                    decision: .accepted,
+                    memoryRevision: 31,
+                    candidateBeforeHash: String(repeating: "a", count: 64),
+                    candidateVersion: returnedVersion
+                )),
+            ]
+            client.decisionLookupResults = [
+                .success(try decisionLookupNotObserved(candidateID: candidateID)),
+            ]
+            let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+            let useCase = OwnerTruthCandidateReviewUseCase(
+                accountLease: lease,
+                client: client,
+                accountLeaseRuntime: runtime,
+                qaGateEnabled: { true },
+                pendingResultStore: store
+            )
+
+            useCase.send(.refresh)
+            let binding = try XCTUnwrap(useCase.viewState.items.first?.reviewBinding)
+            useCase.send(.accept(candidateID: candidateID, displayedBinding: binding))
+
+            XCTAssertEqual(useCase.viewState.notice, .reviewResultInconsistent)
+            XCTAssertNil(useCase.viewState.latestReceipt)
+            XCTAssertEqual(
+                try store.records(subjectID: lease.subjectId, vaultID: lease.vaultId).count,
+                1
+            )
+        }
+    }
+
+    func testCandidateReviewRecreatedUseCaseQueriesPersistedCommandWithoutPosting() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006b3")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "candidate-review-pending-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = OwnerTruthCandidateReviewPendingResultStore(directoryURL: root)
+        let firstClient = CandidateReviewClientSpy()
+        firstClient.inboxResult = .success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 16,
+            proposalGeneration: 5
+        ))
+        firstClient.reviewTransportOutcomes = [
+            .outcomeUnknown(URLError(.networkConnectionLost)),
+        ]
+        firstClient.decisionLookupResults = [
+            .success(try decisionLookupNotObserved(candidateID: candidateID)),
+        ]
+        let firstUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: firstClient,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "candidate-review-restart-lookup" },
+            pendingResultStore: store
+        )
+        firstUseCase.send(.refresh)
+        let binding = try XCTUnwrap(firstUseCase.viewState.items.first?.reviewBinding)
+        firstUseCase.send(.accept(candidateID: candidateID, displayedBinding: binding))
+        XCTAssertEqual(firstClient.reviewedCommands.count, 1)
+
+        let resumedClient = CandidateReviewClientSpy()
+        resumedClient.inboxResult = .success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [],
+            memoryRevision: 17,
+            proposalGeneration: 6
+        ))
+        resumedClient.decisionLookupResults = [.success(try decisionLookupResult(
+            candidateID: candidateID,
+            commandBinding: binding,
+            decision: .accepted,
+            appliedMemoryRevision: 17
+        ))]
+        let resumedUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: resumedClient,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        var recoveredOutcome: OwnerTruthCandidateReviewOperationOutcome?
+        resumedUseCase.onReviewOperationOutcome = { recoveredID, outcome in
+            if recoveredID == candidateID { recoveredOutcome = outcome }
+        }
+
+        resumedUseCase.send(.refresh)
+
+        XCTAssertTrue(resumedClient.reviewedCommands.isEmpty)
+        XCTAssertEqual(resumedClient.decisionLookupCommandIDs, ["candidate-review-restart-lookup"])
+        guard case .committed = recoveredOutcome else {
+            return XCTFail("The recreated use case must commit only the persisted command lookup")
+        }
+        XCTAssertTrue(
+            try store.records(subjectID: lease.subjectId, vaultID: lease.vaultId).isEmpty
+        )
+    }
+
+    func testCandidateReviewLocalPendingRecordFailurePreventsWriteSubmission() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006b4")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 18,
+            proposalGeneration: 7
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "candidate-review-local-store-failure" },
+            pendingResultStore: CandidateReviewFailingPendingResultStore()
+        )
+        var operationOutcome: OwnerTruthCandidateReviewOperationOutcome?
+        useCase.onReviewOperationOutcome = { _, outcome in operationOutcome = outcome }
+
+        useCase.send(.refresh)
+        let item = try XCTUnwrap(useCase.viewState.items.first)
+        useCase.send(.accept(
+            candidateID: candidateID,
+            displayedBinding: try XCTUnwrap(item.reviewBinding)
+        ))
+
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+        XCTAssertEqual(useCase.viewState.notice, .reviewLocalPersistenceUnavailable)
+        XCTAssertEqual(
+            operationOutcome,
+            .notSent(.reviewLocalPersistenceUnavailable)
+        )
+    }
+
+    func testCandidateReviewUnreadablePendingStoreFailsClosedBeforeWrite() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006c8")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 22,
+            proposalGeneration: 9
+        ))
+        let store = CandidateReviewUnreadablePendingResultStore()
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        var operationOutcome: OwnerTruthCandidateReviewOperationOutcome?
+        useCase.onReviewOperationOutcome = { _, outcome in operationOutcome = outcome }
+
+        useCase.send(.refresh)
+        let binding = try XCTUnwrap(useCase.viewState.items.first?.reviewBinding)
+        store.failReads = true
+        useCase.send(.accept(candidateID: candidateID, displayedBinding: binding))
+
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+        XCTAssertEqual(useCase.viewState.notice, .reviewResultInconsistent)
+        XCTAssertEqual(operationOutcome, .outcomeUnknown(.reviewResultInconsistent))
+    }
+
+    func testCandidateReviewPendingRecordRemovalFailureDoesNotPublishSuccess() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006b6")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 22,
+            proposalGeneration: 9
+        ))
+        client.reviewTransportOutcomes = [
+            .committed(try decisionResult(
+                candidateID: candidateID,
+                decision: .accepted,
+                memoryRevision: 23,
+                candidateBeforeHash: String(repeating: "a", count: 64)
+            )),
+        ]
+        let store = CandidateReviewFailingRemovalPendingResultStore()
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        var operationOutcome: OwnerTruthCandidateReviewOperationOutcome?
+        useCase.onReviewOperationOutcome = { _, outcome in operationOutcome = outcome }
+
+        useCase.send(.refresh)
+        let binding = try XCTUnwrap(useCase.viewState.items.first?.reviewBinding)
+        useCase.send(.accept(candidateID: candidateID, displayedBinding: binding))
+
+        XCTAssertEqual(useCase.viewState.notice, .reviewResultInconsistent)
+        XCTAssertNil(useCase.viewState.latestReceipt)
+        XCTAssertEqual(operationOutcome, .outcomeUnknown(.reviewResultInconsistent))
+        XCTAssertEqual(
+            try store.records(subjectID: lease.subjectId, vaultID: lease.vaultId).count,
+            1
+        )
+    }
+
+    func testCandidateReviewRejectsMismatchedReadOnlyLookupAsUnknown() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-0000000006b5")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 20,
+            proposalGeneration: 8
+        ))
+        client.reviewTransportOutcomes = [
+            .outcomeUnknown(URLError(.networkConnectionLost)),
+        ]
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "candidate-review-mismatched-lookup" },
+            pendingResultStore: store
+        )
+        useCase.send(.refresh)
+        let item = try XCTUnwrap(useCase.viewState.items.first)
+        let displayedBinding = try XCTUnwrap(item.reviewBinding)
+        let otherInbox = try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [candidateID],
+            memoryRevision: 21,
+            proposalGeneration: 9
+        )
+        let otherProposal = try XCTUnwrap(otherInbox.candidates.first?.proposedChangeSet)
+        let otherBinding = OwnerTruthCandidateReviewBinding(
+            candidateID: candidateID,
+            candidateVersion: 1,
+            candidateContentHash: String(repeating: "a", count: 64),
+            proposal: otherProposal
+        )
+        client.decisionLookupResults = [.success(try decisionLookupResult(
+            candidateID: candidateID,
+            commandBinding: otherBinding,
+            decision: .accepted,
+            appliedMemoryRevision: 22
+        ))]
+        var operationOutcome: OwnerTruthCandidateReviewOperationOutcome?
+        useCase.onReviewOperationOutcome = { _, outcome in operationOutcome = outcome }
+
+        useCase.send(.accept(candidateID: candidateID, displayedBinding: displayedBinding))
+
+        XCTAssertEqual(useCase.viewState.notice, .reviewResultInconsistent)
+        XCTAssertNil(useCase.viewState.latestReceipt)
+        XCTAssertEqual(
+            operationOutcome,
+            .outcomeUnknown(.reviewResultInconsistent)
+        )
+        XCTAssertEqual(client.reviewedCommands.count, 1)
+        XCTAssertEqual(client.decisionLookupCommandIDs.count, 1)
+        XCTAssertEqual(
+            try store.records(subjectID: lease.subjectId, vaultID: lease.vaultId).count,
+            1
+        )
     }
 
     func testCandidateReviewUseCaseScopesMediaHandoffToDerivedSource() throws {
@@ -2225,6 +8034,82 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    func testRelatedCandidateGroupCannotStartWhileSingleReviewOutcomeIsUnresolved() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstID = recordID("00000000-0000-0000-0000-0000000006d7")
+        let secondID = recordID("00000000-0000-0000-0000-0000000006d8")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try relatedV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        ))
+        client.reviewTransportOutcomes = [
+            .outcomeUnknown(URLError(.networkConnectionLost)),
+        ]
+        client.decisionLookupResults = [
+            .success(try decisionLookupNotObserved(candidateID: firstID)),
+        ]
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        let inboxUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        inboxUseCase.send(.refresh)
+        let items = inboxUseCase.viewState.items
+        inboxUseCase.send(.accept(
+            candidateID: firstID,
+            displayedBinding: try XCTUnwrap(items.first?.reviewBinding)
+        ))
+        XCTAssertEqual(client.reviewedCommands.count, 1)
+
+        let groupUseCase = OwnerTruthCandidateRelatedGroupReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        var previewResult: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+        groupUseCase.preview(candidates: items) { previewResult = $0 }
+
+        XCTAssertNotNil(previewResult)
+        XCTAssertThrowsError(try previewResult?.get())
+        XCTAssertTrue(client.previewedGroupCommands.isEmpty)
+        XCTAssertTrue(client.confirmedGroupCommands.isEmpty)
+        XCTAssertEqual(
+            try store.records(subjectID: lease.subjectId, vaultID: lease.vaultId).count,
+            1
+        )
+    }
+
+    func testRelatedCandidateGroupThreeMembersPreserveEveryActionAndFactDiff() throws {
+        let candidateIDs = [
+            recordID("00000000-0000-0000-0000-000000000281"),
+            recordID("00000000-0000-0000-0000-000000000282"),
+            recordID("00000000-0000-0000-0000-000000000283"),
+        ]
+        let actions: [OwnerTruthCandidateReviewAction] = [.accept, .correct, .reject]
+        let proposal = try relatedGroupProposal(
+            vaultID: "vault-related-three",
+            candidateIDs: candidateIDs,
+            actions: actions
+        )
+
+        XCTAssertEqual(proposal.members.count, 3)
+        XCTAssertEqual(proposal.members.map(\.action), actions)
+        XCTAssertEqual(proposal.members.map(\.operationIndex), [0, 1, 2])
+        for member in proposal.members {
+            let operation = try XCTUnwrap(member.proposedChangeSet.operations.first)
+            XCTAssertNil(operation.factDiff.before)
+            XCTAssertNotNil(operation.factDiff.after?.ownerTruthFactPreviewText)
+            XCTAssertEqual(operation.factDiff.beforeEvidenceCount, 0)
+            XCTAssertEqual(operation.factDiff.afterEvidenceCount, 1)
+        }
+    }
+
     func testRelatedCandidateGroupBindsMixedOwnerActionsAndOnlySendsChangedCorrectionText() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let firstID = recordID("00000000-0000-0000-0000-000000000606")
@@ -2357,7 +8242,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(client.confirmedGroupCommands.count, 1)
     }
 
-    func testRelatedCandidateGroupRetryReusesCommandAfterTransientFailure() throws {
+    func testRelatedCandidateGroupUnknownOutcomeNeverRepostsReviewWrite() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let firstID = recordID("00000000-0000-0000-0000-000000000610")
         let secondID = recordID("00000000-0000-0000-0000-000000000611")
@@ -2408,17 +8293,1466 @@ final class OwnerTruthContractsTests: XCTestCase {
             OwnerTruthCandidateRelatedGroupReviewFailureDisposition(
                 error: firstError
             ),
-            .retryable
+            .outcomeUnknown
         )
 
         var retryResult: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
         groupUseCase.confirm(proposal: visibleProposal) { retryResult = $0 }
 
-        XCTAssertNotNil(try retryResult?.get())
-        XCTAssertEqual(client.confirmedGroupCommands.count, 2)
+        XCTAssertThrowsError(try retryResult?.get())
         XCTAssertEqual(
-            client.confirmedGroupCommands[0].commandID,
-            client.confirmedGroupCommands[1].commandID
+            client.confirmedGroupCommands.count,
+            1,
+            "An exposed group write with an unknown outcome may only be verified read-only"
+        )
+    }
+
+    func testRelatedCandidateGroupUnknownOutcomePersistsAcrossReentryAndBlocksSingleWrite() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstID = recordID("00000000-0000-0000-0000-0000000007a1")
+        let secondID = recordID("00000000-0000-0000-0000-0000000007a2")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try relatedV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        ))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        )
+        client.changeSetGroupPreviewResult = .success(proposal)
+        client.changeSetGroupTransportOutcomes = [
+            .outcomeUnknown(URLError(.networkConnectionLost)),
+        ]
+        client.changeSetGroupLookupResults = [
+            .success(try relatedGroupLookupNotObserved(proposal: proposal)),
+            .success(try relatedGroupLookupNotObserved(proposal: proposal)),
+        ]
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        let groupUseCase = OwnerTruthCandidateRelatedGroupReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "related-group-pending-reentry" },
+            pendingResultStore: store
+        )
+        let inboxUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        inboxUseCase.send(.refresh)
+        let items = inboxUseCase.viewState.items
+        var previewResult: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+        groupUseCase.preview(candidates: items) { previewResult = $0 }
+        let visibleProposal = try XCTUnwrap(try previewResult?.get())
+
+        var firstResult: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+        groupUseCase.confirm(proposal: visibleProposal) { firstResult = $0 }
+
+        XCTAssertThrowsError(try firstResult?.get())
+        XCTAssertEqual(client.confirmedGroupCommands.count, 1)
+        XCTAssertEqual(client.changeSetGroupLookupCommandIDs, ["related-group-pending-reentry"])
+        XCTAssertEqual(
+            try store.groupRecords(subjectID: lease.subjectId, vaultID: lease.vaultId).count,
+            1
+        )
+
+        let reopenedUseCase = OwnerTruthCandidateRelatedGroupReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "must-not-be-used" },
+            pendingResultStore: store
+        )
+        var reopenedResult: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+        reopenedUseCase.confirm(proposal: visibleProposal) { reopenedResult = $0 }
+        XCTAssertThrowsError(try reopenedResult?.get())
+        XCTAssertEqual(client.confirmedGroupCommands.count, 1)
+        XCTAssertEqual(client.changeSetGroupLookupCommandIDs, [
+            "related-group-pending-reentry",
+            "related-group-pending-reentry",
+        ])
+
+        let firstBinding = try XCTUnwrap(items.first?.reviewBinding)
+        inboxUseCase.send(.accept(candidateID: firstID, displayedBinding: firstBinding))
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+        XCTAssertEqual(inboxUseCase.viewState.notice, .reviewOutcomeUnknown)
+    }
+
+    @MainActor
+    func testRelatedGroupPendingResultRecoversFromDiskThroughRecreatedInboxPage() throws {
+        UIView.setAnimationsEnabled(false)
+        defer { UIView.setAnimationsEnabled(true) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let originalCandidateIDs = [
+            recordID("00000000-0000-0000-0000-0000000007d1"),
+            recordID("00000000-0000-0000-0000-0000000007d2"),
+        ]
+        let replacementCandidateID = recordID("00000000-0000-0000-0000-0000000007d3")
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: originalCandidateIDs
+        )
+        let commandID = "related-group-disk-reentry"
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("owner-truth-group-reentry-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let firstStore = OwnerTruthCandidateReviewPendingResultStore(directoryURL: rootURL)
+        try firstStore.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: commandID,
+            proposal: proposal
+        ))
+
+        weak var releasedController: OwnerTruthCandidateInboxViewController?
+        autoreleasepool {
+            let oldClient = CandidateReviewClientSpy()
+            oldClient.inboxResult = .failure(URLError(.cancelled))
+            let oldController = OwnerTruthCandidateInboxViewController(
+                accountLease: lease,
+                client: oldClient,
+                accountLeaseRuntime: runtime,
+                qaGateEnabled: { true },
+                pendingResultStore: firstStore
+            )
+            releasedController = oldController
+            oldController.loadViewIfNeeded()
+        }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertNil(releasedController, "The recovery proof must not retain the old page or UseCase")
+
+        let secondStore = OwnerTruthCandidateReviewPendingResultStore(directoryURL: rootURL)
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        let foundPayload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthMemoryChangeSetGroupDecisionLookupResult.schemaVersion,
+            "status": OwnerTruthMemoryChangeSetGroupDecisionLookupStatus.found.rawValue,
+            "result": relatedGroupCommitJSONObject(proposal: proposal),
+        ])
+        let refreshedInboxPayload = try JSONSerialization.data(withJSONObject:
+            sequentialV5CandidateInboxJSONObject(
+                vaultID: lease.vaultId,
+                candidateIDs: [replacementCandidateID],
+                memoryRevision: proposal.baseMemoryRevision + 2,
+                proposalGeneration: 9
+            )
+        )
+        var groupLookupCount = 0
+        var inboxGETCount = 0
+        var businessWriteCount = 0
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            switch (request.httpMethod, request.url?.path ?? "") {
+            case ("GET", let path) where path.hasSuffix("/memory-changeset-groups/decision-result"):
+                groupLookupCount += 1
+                XCTAssertEqual(
+                    request.value(forHTTPHeaderField: "X-DreamJourney-Review-Command-Id"),
+                    commandID
+                )
+                loader.respond(statusCode: 200, body: foundPayload)
+            case ("GET", let path) where path.hasSuffix("/candidates"):
+                inboxGETCount += 1
+                loader.respond(statusCode: 200, body: refreshedInboxPayload)
+            case ("POST", _):
+                businessWriteCount += 1
+                XCTFail("Re-entry recovery must never submit a new review write")
+                loader.fail(URLError(.cancelled))
+            default:
+                XCTFail("Unexpected request \(request.httpMethod ?? "") \(request.url?.path ?? "")")
+                loader.fail(URLError(.badURL))
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: secondStore
+        )
+        let navigationController = ImmediateNavigationController(rootViewController: controller)
+        let windowScene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        )
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        controller.loadViewIfNeeded()
+
+        let statusLabel = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-inbox-status"
+        ) as? UILabel)
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+            groupLookupCount == 1
+                && inboxGETCount == 1
+                && (try? secondStore.groupRecords(
+                    subjectID: lease.subjectId,
+                    vaultID: lease.vaultId
+                ).isEmpty) == true
+                && statusLabel.text == "已加载 1 条候选记忆"
+        })
+        XCTAssertEqual(businessWriteCount, 0)
+        XCTAssertEqual(
+            OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.map(\.httpMethod),
+            ["GET", "GET"]
+        )
+        XCTAssertEqual(statusLabel.text, "已加载 1 条候选记忆")
+        attachUIKitEvidence(view: window, name: "G01-group-pending-disk-reentry-found")
+    }
+
+    @MainActor
+    func testResolvedGroupInboxFailureVerifyActionRetriesCandidateReadWithoutRelookupOrWrite() throws {
+        UIView.setAnimationsEnabled(false)
+        defer { UIView.setAnimationsEnabled(true) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-0000000007d4"),
+                recordID("00000000-0000-0000-0000-0000000007d5"),
+            ]
+        )
+        let replacementCandidateID = recordID("00000000-0000-0000-0000-0000000007d6")
+        let commandID = "related-group-resolved-inbox-retry"
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "owner-truth-group-resolved-inbox-retry-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let store = OwnerTruthCandidateReviewPendingResultStore(directoryURL: rootURL)
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: commandID,
+            proposal: proposal
+        ))
+
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        let foundPayload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthMemoryChangeSetGroupDecisionLookupResult.schemaVersion,
+            "status": OwnerTruthMemoryChangeSetGroupDecisionLookupStatus.found.rawValue,
+            "result": relatedGroupCommitJSONObject(proposal: proposal),
+        ])
+        let refreshedInboxPayload = try JSONSerialization.data(withJSONObject:
+            sequentialV5CandidateInboxJSONObject(
+                vaultID: lease.vaultId,
+                candidateIDs: [replacementCandidateID],
+                memoryRevision: proposal.baseMemoryRevision + 2,
+                proposalGeneration: 10
+            )
+        )
+        var groupLookupCount = 0
+        var inboxGETCount = 0
+        var businessWriteCount = 0
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            switch (request.httpMethod, request.url?.path ?? "") {
+            case ("GET", let path) where path.hasSuffix("/memory-changeset-groups/decision-result"):
+                groupLookupCount += 1
+                loader.respond(statusCode: 200, body: foundPayload)
+            case ("GET", let path) where path.hasSuffix("/candidates"):
+                inboxGETCount += 1
+                if inboxGETCount == 1 {
+                    loader.fail(URLError(.networkConnectionLost))
+                } else {
+                    loader.respond(statusCode: 200, body: refreshedInboxPayload)
+                }
+            case ("POST", _):
+                businessWriteCount += 1
+                XCTFail("Resolved-group inbox recovery must remain readonly")
+                loader.fail(URLError(.cancelled))
+            default:
+                XCTFail("Unexpected request \(request.httpMethod ?? "") \(request.url?.path ?? "")")
+                loader.fail(URLError(.badURL))
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        let navigationController = ImmediateNavigationController(rootViewController: controller)
+        let windowScene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        )
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        controller.loadViewIfNeeded()
+
+        let statusLabel = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-inbox-status"
+        ) as? UILabel)
+        let verifyButton = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-inbox-verify-group-result"
+        ) as? UIButton)
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+            groupLookupCount == 1
+                && inboxGETCount == 1
+                && statusLabel.text == "暂未核实到结果，未重新提交"
+                && verifyButton.isEnabled
+        })
+        XCTAssertTrue(try store.groupRecords(
+            subjectID: lease.subjectId,
+            vaultID: lease.vaultId
+        ).isEmpty)
+
+        verifyButton.sendActions(for: .touchUpInside)
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
+            inboxGETCount == 2
+                && statusLabel.text == "已加载 1 条候选记忆"
+                && verifyButton.isHidden
+        })
+        XCTAssertEqual(groupLookupCount, 1)
+        XCTAssertEqual(businessWriteCount, 0)
+        XCTAssertEqual(
+            OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.map(\.httpMethod),
+            ["GET", "GET", "GET"]
+        )
+        attachUIKitEvidence(
+            view: window,
+            name: "G13-resolved-group-inbox-failure-manual-retry"
+        )
+    }
+
+    @MainActor
+    func testResolvedGroupInboxFailurePageReentryRetriesCandidateReadWithoutExtraAction() throws {
+        UIView.setAnimationsEnabled(false)
+        defer { UIView.setAnimationsEnabled(true) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-0000000007d7"),
+                recordID("00000000-0000-0000-0000-0000000007d8"),
+            ]
+        )
+        let commandID = "related-group-resolved-inbox-reentry"
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: commandID,
+            proposal: proposal
+        ))
+        let client = CandidateReviewClientSpy()
+        client.changeSetGroupLookupResults = [
+            .success(try relatedGroupLookupFound(proposal: proposal)),
+        ]
+        client.inboxResults = [
+            .failure(URLError(.networkConnectionLost)),
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [recordID("00000000-0000-0000-0000-0000000007d9")],
+                memoryRevision: proposal.baseMemoryRevision + 2,
+                proposalGeneration: 11
+            )),
+        ]
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        controller.loadViewIfNeeded()
+        let statusLabel = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-inbox-status"
+        ) as? UILabel)
+        let verifyButton = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-inbox-verify-group-result"
+        ) as? UIButton)
+
+        XCTAssertEqual(statusLabel.text, "暂未核实到结果，未重新提交")
+        XCTAssertTrue(verifyButton.isEnabled)
+        XCTAssertEqual(client.inboxRequestCount, 1)
+        XCTAssertEqual(client.changeSetGroupLookupCommandIDs, [commandID])
+
+        controller.beginAppearanceTransition(true, animated: false)
+        controller.endAppearanceTransition()
+        controller.beginAppearanceTransition(false, animated: false)
+        controller.endAppearanceTransition()
+        controller.beginAppearanceTransition(true, animated: false)
+        controller.endAppearanceTransition()
+
+        XCTAssertEqual(client.inboxRequestCount, 2)
+        XCTAssertEqual(client.changeSetGroupLookupCommandIDs, [commandID])
+        XCTAssertEqual(statusLabel.text, "已加载 1 条候选记忆")
+        XCTAssertTrue(verifyButton.isHidden)
+        XCTAssertTrue(client.confirmedGroupCommands.isEmpty)
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+    }
+
+    @MainActor
+    func testResolvedGroupInboxRetryFailureRemainsRetryableAndDoesNotPretendRefreshing() throws {
+        UIView.setAnimationsEnabled(false)
+        defer { UIView.setAnimationsEnabled(true) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-0000000007da"),
+                recordID("00000000-0000-0000-0000-0000000007db"),
+            ]
+        )
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: "related-group-resolved-inbox-repeat-failure",
+            proposal: proposal
+        ))
+        let client = CandidateReviewClientSpy()
+        client.changeSetGroupLookupResults = [
+            .success(try relatedGroupLookupFound(proposal: proposal)),
+        ]
+        client.inboxResults = [
+            .failure(URLError(.networkConnectionLost)),
+            .failure(URLError(.timedOut)),
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [recordID("00000000-0000-0000-0000-0000000007dc")],
+                memoryRevision: proposal.baseMemoryRevision + 2,
+                proposalGeneration: 12
+            )),
+        ]
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        controller.loadViewIfNeeded()
+        let verifyButton = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-inbox-verify-group-result"
+        ) as? UIButton)
+        let statusLabel = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-inbox-status"
+        ) as? UILabel)
+
+        verifyButton.sendActions(for: .touchUpInside)
+
+        XCTAssertEqual(client.inboxRequestCount, 2)
+        XCTAssertEqual(statusLabel.text, "暂未核实到结果，未重新提交")
+        XCTAssertTrue(verifyButton.isEnabled)
+
+        verifyButton.sendActions(for: .touchUpInside)
+
+        XCTAssertEqual(client.inboxRequestCount, 3)
+        XCTAssertEqual(statusLabel.text, "已加载 1 条候选记忆")
+        XCTAssertTrue(verifyButton.isHidden)
+        XCTAssertEqual(client.changeSetGroupLookupCommandIDs.count, 1)
+        XCTAssertTrue(client.confirmedGroupCommands.isEmpty)
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+    }
+
+    @MainActor
+    func testResolvedGroupInboxRetryCoalescesClicksAndReentryWhileReadIsInFlight() throws {
+        UIView.setAnimationsEnabled(false)
+        defer { UIView.setAnimationsEnabled(true) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-0000000007dd"),
+                recordID("00000000-0000-0000-0000-0000000007de"),
+            ]
+        )
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: "related-group-resolved-inbox-single-flight",
+            proposal: proposal
+        ))
+        let client = CandidateReviewClientSpy()
+        client.changeSetGroupLookupResults = [
+            .success(try relatedGroupLookupFound(proposal: proposal)),
+        ]
+        client.inboxResults = [.failure(URLError(.networkConnectionLost))]
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        controller.loadViewIfNeeded()
+        let verifyButton = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-inbox-verify-group-result"
+        ) as? UIButton)
+        let statusLabel = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-inbox-status"
+        ) as? UILabel)
+        client.deferInbox = true
+
+        verifyButton.sendActions(for: .touchUpInside)
+        verifyButton.sendActions(for: .touchUpInside)
+        controller.beginAppearanceTransition(true, animated: false)
+        controller.endAppearanceTransition()
+        controller.beginAppearanceTransition(false, animated: false)
+        controller.endAppearanceTransition()
+        controller.beginAppearanceTransition(true, animated: false)
+        controller.endAppearanceTransition()
+
+        XCTAssertEqual(client.inboxRequestCount, 2)
+        XCTAssertEqual(client.changeSetGroupLookupCommandIDs.count, 1)
+        XCTAssertEqual(statusLabel.text, "审核结果已核实，正在刷新候选记忆")
+        XCTAssertFalse(verifyButton.isEnabled)
+        XCTAssertTrue(client.confirmedGroupCommands.isEmpty)
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+
+        client.deferInbox = false
+        client.completeDeferredInbox(.success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [recordID("00000000-0000-0000-0000-0000000007df")],
+            memoryRevision: proposal.baseMemoryRevision + 2,
+            proposalGeneration: 13
+        )))
+
+        XCTAssertEqual(client.inboxRequestCount, 2)
+        XCTAssertEqual(statusLabel.text, "已加载 1 条候选记忆")
+        XCTAssertTrue(verifyButton.isHidden)
+    }
+
+    func testResolvedGroupInboxRetryKeepsTraceAndMinimumRevisionUntilFreshSnapshot() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-0000000007e0"),
+                recordID("00000000-0000-0000-0000-0000000007e1"),
+            ]
+        )
+        let nextCandidateID = recordID("00000000-0000-0000-0000-0000000007e2")
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: "related-group-resolved-inbox-revision",
+            proposal: proposal
+        ))
+        let client = CandidateReviewClientSpy()
+        client.changeSetGroupLookupResults = [
+            .success(try relatedGroupLookupFound(proposal: proposal)),
+        ]
+        client.inboxResults = [
+            .failure(URLError(.networkConnectionLost)),
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [nextCandidateID],
+                memoryRevision: proposal.baseMemoryRevision,
+                proposalGeneration: 14
+            )),
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [nextCandidateID],
+                memoryRevision: proposal.baseMemoryRevision + 2,
+                proposalGeneration: 15
+            )),
+        ]
+        let traceID = "resolved-group-fresh-inbox-trace"
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            inboxReadContextFactory: {
+                OwnerTruthCandidateInboxReadContext(traceID: traceID, attempt: 1)
+            },
+            pendingResultStore: store
+        )
+
+        useCase.send(.refresh)
+        XCTAssertEqual(useCase.groupPendingRecoveryState, .unresolved)
+        useCase.resumePendingReviewResultIfNeeded()
+
+        XCTAssertEqual(client.inboxRequestCount, 3)
+        XCTAssertEqual(client.requestedInboxReadContexts.map(\.traceID), [traceID, traceID, traceID])
+        XCTAssertEqual(client.requestedInboxReadContexts.map(\.attempt), [1, 2, 3])
+        XCTAssertEqual(useCase.groupPendingRecoveryState, .none)
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.items.map(\.id), [nextCandidateID])
+        XCTAssertEqual(client.changeSetGroupLookupCommandIDs.count, 1)
+        XCTAssertTrue(client.confirmedGroupCommands.isEmpty)
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+    }
+
+    func testG02ASeedPendingGroupForSimulatorProcessRestart() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-000000000861"),
+                recordID("00000000-0000-0000-0000-000000000862"),
+            ]
+        )
+        let rootURL = g02PendingGroupDirectoryURL()
+        try? FileManager.default.removeItem(at: rootURL)
+        let store = OwnerTruthCandidateReviewPendingResultStore(directoryURL: rootURL)
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: "group-recovery-process-restart",
+            proposal: proposal
+        ))
+        XCTAssertEqual(try store.groupRecords(
+            subjectID: lease.subjectId,
+            vaultID: lease.vaultId
+        ).count, 1)
+    }
+
+    @MainActor
+    func testG02BRecoversPendingGroupAfterSimulatorProcessRestart() throws {
+        UIView.setAnimationsEnabled(false)
+        defer { UIView.setAnimationsEnabled(true) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-000000000861"),
+                recordID("00000000-0000-0000-0000-000000000862"),
+            ]
+        )
+        let rootURL = g02PendingGroupDirectoryURL()
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let store = OwnerTruthCandidateReviewPendingResultStore(directoryURL: rootURL)
+        XCTAssertEqual(try store.groupRecords(
+            subjectID: lease.subjectId,
+            vaultID: lease.vaultId
+        ).map(\.commandID), ["group-recovery-process-restart"])
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        let foundPayload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthMemoryChangeSetGroupDecisionLookupResult.schemaVersion,
+            "status": OwnerTruthMemoryChangeSetGroupDecisionLookupStatus.found.rawValue,
+            "result": relatedGroupCommitJSONObject(proposal: proposal),
+        ])
+        let emptyPayload = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+            "vaultId": lease.vaultId,
+            "memoryRevision": proposal.baseMemoryRevision + 2,
+            "candidates": [],
+        ])
+        var methods: [String] = []
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            methods.append(request.httpMethod ?? "")
+            switch (request.httpMethod, request.url?.path ?? "") {
+            case ("GET", let path) where path.hasSuffix("/memory-changeset-groups/decision-result"):
+                loader.respond(statusCode: 200, body: foundPayload)
+            case ("GET", let path) where path.hasSuffix("/candidates"):
+                loader.respond(statusCode: 200, body: emptyPayload)
+            default:
+                XCTFail("Cold-start recovery only permits the two readonly GET requests")
+                loader.fail(URLError(.cancelled))
+            }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        let navigationController = ImmediateNavigationController(rootViewController: controller)
+        let windowScene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        )
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        controller.loadViewIfNeeded()
+        let statusLabel = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-inbox-status"
+        ) as? UILabel)
+
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+            methods == ["GET", "GET"]
+                && statusLabel.text == "没有待确认候选记忆"
+                && (try? store.groupRecords(
+                    subjectID: lease.subjectId,
+                    vaultID: lease.vaultId
+                ).isEmpty) == true
+        })
+        XCTAssertFalse(methods.contains("POST"))
+        attachUIKitEvidence(view: window, name: "G02-process-restart-recovery")
+    }
+
+    func testG03G04G05PendingGroupRecoveryIsScopeBoundNotListBoundAndRetriesReadOnly() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-0000000007e1"),
+                recordID("00000000-0000-0000-0000-0000000007e2"),
+            ]
+        )
+        let commandID = "group-recovery-scope-not-list"
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: commandID,
+            proposal: proposal
+        ))
+        let client = CandidateReviewClientSpy()
+        client.changeSetGroupLookupResults = [
+            .success(try relatedGroupLookupNotObserved(proposal: proposal)),
+            .success(try relatedGroupLookupFound(proposal: proposal)),
+        ]
+        client.inboxResult = .success(try OwnerTruthCandidateInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                "vaultId": lease.vaultId,
+                "memoryRevision": proposal.baseMemoryRevision + 2,
+                "candidates": [],
+            ],
+            expectedVaultID: vaultID
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            sourceIDFilter: recordID("00000000-0000-0000-0000-0000000007ef"),
+            pendingResultStore: store
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.groupPendingRecoveryState, .unresolved)
+        XCTAssertEqual(client.inboxRequestCount, 0)
+        XCTAssertEqual(client.changeSetGroupLookupCommandIDs, [commandID])
+        XCTAssertEqual(try store.groupRecords(
+            subjectID: lease.subjectId,
+            vaultID: lease.vaultId
+        ).count, 1)
+
+        useCase.resumePendingReviewResultIfNeeded()
+
+        XCTAssertEqual(client.changeSetGroupLookupCommandIDs, [commandID, commandID])
+        XCTAssertEqual(client.confirmedGroupCommands.count, 0)
+        XCTAssertEqual(client.inboxRequestCount, 1)
+        XCTAssertEqual(useCase.viewState.phase, .empty)
+        XCTAssertEqual(useCase.groupPendingRecoveryState, .none)
+        XCTAssertTrue(try store.groupRecords(
+            subjectID: lease.subjectId,
+            vaultID: lease.vaultId
+        ).isEmpty)
+    }
+
+    func testG06G07G10PendingGroupRecoveryExpiresOnceAndDropsLateFound() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-0000000007f1"),
+                recordID("00000000-0000-0000-0000-0000000007f2"),
+            ]
+        )
+        let commandID = "group-recovery-timeout"
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: commandID,
+            proposal: proposal
+        ))
+        let client = CandidateReviewClientSpy()
+        client.deferChangeSetGroupLookup = true
+        var deadlines: [() -> Void] = []
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store,
+            groupPendingLookupTimeout: 1,
+            groupPendingLookupScheduler: { _, block in deadlines.append(block) }
+        )
+
+        useCase.send(.refresh)
+        useCase.send(.refresh)
+
+        XCTAssertEqual(client.changeSetGroupLookupCommandIDs, [commandID])
+        XCTAssertEqual(deadlines.count, 1)
+        deadlines[0]()
+        XCTAssertEqual(useCase.groupPendingRecoveryState, .unresolved)
+        XCTAssertEqual(useCase.viewState.notice, .reviewOutcomeUnknown)
+
+        client.completeDeferredChangeSetGroupLookup(
+            .success(try relatedGroupLookupFound(proposal: proposal))
+        )
+
+        XCTAssertEqual(useCase.groupPendingRecoveryState, .unresolved)
+        XCTAssertEqual(client.inboxRequestCount, 0)
+        XCTAssertEqual(try store.groupRecords(
+            subjectID: lease.subjectId,
+            vaultID: lease.vaultId
+        ).count, 1)
+    }
+
+    func testG06PendingGroupRecoveryKeepsOriginalCommandAcrossTransportAndHTTPFailures() throws {
+        let failureCases: [(name: String, error: Error)] = [
+            ("networkLost", URLError(.networkConnectionLost)),
+            (
+                "serviceUnavailable",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 503,
+                    context: .init(code: "serviceUnavailable", detail: "synthetic")
+                )
+            ),
+            (
+                "notFound",
+                DreamJourneyBackendClient.ClientError.backendError(
+                    statusCode: 404,
+                    context: .init(code: "resultNotObserved", detail: "synthetic")
+                )
+            ),
+        ]
+
+        for (index, failureCase) in failureCases.enumerated() {
+            let (runtime, lease) = try makeActiveRuntime()
+            let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+            let proposal = try relatedGroupProposal(
+                vaultID: lease.vaultId,
+                candidateIDs: [
+                    recordID("00000000-0000-0000-0000-0000000007f3"),
+                    recordID("00000000-0000-0000-0000-0000000007f4"),
+                ]
+            )
+            let commandID = "group-recovery-\(failureCase.name)"
+            let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+            try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+                accountLease: lease,
+                vaultID: vaultID,
+                commandID: commandID,
+                proposal: proposal
+            ))
+            let client = CandidateReviewClientSpy()
+            client.changeSetGroupLookupResults = [
+                .failure(failureCase.error),
+                .success(try relatedGroupLookupFound(proposal: proposal)),
+            ]
+            client.inboxResults = [
+                .success(try sequentialV5CandidateInbox(
+                    vaultID: lease.vaultId,
+                    candidateIDs: [recordID(String(
+                        format: "00000000-0000-0000-0000-%012x",
+                        0x7f5 + index
+                    ))],
+                    memoryRevision: proposal.baseMemoryRevision + 2,
+                    proposalGeneration: 3 + index
+                )),
+            ]
+            let useCase = OwnerTruthCandidateReviewUseCase(
+                accountLease: lease,
+                client: client,
+                accountLeaseRuntime: runtime,
+                qaGateEnabled: { true },
+                pendingResultStore: store
+            )
+
+            useCase.resumePendingReviewResultIfNeeded()
+
+            XCTAssertEqual(useCase.groupPendingRecoveryState, .unresolved, failureCase.name)
+            XCTAssertEqual(client.changeSetGroupLookupCommandIDs, [commandID], failureCase.name)
+            XCTAssertTrue(client.confirmedGroupCommands.isEmpty, failureCase.name)
+            XCTAssertEqual(try store.groupRecords(
+                subjectID: lease.subjectId,
+                vaultID: lease.vaultId
+            ).count, 1, failureCase.name)
+
+            useCase.resumePendingReviewResultIfNeeded()
+
+            XCTAssertEqual(useCase.groupPendingRecoveryState, .none, failureCase.name)
+            XCTAssertEqual(
+                client.changeSetGroupLookupCommandIDs,
+                [commandID, commandID],
+                failureCase.name
+            )
+            XCTAssertTrue(client.confirmedGroupCommands.isEmpty, failureCase.name)
+            XCTAssertTrue(client.reviewedCommands.isEmpty, failureCase.name)
+            XCTAssertTrue(try store.groupRecords(
+                subjectID: lease.subjectId,
+                vaultID: lease.vaultId
+            ).isEmpty, failureCase.name)
+        }
+    }
+
+    func testG08G09PendingGroupRecoveryRetainsOriginalScopeAcrossAccountChange() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-000000000801"),
+                recordID("00000000-0000-0000-0000-000000000802"),
+            ]
+        )
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: "group-recovery-account-boundary",
+            proposal: proposal
+        ))
+        let client = CandidateReviewClientSpy()
+        client.deferChangeSetGroupLookup = true
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        useCase.send(.refresh)
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000803")!
+        ))
+
+        client.completeDeferredChangeSetGroupLookup(
+            .success(try relatedGroupLookupFound(proposal: proposal))
+        )
+
+        XCTAssertEqual(useCase.groupPendingRecoveryState, .blocked)
+        XCTAssertEqual(useCase.viewState.notice, .accountUnavailable)
+        XCTAssertEqual(client.confirmedGroupCommands.count, 0)
+        XCTAssertEqual(try store.groupRecords(
+            subjectID: lease.subjectId,
+            vaultID: lease.vaultId
+        ).count, 1)
+    }
+
+    func testG08PendingGroupRecoveryResumesReadOnlyWhenOriginalAccountReturns() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-000000000804"),
+                recordID("00000000-0000-0000-0000-000000000805"),
+            ]
+        )
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: "group-recovery-original-account-returned",
+            proposal: proposal
+        ))
+
+        runtime.publish(session: accountSession(
+            subjectId: "owner-b",
+            vaultId: "vault-b",
+            generation: 2,
+            generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000806")!
+        ))
+        let blockedClient = CandidateReviewClientSpy()
+        let blockedUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: blockedClient,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        blockedUseCase.resumePendingReviewResultIfNeeded()
+        XCTAssertEqual(blockedUseCase.groupPendingRecoveryState, .blocked)
+        XCTAssertTrue(blockedClient.changeSetGroupLookupCommandIDs.isEmpty)
+
+        runtime.publish(session: accountSession(
+            subjectId: lease.subjectId,
+            vaultId: lease.vaultId,
+            generation: lease.generation,
+            generationID: lease.generationId
+        ))
+        let recoveredClient = CandidateReviewClientSpy()
+        recoveredClient.changeSetGroupLookupResults = [
+            .success(try relatedGroupLookupFound(proposal: proposal)),
+        ]
+        recoveredClient.inboxResults = [
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [recordID("00000000-0000-0000-0000-000000000807")],
+                memoryRevision: proposal.baseMemoryRevision + 2,
+                proposalGeneration: 2
+            )),
+        ]
+        let recoveredUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: recoveredClient,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+
+        recoveredUseCase.resumePendingReviewResultIfNeeded()
+
+        XCTAssertEqual(recoveredUseCase.groupPendingRecoveryState, .none)
+        XCTAssertEqual(
+            recoveredClient.changeSetGroupLookupCommandIDs,
+            ["group-recovery-original-account-returned"]
+        )
+        XCTAssertEqual(recoveredClient.inboxRequestCount, 1)
+        XCTAssertTrue(recoveredClient.confirmedGroupCommands.isEmpty)
+        XCTAssertTrue(recoveredClient.reviewedCommands.isEmpty)
+        XCTAssertTrue(try store.groupRecords(
+            subjectID: lease.subjectId,
+            vaultID: lease.vaultId
+        ).isEmpty)
+    }
+
+    func testG09PendingGroupRecoveryDropsOldCallbackAfterSameSubjectCredentialRotation() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-000000000809"),
+                recordID("00000000-0000-0000-0000-00000000080a"),
+            ]
+        )
+        let commandID = "group-recovery-credential-rotation"
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: commandID,
+            proposal: proposal
+        ))
+        let client = CandidateReviewClientSpy()
+        client.deferChangeSetGroupLookup = true
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+
+        useCase.send(.refresh)
+        runtime.publish(session: accountSession(
+            subjectId: lease.subjectId,
+            vaultId: lease.vaultId,
+            generation: lease.generation,
+            generationID: lease.generationId,
+            sessionID: "session-owner-a-rotated"
+        ))
+        client.completeDeferredChangeSetGroupLookup(
+            .success(try relatedGroupLookupFound(proposal: proposal))
+        )
+
+        XCTAssertEqual(useCase.groupPendingRecoveryState, .unresolved)
+        XCTAssertEqual(useCase.viewState.notice, .reviewOutcomeUnknown)
+        XCTAssertEqual(client.inboxRequestCount, 0)
+        XCTAssertEqual(client.confirmedGroupCommands.count, 0)
+        XCTAssertEqual(try store.groupRecords(
+            subjectID: lease.subjectId,
+            vaultID: lease.vaultId
+        ).map(\.commandID), [commandID])
+
+        client.deferChangeSetGroupLookup = false
+        client.changeSetGroupLookupResults = [
+            .success(try relatedGroupLookupFound(proposal: proposal)),
+        ]
+        client.inboxResult = .success(try OwnerTruthCandidateInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                "vaultId": lease.vaultId,
+                "memoryRevision": proposal.baseMemoryRevision + 2,
+                "candidates": [],
+            ],
+            expectedVaultID: vaultID
+        ))
+
+        useCase.resumePendingReviewResultIfNeeded()
+
+        XCTAssertEqual(client.changeSetGroupLookupCommandIDs, [commandID, commandID])
+        XCTAssertEqual(client.inboxRequestCount, 1)
+        XCTAssertEqual(useCase.groupPendingRecoveryState, .none)
+        XCTAssertTrue(try store.groupRecords(
+            subjectID: lease.subjectId,
+            vaultID: lease.vaultId
+        ).isEmpty)
+    }
+
+    func testG11G12PendingGroupRecoveryFailsClosedForMismatchAndStorageFailure() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-000000000821"),
+                recordID("00000000-0000-0000-0000-000000000822"),
+            ]
+        )
+        var mismatchedResult = relatedGroupCommitJSONObject(proposal: proposal)
+        mismatchedResult["groupProposalHash"] = String(repeating: "1", count: 64)
+        XCTAssertThrowsError(try OwnerTruthMemoryChangeSetGroupDecisionLookupResult(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthMemoryChangeSetGroupDecisionLookupResult.schemaVersion,
+                "status": OwnerTruthMemoryChangeSetGroupDecisionLookupStatus.found.rawValue,
+                "result": mismatchedResult,
+            ],
+            expectedBinding: OwnerTruthMemoryChangeSetGroupBinding(proposal: proposal)
+        ))
+
+        let store = CandidateReviewFailingGroupPendingResultStore()
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: "group-recovery-remove-failure",
+            proposal: proposal
+        ))
+        store.failGroupRemoval = true
+        let client = CandidateReviewClientSpy()
+        client.changeSetGroupLookupResults = [
+            .success(try relatedGroupLookupFound(proposal: proposal)),
+        ]
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.groupPendingRecoveryState, .blocked)
+        XCTAssertEqual(useCase.viewState.notice, .reviewResultInconsistent)
+        XCTAssertEqual(client.inboxRequestCount, 0)
+        XCTAssertEqual(client.confirmedGroupCommands.count, 0)
+        XCTAssertEqual(try store.groupRecords(
+            subjectID: lease.subjectId,
+            vaultID: lease.vaultId
+        ).count, 1)
+    }
+
+    func testG12PendingGroupRecoveryFailsClosedWhenDiskRecordsCannotBeRead() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-00000000082a"),
+                recordID("00000000-0000-0000-0000-00000000082b"),
+            ]
+        )
+        let store = CandidateReviewFailingGroupPendingResultStore()
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: "group-recovery-read-failure",
+            proposal: proposal
+        ))
+        store.failGroupReads = true
+        let client = CandidateReviewClientSpy()
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.groupPendingRecoveryState, .blocked)
+        XCTAssertEqual(useCase.viewState.notice, .reviewResultInconsistent)
+        XCTAssertTrue(client.changeSetGroupLookupCommandIDs.isEmpty)
+        XCTAssertEqual(client.inboxRequestCount, 0)
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+        XCTAssertTrue(client.confirmedGroupCommands.isEmpty)
+    }
+
+    func testG13FoundGroupWaitsForCandidateSnapshotAtCommittedRevision() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-000000000831"),
+                recordID("00000000-0000-0000-0000-000000000832"),
+            ]
+        )
+        let nextCandidate = recordID("00000000-0000-0000-0000-000000000833")
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: "group-recovery-revision-chase",
+            proposal: proposal
+        ))
+        let client = CandidateReviewClientSpy()
+        client.changeSetGroupLookupResults = [
+            .success(try relatedGroupLookupFound(proposal: proposal)),
+        ]
+        client.inboxResults = [
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [nextCandidate],
+                memoryRevision: proposal.baseMemoryRevision,
+                proposalGeneration: 1
+            )),
+            .success(try sequentialV5CandidateInbox(
+                vaultID: lease.vaultId,
+                candidateIDs: [nextCandidate],
+                memoryRevision: proposal.baseMemoryRevision + 2,
+                proposalGeneration: 2
+            )),
+        ]
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(client.inboxRequestCount, 2)
+        XCTAssertEqual(useCase.groupPendingRecoveryState, .none)
+        XCTAssertEqual(useCase.viewState.phase, .ready)
+        XCTAssertEqual(useCase.viewState.items.map(\.id), [nextCandidate])
+        XCTAssertEqual(client.confirmedGroupCommands.count, 0)
+    }
+
+    func testG14MultiplePendingRecordsKeepWholeVaultWriteProtected() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        for suffix in ["841", "842"] {
+            let proposal = try relatedGroupProposal(
+                vaultID: lease.vaultId,
+                candidateIDs: [
+                    recordID("00000000-0000-0000-0000-000000000\(suffix)"),
+                    recordID("00000000-0000-0000-0000-00000000085\(suffix.suffix(1))"),
+                ]
+            )
+            try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+                accountLease: lease,
+                vaultID: vaultID,
+                commandID: "group-recovery-multiple-\(suffix)",
+                proposal: proposal
+            ))
+        }
+        let client = CandidateReviewClientSpy()
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+
+        useCase.send(.refresh)
+
+        XCTAssertEqual(useCase.groupPendingRecoveryState, .blocked)
+        XCTAssertEqual(useCase.viewState.notice, .reviewResultInconsistent)
+        XCTAssertTrue(client.changeSetGroupLookupCommandIDs.isEmpty)
+        XCTAssertTrue(client.reviewedCommands.isEmpty)
+        XCTAssertTrue(client.confirmedGroupCommands.isEmpty)
+        XCTAssertEqual(try store.groupRecords(
+            subjectID: lease.subjectId,
+            vaultID: lease.vaultId
+        ).count, 2)
+    }
+
+    @MainActor
+    func testG05G16InboxPageOffersReadonlyVerificationAfterNotObserved() throws {
+        UIView.setAnimationsEnabled(false)
+        defer { UIView.setAnimationsEnabled(true) }
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-000000000811"),
+                recordID("00000000-0000-0000-0000-000000000812"),
+            ]
+        )
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        let commandID = "group-recovery-ui-verify"
+        try store.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(
+            accountLease: lease,
+            vaultID: vaultID,
+            commandID: commandID,
+            proposal: proposal
+        ))
+        let client = CandidateReviewClientSpy()
+        client.changeSetGroupLookupResults = [
+            .success(try relatedGroupLookupNotObserved(proposal: proposal)),
+            .success(try relatedGroupLookupFound(proposal: proposal)),
+        ]
+        client.inboxResult = .success(try sequentialV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [
+                recordID("00000000-0000-0000-0000-000000000813"),
+                recordID("00000000-0000-0000-0000-000000000814"),
+            ],
+            memoryRevision: proposal.baseMemoryRevision + 2,
+            proposalGeneration: 2
+        ))
+        let controller = OwnerTruthCandidateInboxViewController(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            pendingResultStore: store
+        )
+        let navigationController = ImmediateNavigationController(rootViewController: controller)
+        let windowScene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        )
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        controller.loadViewIfNeeded()
+        let verifyButton = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-inbox-verify-group-result"
+        ) as? UIButton)
+        let statusLabel = try XCTUnwrap(findView(
+            in: controller.view,
+            accessibilityIdentifier: "owner-truth-candidate-inbox-status"
+        ) as? UILabel)
+
+        XCTAssertFalse(verifyButton.isHidden)
+        XCTAssertTrue(verifyButton.isEnabled)
+        XCTAssertEqual(statusLabel.text, "暂未核实到结果，未重新提交")
+        attachUIKitEvidence(view: window, name: "G16-group-pending-not-observed-readonly-action")
+        verifyButton.sendActions(for: .touchUpInside)
+
+        XCTAssertEqual(client.changeSetGroupLookupCommandIDs, [commandID, commandID])
+        XCTAssertEqual(client.confirmedGroupCommands.count, 0)
+        XCTAssertEqual(statusLabel.text, "已加载 2 条候选记忆")
+        XCTAssertTrue(verifyButton.isHidden)
+        XCTAssertTrue(try store.groupRecords(
+            subjectID: lease.subjectId,
+            vaultID: lease.vaultId
+        ).isEmpty)
+        attachUIKitEvidence(view: window, name: "G16-group-pending-found-refreshed")
+    }
+
+    func testRelatedCandidateGroupUnknownOutcomeCommitsOnlyAfterBoundGroupLookup() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let firstID = recordID("00000000-0000-0000-0000-0000000007a3")
+        let secondID = recordID("00000000-0000-0000-0000-0000000007a4")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try relatedV5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        ))
+        let proposal = try relatedGroupProposal(
+            vaultID: lease.vaultId,
+            candidateIDs: [firstID, secondID]
+        )
+        client.changeSetGroupPreviewResult = .success(proposal)
+        client.changeSetGroupTransportOutcomes = [
+            .outcomeUnknown(URLError(.timedOut)),
+        ]
+        client.changeSetGroupLookupResults = [
+            .success(try relatedGroupLookupFound(proposal: proposal)),
+        ]
+        let store = OwnerTruthCandidateReviewTransientPendingResultStore()
+        let inboxUseCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        inboxUseCase.send(.refresh)
+        let groupUseCase = OwnerTruthCandidateRelatedGroupReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true },
+            commandIDFactory: { "related-group-lookup-found" },
+            pendingResultStore: store
+        )
+        var previewResult: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>?
+        groupUseCase.preview(candidates: inboxUseCase.viewState.items) { previewResult = $0 }
+        let visibleProposal = try XCTUnwrap(try previewResult?.get())
+        var confirmation: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>?
+
+        groupUseCase.confirm(proposal: visibleProposal) { confirmation = $0 }
+
+        XCTAssertNotNil(try confirmation?.get())
+        XCTAssertEqual(client.confirmedGroupCommands.count, 1)
+        XCTAssertEqual(client.changeSetGroupLookupCommandIDs, ["related-group-lookup-found"])
+        XCTAssertTrue(
+            try store.groupRecords(subjectID: lease.subjectId, vaultID: lease.vaultId).isEmpty
         )
     }
 
@@ -3450,6 +10784,9 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(status.reviewBatchState, .acknowledged)
         XCTAssertEqual(status.candidateProposalState, .admitted)
         XCTAssertEqual(status.candidateExtractionState, .requested)
+        XCTAssertEqual(status.candidateExtractionJobState, .pending)
+        XCTAssertEqual(status.candidateExtractionMaxAttempts, 3)
+        XCTAssertFalse(status.candidateExtractionRetryable)
         XCTAssertEqual(status.candidateReviewState, .notReady)
 
         var privateFieldPayload = interviewCandidateProposalStatusPayload(
@@ -3477,6 +10814,63 @@ final class OwnerTruthContractsTests: XCTestCase {
                 expectedReviewBatchID: reviewBatchID
             )
         )
+    }
+
+    func testInterviewCandidateProposalStatusPreservesRetryWaitProgressAndFailureCode() throws {
+        let vaultID = "vault-owner-a"
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000219")
+        let status = try OwnerTruthInterviewCandidateProposalStatus(
+            backendJSONObject: interviewCandidateProposalStatusPayload(
+                vaultID: vaultID,
+                reviewBatchID: reviewBatchID,
+                candidateExtractionJobState: .retryWait,
+                candidateExtractionAttempt: 1,
+                candidateExtractionRetryAvailableAt: "2026-09-10T12:00:05Z",
+                candidateExtractionFailureCode: "candidateExtraction.providerRequest.timeout",
+                candidateExtractionFailureCategory: "timeout"
+            ),
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID)),
+            expectedReviewBatchID: reviewBatchID
+        )
+
+        XCTAssertEqual(status.candidateExtractionJobState, .retryWait)
+        XCTAssertEqual(status.candidateExtractionAttempt, 1)
+        XCTAssertEqual(status.candidateExtractionMaxAttempts, 3)
+        XCTAssertEqual(
+            status.candidateExtractionFailureCode,
+            "candidateExtraction.providerRequest.timeout"
+        )
+        XCTAssertEqual(
+            status.candidateExtractionFailureCategory,
+            .timeout
+        )
+        XCTAssertNil(status.candidateExtractionTerminationCode)
+        XCTAssertTrue(status.candidateExtractionRetryable)
+    }
+
+    func testInterviewCandidateProposalStatusStillDecodesStrictLegacyV2Contract() throws {
+        let vaultID = "vault-owner-a"
+        let reviewBatchID = recordID("00000000-0000-0000-0000-000000000220")
+        var payload = interviewCandidateProposalStatusPayload(
+            vaultID: vaultID,
+            reviewBatchID: reviewBatchID
+        )
+        payload["schemaVersion"] = OwnerTruthInterviewCandidateProposalStatus.legacySchemaVersion
+        var extraction = try XCTUnwrap(payload["candidateExtraction"] as? [String: Any])
+        extraction.removeValue(forKey: "firstFailureCode")
+        extraction.removeValue(forKey: "failureCategory")
+        extraction.removeValue(forKey: "terminationCode")
+        payload["candidateExtraction"] = extraction
+
+        let status = try OwnerTruthInterviewCandidateProposalStatus(
+            backendJSONObject: payload,
+            expectedVaultID: try XCTUnwrap(OwnerTruthVaultID(vaultID)),
+            expectedReviewBatchID: reviewBatchID
+        )
+
+        XCTAssertNil(status.candidateExtractionFirstFailureCode)
+        XCTAssertNil(status.candidateExtractionFailureCategory)
+        XCTAssertNil(status.candidateExtractionTerminationCode)
     }
 
     func testInterviewCandidateProposalStatusUseCaseFailsClosedWithoutReleasePolicy() throws {
@@ -8029,6 +15423,17 @@ final class OwnerTruthContractsTests: XCTestCase {
         return (runtime, try XCTUnwrap(runtime.capture(forSubjectId: "owner-a")))
     }
 
+    private func g02PendingGroupDirectoryURL() -> URL {
+        let root = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first ?? FileManager.default.temporaryDirectory
+        return root.appendingPathComponent(
+            "b4-g02-pending-group-process-restart",
+            isDirectory: true
+        )
+    }
+
     private func accountSession(
         subjectId: String,
         vaultId: String,
@@ -8441,10 +15846,34 @@ final class OwnerTruthContractsTests: XCTestCase {
         candidateProposalState: OwnerTruthInterviewCandidateProposalAdmissionState = .admitted,
         sourceState: OwnerTruthInterviewCandidateProposalSourceState = .admitted,
         candidateExtractionState: OwnerTruthInterviewCandidateProposalExtractionState = .requested,
+        candidateExtractionJobState: OwnerTruthInterviewCandidateProposalExtractionJobState? = nil,
+        candidateExtractionAttempt: Int = 0,
+        candidateExtractionMaxAttempts: Int = 3,
+        candidateExtractionRetryAvailableAt: Any = NSNull(),
+        candidateExtractionFirstFailureCode: Any = NSNull(),
+        candidateExtractionFailureCode: Any = NSNull(),
+        candidateExtractionFailureCategory: Any = NSNull(),
+        candidateExtractionTerminationCode: Any = NSNull(),
+        candidateExtractionDeadLetterState: Any = NSNull(),
         effectExecutionState: OwnerTruthInterviewCandidateProposalEffectState = .disabled,
         candidateReviewState: OwnerTruthInterviewCandidateProposalReviewState = .notReady
     ) -> [String: Any] {
-        [
+        let resolvedJobState: OwnerTruthInterviewCandidateProposalExtractionJobState
+        if let candidateExtractionJobState {
+            resolvedJobState = candidateExtractionJobState
+        } else {
+            switch candidateExtractionState {
+            case .requested:
+                resolvedJobState = .pending
+            case .succeeded:
+                resolvedJobState = .succeeded
+            case .failed, .quarantined:
+                resolvedJobState = .failed
+            case .notRequested, .blocked:
+                resolvedJobState = .notCreated
+            }
+        }
+        return [
             "schemaVersion": OwnerTruthInterviewCandidateProposalStatus.schemaVersion,
             "vaultId": vaultID,
             "reviewBatch": [
@@ -8453,7 +15882,19 @@ final class OwnerTruthContractsTests: XCTestCase {
             ],
             "candidateProposal": ["status": candidateProposalState.rawValue],
             "source": ["status": sourceState.rawValue],
-            "candidateExtraction": ["status": candidateExtractionState.rawValue],
+            "candidateExtraction": [
+                "status": candidateExtractionState.rawValue,
+                "jobState": resolvedJobState.rawValue,
+                "attempt": candidateExtractionAttempt,
+                "maxAttempts": candidateExtractionMaxAttempts,
+                "retryAvailableAt": candidateExtractionRetryAvailableAt,
+                "firstFailureCode": candidateExtractionFirstFailureCode,
+                "failureCode": candidateExtractionFailureCode,
+                "failureCategory": candidateExtractionFailureCategory,
+                "terminationCode": candidateExtractionTerminationCode,
+                "retryable": resolvedJobState == .retryWait,
+                "deadLetterState": candidateExtractionDeadLetterState,
+            ],
             "effectExecution": ["status": effectExecutionState.rawValue],
             "candidateReview": ["status": candidateReviewState.rawValue],
         ]
@@ -8986,7 +16427,17 @@ final class OwnerTruthContractsTests: XCTestCase {
 
     private func v5CandidateInbox(
         vaultID: String,
-        candidateID: OwnerTruthRecordID
+        candidateID: OwnerTruthRecordID,
+        operationKind: String = "correct",
+        omitRequiredAfter: Bool = false,
+        omitRequiredTarget: Bool = false,
+        opaqueAfter: Bool = false,
+        operationCount: Int = 1,
+        statement: String = "我在 2016 年从 A 大学计算机专业毕业。",
+        finalStatement: String? = nil,
+        facetOnlyDiff: Bool = false,
+        candidateHash: String = String(repeating: "a", count: 64),
+        proposalHash: String = String(repeating: "b", count: 64)
     ) throws -> OwnerTruthCandidateInbox {
         let expectedVaultID = try XCTUnwrap(OwnerTruthVaultID(vaultID))
         let sourceID = "00000000-0000-0000-0000-000000000173"
@@ -8994,12 +16445,123 @@ final class OwnerTruthContractsTests: XCTestCase {
         let targetVersionID = "00000000-0000-0000-0000-000000000175"
         let proposalID = "00000000-0000-0000-0000-000000000176"
         let changeSetID = "00000000-0000-0000-0000-000000000177"
-        let candidateHash = String(repeating: "a", count: 64)
-        let proposalHash = String(repeating: "b", count: 64)
-        let content: [String: Any] = [
-            "statement": "我在 2016 年从 A 大学计算机专业毕业。",
-            "qualifiers": ["validTime": ["expression": "2016 年"]],
+        let people: [[String: Any]] = [[
+            "value": "外公",
+            "evidenceMode": "ownerStated",
+            "confidence": 1.0,
+        ]]
+        let places: [[String: Any]] = [[
+            "value": "杭州",
+            "evidenceMode": "inferred",
+            "confidence": 0.72,
+        ]]
+        let facets: [String: Any] = [
+            "people": people,
+            "time": [],
+            "places": places,
+            "relationships": [],
+            "emotions": [],
+            "values": [],
+            "personality": [],
+            "habits": [],
+            "goals": [],
+            "identity": [],
+            "reflections": [],
+            "confidence": 0.88,
         ]
+        let content: [String: Any] = [
+            "statement": statement,
+            "qualifiers": ["validTime": ["expression": "2016 年"]],
+            "facets": facets,
+        ]
+        var proposedContent = content
+        proposedContent["statement"] = finalStatement ?? statement
+        let createsNewFact = operationKind == "add"
+        let createsNoPersonalFact = operationKind == "noPersonalFact"
+        let createsNoNewVersion = operationKind == "duplicate"
+        let beforeValue: Any = createsNewFact || createsNoPersonalFact
+            ? NSNull()
+            : ["statement": "我在 B 大学毕业。"]
+        let afterValue: Any
+        if createsNoPersonalFact || omitRequiredAfter {
+            afterValue = NSNull()
+        } else if opaqueAfter {
+            afterValue = ["opaque": ["nested": true]]
+        } else {
+            afterValue = proposedContent
+        }
+        let fieldDiffs: [[String: Any]]
+        if createsNoPersonalFact || createsNoNewVersion || operationKind == "addEvidence" {
+            fieldDiffs = []
+        } else if facetOnlyDiff {
+            fieldDiffs = [[
+                "path": "facets.emotions",
+                "before": [[
+                    "value": "平静",
+                    "evidenceMode": "inferred",
+                    "confidence": 0.72,
+                ]],
+                "after": [[
+                    "value": "安心",
+                    "evidenceMode": "ownerStated",
+                    "confidence": 1.0,
+                ]],
+            ]]
+        } else {
+            fieldDiffs = [[
+                "path": "content",
+                "before": beforeValue,
+                "after": afterValue,
+            ]]
+        }
+        let changedFields: [String]
+        if createsNoPersonalFact || createsNoNewVersion {
+            changedFields = []
+        } else if operationKind == "addEvidence" {
+            changedFields = ["evidenceRefs"]
+        } else if facetOnlyDiff {
+            changedFields = ["facets.emotions"]
+        } else {
+            changedFields = ["content", "evidenceRefs"]
+        }
+        let anticipatedActivation: String
+        switch operationKind {
+        case "add": anticipatedActivation = "create"
+        case "temporalChange": anticipatedActivation = "createRelated"
+        case "dispute": anticipatedActivation = "createContradictory"
+        case "duplicate": anticipatedActivation = "noNewVersion"
+        case "noPersonalFact": anticipatedActivation = "notApplicable"
+        default: anticipatedActivation = "revise"
+        }
+        var operation: [String: Any] = [
+            "operationIndex": 0,
+            "operationKind": operationKind,
+            "reason": "syntheticReviewTarget",
+            "changedFields": changedFields,
+            "factDiff": [
+                "before": beforeValue,
+                "after": afterValue,
+                "candidate": content,
+                "changedFields": fieldDiffs,
+                "evidence": [
+                    "beforeCount": createsNewFact || createsNoPersonalFact ? 0 : 1,
+                    "candidateCount": 1,
+                    "afterCount": createsNoPersonalFact ? 0 : 2,
+                    "addedCount": createsNoPersonalFact ? 0 : 1,
+                ],
+            ],
+            "anticipatedActivation": anticipatedActivation,
+        ]
+        if !createsNewFact && !createsNoPersonalFact && !omitRequiredTarget {
+            operation["targetMemoryId"] = targetMemoryID
+            operation["targetMemoryVersionId"] = targetVersionID
+            operation["targetMemoryVersion"] = 2
+        }
+        let operations = (0..<max(1, operationCount)).map { index -> [String: Any] in
+            var indexedOperation = operation
+            indexedOperation["operationIndex"] = index
+            return indexedOperation
+        }
         return try OwnerTruthCandidateInbox(
             backendJSONObject: [
                 "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
@@ -9026,32 +16588,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                         "candidateVersion": 3,
                         "changeSetId": changeSetID,
                         "baseMemoryRevision": 9,
-                        "operations": [[
-                            "operationIndex": 0,
-                            "operationKind": "correct",
-                            "targetMemoryId": targetMemoryID,
-                            "targetMemoryVersionId": targetVersionID,
-                            "targetMemoryVersion": 2,
-                            "reason": "explicitCorrectionTarget",
-                            "changedFields": ["content", "evidenceRefs"],
-                            "factDiff": [
-                                "before": ["statement": "我在 B 大学毕业。"],
-                                "after": content,
-                                "candidate": content,
-                                "changedFields": [[
-                                    "path": "content",
-                                    "before": ["statement": "我在 B 大学毕业。"],
-                                    "after": content,
-                                ]],
-                                "evidence": [
-                                    "beforeCount": 1,
-                                    "candidateCount": 1,
-                                    "afterCount": 2,
-                                    "addedCount": 1,
-                                ],
-                            ],
-                            "anticipatedActivation": "revise",
-                        ]],
+                        "operations": operations,
                         "dependencies": [],
                     ],
                 ]],
@@ -9060,22 +16597,200 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    @MainActor
+    private func v5CandidateDetailItem(
+        operationKind: String = "correct",
+        omitRequiredAfter: Bool = false,
+        omitRequiredTarget: Bool = false,
+        opaqueAfter: Bool = false,
+        operationCount: Int = 1,
+        statement: String = "我在 2016 年从 A 大学计算机专业毕业。",
+        finalStatement: String? = nil,
+        facetOnlyDiff: Bool = false
+    ) throws -> OwnerTruthCandidateInboxItemViewState {
+        let (runtime, lease) = try makeActiveRuntime()
+        let candidateID = recordID("00000000-0000-0000-0000-000000000171")
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(try v5CandidateInbox(
+            vaultID: lease.vaultId,
+            candidateID: candidateID,
+            operationKind: operationKind,
+            omitRequiredAfter: omitRequiredAfter,
+            omitRequiredTarget: omitRequiredTarget,
+            opaqueAfter: opaqueAfter,
+            operationCount: operationCount,
+            statement: statement,
+            finalStatement: finalStatement,
+            facetOnlyDiff: facetOnlyDiff
+        ))
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        useCase.send(.refresh)
+        return try XCTUnwrap(useCase.viewState.items.first)
+    }
+
+    @MainActor
+    private func allLabelText(in root: UIView) -> String {
+        let own = (root as? UILabel)?.text.map { [$0] } ?? []
+        return (own + root.subviews.flatMap { child in
+            allLabelText(in: child).split(separator: "\n").map(String.init)
+        }).joined(separator: "\n")
+    }
+
+    @MainActor
+    private func attachUIKitEvidence(view: UIView, name: String) {
+        view.layoutIfNeeded()
+        let renderer = UIGraphicsImageRenderer(bounds: view.bounds)
+        let image = renderer.image { _ in
+            view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
+        }
+        let screenshot = XCTAttachment(image: image)
+        screenshot.name = name
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        let accessibility = XCTAttachment(string: accessibilityEvidence(in: view).joined(separator: "\n"))
+        accessibility.name = "\(name)-accessibility"
+        accessibility.lifetime = .keepAlways
+        add(accessibility)
+    }
+
+    @MainActor
+    private func accessibilityEvidence(in root: UIView, depth: Int = 0) -> [String] {
+        let identifier = root.accessibilityIdentifier ?? ""
+        let label = root.accessibilityLabel ?? ""
+        let own = identifier.isEmpty && label.isEmpty
+            ? []
+            : ["\(String(repeating: "  ", count: depth))id=\(identifier) label=\(label)"]
+        return own + root.subviews.flatMap {
+            accessibilityEvidence(in: $0, depth: depth + 1)
+        }
+    }
+
+    @MainActor
+    private func button(in root: UIView, identifier: String) -> UIButton? {
+        if let button = root as? UIButton, button.accessibilityIdentifier == identifier {
+            return button
+        }
+        for child in root.subviews {
+            if let match = self.button(in: child, identifier: identifier) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    @MainActor
+    private func textView(in root: UIView, identifier: String) -> UITextView? {
+        if let textView = root as? UITextView,
+           textView.accessibilityIdentifier == identifier {
+            return textView
+        }
+        for child in root.subviews {
+            if let match = self.textView(in: child, identifier: identifier) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    @MainActor
+    private func textField(in root: UIView, identifier: String) -> UITextField? {
+        if let textField = root as? UITextField,
+           textField.accessibilityIdentifier == identifier {
+            return textField
+        }
+        for child in root.subviews {
+            if let match = self.textField(in: child, identifier: identifier) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    @MainActor
+    private func buttonOrLabel(in root: UIView, identifier: String) -> UIView? {
+        if root.accessibilityIdentifier == identifier { return root }
+        for child in root.subviews {
+            if let match = self.buttonOrLabel(in: child, identifier: identifier) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    private func staleV5Proposal() throws -> OwnerTruthCandidateChangeSetProposal {
+        let content: [String: Any] = [
+            "statement": "我在 2017 年从 A 大学计算机专业毕业。",
+        ]
+        return try OwnerTruthCandidateChangeSetProposal(backendJSONObject: [
+            "schemaVersion": OwnerTruthCandidateChangeSetProposal.schemaVersion,
+            "proposalId": "00000000-0000-0000-0000-000000000178",
+            "proposalHash": String(repeating: "c", count: 64),
+            "candidateContentHash": String(repeating: "a", count: 64),
+            "candidateVersion": 3,
+            "changeSetId": "00000000-0000-0000-0000-000000000179",
+            "baseMemoryRevision": 8,
+            "operations": [[
+                "operationIndex": 0,
+                "operationKind": "correct",
+                "targetMemoryId": "00000000-0000-0000-0000-000000000174",
+                "targetMemoryVersionId": "00000000-0000-0000-0000-000000000175",
+                "targetMemoryVersion": 2,
+                "reason": "explicitCorrectionTarget",
+                "changedFields": ["content"],
+                "factDiff": [
+                    "before": ["statement": "我在 2016 年从 A 大学计算机专业毕业。"],
+                    "after": content,
+                    "candidate": content,
+                    "changedFields": [[
+                        "path": "content",
+                        "before": ["statement": "我在 2016 年从 A 大学计算机专业毕业。"],
+                        "after": content,
+                    ]],
+                    "evidence": [
+                        "beforeCount": 1,
+                        "candidateCount": 1,
+                        "afterCount": 2,
+                        "addedCount": 1,
+                    ],
+                ],
+                "anticipatedActivation": "revise",
+            ]],
+            "dependencies": [],
+        ])
+    }
+
     private func relatedV5CandidateInbox(
         vaultID: String,
         candidateIDs: [OwnerTruthRecordID]
     ) throws -> OwnerTruthCandidateInbox {
         let expectedVaultID = try XCTUnwrap(OwnerTruthVaultID(vaultID))
-        guard candidateIDs.count == 2 else {
-            throw OwnerTruthRemoteContractError.invalidInbox("related group fixture requires two Candidates")
+        guard candidateIDs.count >= 2 else {
+            throw OwnerTruthRemoteContractError.invalidInbox("related group fixture requires at least two Candidates")
         }
         let sourceID = "00000000-0000-0000-0000-000000000273"
         let candidates = candidateIDs.enumerated().map { index, candidateID -> [String: Any] in
-            let contentHash = String(repeating: index == 0 ? "c" : "d", count: 64)
-            let proposalHash = String(repeating: index == 0 ? "e" : "f", count: 64)
+            let contentHash = String(repeating: ["c", "d", "e", "f"][index % 4], count: 64)
+            let proposalHash = String(repeating: ["6", "7", "8", "9"][index % 4], count: 64)
+            let proposalID = String(
+                format: "00000000-0000-0000-0000-%012d",
+                274 + index
+            )
+            let changeSetID = String(
+                format: "00000000-0000-0000-0000-%012d",
+                284 + index
+            )
             let content: [String: Any] = [
-                "statement": index == 0
-                    ? "我在 2016 年从 A 大学计算机专业毕业。"
-                    : "毕业后我在上海从事软件研发工作。",
+                "statement": [
+                    "我在 2016 年从 A 大学计算机专业毕业。",
+                    "毕业后我在上海从事软件研发工作。",
+                    "我喜欢在周末阅读。",
+                ][index % 3],
             ]
             return [
                 "candidateId": candidateID.rawValue.uuidString.lowercased(),
@@ -9092,15 +16807,11 @@ final class OwnerTruthContractsTests: XCTestCase {
                 "candidateVersion": 3,
                 "proposedChangeSet": [
                     "schemaVersion": OwnerTruthCandidateChangeSetProposal.schemaVersion,
-                    "proposalId": index == 0
-                        ? "00000000-0000-0000-0000-000000000274"
-                        : "00000000-0000-0000-0000-000000000275",
+                    "proposalId": proposalID,
                     "proposalHash": proposalHash,
                     "candidateContentHash": contentHash,
                     "candidateVersion": 3,
-                    "changeSetId": index == 0
-                        ? "00000000-0000-0000-0000-000000000276"
-                        : "00000000-0000-0000-0000-000000000277",
+                    "changeSetId": changeSetID,
                     "baseMemoryRevision": 9 + index,
                     "operations": [[
                         "operationIndex": 0,
@@ -9126,7 +16837,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                                 "addedCount": 1,
                             ],
                         ],
-                        "anticipatedActivation": "created",
+                        "anticipatedActivation": "create",
                     ]],
                     "dependencies": [],
                 ],
@@ -9143,6 +16854,221 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private func backendBuilderStructuredDiffOperation(
+        caseName: String
+    ) throws -> OwnerTruthCandidateChangeSetOperation {
+        let fixture = try backendBuilderStructuredDiffFixture(caseName: caseName)
+        guard let operation = fixture["operation"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidInbox("backend builder operation fixture is invalid")
+        }
+        return try OwnerTruthCandidateChangeSetOperation(backendJSONObject: operation)
+    }
+
+    private func backendBuilderPrecisionOperation(
+        caseName: String
+    ) throws -> OwnerTruthCandidateChangeSetOperation {
+        let fixture = try backendBuilderPrecisionFixture(caseName: caseName)
+        guard let operation = fixture["operation"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidInbox("backend builder precision operation fixture is invalid")
+        }
+        return try OwnerTruthCandidateChangeSetOperation(backendJSONObject: operation)
+    }
+
+    private func backendBuilderPrecisionFixture(
+        caseName: String
+    ) throws -> [String: Any] {
+        let fixtureURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/OwnerTruth/b4-raw-value-precision-builder-proposals.json")
+        let data = try Data(contentsOf: fixtureURL)
+        guard let cases = try JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+              let fixture = cases.first(where: { $0["case"] as? String == caseName }) else {
+            throw OwnerTruthRemoteContractError.invalidInbox("backend builder precision fixture is invalid")
+        }
+        return fixture
+    }
+
+    private func backendBuilderStructuredDiffFixture(
+        caseName: String
+    ) throws -> [String: Any] {
+        let fixtureURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/OwnerTruth/b4-structured-diff-builder-proposals.json")
+        let data = try Data(contentsOf: fixtureURL)
+        guard let cases = try JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+              let fixture = cases.first(where: { $0["case"] as? String == caseName }) else {
+            throw OwnerTruthRemoteContractError.invalidInbox("backend builder fixture is invalid")
+        }
+        return fixture
+    }
+
+    private func backendBuilderStructuredRelatedGroupProposal(
+        vaultID: String,
+        secondOperationKind: String? = nil
+    ) throws -> OwnerTruthMemoryChangeSetGroupProposal {
+        let firstFixture = try backendBuilderStructuredDiffFixture(caseName: "temporal")
+        let secondFixture = try backendBuilderStructuredDiffFixture(caseName: "structuredCorrection")
+        return try backendBuilderRelatedGroupProposal(
+            vaultID: vaultID,
+            firstFixture: firstFixture,
+            secondFixture: secondFixture,
+            secondOperationKind: secondOperationKind
+        )
+    }
+
+    private func backendBuilderPrecisionRelatedGroupProposal(
+        vaultID: String
+    ) throws -> OwnerTruthMemoryChangeSetGroupProposal {
+        try backendBuilderRelatedGroupProposal(
+            vaultID: vaultID,
+            firstFixture: backendBuilderPrecisionFixture(caseName: "confidenceOnly"),
+            secondFixture: backendBuilderPrecisionFixture(caseName: "timePlusConfidence"),
+            secondOperationKind: nil
+        )
+    }
+
+    private func backendBuilderRelatedGroupProposal(
+        vaultID: String,
+        firstFixture: [String: Any],
+        secondFixture: [String: Any],
+        secondOperationKind: String?
+    ) throws -> OwnerTruthMemoryChangeSetGroupProposal {
+        guard let firstOperation = firstFixture["operation"] as? [String: Any],
+              let firstCandidateID = firstOperation["candidateId"] as? String,
+              let firstProposal = firstFixture["proposal"] as? [String: Any],
+              let firstCandidateVersion = firstProposal["candidateVersion"] as? Int,
+              let secondOperation = secondFixture["operation"] as? [String: Any],
+              let secondCandidateID = secondOperation["candidateId"] as? String,
+              var secondProposal = secondFixture["proposal"] as? [String: Any],
+              let secondCandidateVersion = secondProposal["candidateVersion"] as? Int else {
+            throw OwnerTruthRemoteContractError.invalidInbox(
+                "backend builder related-group fixture is invalid"
+            )
+        }
+        if let secondOperationKind {
+            guard var operations = secondProposal["operations"] as? [[String: Any]],
+                  !operations.isEmpty else {
+                throw OwnerTruthRemoteContractError.invalidInbox(
+                    "backend builder related-group operations are invalid"
+                )
+            }
+            operations[0]["operationKind"] = secondOperationKind
+            secondProposal["operations"] = operations
+        }
+        let expectedVaultID = try XCTUnwrap(OwnerTruthVaultID(vaultID))
+        return try OwnerTruthMemoryChangeSetGroupProposal(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthMemoryChangeSetGroupProposal.schemaVersion,
+                "groupProposalId": "00000000-0000-0000-0000-000000000590",
+                "groupProposalHash": String(repeating: "8", count: 64),
+                "vaultId": vaultID,
+                "baseMemoryRevision": 5,
+                "members": [[
+                    "operationIndex": 0,
+                    "candidateId": firstCandidateID,
+                    "action": OwnerTruthCandidateReviewAction.reject.rawValue,
+                    "reasonCode": "ownerReviewedRelatedGroup",
+                    "candidateVersion": firstCandidateVersion,
+                    "proposedChangeSet": firstProposal,
+                    "anticipatedOutcome": "rejected",
+                    "appliedMemoryRevision": 5,
+                ], [
+                    "operationIndex": 1,
+                    "candidateId": secondCandidateID,
+                    "action": OwnerTruthCandidateReviewAction.accept.rawValue,
+                    "reasonCode": "ownerReviewedRelatedGroup",
+                    "candidateVersion": secondCandidateVersion,
+                    "proposedChangeSet": secondProposal,
+                    "anticipatedOutcome": "revised",
+                    "appliedMemoryRevision": 6,
+                ]],
+                "dependencies": [[
+                    "beforeCandidateId": firstCandidateID,
+                    "afterCandidateId": secondCandidateID,
+                ]],
+            ],
+            expectedVaultID: expectedVaultID
+        )
+    }
+
+    @MainActor
+    private func v5CandidateDetailItemFromBackendBuilder(
+        caseName: String
+    ) throws -> OwnerTruthCandidateInboxItemViewState {
+        let fixture = try backendBuilderStructuredDiffFixture(caseName: caseName)
+        return try v5CandidateDetailItemFromBackendFixture(fixture)
+    }
+
+    @MainActor
+    private func v5CandidateDetailItemFromPrecisionBuilder(
+        caseName: String
+    ) throws -> OwnerTruthCandidateInboxItemViewState {
+        try v5CandidateDetailItemFromBackendFixture(
+            backendBuilderPrecisionFixture(caseName: caseName)
+        )
+    }
+
+    @MainActor
+    private func v5CandidateDetailItemFromBackendFixture(
+        _ fixture: [String: Any]
+    ) throws -> OwnerTruthCandidateInboxItemViewState {
+        let (runtime, lease) = try makeActiveRuntime()
+        let inbox = try backendBuilderCandidateInbox(fixture: fixture, vaultID: lease.vaultId)
+        let client = CandidateReviewClientSpy()
+        client.inboxResult = .success(inbox)
+        let useCase = OwnerTruthCandidateReviewUseCase(
+            accountLease: lease,
+            client: client,
+            accountLeaseRuntime: runtime,
+            qaGateEnabled: { true }
+        )
+        useCase.send(.refresh)
+        return try XCTUnwrap(useCase.viewState.items.first)
+    }
+
+    private func backendBuilderCandidateInbox(
+        fixture: [String: Any],
+        vaultID: String
+    ) throws -> OwnerTruthCandidateInbox {
+        guard let proposal = fixture["proposal"] as? [String: Any],
+              let operation = fixture["operation"] as? [String: Any],
+              let candidateIDText = operation["candidateId"] as? String,
+              let candidateUUID = UUID(uuidString: candidateIDText),
+              let factDiff = operation["factDiff"] as? [String: Any],
+              let content = factDiff["candidate"] as? [String: Any],
+              let candidateHash = proposal["candidateContentHash"] as? String,
+              let candidateVersion = proposal["candidateVersion"] as? Int,
+              let baseRevision = proposal["baseMemoryRevision"] as? Int,
+              let expectedVaultID = OwnerTruthVaultID(vaultID) else {
+            throw OwnerTruthRemoteContractError.invalidInbox("backend builder detail fixture is invalid")
+        }
+        let candidateID = OwnerTruthRecordID(rawValue: candidateUUID)
+        let sourceID = "00000000-0000-0000-0000-000000000573"
+        return try OwnerTruthCandidateInbox(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+                "vaultId": vaultID,
+                "memoryRevision": baseRevision,
+                "candidates": [[
+                    "candidateId": candidateID.rawValue.uuidString.lowercased(),
+                    "sourceId": sourceID,
+                    "memoryKind": "knowledge",
+                    "perspectiveType": "firstPerson",
+                    "epistemicStatus": "recalled",
+                    "sensitivity": "standard",
+                    "contentSchemaVersion": "owner-truth-v5",
+                    "content": content,
+                    "contentHash": candidateHash,
+                    "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                    "reviewMode": "single",
+                    "candidateVersion": candidateVersion,
+                    "proposedChangeSet": proposal,
+                ]],
+            ],
+            expectedVaultID: expectedVaultID
+        )
+    }
+
     private func relatedGroupProposal(
         vaultID: String,
         candidateIDs: [OwnerTruthRecordID],
@@ -9150,7 +17076,7 @@ final class OwnerTruthContractsTests: XCTestCase {
     ) throws -> OwnerTruthMemoryChangeSetGroupProposal {
         let expectedVaultID = try XCTUnwrap(OwnerTruthVaultID(vaultID))
         let inbox = try relatedV5CandidateInbox(vaultID: vaultID, candidateIDs: candidateIDs)
-        guard inbox.candidates.count == 2 else {
+        guard inbox.candidates.count == candidateIDs.count else {
             throw OwnerTruthRemoteContractError.invalidInbox("related group fixture is invalid")
         }
         let effectiveActions = actions ?? Array(repeating: .accept, count: candidateIDs.count)
@@ -9202,7 +17128,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                                 "addedCount": 1,
                             ],
                         ],
-                        "anticipatedActivation": "created",
+                        "anticipatedActivation": "create",
                     ]],
                     "dependencies": [],
                 ],
@@ -9230,8 +17156,17 @@ final class OwnerTruthContractsTests: XCTestCase {
     private func relatedGroupCommitResult(
         proposal: OwnerTruthMemoryChangeSetGroupProposal
     ) throws -> OwnerTruthMemoryChangeSetGroupCommitResult {
+        try OwnerTruthMemoryChangeSetGroupCommitResult(
+            backendJSONObject: relatedGroupCommitJSONObject(proposal: proposal),
+            expectedProposal: proposal
+        )
+    }
+
+    private func relatedGroupCommitJSONObject(
+        proposal: OwnerTruthMemoryChangeSetGroupProposal
+    ) -> [String: Any] {
         let activatingMemberCount = proposal.members.filter { $0.action != .reject }.count
-        let payload: [String: Any] = [
+        return [
                 "schemaVersion": OwnerTruthMemoryChangeSetGroupCommitResult.schemaVersion,
                 "status": OwnerTruthCommandOutcome.created.rawValue,
                 "groupReceiptId": "00000000-0000-0000-0000-000000000279",
@@ -9268,9 +17203,31 @@ final class OwnerTruthContractsTests: XCTestCase {
                 },
                 "projectionEffectCount": activatingMemberCount,
         ]
-        return try OwnerTruthMemoryChangeSetGroupCommitResult(
-            backendJSONObject: payload,
-            expectedProposal: proposal
+    }
+
+    private func relatedGroupLookupNotObserved(
+        proposal: OwnerTruthMemoryChangeSetGroupProposal
+    ) throws -> OwnerTruthMemoryChangeSetGroupDecisionLookupResult {
+        try OwnerTruthMemoryChangeSetGroupDecisionLookupResult(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthMemoryChangeSetGroupDecisionLookupResult.schemaVersion,
+                "status": OwnerTruthMemoryChangeSetGroupDecisionLookupStatus.notObserved.rawValue,
+                "result": NSNull(),
+            ],
+            expectedBinding: OwnerTruthMemoryChangeSetGroupBinding(proposal: proposal)
+        )
+    }
+
+    private func relatedGroupLookupFound(
+        proposal: OwnerTruthMemoryChangeSetGroupProposal
+    ) throws -> OwnerTruthMemoryChangeSetGroupDecisionLookupResult {
+        try OwnerTruthMemoryChangeSetGroupDecisionLookupResult(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthMemoryChangeSetGroupDecisionLookupResult.schemaVersion,
+                "status": OwnerTruthMemoryChangeSetGroupDecisionLookupStatus.found.rawValue,
+                "result": relatedGroupCommitJSONObject(proposal: proposal),
+            ],
+            expectedBinding: OwnerTruthMemoryChangeSetGroupBinding(proposal: proposal)
         )
     }
 
@@ -9359,15 +17316,18 @@ final class OwnerTruthContractsTests: XCTestCase {
 
     private func decisionResult(
         candidateID: OwnerTruthRecordID,
-        decision: OwnerTruthCandidateDecision
+        decision: OwnerTruthCandidateDecision,
+        memoryRevision: Int? = nil,
+        candidateBeforeHash: String = "content-hash",
+        candidateVersion: Int = 2
     ) throws -> OwnerTruthCandidateDecisionResult {
         let activatesMemory = decision == .accepted || decision == .corrected
         let receipt: [String: Any] = [
             "receiptId": "00000000-0000-0000-0000-000000000046",
             "candidateId": candidateID.rawValue.uuidString.lowercased(),
             "decision": decision.rawValue,
-            "candidateVersion": 2,
-            "candidateBeforeHash": "before-hash",
+            "candidateVersion": candidateVersion,
+            "candidateBeforeHash": candidateBeforeHash,
             "candidateAfterHash": "after-hash",
             "correctedValueId": NSNull(),
         ]
@@ -9377,15 +17337,170 @@ final class OwnerTruthContractsTests: XCTestCase {
             "memoryVersionId": activatesMemory ? "00000000-0000-0000-0000-000000000048" : NSNull(),
             "contentHash": activatesMemory ? "memory-hash" : NSNull(),
         ]
-        return try OwnerTruthCandidateDecisionResult(
-            backendJSONObject: [
+        var response: [String: Any] = [
                 "schemaVersion": "owner-truth-candidate-decision-memory-v1",
                 "status": "created",
                 "receipt": receipt,
                 "memoryActivation": memoryActivation,
+            ]
+        if let memoryRevision {
+            response["memoryRevision"] = memoryRevision
+        }
+        return try OwnerTruthCandidateDecisionResult(
+            backendJSONObject: response,
+            expectedCandidateID: candidateID
+        )
+    }
+
+    private func decisionLookupNotObserved(
+        candidateID: OwnerTruthRecordID
+    ) throws -> OwnerTruthCandidateDecisionLookupResult {
+        try OwnerTruthCandidateDecisionLookupResult(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthCandidateDecisionLookupResult.schemaVersion,
+                "result": "notObserved",
             ],
             expectedCandidateID: candidateID
         )
+    }
+
+    private func decisionLookupResult(
+        candidateID: OwnerTruthRecordID,
+        commandBinding: OwnerTruthCandidateReviewBinding,
+        decision: OwnerTruthCandidateDecision,
+        appliedMemoryRevision: Int
+    ) throws -> OwnerTruthCandidateDecisionLookupResult {
+        let activatesMemory = decision == .accepted || decision == .corrected
+        let receipt: [String: Any] = [
+            "receiptId": "00000000-0000-0000-0000-0000000006bf",
+            "candidateId": candidateID.rawValue.uuidString.lowercased(),
+            "decision": decision.rawValue,
+            "candidateVersion": commandBinding.candidateVersion + 1,
+            "candidateBeforeHash": commandBinding.candidateContentHash,
+            "candidateAfterHash": String(repeating: "e", count: 64),
+            "correctedValueId": NSNull(),
+        ]
+        let activation: [String: Any] = [
+            "status": activatesMemory ? "created" : "notApplicable",
+            "memoryId": activatesMemory
+                ? "00000000-0000-0000-0000-0000000006c1" : NSNull(),
+            "memoryVersionId": activatesMemory
+                ? "00000000-0000-0000-0000-0000000006c2" : NSNull(),
+            "contentHash": activatesMemory
+                ? String(repeating: "f", count: 64) : NSNull(),
+        ]
+        let decisionObject: [String: Any] = [
+            "schemaVersion": "owner-truth-candidate-decision-memory-v1",
+            "status": "created",
+            "receipt": receipt,
+            "memoryActivation": activation,
+            "memoryRevision": appliedMemoryRevision,
+        ]
+        let response: [String: Any] = [
+            "schemaVersion": OwnerTruthCandidateDecisionLookupResult.schemaVersion,
+            "result": "found",
+            "expectedCandidateVersion": commandBinding.candidateVersion,
+            "candidateBeforeHash": commandBinding.candidateContentHash,
+            "expectedChangeSetId": commandBinding.changeSetID.rawValue.uuidString.lowercased(),
+            "expectedProposalHash": commandBinding.proposalHash,
+            "decisionResult": decisionObject,
+        ]
+        return try OwnerTruthCandidateDecisionLookupResult(
+            backendJSONObject: response,
+            expectedCandidateID: candidateID
+        )
+    }
+
+    private func sequentialV5CandidateInbox(
+        vaultID: String,
+        candidateIDs: [OwnerTruthRecordID],
+        memoryRevision: Int,
+        proposalGeneration: Int
+    ) throws -> OwnerTruthCandidateInbox {
+        let expectedVaultID = try XCTUnwrap(OwnerTruthVaultID(vaultID))
+        return try OwnerTruthCandidateInbox(
+            backendJSONObject: sequentialV5CandidateInboxJSONObject(
+                vaultID: vaultID,
+                candidateIDs: candidateIDs,
+                memoryRevision: memoryRevision,
+                proposalGeneration: proposalGeneration
+            ),
+            expectedVaultID: expectedVaultID
+        )
+    }
+
+    private func sequentialV5CandidateInboxJSONObject(
+        vaultID: String,
+        candidateIDs: [OwnerTruthRecordID],
+        memoryRevision: Int,
+        proposalGeneration: Int
+    ) -> [String: Any] {
+        let sourceID = "00000000-0000-0000-0000-0000000006a3"
+        let candidates = candidateIDs.enumerated().map { index, candidateID -> [String: Any] in
+            let suffix = proposalGeneration * 10 + index
+            let candidateHash = String(repeating: index == 0 ? "a" : "b", count: 64)
+            let proposalHash = String(repeating: proposalGeneration == 1 ? "c" : "d", count: 64)
+            let statement = index == 0 && candidateIDs.count > 1
+                ? "第一条合成审核事实"
+                : "第二条合成审核事实"
+            let content: [String: Any] = ["statement": statement]
+            return [
+                "candidateId": candidateID.rawValue.uuidString.lowercased(),
+                "sourceId": sourceID,
+                "memoryKind": "knowledge",
+                "perspectiveType": "firstPerson",
+                "epistemicStatus": "recalled",
+                "sensitivity": "standard",
+                "contentSchemaVersion": "owner-truth-v5",
+                "content": content,
+                "contentHash": candidateHash,
+                "sourceRefs": [["sourceId": sourceID, "sourceVersion": 1]],
+                "reviewMode": "single",
+                "candidateVersion": 1,
+                "proposedChangeSet": [
+                    "schemaVersion": OwnerTruthCandidateChangeSetProposal.schemaVersion,
+                    "proposalId": String(format: "00000000-0000-0000-0000-%012d", 700 + suffix),
+                    "proposalHash": proposalHash,
+                    "candidateContentHash": candidateHash,
+                    "candidateVersion": 1,
+                    "changeSetId": String(format: "00000000-0000-0000-0000-%012d", 800 + suffix),
+                    "baseMemoryRevision": memoryRevision,
+                    "operations": [[
+                        "operationIndex": 0,
+                        "operationKind": "add",
+                        "targetMemoryId": NSNull(),
+                        "targetMemoryVersionId": NSNull(),
+                        "targetMemoryVersion": NSNull(),
+                        "reason": "newFact",
+                        "changedFields": ["content"],
+                        "factDiff": [
+                            "before": NSNull(),
+                            "after": content,
+                            "candidate": content,
+                            "changedFields": [[
+                                "path": "content",
+                                "before": NSNull(),
+                                "after": content,
+                            ]],
+                            "evidence": [
+                                "beforeCount": 0,
+                                "candidateCount": 1,
+                                "afterCount": 1,
+                                "addedCount": 1,
+                            ],
+                        ],
+                        "anticipatedActivation": "create",
+                    ]],
+                    "dependencies": [],
+                ],
+            ]
+        }
+        return [
+            "schemaVersion": OwnerTruthCandidateInbox.schemaVersion,
+            "vaultId": vaultID,
+            "memoryRevision": memoryRevision,
+            "candidates": candidates,
+        ]
     }
 
     func testMigrationViewStateParityMatchesEquivalentLegacyAndV4Read() throws {
@@ -9723,6 +17838,11 @@ final class OwnerTruthContractsTests: XCTestCase {
     }
 
     func testRealtimeVoiceRuntimeConfigAcceptsOnlyFutureBackendProxyTicket() throws {
+        let providerRoleText = "只使用服务端正式记忆回答。"
+        let providerDigest = SHA256.hash(data: Data(providerRoleText.utf8))
+        let providerContextHash = "sha256:" + providerDigest.map {
+            String(format: "%02x", $0)
+        }.joined()
         let json: [String: Any] = [
             "status": "ready",
             "credentialMode": "oneTimeBackendProxyTicket",
@@ -9732,23 +17852,30 @@ final class OwnerTruthContractsTests: XCTestCase {
             "providerReady": true,
             "releaseVisible": true,
             "retryable": true,
-            "contractVersion": 5,
+            "contractVersion": 7,
             "expiresAt": "2099-01-01T00:00:00Z",
             "echoSession": [
                 "productSessionId": "echo_live_stable_001",
                 "targetPersonaId": "subject-1",
                 "projectionCheckpoint": "checkpoint-7",
                 "authorityEpoch": 7,
+                "memoryRevision": 12,
                 "contextHash": "sha256:context",
+                "providerContextHash": providerContextHash,
             ],
             "sessionContext": [
                 "systemRole": "只使用正式记忆",
                 "speakingStyle": "自然、温柔",
+                "providerRoleText": providerRoleText,
+                "providerContextHash": providerContextHash,
                 "formalMemorySnapshot": [
-                    "schemaVersion": "formal-memory-conversation-v2",
+                    "schemaVersion": "formal-memory-conversation-v3",
                     "projectionCheckpoint": "checkpoint-7",
                     "authorityEpoch": 7,
+                    "memoryRevision": 12,
                     "contextHash": "sha256:context",
+                    "providerRoleText": providerRoleText,
+                    "providerContextHash": providerContextHash,
                     "coreFacts": [],
                     "coverage": [
                         "eligibleFactCount": 0,
@@ -13041,31 +21168,42 @@ final class OwnerTruthContractsTests: XCTestCase {
         return nil
     }
 
-    private func makeOwnerTruthHTTPTestSession() throws -> Session {
+    private func makeOwnerTruthHTTPTestSession(
+        startRequestsImmediately: Bool = true
+    ) throws -> Session {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [OwnerTruthReviewReadyHTTPURLProtocol.self]
-        return Session(configuration: configuration, startRequestsImmediately: true)
+        return Session(
+            configuration: configuration,
+            startRequestsImmediately: startRequestsImmediately
+        )
     }
 
     private func makeOwnerTruthHTTPTestAuthSession(
-        userID: String
+        userID: String,
+        sessionID: String? = nil,
+        parentSessionID: String? = nil,
+        tokenFamilyID: String? = nil,
+        sessionVersion: Int = 1,
+        accessTokenSuffix: String = "default"
     ) throws -> BackendAuthSessionContract {
         let formatter = ISO8601DateFormatter()
         let now = Date()
         let payload: [String: Any] = [
-            "sessionId": "owner-truth-http-session-\(userID)",
+            "sessionId": sessionID ?? "owner-truth-http-session-\(userID)",
             "userId": userID,
             "subjectId": userID,
+            "parentSessionId": parentSessionID ?? NSNull(),
             "tokenType": "Bearer",
-            "accessToken": "dja_owner_truth_http_access_token",
-            "refreshToken": "djr_owner_truth_http_refresh_token",
+            "accessToken": "dja_owner_truth_http_access_token_\(accessTokenSuffix)",
+            "refreshToken": "djr_owner_truth_http_refresh_token_\(accessTokenSuffix)",
             "accessExpiresInSeconds": 3_600,
             "refreshExpiresInSeconds": 86_400,
             "accessExpiresAt": formatter.string(from: now.addingTimeInterval(3_600)),
             "refreshExpiresAt": formatter.string(from: now.addingTimeInterval(86_400)),
             "contractVersion": 2,
-            "tokenFamilyId": "owner-truth-http-family-\(userID)",
-            "sessionVersion": 1,
+            "tokenFamilyId": tokenFamilyID ?? "owner-truth-http-family-\(userID)",
+            "sessionVersion": sessionVersion,
         ]
         return try XCTUnwrap(BackendAuthSessionContract(json: payload))
     }
@@ -13112,6 +21250,131 @@ final class OwnerTruthContractsTests: XCTestCase {
             "evidenceStatus": "verified",
             "controlState": "legacy",
         ])
+    }
+
+    private func candidateReleasePolicyPayload(
+        version: String,
+        revision: Int,
+        expiresAt: String,
+        enabled: Bool = true,
+        audience: String = "owner",
+        cohort: String = "authenticatedOwner"
+    ) -> [String: Any] {
+        [
+            "schemaVersion": 1,
+            "policyVersion": version,
+            "policyRevision": revision,
+            "issuedAt": "2025-01-01T00:00:00Z",
+            "expiresAt": expiresAt,
+            "minClient": 1,
+            "emergencyRevision": 1,
+            "audience": audience,
+            "cohort": cohort,
+            "source": "server",
+            "shadowMode": false,
+            "snapshotDecision": enabled ? "allow" : "deny",
+            "features": [[
+                "feature": DJFeature.ownerTruthCandidateReview.backendReleasePolicyFeature,
+                "enabled": enabled,
+                "releaseVisible": enabled,
+                "audience": audience,
+                "cohort": cohort,
+                "requiredGates": ["G0"],
+                "reason": enabled ? "candidateReviewEnabled" : "candidateReviewDisabled",
+            ]],
+        ]
+    }
+
+    private func saveCandidateReleasePolicy(
+        _ payload: [String: Any],
+        store: ReleasePolicyStore,
+        scope: ReleasePolicyCacheScope
+    ) throws {
+        let formatter = ISO8601DateFormatter()
+        let expiresAt = try XCTUnwrap(formatter.date(from: payload["expiresAt"] as? String ?? ""))
+        let issuedAt = try XCTUnwrap(formatter.date(from: payload["issuedAt"] as? String ?? ""))
+        try store.save(
+            payload: JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
+            policySchemaVersion: payload["schemaVersion"] as? Int ?? 1,
+            policyVersion: payload["policyVersion"] as? String ?? "candidate-test-policy",
+            policyRevision: payload["policyRevision"] as? Int ?? 1,
+            emergencyRevision: payload["emergencyRevision"] as? Int ?? 1,
+            scope: scope,
+            fetchedAt: issuedAt,
+            expiresAt: expiresAt
+        )
+    }
+
+    private func candidateReleasePolicyScope(
+        lease: AccountLease,
+        clientBuild: Int = FeatureGateService.shared.clientBuild
+    ) -> ReleasePolicyCacheScope {
+        ReleasePolicyCacheScope(
+            accountUserId: lease.subjectId,
+            appBuild: String(clientBuild),
+            audience: "owner",
+            cohort: "authenticatedOwner"
+        )
+    }
+
+    private func makeCandidatePolicyTestClient(
+        runtime: AccountLeaseRuntime,
+        lease: AccountLease,
+        authSession: @escaping () -> BackendAuthSessionContract?,
+        authSessionRefresher: ((
+            BackendAuthSessionContract,
+            @escaping (BackendAuthSessionContract?) -> Void
+        ) -> Void)? = nil,
+        store: ReleasePolicyStore,
+        policyTimeout: TimeInterval = 15,
+        eventSink: @escaping (OwnerTruthCandidateInboxDiagnosticEvent) -> Void = { _ in }
+    ) throws -> (
+        client: DreamJourneyBackendClient,
+        decision: (DJFeature) -> FeatureDecision,
+        snapshot: () -> FeatureGatePolicySnapshot
+    ) {
+        let evaluator = FeatureGateEvaluator()
+        let clientBuild = FeatureGateService.shared.clientBuild
+        let scope = candidateReleasePolicyScope(lease: lease, clientBuild: clientBuild)
+        let snapshot = {
+            BackendCachedReleasePolicyEvaluation(
+                cache: store.evaluate(scope: scope, risk: .ownerTextCore),
+                risk: .ownerTextCore
+            ).featureGatePolicySnapshot(for: .ownerTruthCandidateReview)
+        }
+        let decision: (DJFeature) -> FeatureDecision = { feature in
+            evaluator.capture(
+                feature: feature,
+                risk: .ownerTextCore,
+                purpose: .request,
+                localEnabled: true,
+                qaSyntheticOverride: false,
+                accountGeneration: authSession()?.sessionId ?? "missing-session",
+                policy: snapshot()
+            )
+        }
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: authSession,
+            currentUserID: { authSession()?.userId },
+            privateAccessAllowed: { true },
+            featureDecision: decision,
+            featureDecisionRevalidator: { captured in
+                evaluator.revalidateForRequest(
+                    captured: captured,
+                    localEnabled: true,
+                    accountGeneration: authSession()?.sessionId ?? "missing-session",
+                    currentPolicy: snapshot()
+                )
+            },
+            authSessionRefresher: authSessionRefresher,
+            accountLeaseRuntime: runtime,
+            releasePolicyStore: store,
+            candidateInboxDiagnosticSink: eventSink,
+            candidateInboxPolicyTimeout: policyTimeout
+        )
+        return (client, decision, snapshot)
     }
 
     private func waitForOwnerTruthHTTPUI(
@@ -13220,6 +21483,10 @@ private final class OwnerTruthReviewReadyHTTPURLProtocol: URLProtocol {
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: body)
         client?.urlProtocolDidFinishLoading(self)
+    }
+
+    func fail(_ error: Error) {
+        client?.urlProtocol(self, didFailWithError: error)
     }
 }
 
@@ -13369,8 +21636,113 @@ private final class KBLiteCompatibilityClientSpy: OwnerTruthKBLiteCompatibilityC
     }
 }
 
+private enum CandidateReviewPendingStoreTestError: Error {
+    case unavailable
+}
+
+private final class CandidateReviewFailingPendingResultStore:
+    OwnerTruthCandidateReviewPendingResultStoring {
+    func records(
+        subjectID: String,
+        vaultID: String
+    ) throws -> [OwnerTruthCandidateReviewPendingResultRecord] {
+        []
+    }
+
+    func upsert(_ record: OwnerTruthCandidateReviewPendingResultRecord) throws {
+        throw CandidateReviewPendingStoreTestError.unavailable
+    }
+
+    func remove(subjectID: String, vaultID: String, commandID: String) throws {}
+}
+
+private final class CandidateReviewUnreadablePendingResultStore:
+    OwnerTruthCandidateReviewPendingResultStoring {
+    var failReads = false
+    private var storedRecords: [OwnerTruthCandidateReviewPendingResultRecord] = []
+
+    func records(
+        subjectID: String,
+        vaultID: String
+    ) throws -> [OwnerTruthCandidateReviewPendingResultRecord] {
+        if failReads { throw CandidateReviewPendingStoreTestError.unavailable }
+        return storedRecords.filter { $0.subjectID == subjectID && $0.vaultID == vaultID }
+    }
+
+    func upsert(_ record: OwnerTruthCandidateReviewPendingResultRecord) throws {
+        storedRecords.removeAll { $0.commandID == record.commandID }
+        storedRecords.append(record)
+    }
+
+    func remove(subjectID: String, vaultID: String, commandID: String) throws {
+        storedRecords.removeAll {
+            $0.subjectID == subjectID && $0.vaultID == vaultID && $0.commandID == commandID
+        }
+    }
+}
+
+private final class CandidateReviewFailingRemovalPendingResultStore:
+    OwnerTruthCandidateReviewPendingResultStoring {
+    private var storedRecords: [OwnerTruthCandidateReviewPendingResultRecord] = []
+
+    func records(
+        subjectID: String,
+        vaultID: String
+    ) throws -> [OwnerTruthCandidateReviewPendingResultRecord] {
+        storedRecords.filter { $0.subjectID == subjectID && $0.vaultID == vaultID }
+    }
+
+    func upsert(_ record: OwnerTruthCandidateReviewPendingResultRecord) throws {
+        storedRecords.removeAll { $0.commandID == record.commandID }
+        storedRecords.append(record)
+    }
+
+    func remove(subjectID: String, vaultID: String, commandID: String) throws {
+        throw CandidateReviewPendingStoreTestError.unavailable
+    }
+}
+
+private final class CandidateReviewFailingGroupPendingResultStore:
+    OwnerTruthCandidateReviewPendingResultStoring {
+    private var storedGroupRecords: [OwnerTruthMemoryChangeSetGroupPendingResultRecord] = []
+    var failGroupReads = false
+    var failGroupRemoval = false
+
+    func records(
+        subjectID: String,
+        vaultID: String
+    ) throws -> [OwnerTruthCandidateReviewPendingResultRecord] { [] }
+
+    func upsert(_ record: OwnerTruthCandidateReviewPendingResultRecord) throws {}
+
+    func remove(subjectID: String, vaultID: String, commandID: String) throws {}
+
+    func groupRecords(
+        subjectID: String,
+        vaultID: String
+    ) throws -> [OwnerTruthMemoryChangeSetGroupPendingResultRecord] {
+        if failGroupReads { throw CandidateReviewPendingStoreTestError.unavailable }
+        return storedGroupRecords.filter {
+            $0.subjectID == subjectID && $0.vaultID == vaultID
+        }
+    }
+
+    func upsertGroup(_ record: OwnerTruthMemoryChangeSetGroupPendingResultRecord) throws {
+        storedGroupRecords.removeAll { $0.commandID == record.commandID }
+        storedGroupRecords.append(record)
+    }
+
+    func removeGroup(subjectID: String, vaultID: String, commandID: String) throws {
+        if failGroupRemoval { throw CandidateReviewPendingStoreTestError.unavailable }
+        storedGroupRecords.removeAll {
+            $0.subjectID == subjectID && $0.vaultID == vaultID && $0.commandID == commandID
+        }
+    }
+}
+
 private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
     var inboxResult: Result<OwnerTruthCandidateInbox, Error>?
+    var inboxResults: [Result<OwnerTruthCandidateInbox, Error>] = []
     var historyResult: Result<OwnerTruthCandidateReviewHistory, Error>?
     var memoryVersionHistoryResult: Result<OwnerTruthMemoryVersionHistory, Error>?
     var reviewResult: Result<OwnerTruthCandidateDecisionResult, Error>?
@@ -13381,29 +21753,89 @@ private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
         Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>
     ] = []
     var reviewResults: [Result<OwnerTruthCandidateDecisionResult, Error>] = []
+    var reviewTransportOutcomes: [OwnerTruthCandidateReviewTransportOutcome] = []
+    var decisionLookupResults: [Result<OwnerTruthCandidateDecisionLookupResult, Error>] = []
+    var changeSetGroupTransportOutcomes: [
+        OwnerTruthMemoryChangeSetGroupReviewTransportOutcome
+    ] = []
+    var changeSetGroupLookupResults: [
+        Result<OwnerTruthMemoryChangeSetGroupDecisionLookupResult, Error>
+    ] = []
     var deferInbox = false
     var deferHistory = false
     var deferMemoryVersionHistory = false
+    var deferDecisionLookup = false
+    var deferReviewWrite = false
+    var deferChangeSetGroupPreview = false
     var deferChangeSetGroupCommit = false
+    var deferChangeSetGroupLookup = false
     private var deferredInboxCompletion: ((Result<OwnerTruthCandidateInbox, Error>) -> Void)?
     private var deferredHistoryCompletion: ((Result<OwnerTruthCandidateReviewHistory, Error>) -> Void)?
     private var deferredMemoryVersionHistoryCompletion: ((Result<OwnerTruthMemoryVersionHistory, Error>) -> Void)?
+    private var deferredDecisionLookupCompletion: ((
+        Result<OwnerTruthCandidateDecisionLookupResult, Error>
+    ) -> Void)?
+    private var deferredReviewWriteCompletion: ((
+        OwnerTruthCandidateReviewTransportOutcome
+    ) -> Void)?
+    private var deferredChangeSetGroupPreviewCompletion: ((
+        Result<OwnerTruthMemoryChangeSetGroupProposal, Error>
+    ) -> Void)?
     private var deferredChangeSetGroupCommitCompletion: ((
         Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>
     ) -> Void)?
+    private var deferredChangeSetGroupWriteCompletion: ((
+        OwnerTruthMemoryChangeSetGroupReviewTransportOutcome
+    ) -> Void)?
+    private var deferredChangeSetGroupLookupCompletion: ((
+        Result<OwnerTruthMemoryChangeSetGroupDecisionLookupResult, Error>
+    ) -> Void)?
     private(set) var reviewedCommands: [OwnerTruthCandidateReviewCommand] = []
+    private(set) var decisionLookupCommandIDs: [String] = []
     private(set) var previewedGroupCommands: [OwnerTruthMemoryChangeSetGroupCommand] = []
     private(set) var confirmedGroupCommands: [OwnerTruthMemoryChangeSetGroupCommand] = []
+    private(set) var changeSetGroupLookupCommandIDs: [String] = []
+    private(set) var inboxRequestCount = 0
+    private(set) var requestedInboxLeases: [AccountLease] = []
+    private(set) var requestedInboxReadContexts: [OwnerTruthCandidateInboxReadContext] = []
 
     func fetchOwnerTruthCandidateInbox(
         vaultID: OwnerTruthVaultID,
         completion: @escaping (Result<OwnerTruthCandidateInbox, Error>) -> Void
     ) {
+        inboxRequestCount += 1
         if deferInbox {
             deferredInboxCompletion = completion
             return
         }
+        if !inboxResults.isEmpty {
+            completion(inboxResults.removeFirst())
+            return
+        }
         completion(inboxResult ?? .failure(CandidateReviewClientSpyError.missingInboxResult))
+    }
+
+    func fetchOwnerTruthCandidateInbox(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthCandidateInbox, Error>) -> Void
+    ) {
+        requestedInboxLeases.append(accountLease)
+        fetchOwnerTruthCandidateInbox(vaultID: vaultID, completion: completion)
+    }
+
+    func fetchOwnerTruthCandidateInbox(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        readContext: OwnerTruthCandidateInboxReadContext,
+        completion: @escaping (Result<OwnerTruthCandidateInbox, Error>) -> Void
+    ) {
+        requestedInboxReadContexts.append(readContext)
+        fetchOwnerTruthCandidateInbox(
+            accountLease: accountLease,
+            vaultID: vaultID,
+            completion: completion
+        )
     }
 
     func fetchOwnerTruthCandidateReviewHistory(
@@ -13446,6 +21878,64 @@ private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
         }
     }
 
+    func reviewOwnerTruthCandidateWrite(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        command: OwnerTruthCandidateReviewCommand,
+        completion: @escaping (OwnerTruthCandidateReviewTransportOutcome) -> Void
+    ) {
+        reviewedCommands.append(command)
+        if deferReviewWrite {
+            deferredReviewWriteCompletion = completion
+            return
+        }
+        if !reviewTransportOutcomes.isEmpty {
+            completion(reviewTransportOutcomes.removeFirst())
+            return
+        }
+        let result: Result<OwnerTruthCandidateDecisionResult, Error>
+        if !reviewResults.isEmpty {
+            result = reviewResults.removeFirst()
+        } else {
+            result = reviewResult ?? .failure(CandidateReviewClientSpyError.missingReviewResult)
+        }
+        completion(OwnerTruthCandidateReviewTransportOutcome.classify(result))
+    }
+
+    func completeDeferredReviewWrite(_ outcome: OwnerTruthCandidateReviewTransportOutcome) {
+        let completion = deferredReviewWriteCompletion
+        deferredReviewWriteCompletion = nil
+        completion?(outcome)
+    }
+
+    func lookupOwnerTruthCandidateDecisionResult(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        commandID: String,
+        completion: @escaping (Result<OwnerTruthCandidateDecisionLookupResult, Error>) -> Void
+    ) {
+        decisionLookupCommandIDs.append(commandID)
+        if deferDecisionLookup {
+            deferredDecisionLookupCompletion = completion
+            return
+        }
+        guard !decisionLookupResults.isEmpty else {
+            completion(.failure(CandidateReviewClientSpyError.missingReviewResult))
+            return
+        }
+        completion(decisionLookupResults.removeFirst())
+    }
+
+    func completeDeferredDecisionLookup(
+        _ result: Result<OwnerTruthCandidateDecisionLookupResult, Error>
+    ) {
+        let completion = deferredDecisionLookupCompletion
+        deferredDecisionLookupCompletion = nil
+        completion?(result)
+    }
+
     func previewOwnerTruthCandidateChangeSet(
         vaultID: OwnerTruthVaultID,
         candidateID: OwnerTruthRecordID,
@@ -13462,9 +21952,21 @@ private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
         completion: @escaping (Result<OwnerTruthMemoryChangeSetGroupProposal, Error>) -> Void
     ) {
         previewedGroupCommands.append(command)
+        if deferChangeSetGroupPreview {
+            deferredChangeSetGroupPreviewCompletion = completion
+            return
+        }
         completion(changeSetGroupPreviewResult ?? .failure(
             CandidateReviewClientSpyError.missingReviewResult
         ))
+    }
+
+    func completeDeferredChangeSetGroupPreview(
+        _ result: Result<OwnerTruthMemoryChangeSetGroupProposal, Error>
+    ) {
+        let completion = deferredChangeSetGroupPreviewCompletion
+        deferredChangeSetGroupPreviewCompletion = nil
+        completion?(result)
     }
 
     func confirmOwnerTruthCandidateChangeSetGroup(
@@ -13487,11 +21989,72 @@ private final class CandidateReviewClientSpy: OwnerTruthCandidateReviewClient {
         ))
     }
 
+    func confirmOwnerTruthCandidateChangeSetGroupWrite(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthMemoryChangeSetGroupCommand,
+        expectedProposal: OwnerTruthMemoryChangeSetGroupProposal,
+        completion: @escaping (OwnerTruthMemoryChangeSetGroupReviewTransportOutcome) -> Void
+    ) {
+        confirmedGroupCommands.append(command)
+        if deferChangeSetGroupCommit {
+            deferredChangeSetGroupWriteCompletion = completion
+            return
+        }
+        if !changeSetGroupTransportOutcomes.isEmpty {
+            completion(changeSetGroupTransportOutcomes.removeFirst())
+            return
+        }
+        let result: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>
+        if !changeSetGroupCommitResults.isEmpty {
+            result = changeSetGroupCommitResults.removeFirst()
+        } else {
+            result = changeSetGroupCommitResult ?? .failure(
+                CandidateReviewClientSpyError.missingReviewResult
+            )
+        }
+        completion(OwnerTruthMemoryChangeSetGroupReviewTransportOutcome.classify(result))
+    }
+
+    func lookupOwnerTruthCandidateChangeSetGroupDecisionResult(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        commandID: String,
+        expectedBinding: OwnerTruthMemoryChangeSetGroupBinding,
+        completion: @escaping (
+            Result<OwnerTruthMemoryChangeSetGroupDecisionLookupResult, Error>
+        ) -> Void
+    ) {
+        changeSetGroupLookupCommandIDs.append(commandID)
+        if deferChangeSetGroupLookup {
+            deferredChangeSetGroupLookupCompletion = completion
+            return
+        }
+        guard !changeSetGroupLookupResults.isEmpty else {
+            completion(.failure(CandidateReviewClientSpyError.missingReviewResult))
+            return
+        }
+        completion(changeSetGroupLookupResults.removeFirst())
+    }
+
     func completeDeferredChangeSetGroupCommit(
         _ result: Result<OwnerTruthMemoryChangeSetGroupCommitResult, Error>
     ) {
+        if let completion = deferredChangeSetGroupWriteCompletion {
+            deferredChangeSetGroupWriteCompletion = nil
+            completion(OwnerTruthMemoryChangeSetGroupReviewTransportOutcome.classify(result))
+            return
+        }
         let completion = deferredChangeSetGroupCommitCompletion
         deferredChangeSetGroupCommitCompletion = nil
+        completion?(result)
+    }
+
+    func completeDeferredChangeSetGroupLookup(
+        _ result: Result<OwnerTruthMemoryChangeSetGroupDecisionLookupResult, Error>
+    ) {
+        let completion = deferredChangeSetGroupLookupCompletion
+        deferredChangeSetGroupLookupCompletion = nil
         completion?(result)
     }
 
@@ -14102,7 +22665,7 @@ private enum InterviewOrchestrationClientSpyError: Error {
     case missingReadResult
 }
 
-private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalInputClient {
+private final class InterviewNaturalInputClientSpy: EchoLiveMemoryCaptureClient {
     var currentSessionHandler: ((OwnerTruthVaultID) -> Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>)?
     var scopedCurrentSessionHandler: ((OwnerTruthVaultID, String?) -> Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>)?
     var startHandler: ((OwnerTruthInterviewNaturalInputStartCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
@@ -14114,27 +22677,37 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
     var restoreDoNotAskHandler: ((OwnerTruthInterviewRestoreDoNotAskCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var restoreCooldownHandler: ((OwnerTruthInterviewRestoreCooldownCommand) -> Result<OwnerTruthInterviewNaturalInputReceipt, Error>)?
     var continuationHandler: ((OwnerTruthRecordID) -> Result<OwnerTruthInterviewNaturalInputContinuation, Error>)?
+    var pendingReviewInboxHandler: (() -> Result<OwnerTruthInterviewPendingReviewBatchInbox, Error>)?
+    var acknowledgementHandler: ((OwnerTruthInterviewReviewBatchAcknowledgementCommand) -> Result<OwnerTruthInterviewReviewBatchAcknowledgementReceipt, Error>)?
+    var admissionHandler: ((OwnerTruthInterviewCandidateProposalAdmissionCommand) -> Result<OwnerTruthInterviewCandidateProposalAdmissionReceipt, Error>)?
+    var proposalStatusHandler: ((OwnerTruthRecordID) -> Result<OwnerTruthInterviewCandidateProposalStatus, Error>)?
     var deferAppend = false
     var deferBoundary = false
     var deferPacing = false
     var deferTopicSwitch = false
     var deferRestoreCooldown = false
+    var deferProposalStatus = false
     private var deferredAppendCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
     private var deferredBoundaryCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
     private var deferredPacingCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
     private var deferredTopicSwitchCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
     private var deferredRestoreCooldownCompletion: ((Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void)?
+    private var deferredProposalStatusCompletion: ((Result<OwnerTruthInterviewCandidateProposalStatus, Error>) -> Void)?
 
     private(set) var startCommand: OwnerTruthInterviewNaturalInputStartCommand?
     private(set) var startCommands: [OwnerTruthInterviewNaturalInputStartCommand] = []
     private(set) var appendCommand: OwnerTruthInterviewNaturalInputAppendCommand?
     private(set) var endCommand: OwnerTruthInterviewEndCommand?
+    private(set) var endCommands: [OwnerTruthInterviewEndCommand] = []
     private(set) var boundaryCommand: OwnerTruthInterviewBoundaryCommand?
     private(set) var pacingCommand: OwnerTruthInterviewPacingCommand?
     private(set) var topicSwitchCommand: OwnerTruthInterviewPauseForTopicSwitchCommand?
     private(set) var restoreDoNotAskCommand: OwnerTruthInterviewRestoreDoNotAskCommand?
     private(set) var restoreCooldownCommand: OwnerTruthInterviewRestoreCooldownCommand?
     private(set) var requestedCurrentProductSessionID: String?
+    private(set) var acknowledgementCommands: [OwnerTruthInterviewReviewBatchAcknowledgementCommand] = []
+    private(set) var admissionCommands: [OwnerTruthInterviewCandidateProposalAdmissionCommand] = []
+    private(set) var proposalStatusRequestCount = 0
 
     func fetchOwnerTruthInterviewNaturalInputCurrentSession(
         vaultID: OwnerTruthVaultID,
@@ -14203,6 +22776,7 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
     ) {
         endCommand = command
+        endCommands.append(command)
         completion(endHandler?(command) ?? .failure(InterviewNaturalInputClientSpyError.missingEndResult))
     }
 
@@ -14287,6 +22861,60 @@ private final class InterviewNaturalInputClientSpy: OwnerTruthInterviewNaturalIn
         ))
     }
 
+    func fetchOwnerTruthInterviewPendingReviewBatchInbox(
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewPendingReviewBatchInbox, Error>) -> Void
+    ) {
+        completion(pendingReviewInboxHandler?() ?? .failure(
+            InterviewNaturalInputClientSpyError.missingPendingReviewInboxResult
+        ))
+    }
+
+    func acknowledgeOwnerTruthInterviewReviewBatch(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
+        completion: @escaping (Result<OwnerTruthInterviewReviewBatchAcknowledgementReceipt, Error>) -> Void
+    ) {
+        acknowledgementCommands.append(command)
+        completion(acknowledgementHandler?(command) ?? .failure(
+            InterviewNaturalInputClientSpyError.missingAcknowledgementResult
+        ))
+    }
+
+    func admitOwnerTruthInterviewCandidateProposal(
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateProposalAdmissionReceipt, Error>) -> Void
+    ) {
+        admissionCommands.append(command)
+        completion(admissionHandler?(command) ?? .failure(
+            InterviewNaturalInputClientSpyError.missingAdmissionResult
+        ))
+    }
+
+    func fetchOwnerTruthInterviewCandidateProposalStatus(
+        vaultID: OwnerTruthVaultID,
+        reviewBatchID: OwnerTruthRecordID,
+        completion: @escaping (Result<OwnerTruthInterviewCandidateProposalStatus, Error>) -> Void
+    ) {
+        proposalStatusRequestCount += 1
+        if deferProposalStatus {
+            deferredProposalStatusCompletion = completion
+            return
+        }
+        completion(proposalStatusHandler?(reviewBatchID) ?? .failure(
+            InterviewNaturalInputClientSpyError.missingProposalStatusResult
+        ))
+    }
+
+    func completeDeferredProposalStatus(
+        _ result: Result<OwnerTruthInterviewCandidateProposalStatus, Error>
+    ) {
+        let completion = deferredProposalStatusCompletion
+        deferredProposalStatusCompletion = nil
+        completion?(result)
+    }
+
     func completeDeferredAppend(_ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>) {
         let completion = deferredAppendCompletion
         deferredAppendCompletion = nil
@@ -14328,6 +22956,10 @@ private enum InterviewNaturalInputClientSpyError: Error {
     case missingRestoreDoNotAskResult
     case missingRestoreCooldownResult
     case missingContinuationResult
+    case missingPendingReviewInboxResult
+    case missingAcknowledgementResult
+    case missingAdmissionResult
+    case missingProposalStatusResult
 }
 
 private final class CorrectionRequestClientSpy: OwnerTruthCorrectionRequestClient {
@@ -14404,4 +23036,20 @@ private final class CorrectionResolutionClientSpy: OwnerTruthCorrectionResolutio
 private enum CorrectionResolutionClientSpyError: Error {
     case missingPreviewResult
     case missingResolutionResult
+}
+
+@MainActor
+private final class ImmediateNavigationController: UINavigationController {
+    override func pushViewController(_ viewController: UIViewController, animated: Bool) {
+        super.setViewControllers(viewControllers + [viewController], animated: false)
+    }
+
+    @discardableResult
+    override func popViewController(animated: Bool) -> UIViewController? {
+        guard viewControllers.count > 1, let removed = viewControllers.last else {
+            return nil
+        }
+        super.setViewControllers(Array(viewControllers.dropLast()), animated: false)
+        return removed
+    }
 }

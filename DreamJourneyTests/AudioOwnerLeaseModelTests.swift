@@ -7,6 +7,37 @@ import UIKit
 #endif
 
 final class EchoLiveAudioRoutePolicyTests: XCTestCase {
+    func testRealtimeVoiceFailureDiagnosticClassifiesFormalMemorySnapshot503() {
+        let error = DreamJourneyBackendClient.ClientError.backendError(
+            statusCode: 503,
+            context: .init(
+                code: "formalMemorySnapshotUnavailable",
+                detail: "private response detail must not be logged"
+            )
+        )
+
+        let diagnostic = EchoRealtimeVoiceRuntimeFailureDiagnostic(error: error)
+
+        XCTAssertEqual(diagnostic.stage, "snapshot")
+        XCTAssertEqual(diagnostic.httpStatus, 503)
+        XCTAssertEqual(diagnostic.businessCode, "formalMemorySnapshotUnavailable")
+    }
+
+    func testRealtimeVoiceFailureDiagnosticRedactsUnknownBackendCode() {
+        let error = DreamJourneyBackendClient.ClientError.backendError(
+            statusCode: 503,
+            context: .init(
+                code: "private-provider-detail",
+                detail: "credential-like private response"
+            )
+        )
+        let diagnostic = EchoRealtimeVoiceRuntimeFailureDiagnostic(error: error)
+
+        XCTAssertEqual(diagnostic.stage, "unknown")
+        XCTAssertEqual(diagnostic.httpStatus, 503)
+        XCTAssertEqual(diagnostic.businessCode, "unknown")
+    }
+
     func testTencentIsSelectedOnlyWhenItCanOwnAudioAtSessionStart() {
         XCTAssertEqual(
             EchoLiveAudioRoutePolicy.select(
@@ -709,6 +740,19 @@ final class EchoTurnIntentReducerTests: XCTestCase {
         XCTAssertEqual(staleReply.previousPhase, .idle)
         XCTAssertEqual(staleReply.currentPhase, .idle)
         XCTAssertEqual(reducer.phase, .idle)
+    }
+
+    func testCompletedTypedTurnCanResetAndImmediatelyStartLive() {
+        var reducer = EchoTurnIntentReducer()
+        _ = reducer.reduce(.prepareVoiceInteraction)
+        _ = reducer.reduce(.voiceCaptureStarted)
+        _ = reducer.reduce(.userTurnAccepted)
+        _ = reducer.reduce(.replyStarted)
+        XCTAssertEqual(reducer.reduce(.replyDelivered).currentPhase, .replied)
+
+        XCTAssertEqual(reducer.reduce(.reset).currentPhase, .idle)
+        XCTAssertEqual(reducer.reduce(.prepareVoiceInteraction).currentPhase, .starting)
+        XCTAssertEqual(reducer.reduce(.voiceCaptureStarted).currentPhase, .listening)
     }
 
     func testDelayedReplyCanBeScheduledAndDeliveredWithoutOpeningAnotherTurn() {

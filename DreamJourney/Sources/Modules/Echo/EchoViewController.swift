@@ -1,4 +1,5 @@
 import AVFoundation
+import CryptoKit
 import UIKit
 
 private enum EchoDigitalHumanAudioOwner: String {
@@ -38,6 +39,49 @@ enum EchoLiveAudioRoutePolicy {
             return .volcengineLocalTTS
         }
         return .tencentDigitalHuman
+    }
+}
+
+struct EchoRealtimeVoiceRuntimeFailureDiagnostic: Equatable {
+    let stage: String
+    let httpStatus: Int?
+    let businessCode: String
+
+    init(error: Error) {
+        guard let backendFailure = error as? any OwnerTruthBackendFailureClassifying else {
+            stage = "request"
+            httpStatus = nil
+            businessCode = "unknown"
+            return
+        }
+
+        httpStatus = backendFailure.ownerTruthBackendStatusCode
+        let code = backendFailure.ownerTruthBackendErrorCode ?? ""
+        switch code {
+        case "authenticatedVoiceSessionRequired":
+            stage = "auth"
+            businessCode = code
+        case "echoLiveTargetRequired", "echoLiveTargetMismatch",
+                "echoFamilyQueryNotAuthorized", "echoLivePersonaScopeInvalid",
+                "realtimeVoiceSubjectUnavailable":
+            stage = "targetAuthorization"
+            businessCode = code
+        case "formalMemorySnapshotUnavailable", "formalMemorySnapshotTooLarge":
+            stage = "snapshot"
+            businessCode = code
+        case "realtimeVoiceFormalMemoryBindingInvalid":
+            stage = "binding"
+            businessCode = code
+        case "realtimeVoiceConcurrentSessionLimit":
+            stage = "ticketStore"
+            businessCode = code
+        case "realtimeVoiceUpstreamURLInvalid", "realtimeVoicePublicURLInvalid":
+            stage = "capability"
+            businessCode = code
+        default:
+            stage = "unknown"
+            businessCode = "unknown"
+        }
     }
 }
 
@@ -253,27 +297,592 @@ struct EchoRecentConversationBuffer: Equatable {
     }
 }
 
-private enum EchoLiveMemoryCaptureState: Equatable {
+enum EchoLiveMemoryCaptureState: Equatable {
     case live
+    case saving
+    case queued
     case organizing
+    case retryWaiting(attempt: Int, maxAttempts: Int)
     case pendingReview
     case empty
+    case statusUnknown
+    case terminalFailure(code: String?)
+    case quarantined
     case unavailable
 
     var isTerminal: Bool {
         switch self {
-        case .pendingReview, .empty, .unavailable:
+        case .pendingReview, .empty, .terminalFailure, .quarantined, .unavailable:
             return true
-        case .live, .organizing:
+        case .live, .saving, .queued, .organizing, .retryWaiting, .statusUnknown:
             return false
         }
+    }
+
+    var isAwaitingOrganizationStatus: Bool {
+        switch self {
+        case .queued, .organizing, .retryWaiting, .statusUnknown:
+            return true
+        case .live, .saving, .pendingReview, .empty, .terminalFailure, .quarantined, .unavailable:
+            return false
+        }
+    }
+}
+
+struct EchoLiveMemoryFollowUpRecord: Codable, Equatable {
+    let productSessionID: String
+    let reviewBatchID: UUID
+    let createdAt: Date
+    var updatedAt: Date
+}
+
+/// Persists only opaque workflow coordinates after the server has durably
+/// admitted a closed conversation. Transcript and memory values stay in the
+/// authoritative backend; this store only lets another page instance resume
+/// status reads without reusing the closed product session for a new Live.
+final class EchoLiveMemoryFollowUpStore {
+    static let shared = EchoLiveMemoryFollowUpStore()
+
+    private let defaults: UserDefaults
+    private let lock = NSLock()
+    private let now: () -> Date
+
+    init(defaults: UserDefaults = .standard, now: @escaping () -> Date = Date.init) {
+        self.defaults = defaults
+        self.now = now
+    }
+
+    func records(for accountLease: AccountLease) -> [EchoLiveMemoryFollowUpRecord] {
+        lock.lock()
+        defer { lock.unlock() }
+        return read(accountLease: accountLease)
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    func upsert(
+        productSessionID: String,
+        reviewBatchID: OwnerTruthRecordID,
+        for accountLease: AccountLease
+    ) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        let timestamp = now()
+        var records = read(accountLease: accountLease)
+        if let index = records.firstIndex(where: { $0.productSessionID == productSessionID }) {
+            records[index] = EchoLiveMemoryFollowUpRecord(
+                productSessionID: productSessionID,
+                reviewBatchID: reviewBatchID.rawValue,
+                createdAt: records[index].createdAt,
+                updatedAt: timestamp
+            )
+        } else {
+            records.append(EchoLiveMemoryFollowUpRecord(
+                productSessionID: productSessionID,
+                reviewBatchID: reviewBatchID.rawValue,
+                createdAt: timestamp,
+                updatedAt: timestamp
+            ))
+        }
+        try write(records, accountLease: accountLease)
+    }
+
+    func remove(productSessionID: String, for accountLease: AccountLease) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        var records = read(accountLease: accountLease)
+        records.removeAll { $0.productSessionID == productSessionID }
+        try write(records, accountLease: accountLease)
+    }
+
+    private func read(accountLease: AccountLease) -> [EchoLiveMemoryFollowUpRecord] {
+        guard let data = defaults.data(forKey: key(accountLease)),
+              let records = try? JSONDecoder().decode([EchoLiveMemoryFollowUpRecord].self, from: data) else {
+            return []
+        }
+        return records
+    }
+
+    private func write(
+        _ records: [EchoLiveMemoryFollowUpRecord],
+        accountLease: AccountLease
+    ) throws {
+        do {
+            if records.isEmpty {
+                defaults.removeObject(forKey: key(accountLease))
+            } else {
+                defaults.set(try JSONEncoder().encode(records), forKey: key(accountLease))
+            }
+        } catch {
+            throw OwnerTruthInterviewLiveTurnOutboxError.storageFailure
+        }
+    }
+
+    private func key(_ accountLease: AccountLease) -> String {
+        let scope = [
+            accountLease.subjectId,
+            accountLease.vaultId,
+            accountLease.authorityEpoch,
+        ].joined(separator: "|")
+        let digest = SHA256.hash(data: Data(scope.utf8)).map {
+            String(format: "%02x", $0)
+        }.joined()
+        return "echo.live-memory-follow-up.v1.\(digest)"
+    }
+}
+
+enum EchoLiveMemoryCompletionPhase: String, Codable, Equatable {
+    case endPrepared
+    case ended
+    case acknowledgementPrepared
+    case acknowledged
+    case admissionPrepared
+    case admitted
+}
+
+struct EchoLiveMemoryCompletionCheckpoint: Codable, Equatable {
+    static let schemaVersion = "echo-live-memory-completion-v1"
+
+    let schemaVersion: String
+    let productSessionID: String
+    var phase: EchoLiveMemoryCompletionPhase
+    var endCommand: OwnerTruthInterviewEndCommand?
+    var endReceipt: OwnerTruthInterviewNaturalInputReceipt?
+    var acknowledgementCommand: OwnerTruthInterviewReviewBatchAcknowledgementCommand?
+    var acknowledgementReceipt: OwnerTruthInterviewReviewBatchAcknowledgementReceipt?
+    var admissionCommand: OwnerTruthInterviewCandidateProposalAdmissionCommand?
+    var admittedReviewBatchID: OwnerTruthRecordID?
+    let createdAt: Date
+    var updatedAt: Date
+}
+
+enum EchoLiveMemoryCompletionCheckpointScanStatus: String, Equatable {
+    case valid
+    case absent
+    case unreadable
+    case decodeInvalid
+    case schemaUnsupported
+    case scopeMismatch
+}
+
+struct EchoLiveMemoryCompletionCheckpointScanOutcome: Equatable {
+    let productSessionID: String
+    let status: EchoLiveMemoryCompletionCheckpointScanStatus
+    let checkpoint: EchoLiveMemoryCompletionCheckpoint?
+}
+
+/// Atomic, account-scoped hand-off journal for the three completion commands.
+/// It stores only opaque coordinates and version fences, never transcript text,
+/// credentials, prompts, or provider responses.
+final class EchoLiveMemoryCompletionCheckpointStore {
+    static let shared = EchoLiveMemoryCompletionCheckpointStore()
+
+    private let rootDirectory: URL
+    private let fileManager: FileManager
+    private let now: () -> Date
+    private let lock = NSLock()
+
+    init(
+        rootDirectory: URL? = nil,
+        fileManager: FileManager = .default,
+        now: @escaping () -> Date = Date.init
+    ) {
+        self.fileManager = fileManager
+        self.now = now
+        let root = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? fileManager.temporaryDirectory
+        self.rootDirectory = rootDirectory ?? root
+            .appendingPathComponent("DreamJourney", isDirectory: true)
+            .appendingPathComponent("EchoLiveMemoryCompletion", isDirectory: true)
+            .appendingPathComponent("v1", isDirectory: true)
+    }
+
+    func load(
+        productSessionID: String,
+        for accountLease: AccountLease
+    ) throws -> EchoLiveMemoryCompletionCheckpoint? {
+        try withLock {
+            let url = fileURL(productSessionID: productSessionID, accountLease: accountLease)
+            guard fileManager.fileExists(atPath: url.path) else { return nil }
+            return try read(url: url, productSessionID: productSessionID, accountLease: accountLease)
+        }
+    }
+
+    func records(for accountLease: AccountLease) -> [EchoLiveMemoryCompletionCheckpoint] {
+        do {
+            return try withLock {
+            let directory = scopeDirectoryURL(accountLease: accountLease)
+            guard let urls = try? fileManager.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            ) else {
+                return []
+            }
+            let checkpoints: [EchoLiveMemoryCompletionCheckpoint] = urls.compactMap { url in
+                guard let data = try? Data(contentsOf: url),
+                      let checkpoint = try? Self.decoder().decode(
+                        EchoLiveMemoryCompletionCheckpoint.self,
+                        from: data
+                      ),
+                      checkpoint.schemaVersion == EchoLiveMemoryCompletionCheckpoint.schemaVersion,
+                      url.deletingPathExtension().lastPathComponent
+                        == Self.digest(normalizedProductSessionID(checkpoint.productSessionID)),
+                      isValid(checkpoint) else {
+                    return nil
+                }
+                return checkpoint
+            }
+            return checkpoints.sorted {
+                $0.createdAt == $1.createdAt
+                    ? $0.productSessionID < $1.productSessionID
+                    : $0.createdAt < $1.createdAt
+            }
+            }
+        } catch {
+            return []
+        }
+    }
+
+    func scan(
+        productSessionID: String,
+        for accountLease: AccountLease
+    ) -> EchoLiveMemoryCompletionCheckpointScanOutcome {
+        let normalizedSessionID = normalizedProductSessionID(productSessionID)
+        return (try? withLock {
+            let url = fileURL(
+                productSessionID: normalizedSessionID,
+                accountLease: accountLease
+            )
+            guard fileManager.fileExists(atPath: url.path) else {
+                return EchoLiveMemoryCompletionCheckpointScanOutcome(
+                    productSessionID: normalizedSessionID,
+                    status: .absent,
+                    checkpoint: nil
+                )
+            }
+            let data: Data
+            do {
+                data = try Data(contentsOf: url)
+            } catch {
+                return EchoLiveMemoryCompletionCheckpointScanOutcome(
+                    productSessionID: normalizedSessionID,
+                    status: .unreadable,
+                    checkpoint: nil
+                )
+            }
+            guard let object = try? JSONSerialization.jsonObject(with: data),
+                  let envelope = object as? [String: Any] else {
+                return EchoLiveMemoryCompletionCheckpointScanOutcome(
+                    productSessionID: normalizedSessionID,
+                    status: .decodeInvalid,
+                    checkpoint: nil
+                )
+            }
+            guard let schemaVersion = envelope["schemaVersion"] as? String else {
+                return EchoLiveMemoryCompletionCheckpointScanOutcome(
+                    productSessionID: normalizedSessionID,
+                    status: .decodeInvalid,
+                    checkpoint: nil
+                )
+            }
+            guard schemaVersion == EchoLiveMemoryCompletionCheckpoint.schemaVersion else {
+                return EchoLiveMemoryCompletionCheckpointScanOutcome(
+                    productSessionID: normalizedSessionID,
+                    status: .schemaUnsupported,
+                    checkpoint: nil
+                )
+            }
+            guard let storedSessionID = envelope["productSessionID"] as? String,
+                  normalizedProductSessionID(storedSessionID) == normalizedSessionID else {
+                return EchoLiveMemoryCompletionCheckpointScanOutcome(
+                    productSessionID: normalizedSessionID,
+                    status: .scopeMismatch,
+                    checkpoint: nil
+                )
+            }
+            guard let checkpoint = try? Self.decoder().decode(
+                EchoLiveMemoryCompletionCheckpoint.self,
+                from: data
+            ), isValid(checkpoint) else {
+                return EchoLiveMemoryCompletionCheckpointScanOutcome(
+                    productSessionID: normalizedSessionID,
+                    status: .decodeInvalid,
+                    checkpoint: nil
+                )
+            }
+            return EchoLiveMemoryCompletionCheckpointScanOutcome(
+                productSessionID: normalizedSessionID,
+                status: .valid,
+                checkpoint: checkpoint
+            )
+        }) ?? EchoLiveMemoryCompletionCheckpointScanOutcome(
+            productSessionID: normalizedSessionID,
+            status: .unreadable,
+            checkpoint: nil
+        )
+    }
+
+    @discardableResult
+    func prepareEnd(
+        _ command: OwnerTruthInterviewEndCommand,
+        productSessionID: String,
+        for accountLease: AccountLease
+    ) throws -> EchoLiveMemoryCompletionCheckpoint {
+        try withLock {
+            let url = fileURL(productSessionID: productSessionID, accountLease: accountLease)
+            if fileManager.fileExists(atPath: url.path) {
+                let existing = try read(
+                    url: url,
+                    productSessionID: productSessionID,
+                    accountLease: accountLease
+                )
+                guard existing.endCommand == command else {
+                    throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+                }
+                return existing
+            }
+            let timestamp = now()
+            let checkpoint = EchoLiveMemoryCompletionCheckpoint(
+                schemaVersion: EchoLiveMemoryCompletionCheckpoint.schemaVersion,
+                productSessionID: productSessionID,
+                phase: .endPrepared,
+                endCommand: command,
+                endReceipt: nil,
+                acknowledgementCommand: nil,
+                acknowledgementReceipt: nil,
+                admissionCommand: nil,
+                admittedReviewBatchID: nil,
+                createdAt: timestamp,
+                updatedAt: timestamp
+            )
+            try write(checkpoint, to: url, accountLease: accountLease)
+            return checkpoint
+        }
+    }
+
+    @discardableResult
+    func acceptEnd(
+        _ receipt: OwnerTruthInterviewNaturalInputReceipt,
+        productSessionID: String,
+        for accountLease: AccountLease
+    ) throws -> EchoLiveMemoryCompletionCheckpoint {
+        try update(productSessionID: productSessionID, accountLease: accountLease) { checkpoint in
+            guard let command = checkpoint.endCommand, receipt.matches(command) else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            checkpoint.phase = .ended
+            checkpoint.endReceipt = receipt
+        }
+    }
+
+    @discardableResult
+    func prepareAcknowledgement(
+        _ command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
+        productSessionID: String,
+        for accountLease: AccountLease
+    ) throws -> EchoLiveMemoryCompletionCheckpoint {
+        try update(productSessionID: productSessionID, accountLease: accountLease) { checkpoint in
+            guard checkpoint.phase == .ended || checkpoint.acknowledgementCommand == command,
+                  let receipt = checkpoint.endReceipt,
+                  receipt.threadID == command.threadID,
+                  receipt.sessionID == command.sessionID else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            checkpoint.phase = .acknowledgementPrepared
+            checkpoint.acknowledgementCommand = command
+        }
+    }
+
+    @discardableResult
+    func acceptAcknowledgement(
+        _ receipt: OwnerTruthInterviewReviewBatchAcknowledgementReceipt,
+        productSessionID: String,
+        for accountLease: AccountLease
+    ) throws -> EchoLiveMemoryCompletionCheckpoint {
+        try update(productSessionID: productSessionID, accountLease: accountLease) { checkpoint in
+            guard let command = checkpoint.acknowledgementCommand, receipt.matches(command) else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            checkpoint.phase = .acknowledged
+            checkpoint.acknowledgementReceipt = receipt
+        }
+    }
+
+    @discardableResult
+    func prepareAdmission(
+        _ command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
+        productSessionID: String,
+        for accountLease: AccountLease
+    ) throws -> EchoLiveMemoryCompletionCheckpoint {
+        try update(productSessionID: productSessionID, accountLease: accountLease) { checkpoint in
+            guard checkpoint.phase == .acknowledged || checkpoint.admissionCommand == command,
+                  let receipt = checkpoint.acknowledgementReceipt,
+                  receipt.reviewBatchID == command.reviewBatchID,
+                  receipt.reviewBatchVersion == command.expectedReviewBatchVersion else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            checkpoint.phase = .admissionPrepared
+            checkpoint.admissionCommand = command
+        }
+    }
+
+    @discardableResult
+    func acceptAdmission(
+        _ receipt: OwnerTruthInterviewCandidateProposalAdmissionReceipt,
+        productSessionID: String,
+        for accountLease: AccountLease
+    ) throws -> EchoLiveMemoryCompletionCheckpoint {
+        try update(productSessionID: productSessionID, accountLease: accountLease) { checkpoint in
+            guard let command = checkpoint.admissionCommand, receipt.matches(command) else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            checkpoint.phase = .admitted
+            checkpoint.admittedReviewBatchID = receipt.reviewBatchID
+        }
+    }
+
+    func remove(productSessionID: String, for accountLease: AccountLease) throws {
+        try withLock {
+            let url = fileURL(productSessionID: productSessionID, accountLease: accountLease)
+            if fileManager.fileExists(atPath: url.path) {
+                try fileManager.removeItem(at: url)
+            }
+        }
+    }
+
+    private func update(
+        productSessionID: String,
+        accountLease: AccountLease,
+        mutation: (inout EchoLiveMemoryCompletionCheckpoint) throws -> Void
+    ) throws -> EchoLiveMemoryCompletionCheckpoint {
+        try withLock {
+            let url = fileURL(productSessionID: productSessionID, accountLease: accountLease)
+            var checkpoint = try read(
+                url: url,
+                productSessionID: productSessionID,
+                accountLease: accountLease
+            )
+            try mutation(&checkpoint)
+            checkpoint.updatedAt = now()
+            try write(checkpoint, to: url, accountLease: accountLease)
+            return checkpoint
+        }
+    }
+
+    private func read(
+        url: URL,
+        productSessionID: String,
+        accountLease: AccountLease
+    ) throws -> EchoLiveMemoryCompletionCheckpoint {
+        do {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let checkpoint = try decoder.decode(
+                EchoLiveMemoryCompletionCheckpoint.self,
+                from: Data(contentsOf: url)
+            )
+            guard checkpoint.schemaVersion == EchoLiveMemoryCompletionCheckpoint.schemaVersion,
+                  checkpoint.productSessionID == normalizedProductSessionID(productSessionID),
+                  isValid(checkpoint) else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            return checkpoint
+        } catch let error as OwnerTruthInterviewLiveTurnOutboxError {
+            throw error
+        } catch {
+            throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+        }
+    }
+
+    private func write(
+        _ checkpoint: EchoLiveMemoryCompletionCheckpoint,
+        to url: URL,
+        accountLease: AccountLease
+    ) throws {
+        guard isValid(checkpoint) else {
+            throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+        }
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = [.sortedKeys]
+            try KnowledgeLocalStoragePolicy.write(try encoder.encode(checkpoint), to: url)
+        } catch {
+            throw OwnerTruthInterviewLiveTurnOutboxError.storageFailure
+        }
+    }
+
+    private func fileURL(productSessionID: String, accountLease: AccountLease) -> URL {
+        scopeDirectoryURL(accountLease: accountLease)
+            .appendingPathComponent(Self.digest(normalizedProductSessionID(productSessionID)) + ".json")
+    }
+
+    private func scopeDirectoryURL(accountLease: AccountLease) -> URL {
+        let scope = [
+            "echo-live-completion-scope-v1",
+            accountLease.subjectId,
+            accountLease.vaultId,
+            accountLease.authorityEpoch,
+        ].map { "\($0.utf8.count):\($0)" }.joined(separator: "|")
+        let scopeDigest = Self.digest(scope)
+        return rootDirectory
+            .appendingPathComponent(scopeDigest, isDirectory: true)
+    }
+
+    private static func decoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+
+    private func normalizedProductSessionID(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func isValid(_ checkpoint: EchoLiveMemoryCompletionCheckpoint) -> Bool {
+        guard !normalizedProductSessionID(checkpoint.productSessionID).isEmpty,
+              checkpoint.endCommand != nil else { return false }
+        switch checkpoint.phase {
+        case .endPrepared:
+            return true
+        case .ended:
+            return checkpoint.endReceipt != nil
+        case .acknowledgementPrepared:
+            return checkpoint.endReceipt != nil && checkpoint.acknowledgementCommand != nil
+        case .acknowledged:
+            return checkpoint.acknowledgementReceipt != nil
+        case .admissionPrepared:
+            return checkpoint.acknowledgementReceipt != nil && checkpoint.admissionCommand != nil
+        case .admitted:
+            return checkpoint.admittedReviewBatchID != nil
+        }
+    }
+
+    private func withLock<T>(_ body: () throws -> T) throws -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try body()
+    }
+
+    private static func digest(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 }
 
 /// Persists one user-controlled Live conversation through the V4 private
 /// interview lane. Assistant turns remain context only; only owner turns can
 /// become evidence for a pending memory candidate.
-private final class EchoLiveMemoryCaptureCoordinator {
+protocol EchoLiveMemoryCaptureClient:
+    OwnerTruthInterviewNaturalInputClient,
+    OwnerTruthInterviewPendingReviewBatchInboxClient,
+    OwnerTruthInterviewReviewBatchAcknowledgementClient,
+    OwnerTruthInterviewCandidateProposalAdmissionClient,
+    OwnerTruthInterviewCandidateProposalStatusClient {}
+
+extension DreamJourneyBackendClient: EchoLiveMemoryCaptureClient {}
+
+final class EchoLiveMemoryCaptureCoordinator {
     private struct Turn: Equatable {
         let delivery: OwnerTruthInterviewLiveTurnDelivery
 
@@ -283,9 +892,12 @@ private final class EchoLiveMemoryCaptureCoordinator {
 
     let id = UUID()
     private let accountLease: AccountLease
-    private let client: DreamJourneyBackendClient
+    private let client: EchoLiveMemoryCaptureClient
+    private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let productSessionID: String
     private let liveTurnOutboxStore: OwnerTruthInterviewLiveTurnOutboxStore
+    private let followUpStore: EchoLiveMemoryFollowUpStore
+    private let completionCheckpointStore: EchoLiveMemoryCompletionCheckpointStore
     /// Disk work must never happen on Volcengine's audio/ASR callback queue.
     /// This serial queue also preserves the local client sequence order.
     private let persistenceQueue = DispatchQueue(label: "com.dreamjourney.echo.live-memory-outbox")
@@ -296,6 +908,7 @@ private final class EchoLiveMemoryCaptureCoordinator {
     private var admissionUseCase: OwnerTruthInterviewCandidateProposalAdmissionUseCase?
     private var proposalStatusUseCase: OwnerTruthInterviewCandidateProposalStatusUseCase?
     private var proposalStatusPollWorkItem: DispatchWorkItem?
+    private var organizationStatusTimeoutWorkItem: DispatchWorkItem?
     private var proposalStatusPollAttempt = 0
     private var queuedTurns: [Turn] = []
     private var inFlightTurn: Turn?
@@ -310,6 +923,14 @@ private final class EchoLiveMemoryCaptureCoordinator {
     private var isFinishing = false
     private var didRequestEnd = false
     private var didBeginOrganization = false
+    private var acceptedEndedReceiptIdentity: String?
+    private var activeReviewBatchID: OwnerTruthRecordID?
+    private var observerGeneration: UInt = 0
+    private var isBackgrounded = false
+    private var cleanupPending = false
+    private var organizationStatusTimedOut = false
+    private var isRestoringLegacyClosingOutbox = false
+    private var lifecycleObserver: NSObjectProtocol?
     private var lastOwnerText = ""
     private var lastOwnerTurnAt: Date?
     private var lastAssistantText = ""
@@ -317,6 +938,7 @@ private final class EchoLiveMemoryCaptureCoordinator {
     private static let duplicateOwnerTurnWindow: TimeInterval = 1.0
     private static let proposalStatusPollInterval: TimeInterval = 1.0
     private static let maximumProposalStatusPollAttempts = 60
+    private let organizationStatusTimeout: TimeInterval
 
     private(set) var state: EchoLiveMemoryCaptureState = .live {
         didSet {
@@ -337,6 +959,8 @@ private final class EchoLiveMemoryCaptureCoordinator {
             if state.isTerminal {
                 proposalStatusPollWorkItem?.cancel()
                 proposalStatusPollWorkItem = nil
+                organizationStatusTimeoutWorkItem?.cancel()
+                organizationStatusTimeoutWorkItem = nil
             }
             onStateChange?(state)
         }
@@ -350,23 +974,59 @@ private final class EchoLiveMemoryCaptureCoordinator {
 
     init(
         accountLease: AccountLease,
-        client: DreamJourneyBackendClient = .shared,
+        client: EchoLiveMemoryCaptureClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         productSessionID: String? = nil,
         liveTurnOutboxStore: OwnerTruthInterviewLiveTurnOutboxStore = .shared,
+        followUpStore: EchoLiveMemoryFollowUpStore = .shared,
+        completionCheckpointStore: EchoLiveMemoryCompletionCheckpointStore = .shared,
+        organizationStatusTimeout: TimeInterval = 30,
         naturalInputPolicyAvailable: @escaping () -> Bool,
         candidateReviewPolicyAvailable: @escaping () -> Bool
     ) {
         self.accountLease = accountLease
         self.client = client
+        self.accountLeaseRuntime = accountLeaseRuntime
         let normalizedProductSessionID = productSessionID?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         self.productSessionID = normalizedProductSessionID?.isEmpty == false
             ? normalizedProductSessionID!
             : "echo_live_\(UUID().uuidString.lowercased())"
         self.liveTurnOutboxStore = liveTurnOutboxStore
+        self.followUpStore = followUpStore
+        self.completionCheckpointStore = completionCheckpointStore
+        self.organizationStatusTimeout = organizationStatusTimeout
         self.naturalInputPolicyAvailable = naturalInputPolicyAvailable
         self.candidateReviewPolicyAvailable = candidateReviewPolicyAvailable
-        restoreDurableTurnsIfNeeded()
+        lifecycleObserver = NotificationCenter.default.addObserver(
+            forName: .djAppLifecycleEventForwarded,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let event = AppLifecycleEventNotification.event(from: notification.userInfo) else {
+                return
+            }
+            self?.receiveLifecycleEvent(event)
+        }
+        if !restoreCompletionCheckpointIfNeeded() {
+            restoreDurableTurnsIfNeeded()
+        }
+    }
+
+    deinit {
+        if let lifecycleObserver {
+            NotificationCenter.default.removeObserver(lifecycleObserver)
+        }
+    }
+
+    var trackedProductSessionID: String { productSessionID }
+
+    func resumeOrganization(reviewBatchID: OwnerTruthRecordID) {
+        guard state == .live, !didBeginOrganization else { return }
+        didBeginOrganization = true
+        activeReviewBatchID = reviewBatchID
+        state = .queued
+        beginCandidateReadinessObservation(reviewBatchID: reviewBatchID)
     }
 
     func appendOwnerTurn(_ text: String) {
@@ -413,6 +1073,111 @@ private final class EchoLiveMemoryCaptureCoordinator {
         persistCloseRequestIfReady()
     }
 
+    @discardableResult
+    private func restoreCompletionCheckpointIfNeeded() -> Bool {
+        let checkpoint: EchoLiveMemoryCompletionCheckpoint
+        do {
+            guard let stored = try completionCheckpointStore.load(
+                productSessionID: productSessionID,
+                for: accountLease
+            ) else {
+                return false
+            }
+            checkpoint = stored
+        } catch {
+            state = .statusUnknown
+            return true
+        }
+
+        isFinishing = true
+        closeRequestPersisted = true
+        didRequestEnd = true
+        switch checkpoint.phase {
+        case .endPrepared:
+            guard let command = checkpoint.endCommand else {
+                state = .statusUnknown
+                return true
+            }
+            state = .saving
+            replayPreparedEnd(command)
+        case .ended:
+            guard let receipt = checkpoint.endReceipt else {
+                state = .statusUnknown
+                return true
+            }
+            acceptedEndedReceiptIdentity = endedReceiptIdentity(receipt)
+            beginPendingMemoryOrganization(receipt: receipt)
+        case .acknowledgementPrepared:
+            guard let receipt = checkpoint.endReceipt,
+                  let command = checkpoint.acknowledgementCommand else {
+                state = .statusUnknown
+                return true
+            }
+            acceptedEndedReceiptIdentity = endedReceiptIdentity(receipt)
+            didBeginOrganization = true
+            state = .queued
+            beginAcknowledgement(receipt: receipt, preparedCommand: command)
+        case .acknowledged:
+            guard let endReceipt = checkpoint.endReceipt,
+                  let receipt = checkpoint.acknowledgementReceipt else {
+                state = .statusUnknown
+                return true
+            }
+            acceptedEndedReceiptIdentity = endedReceiptIdentity(endReceipt)
+            didBeginOrganization = true
+            state = .queued
+            beginAdmission(receipt: receipt, preparedCommand: nil)
+        case .admissionPrepared:
+            guard let endReceipt = checkpoint.endReceipt,
+                  let receipt = checkpoint.acknowledgementReceipt,
+                  let command = checkpoint.admissionCommand else {
+                state = .statusUnknown
+                return true
+            }
+            acceptedEndedReceiptIdentity = endedReceiptIdentity(endReceipt)
+            didBeginOrganization = true
+            state = .queued
+            beginAdmission(receipt: receipt, preparedCommand: command)
+        case .admitted:
+            guard let reviewBatchID = checkpoint.admittedReviewBatchID else {
+                state = .statusUnknown
+                return true
+            }
+            didBeginOrganization = true
+            activeReviewBatchID = reviewBatchID
+            state = .queued
+            persistFollowUpThenBeginObservation(reviewBatchID: reviewBatchID)
+        }
+        return true
+    }
+
+    private func replayPreparedEnd(_ command: OwnerTruthInterviewEndCommand) {
+        guard naturalInputPolicyAvailable(),
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+              let vaultID = OwnerTruthVaultID(accountLease.vaultId) else {
+            state = .unavailable
+            return
+        }
+        client.endOwnerTruthInterviewNaturalInput(
+            vaultID: vaultID,
+            command: command
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self, !self.state.isTerminal else { return }
+                switch result {
+                case .success(let receipt):
+                    guard receipt.matches(command) else {
+                        self.state = .statusUnknown
+                        return
+                    }
+                    self.clearCompletedOutboxThenBeginOrganization(receipt: receipt)
+                case .failure:
+                    self.state = .statusUnknown
+                }
+            }
+        }
+    }
+
     private func restoreDurableTurnsIfNeeded() {
         do {
             guard let snapshot = try liveTurnOutboxStore.load(
@@ -431,6 +1196,14 @@ private final class EchoLiveMemoryCaptureCoordinator {
             )
             isFinishing = snapshot.isClosing
             closeRequestPersisted = snapshot.isClosing
+            isRestoringLegacyClosingOutbox = snapshot.isClosing
+            if snapshot.isClosing && queuedTurns.isEmpty {
+                // Legacy snapshots did not persist the end command. With no
+                // remaining stable append command, starting a new interview
+                // would attach the close to the wrong conversation.
+                state = .statusUnknown
+                return
+            }
             if !queuedTurns.isEmpty || isFinishing {
                 ensureNaturalInputSession()
                 DispatchQueue.main.async { [weak self] in
@@ -534,10 +1307,19 @@ private final class EchoLiveMemoryCaptureCoordinator {
         let useCase = OwnerTruthInterviewNaturalInputUseCase(
             accountLease: accountLease,
             client: client,
+            accountLeaseRuntime: accountLeaseRuntime,
             qaGateEnabled: naturalInputPolicyAvailable,
             entryMode: .live,
             allowsEntryModeTransition: true,
-            productSessionID: productSessionID
+            allowStartWhenCurrentMissing: !isRestoringLegacyClosingOutbox,
+            productSessionID: productSessionID,
+            willSendEndCommand: { [completionCheckpointStore, accountLease, productSessionID] command in
+                try completionCheckpointStore.prepareEnd(
+                    command,
+                    productSessionID: productSessionID,
+                    for: accountLease
+                )
+            }
         )
         useCase.onViewStateChange = { [weak self, weak useCase] viewState in
             DispatchQueue.main.async {
@@ -566,7 +1348,10 @@ private final class EchoLiveMemoryCaptureCoordinator {
                 self?.advanceNaturalInputPipeline()
             }
         case .unavailable, .failed:
-            state = .unavailable
+            // Continuation refresh is advisory once the durable ended receipt
+            // has already moved the workflow into acknowledgement/admission.
+            guard !didBeginOrganization, !state.isTerminal else { return }
+            state = isRestoringLegacyClosingOutbox ? .statusUnknown : .unavailable
         case .idle, .starting, .submitting:
             break
         }
@@ -636,29 +1421,35 @@ private final class EchoLiveMemoryCaptureCoordinator {
     private func clearCompletedOutboxThenBeginOrganization(
         receipt: OwnerTruthInterviewNaturalInputReceipt?
     ) {
-        guard !isClearingCompletedOutbox else { return }
-        isClearingCompletedOutbox = true
-        let accountLease = accountLease
-        let productSessionID = productSessionID
-        let store = liveTurnOutboxStore
-        persistenceQueue.async { [weak self] in
-            let result = Result {
-                try store.remove(for: accountLease, productSessionID: productSessionID)
-            }
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.isClearingCompletedOutbox = false
-                switch result {
-                case .success:
-                    self.beginPendingMemoryOrganization(receipt: receipt)
-                case .failure:
-                    // The server has ended the session, but keeping an
-                    // unreadable local journal is safer than pretending the
-                    // recovery state was cleared.
-                    self.state = .unavailable
-                }
-            }
+        guard let receipt, receipt.lifecycle == .ended else { return }
+        let identity = endedReceiptIdentity(receipt)
+        guard acceptedEndedReceiptIdentity == nil else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "EchoLiveMemory",
+                event: "endedReceiptDuplicateIgnored",
+                states: ["stage": "organizationAlreadyOwned"],
+                counts: ["duplicateIgnored": 1]
+            )
+            return
         }
+        guard !state.isTerminal else { return }
+        do {
+            try completionCheckpointStore.acceptEnd(
+                receipt,
+                productSessionID: productSessionID,
+                for: accountLease
+            )
+        } catch {
+            state = .statusUnknown
+            return
+        }
+        acceptedEndedReceiptIdentity = identity
+        state = .saving
+        // Keep the closing outbox until the server reaches a durable success
+        // state. If the page or app closes during acknowledgement, admission,
+        // extraction or retry wait, restoring this journal resumes the same
+        // idempotent session instead of losing its progress coordinates.
+        beginPendingMemoryOrganization(receipt: receipt)
     }
 
     private func beginPendingMemoryOrganization(
@@ -670,14 +1461,31 @@ private final class EchoLiveMemoryCaptureCoordinator {
             return
         }
         didBeginOrganization = true
-        state = .organizing
+        state = .queued
+        beginAcknowledgement(receipt: receipt, preparedCommand: nil)
+    }
+
+    private func beginAcknowledgement(
+        receipt: OwnerTruthInterviewNaturalInputReceipt,
+        preparedCommand: OwnerTruthInterviewReviewBatchAcknowledgementCommand?
+    ) {
+        guard acknowledgementUseCase == nil else { return }
         let useCase = OwnerTruthInterviewReviewBatchAcknowledgementUseCase(
             accountLease: accountLease,
             threadID: receipt.threadID,
             sessionID: receipt.sessionID,
             inboxClient: client,
             acknowledgementClient: client,
-            releasePolicyAvailable: naturalInputPolicyAvailable
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyAvailable: naturalInputPolicyAvailable,
+            preparedCommand: preparedCommand,
+            willSendCommand: { [completionCheckpointStore, accountLease, productSessionID] command in
+                try completionCheckpointStore.prepareAcknowledgement(
+                    command,
+                    productSessionID: productSessionID,
+                    for: accountLease
+                )
+            }
         )
         useCase.onViewStateChange = { [weak self, weak useCase] viewState in
             DispatchQueue.main.async {
@@ -695,25 +1503,52 @@ private final class EchoLiveMemoryCaptureCoordinator {
         switch viewState.phase {
         case .acknowledged:
             guard admissionUseCase == nil, let receipt = viewState.receipt else { return }
-            let useCase = OwnerTruthInterviewCandidateProposalAdmissionUseCase(
-                accountLease: accountLease,
-                acknowledgementReceipt: receipt,
-                client: client,
-                releasePolicyAvailable: candidateReviewPolicyAvailable
-            )
-            useCase.onViewStateChange = { [weak self, weak useCase] admissionState in
-                DispatchQueue.main.async {
-                    guard let self, useCase === self.admissionUseCase else { return }
-                    self.receiveAdmissionState(admissionState)
-                }
+            do {
+                try completionCheckpointStore.acceptAcknowledgement(
+                    receipt,
+                    productSessionID: productSessionID,
+                    for: accountLease
+                )
+            } catch {
+                state = .statusUnknown
+                return
             }
-            admissionUseCase = useCase
-            useCase.send(.admit)
+            beginAdmission(receipt: receipt, preparedCommand: nil)
         case .unavailable, .failed:
             state = .unavailable
         case .idle, .discovering, .acknowledging:
             break
         }
+    }
+
+    private func beginAdmission(
+        receipt: OwnerTruthInterviewReviewBatchAcknowledgementReceipt,
+        preparedCommand: OwnerTruthInterviewCandidateProposalAdmissionCommand?
+    ) {
+        guard admissionUseCase == nil else { return }
+        let useCase = OwnerTruthInterviewCandidateProposalAdmissionUseCase(
+            accountLease: accountLease,
+            acknowledgementReceipt: receipt,
+            client: client,
+            accountLeaseRuntime: accountLeaseRuntime,
+            releasePolicyAvailable: candidateReviewPolicyAvailable,
+            preparedCommand: preparedCommand,
+            willSendCommand: { [completionCheckpointStore, accountLease, productSessionID] command in
+                try completionCheckpointStore.prepareAdmission(
+                    command,
+                    productSessionID: productSessionID,
+                    for: accountLease
+                )
+            }
+        )
+        useCase.onViewStateChange = { [weak self, weak useCase] admissionState in
+            DispatchQueue.main.async {
+                guard let self, useCase === self.admissionUseCase else { return }
+                self.receiveAdmissionState(admissionState)
+            }
+        }
+        admissionUseCase = useCase
+        useCase.send(.admit)
     }
 
     private func receiveAdmissionState(
@@ -725,7 +1560,17 @@ private final class EchoLiveMemoryCaptureCoordinator {
                 state = .unavailable
                 return
             }
-            beginCandidateReadinessObservation(reviewBatchID: receipt.reviewBatchID)
+            do {
+                try completionCheckpointStore.acceptAdmission(
+                    receipt,
+                    productSessionID: productSessionID,
+                    for: accountLease
+                )
+            } catch {
+                state = .statusUnknown
+                return
+            }
+            persistFollowUpThenBeginObservation(reviewBatchID: receipt.reviewBatchID)
         case .unavailable, .failed:
             state = .unavailable
         case .idle, .admitting:
@@ -733,24 +1578,75 @@ private final class EchoLiveMemoryCaptureCoordinator {
         }
     }
 
+    private func persistFollowUpThenBeginObservation(reviewBatchID: OwnerTruthRecordID) {
+        guard !isClearingCompletedOutbox else { return }
+        isClearingCompletedOutbox = true
+        let accountLease = accountLease
+        let productSessionID = productSessionID
+        let outboxStore = liveTurnOutboxStore
+        let followUpStore = followUpStore
+        let completionCheckpointStore = completionCheckpointStore
+        persistenceQueue.async { [weak self] in
+            let result = Result {
+                try followUpStore.upsert(
+                    productSessionID: productSessionID,
+                    reviewBatchID: reviewBatchID,
+                    for: accountLease
+                )
+                try outboxStore.remove(
+                    for: accountLease,
+                    productSessionID: productSessionID
+                )
+                try completionCheckpointStore.remove(
+                    productSessionID: productSessionID,
+                    for: accountLease
+                )
+            }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isClearingCompletedOutbox = false
+                switch result {
+                case .success:
+                    self.activeReviewBatchID = reviewBatchID
+                    self.beginCandidateReadinessObservation(reviewBatchID: reviewBatchID)
+                case .failure:
+                    // The server admission is already authoritative. Keep the
+                    // outbox and expose an unknown status without re-admitting.
+                    self.activeReviewBatchID = reviewBatchID
+                    self.state = .statusUnknown
+                    self.beginCandidateReadinessObservation(reviewBatchID: reviewBatchID)
+                }
+            }
+        }
+    }
+
     private func beginCandidateReadinessObservation(reviewBatchID: OwnerTruthRecordID) {
+        if let activeReviewBatchID, activeReviewBatchID != reviewBatchID {
+            return
+        }
+        activeReviewBatchID = reviewBatchID
         guard proposalStatusUseCase == nil else { return }
+        observerGeneration &+= 1
+        let generation = observerGeneration
         proposalStatusPollAttempt = 0
         let useCase = OwnerTruthInterviewCandidateProposalStatusUseCase(
             accountLease: accountLease,
             reviewBatchID: reviewBatchID,
             client: client,
+            accountLeaseRuntime: accountLeaseRuntime,
             releasePolicyAvailable: candidateReviewPolicyAvailable
         )
         useCase.onViewStateChange = { [weak self, weak useCase] viewState in
             DispatchQueue.main.async {
                 guard let self,
                       let useCase,
-                      useCase === self.proposalStatusUseCase else { return }
+                      useCase === self.proposalStatusUseCase,
+                      generation == self.observerGeneration else { return }
                 self.receiveCandidateReadinessState(viewState, useCase: useCase)
             }
         }
         proposalStatusUseCase = useCase
+        armOrganizationStatusTimeoutIfNeeded()
         useCase.send(.refresh)
     }
 
@@ -758,7 +1654,7 @@ private final class EchoLiveMemoryCaptureCoordinator {
         _ viewState: OwnerTruthInterviewCandidateProposalStatusViewState,
         useCase: OwnerTruthInterviewCandidateProposalStatusUseCase
     ) {
-        guard state == .organizing else { return }
+        guard state.isAwaitingOrganizationStatus else { return }
         switch viewState.phase {
         case .ready:
             guard let status = viewState.status else {
@@ -767,15 +1663,39 @@ private final class EchoLiveMemoryCaptureCoordinator {
             }
             switch status.candidateReviewState {
             case .reviewReady:
-                state = .pendingReview
+                clearCompletedOutboxThenFinishOrganization(with: .pendingReview)
             case .noCandidates:
-                state = .empty
-            case .extractionFailed, .extractionQuarantined:
-                state = .unavailable
+                clearCompletedOutboxThenFinishOrganization(with: .empty)
+            case .extractionFailed:
+                state = .terminalFailure(code: status.candidateExtractionFailureCode)
+            case .extractionQuarantined:
+                state = .quarantined
             case .notReady:
+                switch status.candidateExtractionJobState {
+                case .pending:
+                    state = organizationStatusTimedOut ? .statusUnknown : .queued
+                case .leased:
+                    state = organizationStatusTimedOut ? .statusUnknown : .organizing
+                case .retryWait:
+                    state = organizationStatusTimedOut
+                        ? .statusUnknown
+                        : .retryWaiting(
+                            attempt: status.candidateExtractionAttempt,
+                            maxAttempts: status.candidateExtractionMaxAttempts
+                        )
+                case .unknown:
+                    state = .statusUnknown
+                case .failed, .cancelled, .blocked:
+                    state = .terminalFailure(code: status.candidateExtractionFailureCode)
+                case .notCreated:
+                    state = .queued
+                case .succeeded:
+                    state = .statusUnknown
+                }
                 scheduleCandidateReadinessPoll(useCase)
             }
         case .failed:
+            state = .statusUnknown
             scheduleCandidateReadinessPoll(useCase)
         case .unavailable:
             state = .unavailable
@@ -784,29 +1704,121 @@ private final class EchoLiveMemoryCaptureCoordinator {
         }
     }
 
+    private func armOrganizationStatusTimeoutIfNeeded() {
+        guard organizationStatusTimeoutWorkItem == nil,
+              organizationStatusTimeout > 0 else { return }
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.state.isAwaitingOrganizationStatus else { return }
+            self.organizationStatusTimedOut = true
+            self.state = .statusUnknown
+            PrivacySafeDiagnostics.log(
+                subsystem: "EchoLiveMemory",
+                event: "organizationStatusTimedOut",
+                states: ["stage": "statusObservation"],
+                counts: ["timeoutSeconds": Int(self.organizationStatusTimeout)]
+            )
+        }
+        organizationStatusTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + organizationStatusTimeout,
+            execute: workItem
+        )
+    }
+
     private func scheduleCandidateReadinessPoll(
         _ useCase: OwnerTruthInterviewCandidateProposalStatusUseCase
     ) {
         proposalStatusPollWorkItem?.cancel()
+        guard !isBackgrounded else { return }
         proposalStatusPollAttempt += 1
-        guard proposalStatusPollAttempt <= Self.maximumProposalStatusPollAttempts else {
-            state = .unavailable
-            return
-        }
         let workItem = DispatchWorkItem { [weak self, weak useCase] in
             guard let self,
                   let useCase,
-                  self.state == .organizing,
+                  self.state.isAwaitingOrganizationStatus,
                   useCase === self.proposalStatusUseCase else {
                 return
             }
             useCase.send(.refresh)
         }
         proposalStatusPollWorkItem = workItem
+        let interval = proposalStatusPollAttempt <= Self.maximumProposalStatusPollAttempts
+            ? Self.proposalStatusPollInterval
+            : 15
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + Self.proposalStatusPollInterval,
+            deadline: .now() + interval,
             execute: workItem
         )
+    }
+
+    private func clearCompletedOutboxThenFinishOrganization(
+        with terminalState: EchoLiveMemoryCaptureState
+    ) {
+        guard !isClearingCompletedOutbox else { return }
+        // Business completion belongs to the server status. Local cleanup is
+        // maintenance and must never regress a confirmed terminal result.
+        state = terminalState
+        isClearingCompletedOutbox = true
+        let accountLease = accountLease
+        let productSessionID = productSessionID
+        let store = liveTurnOutboxStore
+        let followUpStore = followUpStore
+        let completionCheckpointStore = completionCheckpointStore
+        persistenceQueue.async { [weak self] in
+            let result = Result {
+                try store.remove(for: accountLease, productSessionID: productSessionID)
+                try followUpStore.remove(
+                    productSessionID: productSessionID,
+                    for: accountLease
+                )
+                try completionCheckpointStore.remove(
+                    productSessionID: productSessionID,
+                    for: accountLease
+                )
+            }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isClearingCompletedOutbox = false
+                switch result {
+                case .success:
+                    self.cleanupPending = false
+                case .failure:
+                    self.cleanupPending = true
+                    PrivacySafeDiagnostics.log(
+                        subsystem: "EchoLiveMemory",
+                        event: "terminalCleanupDeferred",
+                        states: ["stage": "localCleanup"],
+                        counts: ["cleanupPending": 1]
+                    )
+                }
+            }
+        }
+    }
+
+    private func endedReceiptIdentity(_ receipt: OwnerTruthInterviewNaturalInputReceipt) -> String {
+        [
+            receipt.threadID.rawValue.uuidString.lowercased(),
+            receipt.sessionID.rawValue.uuidString.lowercased(),
+            String(receipt.threadVersion),
+            String(receipt.sessionVersion),
+        ].joined(separator: "|")
+    }
+
+    private func receiveLifecycleEvent(_ event: AppLifecycleEvent) {
+        switch event {
+        case .willResignActive, .didEnterBackground, .didDisconnect:
+            isBackgrounded = true
+            proposalStatusPollWorkItem?.cancel()
+            proposalStatusPollWorkItem = nil
+        case .didBecomeActive, .willEnterForeground:
+            let wasBackgrounded = isBackgrounded
+            isBackgrounded = false
+            guard wasBackgrounded,
+                  state.isAwaitingOrganizationStatus,
+                  let useCase = proposalStatusUseCase else { return }
+            useCase.send(.refresh)
+        case .sceneConnected:
+            break
+        }
     }
 
     private func normalizedTurn(_ text: String) -> String? {
@@ -1038,6 +2050,129 @@ private final class EchoTurnKnowledgeContextGate {
         timeoutWorkItem = nil
         retryWorkItem?.cancel()
         retryWorkItem = nil
+    }
+}
+
+enum EchoLiveMemoryRecoveryBlockReason: String, Equatable {
+    case unclosedLegacySession
+    case closingOutboxMissingCheckpoint
+    case checkpointUnreadable
+    case checkpointDecodeInvalid
+    case checkpointSchemaUnsupported
+    case checkpointScopeMismatch
+}
+
+struct EchoLiveMemoryRecoveryBlockedRecord: Equatable {
+    let productSessionID: String
+    let reason: EchoLiveMemoryRecoveryBlockReason
+}
+
+struct EchoLiveMemoryRecoveryResult {
+    let coordinators: [EchoLiveMemoryCaptureCoordinator]
+    let blockedRecords: [EchoLiveMemoryRecoveryBlockedRecord]
+}
+
+/// The page and tests share this discovery path so crash recovery cannot rely
+/// on a caller already knowing the old product session identifier.
+final class EchoLiveMemoryRecoveryService {
+    func resumePendingWorkflows(
+        accountLease: AccountLease,
+        excluding trackedProductSessionIDs: Set<String>,
+        client: EchoLiveMemoryCaptureClient = DreamJourneyBackendClient.shared,
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        liveTurnOutboxStore: OwnerTruthInterviewLiveTurnOutboxStore = .shared,
+        followUpStore: EchoLiveMemoryFollowUpStore = .shared,
+        completionCheckpointStore: EchoLiveMemoryCompletionCheckpointStore = .shared,
+        organizationStatusTimeout: TimeInterval = 30,
+        naturalInputPolicyAvailable: @escaping () -> Bool,
+        candidateReviewPolicyAvailable: @escaping () -> Bool
+    ) -> EchoLiveMemoryRecoveryResult {
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            return EchoLiveMemoryRecoveryResult(coordinators: [], blockedRecords: [])
+        }
+
+        let checkpoints = completionCheckpointStore.records(for: accountLease)
+        let followUps = followUpStore.records(for: accountLease)
+        let outboxes = liveTurnOutboxStore.snapshots(for: accountLease)
+        let checkpointIDs = Set(checkpoints.map(\.productSessionID))
+        let followUpsByID = Dictionary(uniqueKeysWithValues: followUps.map {
+            ($0.productSessionID, $0)
+        })
+        var discoveredIDs = trackedProductSessionIDs
+        var coordinators: [EchoLiveMemoryCaptureCoordinator] = []
+        var blocked: [EchoLiveMemoryRecoveryBlockedRecord] = []
+
+        for checkpoint in checkpoints where discoveredIDs.insert(checkpoint.productSessionID).inserted {
+            coordinators.append(EchoLiveMemoryCaptureCoordinator(
+                accountLease: accountLease,
+                client: client,
+                accountLeaseRuntime: accountLeaseRuntime,
+                productSessionID: checkpoint.productSessionID,
+                liveTurnOutboxStore: liveTurnOutboxStore,
+                followUpStore: followUpStore,
+                completionCheckpointStore: completionCheckpointStore,
+                organizationStatusTimeout: organizationStatusTimeout,
+                naturalInputPolicyAvailable: naturalInputPolicyAvailable,
+                candidateReviewPolicyAvailable: candidateReviewPolicyAvailable
+            ))
+        }
+
+        for record in followUps
+        where !checkpointIDs.contains(record.productSessionID)
+            && discoveredIDs.insert(record.productSessionID).inserted {
+            let coordinator = EchoLiveMemoryCaptureCoordinator(
+                accountLease: accountLease,
+                client: client,
+                accountLeaseRuntime: accountLeaseRuntime,
+                productSessionID: record.productSessionID,
+                liveTurnOutboxStore: liveTurnOutboxStore,
+                followUpStore: followUpStore,
+                completionCheckpointStore: completionCheckpointStore,
+                organizationStatusTimeout: organizationStatusTimeout,
+                naturalInputPolicyAvailable: naturalInputPolicyAvailable,
+                candidateReviewPolicyAvailable: candidateReviewPolicyAvailable
+            )
+            coordinator.resumeOrganization(reviewBatchID: OwnerTruthRecordID(rawValue: record.reviewBatchID))
+            coordinators.append(coordinator)
+        }
+
+        for snapshot in outboxes
+        where !checkpointIDs.contains(snapshot.productSessionID)
+            && followUpsByID[snapshot.productSessionID] == nil
+            && discoveredIDs.insert(snapshot.productSessionID).inserted {
+            let scan = completionCheckpointStore.scan(
+                productSessionID: snapshot.productSessionID,
+                for: accountLease
+            )
+            let reason: EchoLiveMemoryRecoveryBlockReason
+            switch scan.status {
+            case .valid:
+                // A valid record may have appeared between enumeration and
+                // this per-workflow scan. Leave it for the next bounded pass.
+                continue
+            case .absent:
+                reason = snapshot.isClosing
+                    ? .closingOutboxMissingCheckpoint
+                    : .unclosedLegacySession
+            case .unreadable:
+                reason = .checkpointUnreadable
+            case .decodeInvalid:
+                reason = .checkpointDecodeInvalid
+            case .schemaUnsupported:
+                reason = .checkpointSchemaUnsupported
+            case .scopeMismatch:
+                reason = .checkpointScopeMismatch
+            }
+            blocked.append(EchoLiveMemoryRecoveryBlockedRecord(
+                productSessionID: snapshot.productSessionID,
+                reason: reason
+            ))
+        }
+
+        return EchoLiveMemoryRecoveryResult(
+            coordinators: coordinators,
+            blockedRecords: blocked
+        )
     }
 }
 
@@ -1817,6 +2952,7 @@ final class EchoViewController: UIViewController {
         guard validateEchoAccountLease(at: .request, reason: "viewDidAppear") else {
             return
         }
+        resumePendingLiveMemoryOrganizationsIfNeeded()
         let lifecycleToken = captureDigitalHumanLifecycleToken(reason: "viewDidAppear")
         prepareCloudDigitalHumanRuntimeIfNeeded(lifecycleToken: lifecycleToken)
     }
@@ -8449,9 +9585,9 @@ final class EchoViewController: UIViewController {
         }
     }
 
-    /// Live and typed Echo share the same answer authority. Fire remains the
-    /// realtime ASR/TTS transport, but it no longer generates an independent
-    /// answer before DreamJourney has retrieved the latest formal memory.
+    /// Explicit delegated/one-shot fallback used outside normal provider-owned
+    /// Live. Production Live answers in the native sessionSnapshot session and
+    /// returns before this method from `onASRResult`.
     private func requestLiveEchoAnswer(
         question: String,
         turnID: String,
@@ -9261,6 +10397,13 @@ final class EchoViewController: UIViewController {
                     .allowed
             }
         )
+        retainLiveMemoryCaptureCoordinator(coordinator, asActive: true)
+    }
+
+    private func retainLiveMemoryCaptureCoordinator(
+        _ coordinator: EchoLiveMemoryCaptureCoordinator,
+        asActive: Bool
+    ) {
         let coordinatorID = coordinator.id
         coordinator.onStateChange = { [weak self, weak coordinator] state in
             DispatchQueue.main.async {
@@ -9278,8 +10421,49 @@ final class EchoViewController: UIViewController {
                 }
             }
         }
-        liveMemoryCaptureCoordinator = coordinator
+        if asActive {
+            liveMemoryCaptureCoordinator = coordinator
+        }
         retainedLiveMemoryCaptureCoordinators[coordinatorID] = coordinator
+    }
+
+    private func resumePendingLiveMemoryOrganizationsIfNeeded() {
+        guard let accountLease = echoAccountLease,
+              validateEchoAccountLease(
+                at: .request,
+                expected: accountLease,
+                reason: "resumeLiveMemoryOrganizations"
+              ) else {
+            return
+        }
+        let trackedProductSessionIDs = Set(
+            retainedLiveMemoryCaptureCoordinators.values.map(\.trackedProductSessionID)
+        )
+        let result = EchoLiveMemoryRecoveryService().resumePendingWorkflows(
+            accountLease: accountLease,
+            excluding: trackedProductSessionIDs,
+            naturalInputPolicyAvailable: {
+                FeatureGateService.shared
+                    .requestServerPolicyManagedDecision(for: .echoTextInput)
+                    .allowed
+            },
+            candidateReviewPolicyAvailable: {
+                FeatureGateService.shared
+                    .requestServerPolicyManagedDecision(for: .ownerTruthCandidateReview)
+                    .allowed
+            }
+        )
+        for coordinator in result.coordinators {
+            retainLiveMemoryCaptureCoordinator(coordinator, asActive: false)
+        }
+        for record in result.blockedRecords {
+            PrivacySafeDiagnostics.log(
+                subsystem: "EchoLiveMemory",
+                event: "recoveryBlocked",
+                states: ["reason": record.reason.rawValue],
+                correlations: ["productSession": record.productSessionID]
+            )
+        }
     }
 
     private func captureLiveOwnerTurn(_ text: String) {
@@ -9302,13 +10486,20 @@ final class EchoViewController: UIViewController {
     private func finishTypedEchoConversation() {
         guard isTypedEchoConversationOpen else { return }
         pendingMemoryGapHandoff = nil
+        finishLiveMemoryCaptureIfNeeded()
+        recentEchoConversation.reset()
+        finishTypedEchoInteractionState()
         renderVoiceStatus(
             text: "正在整理本次文字对话",
             isVisible: true,
             accessibilityIdentifier: "echoTypedMemoryOrganizing"
         )
-        finishLiveMemoryCaptureIfNeeded()
-        recentEchoConversation.reset()
+    }
+
+    private func finishTypedEchoInteractionState() {
+        _ = invalidateDigitalHumanInteraction(reason: "typedEchoConversationFinished")
+        activeVoiceInteractionLifecycleToken = nil
+        resetEchoViewModelToIdle()
     }
 
     private func armLiveUserInactivityTimeout(reason: String) {
@@ -9366,11 +10557,29 @@ final class EchoViewController: UIViewController {
         switch state {
         case .live:
             break
+        case .saving:
+            renderVoiceStatus(
+                text: "正在保存本次对话",
+                isVisible: true,
+                accessibilityIdentifier: "echoLiveMemorySaving"
+            )
+        case .queued:
+            renderVoiceStatus(
+                text: "对话已保存，等待整理",
+                isVisible: true,
+                accessibilityIdentifier: "echoLiveMemoryQueued"
+            )
         case .organizing:
             renderVoiceStatus(
                 text: "正在整理本次对话",
                 isVisible: true,
                 accessibilityIdentifier: "echoLiveMemoryOrganizing"
+            )
+        case .retryWaiting(let attempt, let maxAttempts):
+            renderVoiceStatus(
+                text: "整理暂时未完成，正在自动重试（\(attempt)/\(maxAttempts)）",
+                isVisible: true,
+                accessibilityIdentifier: "echoLiveMemoryRetryWaiting"
             )
         case .pendingReview:
             renderVoiceStatus(
@@ -9384,9 +10593,27 @@ final class EchoViewController: UIViewController {
                 isVisible: true,
                 accessibilityIdentifier: "echoLiveMemoryEmpty"
             )
+        case .statusUnknown:
+            renderVoiceStatus(
+                text: "暂时无法确认整理状态，联网后会继续查询",
+                isVisible: true,
+                accessibilityIdentifier: "echoLiveMemoryStatusUnknown"
+            )
+        case .terminalFailure:
+            renderVoiceStatus(
+                text: "本次整理失败，原对话已保留，可稍后重试",
+                isVisible: true,
+                accessibilityIdentifier: "echoLiveMemoryTerminalFailure"
+            )
+        case .quarantined:
+            renderVoiceStatus(
+                text: "本次整理需要人工处理，原对话已安全保留",
+                isVisible: true,
+                accessibilityIdentifier: "echoLiveMemoryQuarantined"
+            )
         case .unavailable:
             renderVoiceStatus(
-                text: "本次对话暂未完成整理，请稍后重试",
+                text: "当前无法继续整理，原对话已保留",
                 isVisible: true,
                 accessibilityIdentifier: "echoLiveMemoryUnavailable"
             )
@@ -10403,14 +11630,7 @@ final class EchoViewController: UIViewController {
         }
 
         let context = DigitalHumanContextStore.shared.current
-        if context.isSelfAssistant,
-           liveProductSessionID == nil {
-            // A crashed/temporarily disconnected Live session must resume the
-            // same product conversation before starting a new one. The lookup
-            // is account/vault/authority scoped and returns no transcript.
-            liveProductSessionID = OwnerTruthInterviewLiveTurnOutboxStore.shared
-                .recoverableProductSessionID(for: accountLease)
-        }
+        resumePendingLiveMemoryOrganizationsIfNeeded()
         let personaScope = context.isSelfAssistant ? "personal" : "family"
         let targetPersonaId = context.isSelfAssistant
             ? accountLease.subjectId
@@ -10475,22 +11695,33 @@ final class EchoViewController: UIViewController {
                         accountLease: accountLease,
                         productSessionID: resolvedProductSessionID
                     )
+                    let groundingPlan = DialogLiveGroundingPlan.sessionSnapshot
                     DialogEngineManager.shared.startDialog(
                         sendsGreeting: true,
-                        usesTurnScopedKnowledgeContext: false,
-                        lifetimePolicy: .userControlledLive,
-                        answerAuthority: .provider
+                        usesTurnScopedKnowledgeContext: groundingPlan.usesTurnScopedKnowledgeContext,
+                        lifetimePolicy: groundingPlan.lifetimePolicy,
+                        answerAuthority: groundingPlan.answerAuthority
                     )
                 } else {
                     self.backendRuntimeTokenApplied = false
                     self.renderVoiceSDKReadinessPreviewIfNeeded()
                     self.handleBlockedRealtimeVoice(reason: "providerCredentialBlocked")
                 }
-            case .failure:
+            case .failure(let error):
+                let diagnostic = EchoRealtimeVoiceRuntimeFailureDiagnostic(error: error)
+                var counts: [String: Int] = [:]
+                if let httpStatus = diagnostic.httpStatus {
+                    counts["httpStatus"] = httpStatus
+                }
                 PrivacySafeDiagnostics.log(
                     subsystem: "Echo",
                     event: "voiceRuntimeConfigUnavailable",
-                    states: ["reason": "backendFailure"]
+                    states: [
+                        "reason": "backendFailure",
+                        "stage": diagnostic.stage,
+                        "businessCode": diagnostic.businessCode,
+                    ],
+                    counts: counts
                 )
                 self.backendRuntimeTokenApplied = false
                 self.renderVoiceSDKReadinessPreviewIfNeeded()
@@ -10823,8 +12054,11 @@ extension EchoViewController: DialogEngineDelegate {
             // turn, but the complete Live conversation must still enter the
             // V4 interview and pending-memory pipeline.
             self.captureLiveOwnerTurn(text)
-            if DialogEngineManager.shared.answerAuthority == .provider,
-               self.isUserControlledLiveSessionOpen {
+            if !DialogLiveAnswerDispatchPolicy.shouldRequestBackendAnswer(
+                isUserControlledLiveSessionOpen: self.isUserControlledLiveSessionOpen,
+                lifetimePolicy: DialogEngineManager.shared.sessionLifetimePolicy,
+                answerAuthority: DialogEngineManager.shared.answerAuthority
+            ) {
                 PrivacySafeDiagnostics.log(
                     subsystem: "Echo",
                     event: "providerOwnedLiveTurnAccepted",
@@ -12352,6 +13586,38 @@ extension EchoViewController {
             }
         }
 
+        func runTypedFinishCycles(
+            remaining: Int,
+            completedCount: Int,
+            allMicButtonsEnabled: Bool,
+            completion: @escaping (_ completedCount: Int, _ allMicButtonsEnabled: Bool) -> Void
+        ) {
+            guard remaining > 0 else {
+                completion(completedCount, allMicButtonsEnabled)
+                return
+            }
+            runTurn(
+                userText: "UIQA 文字会话结束状态测试。",
+                replyText: "这是一条不会发送给服务端的 UIQA 回答。"
+            ) { [weak self] turnCompleted in
+                guard let self else {
+                    completion(completedCount, false)
+                    return
+                }
+                self.finishTypedEchoInteractionState()
+                DispatchQueue.main.async {
+                    let resetToIdle = stateName() == "idle"
+                    let micEnabled = self.micButton.isEnabled
+                    runTypedFinishCycles(
+                        remaining: remaining - 1,
+                        completedCount: completedCount + (turnCompleted && resetToIdle ? 1 : 0),
+                        allMicButtonsEnabled: allMicButtonsEnabled && micEnabled,
+                        completion: completion
+                    )
+                }
+            }
+        }
+
         DispatchQueue.main.async { [weak self] in
             guard let self else {
                 completion([
@@ -12399,67 +13665,83 @@ extension EchoViewController {
                         }
 
                         let stoppedToIdle = stateName() == "idle"
-                        let transcriptCountBeforeStaleReply = self.transcriptEntries.count
-                        self.viewModel.receiveAIReply("这是一条停止后的旧回信，不应显示。")
-
-                        DispatchQueue.main.async { [weak self] in
+                        runTypedFinishCycles(
+                            remaining: 10,
+                            completedCount: 0,
+                            allMicButtonsEnabled: true
+                        ) { [weak self] typedFinishCycleCount, micEnabledAfterTypedFinish in
                             guard let self,
                                   let tabBarController = self.tabBarController,
                                   (tabBarController.viewControllers?.count ?? 0) > 1 else {
                                 completion([
                                     "completed": false,
-                                    "failureReason": "missingRootTabAfterStop",
+                                    "failureReason": "missingRootTabAfterTypedFinishCycles",
                                 ])
                                 return
                             }
-
-                            let staleReplyRejected = stateName() == "idle"
-                                && self.transcriptEntries.count == transcriptCountBeforeStaleReply
-                            let transcriptCountBeforeLeave = self.transcriptEntries.count
-                            tabBarController.selectedIndex = 0
+                            let transcriptCountBeforeStaleReply = self.transcriptEntries.count
+                            self.viewModel.receiveAIReply("这是一条结束后的旧回信，不应显示。")
 
                             DispatchQueue.main.async { [weak self] in
                                 guard let self else {
                                     completion([
                                         "completed": false,
-                                        "failureReason": "controllerReleasedAfterLeave",
+                                        "failureReason": "controllerReleasedAfterTypedFinish",
                                     ])
                                     return
                                 }
-                                let leftEchoTab = tabBarController.selectedIndex == 0
-                                tabBarController.selectedIndex = 1
+                                let staleReplyRejected = stateName() == "idle"
+                                    && self.transcriptEntries.count == transcriptCountBeforeStaleReply
+                                let transcriptCountBeforeLeave = self.transcriptEntries.count
+                                tabBarController.selectedIndex = 0
 
                                 DispatchQueue.main.async { [weak self] in
                                     guard let self else {
                                         completion([
                                             "completed": false,
-                                            "failureReason": "controllerReleasedAfterReentry",
+                                            "failureReason": "controllerReleasedAfterLeave",
                                         ])
                                         return
                                     }
-                                    let reenteredEchoTab = tabBarController.selectedIndex == 1
-                                        && self.view.window != nil
-                                        && stateName() == "idle"
-                                    completion([
-                                        "completed": firstTurnCompleted
-                                            && secondTurnCompleted
-                                            && stoppedToIdle
-                                            && staleReplyRejected
-                                            && leftEchoTab
-                                            && reenteredEchoTab
-                                            && transcriptCountBeforeLeave == 4,
-                                        "firstTurnCompleted": firstTurnCompleted,
-                                        "secondTurnCompleted": secondTurnCompleted,
-                                        "stoppedToIdle": stoppedToIdle,
-                                        "staleReplyRejected": staleReplyRejected,
-                                        "leftEchoTab": leftEchoTab,
-                                        "reenteredEchoTab": reenteredEchoTab,
-                                        "finalState": stateName(),
-                                        "transcriptEntryCountBeforeLeave": transcriptCountBeforeLeave,
-                                        "transcriptEntryCount": self.transcriptEntries.count,
-                                        "digitalHumanPanelVisible": self.digitalHumanLivePanelView != nil,
-                                        "audioOwner": self.currentEchoAudioOwner.rawValue,
-                                    ])
+                                    let leftEchoTab = tabBarController.selectedIndex == 0
+                                    tabBarController.selectedIndex = 1
+
+                                    DispatchQueue.main.async { [weak self] in
+                                        guard let self else {
+                                            completion([
+                                                "completed": false,
+                                                "failureReason": "controllerReleasedAfterReentry",
+                                            ])
+                                            return
+                                        }
+                                        let reenteredEchoTab = tabBarController.selectedIndex == 1
+                                            && self.view.window != nil
+                                            && stateName() == "idle"
+                                        completion([
+                                            "completed": firstTurnCompleted
+                                                && secondTurnCompleted
+                                                && stoppedToIdle
+                                                && typedFinishCycleCount == 10
+                                                && micEnabledAfterTypedFinish
+                                                && staleReplyRejected
+                                                && leftEchoTab
+                                                && reenteredEchoTab
+                                                && transcriptCountBeforeLeave == 4,
+                                            "firstTurnCompleted": firstTurnCompleted,
+                                            "secondTurnCompleted": secondTurnCompleted,
+                                            "stoppedToIdle": stoppedToIdle,
+                                            "typedFinishCycleCount": typedFinishCycleCount,
+                                            "micEnabledAfterTypedFinish": micEnabledAfterTypedFinish,
+                                            "staleReplyRejected": staleReplyRejected,
+                                            "leftEchoTab": leftEchoTab,
+                                            "reenteredEchoTab": reenteredEchoTab,
+                                            "finalState": stateName(),
+                                            "transcriptEntryCountBeforeLeave": transcriptCountBeforeLeave,
+                                            "transcriptEntryCount": self.transcriptEntries.count,
+                                            "digitalHumanPanelVisible": self.digitalHumanLivePanelView != nil,
+                                            "audioOwner": self.currentEchoAudioOwner.rawValue,
+                                        ])
+                                    }
                                 }
                             }
                         }

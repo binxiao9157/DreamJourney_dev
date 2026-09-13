@@ -1,0 +1,1648 @@
+[
+  {
+    "case": "confidenceOnly",
+    "operation": {
+      "addedEvidenceCount": 1,
+      "anticipatedActivation": "revise",
+      "candidateAssertionKey": [
+        "person-owner",
+        "preference",
+        "prefers",
+        "东坡肉"
+      ],
+      "candidateId": "00000000-0000-0000-0000-0000000003ed",
+      "changedFields": [
+        "content",
+        "evidenceRefs"
+      ],
+      "factDiff": {
+        "after": {
+          "affect": null,
+          "claimSubjectId": "person-owner",
+          "dimensions": [
+            "knowledgeSkills",
+            "preferences",
+            "habits"
+          ],
+          "domains": [
+            "饮食"
+          ],
+          "facets": {
+            "confidence": 0.0,
+            "emotions": [],
+            "goals": [],
+            "habits": [
+              {
+                "confidence": 0.724,
+                "evidenceMode": "inferred",
+                "value": "喜欢清淡饮食"
+              }
+            ],
+            "identity": [],
+            "people": [],
+            "personality": [],
+            "places": [],
+            "reflections": [],
+            "relationships": [],
+            "time": [],
+            "values": []
+          },
+          "factType": "preference",
+          "knowledgeType": "personal_preference",
+          "memorySubjectId": "person-owner",
+          "object": {
+            "category": "dish",
+            "entityId": null,
+            "label": "东坡肉"
+          },
+          "predicate": "prefers",
+          "provenance": {
+            "contributorAccountId": null,
+            "evidenceRefs": [],
+            "mode": "selfReport",
+            "speakerPersonId": null
+          },
+          "qualifiers": {
+            "currentApplicability": "historical",
+            "place": null,
+            "polarity": "positive",
+            "scenario": null,
+            "strengthExpression": null,
+            "superlativeAsserted": false,
+            "validTime": {
+              "end": null,
+              "expression": "2016年",
+              "precision": "year",
+              "start": null
+            }
+          },
+          "semantic": {
+            "emotionEvidence": [],
+            "entities": [],
+            "eventTime": null,
+            "facets": [
+              "knowledge",
+              "habit"
+            ],
+            "narrative": "我在杭州时喜欢吃东坡肉",
+            "primaryKind": "knowledge",
+            "title": "我在杭州时喜欢吃东坡肉"
+          },
+          "statement": "我在杭州时喜欢吃东坡肉"
+        },
+        "before": {
+          "affect": null,
+          "claimSubjectId": "person-owner",
+          "dimensions": [
+            "knowledgeSkills",
+            "preferences",
+            "habits"
+          ],
+          "domains": [
+            "饮食"
+          ],
+          "facets": {
+            "confidence": 0.0,
+            "emotions": [],
+            "goals": [],
+            "habits": [
+              {
+                "confidence": 0.721,
+                "evidenceMode": "inferred",
+                "value": "喜欢清淡饮食"
+              }
+            ],
+            "identity": [],
+            "people": [],
+            "personality": [],
+            "places": [],
+            "reflections": [],
+            "relationships": [],
+            "time": [],
+            "values": []
+          },
+          "factType": "preference",
+          "knowledgeType": "personal_preference",
+          "memorySubjectId": "person-owner",
+          "object": {
+            "category": "dish",
+            "entityId": null,
+            "label": "东坡肉"
+          },
+          "predicate": "prefers",
+          "provenance": {
+            "contributorAccountId": null,
+            "evidenceRefs": [],
+            "mode": "selfReport",
+            "speakerPersonId": null
+          },
+          "qualifiers": {
+            "currentApplicability": "historical",
+            "place": null,
+            "polarity": "positive",
+            "scenario": null,
+            "strengthExpression": null,
+            "superlativeAsserted": false,
+            "validTime": {
+              "end": null,
+              "expression": "2016年",
+              "precision": "year",
+              "start": null
+            }
+          },
+          "semantic": {
+            "emotionEvidence": [],
+            "entities": [],
+            "eventTime": null,
+            "facets": [
+              "knowledge",
+              "habit"
+            ],
+            "narrative": "我在杭州时喜欢吃东坡肉",
+            "primaryKind": "knowledge",
+            "title": "我在杭州时喜欢吃东坡肉"
+          },
+          "statement": "我在杭州时喜欢吃东坡肉"
+        },
+        "candidate": {
+          "affect": null,
+          "claimSubjectId": "person-owner",
+          "dimensions": [
+            "knowledgeSkills",
+            "preferences",
+            "habits"
+          ],
+          "domains": [
+            "饮食"
+          ],
+          "facets": {
+            "confidence": 0.0,
+            "emotions": [],
+            "goals": [],
+            "habits": [
+              {
+                "confidence": 0.724,
+                "evidenceMode": "inferred",
+                "value": "喜欢清淡饮食"
+              }
+            ],
+            "identity": [],
+            "people": [],
+            "personality": [],
+            "places": [],
+            "reflections": [],
+            "relationships": [],
+            "time": [],
+            "values": []
+          },
+          "factType": "preference",
+          "knowledgeType": "personal_preference",
+          "memorySubjectId": "person-owner",
+          "object": {
+            "category": "dish",
+            "entityId": null,
+            "label": "东坡肉"
+          },
+          "predicate": "prefers",
+          "provenance": {
+            "contributorAccountId": null,
+            "evidenceRefs": [],
+            "mode": "selfReport",
+            "speakerPersonId": null
+          },
+          "qualifiers": {
+            "currentApplicability": "historical",
+            "place": null,
+            "polarity": "positive",
+            "scenario": null,
+            "strengthExpression": null,
+            "superlativeAsserted": false,
+            "validTime": {
+              "end": null,
+              "expression": "2016年",
+              "precision": "year",
+              "start": null
+            }
+          },
+          "semantic": {
+            "emotionEvidence": [],
+            "entities": [],
+            "eventTime": null,
+            "facets": [
+              "knowledge",
+              "habit"
+            ],
+            "narrative": "我在杭州时喜欢吃东坡肉",
+            "primaryKind": "knowledge",
+            "title": "我在杭州时喜欢吃东坡肉"
+          },
+          "statement": "我在杭州时喜欢吃东坡肉"
+        },
+        "changedFields": [
+          {
+            "after": {
+              "affect": null,
+              "claimSubjectId": "person-owner",
+              "dimensions": [
+                "knowledgeSkills",
+                "preferences",
+                "habits"
+              ],
+              "domains": [
+                "饮食"
+              ],
+              "facets": {
+                "confidence": 0.0,
+                "emotions": [],
+                "goals": [],
+                "habits": [
+                  {
+                    "confidence": 0.724,
+                    "evidenceMode": "inferred",
+                    "value": "喜欢清淡饮食"
+                  }
+                ],
+                "identity": [],
+                "people": [],
+                "personality": [],
+                "places": [],
+                "reflections": [],
+                "relationships": [],
+                "time": [],
+                "values": []
+              },
+              "factType": "preference",
+              "knowledgeType": "personal_preference",
+              "memorySubjectId": "person-owner",
+              "object": {
+                "category": "dish",
+                "entityId": null,
+                "label": "东坡肉"
+              },
+              "predicate": "prefers",
+              "provenance": {
+                "contributorAccountId": null,
+                "evidenceRefs": [],
+                "mode": "selfReport",
+                "speakerPersonId": null
+              },
+              "qualifiers": {
+                "currentApplicability": "historical",
+                "place": null,
+                "polarity": "positive",
+                "scenario": null,
+                "strengthExpression": null,
+                "superlativeAsserted": false,
+                "validTime": {
+                  "end": null,
+                  "expression": "2016年",
+                  "precision": "year",
+                  "start": null
+                }
+              },
+              "semantic": {
+                "emotionEvidence": [],
+                "entities": [],
+                "eventTime": null,
+                "facets": [
+                  "knowledge",
+                  "habit"
+                ],
+                "narrative": "我在杭州时喜欢吃东坡肉",
+                "primaryKind": "knowledge",
+                "title": "我在杭州时喜欢吃东坡肉"
+              },
+              "statement": "我在杭州时喜欢吃东坡肉"
+            },
+            "before": {
+              "affect": null,
+              "claimSubjectId": "person-owner",
+              "dimensions": [
+                "knowledgeSkills",
+                "preferences",
+                "habits"
+              ],
+              "domains": [
+                "饮食"
+              ],
+              "facets": {
+                "confidence": 0.0,
+                "emotions": [],
+                "goals": [],
+                "habits": [
+                  {
+                    "confidence": 0.721,
+                    "evidenceMode": "inferred",
+                    "value": "喜欢清淡饮食"
+                  }
+                ],
+                "identity": [],
+                "people": [],
+                "personality": [],
+                "places": [],
+                "reflections": [],
+                "relationships": [],
+                "time": [],
+                "values": []
+              },
+              "factType": "preference",
+              "knowledgeType": "personal_preference",
+              "memorySubjectId": "person-owner",
+              "object": {
+                "category": "dish",
+                "entityId": null,
+                "label": "东坡肉"
+              },
+              "predicate": "prefers",
+              "provenance": {
+                "contributorAccountId": null,
+                "evidenceRefs": [],
+                "mode": "selfReport",
+                "speakerPersonId": null
+              },
+              "qualifiers": {
+                "currentApplicability": "historical",
+                "place": null,
+                "polarity": "positive",
+                "scenario": null,
+                "strengthExpression": null,
+                "superlativeAsserted": false,
+                "validTime": {
+                  "end": null,
+                  "expression": "2016年",
+                  "precision": "year",
+                  "start": null
+                }
+              },
+              "semantic": {
+                "emotionEvidence": [],
+                "entities": [],
+                "eventTime": null,
+                "facets": [
+                  "knowledge",
+                  "habit"
+                ],
+                "narrative": "我在杭州时喜欢吃东坡肉",
+                "primaryKind": "knowledge",
+                "title": "我在杭州时喜欢吃东坡肉"
+              },
+              "statement": "我在杭州时喜欢吃东坡肉"
+            },
+            "path": "content"
+          }
+        ],
+        "evidence": {
+          "addedCount": 1,
+          "afterCount": 2,
+          "beforeCount": 1,
+          "candidateCount": 1
+        }
+      },
+      "operationIndex": 0,
+      "operationKind": "correct",
+      "reason": "explicitCorrectionTarget",
+      "targetMemoryId": "00000000-0000-0000-0000-0000000003ea",
+      "targetMemoryVersion": 3,
+      "targetMemoryVersionId": "00000000-0000-0000-0000-0000000003eb"
+    },
+    "proposal": {
+      "baseMemoryRevision": 4,
+      "candidateContentHash": "bb5821d9ba3288c74a0d2e9544b1ece930037503f51428ab6f6cd377902bce40",
+      "candidateVersion": 1,
+      "changeSetId": "f70282cc-8b3a-5c49-afbe-ab92e68b9d03",
+      "dependencies": [],
+      "operations": [
+        {
+          "addedEvidenceCount": 1,
+          "anticipatedActivation": "revise",
+          "candidateAssertionKey": [
+            "person-owner",
+            "preference",
+            "prefers",
+            "东坡肉"
+          ],
+          "candidateId": "00000000-0000-0000-0000-0000000003ed",
+          "changedFields": [
+            "content",
+            "evidenceRefs"
+          ],
+          "factDiff": {
+            "after": {
+              "affect": null,
+              "claimSubjectId": "person-owner",
+              "dimensions": [
+                "knowledgeSkills",
+                "preferences",
+                "habits"
+              ],
+              "domains": [
+                "饮食"
+              ],
+              "facets": {
+                "confidence": 0.0,
+                "emotions": [],
+                "goals": [],
+                "habits": [
+                  {
+                    "confidence": 0.724,
+                    "evidenceMode": "inferred",
+                    "value": "喜欢清淡饮食"
+                  }
+                ],
+                "identity": [],
+                "people": [],
+                "personality": [],
+                "places": [],
+                "reflections": [],
+                "relationships": [],
+                "time": [],
+                "values": []
+              },
+              "factType": "preference",
+              "knowledgeType": "personal_preference",
+              "memorySubjectId": "person-owner",
+              "object": {
+                "category": "dish",
+                "entityId": null,
+                "label": "东坡肉"
+              },
+              "predicate": "prefers",
+              "provenance": {
+                "contributorAccountId": null,
+                "evidenceRefs": [],
+                "mode": "selfReport",
+                "speakerPersonId": null
+              },
+              "qualifiers": {
+                "currentApplicability": "historical",
+                "place": null,
+                "polarity": "positive",
+                "scenario": null,
+                "strengthExpression": null,
+                "superlativeAsserted": false,
+                "validTime": {
+                  "end": null,
+                  "expression": "2016年",
+                  "precision": "year",
+                  "start": null
+                }
+              },
+              "semantic": {
+                "emotionEvidence": [],
+                "entities": [],
+                "eventTime": null,
+                "facets": [
+                  "knowledge",
+                  "habit"
+                ],
+                "narrative": "我在杭州时喜欢吃东坡肉",
+                "primaryKind": "knowledge",
+                "title": "我在杭州时喜欢吃东坡肉"
+              },
+              "statement": "我在杭州时喜欢吃东坡肉"
+            },
+            "before": {
+              "affect": null,
+              "claimSubjectId": "person-owner",
+              "dimensions": [
+                "knowledgeSkills",
+                "preferences",
+                "habits"
+              ],
+              "domains": [
+                "饮食"
+              ],
+              "facets": {
+                "confidence": 0.0,
+                "emotions": [],
+                "goals": [],
+                "habits": [
+                  {
+                    "confidence": 0.721,
+                    "evidenceMode": "inferred",
+                    "value": "喜欢清淡饮食"
+                  }
+                ],
+                "identity": [],
+                "people": [],
+                "personality": [],
+                "places": [],
+                "reflections": [],
+                "relationships": [],
+                "time": [],
+                "values": []
+              },
+              "factType": "preference",
+              "knowledgeType": "personal_preference",
+              "memorySubjectId": "person-owner",
+              "object": {
+                "category": "dish",
+                "entityId": null,
+                "label": "东坡肉"
+              },
+              "predicate": "prefers",
+              "provenance": {
+                "contributorAccountId": null,
+                "evidenceRefs": [],
+                "mode": "selfReport",
+                "speakerPersonId": null
+              },
+              "qualifiers": {
+                "currentApplicability": "historical",
+                "place": null,
+                "polarity": "positive",
+                "scenario": null,
+                "strengthExpression": null,
+                "superlativeAsserted": false,
+                "validTime": {
+                  "end": null,
+                  "expression": "2016年",
+                  "precision": "year",
+                  "start": null
+                }
+              },
+              "semantic": {
+                "emotionEvidence": [],
+                "entities": [],
+                "eventTime": null,
+                "facets": [
+                  "knowledge",
+                  "habit"
+                ],
+                "narrative": "我在杭州时喜欢吃东坡肉",
+                "primaryKind": "knowledge",
+                "title": "我在杭州时喜欢吃东坡肉"
+              },
+              "statement": "我在杭州时喜欢吃东坡肉"
+            },
+            "candidate": {
+              "affect": null,
+              "claimSubjectId": "person-owner",
+              "dimensions": [
+                "knowledgeSkills",
+                "preferences",
+                "habits"
+              ],
+              "domains": [
+                "饮食"
+              ],
+              "facets": {
+                "confidence": 0.0,
+                "emotions": [],
+                "goals": [],
+                "habits": [
+                  {
+                    "confidence": 0.724,
+                    "evidenceMode": "inferred",
+                    "value": "喜欢清淡饮食"
+                  }
+                ],
+                "identity": [],
+                "people": [],
+                "personality": [],
+                "places": [],
+                "reflections": [],
+                "relationships": [],
+                "time": [],
+                "values": []
+              },
+              "factType": "preference",
+              "knowledgeType": "personal_preference",
+              "memorySubjectId": "person-owner",
+              "object": {
+                "category": "dish",
+                "entityId": null,
+                "label": "东坡肉"
+              },
+              "predicate": "prefers",
+              "provenance": {
+                "contributorAccountId": null,
+                "evidenceRefs": [],
+                "mode": "selfReport",
+                "speakerPersonId": null
+              },
+              "qualifiers": {
+                "currentApplicability": "historical",
+                "place": null,
+                "polarity": "positive",
+                "scenario": null,
+                "strengthExpression": null,
+                "superlativeAsserted": false,
+                "validTime": {
+                  "end": null,
+                  "expression": "2016年",
+                  "precision": "year",
+                  "start": null
+                }
+              },
+              "semantic": {
+                "emotionEvidence": [],
+                "entities": [],
+                "eventTime": null,
+                "facets": [
+                  "knowledge",
+                  "habit"
+                ],
+                "narrative": "我在杭州时喜欢吃东坡肉",
+                "primaryKind": "knowledge",
+                "title": "我在杭州时喜欢吃东坡肉"
+              },
+              "statement": "我在杭州时喜欢吃东坡肉"
+            },
+            "changedFields": [
+              {
+                "after": {
+                  "affect": null,
+                  "claimSubjectId": "person-owner",
+                  "dimensions": [
+                    "knowledgeSkills",
+                    "preferences",
+                    "habits"
+                  ],
+                  "domains": [
+                    "饮食"
+                  ],
+                  "facets": {
+                    "confidence": 0.0,
+                    "emotions": [],
+                    "goals": [],
+                    "habits": [
+                      {
+                        "confidence": 0.724,
+                        "evidenceMode": "inferred",
+                        "value": "喜欢清淡饮食"
+                      }
+                    ],
+                    "identity": [],
+                    "people": [],
+                    "personality": [],
+                    "places": [],
+                    "reflections": [],
+                    "relationships": [],
+                    "time": [],
+                    "values": []
+                  },
+                  "factType": "preference",
+                  "knowledgeType": "personal_preference",
+                  "memorySubjectId": "person-owner",
+                  "object": {
+                    "category": "dish",
+                    "entityId": null,
+                    "label": "东坡肉"
+                  },
+                  "predicate": "prefers",
+                  "provenance": {
+                    "contributorAccountId": null,
+                    "evidenceRefs": [],
+                    "mode": "selfReport",
+                    "speakerPersonId": null
+                  },
+                  "qualifiers": {
+                    "currentApplicability": "historical",
+                    "place": null,
+                    "polarity": "positive",
+                    "scenario": null,
+                    "strengthExpression": null,
+                    "superlativeAsserted": false,
+                    "validTime": {
+                      "end": null,
+                      "expression": "2016年",
+                      "precision": "year",
+                      "start": null
+                    }
+                  },
+                  "semantic": {
+                    "emotionEvidence": [],
+                    "entities": [],
+                    "eventTime": null,
+                    "facets": [
+                      "knowledge",
+                      "habit"
+                    ],
+                    "narrative": "我在杭州时喜欢吃东坡肉",
+                    "primaryKind": "knowledge",
+                    "title": "我在杭州时喜欢吃东坡肉"
+                  },
+                  "statement": "我在杭州时喜欢吃东坡肉"
+                },
+                "before": {
+                  "affect": null,
+                  "claimSubjectId": "person-owner",
+                  "dimensions": [
+                    "knowledgeSkills",
+                    "preferences",
+                    "habits"
+                  ],
+                  "domains": [
+                    "饮食"
+                  ],
+                  "facets": {
+                    "confidence": 0.0,
+                    "emotions": [],
+                    "goals": [],
+                    "habits": [
+                      {
+                        "confidence": 0.721,
+                        "evidenceMode": "inferred",
+                        "value": "喜欢清淡饮食"
+                      }
+                    ],
+                    "identity": [],
+                    "people": [],
+                    "personality": [],
+                    "places": [],
+                    "reflections": [],
+                    "relationships": [],
+                    "time": [],
+                    "values": []
+                  },
+                  "factType": "preference",
+                  "knowledgeType": "personal_preference",
+                  "memorySubjectId": "person-owner",
+                  "object": {
+                    "category": "dish",
+                    "entityId": null,
+                    "label": "东坡肉"
+                  },
+                  "predicate": "prefers",
+                  "provenance": {
+                    "contributorAccountId": null,
+                    "evidenceRefs": [],
+                    "mode": "selfReport",
+                    "speakerPersonId": null
+                  },
+                  "qualifiers": {
+                    "currentApplicability": "historical",
+                    "place": null,
+                    "polarity": "positive",
+                    "scenario": null,
+                    "strengthExpression": null,
+                    "superlativeAsserted": false,
+                    "validTime": {
+                      "end": null,
+                      "expression": "2016年",
+                      "precision": "year",
+                      "start": null
+                    }
+                  },
+                  "semantic": {
+                    "emotionEvidence": [],
+                    "entities": [],
+                    "eventTime": null,
+                    "facets": [
+                      "knowledge",
+                      "habit"
+                    ],
+                    "narrative": "我在杭州时喜欢吃东坡肉",
+                    "primaryKind": "knowledge",
+                    "title": "我在杭州时喜欢吃东坡肉"
+                  },
+                  "statement": "我在杭州时喜欢吃东坡肉"
+                },
+                "path": "content"
+              }
+            ],
+            "evidence": {
+              "addedCount": 1,
+              "afterCount": 2,
+              "beforeCount": 1,
+              "candidateCount": 1
+            }
+          },
+          "operationIndex": 0,
+          "operationKind": "correct",
+          "reason": "explicitCorrectionTarget",
+          "targetMemoryId": "00000000-0000-0000-0000-0000000003ea",
+          "targetMemoryVersion": 3,
+          "targetMemoryVersionId": "00000000-0000-0000-0000-0000000003eb"
+        }
+      ],
+      "proposalHash": "5bb99419d470bff1c42947c92d52bfc0d238b238859d8b17a5d527a85675df51",
+      "proposalId": "1760d5ab-985b-5013-b6a2-d52300fde3f7",
+      "schemaVersion": "owner-truth-memory-changeset-proposal-v1"
+    }
+  },
+  {
+    "case": "timePlusConfidence",
+    "operation": {
+      "addedEvidenceCount": 1,
+      "anticipatedActivation": "revise",
+      "candidateAssertionKey": [
+        "person-owner",
+        "preference",
+        "prefers",
+        "东坡肉"
+      ],
+      "candidateId": "00000000-0000-0000-0000-0000000003f2",
+      "changedFields": [
+        "content",
+        "evidenceRefs"
+      ],
+      "factDiff": {
+        "after": {
+          "affect": null,
+          "claimSubjectId": "person-owner",
+          "dimensions": [
+            "knowledgeSkills",
+            "preferences",
+            "habits"
+          ],
+          "domains": [
+            "饮食"
+          ],
+          "facets": {
+            "confidence": 0.0,
+            "emotions": [],
+            "goals": [],
+            "habits": [
+              {
+                "confidence": 0.724,
+                "evidenceMode": "inferred",
+                "value": "喜欢清淡饮食"
+              }
+            ],
+            "identity": [],
+            "people": [],
+            "personality": [],
+            "places": [],
+            "reflections": [],
+            "relationships": [],
+            "time": [],
+            "values": []
+          },
+          "factType": "preference",
+          "knowledgeType": "personal_preference",
+          "memorySubjectId": "person-owner",
+          "object": {
+            "category": "dish",
+            "entityId": null,
+            "label": "东坡肉"
+          },
+          "predicate": "prefers",
+          "provenance": {
+            "contributorAccountId": null,
+            "evidenceRefs": [],
+            "mode": "selfReport",
+            "speakerPersonId": null
+          },
+          "qualifiers": {
+            "currentApplicability": "historical",
+            "place": null,
+            "polarity": "positive",
+            "scenario": null,
+            "strengthExpression": null,
+            "superlativeAsserted": false,
+            "validTime": {
+              "end": null,
+              "expression": "2018年",
+              "precision": "year",
+              "start": null
+            }
+          },
+          "semantic": {
+            "emotionEvidence": [],
+            "entities": [],
+            "eventTime": null,
+            "facets": [
+              "knowledge",
+              "habit"
+            ],
+            "narrative": "我在杭州时喜欢吃东坡肉",
+            "primaryKind": "knowledge",
+            "title": "我在杭州时喜欢吃东坡肉"
+          },
+          "statement": "我在杭州时喜欢吃东坡肉"
+        },
+        "before": {
+          "affect": null,
+          "claimSubjectId": "person-owner",
+          "dimensions": [
+            "knowledgeSkills",
+            "preferences",
+            "habits"
+          ],
+          "domains": [
+            "饮食"
+          ],
+          "facets": {
+            "confidence": 0.0,
+            "emotions": [],
+            "goals": [],
+            "habits": [
+              {
+                "confidence": 0.721,
+                "evidenceMode": "inferred",
+                "value": "喜欢清淡饮食"
+              }
+            ],
+            "identity": [],
+            "people": [],
+            "personality": [],
+            "places": [],
+            "reflections": [],
+            "relationships": [],
+            "time": [],
+            "values": []
+          },
+          "factType": "preference",
+          "knowledgeType": "personal_preference",
+          "memorySubjectId": "person-owner",
+          "object": {
+            "category": "dish",
+            "entityId": null,
+            "label": "东坡肉"
+          },
+          "predicate": "prefers",
+          "provenance": {
+            "contributorAccountId": null,
+            "evidenceRefs": [],
+            "mode": "selfReport",
+            "speakerPersonId": null
+          },
+          "qualifiers": {
+            "currentApplicability": "historical",
+            "place": null,
+            "polarity": "positive",
+            "scenario": null,
+            "strengthExpression": null,
+            "superlativeAsserted": false,
+            "validTime": {
+              "end": null,
+              "expression": "2016年",
+              "precision": "year",
+              "start": null
+            }
+          },
+          "semantic": {
+            "emotionEvidence": [],
+            "entities": [],
+            "eventTime": null,
+            "facets": [
+              "knowledge",
+              "habit"
+            ],
+            "narrative": "我在杭州时喜欢吃东坡肉",
+            "primaryKind": "knowledge",
+            "title": "我在杭州时喜欢吃东坡肉"
+          },
+          "statement": "我在杭州时喜欢吃东坡肉"
+        },
+        "candidate": {
+          "affect": null,
+          "claimSubjectId": "person-owner",
+          "dimensions": [
+            "knowledgeSkills",
+            "preferences",
+            "habits"
+          ],
+          "domains": [
+            "饮食"
+          ],
+          "facets": {
+            "confidence": 0.0,
+            "emotions": [],
+            "goals": [],
+            "habits": [
+              {
+                "confidence": 0.724,
+                "evidenceMode": "inferred",
+                "value": "喜欢清淡饮食"
+              }
+            ],
+            "identity": [],
+            "people": [],
+            "personality": [],
+            "places": [],
+            "reflections": [],
+            "relationships": [],
+            "time": [],
+            "values": []
+          },
+          "factType": "preference",
+          "knowledgeType": "personal_preference",
+          "memorySubjectId": "person-owner",
+          "object": {
+            "category": "dish",
+            "entityId": null,
+            "label": "东坡肉"
+          },
+          "predicate": "prefers",
+          "provenance": {
+            "contributorAccountId": null,
+            "evidenceRefs": [],
+            "mode": "selfReport",
+            "speakerPersonId": null
+          },
+          "qualifiers": {
+            "currentApplicability": "historical",
+            "place": null,
+            "polarity": "positive",
+            "scenario": null,
+            "strengthExpression": null,
+            "superlativeAsserted": false,
+            "validTime": {
+              "end": null,
+              "expression": "2018年",
+              "precision": "year",
+              "start": null
+            }
+          },
+          "semantic": {
+            "emotionEvidence": [],
+            "entities": [],
+            "eventTime": null,
+            "facets": [
+              "knowledge",
+              "habit"
+            ],
+            "narrative": "我在杭州时喜欢吃东坡肉",
+            "primaryKind": "knowledge",
+            "title": "我在杭州时喜欢吃东坡肉"
+          },
+          "statement": "我在杭州时喜欢吃东坡肉"
+        },
+        "changedFields": [
+          {
+            "after": {
+              "affect": null,
+              "claimSubjectId": "person-owner",
+              "dimensions": [
+                "knowledgeSkills",
+                "preferences",
+                "habits"
+              ],
+              "domains": [
+                "饮食"
+              ],
+              "facets": {
+                "confidence": 0.0,
+                "emotions": [],
+                "goals": [],
+                "habits": [
+                  {
+                    "confidence": 0.724,
+                    "evidenceMode": "inferred",
+                    "value": "喜欢清淡饮食"
+                  }
+                ],
+                "identity": [],
+                "people": [],
+                "personality": [],
+                "places": [],
+                "reflections": [],
+                "relationships": [],
+                "time": [],
+                "values": []
+              },
+              "factType": "preference",
+              "knowledgeType": "personal_preference",
+              "memorySubjectId": "person-owner",
+              "object": {
+                "category": "dish",
+                "entityId": null,
+                "label": "东坡肉"
+              },
+              "predicate": "prefers",
+              "provenance": {
+                "contributorAccountId": null,
+                "evidenceRefs": [],
+                "mode": "selfReport",
+                "speakerPersonId": null
+              },
+              "qualifiers": {
+                "currentApplicability": "historical",
+                "place": null,
+                "polarity": "positive",
+                "scenario": null,
+                "strengthExpression": null,
+                "superlativeAsserted": false,
+                "validTime": {
+                  "end": null,
+                  "expression": "2018年",
+                  "precision": "year",
+                  "start": null
+                }
+              },
+              "semantic": {
+                "emotionEvidence": [],
+                "entities": [],
+                "eventTime": null,
+                "facets": [
+                  "knowledge",
+                  "habit"
+                ],
+                "narrative": "我在杭州时喜欢吃东坡肉",
+                "primaryKind": "knowledge",
+                "title": "我在杭州时喜欢吃东坡肉"
+              },
+              "statement": "我在杭州时喜欢吃东坡肉"
+            },
+            "before": {
+              "affect": null,
+              "claimSubjectId": "person-owner",
+              "dimensions": [
+                "knowledgeSkills",
+                "preferences",
+                "habits"
+              ],
+              "domains": [
+                "饮食"
+              ],
+              "facets": {
+                "confidence": 0.0,
+                "emotions": [],
+                "goals": [],
+                "habits": [
+                  {
+                    "confidence": 0.721,
+                    "evidenceMode": "inferred",
+                    "value": "喜欢清淡饮食"
+                  }
+                ],
+                "identity": [],
+                "people": [],
+                "personality": [],
+                "places": [],
+                "reflections": [],
+                "relationships": [],
+                "time": [],
+                "values": []
+              },
+              "factType": "preference",
+              "knowledgeType": "personal_preference",
+              "memorySubjectId": "person-owner",
+              "object": {
+                "category": "dish",
+                "entityId": null,
+                "label": "东坡肉"
+              },
+              "predicate": "prefers",
+              "provenance": {
+                "contributorAccountId": null,
+                "evidenceRefs": [],
+                "mode": "selfReport",
+                "speakerPersonId": null
+              },
+              "qualifiers": {
+                "currentApplicability": "historical",
+                "place": null,
+                "polarity": "positive",
+                "scenario": null,
+                "strengthExpression": null,
+                "superlativeAsserted": false,
+                "validTime": {
+                  "end": null,
+                  "expression": "2016年",
+                  "precision": "year",
+                  "start": null
+                }
+              },
+              "semantic": {
+                "emotionEvidence": [],
+                "entities": [],
+                "eventTime": null,
+                "facets": [
+                  "knowledge",
+                  "habit"
+                ],
+                "narrative": "我在杭州时喜欢吃东坡肉",
+                "primaryKind": "knowledge",
+                "title": "我在杭州时喜欢吃东坡肉"
+              },
+              "statement": "我在杭州时喜欢吃东坡肉"
+            },
+            "path": "content"
+          }
+        ],
+        "evidence": {
+          "addedCount": 1,
+          "afterCount": 2,
+          "beforeCount": 1,
+          "candidateCount": 1
+        }
+      },
+      "operationIndex": 0,
+      "operationKind": "correct",
+      "reason": "explicitCorrectionTarget",
+      "targetMemoryId": "00000000-0000-0000-0000-0000000003ef",
+      "targetMemoryVersion": 3,
+      "targetMemoryVersionId": "00000000-0000-0000-0000-0000000003f0"
+    },
+    "proposal": {
+      "baseMemoryRevision": 4,
+      "candidateContentHash": "6747df0e37c099e0c8f68da5da0f9d2efbf50984612c182a7c30d33b56292f2d",
+      "candidateVersion": 1,
+      "changeSetId": "4e9abc5a-8e82-5e18-8c6a-1dd0bf0b6d58",
+      "dependencies": [],
+      "operations": [
+        {
+          "addedEvidenceCount": 1,
+          "anticipatedActivation": "revise",
+          "candidateAssertionKey": [
+            "person-owner",
+            "preference",
+            "prefers",
+            "东坡肉"
+          ],
+          "candidateId": "00000000-0000-0000-0000-0000000003f2",
+          "changedFields": [
+            "content",
+            "evidenceRefs"
+          ],
+          "factDiff": {
+            "after": {
+              "affect": null,
+              "claimSubjectId": "person-owner",
+              "dimensions": [
+                "knowledgeSkills",
+                "preferences",
+                "habits"
+              ],
+              "domains": [
+                "饮食"
+              ],
+              "facets": {
+                "confidence": 0.0,
+                "emotions": [],
+                "goals": [],
+                "habits": [
+                  {
+                    "confidence": 0.724,
+                    "evidenceMode": "inferred",
+                    "value": "喜欢清淡饮食"
+                  }
+                ],
+                "identity": [],
+                "people": [],
+                "personality": [],
+                "places": [],
+                "reflections": [],
+                "relationships": [],
+                "time": [],
+                "values": []
+              },
+              "factType": "preference",
+              "knowledgeType": "personal_preference",
+              "memorySubjectId": "person-owner",
+              "object": {
+                "category": "dish",
+                "entityId": null,
+                "label": "东坡肉"
+              },
+              "predicate": "prefers",
+              "provenance": {
+                "contributorAccountId": null,
+                "evidenceRefs": [],
+                "mode": "selfReport",
+                "speakerPersonId": null
+              },
+              "qualifiers": {
+                "currentApplicability": "historical",
+                "place": null,
+                "polarity": "positive",
+                "scenario": null,
+                "strengthExpression": null,
+                "superlativeAsserted": false,
+                "validTime": {
+                  "end": null,
+                  "expression": "2018年",
+                  "precision": "year",
+                  "start": null
+                }
+              },
+              "semantic": {
+                "emotionEvidence": [],
+                "entities": [],
+                "eventTime": null,
+                "facets": [
+                  "knowledge",
+                  "habit"
+                ],
+                "narrative": "我在杭州时喜欢吃东坡肉",
+                "primaryKind": "knowledge",
+                "title": "我在杭州时喜欢吃东坡肉"
+              },
+              "statement": "我在杭州时喜欢吃东坡肉"
+            },
+            "before": {
+              "affect": null,
+              "claimSubjectId": "person-owner",
+              "dimensions": [
+                "knowledgeSkills",
+                "preferences",
+                "habits"
+              ],
+              "domains": [
+                "饮食"
+              ],
+              "facets": {
+                "confidence": 0.0,
+                "emotions": [],
+                "goals": [],
+                "habits": [
+                  {
+                    "confidence": 0.721,
+                    "evidenceMode": "inferred",
+                    "value": "喜欢清淡饮食"
+                  }
+                ],
+                "identity": [],
+                "people": [],
+                "personality": [],
+                "places": [],
+                "reflections": [],
+                "relationships": [],
+                "time": [],
+                "values": []
+              },
+              "factType": "preference",
+              "knowledgeType": "personal_preference",
+              "memorySubjectId": "person-owner",
+              "object": {
+                "category": "dish",
+                "entityId": null,
+                "label": "东坡肉"
+              },
+              "predicate": "prefers",
+              "provenance": {
+                "contributorAccountId": null,
+                "evidenceRefs": [],
+                "mode": "selfReport",
+                "speakerPersonId": null
+              },
+              "qualifiers": {
+                "currentApplicability": "historical",
+                "place": null,
+                "polarity": "positive",
+                "scenario": null,
+                "strengthExpression": null,
+                "superlativeAsserted": false,
+                "validTime": {
+                  "end": null,
+                  "expression": "2016年",
+                  "precision": "year",
+                  "start": null
+                }
+              },
+              "semantic": {
+                "emotionEvidence": [],
+                "entities": [],
+                "eventTime": null,
+                "facets": [
+                  "knowledge",
+                  "habit"
+                ],
+                "narrative": "我在杭州时喜欢吃东坡肉",
+                "primaryKind": "knowledge",
+                "title": "我在杭州时喜欢吃东坡肉"
+              },
+              "statement": "我在杭州时喜欢吃东坡肉"
+            },
+            "candidate": {
+              "affect": null,
+              "claimSubjectId": "person-owner",
+              "dimensions": [
+                "knowledgeSkills",
+                "preferences",
+                "habits"
+              ],
+              "domains": [
+                "饮食"
+              ],
+              "facets": {
+                "confidence": 0.0,
+                "emotions": [],
+                "goals": [],
+                "habits": [
+                  {
+                    "confidence": 0.724,
+                    "evidenceMode": "inferred",
+                    "value": "喜欢清淡饮食"
+                  }
+                ],
+                "identity": [],
+                "people": [],
+                "personality": [],
+                "places": [],
+                "reflections": [],
+                "relationships": [],
+                "time": [],
+                "values": []
+              },
+              "factType": "preference",
+              "knowledgeType": "personal_preference",
+              "memorySubjectId": "person-owner",
+              "object": {
+                "category": "dish",
+                "entityId": null,
+                "label": "东坡肉"
+              },
+              "predicate": "prefers",
+              "provenance": {
+                "contributorAccountId": null,
+                "evidenceRefs": [],
+                "mode": "selfReport",
+                "speakerPersonId": null
+              },
+              "qualifiers": {
+                "currentApplicability": "historical",
+                "place": null,
+                "polarity": "positive",
+                "scenario": null,
+                "strengthExpression": null,
+                "superlativeAsserted": false,
+                "validTime": {
+                  "end": null,
+                  "expression": "2018年",
+                  "precision": "year",
+                  "start": null
+                }
+              },
+              "semantic": {
+                "emotionEvidence": [],
+                "entities": [],
+                "eventTime": null,
+                "facets": [
+                  "knowledge",
+                  "habit"
+                ],
+                "narrative": "我在杭州时喜欢吃东坡肉",
+                "primaryKind": "knowledge",
+                "title": "我在杭州时喜欢吃东坡肉"
+              },
+              "statement": "我在杭州时喜欢吃东坡肉"
+            },
+            "changedFields": [
+              {
+                "after": {
+                  "affect": null,
+                  "claimSubjectId": "person-owner",
+                  "dimensions": [
+                    "knowledgeSkills",
+                    "preferences",
+                    "habits"
+                  ],
+                  "domains": [
+                    "饮食"
+                  ],
+                  "facets": {
+                    "confidence": 0.0,
+                    "emotions": [],
+                    "goals": [],
+                    "habits": [
+                      {
+                        "confidence": 0.724,
+                        "evidenceMode": "inferred",
+                        "value": "喜欢清淡饮食"
+                      }
+                    ],
+                    "identity": [],
+                    "people": [],
+                    "personality": [],
+                    "places": [],
+                    "reflections": [],
+                    "relationships": [],
+                    "time": [],
+                    "values": []
+                  },
+                  "factType": "preference",
+                  "knowledgeType": "personal_preference",
+                  "memorySubjectId": "person-owner",
+                  "object": {
+                    "category": "dish",
+                    "entityId": null,
+                    "label": "东坡肉"
+                  },
+                  "predicate": "prefers",
+                  "provenance": {
+                    "contributorAccountId": null,
+                    "evidenceRefs": [],
+                    "mode": "selfReport",
+                    "speakerPersonId": null
+                  },
+                  "qualifiers": {
+                    "currentApplicability": "historical",
+                    "place": null,
+                    "polarity": "positive",
+                    "scenario": null,
+                    "strengthExpression": null,
+                    "superlativeAsserted": false,
+                    "validTime": {
+                      "end": null,
+                      "expression": "2018年",
+                      "precision": "year",
+                      "start": null
+                    }
+                  },
+                  "semantic": {
+                    "emotionEvidence": [],
+                    "entities": [],
+                    "eventTime": null,
+                    "facets": [
+                      "knowledge",
+                      "habit"
+                    ],
+                    "narrative": "我在杭州时喜欢吃东坡肉",
+                    "primaryKind": "knowledge",
+                    "title": "我在杭州时喜欢吃东坡肉"
+                  },
+                  "statement": "我在杭州时喜欢吃东坡肉"
+                },
+                "before": {
+                  "affect": null,
+                  "claimSubjectId": "person-owner",
+                  "dimensions": [
+                    "knowledgeSkills",
+                    "preferences",
+                    "habits"
+                  ],
+                  "domains": [
+                    "饮食"
+                  ],
+                  "facets": {
+                    "confidence": 0.0,
+                    "emotions": [],
+                    "goals": [],
+                    "habits": [
+                      {
+                        "confidence": 0.721,
+                        "evidenceMode": "inferred",
+                        "value": "喜欢清淡饮食"
+                      }
+                    ],
+                    "identity": [],
+                    "people": [],
+                    "personality": [],
+                    "places": [],
+                    "reflections": [],
+                    "relationships": [],
+                    "time": [],
+                    "values": []
+                  },
+                  "factType": "preference",
+                  "knowledgeType": "personal_preference",
+                  "memorySubjectId": "person-owner",
+                  "object": {
+                    "category": "dish",
+                    "entityId": null,
+                    "label": "东坡肉"
+                  },
+                  "predicate": "prefers",
+                  "provenance": {
+                    "contributorAccountId": null,
+                    "evidenceRefs": [],
+                    "mode": "selfReport",
+                    "speakerPersonId": null
+                  },
+                  "qualifiers": {
+                    "currentApplicability": "historical",
+                    "place": null,
+                    "polarity": "positive",
+                    "scenario": null,
+                    "strengthExpression": null,
+                    "superlativeAsserted": false,
+                    "validTime": {
+                      "end": null,
+                      "expression": "2016年",
+                      "precision": "year",
+                      "start": null
+                    }
+                  },
+                  "semantic": {
+                    "emotionEvidence": [],
+                    "entities": [],
+                    "eventTime": null,
+                    "facets": [
+                      "knowledge",
+                      "habit"
+                    ],
+                    "narrative": "我在杭州时喜欢吃东坡肉",
+                    "primaryKind": "knowledge",
+                    "title": "我在杭州时喜欢吃东坡肉"
+                  },
+                  "statement": "我在杭州时喜欢吃东坡肉"
+                },
+                "path": "content"
+              }
+            ],
+            "evidence": {
+              "addedCount": 1,
+              "afterCount": 2,
+              "beforeCount": 1,
+              "candidateCount": 1
+            }
+          },
+          "operationIndex": 0,
+          "operationKind": "correct",
+          "reason": "explicitCorrectionTarget",
+          "targetMemoryId": "00000000-0000-0000-0000-0000000003ef",
+          "targetMemoryVersion": 3,
+          "targetMemoryVersionId": "00000000-0000-0000-0000-0000000003f0"
+        }
+      ],
+      "proposalHash": "1c95a2179ba3f586301c7ddb1815f4da3dc329d4aef76e9d6a1560f328635793",
+      "proposalId": "6f101f9f-9d5f-5a04-8bb3-43fc2a96b686",
+      "schemaVersion": "owner-truth-memory-changeset-proposal-v1"
+    }
+  }
+]

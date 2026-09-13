@@ -1,4 +1,476 @@
 import Foundation
+import CryptoKit
+import zlib
+
+enum DialogProviderLiveStartConfigError: Error {
+    case missingRoleText
+    case invalidDialogShape
+    case invalidStartConfig
+}
+
+enum DialogProviderLiveStartConfigBuilder {
+    static let adapterVersion = "volc-speechengine-canonical-start-session-v3"
+    static let endpointingMilliseconds = 1_500
+    static let speechRate = -20
+    static let loudnessRate = 10
+
+    static func makeCanonicalStartConfig(
+        systemRole: String,
+        speakingStyle: String,
+        model: String,
+        ttsSpeaker: String?,
+        hotwords: [String]
+    ) -> [String: Any] {
+        var asr: [String: Any] = [
+            "audio_info": [
+                "format": "pcm",
+                "sample_rate": 16_000,
+                "channel": 1,
+            ],
+            "extra": [
+                "end_smooth_window_ms": endpointingMilliseconds,
+                "enable_custom_vad": true,
+            ],
+        ]
+        if !hotwords.isEmpty {
+            asr["hot_words"] = hotwords
+        }
+        var result: [String: Any] = [
+            "asr": asr,
+            "dialog": [
+                "bot_name": "寻梦环游",
+                "system_role": systemRole,
+                "speaking_style": speakingStyle,
+                "extra": ["model": model],
+            ],
+        ]
+        if let ttsSpeaker {
+            result["tts"] = [
+                "speaker": ttsSpeaker,
+                "audio_config": [
+                    "speech_rate": speechRate,
+                    "loudness_rate": loudnessRate,
+                ],
+            ]
+        }
+        return result
+    }
+
+    static func applying(
+        providerRoleText: String,
+        to dialogConfig: [String: Any]
+    ) throws -> [String: Any] {
+        let normalized = providerRoleText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            throw DialogProviderLiveStartConfigError.missingRoleText
+        }
+        guard var dialog = dialogConfig["dialog"] as? [String: Any],
+              !containsLegacyNestedSections(dialog) else {
+            throw DialogProviderLiveStartConfigError.invalidDialogShape
+        }
+        dialog["system_role"] = providerRoleText
+        var result = dialogConfig
+        result["dialog"] = dialog
+        return result
+    }
+
+    static func submittedRoleText(in startConfig: [String: Any]) -> String? {
+        guard let dialog = startConfig["dialog"] as? [String: Any],
+              !containsLegacyNestedSections(dialog),
+              systemRoleOccurrences(in: startConfig) == 1,
+              let role = dialog["system_role"] as? String,
+              !role.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return role
+    }
+
+    static func encodedStartConfig(
+        _ startConfig: [String: Any],
+        expectedProviderRoleText: String? = nil
+    ) throws -> String {
+        guard let dialog = startConfig["dialog"] as? [String: Any],
+              !containsLegacyNestedSections(dialog),
+              nonEmptyString(dialog["bot_name"]) != nil,
+              submittedRoleText(in: startConfig) != nil,
+              nonEmptyString(dialog["speaking_style"]) != nil,
+              let extra = dialog["extra"] as? [String: Any],
+              nonEmptyString(extra["model"]) != nil,
+              startConfig["asr"] is [String: Any] else {
+            throw DialogProviderLiveStartConfigError.invalidDialogShape
+        }
+        if let tts = startConfig["tts"] {
+            guard let tts = tts as? [String: Any],
+                  nonEmptyString(tts["speaker"]) != nil,
+                  tts["audio_config"] is [String: Any] else {
+                throw DialogProviderLiveStartConfigError.invalidDialogShape
+            }
+        }
+        if let expectedProviderRoleText,
+           submittedRoleText(in: startConfig) != expectedProviderRoleText {
+            throw DialogProviderLiveStartConfigError.invalidDialogShape
+        }
+        guard JSONSerialization.isValidJSONObject(startConfig),
+              let data = try? JSONSerialization.data(withJSONObject: startConfig),
+              let encoded = String(data: data, encoding: .utf8) else {
+            throw DialogProviderLiveStartConfigError.invalidStartConfig
+        }
+        return encoded
+    }
+
+    private static func containsLegacyNestedSections(_ dialog: [String: Any]) -> Bool {
+        dialog["dialog"] != nil || dialog["asr"] != nil || dialog["tts"] != nil
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String,
+              !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return value
+    }
+
+    private static func systemRoleOccurrences(in value: Any) -> Int {
+        if let dictionary = value as? [String: Any] {
+            return dictionary.reduce(into: 0) { count, element in
+                if element.key == "system_role" {
+                    count += 1
+                } else {
+                    count += systemRoleOccurrences(in: element.value)
+                }
+            }
+        }
+        if let array = value as? [Any] {
+            return array.reduce(0) { $0 + systemRoleOccurrences(in: $1) }
+        }
+        return 0
+    }
+}
+
+enum DialogChatRAGTextPayloadError: Error {
+    case emptyContent
+    case payloadTooLarge
+    case encodingFailed
+}
+
+enum DialogChatRAGTextPayloadEncoder {
+    static let maximumCharacters = 4_096
+
+    static func encode(
+        content: String,
+        title: String = "已确认正式事实"
+    ) throws -> String {
+        let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            throw DialogChatRAGTextPayloadError.emptyContent
+        }
+        let entries: [[String: String]] = [[
+            "title": title,
+            "content": content,
+        ]]
+        guard let entriesData = try? JSONSerialization.data(withJSONObject: entries),
+              let entriesJSON = String(data: entriesData, encoding: .utf8),
+              let payloadData = try? JSONSerialization.data(
+                withJSONObject: ["external_rag": entriesJSON]
+              ),
+              let payload = String(data: payloadData, encoding: .utf8) else {
+            throw DialogChatRAGTextPayloadError.encodingFailed
+        }
+        guard payload.count <= maximumCharacters else {
+            throw DialogChatRAGTextPayloadError.payloadTooLarge
+        }
+        return payload
+    }
+}
+
+#if DEBUG
+enum DialogT06DiagnosticMode {
+    static let launchArgument = "-DreamJourneyT06SDKCapture"
+    static let expectedRolePath = "dialog.system_role"
+    static let syntheticProviderRoleText = """
+        T06 synthetic formal memory. Only use these synthetic facts.
+        Education: graduated from Synthetic University.
+        Occupation: synthetic software engineer.
+        Food preference: synthetic tomato noodles.
+        """
+
+    static var isEnabled: Bool {
+        ProcessInfo.processInfo.arguments.contains(launchArgument)
+    }
+
+    static var providerContextHash: String {
+        DialogT06SDKFrameInspector.sha256(syntheticProviderRoleText)
+    }
+}
+
+struct DialogT06SDKFrameObservation: Equatable {
+    let event: Int
+    let fieldPath: String
+    let roleByteCount: Int
+    let roleHash: String
+    let providerContextHash: String
+    let modelFieldPresent: Bool
+    let hasLegacyDialogWrapper: Bool
+    let roleMatchesExpected: Bool
+    let hashMatchesExpected: Bool
+    let fieldPathMatchesExpected: Bool
+
+    var contractMatches: Bool {
+        event == 100
+            && roleMatchesExpected
+            && hashMatchesExpected
+            && fieldPathMatchesExpected
+            && modelFieldPresent
+            && !hasLegacyDialogWrapper
+    }
+}
+
+enum DialogT06SDKFrameInspector {
+    static let startSessionEvent = 100
+    static let maximumCompressedPayloadBytes = 128 * 1_024
+    static let maximumDecodedPayloadBytes = 512 * 1_024
+
+    static func inspect(
+        frame: Data,
+        expectedRoleText: String,
+        expectedProviderContextHash: String,
+        expectedFieldPath: String
+    ) -> DialogT06SDKFrameObservation? {
+        guard let envelope = parseClientEventFrame(frame),
+              envelope.event == startSessionEvent,
+              let object = try? JSONSerialization.jsonObject(with: envelope.payload),
+              let root = object as? [String: Any] else {
+            return nil
+        }
+        let roles = findSystemRoles(in: root)
+        guard roles.count == 1, let role = roles.first else { return nil }
+        let dialog = root["dialog"] as? [String: Any]
+        let extra = dialog?["extra"] as? [String: Any]
+        let roleHash = sha256(role.value)
+        return DialogT06SDKFrameObservation(
+            event: envelope.event,
+            fieldPath: role.path,
+            roleByteCount: role.value.utf8.count,
+            roleHash: roleHash,
+            providerContextHash: expectedProviderContextHash,
+            modelFieldPresent: extra?["model"] is String,
+            hasLegacyDialogWrapper: dialog?["dialog"] != nil
+                || dialog?["asr"] != nil
+                || dialog?["tts"] != nil,
+            roleMatchesExpected: role.value == expectedRoleText,
+            hashMatchesExpected: roleHash == expectedProviderContextHash,
+            fieldPathMatchesExpected: role.path == expectedFieldPath
+        )
+    }
+
+    static func sha256(_ value: String) -> String {
+        let digest = SHA256.hash(data: Data(value.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return "sha256:" + digest
+    }
+
+    static func gzipForTesting(_ data: Data) -> Data? {
+        var stream = z_stream()
+        guard deflateInit2_(
+            &stream,
+            Z_DEFAULT_COMPRESSION,
+            Z_DEFLATED,
+            15 + 16,
+            8,
+            Z_DEFAULT_STRATEGY,
+            ZLIB_VERSION,
+            Int32(MemoryLayout<z_stream>.size)
+        ) == Z_OK else {
+            return nil
+        }
+        defer { deflateEnd(&stream) }
+
+        return data.withUnsafeBytes { inputBuffer -> Data? in
+            guard let input = inputBuffer.bindMemory(to: Bytef.self).baseAddress else {
+                return nil
+            }
+            stream.next_in = UnsafeMutablePointer(mutating: input)
+            stream.avail_in = uInt(data.count)
+            var output = Data()
+            var buffer = [UInt8](repeating: 0, count: 4_096)
+            let bufferCapacity = buffer.count
+
+            repeat {
+                let status = buffer.withUnsafeMutableBytes { outputBuffer -> Int32 in
+                    stream.next_out = outputBuffer.bindMemory(to: Bytef.self).baseAddress
+                    stream.avail_out = uInt(bufferCapacity)
+                    return deflate(&stream, Z_FINISH)
+                }
+                guard status == Z_OK || status == Z_STREAM_END else { return nil }
+                output.append(
+                    contentsOf: buffer.prefix(bufferCapacity - Int(stream.avail_out))
+                )
+                if status == Z_STREAM_END {
+                    return output
+                }
+            } while output.count <= maximumCompressedPayloadBytes
+            return nil
+        }
+    }
+
+    private struct ClientEventEnvelope {
+        let event: Int
+        let payload: Data
+    }
+
+    private static func parseClientEventFrame(_ frame: Data) -> ClientEventEnvelope? {
+        let bytes = [UInt8](frame)
+        guard bytes.count >= 12,
+              bytes[0] >> 4 == 1,
+              bytes[1] >> 4 == 1,
+              bytes[2] >> 4 == 1 else {
+            return nil
+        }
+        let headerBytes = Int(bytes[0] & 0x0F) * 4
+        guard headerBytes >= 4, headerBytes <= bytes.count - 8 else { return nil }
+
+        let flags = bytes[1] & 0x0F
+        guard flags & 0x04 == 0x04 else { return nil }
+        var offset = headerBytes
+        switch flags & 0x03 {
+        case 0x01, 0x03:
+            guard readUInt32(bytes, at: offset) != nil else { return nil }
+            offset += 4
+        case 0x00, 0x02:
+            break
+        default:
+            return nil
+        }
+
+        guard let event = readUInt32(bytes, at: offset) else { return nil }
+        offset += 4
+
+        if event == startSessionEvent {
+            guard let sessionIDSize = readUInt32(bytes, at: offset),
+                  sessionIDSize > 0,
+                  sessionIDSize <= 1_024 else {
+                return nil
+            }
+            offset += 4
+            guard offset + sessionIDSize <= bytes.count else { return nil }
+            offset += sessionIDSize
+        }
+
+        let declaredSize = readUInt32(bytes, at: offset)
+        guard let declaredSize,
+              declaredSize > 0,
+              declaredSize <= maximumCompressedPayloadBytes else {
+            return nil
+        }
+        let payloadOffset = offset + 4
+        guard payloadOffset + declaredSize == bytes.count else { return nil }
+        let compressedPayload = Data(bytes[payloadOffset..<bytes.count])
+        let compression = bytes[2] & 0x0F
+        let payload: Data
+        switch compression {
+        case 0:
+            payload = compressedPayload
+        case 1:
+            guard let uncompressed = gunzip(
+                compressedPayload,
+                maximumOutputBytes: maximumDecodedPayloadBytes
+            ) else { return nil }
+            payload = uncompressed
+        default:
+            return nil
+        }
+        guard payload.count <= maximumDecodedPayloadBytes else { return nil }
+        return ClientEventEnvelope(event: event, payload: payload)
+    }
+
+    private static func readUInt32(_ bytes: [UInt8], at offset: Int) -> Int? {
+        guard offset >= 0, offset + 4 <= bytes.count else { return nil }
+        return Int(bytes[offset]) << 24
+            | Int(bytes[offset + 1]) << 16
+            | Int(bytes[offset + 2]) << 8
+            | Int(bytes[offset + 3])
+    }
+
+    private static func findSystemRoles(
+        in value: Any,
+        path: String = ""
+    ) -> [(path: String, value: String)] {
+        if let dictionary = value as? [String: Any] {
+            var results: [(String, String)] = []
+            for key in dictionary.keys.sorted() {
+                let childPath = path.isEmpty ? key : path + "." + key
+                if key == "system_role", let role = dictionary[key] as? String {
+                    results.append((childPath, role))
+                } else if let child = dictionary[key] {
+                    results.append(contentsOf: findSystemRoles(in: child, path: childPath))
+                }
+            }
+            return results
+        }
+        if let array = value as? [Any] {
+            return array.enumerated().flatMap { index, child in
+                findSystemRoles(in: child, path: path + "[\(index)]")
+            }
+        }
+        return []
+    }
+
+    private static func gunzip(
+        _ data: Data,
+        maximumOutputBytes: Int
+    ) -> Data? {
+        guard data.count >= 2,
+              data[data.startIndex] == 0x1F,
+              data[data.index(after: data.startIndex)] == 0x8B else {
+            return nil
+        }
+
+        var stream = z_stream()
+        guard inflateInit2_(
+            &stream,
+            15 + 32,
+            ZLIB_VERSION,
+            Int32(MemoryLayout<z_stream>.size)
+        ) == Z_OK else {
+            return nil
+        }
+        defer { inflateEnd(&stream) }
+
+        return data.withUnsafeBytes { inputBuffer -> Data? in
+            guard let input = inputBuffer.bindMemory(to: Bytef.self).baseAddress else {
+                return nil
+            }
+            stream.next_in = UnsafeMutablePointer(mutating: input)
+            stream.avail_in = uInt(data.count)
+            var output = Data()
+            var buffer = [UInt8](repeating: 0, count: 4_096)
+            let bufferCapacity = buffer.count
+
+            while true {
+                let status = buffer.withUnsafeMutableBytes { outputBuffer -> Int32 in
+                    stream.next_out = outputBuffer.bindMemory(to: Bytef.self).baseAddress
+                    stream.avail_out = uInt(bufferCapacity)
+                    return inflate(&stream, Z_NO_FLUSH)
+                }
+                let produced = bufferCapacity - Int(stream.avail_out)
+                if produced > 0 {
+                    guard output.count + produced <= maximumOutputBytes else {
+                        return nil
+                    }
+                    output.append(contentsOf: buffer.prefix(produced))
+                }
+                if status == Z_STREAM_END {
+                    return output
+                }
+                guard status == Z_OK, stream.avail_in > 0 || produced > 0 else {
+                    return nil
+                }
+            }
+        }
+    }
+}
+#endif
 
 #if DEBUG || UI_QA_SIMULATOR
 struct DialogPromptDebugSnapshot {
@@ -311,12 +783,46 @@ enum DialogPCM16WaveEncoder {
     }
 }
 
-/// Selects who generates the semantic answer for a dialog session. Most
-/// callers keep the provider-owned behavior; Echo Live delegates only answer
-/// generation to DreamJourney so typed and spoken questions share `/echo/answers`.
+/// Selects who generates the semantic answer for a dialog session. Native Live
+/// is provider-owned and receives the bound formal-memory snapshot at session
+/// start. Backend authority is reserved for explicit one-shot/delegated flows.
 enum DialogAnswerAuthority: Equatable, Sendable {
     case provider
     case dreamJourneyBackend
+}
+
+/// Keeps the production Live grounding contract in one testable value. The
+/// default path binds the complete reviewed snapshot once at session start and
+/// never submits the retired per-turn ChatRagText payload.
+struct DialogLiveGroundingPlan: Equatable, Sendable {
+    let usesTurnScopedKnowledgeContext: Bool
+    let lifetimePolicy: DialogSessionLifetimePolicy
+    let answerAuthority: DialogAnswerAuthority
+
+    static let sessionSnapshot = DialogLiveGroundingPlan(
+        usesTurnScopedKnowledgeContext: false,
+        lifetimePolicy: .userControlledLive,
+        answerAuthority: .provider
+    )
+
+    var usesBackendAnswerPerTurn: Bool {
+        answerAuthority == .dreamJourneyBackend
+    }
+}
+
+/// Keeps the native Live answer boundary explicit and independently testable.
+/// Provider-owned, user-controlled Live turns are captured for persistence but
+/// must never dispatch a second semantic answer through DreamJourneyBackend.
+struct DialogLiveAnswerDispatchPolicy: Equatable, Sendable {
+    static func shouldRequestBackendAnswer(
+        isUserControlledLiveSessionOpen: Bool,
+        lifetimePolicy: DialogSessionLifetimePolicy,
+        answerAuthority: DialogAnswerAuthority
+    ) -> Bool {
+        !(isUserControlledLiveSessionOpen
+            && lifetimePolicy == .userControlledLive
+            && answerAuthority == .provider)
+    }
 }
 
 /// Selects exactly one audible output for a dialog session. SpeechEngine's
@@ -480,6 +986,109 @@ struct DialogEngineDelegatedPlaybackState: Equatable, Sendable {
 
     private func matches(_ nextReplyID: String) -> Bool {
         !nextReplyID.isEmpty && replyID == nextReplyID
+    }
+}
+
+struct DialogProviderEventMetadata: Equatable, Sendable {
+    let questionID: String?
+    let replyID: String?
+    let ttsType: String?
+
+    init(data: Data) {
+        let object = try? JSONSerialization.jsonObject(with: data)
+        questionID = Self.firstString(
+            in: object,
+            keys: ["question_id", "questionId"]
+        )
+        replyID = Self.firstString(
+            in: object,
+            keys: ["reply_id", "replyId"]
+        )
+        ttsType = Self.firstString(
+            in: object,
+            keys: ["tts_type", "ttsType"]
+        )
+    }
+
+    private static func firstString(in value: Any?, keys: Set<String>) -> String? {
+        if let dictionary = value as? [String: Any] {
+            for key in keys {
+                if let result = dictionary[key] as? String,
+                   !result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return result
+                }
+            }
+            for key in dictionary.keys.sorted() {
+                if let result = firstString(in: dictionary[key], keys: keys) {
+                    return result
+                }
+            }
+        } else if let array = value as? [Any] {
+            for child in array {
+                if let result = firstString(in: child, keys: keys) {
+                    return result
+                }
+            }
+        }
+        return nil
+    }
+}
+
+enum DialogProviderReplyCorrelation: String, Equatable, Sendable {
+    case matched
+    case unobserved
+    case staleQuestion
+    case staleGeneration
+}
+
+struct DialogProviderTurnCorrelationState: Equatable, Sendable {
+    private(set) var generation: UUID?
+    private(set) var turnSequence = 0
+    private(set) var currentQuestionID: String?
+    private(set) var currentReplyID: String?
+
+    mutating func beginSession(generation: UUID) {
+        self.generation = generation
+        turnSequence = 0
+        currentQuestionID = nil
+        currentReplyID = nil
+    }
+
+    @discardableResult
+    mutating func observeQuestion(
+        id: String?,
+        generation: UUID
+    ) -> Int? {
+        guard self.generation == generation else { return nil }
+        guard let id,
+              !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return currentQuestionID == nil ? nil : turnSequence
+        }
+        if currentQuestionID != id {
+            turnSequence += 1
+            currentQuestionID = id
+            currentReplyID = nil
+        }
+        return turnSequence
+    }
+
+    mutating func observeReply(
+        questionID: String?,
+        replyID: String?,
+        generation: UUID
+    ) -> DialogProviderReplyCorrelation {
+        guard self.generation == generation else { return .staleGeneration }
+        guard let replyID,
+              !replyID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .unobserved
+        }
+        if let questionID,
+           let currentQuestionID,
+           questionID != currentQuestionID {
+            return .staleQuestion
+        }
+        currentReplyID = replyID
+        return .matched
     }
 }
 
@@ -959,6 +1568,85 @@ import AVFoundation
 import CocoaLumberjack
 import SpeechEngineToB
 
+#if DEBUG
+private final class DialogT06ControlledWebSocketClient: NSObject, SpeechWsClientProtocol {
+    private var listener: SpeechWsListenerProtocol?
+    private var didRecordTerminalEvidence = false
+    private var observedFrameCount = 0
+
+    func setup(withListener listener: SpeechWsListenerProtocol) -> Bool {
+        self.listener = listener
+        PrivacySafeDiagnostics.log(
+            subsystem: "T06SDKCapture",
+            event: "controlledUpstreamReady",
+            states: ["sdkVersion": "0.0.14.6.1-bugfix"]
+        )
+        return true
+    }
+
+    func startConnection(_ config: SpeechWsConnectionConfig) -> Bool {
+        PrivacySafeDiagnostics.log(
+            subsystem: "T06SDKCapture",
+            event: "controlledUpstreamConnected",
+            states: ["transport": "customWsClient"]
+        )
+        DispatchQueue.main.async { [weak self] in
+            self?.listener?.onConnected("t06-controlled-upstream")
+        }
+        return true
+    }
+
+    func send(_ data: Data) -> Bool {
+        observedFrameCount += 1
+        guard !didRecordTerminalEvidence else { return true }
+        guard let observation = DialogT06SDKFrameInspector.inspect(
+                frame: data,
+                expectedRoleText: DialogT06DiagnosticMode.syntheticProviderRoleText,
+                expectedProviderContextHash: DialogT06DiagnosticMode.providerContextHash,
+                expectedFieldPath: DialogT06DiagnosticMode.expectedRolePath
+              ) else {
+            if observedFrameCount <= 4 {
+                let header = data.prefix(8).map { String(format: "%02x", $0) }.joined()
+                PrivacySafeDiagnostics.log(
+                    subsystem: "T06SDKCapture",
+                    event: "sdkFrameObserved",
+                    states: ["header": header.isEmpty ? "none" : header],
+                    counts: [
+                        "frameIndex": observedFrameCount,
+                        "frameBytes": data.count,
+                    ]
+                )
+            }
+            return true
+        }
+        didRecordTerminalEvidence = true
+        PrivacySafeDiagnostics.log(
+            subsystem: "T06SDKCapture",
+            event: "upstreamStartSessionObserved",
+            states: [
+                "event": String(observation.event),
+                "fieldPath": observation.fieldPath,
+                "roleHash": observation.roleHash,
+                "providerContextHash": observation.providerContextHash,
+                "modelFieldPresent": observation.modelFieldPresent ? "true" : "false",
+                "legacyDialogWrapper": observation.hasLegacyDialogWrapper ? "true" : "false",
+                "roleMatch": observation.roleMatchesExpected ? "true" : "false",
+                "hashMatch": observation.hashMatchesExpected ? "true" : "false",
+                "pathMatch": observation.fieldPathMatchesExpected ? "true" : "false",
+                "contractMatch": observation.contractMatches ? "true" : "false",
+            ],
+            counts: ["roleBytes": observation.roleByteCount]
+        )
+        return true
+    }
+
+    func stopConnection() -> Bool {
+        listener = nil
+        return true
+    }
+}
+#endif
+
 private final class DialogPCMPlaybackController: NSObject, AVAudioPlayerDelegate {
     private var player: AVAudioPlayer?
     private var completion: ((Bool) -> Void)?
@@ -1128,11 +1816,19 @@ final class DialogEngineManager: NSObject {
     private var runtimeSystemRole: String?
     private var runtimeSpeakingStyle: String?
     private var runtimeFormalMemorySnapshot: [String: Any]?
+    private var runtimeProviderRoleText: String?
+    private var runtimeProviderContextHash: String?
     private var runtimeProjectionCheckpoint: String?
+    private var runtimeMemoryRevision: Int?
     private var runtimeProductSessionID: String?
     private var liveStartSubmittedAt: Date?
     private var liveStartDirectiveReturnCode: Int?
     private var liveFirstResponseObserved = false
+    private var providerTurnCorrelation = DialogProviderTurnCorrelationState()
+    private var providerActiveChatReplyID: String?
+    private var providerQuestionObservedAt: Date?
+    private var providerFirstTextKeys = Set<String>()
+    private var providerFirstAudioKeys = Set<String>()
 
     /// 引擎是否就绪（已初始化完成）
     private(set) var isEngineReady = false
@@ -1303,6 +1999,9 @@ final class DialogEngineManager: NSObject {
 
     private var engine: SpeechEngine?
     private var isSettingUp = false
+    #if DEBUG
+    private var t06ControlledWebSocketClient: DialogT06ControlledWebSocketClient?
+    #endif
 
     /// 静音超时计时器
     private var silenceTimer: Timer?
@@ -1478,7 +2177,10 @@ final class DialogEngineManager: NSObject {
         runtimeSystemRole = runtimeConfig.systemRole
         runtimeSpeakingStyle = runtimeConfig.speakingStyle
         runtimeFormalMemorySnapshot = runtimeConfig.formalMemorySnapshot
+        runtimeProviderRoleText = runtimeConfig.providerRoleText
+        runtimeProviderContextHash = runtimeConfig.providerContextHash
         runtimeProjectionCheckpoint = runtimeConfig.projectionCheckpoint
+        runtimeMemoryRevision = runtimeConfig.memoryRevision
         runtimeProductSessionID = runtimeConfig.productSessionID
         recordLiveSnapshotDecoded(runtimeConfig)
         DDLogInfo("[DialogEngine] backend realtime proxy ticket applied")
@@ -1570,6 +2272,16 @@ final class DialogEngineManager: NSObject {
             return
         }
 
+        #if DEBUG
+        if DialogT06DiagnosticMode.isEnabled {
+            let controlledClient = DialogT06ControlledWebSocketClient()
+            t06ControlledWebSocketClient = controlledClient
+            speechEngine.setWsClient(controlledClient)
+        } else {
+            t06ControlledWebSocketClient = nil
+        }
+        #endif
+
         // 配置引擎参数
         configureEngine(speechEngine)
 
@@ -1638,12 +2350,20 @@ final class DialogEngineManager: NSObject {
         activeDialogAccountLease = accountLease
         activeDialogBindingHandle = bindingHandle
         activeDialogOperationId = dialogOperationId
+        if let engineCallbackGeneration {
+            providerTurnCorrelation.beginSession(generation: engineCallbackGeneration)
+        }
         self.usesTurnScopedKnowledgeContext = usesTurnScopedKnowledgeContext
         sessionLifetimePolicy = lifetimePolicy
         self.answerAuthority = answerAuthority
         liveStartSubmittedAt = nil
         liveStartDirectiveReturnCode = nil
         liveFirstResponseObserved = false
+        providerActiveChatReplyID = nil
+        providerQuestionObservedAt = nil
+        providerFirstTextKeys.removeAll()
+        providerFirstAudioKeys.removeAll()
+        chatBuffer = ""
         resetDelegatedTTSRoutingState()
         isRecorderPaused = false
         suppressGreetingForNextStart = !sendsGreeting
@@ -1852,22 +2572,20 @@ final class DialogEngineManager: NSObject {
         DDLogInfo("[DialogEngine] 发送打断指令")
     }
 
-    /// 为当前已确认的用户 query 提交后端筛选后的知识上下文。
-    /// ChatRagText 会把 content 绑定到 SDK 当前等待中的 turn，不修改下一轮 system_role。
+    /// Sends a contract-valid external RAG payload for isolated capability
+    /// probes. The provider does not document a same-turn generation barrier,
+    /// so a successful SDK return must not be treated as same-turn adoption.
     @discardableResult
     func submitTurnKnowledgeContext(
         _ content: String,
         traceID: String?,
         source: String
     ) -> Bool {
-        guard isDialogActive, let engine else {
+        guard isDialogActive, usesTurnScopedKnowledgeContext, let engine else {
             DDLogWarn("[DialogEngine] 忽略 turn RAG：对话未激活")
             return false
         }
-        guard let payloadData = try? JSONSerialization.data(
-            withJSONObject: ["content": content],
-            options: []
-        ), let payload = String(data: payloadData, encoding: .utf8) else {
+        guard let payload = try? DialogChatRAGTextPayloadEncoder.encode(content: content) else {
             DDLogError("[DialogEngine] turn RAG JSON 编码失败")
             return false
         }
@@ -2214,6 +2932,12 @@ final class DialogEngineManager: NSObject {
         sessionLifetimePolicy = .automatic
         answerAuthority = .provider
         usesTurnScopedKnowledgeContext = false
+        providerTurnCorrelation = DialogProviderTurnCorrelationState()
+        providerActiveChatReplyID = nil
+        providerQuestionObservedAt = nil
+        providerFirstTextKeys.removeAll()
+        providerFirstAudioKeys.removeAll()
+        chatBuffer = ""
         restoreAudioSessionIfNeeded(forceCoordinatorOwnership: coordinatorOwnedAudioSession)
         externallyManagedAudioSessionLease = nil
         DDLogInfo("[DialogEngine] 引擎已销毁")
@@ -2489,12 +3213,9 @@ final class DialogEngineManager: NSObject {
         // 音量回调
         engine.setBoolParam(true, forKey: SE_PARAMS_KEY_ENABLE_GET_VOLUME_BOOL)
 
-        // 日志级别
-        #if DEBUG
-        engine.setStringParam(SE_LOG_LEVEL_DEBUG, forKey: SE_PARAMS_KEY_LOG_LEVEL_STRING)
-        #else
+        // SDK debug output includes StartSession payloads. Keep it disabled even
+        // in diagnostic builds so formal-memory prompts never become logs.
         engine.setStringParam(SE_LOG_LEVEL_WARN, forKey: SE_PARAMS_KEY_LOG_LEVEL_STRING)
-        #endif
     }
 
     /// 执行开始对话
@@ -2535,50 +3256,51 @@ final class DialogEngineManager: NSObject {
         let systemRole = buildSystemRole()
         let ttsSpeaker = resolvedTTSSpeaker(for: bindingHandle)
 
-        var dialogConfig: [String: Any] = [
-            "asr": [
-                "audio_info": [
-                    "format": "pcm",
-                    "sample_rate": 16000,
-                    "channel": 1
-                ],
-                "extra": [
-                    "end_smooth_window_ms": 3000,   // 3秒停顿容忍，老人说话断续多
-                    "enable_custom_vad": true         // 启用自定义VAD
-                ]
-            ],
-            "dialog": [
-                "bot_name": "寻梦环游",
-                "system_role": systemRole,
-                "speaking_style": resolvedSpeakingStyle(),
-                "extra": [
-                    "model": "1.2.1.1"               // O2.0版本，精品音色
-                ]
-            ]
-            ]
-        if config.enablePlayer {
-            dialogConfig["tts"] = [
-                "speaker": ttsSpeaker,
-                "audio_config": [
-                    "speech_rate": -20,      // 慢20%，适老化
-                    "loudness_rate": 10       // 大声10%，适老化
-                ]
-            ]
-        } else {
+        // The malformed legacy wrapper meant the custom VAD value was not
+        // reliably applied. Keep the provider's observed/default 1.5s
+        // endpointing when moving ASR to its canonical path.
+        var dialogConfig = DialogProviderLiveStartConfigBuilder.makeCanonicalStartConfig(
+            systemRole: systemRole,
+            speakingStyle: resolvedSpeakingStyle(),
+            model: "1.2.1.1",
+            ttsSpeaker: config.enablePlayer ? ttsSpeaker : nil,
+            hotwords: config.hotwords
+        )
+        if !config.enablePlayer {
             print("[DialogEngine] Tencent audio owner active; StartEngine omits Fire TTS config")
         }
         var livePromptHash: String?
-        if !config.systemPrompt.isEmpty {
-            let providerOwnedLive = answerAuthority == .provider
-                && sessionLifetimePolicy == .userControlledLive
+        var expectedProviderRoleText: String?
+        let providerOwnedLive = answerAuthority == .provider
+            && sessionLifetimePolicy == .userControlledLive
+        if providerOwnedLive || !config.systemPrompt.isEmpty {
+            guard !providerOwnedLive || runtimeProviderRoleText?.isEmpty == false else {
+                DDLogError("[DialogEngine] provider-owned Live missing server role text")
+                restoreAudioSessionIfNeeded()
+                if let callbackContext = currentProviderCallbackContext(),
+                   finishProviderOperation(callbackContext) {
+                    deliverProviderCallback(
+                        callbackContext,
+                        requiresActiveOperation: false
+                    ) { _, delegate in
+                        delegate.onError(error: DialogEngineError.productionConfigurationMissing)
+                    }
+                }
+                return
+            }
             var fullPrompt = providerOwnedLive
-                ? (runtimeSystemRole ?? config.systemPrompt)
+                ? runtimeProviderRoleText!
                 : config.systemPrompt
+            #if DEBUG
+            if providerOwnedLive, DialogT06DiagnosticMode.isEnabled {
+                fullPrompt = DialogT06DiagnosticMode.syntheticProviderRoleText
+            }
+            #endif
             let context = DigitalHumanContextStore.shared.current
-            fullPrompt += buildDigitalHumanModePolicy(context: context)
-            if providerOwnedLive {
-                fullPrompt += buildFormalMemorySnapshotPromptSection()
-            } else if shouldExposePersonalContext(for: context),
+            if !providerOwnedLive {
+                fullPrompt += buildDigitalHumanModePolicy(context: context)
+            }
+            if !providerOwnedLive, shouldExposePersonalContext(for: context),
                       !usesTurnScopedKnowledgeContext {
                 // 注入跨会话记忆上下文
                 let memory = ConversationMemoryManager.shared.currentMemory
@@ -2592,43 +3314,57 @@ final class DialogEngineManager: NSObject {
                     print("[DialogEngine] 🗂️ 已注入记忆档案馆素材")
                 }
             }
-            #if DEBUG || UI_QA_SIMULATOR
+            #if UI_QA_SIMULATOR
             DialogPromptDebugRecorder.record(prompt: fullPrompt)
+            #elseif DEBUG
+            if DialogT06DiagnosticMode.isEnabled {
+                DialogPromptDebugRecorder.record(prompt: fullPrompt)
+            }
             #endif
             livePromptHash = recordLivePromptPrepared(systemRole: fullPrompt)
-            // 正确写入 dialog 子字典的 system_role（而非 dialogConfig 顶层）
-            if var dialog = dialogConfig["dialog"] as? [String: Any] {
-                dialog["system_role"] = fullPrompt
-                dialogConfig["dialog"] = dialog
+            expectedProviderRoleText = providerOwnedLive ? fullPrompt : nil
+            do {
+                dialogConfig = try DialogProviderLiveStartConfigBuilder.applying(
+                    providerRoleText: fullPrompt,
+                    to: dialogConfig
+                )
+            } catch {
+                DDLogError("[DialogEngine] invalid provider Live dialog config")
+                restoreAudioSessionIfNeeded()
+                if let callbackContext = currentProviderCallbackContext(),
+                   finishProviderOperation(callbackContext) {
+                    deliverProviderCallback(
+                        callbackContext,
+                        requiresActiveOperation: false
+                    ) { _, delegate in
+                        delegate.onError(error: DialogEngineError.productionConfigurationMissing)
+                    }
+                }
+                return
             }
         }
 
-        var startConfig: [String: Any] = [
-            "dialog": dialogConfig
-        ]
-
-        // ASR 热词配置
-        if !config.hotwords.isEmpty {
-            startConfig["asr"] = [
-                "hot_words": config.hotwords
-            ]
-        }
-
-        // TTS 语速配置（适老慢速）。腾讯数智人接管声音时不请求火山 TTS 音频，
-        // 只保留 Chat 文本结果，再交给 Tencent cloud render 播放和驱动口型。
-        if config.enablePlayer {
-            startConfig["tts"] = [
-                "speaker": ttsSpeaker,
-                "speech_rate": config.speechRate
-            ]
-        }
+        let startConfig = dialogConfig
 
         let configJSON: String
-        if let jsonData = try? JSONSerialization.data(withJSONObject: startConfig),
-           let jsonStr = String(data: jsonData, encoding: .utf8) {
-            configJSON = jsonStr
-        } else {
-            configJSON = "{\"dialog\":{\"bot_name\":\"\(config.botName)\"}}"
+        do {
+            configJSON = try DialogProviderLiveStartConfigBuilder.encodedStartConfig(
+                startConfig,
+                expectedProviderRoleText: expectedProviderRoleText
+            )
+        } catch {
+            DDLogError("[DialogEngine] invalid StartEngine config")
+            restoreAudioSessionIfNeeded()
+            if let callbackContext = currentProviderCallbackContext(),
+               finishProviderOperation(callbackContext) {
+                deliverProviderCallback(
+                    callbackContext,
+                    requiresActiveOperation: false
+                ) { _, delegate in
+                    delegate.onError(error: DialogEngineError.productionConfigurationMissing)
+                }
+            }
+            return
         }
 
         // 启动引擎（SDK 内部自动处理连接、会话、录音）。StartEngine 的
@@ -2681,23 +3417,6 @@ final class DialogEngineManager: NSObject {
         return runtimeSpeakingStyle ?? speakingStyle
     }
 
-    /// The Live ticket contains a bounded, server-built snapshot of the
-    /// current formal memory. It is serialized into the provider role prompt
-    /// so the provider can answer continuously without a per-turn backend hop.
-    private func buildFormalMemorySnapshotPromptSection() -> String {
-        guard let snapshot = runtimeFormalMemorySnapshot,
-              JSONSerialization.isValidJSONObject(snapshot),
-              let data = try? JSONSerialization.data(
-                  withJSONObject: snapshot,
-                  options: [.sortedKeys]
-              ),
-              let json = String(data: data, encoding: .utf8),
-              !json.isEmpty else {
-            return "\n\n【正式记忆快照】\n当前没有可用的已确认正式记忆。事实问题请明确说明不知道，不要猜测。"
-        }
-        return "\n\n【正式记忆快照】\n只允许引用以下服务端已确认事实；不得把助手回应或用户本轮未确认内容当作正式记忆。\n" + json
-    }
-
     private var isProviderOwnedLive: Bool {
         sessionLifetimePolicy == .userControlledLive && answerAuthority == .provider
     }
@@ -2742,12 +3461,13 @@ final class DialogEngineManager: NSObject {
         guard isProviderOwnedLive else { return nil }
         let normalized = systemRole.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return nil }
-        let promptHash = PrivacySafeDiagnostics.correlationHash(normalized)
+        let promptHash = runtimeProviderContextHash
+            ?? PrivacySafeDiagnostics.correlationHash(normalized)
         let factCount = (runtimeFormalMemorySnapshot?["coreFacts"] as? [[String: Any]])?.count ?? 0
         PrivacySafeDiagnostics.log(
             subsystem: "DialogEngine",
             event: "livePromptPrepared",
-            states: ["formatVersion": "dialog.system_role.v1"],
+            states: ["formatVersion": DialogProviderLiveStartConfigBuilder.adapterVersion],
             counts: [
                 "promptChars": normalized.count,
                 "promptBytes": normalized.utf8.count,
@@ -2772,7 +3492,7 @@ final class DialogEngineManager: NSObject {
                     config.resourceID,
                     fallback: "unknown"
                 ),
-                "configShapeVersion": "dialog.system_role.v1",
+                "configShapeVersion": DialogProviderLiveStartConfigBuilder.adapterVersion,
             ],
             correlations: [
                 "promptHash": promptHash,
@@ -2783,14 +3503,14 @@ final class DialogEngineManager: NSObject {
         )
     }
 
-    private func recordLiveStartEngineAccepted(
+    private func recordLiveConnectionStarted(
         providerPayload: Data,
         dialogOperationID: UUID
     ) {
         guard isProviderOwnedLive else { return }
         PrivacySafeDiagnostics.log(
             subsystem: "DialogEngine",
-            event: "liveStartEngineAccepted",
+            event: "liveProviderConnectionStarted",
             states: [
                 "directiveReturnCode": String(liveStartDirectiveReturnCode ?? -1),
                 "providerCallback": "connectionStarted",
@@ -2802,6 +3522,162 @@ final class DialogEngineManager: NSObject {
                 "providerConnection": PrivacySafeDiagnostics.correlationHash(providerPayload),
             ]
         )
+    }
+
+    private func recordLiveProviderSessionStarted(dialogOperationID: UUID) {
+        guard isProviderOwnedLive else { return }
+        PrivacySafeDiagnostics.log(
+            subsystem: "DialogEngine",
+            event: "liveProviderSessionStarted",
+            states: [
+                "groundingMode": "sessionSnapshot",
+                "directiveReturnCode": String(liveStartDirectiveReturnCode ?? -1),
+            ],
+            correlations: [
+                "providerSession": PrivacySafeDiagnostics.correlationHash(
+                    dialogOperationID.uuidString
+                ),
+                "providerContextHash": runtimeProviderContextHash,
+            ]
+        )
+    }
+
+    @discardableResult
+    private func observeProviderQuestionEvent(
+        _ data: Data,
+        stage: String,
+        callbackContext: DialogEngineProviderCallbackContext
+    ) -> DialogProviderEventMetadata {
+        let metadata = DialogProviderEventMetadata(data: data)
+        let previousQuestionID = providerTurnCorrelation.currentQuestionID
+        let turnSequence = providerTurnCorrelation.observeQuestion(
+            id: metadata.questionID,
+            generation: callbackContext.engineGeneration
+        )
+        if let questionID = metadata.questionID,
+           questionID != previousQuestionID,
+           turnSequence != nil {
+            providerQuestionObservedAt = Date()
+        }
+        guard isProviderOwnedLive else { return metadata }
+        PrivacySafeDiagnostics.log(
+            subsystem: "DialogEngine",
+            event: "liveProviderQuestionObserved",
+            states: [
+                "groundingMode": "sessionSnapshot",
+                "stage": stage,
+                "questionIDObserved": metadata.questionID == nil ? "false" : "true",
+            ],
+            counts: ["turnSequence": turnSequence ?? 0],
+            correlations: [
+                "providerQuestion": metadata.questionID,
+                "providerContextHash": runtimeProviderContextHash,
+            ]
+        )
+        return metadata
+    }
+
+    private func recordProviderFirstOutput(
+        kind: String,
+        replyID: String?,
+        callbackContext: DialogEngineProviderCallbackContext
+    ) {
+        guard isProviderOwnedLive else { return }
+        let correlationKey = replyID
+            ?? providerTurnCorrelation.currentReplyID
+            ?? providerTurnCorrelation.currentQuestionID
+            ?? "unobserved-\(providerTurnCorrelation.turnSequence)"
+        let inserted: Bool
+        switch kind {
+        case "text":
+            inserted = providerFirstTextKeys.insert(correlationKey).inserted
+        case "audio":
+            inserted = providerFirstAudioKeys.insert(correlationKey).inserted
+        default:
+            return
+        }
+        guard inserted else { return }
+        var counts = ["turnSequence": providerTurnCorrelation.turnSequence]
+        if let observedAt = providerQuestionObservedAt {
+            counts["latencyFromQuestionMs"] = max(
+                0,
+                Int(Date().timeIntervalSince(observedAt) * 1_000)
+            )
+        }
+        if let runtimeMemoryRevision {
+            counts["memoryRevision"] = runtimeMemoryRevision
+        }
+        PrivacySafeDiagnostics.log(
+            subsystem: "DialogEngine",
+            event: "liveProviderFirstOutputObserved",
+            states: [
+                "groundingMode": "sessionSnapshot",
+                "kind": kind,
+                "questionIDObserved": providerTurnCorrelation.currentQuestionID == nil
+                    ? "false" : "true",
+                "replyIDObserved": (replyID ?? providerTurnCorrelation.currentReplyID) == nil
+                    ? "false" : "true",
+            ],
+            counts: counts,
+            correlations: [
+                "providerSession": PrivacySafeDiagnostics.correlationHash(
+                    callbackContext.dialogOperationId.uuidString
+                ),
+                "providerQuestion": providerTurnCorrelation.currentQuestionID,
+                "providerReply": replyID ?? providerTurnCorrelation.currentReplyID,
+                "providerContextHash": runtimeProviderContextHash,
+                "checkpointHash": PrivacySafeDiagnostics.correlationHash(
+                    runtimeProjectionCheckpoint
+                ),
+            ]
+        )
+    }
+
+    private func observeProviderReplyEvent(
+        _ data: Data,
+        stage: String,
+        callbackContext: DialogEngineProviderCallbackContext
+    ) -> (DialogProviderEventMetadata, DialogProviderReplyCorrelation) {
+        let metadata = DialogProviderEventMetadata(data: data)
+        if metadata.questionID != nil {
+            _ = providerTurnCorrelation.observeQuestion(
+                id: metadata.questionID,
+                generation: callbackContext.engineGeneration
+            )
+        }
+        let correlation = providerTurnCorrelation.observeReply(
+            questionID: metadata.questionID,
+            replyID: metadata.replyID,
+            generation: callbackContext.engineGeneration
+        )
+        if isProviderOwnedLive {
+            PrivacySafeDiagnostics.log(
+                subsystem: "DialogEngine",
+                event: "liveProviderReplyObserved",
+                states: [
+                    "groundingMode": "sessionSnapshot",
+                    "stage": stage,
+                    "correlation": correlation.rawValue,
+                ],
+                counts: ["turnSequence": providerTurnCorrelation.turnSequence],
+                correlations: [
+                    "providerQuestion": metadata.questionID,
+                    "providerReply": metadata.replyID,
+                    "providerContextHash": runtimeProviderContextHash,
+                ]
+            )
+        }
+        return (metadata, correlation)
+    }
+
+    private func acceptsProviderReply(_ correlation: DialogProviderReplyCorrelation) -> Bool {
+        switch correlation {
+        case .matched, .unobserved:
+            return true
+        case .staleQuestion, .staleGeneration:
+            DDLogWarn("[DialogEngine] dropped stale provider reply correlation=\(correlation.rawValue)")
+            return false
+        }
     }
 
     private func observeLiveFirstResponseIfNeeded(
@@ -3057,7 +3933,7 @@ extension DialogEngineManager {
         switch type {
         // MARK: Connection Events
         case SEEventConnectionStarted:
-            recordLiveStartEngineAccepted(
+            recordLiveConnectionStarted(
                 providerPayload: data,
                 dialogOperationID: callbackContext.dialogOperationId
             )
@@ -3110,6 +3986,15 @@ extension DialogEngineManager {
             DDLogInfo("[DialogEngine] 对话会话已开始")
             isDialogActive = true
             providerSessionOperationId = callbackContext.dialogOperationId
+            providerTurnCorrelation.beginSession(generation: callbackContext.engineGeneration)
+            providerActiveChatReplyID = nil
+            providerQuestionObservedAt = nil
+            providerFirstTextKeys.removeAll()
+            providerFirstAudioKeys.removeAll()
+            chatBuffer = ""
+            recordLiveProviderSessionStarted(
+                dialogOperationID: callbackContext.dialogOperationId
+            )
             guard selectDelegatedClientTTSRouteIfNeeded() else {
                 deliverProviderCallback(callbackContext) { _, delegate in
                     delegate.onError(
@@ -3200,6 +4085,11 @@ extension DialogEngineManager {
         // MARK: ASR Events
         case SEEventASRInfo:
             let asrRawStr = String(data: data, encoding: .utf8) ?? ""
+            let providerMetadata = observeProviderQuestionEvent(
+                data,
+                stage: "asrInfo",
+                callbackContext: callbackContext
+            )
             let parsedASRInfo = parseASRResult(from: data)
 
             // Live 模式允许用户直接开口打断本地 AI 播报。只有识别到非空
@@ -3242,6 +4132,16 @@ extension DialogEngineManager {
                 deliverProviderCallback(callbackContext) { _, delegate in
                     delegate.onASRResult(text: result.text, isFinal: result.isFinal)
                 }
+            } else if providerMetadata.questionID != nil {
+                // SpeechEngineToB may emit an identifier-only ASRInfo before
+                // the textual ASRResponse. It establishes turn ownership but
+                // is not a recognition failure and must not be shown as text.
+                PrivacySafeDiagnostics.log(
+                    subsystem: "DialogEngine",
+                    event: "liveASRIdentifierOnly",
+                    counts: ["payloadBytes": data.count],
+                    correlations: ["providerQuestion": providerMetadata.questionID]
+                )
             } else {
                 // 解析失败，尝试从 raw JSON 中提取任何文本
                 DDLogWarn("[DialogEngine] ASRInfo payload parse failed; trying fallback extraction")
@@ -3282,6 +4182,11 @@ extension DialogEngineManager {
             }
 
         case SEEventASRResponse:
+            _ = observeProviderQuestionEvent(
+                data,
+                stage: "asrResponse",
+                callbackContext: callbackContext
+            )
             let parsedASRResponse = parseASRResult(from: data)
             if isAISpeaking {
                 let interruptText = parsedASRResponse?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -3337,9 +4242,19 @@ extension DialogEngineManager {
             }
 
         case SEEventASREnded:
+            _ = observeProviderQuestionEvent(
+                data,
+                stage: "asrEnded",
+                callbackContext: callbackContext
+            )
             DDLogInfo("[DialogEngine] ASR 结束")
 
         case SEEventChatTextQueryConfirmed:
+            _ = observeProviderQuestionEvent(
+                data,
+                stage: "queryConfirmed",
+                callbackContext: callbackContext
+            )
             let confirmedQueryText = parseQueryConfirmedText(from: data)
             if isAISpeaking {
                 let interruptText = confirmedQueryText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -3393,6 +4308,12 @@ extension DialogEngineManager {
                 print("[DialogEngine] skipped Fire TTS sentence start; Tencent owns audible playback")
                 return
             }
+            let (_, replyCorrelation) = observeProviderReplyEvent(
+                data,
+                stage: "ttsSentenceStart",
+                callbackContext: callbackContext
+            )
+            guard acceptsProviderReply(replyCorrelation) else { return }
             guard acceptsDelegatedTTSEvent(data, phase: .started) else { return }
             if sessionLifetimePolicy == .userControlledLive,
                answerAuthority == .dreamJourneyBackend,
@@ -3436,6 +4357,12 @@ extension DialogEngineManager {
                 print("[DialogEngine] skipped Fire TTS sentence end; Tencent owns audible playback")
                 return
             }
+            let (_, replyCorrelation) = observeProviderReplyEvent(
+                data,
+                stage: "ttsSentenceEnd",
+                callbackContext: callbackContext
+            )
+            guard acceptsProviderReply(replyCorrelation) else { return }
             guard acceptsDelegatedTTSEvent(data, phase: .sentenceEnded) else { return }
             if pendingTextReplyPlayback != nil {
                 return
@@ -3454,6 +4381,12 @@ extension DialogEngineManager {
                 print("[DialogEngine] skipped Fire TTS ended; Tencent owns audible playback")
                 return
             }
+            let (_, replyCorrelation) = observeProviderReplyEvent(
+                data,
+                stage: "ttsEnded",
+                callbackContext: callbackContext
+            )
+            guard acceptsProviderReply(replyCorrelation) else { return }
             guard acceptsDelegatedTTSEvent(data, phase: .streamEnded) else { return }
             DDLogInfo("[DialogEngine] TTS 播放结束")
             if let playback = pendingTextReplyPlayback {
@@ -3503,6 +4436,11 @@ extension DialogEngineManager {
                 return
             }
             observeLiveFirstResponseIfNeeded(callbackContext: callbackContext)
+            recordProviderFirstOutput(
+                kind: "audio",
+                replyID: providerTurnCorrelation.currentReplyID,
+                callbackContext: callbackContext
+            )
             if sessionLifetimePolicy == .userControlledLive,
                answerAuthority == .dreamJourneyBackend {
                 guard let replyID = delegatedClientPlaybackReplyID,
@@ -3552,8 +4490,26 @@ extension DialogEngineManager {
                 // Provider-side chat text must not overwrite the grounded answer.
                 return
             }
+            let (metadata, replyCorrelation) = observeProviderReplyEvent(
+                data,
+                stage: "chatResponse",
+                callbackContext: callbackContext
+            )
+            guard acceptsProviderReply(replyCorrelation) else { return }
+            if let replyID = metadata.replyID,
+               providerActiveChatReplyID != replyID {
+                providerActiveChatReplyID = replyID
+                chatBuffer = ""
+            }
             // AI 对话流式 chunk —— 拼接到 buffer，不直接展示
             if let text = parseChatText(from: data) {
+                if !text.isEmpty {
+                    recordProviderFirstOutput(
+                        kind: "text",
+                        replyID: metadata.replyID,
+                        callbackContext: callbackContext
+                    )
+                }
                 chatBuffer += text
                 // 实时更新 UI（流式效果）
                 let currentText = chatBuffer
@@ -3567,6 +4523,12 @@ extension DialogEngineManager {
                 chatBuffer = ""
                 return
             }
+            let (_, replyCorrelation) = observeProviderReplyEvent(
+                data,
+                stage: "chatEnded",
+                callbackContext: callbackContext
+            )
+            guard acceptsProviderReply(replyCorrelation) else { return }
             DDLogInfo("[DialogEngine] Chat 结束")
             // 如果 chatBuffer 有内容但未通过 TTS 展示，展示它
             if !chatBuffer.isEmpty {
@@ -3576,6 +4538,7 @@ extension DialogEngineManager {
                     delegate.onTTSStarted(text: finalText)
                 }
             }
+            providerActiveChatReplyID = nil
 
         // MARK: Engine Events
         case SEEngineStart:

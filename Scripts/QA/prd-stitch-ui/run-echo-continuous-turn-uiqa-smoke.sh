@@ -83,6 +83,7 @@ for key in (
     "firstTurnCompleted",
     "secondTurnCompleted",
     "stoppedToIdle",
+    "micEnabledAfterTypedFinish",
     "staleReplyRejected",
     "leftEchoTab",
     "reenteredEchoTab",
@@ -92,6 +93,11 @@ for key in (
 
 if payload.get("finalState") != "idle":
     raise SystemExit(f"{path}: expected finalState=idle, got {payload.get('finalState')!r}")
+if payload.get("typedFinishCycleCount") != 10:
+    raise SystemExit(
+        f"{path}: expected typedFinishCycleCount=10, "
+        f"got {payload.get('typedFinishCycleCount')!r}"
+    )
 if payload.get("transcriptEntryCountBeforeLeave") != 4:
     raise SystemExit(
         f"{path}: expected transcriptEntryCountBeforeLeave=4, "
@@ -129,6 +135,10 @@ run_once() {
 
   cp "$RESULT_FILE" "$result_copy"
   verify_result "$result_copy"
+  # The result can be persisted before CoreAnimation presents the first frame
+  # after a process restart. Wait for that frame so the screenshot is evidence
+  # of the rendered UIKit state instead of a transient black surface.
+  sleep 1
   xcrun simctl io "$SIMULATOR_UDID" screenshot "$screenshot_path" >/dev/null
   xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
   kill "$CONSOLE_PID" >/dev/null 2>&1 || true
