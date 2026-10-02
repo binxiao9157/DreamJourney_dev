@@ -130,6 +130,15 @@ final class UserManager {
     }
     #endif
 
+    #if DEBUG
+    func setSyntheticCurrentUserForTesting(_ user: UserModel?) {
+        accountStateLock.lock()
+        storedCurrentUser = user
+        privateAccessState = user == nil ? .signedOut : .authenticated
+        accountStateLock.unlock()
+    }
+    #endif
+
     @discardableResult
     func reconcilePrivateAccessSession() -> Bool {
         let capturedUser = currentUser

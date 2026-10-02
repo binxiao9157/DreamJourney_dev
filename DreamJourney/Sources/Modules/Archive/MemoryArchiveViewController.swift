@@ -6881,6 +6881,10 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         "预览关联 \(count) 条"
     }
 
+    private var themes: [OwnerTruthLiveTheme] = []
+    private var themeCursor: String?
+    private var themeRequestID: UUID?
+    private let themesEnabled: Bool
     private var accountLease: AccountLease
     private let candidateClient: OwnerTruthCandidateReviewClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
@@ -6966,6 +6970,9 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         useCase.onReviewContextInvalidated = { [weak self, weak useCase] successor in
             DispatchQueue.main.async {
                 guard let self, self.cachedRelatedGroupReviewUseCase === useCase else { return }
+                self.themeRequestID = nil
+                self.themes = []; self.themeCursor = nil
+                self.tableView.reloadData()
                 self.reviewContextGeneration &+= 1
                 self.accountLease = successor
                 self.relatedGroupRequestID = nil
@@ -6994,8 +7001,10 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         inboxReadContextFactory: @escaping OwnerTruthCandidateReviewUseCase.InboxReadContextFactory = {
             OwnerTruthCandidateInboxReadContext()
         },
-        pendingResultStore: OwnerTruthCandidateReviewPendingResultStoring? = nil
+        pendingResultStore: OwnerTruthCandidateReviewPendingResultStoring? = nil,
+        themesEnabled: Bool = Bundle.main.object(forInfoDictionaryKey: "LiveRecoveryEnabled") as? Bool ?? false
     ) {
+        self.themesEnabled = themesEnabled
         self.accountLease = accountLease
         self.candidateClient = client
         self.accountLeaseRuntime = accountLeaseRuntime
@@ -7045,6 +7054,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        refreshThemes()
         navigationController?.setNavigationBarHidden(false, animated: animated)
         navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
         navigationController?.navigationBar.titleTextAttributes = [
@@ -7234,7 +7244,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         formalMemoryNoticeLabel.accessibilityLabel = formalMemoryNotice
         formalMemoryNoticeLabel.isHidden = formalMemoryNotice == nil
         emptyStateLabel.text = emptyText(for: state)
-        emptyStateLabel.isHidden = emptyStateLabel.text == nil
+        emptyStateLabel.isHidden = !themes.isEmpty || emptyStateLabel.text == nil
         tableView.reloadData()
         restoreBatchSelection()
         PrivacySafeDiagnostics.log(
@@ -7386,7 +7396,34 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         }
     }
 
+    private func refreshThemes(after: String? = nil) {
+        guard themesEnabled, let client = candidateClient as? OwnerTruthLiveThemeClient,
+              qaGateEnabled(), accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            themes = []; themeCursor = nil; tableView.reloadData(); return
+        }
+        let request = UUID(), lease = accountLease; themeRequestID = request
+        client.fetchOwnerTruthLiveThemes(lease: lease, after: after) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self, self.themeRequestID == request,
+                      self.accountLeaseRuntime.validate(lease, at: .commit).allowed else { return }
+                self.themeRequestID = nil
+                switch result {
+                case .success(let page):
+                    let visible = page.themes.filter { self.sourceIDFilter == nil || $0.sourceID == self.sourceIDFilter || $0.members.contains(where: { $0.sourceID == self.sourceIDFilter }) }
+                    if after == nil { self.themes = visible }
+                    else { self.themes += visible.filter { value in !self.themes.contains { $0.binding.topicId == value.binding.topicId } } }
+                    self.themeCursor = page.nextCursor
+                    self.emptyStateLabel.isHidden = !self.themes.isEmpty || self.emptyStateLabel.text == nil
+                case .failure:
+                    self.statusLabel.text = "主题记忆暂未读取成功，请稍后刷新。"
+                }
+                self.tableView.reloadData()
+            }
+        }
+    }
+
     @objc private func refreshTapped() {
+        refreshThemes()
         useCase.send(.refresh)
     }
 
@@ -7987,7 +8024,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
 
     private func openCandidateDetail(_ item: OwnerTruthCandidateInboxItemViewState) {
         let generation = reviewContextGeneration
-        let controller = OwnerTruthCandidateDetailViewController(item: item)
+        let controller = OwnerTruthCandidateDetailViewController(item: item, draftAccountLease: AccountLeaseRuntime.shared.capture())
         var activeReviewIntentID: UUID?
         controller.onAccept = { [weak self, weak controller] in
             guard let self, generation == self.reviewContextGeneration else { return }
@@ -8013,7 +8050,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
                 completion: completion
             )
         }
-        controller.onCorrect = { [weak self, weak controller] correctedValue, correctedFacetValues, proposal in
+        controller.onCorrect = { [weak self, weak controller] correctedValue, correctedFacetValues, verifiedPreview in
             guard let self, generation == self.reviewContextGeneration else { return }
             guard controller?.beginReviewSubmission() == true else { return }
             let intentID = UUID()
@@ -8022,15 +8059,9 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
                 candidateID: item.id,
                 correctedPrimaryValue: correctedValue,
                 correctedFacetValues: correctedFacetValues,
-                proposedChangeSet: proposal,
-                displayedBinding: proposal.map {
-                    OwnerTruthCandidateReviewBinding(
-                        candidateID: item.id,
-                        candidateVersion: item.candidateVersion,
-                        candidateContentHash: item.candidateContentHash,
-                        proposal: $0
-                    )
-                }
+                proposedChangeSet: verifiedPreview?.proposal,
+                displayedBinding: nil,
+                verifiedCorrectionPreview: verifiedPreview
             ), intentID: intentID)
         }
         controller.onReject = { [weak self, weak controller] in
@@ -8052,6 +8083,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
             activeReviewIntentID = nil
             switch event.outcome {
             case .committed:
+                controller.reviewDidCommit()
                 controller.navigationController?.popViewController(animated: true)
             case .outcomeUnknown(let notice):
                 controller.setReviewOutcomeUnknown()
@@ -8220,14 +8252,28 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
 }
 
 extension OwnerTruthCandidateInboxViewController: UITableViewDataSource, UITableViewDelegate {
+    func numberOfSections(in tableView: UITableView) -> Int { themesEnabled ? 2 : 1 }
+    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        section == 1 && (!themes.isEmpty || themeCursor != nil) ? "对话主题" : nil
+    }
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        renderedState.items.count
+        section == 1 ? themes.count + (themeCursor == nil ? 0 : 1) : renderedState.items.count
     }
 
     func tableView(
         _ tableView: UITableView,
         cellForRowAt indexPath: IndexPath
     ) -> UITableViewCell {
+        if indexPath.section == 1 {
+            let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+            if indexPath.row == themes.count { cell.textLabel?.text = "载入更多主题"; return cell }
+            let theme = themes[indexPath.row]
+            cell.textLabel?.text = theme.title
+            cell.detailTextLabel?.text = (theme.binding.version > 1 ? "有新补充 · " : "") + theme.summary
+            cell.detailTextLabel?.numberOfLines = 3; cell.accessoryType = .disclosureIndicator
+            cell.accessibilityIdentifier = "live-theme-card-\(theme.binding.topicId)"
+            return cell
+        }
         let cell = tableView.dequeueReusableCell(
             withIdentifier: OwnerTruthCandidateInboxCell.reuseIdentifier,
             for: indexPath
@@ -8237,6 +8283,16 @@ extension OwnerTruthCandidateInboxViewController: UITableViewDataSource, UITable
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        if indexPath.section == 1 {
+            tableView.deselectRow(at: indexPath, animated: true)
+            guard !isSelectingBatch, !isSelectingRelatedGroup else { return }
+            if indexPath.row == themes.count { if let cursor = themeCursor { refreshThemes(after: cursor) }; return }
+            guard themes.indices.contains(indexPath.row), let client = candidateClient as? OwnerTruthLiveThemeClient else { return }
+            let controller = OwnerTruthLiveThemeDetailViewController(theme: themes[indexPath.row], lease: accountLease,
+                client: client, runtime: accountLeaseRuntime, pending: pendingResultStore)
+            controller.onCompleted = { [weak self] in self?.refreshThemes(); self?.useCase.send(.refresh) }
+            navigationController?.pushViewController(controller, animated: true); return
+        }
         guard renderedState.items.indices.contains(indexPath.row) else {
             return
         }
@@ -8266,6 +8322,7 @@ extension OwnerTruthCandidateInboxViewController: UITableViewDataSource, UITable
     }
 
     func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
+        guard indexPath.section == 0 else { return }
         guard (isSelectingBatch || isSelectingRelatedGroup),
               renderedState.items.indices.contains(indexPath.row) else {
             return
@@ -8283,6 +8340,7 @@ extension OwnerTruthCandidateInboxViewController: UITableViewDataSource, UITable
         _ tableView: UITableView,
         willSelectRowAt indexPath: IndexPath
     ) -> IndexPath? {
+        if indexPath.section == 1 { return (isSelectingBatch || isSelectingRelatedGroup) ? nil : indexPath }
         guard (isSelectingBatch || isSelectingRelatedGroup),
               renderedState.items.indices.contains(indexPath.row) else {
             return indexPath
@@ -8300,7 +8358,7 @@ extension OwnerTruthCandidateInboxViewController: UITableViewDataSource, UITable
     }
 }
 
-final class OwnerTruthCandidateDetailViewController: UIViewController {
+final class OwnerTruthCandidateDetailViewController: UIViewController, UITextViewDelegate {
     static func changeSetBaseRevisionText(_ revision: Int) -> String {
         "基于正式记忆第 \(revision) 次修订快照"
     }
@@ -8321,6 +8379,11 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
         "字段变化：\(paths)"
     }
 
+    private let draftLeaseIsValid: (AccountLease) -> Bool
+    private let draftAccountLease: AccountLease?
+    private let draftStore: OwnerTruthCandidateEditDraftStore
+    private var editDraft: OwnerTruthCandidateEditDraftStore.Draft?
+    private var draftReadFailed = false
     private let item: OwnerTruthCandidateInboxItemViewState
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
@@ -8337,12 +8400,12 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
     var onRequestCorrectionPreview: ((
         String,
         [OwnerTruthMemoryFacetKind: [String]]?,
-        @escaping (Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void
+        @escaping (Result<OwnerTruthVerifiedCorrectionPreview, Error>) -> Void
     ) -> Void)?
     var onCorrect: ((
         String,
         [OwnerTruthMemoryFacetKind: [String]]?,
-        OwnerTruthCandidateChangeSetProposal?
+        OwnerTruthVerifiedCorrectionPreview?
     ) -> Void)?
     var onReject: (() -> Void)?
     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
@@ -8361,10 +8424,9 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
     func runUIQAShowCorrectionPreview(
         _ proposal: OwnerTruthCandidateChangeSetProposal
     ) {
-        presentCorrectionPreview(
+        presentCorrectionPreviewForUIQA(
             proposal,
-            correctedValue: item.primaryValue,
-            correctedFacetValues: nil
+            onConfirm: nil
         )
     }
 
@@ -8396,8 +8458,13 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
     }
     #endif
 
-    init(item: OwnerTruthCandidateInboxItemViewState) {
+    init(item: OwnerTruthCandidateInboxItemViewState, draftAccountLease: AccountLease? = nil,
+         draftStore: OwnerTruthCandidateEditDraftStore = .shared,
+         draftLeaseIsValid: @escaping (AccountLease) -> Bool = { AccountLeaseRuntime.shared.validate($0, at: .commit).allowed }) {
         self.item = item
+        self.draftAccountLease = draftAccountLease
+        self.draftStore = draftStore
+        self.draftLeaseIsValid = draftLeaseIsValid
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
     }
@@ -8469,6 +8536,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
         view.backgroundColor = DJDesignTokens.Color.background
         configureLayout()
         configureContent()
+        restoreEditDraft()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -8705,6 +8773,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
         helpLabel.textColor = DJDesignTokens.Color.textTertiary
         helpLabel.numberOfLines = 0
 
+        correctionTextView.delegate = self
         correctionTextView.text = item.primaryValue
         correctionTextView.font = DJDesignTokens.Font.body(16)
         correctionTextView.textColor = DJDesignTokens.Color.textPrimary
@@ -8781,6 +8850,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
         textField.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 12, height: 1))
         textField.leftViewMode = .always
 
+        textField.addTarget(self, action: #selector(editDraftChanged), for: .editingChanged)
         facetTextFields[kind] = textField
         stack.addArrangedSubview(label)
         stack.addArrangedSubview(textField)
@@ -8965,14 +9035,79 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
         return button
     }
 
+    private func restoreEditDraft() {
+        guard let lease = draftAccountLease,
+              draftLeaseIsValid(lease) else { return }
+        do {
+            guard let draft = try draftStore.load(candidateID: item.id.rawValue.uuidString, for: lease) else { return }
+            editDraft = draft
+            correctionTextView.text = draft.primaryValue
+            for (key, value) in draft.facetValues {
+                if let kind = OwnerTruthMemoryFacetKind(rawValue: key) { facetTextFields[kind]?.text = value }
+            }
+            correctionCard.isHidden = false
+            if draft.baseProposalVersion != item.candidateVersion || draft.baseContentHash != item.candidateContentHash {
+                correctionErrorLabel.text = "候选已有更新，已保留你的编辑。提交前请核对新的变更预览。"
+                correctionErrorLabel.isHidden = false
+            }
+        } catch {
+            draftReadFailed = true
+            correctionCard.isHidden = false
+            correctionErrorLabel.text = "未能读取上次编辑，原草稿仍保留，暂不覆盖。"
+            correctionErrorLabel.isHidden = false
+        }
+    }
+
+    func textViewDidChange(_ textView: UITextView) {
+        guard textView === correctionTextView else { return }
+        persistEditDraft()
+    }
+
+    @objc private func editDraftChanged() { persistEditDraft() }
+
+    private func persistEditDraft() {
+        guard !draftReadFailed, let lease = draftAccountLease,
+              draftLeaseIsValid(lease) else { return }
+        do {
+            editDraft = try draftStore.save(candidateID: item.id.rawValue.uuidString,
+                baseProposalVersion: editDraft?.baseProposalVersion ?? item.candidateVersion,
+                baseContentHash: editDraft?.baseContentHash ?? item.candidateContentHash,
+                primaryValue: correctionTextView.text ?? "",
+                facetValues: Dictionary(uniqueKeysWithValues: facetTextFields.map { ($0.key.rawValue, $0.value.text ?? "") }),
+                expectedEditRevision: editDraft?.editRevision ?? 0, for: lease)
+        } catch {
+            correctionErrorLabel.text = "本次编辑尚未保存到手机，请保留页面后重试。"
+            correctionErrorLabel.isHidden = false
+        }
+    }
+
+    @discardableResult
+    private func discardEditDraft() -> Bool {
+        guard let lease = draftAccountLease, let draft = editDraft else { return !draftReadFailed }
+        do {
+            try draftStore.discard(candidateID: item.id.rawValue.uuidString,
+                expectedEditRevision: draft.editRevision, for: lease)
+            editDraft = nil
+            return true
+        } catch {
+            correctionErrorLabel.text = "未能清理编辑草稿，原内容仍保留。"
+            correctionErrorLabel.isHidden = false
+            return false
+        }
+    }
+
+    func reviewDidCommit() { _ = discardEditDraft() }
+
     @objc private func showCorrectionTapped() {
         correctionCard.isHidden = false
         correctionErrorLabel.isHidden = true
+        persistEditDraft()
         correctionTextView.becomeFirstResponder()
         scrollView.scrollRectToVisible(correctionCard.frame.insetBy(dx: 0, dy: -20), animated: true)
     }
 
     @objc private func cancelCorrectionTapped() {
+        guard discardEditDraft() else { return }
         correctionPreviewGeneration &+= 1
         correctionTextView.text = item.primaryValue
         if case .available(let facets) = item.facetsState {
@@ -9037,7 +9172,8 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
             DispatchQueue.main.async {
                 guard let self, previewGeneration == self.correctionPreviewGeneration else { return }
                 switch result {
-                case .success(let proposal):
+                case .success(let verifiedPreview):
+                    let proposal = verifiedPreview.proposal
                     guard proposal.reviewability == .reviewable else {
                         self.correctionErrorLabel.textColor = .systemRed
                         self.correctionErrorLabel.text = "变更预览不完整，请重新载入后再确认。"
@@ -9046,7 +9182,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
                     }
                     self.correctionErrorLabel.isHidden = true
                     self.presentCorrectionPreview(
-                        proposal,
+                        verifiedPreview,
                         correctedValue: value,
                         correctedFacetValues: correctedFacetValues
                     )
@@ -9073,9 +9209,21 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
     }
 
     private func presentCorrectionPreview(
-        _ proposal: OwnerTruthCandidateChangeSetProposal,
+        _ verifiedPreview: OwnerTruthVerifiedCorrectionPreview,
         correctedValue: String,
         correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]?
+    ) {
+        presentCorrectionPreviewForUIQA(
+            verifiedPreview.proposal,
+            onConfirm: { [weak self] in
+                self?.onCorrect?(correctedValue, correctedFacetValues, verifiedPreview)
+            }
+        )
+    }
+
+    private func presentCorrectionPreviewForUIQA(
+        _ proposal: OwnerTruthCandidateChangeSetProposal,
+        onConfirm: (() -> Void)?
     ) {
         let message = correctionPreviewMessage(proposal)
         let previewController = OwnerTruthReviewPreviewViewController(
@@ -9086,9 +9234,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController {
             returnTitle: "继续编辑",
             confirmTitle: "确认写入",
             accessibilityPrefix: "owner-truth-correction",
-            onConfirm: { [weak self] in
-                self?.onCorrect?(correctedValue, correctedFacetValues, proposal)
-            }
+            onConfirm: onConfirm ?? {}
         )
         #if UI_QA_SIMULATOR && targetEnvironment(simulator)
         present(previewController, animated: true) { [weak self] in
@@ -11122,6 +11268,17 @@ private final class CandidateInboxUIQAClient: OwnerTruthCandidateReviewClient {
         completion(.failure(CandidateInboxUIQAClientError.invalidReview))
     }
 
+    func previewOwnerTruthCandidateCorrectionChangeSet(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        frozenCorrection: OwnerTruthFrozenCorrectionInput,
+        traceID: String,
+        completion: @escaping (Result<OwnerTruthCandidateCorrectionPreviewEnvelope, Error>) -> Void
+    ) {
+        completion(.failure(CandidateInboxUIQAClientError.invalidReview))
+    }
+
     func previewOwnerTruthCandidateChangeSetGroup(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthMemoryChangeSetGroupCommand,
@@ -11965,6 +12122,17 @@ private final class CandidateRelatedGroupUIQAClient: OwnerTruthCandidateReviewCl
         correctedValue: [String: OwnerTruthJSONValue]?,
         correctedValueSchemaVersion: String?,
         completion: @escaping (Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void
+    ) {
+        completion(.failure(CandidateInboxUIQAClientError.invalidReview))
+    }
+
+    func previewOwnerTruthCandidateCorrectionChangeSet(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        frozenCorrection: OwnerTruthFrozenCorrectionInput,
+        traceID: String,
+        completion: @escaping (Result<OwnerTruthCandidateCorrectionPreviewEnvelope, Error>) -> Void
     ) {
         completion(.failure(CandidateInboxUIQAClientError.invalidReview))
     }
@@ -17410,10 +17578,12 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
     private func reviewBatchAcknowledgementStatusText() -> String {
         switch candidateProposalAdmissionState.phase {
-        case .admitting:
+        case .waitingForPolicy, .admitting:
             return "正在开始整理"
         case .admitted:
             return candidateProposalStatusText()
+        case .outcomeUnknown:
+            return "正在核实是否开始整理"
         case .failed, .unavailable:
             return "暂时无法开始整理"
         case .idle:
@@ -17433,10 +17603,12 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
 
     private func reviewBatchAcknowledgementDetailText() -> String {
         switch candidateProposalAdmissionState.phase {
-        case .admitting:
+        case .waitingForPolicy, .admitting:
             return "正在建立本次分享的整理边界。"
         case .admitted:
             return candidateProposalStatusDetailText()
+        case .outcomeUnknown:
+            return "开始整理的结果尚未确认；系统只会核实原请求，不会重复提交。"
         case .failed, .unavailable:
             return candidateProposalAdmissionFailureDetailText()
         case .idle:
@@ -17464,8 +17636,16 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             return "本次分享的状态已更新，请重新进入查看。"
         case .accountUnavailable, .staleAccountLease:
             return "账号已变化，请重新进入。"
-        case .releasePolicyDisabled:
+        case .releasePolicyDisabled, .policyRefreshTimedOut:
             return "当前暂不能开始整理，请稍后再试。"
+        case .storageFailed:
+            return "本次整理请求未能安全保存，尚未发送。"
+        case .requestNotSent:
+            return "本次整理请求尚未发送，可稍后重新进入。"
+        case .outcomeUnknown:
+            return "开始整理的结果尚未确认；系统只会核实原请求。"
+        case .serverRejected:
+            return "服务端已拒绝本次整理请求，请重新进入查看。"
         case .invalidVault, .requestFailed, nil:
             return "暂时无法开始整理，请稍后重试。"
         }
@@ -17551,6 +17731,14 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             return "账号已变化，请重新进入。"
         case .releasePolicyDisabled:
             return "当前暂不能开始整理，请稍后再试。"
+        case .storageFailed:
+            return "本次确认未能安全保存，尚未发送。"
+        case .requestNotSent:
+            return "本次确认尚未发送，可稍后重试。"
+        case .outcomeUnknown:
+            return "本次确认结果尚未确定；系统只会核实原请求。"
+        case .serverRejected:
+            return "服务端已拒绝本次确认，请重新进入查看。"
         case .invalidVault, .requestFailed, nil:
             return "暂时无法确认整理，请稍后重试。"
         }
@@ -17581,6 +17769,16 @@ final class OwnerTruthInterviewNaturalInputViewController: UIViewController {
             return "当前档案空间不可用"
         case .accountUnavailable, .staleAccountLease:
             return "账号已变化，请重新进入"
+        case .storageFailed:
+            return "结束请求未能安全保存，尚未发送"
+        case .requestNotSent:
+            return "结束请求尚未发送"
+        case .outcomeUnknown:
+            return "结束结果尚未确认，将只读核实"
+        case .serverRejected:
+            return "服务端已拒绝本次结束请求"
+        case .authenticationRejectedBeforeApplication:
+            return "登录凭据已过期，本次请求尚未处理"
         case .invalidInput, .contractMismatch, .requestFailed, nil:
             return "自然输入暂不可用"
         }
@@ -19090,12 +19288,13 @@ private final class InterviewNaturalInputBoundaryUIQAScenario {
     }
 }
 
-private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalInputClient,
+final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalInputClient,
     OwnerTruthInterviewPendingReviewBatchInboxClient,
     OwnerTruthInterviewReviewBatchAcknowledgementClient,
     OwnerTruthInterviewCandidateProposalAdmissionClient,
     OwnerTruthInterviewCandidateProposalStatusClient {
     private let vaultID: OwnerTruthVaultID?
+    private let featureGateService: FeatureGateService
     private let postNarrativeContinuationState: OwnerTruthInterviewNaturalInputContinuationState
     private let candidateProposalReviewState: OwnerTruthInterviewCandidateProposalReviewState
     private var sessionsWithNarrative = Set<UUID>()
@@ -19113,17 +19312,33 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
     private var acknowledgedReviewBatch = false
     private var candidateProposalAdmitted = false
     private(set) var candidateProposalStatusRequestCount = 0
+    private(set) var appendRequestCount = 0
+    private(set) var endRequestCount = 0
+    private(set) var acknowledgementRequestCount = 0
+    private(set) var admissionRequestCount = 0
 
     var reviewBatchIDForUIQA: OwnerTruthRecordID { reviewBatchID }
+
+    func freshOwnerTruthInterviewNaturalInputDecision() -> FeatureDecision? {
+        featureGateService.requestServerPolicyManagedDecision(for: .echoTextInput)
+    }
+
+    func freshOwnerTruthInterviewCandidateProposalAdmissionDecision() -> FeatureDecision? {
+        featureGateService.requestServerPolicyManagedDecision(
+            for: .ownerTruthCandidateReview
+        )
+    }
 
     init(
         vaultID: OwnerTruthVaultID?,
         postNarrativeContinuationState: OwnerTruthInterviewNaturalInputContinuationState = .narrativeRecorded,
-        candidateProposalReviewState: OwnerTruthInterviewCandidateProposalReviewState = .notReady
+        candidateProposalReviewState: OwnerTruthInterviewCandidateProposalReviewState = .notReady,
+        featureGateService: FeatureGateService = .shared
     ) {
         self.vaultID = vaultID
         self.postNarrativeContinuationState = postNarrativeContinuationState
         self.candidateProposalReviewState = candidateProposalReviewState
+        self.featureGateService = featureGateService
     }
 
     func fetchOwnerTruthInterviewNaturalInputCurrentSession(
@@ -19201,10 +19416,12 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
         command: OwnerTruthInterviewNaturalInputAppendCommand,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
     ) {
-        guard self.vaultID == vaultID else {
+        guard self.vaultID == vaultID,
+              let clientSequenceNumber = command.clientSequenceNumber else {
             completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
             return
         }
+        appendRequestCount += 1
         sessionsWithNarrative.insert(command.sessionID.rawValue)
         do {
             let receipt = try OwnerTruthInterviewNaturalInputReceipt(
@@ -19221,6 +19438,9 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
                         "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
                         "messageId": command.messageID.rawValue.uuidString,
                         "messageSequence": 1,
+                        "clientSequenceNumber": clientSequenceNumber,
+                        "continuousClientSequence": clientSequenceNumber,
+                        "deliveryState": OwnerTruthInterviewNaturalInputDeliveryState.contiguous.rawValue,
                     ],
                 ],
                 expectedVaultID: vaultID
@@ -19245,11 +19465,13 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
               current.boundary == .open,
               current.threadVersion == command.expectedThreadVersion,
               current.sessionVersion == command.expectedSessionVersion,
+              let lastClientSequenceNumber = command.lastClientSequenceNumber,
               sessionsWithNarrative.contains(command.sessionID.rawValue) else {
             completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
             return
         }
         do {
+            endRequestCount += 1
             let receipt = try OwnerTruthInterviewNaturalInputReceipt(
                 backendJSONObject: [
                     "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
@@ -19262,6 +19484,8 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
                         "sessionVersion": command.expectedSessionVersion + 2,
                         "state": OwnerTruthInterviewSessionLifecycle.ended.rawValue,
                         "boundary": OwnerTruthInterviewSessionBoundary.open.rawValue,
+                        "continuousClientSequence": lastClientSequenceNumber,
+                        "deliveryState": OwnerTruthInterviewNaturalInputDeliveryState.closedAfterContiguousDelivery.rawValue,
                     ],
                 ],
                 expectedVaultID: vaultID
@@ -19305,6 +19529,23 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
         }
     }
 
+    func fetchOwnerTruthInterviewPendingReviewBatchInbox(
+        authority: OwnerTruthInterviewNaturalInputRequestAuthority,
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewPendingReviewBatchInbox, Error>) -> Void
+    ) {
+        guard authority.featureDecision.feature == .echoTextInput,
+              authority.featureDecision.allowed,
+              authority.accountLease.vaultId == vaultID.rawValue else {
+            completion(.failure(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        fetchOwnerTruthInterviewPendingReviewBatchInbox(
+            vaultID: vaultID,
+            completion: completion
+        )
+    }
+
     func acknowledgeOwnerTruthInterviewReviewBatch(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
@@ -19321,6 +19562,7 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
             return
         }
         do {
+            acknowledgementRequestCount += 1
             let outcome: OwnerTruthInterviewReviewBatchAcknowledgementOutcome = acknowledgedReviewBatch
                 ? .deduplicated
                 : .acknowledged
@@ -19353,6 +19595,30 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
         }
     }
 
+    func acknowledgeOwnerTruthInterviewReviewBatchWrite(
+        authority: OwnerTruthInterviewNaturalInputRequestAuthority,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
+        diagnosticTraceID: String,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewReviewBatchAcknowledgementReceipt>
+        ) -> Void
+    ) {
+        guard authority.featureDecision.feature == .echoTextInput,
+              authority.featureDecision.allowed,
+              authority.accountLease.vaultId == vaultID.rawValue,
+              !diagnosticTraceID.isEmpty else {
+            completion(.notSent(InterviewNaturalInputUIQAClientError.invalidRequest))
+            return
+        }
+        acknowledgeOwnerTruthInterviewReviewBatch(
+            vaultID: vaultID,
+            command: command
+        ) { result in
+            completion(.classify(result, exposure: .unknown))
+        }
+    }
+
     func admitOwnerTruthInterviewCandidateProposal(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
@@ -19366,6 +19632,7 @@ private final class InterviewNaturalInputUIQAClient: OwnerTruthInterviewNaturalI
             return
         }
         do {
+            admissionRequestCount += 1
             let outcome: OwnerTruthCommandOutcome = candidateProposalAdmitted ? .deduplicated : .created
             candidateProposalAdmitted = true
             completion(.success(try OwnerTruthInterviewCandidateProposalAdmissionReceipt(
@@ -20698,3 +20965,211 @@ private struct OwnerTruthKnowledgeDimensionConfirmationUIQAUseCaseVariants {
 }
 
 #endif
+
+/// Editing is local page state. The only persisted business states remain
+/// pending/accepted/rejected; the submitted proposal is frozen to what was shown.
+final class OwnerTruthLiveThemeDetailViewController: UIViewController, UITextViewDelegate {
+    private let theme: OwnerTruthLiveTheme
+    private let lease: AccountLease
+    private let client: OwnerTruthLiveThemeClient
+    private let runtime: AccountLeaseRuntimePort
+    private let pending: OwnerTruthCandidateReviewPendingResultStoring
+    private let drafts: OwnerTruthCandidateEditDraftStore
+    private var draft: OwnerTruthCandidateEditDraftStore.Draft?
+    private var fields: [String: UITextView] = [:]
+    private let stack = UIStackView()
+    private let notice = UILabel()
+    private let editButton = UIButton(type: .system)
+    private let confirmButton = UIButton(type: .system)
+    private let rejectButton = UIButton(type: .system)
+    private var editingFields = false
+    private var busy = false
+    private var unresolved = false
+    private var staleDraft = false
+    var onCompleted: (() -> Void)?
+    init(theme: OwnerTruthLiveTheme, lease: AccountLease, client: OwnerTruthLiveThemeClient,
+         runtime: AccountLeaseRuntimePort, pending: OwnerTruthCandidateReviewPendingResultStoring,
+         drafts: OwnerTruthCandidateEditDraftStore = .shared) {
+        self.theme = theme; self.lease = lease; self.client = client; self.runtime = runtime
+        self.pending = pending; self.drafts = drafts
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func viewDidLoad() {
+        super.viewDidLoad(); title = "待确认记忆"; view.backgroundColor = .systemBackground
+        let scroll = UIScrollView(); scroll.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scroll); stack.axis = .vertical; stack.spacing = 18
+        stack.translatesAutoresizingMaskIntoConstraints = false; scroll.addSubview(stack)
+        NSLayoutConstraint.activate([
+            scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor), scroll.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -20),
+            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 20),
+            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -30),
+            stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -40)])
+        addLabel(theme.title, font: .preferredFont(forTextStyle: .title2))
+        addLabel(theme.summary, font: .preferredFont(forTextStyle: .body))
+        if theme.linkedTopicID != nil { addLabel("这是对已处理记忆的补充或更正，确认前不会修改原记忆。", font: .preferredFont(forTextStyle: .footnote)) }
+        notice.numberOfLines = 0; notice.font = .preferredFont(forTextStyle: .footnote); stack.addArrangedSubview(notice)
+        editButton.accessibilityIdentifier = "live-theme-edit"
+        confirmButton.accessibilityIdentifier = "live-theme-confirm"
+        editButton.setTitle("查看与编辑内容", for: .normal); editButton.addTarget(self, action: #selector(toggleEdit), for: .touchUpInside)
+        stack.addArrangedSubview(editButton)
+        var restored: [String: String] = [:]
+        do {
+            draft = try drafts.load(candidateID: theme.binding.topicId, for: lease)
+            if let draft {
+                staleDraft = draft.baseProposalVersion != theme.binding.version || draft.baseContentHash != theme.binding.proposalHash
+                restored = try JSONDecoder().decode([String: String].self, from: Data(draft.primaryValue.utf8))
+                if staleDraft {
+                    notice.text = "这条记忆有新补充。你的旧编辑已保留，需核对新内容后再确认。"
+                    addLabel("已保留的旧编辑：\n" + restored.sorted(by: { $0.key < $1.key }).map(\.value).joined(separator: "\n"), font: .preferredFont(forTextStyle: .body))
+                    let reset = UIButton(type: .system); reset.setTitle("核对后使用新版本", for: .normal)
+                    reset.addTarget(self, action: #selector(useNewVersion), for: .touchUpInside); stack.addArrangedSubview(reset)
+                    let merge = UIButton(type: .system); merge.setTitle("保留我的编辑，合并新补充", for: .normal)
+                    merge.accessibilityIdentifier = "live-theme-merge-draft"
+                    merge.addTarget(self, action: #selector(mergeOldEdits), for: .touchUpInside); stack.addArrangedSubview(merge)
+                    restored = [:]
+                } else { editingFields = true; notice.text = "已恢复上次编辑，尚未确认。" }
+            }
+        } catch { staleDraft = true; notice.text = "编辑草稿无法读取，已保留原文件；暂不能提交。" }
+        for member in theme.members {
+            let field = UITextView(); field.font = .preferredFont(forTextStyle: .body); field.isScrollEnabled = false
+            field.text = restored[member.atomID] ?? member.statement; field.delegate = self
+            field.backgroundColor = .secondarySystemBackground; field.layer.cornerRadius = 8
+            field.accessibilityIdentifier = "live-theme-fact-\(member.atomID)"
+            field.isHidden = !editingFields; field.heightAnchor.constraint(greaterThanOrEqualToConstant: 64).isActive = true
+            fields[member.atomID] = field; stack.addArrangedSubview(field)
+        }
+        confirmButton.setTitle("预览并确认", for: .normal); confirmButton.addTarget(self, action: #selector(previewAccept), for: .touchUpInside)
+        rejectButton.setTitle("不保存这条记忆", for: .normal); rejectButton.addTarget(self, action: #selector(previewReject), for: .touchUpInside)
+        stack.addArrangedSubview(confirmButton); stack.addArrangedSubview(rejectButton)
+        do { unresolved = !(try pending.groupRecords(subjectID: lease.subjectId, vaultID: lease.vaultId)).isEmpty }
+        catch { unresolved = true }
+        if unresolved { notice.text = "上次确认结果尚未核实，请返回列表核实后继续。" }
+        updateControls()
+    }
+    private func addLabel(_ text: String, font: UIFont) {
+        let label = UILabel(); label.text = text; label.numberOfLines = 0; label.font = font; stack.addArrangedSubview(label)
+    }
+    private func updateControls() {
+        let allowed = runtime.validate(lease, at: .commit).allowed && !busy && !unresolved && !staleDraft
+        confirmButton.isEnabled = allowed; rejectButton.isEnabled = allowed; editButton.isEnabled = allowed
+        fields.values.forEach { $0.isEditable = allowed }
+    }
+    @objc private func toggleEdit() {
+        editingFields.toggle(); fields.values.forEach { $0.isHidden = !editingFields }
+    }
+    @objc private func useNewVersion() {
+        guard !busy, let old = draft else { return }
+        let alert = UIAlertController(title: "使用新版本", message: "旧编辑不会自动覆盖新补充。确认后清除旧编辑草稿，你可以重新编辑上面展示的新版本。", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "继续核对", style: .cancel))
+        alert.addAction(UIAlertAction(title: "使用新版本", style: .destructive) { [weak self] _ in
+            guard let self, self.runtime.validate(self.lease, at: .commit).allowed else { return }
+            do {
+                try self.drafts.discard(candidateID: self.theme.binding.topicId, expectedEditRevision: old.editRevision, for: self.lease)
+                self.draft = nil; self.staleDraft = false; self.notice.text = "请核对新版本后确认。"; self.updateControls()
+            } catch { self.notice.text = "草稿已发生变化，请重新打开。" }
+        }); present(alert, animated: true)
+    }
+    @objc private func mergeOldEdits() {
+        guard staleDraft, !busy, let old = draft else { return }
+        do {
+            let values = try JSONDecoder().decode([String: String].self, from: Data(old.primaryValue.utf8))
+            let currentIDs = Set(theme.members.map(\.atomID))
+            // A removed/replaced fact has no safe automatic destination. Keep
+            // the full draft and ask the owner to copy edits after comparison.
+            guard Set(values.keys).isSubset(of: currentIDs) else {
+                notice.text = "部分旧内容已被更正，无法自动合并。旧编辑仍显示在上方，请核对后使用新版本并手动填写。"; return
+            }
+            let message = "以下修改将保留，其余内容采用新补充。请核对后再预览确认：\n" + values.sorted(by: { $0.key < $1.key }).map(\.value).joined(separator: "\n")
+            let alert = UIAlertController(title: "合并编辑与新补充", message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "继续核对", style: .cancel))
+            alert.addAction(UIAlertAction(title: "合并到编辑草稿", style: .default) { [weak self] _ in
+                guard let self, self.runtime.validate(self.lease, at: .commit).allowed else { return }
+                do {
+                    self.draft = try self.drafts.mergeOntoProposal(candidateID: self.theme.binding.topicId,
+                        baseProposalVersion: self.theme.binding.version, baseContentHash: self.theme.binding.proposalHash,
+                        primaryValue: old.primaryValue, expectedEditRevision: old.editRevision, for: self.lease)
+                    for (id,value) in values { self.fields[id]?.text = value }
+                    self.staleDraft = false; self.editingFields = true; self.fields.values.forEach { $0.isHidden = false }
+                    self.notice.text = "编辑与新补充已合并保存，尚未确认。"; self.updateControls()
+                } catch { self.notice.text = "未能合并保存，原编辑仍保留。请重新打开后核对。" }
+            }); present(alert, animated: true)
+        } catch { notice.text = "旧编辑无法读取，未作修改。" }
+    }
+    private func editedValues() -> [String: String] {
+        Dictionary(uniqueKeysWithValues: theme.members.compactMap { member in
+            let value = fields[member.atomID]?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? member.statement
+            return value == member.statement ? nil : (member.atomID, value)
+        })
+    }
+    func textViewDidChange(_ textView: UITextView) {
+        guard !staleDraft, !busy, runtime.validate(lease, at: .commit).allowed else { return }
+        do {
+            let data = try JSONEncoder().encode(editedValues())
+            draft = try drafts.save(candidateID: theme.binding.topicId, baseProposalVersion: theme.binding.version,
+                baseContentHash: theme.binding.proposalHash, primaryValue: String(decoding: data, as: UTF8.self),
+                facetValues: [:], expectedEditRevision: draft?.editRevision ?? 0, for: lease)
+            notice.text = "编辑已保存，尚未确认。"
+        } catch { staleDraft = true; notice.text = "编辑未能安全保存，请保留页面内容后重新打开。"; updateControls() }
+    }
+    @objc private func previewAccept() { preview(rejecting: false) }
+    @objc private func previewReject() { preview(rejecting: true) }
+    private func preview(rejecting: Bool) {
+        guard !busy, !unresolved, !staleDraft, runtime.validate(lease, at: .request).allowed else { return }
+        let edits = rejecting ? [:] : editedValues()
+        guard edits.values.allSatisfy({ !$0.isEmpty && $0.count <= 4000 }) else { notice.text = "编辑内容不能为空或超过 4000 字。"; return }
+        let commandID = UUID().uuidString.lowercased()
+        busy = true; updateControls(); notice.text = "正在核对最新版本…"
+        client.previewOwnerTruthLiveTheme(lease: lease, theme: theme, commandID: commandID, edits: edits, rejecting: rejecting) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self, self.runtime.validate(self.lease, at: .commit).allowed else { return }
+                switch result {
+                case .failure:
+                    self.busy = false; self.notice.text = "暂不能确认。内容可能已有更新，请返回刷新；你的编辑仍保留。"; self.updateControls()
+                case .success(let proposal):
+                    guard proposal.reviewability == .reviewable else {
+                        self.busy = false; self.notice.text = "确认信息不完整，暂不能提交。"; self.updateControls(); return
+                    }
+                    let body = rejecting ? "这条待确认记忆将移出列表。" : self.theme.members.map { edits[$0.atomID] ?? $0.statement }.joined(separator: "\n\n")
+                    let alert = UIAlertController(title: rejecting ? "不保存这条记忆？" : "确认保存以下内容？", message: body, preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "返回编辑", style: .cancel) { [weak self] _ in self?.busy = false; self?.updateControls() })
+                    alert.addAction(UIAlertAction(title: rejecting ? "不保存" : "确认保存", style: rejecting ? .destructive : .default) { [weak self] _ in
+                        self?.submit(commandID: commandID, edits: edits, rejecting: rejecting, proposal: proposal)
+                    }); self.present(alert, animated: true)
+                }
+            }
+        }
+    }
+    private func submit(commandID: String, edits: [String: String], rejecting: Bool, proposal: OwnerTruthMemoryChangeSetGroupProposal) {
+        guard runtime.validate(lease, at: .request).allowed, let vault = OwnerTruthVaultID(lease.vaultId) else { busy = false; updateControls(); return }
+        do {
+            try pending.upsertGroup(OwnerTruthMemoryChangeSetGroupPendingResultRecord(accountLease: lease, vaultID: vault, commandID: commandID, proposal: proposal))
+        } catch { busy = false; notice.text = "无法保存确认记录，尚未发送。"; updateControls(); return }
+        notice.text = "正在保存确认结果…"
+        client.confirmOwnerTruthLiveTheme(lease: lease, theme: theme, commandID: commandID, edits: edits,
+            rejecting: rejecting, proposal: proposal) { [weak self] outcome in
+            DispatchQueue.main.async {
+                guard let self, self.runtime.validate(self.lease, at: .commit).allowed else { return }
+                self.busy = false
+                switch outcome {
+                case .committed:
+                    do {
+                        try self.pending.removeGroup(subjectID: self.lease.subjectId, vaultID: self.lease.vaultId, commandID: commandID)
+                        if let draft = self.draft { try self.drafts.discard(candidateID: self.theme.binding.topicId, expectedEditRevision: draft.editRevision, for: self.lease) }
+                        self.onCompleted?(); self.navigationController?.popViewController(animated: true)
+                    } catch { self.unresolved = true; self.notice.text = "已保存；本地确认记录待核实，请返回列表。" }
+                case .notSent, .serverRejected:
+                    do { try self.pending.removeGroup(subjectID: self.lease.subjectId, vaultID: self.lease.vaultId, commandID: commandID) }
+                    catch { self.unresolved = true }
+                    self.notice.text = "未完成确认，请返回刷新；编辑仍保留。"
+                case .outcomeUnknown:
+                    self.unresolved = true; self.notice.text = "结果尚未确认，请返回列表核实。不会自动重复提交。"
+                }
+                self.updateControls()
+            }
+        }
+    }
+}

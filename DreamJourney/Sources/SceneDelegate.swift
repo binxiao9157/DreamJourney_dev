@@ -16,6 +16,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = (scene as? UIWindowScene) else { return }
         let window = UIWindow(windowScene: windowScene)
         self.window = window
+        #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.environment["DJ_ISOLATED_UNIT_TEST_HOST"] == "1" {
+            window.rootViewController = UIViewController()
+            window.makeKeyAndVisible()
+            return
+        }
+        #endif
         let appComposition = (UIApplication.shared.delegate as? AppDelegate)?.appComposition
         let coordinator = AppCoordinator(window: window, appComposition: appComposition)
         appCoordinator = coordinator

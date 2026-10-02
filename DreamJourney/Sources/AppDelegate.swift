@@ -19,6 +19,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.environment["DJ_ISOLATED_UNIT_TEST_HOST"] == "1" {
+            return true
+        }
+        #endif
         TencentVirtualmanSDKBridge.registerFactory()
         configureLaunchArgumentFeatureFlagsIfNeeded()
         appComposition.prepareForProcessLaunch()
@@ -330,6 +335,8 @@ private extension AppDelegate {
             scheduleUIQAScenario(scenario) { $0.runEchoAudioOwnerCoordinatorSmoke() }
         case .echoContinuousTurnSmoke:
             scheduleUIQAScenario(scenario) { $0.runEchoContinuousTurnSmoke() }
+        case .echoLiveMemoryColdStartRecoverySmoke:
+            scheduleUIQAScenario(scenario) { $0.runEchoLiveMemoryColdStartRecoverySmoke() }
         case .digitalHumanRuntimeStubSmoke:
             prepareUIQADigitalHumanRuntimeStubBackendSession { [weak self] authenticated in
                 guard authenticated else { return }
@@ -3286,6 +3293,37 @@ private extension AppDelegate {
                     "completed=\(result["completed"] as? Bool == true) " +
                     "entryVisible=\(result["entryVisible"] as? Bool == true) " +
                     "sheetPresented=\(result["sheetPresented"] as? Bool == true)"
+                )
+            }
+        )
+    }
+
+    func runEchoLiveMemoryColdStartRecoverySmoke(retryCount: Int = 0) {
+        let phase = QALaunchConfiguration.shared.value(forPrefix: "DJB6ColdStartPhase=")
+            ?? "missing"
+        QAEchoScenarioRunner.run(
+            retryCount: retryCount,
+            smokeName: "EchoLiveMemoryColdStartRecoverySmoke",
+            retry: { [weak self] nextRetryCount in
+                self?.runEchoLiveMemoryColdStartRecoverySmoke(retryCount: nextRetryCount)
+            },
+            writeResult: { result in
+                QAScenarioResultWriter.writeAndLog(
+                    result,
+                    fileName: "b6-cold-start-\(phase)-result.json",
+                    smokeName: "EchoLiveMemoryColdStartRecoverySmoke"
+                )
+            },
+            execute: { echoViewController, completion in
+                echoViewController.runUIQAEchoLiveMemoryColdStartRecoverySmoke(
+                    phase: phase,
+                    completion: completion
+                )
+            },
+            completionLog: { result in
+                print(
+                    "[UI_QA] EchoLiveMemoryColdStartRecoverySmoke completed " +
+                    "phase=\(phase) completed=\(result["completed"] as? Bool == true)"
                 )
             }
         )

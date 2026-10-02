@@ -700,6 +700,265 @@ private final class TencentTerminalEventTestBridge: TencentDigitalHumanSDKBridge
 }
 
 final class EchoTurnIntentReducerTests: XCTestCase {
+    func testLateSameQuestionEventsCannotClaimClientInterruptDuringItsReply() {
+        let generation = UUID()
+        var state = DialogProviderInterruptionState()
+        state.beginSession(generation: generation)
+        state.beginAudibleReply(questionID: "q1", generation: generation)
+
+        for _ in 0..<3 {
+            XCTAssertFalse(state.claimNewSpokenQuestion(
+                incomingQuestionID: "q1",
+                currentQuestionID: "q1",
+                hasRecognizedSpeech: true,
+                generation: generation
+            ))
+        }
+    }
+
+    func testNewBoundSpokenQuestionClaimsClientInterruptOnlyOnce() {
+        let generation = UUID()
+        var state = DialogProviderInterruptionState()
+        state.beginSession(generation: generation)
+        state.beginAudibleReply(questionID: "q1", generation: generation)
+
+        XCTAssertFalse(state.claimNewSpokenQuestion(
+            incomingQuestionID: "q2",
+            currentQuestionID: "q2",
+            hasRecognizedSpeech: false,
+            generation: generation
+        ))
+        XCTAssertTrue(state.claimNewSpokenQuestion(
+            incomingQuestionID: "q2",
+            currentQuestionID: "q2",
+            hasRecognizedSpeech: true,
+            generation: generation
+        ))
+        XCTAssertFalse(state.claimNewSpokenQuestion(
+            incomingQuestionID: "q2",
+            currentQuestionID: "q2",
+            hasRecognizedSpeech: true,
+            generation: generation
+        ))
+        XCTAssertFalse(state.claimNewSpokenQuestion(
+            incomingQuestionID: "q1",
+            currentQuestionID: "q2",
+            hasRecognizedSpeech: true,
+            generation: generation
+        ))
+    }
+
+    func testReplyWithoutQuestionCannotReplaceCurrentBoundReply() {
+        let generation = UUID()
+        var state = DialogProviderTurnCorrelationState()
+        state.beginSession(generation: generation)
+        XCTAssertEqual(state.observeQuestion(id: "q-current", generation: generation), 1)
+        XCTAssertEqual(
+            state.observeReply(
+                questionID: "q-current",
+                replyID: "r-current",
+                generation: generation
+            ),
+            .matched
+        )
+
+        XCTAssertEqual(
+            state.observeReply(
+                questionID: nil,
+                replyID: "r-unbound-late",
+                generation: generation
+            ),
+            .ambiguousReply
+        )
+        XCTAssertEqual(state.currentQuestionID, "q-current")
+        XCTAssertEqual(state.currentReplyID, "r-current")
+    }
+
+    func testNativeLiveDiagnosticsRingIsBoundedScopedAndRedacted() {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("native-live-diagnostics-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        var timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let lease = AccountLease(
+            subjectId: "owner-sensitive",
+            vaultId: "vault-sensitive",
+            sessionId: "session-sensitive",
+            generation: 7,
+            generationId: UUID(),
+            authorityEpoch: "epoch-sensitive"
+        )
+        let store = NativeLiveDiagnosticsRingStore(
+            rootDirectory: root,
+            now: { timestamp },
+            maximumEventCount: 3,
+            maximumSessionCount: 2,
+            maximumTotalBytes: 32 * 1_024,
+            retentionInterval: 60,
+            queueLabel: "native-live-diagnostics-test-\(UUID().uuidString)"
+        )
+
+        for index in 1...5 {
+            timestamp = timestamp.addingTimeInterval(1)
+            store.record(
+                accountLease: lease,
+                providerSessionID: "provider-session-sensitive",
+                source: "sdk",
+                event: "providerCallback",
+                eventCode: index,
+                callbackOrdinal: UInt64(index),
+                questionID: "question-sensitive",
+                replyID: "reply-sensitive",
+                reason: index == 5 ? "unsafe reason with spaces and content" : "handled",
+                speakingBefore: true,
+                speakingAfter: false
+            )
+        }
+        store.waitForPendingWrites()
+
+        let snapshot = store.snapshot(
+            accountLease: lease,
+            providerSessionID: "provider-session-sensitive"
+        )
+        XCTAssertEqual(snapshot.events.map(\.eventCode), [3, 4, 5])
+        XCTAssertEqual(snapshot.events.map(\.callbackOrdinal), [3, 4, 5])
+        XCTAssertEqual(snapshot.droppedCount, 2)
+        XCTAssertEqual(snapshot.events.last?.reason, "redacted")
+        XCTAssertFalse(snapshot.events.last?.sessionHash.contains("sensitive") == true)
+        XCTAssertFalse(snapshot.events.last?.questionHash.contains("sensitive") == true)
+        XCTAssertFalse(snapshot.events.last?.replyHash.contains("sensitive") == true)
+
+        let storedBytes = (try? FileManager.default.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: nil
+        ))?.flatMap { directory in
+            (try? FileManager.default.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: nil
+            )) ?? []
+        }.compactMap { try? Data(contentsOf: $0) }.reduce(into: Data()) { $0.append($1) }
+        let storedText = storedBytes.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        XCTAssertFalse(storedText.contains("owner-sensitive"))
+        XCTAssertFalse(storedText.contains("vault-sensitive"))
+        XCTAssertFalse(storedText.contains("question-sensitive"))
+        XCTAssertFalse(storedText.contains("reply-sensitive"))
+        XCTAssertFalse(storedText.contains("unsafe reason"))
+    }
+
+    func testCanonicalAssistantTextStartsFreshForEachReply() {
+        var state = DialogProviderCanonicalReplyTextState()
+        XCTAssertEqual(state.update("第一条长回答的前半段", replyID: "reply-1"), "第一条长回答的前半段")
+        XCTAssertEqual(
+            state.update("第一条长回答的前半段和后半段", replyID: "reply-1"),
+            "第一条长回答的前半段和后半段"
+        )
+
+        XCTAssertEqual(state.update("第二条短回答", replyID: "reply-2"), "第二条短回答")
+        XCTAssertEqual(state.replyID, "reply-2")
+        XCTAssertFalse(state.text.contains("第一条长回答"))
+    }
+
+    func testExplicitFinalASRMapsToCompleteCanonicalOwnerTurn() {
+        XCTAssertEqual(
+            DialogProviderCanonicalOwnerFinalityMapper.finality(evidence: .explicitFinal),
+            .complete
+        )
+        XCTAssertEqual(
+            DialogProviderCanonicalOwnerFinalityMapper.finality(evidence: .explicitInterim),
+            .interim
+        )
+    }
+
+    func testASRParserRequiresTypedFinalityEvidence() throws {
+        func data(_ value: Any) throws -> Data {
+            try JSONSerialization.data(withJSONObject: value)
+        }
+        XCTAssertEqual(
+            DialogProviderASRParser.parse(try data(["results": [["text": "final", "is_interim": false]]]))?.finalityEvidence,
+            .explicitFinal
+        )
+        XCTAssertEqual(
+            DialogProviderASRParser.parse(try data(["results": [["text": "interim", "is_interim": true]]]))?.finalityEvidence,
+            .explicitInterim
+        )
+        XCTAssertEqual(
+            DialogProviderASRParser.parse(try data(["results": [["text": "missing"]]]))?.finalityEvidence,
+            .unknown
+        )
+        XCTAssertEqual(
+            DialogProviderASRParser.parse(try data(["results": [["text": "invalid", "is_interim": "false"]]]))?.finalityEvidence,
+            .invalid
+        )
+        XCTAssertEqual(
+            DialogProviderASRParser.parse(try data(["text": "legacy", "definite": 1]))?.finalityEvidence,
+            .explicitFinal
+        )
+        XCTAssertEqual(
+            DialogProviderASRParser.parse(try data(["text": "bool-is-invalid", "definite": true]))?.finalityEvidence,
+            .invalid
+        )
+    }
+
+    func testProviderReplyOnlyDrainsAfterSynthesisAndAllPlayerSegmentsFinish() {
+        let generation = UUID()
+        var state = DialogProviderReplyPlaybackState()
+
+        XCTAssertEqual(
+            state.receive(.playerStarted, replyID: "reply-long", generation: generation),
+            .waiting
+        )
+        XCTAssertEqual(
+            state.receive(.synthesisEnded, replyID: "reply-long", generation: generation),
+            .waiting
+        )
+        XCTAssertEqual(
+            state.receive(.playerFinished, replyID: "reply-long", generation: generation),
+            .drained
+        )
+        XCTAssertEqual(
+            state.receive(.playerFinished, replyID: "reply-long", generation: generation),
+            .ignored
+        )
+    }
+
+    func testLatePlaybackEventCannotDrainCurrentReply() {
+        let generation = UUID()
+        var state = DialogProviderReplyPlaybackState()
+        XCTAssertEqual(
+            state.receive(.playerStarted, replyID: "reply-current", generation: generation),
+            .waiting
+        )
+        XCTAssertEqual(
+            state.receive(.synthesisEnded, replyID: "reply-old", generation: generation),
+            .ignored
+        )
+        XCTAssertEqual(
+            state.receive(.playerFinished, replyID: "reply-current", generation: generation),
+            .waiting
+        )
+    }
+
+    func testLateReplyCannotRewindCurrentProviderQuestionBeforeCorrelation() {
+        let generation = UUID()
+        var state = DialogProviderTurnCorrelationState()
+        state.beginSession(generation: generation)
+        XCTAssertEqual(state.observeQuestion(id: "q1", generation: generation), 1)
+        XCTAssertEqual(state.observeReply(questionID: "q1", replyID: "r1", generation: generation), .matched)
+        XCTAssertEqual(state.observeQuestion(id: "q2", generation: generation), 2)
+
+        // This mirrors the production reply-event path: it currently observes
+        // a reply's embedded question as a new question before correlating it.
+        _ = state.observeQuestion(id: "q1", generation: generation)
+        let lateReply = state.observeReply(
+            questionID: "q1",
+            replyID: "r1-late",
+            generation: generation
+        )
+
+        XCTAssertEqual(lateReply, .staleQuestion)
+        XCTAssertEqual(state.currentQuestionID, "q2")
+        XCTAssertEqual(state.turnSequence, 2)
+    }
+
     func testOrdinaryTurnTransitionsFromVoiceStartToReplyDelivered() {
         var reducer = EchoTurnIntentReducer()
 
@@ -2659,7 +2918,8 @@ final class DialogEngineAudiblePlaybackPolicyTests: XCTestCase {
         let policy = DialogEngineAudiblePlaybackPolicy(enablePlayer: true)
 
         XCTAssertTrue(policy.providerPlayerEnabled)
-        XCTAssertFalse(policy.providerPlayerAudioCallbackEnabled)
+        XCTAssertTrue(policy.providerPlayerAudioCallbackEnabled)
+        XCTAssertTrue(policy.decoderObservationEnabled)
         XCTAssertFalse(policy.applicationPCMPlaybackEnabled)
 
         let delegatedLivePolicy = DialogEngineAudiblePlaybackPolicy(
@@ -3619,5 +3879,94 @@ final class DialogPCM16WaveEncoderTests: XCTestCase {
                 Data([0x00, 0x00, 0x20, 0x00])
             )
         )
+    }
+}
+
+final class DialogProviderPCMDrainVerifierTests: XCTestCase {
+    private let generation = UUID()
+    private let reply = "actual-reply"
+    private func pcm(_ values: [Int16]) -> Data {
+        var result = Data()
+        for value in values {
+            let bits = UInt16(bitPattern: value)
+            result.append(UInt8(truncatingIfNeeded: bits))
+            result.append(UInt8(truncatingIfNeeded: bits >> 8))
+        }
+        return result
+    }
+    private let silence = Data(repeating: 0, count: 9_600)
+    private func prime(_ state: inout DialogProviderPCMDrainVerifier) {
+        state.decoded(pcm([0, 1, -2, 300, 0]), replyID: reply, generation: generation)
+        state.synthesized(replyID: reply, generation: generation)
+    }
+    func testActualPlayedContentAndObservedSilenceCompleteExactlyOnce() {
+        var state = DialogProviderPCMDrainVerifier(); prime(&state)
+        XCTAssertFalse(state.played(pcm([0, 0, 1, -2]), replyID: reply, generation: generation))
+        XCTAssertFalse(state.played(pcm([300, 0]), replyID: reply, generation: generation))
+        XCTAssertTrue(state.played(silence, replyID: reply, generation: generation))
+        XCTAssertFalse(state.played(silence, replyID: reply, generation: generation))
+    }
+    func testSynthesisAndSilenceWithoutPlaybackCannotComplete() {
+        var state = DialogProviderPCMDrainVerifier(); prime(&state)
+        XCTAssertFalse(state.played(silence, replyID: reply, generation: generation))
+        XCTAssertFalse(state.didDrain)
+    }
+    func testSameLengthDifferentAudioCannotComplete() {
+        var state = DialogProviderPCMDrainVerifier(); prime(&state)
+        XCTAssertFalse(state.played(pcm([1, -2, 301]), replyID: reply, generation: generation))
+        XCTAssertFalse(state.played(silence, replyID: reply, generation: generation))
+    }
+    func testTruncatedTailCannotComplete() {
+        var state = DialogProviderPCMDrainVerifier(); prime(&state)
+        XCTAssertFalse(state.played(pcm([1, -2]), replyID: reply, generation: generation))
+        XCTAssertFalse(state.played(silence, replyID: reply, generation: generation))
+    }
+    func testPlaybackBeforeSynthesisWaitsForFreshSilence() {
+        var state = DialogProviderPCMDrainVerifier()
+        let audio = pcm([1, -2, 300])
+        state.decoded(audio, replyID: reply, generation: generation)
+        XCTAssertFalse(state.played(audio, replyID: reply, generation: generation))
+        XCTAssertFalse(state.played(silence, replyID: reply, generation: generation))
+        state.synthesized(replyID: reply, generation: generation)
+        XCTAssertFalse(state.didDrain)
+        XCTAssertTrue(state.played(silence, replyID: reply, generation: generation))
+    }
+    func testStaleReplyAndGenerationDoNotSatisfyCurrentPlayback() {
+        var state = DialogProviderPCMDrainVerifier(); prime(&state)
+        XCTAssertFalse(state.played(pcm([1, -2, 300]), replyID: "old", generation: generation))
+        XCTAssertFalse(state.played(pcm([1, -2, 300]), replyID: reply, generation: UUID()))
+        XCTAssertFalse(state.played(silence, replyID: reply, generation: generation))
+        XCTAssertEqual(state.playedSamples, 0)
+    }
+    func testResetDropsPreviousProof() {
+        var state = DialogProviderPCMDrainVerifier(); prime(&state)
+        _ = state.played(pcm([1, -2, 300]), replyID: reply, generation: generation)
+        state.reset()
+        XCTAssertFalse(state.played(silence, replyID: "new", generation: generation))
+        XCTAssertFalse(state.didDrain)
+    }
+    func testOddPCMAndPostTerminalDecodeFailClosed() {
+        var state = DialogProviderPCMDrainVerifier()
+        state.decoded(Data([1]), replyID: reply, generation: generation)
+        XCTAssertTrue(state.invalid)
+        state.reset(); prime(&state)
+        state.decoded(pcm([1]), replyID: reply, generation: generation)
+        XCTAssertTrue(state.invalid)
+    }
+    func testSilentReplyCannotInventPlayback() {
+        var state = DialogProviderPCMDrainVerifier()
+        state.decoded(silence, replyID: reply, generation: generation)
+        state.synthesized(replyID: reply, generation: generation)
+        XCTAssertFalse(state.played(silence, replyID: reply, generation: generation))
+    }
+    func testCallbackChunkingAndInterChunkUnderrunDoNotChangeContent() {
+        var state = DialogProviderPCMDrainVerifier()
+        state.decoded(pcm([1, 0]), replyID: reply, generation: generation)
+        _ = state.played(pcm([0, 1, 0]), replyID: reply, generation: generation)
+        _ = state.played(silence, replyID: reply, generation: generation)
+        state.decoded(pcm([-2, 0, 300]), replyID: reply, generation: generation)
+        state.synthesized(replyID: reply, generation: generation)
+        _ = state.played(pcm([-2, 0, 300, 0]), replyID: reply, generation: generation)
+        XCTAssertTrue(state.played(silence, replyID: reply, generation: generation))
     }
 }

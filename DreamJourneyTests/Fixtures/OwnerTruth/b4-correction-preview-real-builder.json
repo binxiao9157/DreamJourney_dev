@@ -1,0 +1,450 @@
+{
+  "assertions": {
+    "resolvedHashDiffersFromSource": true,
+    "resolvedHashMatchesProposal": true,
+    "sourceHashMatchesOriginal": true
+  },
+  "correctionPreview": {
+    "candidateId": "7213dee5-5fe2-45cf-9963-40b73c4bf4a8",
+    "correctionBinding": {
+      "resolvedContentHash": "9edaf8556d6165739808384a7ad58db8cb9cb95e9e25652b88d3b8cbaf4be98f",
+      "schemaVersion": "owner-truth-candidate-correction-binding-v1",
+      "sourceCandidateContentHash": "14bb4a932ce15d79140e1b031a6ad5422b84235cb97cbfc62f98cc1daab61b97",
+      "sourceCandidateVersion": 1,
+      "submittedCorrection": {
+        "correctedValue": {
+          "statement": "合成测试阅读清单代号是新值。"
+        },
+        "correctedValueSchemaVersion": "owner-truth-v5"
+      }
+    },
+    "proposedChangeSet": {
+      "baseMemoryRevision": 0,
+      "candidateContentHash": "9edaf8556d6165739808384a7ad58db8cb9cb95e9e25652b88d3b8cbaf4be98f",
+      "candidateVersion": 1,
+      "changeSetId": "8c2c216d-ee91-5eaa-86dd-9929044567c0",
+      "dependencies": [],
+      "operations": [
+        {
+          "addedEvidenceCount": 1,
+          "anticipatedActivation": "create",
+          "candidateAssertionKey": [
+            "person-fixture-owner",
+            "knowledge",
+            "states",
+            "合成测试阅读清单代号是新值。"
+          ],
+          "candidateId": "7213dee5-5fe2-45cf-9963-40b73c4bf4a8",
+          "changedFields": [],
+          "factDiff": {
+            "after": {
+              "affect": null,
+              "applicability": null,
+              "claimSubjectId": "person-fixture-owner",
+              "dimensions": [
+                "knowledgeSkills"
+              ],
+              "domains": [],
+              "exceptions": [],
+              "facets": {
+                "confidence": 1.0,
+                "emotions": [],
+                "goals": [],
+                "habits": [],
+                "identity": [],
+                "people": [],
+                "personality": [],
+                "places": [],
+                "reflections": [],
+                "relationships": [],
+                "time": [],
+                "values": []
+              },
+              "factType": "knowledge",
+              "knowledgeType": "personal_experience",
+              "learnedFrom": null,
+              "memorySubjectId": "person-fixture-owner",
+              "object": null,
+              "predicate": "states",
+              "provenance": {
+                "contributorAccountId": null,
+                "evidenceRefs": [],
+                "mode": "selfReport",
+                "speakerPersonId": null
+              },
+              "qualifiers": {
+                "currentApplicability": "unknown",
+                "place": null,
+                "polarity": "unknown",
+                "scenario": null,
+                "strengthExpression": null,
+                "superlativeAsserted": false,
+                "validTime": {
+                  "end": null,
+                  "expression": null,
+                  "precision": "unknown",
+                  "start": null
+                }
+              },
+              "semantic": {
+                "emotionEvidence": [],
+                "entities": [],
+                "eventTime": null,
+                "facets": [
+                  "knowledge"
+                ],
+                "narrative": "合成测试阅读清单代号是新值。",
+                "primaryKind": "knowledge",
+                "title": "合成测试阅读清单代号是新值"
+              },
+              "statement": "合成测试阅读清单代号是新值。"
+            },
+            "before": null,
+            "candidate": {
+              "affect": null,
+              "applicability": null,
+              "claimSubjectId": "person-fixture-owner",
+              "dimensions": [
+                "knowledgeSkills"
+              ],
+              "domains": [],
+              "exceptions": [],
+              "facets": {
+                "confidence": 1.0,
+                "emotions": [],
+                "goals": [],
+                "habits": [],
+                "identity": [],
+                "people": [],
+                "personality": [],
+                "places": [],
+                "reflections": [],
+                "relationships": [],
+                "time": [],
+                "values": []
+              },
+              "factType": "knowledge",
+              "knowledgeType": "personal_experience",
+              "learnedFrom": null,
+              "memorySubjectId": "person-fixture-owner",
+              "object": null,
+              "predicate": "states",
+              "provenance": {
+                "contributorAccountId": null,
+                "evidenceRefs": [],
+                "mode": "selfReport",
+                "speakerPersonId": null
+              },
+              "qualifiers": {
+                "currentApplicability": "unknown",
+                "place": null,
+                "polarity": "unknown",
+                "scenario": null,
+                "strengthExpression": null,
+                "superlativeAsserted": false,
+                "validTime": {
+                  "end": null,
+                  "expression": null,
+                  "precision": "unknown",
+                  "start": null
+                }
+              },
+              "semantic": {
+                "emotionEvidence": [],
+                "entities": [],
+                "eventTime": null,
+                "facets": [
+                  "knowledge"
+                ],
+                "narrative": "合成测试阅读清单代号是新值。",
+                "primaryKind": "knowledge",
+                "title": "合成测试阅读清单代号是新值"
+              },
+              "statement": "合成测试阅读清单代号是新值。"
+            },
+            "changedFields": [],
+            "evidence": {
+              "addedCount": 1,
+              "afterCount": 1,
+              "beforeCount": 0,
+              "candidateCount": 1
+            }
+          },
+          "operationIndex": 0,
+          "operationKind": "add",
+          "reason": "noComparableCurrentFact",
+          "targetMemoryId": null,
+          "targetMemoryVersion": null,
+          "targetMemoryVersionId": null
+        }
+      ],
+      "proposalHash": "d7a114dd9083367f8507cb8afdbfb67aa793b3ed89fc09abf37167407c4c58b6",
+      "proposalId": "e4cf7f31-cd16-51dd-88ce-c1f14ccacf50",
+      "schemaVersion": "owner-truth-memory-changeset-proposal-v1"
+    },
+    "schemaVersion": "owner-truth-candidate-changeset-preview-v1",
+    "vaultId": "vault-fixture-correction-binding"
+  },
+  "originalCandidate": {
+    "candidateId": "7213dee5-5fe2-45cf-9963-40b73c4bf4a8",
+    "candidateVersion": 1,
+    "content": {
+      "affect": null,
+      "claimSubjectId": "person-fixture-owner",
+      "dimensions": [
+        "knowledgeSkills"
+      ],
+      "domains": [
+        "knowledgeSkills"
+      ],
+      "facets": {
+        "confidence": 0.0,
+        "emotions": [],
+        "goals": [],
+        "habits": [],
+        "identity": [],
+        "people": [],
+        "personality": [],
+        "places": [],
+        "reflections": [],
+        "relationships": [],
+        "time": [],
+        "values": []
+      },
+      "factType": "knowledge",
+      "knowledgeType": "preference",
+      "memorySubjectId": "person-fixture-owner",
+      "object": {
+        "category": "codeName",
+        "entityId": null,
+        "label": "旧值"
+      },
+      "predicate": "readingListCodeName",
+      "provenance": {
+        "contributorAccountId": null,
+        "evidenceRefs": [],
+        "mode": "selfReport",
+        "speakerPersonId": null
+      },
+      "qualifiers": {
+        "currentApplicability": "unknown",
+        "place": null,
+        "polarity": "unknown",
+        "scenario": null,
+        "strengthExpression": null,
+        "superlativeAsserted": false,
+        "validTime": {
+          "end": null,
+          "expression": null,
+          "precision": "unknown",
+          "start": null
+        }
+      },
+      "semantic": {
+        "emotionEvidence": [],
+        "entities": [],
+        "eventTime": null,
+        "facets": [
+          "knowledge"
+        ],
+        "narrative": "合成测试阅读清单代号是旧值。",
+        "primaryKind": "knowledge",
+        "title": "合成测试阅读清单代号是旧值"
+      },
+      "statement": "合成测试阅读清单代号是旧值。"
+    },
+    "contentHash": "14bb4a932ce15d79140e1b031a6ad5422b84235cb97cbfc62f98cc1daab61b97",
+    "contentSchemaVersion": "owner-truth-v5",
+    "createdAt": null,
+    "epistemicStatus": "recalled",
+    "memoryKind": "knowledge",
+    "perspectiveType": "firstPerson",
+    "proposedChangeSet": {
+      "baseMemoryRevision": 0,
+      "candidateContentHash": "14bb4a932ce15d79140e1b031a6ad5422b84235cb97cbfc62f98cc1daab61b97",
+      "candidateVersion": 1,
+      "changeSetId": "f32363ef-2297-5889-bb4c-7dad373d05d0",
+      "dependencies": [],
+      "operations": [
+        {
+          "addedEvidenceCount": 1,
+          "anticipatedActivation": "create",
+          "candidateAssertionKey": [
+            "person-fixture-owner",
+            "knowledge",
+            "readinglistcodename",
+            "旧值"
+          ],
+          "candidateId": "7213dee5-5fe2-45cf-9963-40b73c4bf4a8",
+          "changedFields": [],
+          "factDiff": {
+            "after": {
+              "affect": null,
+              "claimSubjectId": "person-fixture-owner",
+              "dimensions": [
+                "knowledgeSkills"
+              ],
+              "domains": [
+                "knowledgeSkills"
+              ],
+              "facets": {
+                "confidence": 0.0,
+                "emotions": [],
+                "goals": [],
+                "habits": [],
+                "identity": [],
+                "people": [],
+                "personality": [],
+                "places": [],
+                "reflections": [],
+                "relationships": [],
+                "time": [],
+                "values": []
+              },
+              "factType": "knowledge",
+              "knowledgeType": "preference",
+              "memorySubjectId": "person-fixture-owner",
+              "object": {
+                "category": "codeName",
+                "entityId": null,
+                "label": "旧值"
+              },
+              "predicate": "readingListCodeName",
+              "provenance": {
+                "contributorAccountId": null,
+                "evidenceRefs": [],
+                "mode": "selfReport",
+                "speakerPersonId": null
+              },
+              "qualifiers": {
+                "currentApplicability": "unknown",
+                "place": null,
+                "polarity": "unknown",
+                "scenario": null,
+                "strengthExpression": null,
+                "superlativeAsserted": false,
+                "validTime": {
+                  "end": null,
+                  "expression": null,
+                  "precision": "unknown",
+                  "start": null
+                }
+              },
+              "semantic": {
+                "emotionEvidence": [],
+                "entities": [],
+                "eventTime": null,
+                "facets": [
+                  "knowledge"
+                ],
+                "narrative": "合成测试阅读清单代号是旧值。",
+                "primaryKind": "knowledge",
+                "title": "合成测试阅读清单代号是旧值"
+              },
+              "statement": "合成测试阅读清单代号是旧值。"
+            },
+            "before": null,
+            "candidate": {
+              "affect": null,
+              "claimSubjectId": "person-fixture-owner",
+              "dimensions": [
+                "knowledgeSkills"
+              ],
+              "domains": [
+                "knowledgeSkills"
+              ],
+              "facets": {
+                "confidence": 0.0,
+                "emotions": [],
+                "goals": [],
+                "habits": [],
+                "identity": [],
+                "people": [],
+                "personality": [],
+                "places": [],
+                "reflections": [],
+                "relationships": [],
+                "time": [],
+                "values": []
+              },
+              "factType": "knowledge",
+              "knowledgeType": "preference",
+              "memorySubjectId": "person-fixture-owner",
+              "object": {
+                "category": "codeName",
+                "entityId": null,
+                "label": "旧值"
+              },
+              "predicate": "readingListCodeName",
+              "provenance": {
+                "contributorAccountId": null,
+                "evidenceRefs": [],
+                "mode": "selfReport",
+                "speakerPersonId": null
+              },
+              "qualifiers": {
+                "currentApplicability": "unknown",
+                "place": null,
+                "polarity": "unknown",
+                "scenario": null,
+                "strengthExpression": null,
+                "superlativeAsserted": false,
+                "validTime": {
+                  "end": null,
+                  "expression": null,
+                  "precision": "unknown",
+                  "start": null
+                }
+              },
+              "semantic": {
+                "emotionEvidence": [],
+                "entities": [],
+                "eventTime": null,
+                "facets": [
+                  "knowledge"
+                ],
+                "narrative": "合成测试阅读清单代号是旧值。",
+                "primaryKind": "knowledge",
+                "title": "合成测试阅读清单代号是旧值"
+              },
+              "statement": "合成测试阅读清单代号是旧值。"
+            },
+            "changedFields": [],
+            "evidence": {
+              "addedCount": 1,
+              "afterCount": 1,
+              "beforeCount": 0,
+              "candidateCount": 1
+            }
+          },
+          "operationIndex": 0,
+          "operationKind": "add",
+          "reason": "noComparableCurrentFact",
+          "targetMemoryId": null,
+          "targetMemoryVersion": null,
+          "targetMemoryVersionId": null
+        }
+      ],
+      "proposalHash": "bdc76eff484b10c7969d87f8c778356b27717514be2349af49ec00c5b53a7f55",
+      "proposalId": "b0d60f78-5fe3-5b51-96d4-0af9370d3a74",
+      "schemaVersion": "owner-truth-memory-changeset-proposal-v1"
+    },
+    "reviewMode": "single",
+    "sensitivity": "standard",
+    "sourceId": "69314827-b031-49cd-bcee-f5165f8d4e34",
+    "sourceRefs": [
+      {
+        "sourceId": "69314827-b031-49cd-bcee-f5165f8d4e34",
+        "sourceVersion": 1,
+        "span": {
+          "end": 10,
+          "start": 0
+        }
+      }
+    ]
+  },
+  "payloadFingerprint": "f28d1b4650409ff46410dd3d5ed66781e878bf130ac0546ec84fc533a007d4c0",
+  "producer": "DreamJourneyBackend real candidate changeset builder",
+  "schemaVersion": "owner-truth-correction-preview-producer-fixture-v1",
+  "syntheticDataOnly": true
+}

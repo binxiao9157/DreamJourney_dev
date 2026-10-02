@@ -1,11 +1,38 @@
 import UIKit
 
+private func logOwnerTruthReadUICommit(
+    _ context: OwnerTruthReadContext,
+    outcome: String,
+    sink: ((OwnerTruthReadDiagnosticEvent) -> Void)?
+) {
+    sink?(OwnerTruthReadDiagnosticEvent(
+        resource: context.resource,
+        traceID: context.traceID,
+        attempt: context.attempt,
+        event: "uiCommitted",
+        stage: "ui",
+        reason: outcome
+    ))
+    PrivacySafeDiagnostics.log(
+        subsystem: "OwnerTruthRead",
+        event: "uiCommitted",
+        states: [
+            "resource": context.resource.rawValue,
+            "outcome": PrivacySafeDiagnostics.safeCode(outcome, fallback: "unknown"),
+        ],
+        counts: ["attempt": context.attempt],
+        correlations: ["trace": context.traceID]
+    )
+}
+
 final class OwnerTruthPersonMemoryProfileViewController: UIViewController {
     private let accountLease: AccountLease
     private let profileClient: OwnerTruthPersonMemoryProfileClient
     private let formalMemoryClient: OwnerTruthFormalMemoryClient
     private let publicationClient: PublicationDraftWriterClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let readContextFactory: (OwnerTruthReadResource) -> OwnerTruthReadContext
+    private let readUIDiagnosticSink: ((OwnerTruthReadDiagnosticEvent) -> Void)?
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let statusLabel = UILabel()
     private lazy var refreshButton = UIBarButtonItem(
@@ -21,21 +48,30 @@ final class OwnerTruthPersonMemoryProfileViewController: UIViewController {
     )
     private var profile: OwnerTruthPersonMemoryProfile?
     private var requestGeneration: UInt64 = 0
+    private var activeReadID: UUID?
+    private var activeReadHandle: OwnerTruthReadHandle?
     private var isLoading = false
     private var hasAppeared = false
+    private var needsReloadOnAppearance = false
 
     init(
         accountLease: AccountLease,
         profileClient: OwnerTruthPersonMemoryProfileClient = DreamJourneyBackendClient.shared,
         formalMemoryClient: OwnerTruthFormalMemoryClient = DreamJourneyBackendClient.shared,
         publicationClient: PublicationDraftWriterClient = DreamJourneyBackendClient.shared,
-        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        readContextFactory: @escaping (OwnerTruthReadResource) -> OwnerTruthReadContext = {
+            OwnerTruthReadContext(resource: $0)
+        },
+        readUIDiagnosticSink: ((OwnerTruthReadDiagnosticEvent) -> Void)? = nil
     ) {
         self.accountLease = accountLease
         self.profileClient = profileClient
         self.formalMemoryClient = formalMemoryClient
         self.publicationClient = publicationClient
         self.accountLeaseRuntime = accountLeaseRuntime
+        self.readContextFactory = readContextFactory
+        self.readUIDiagnosticSink = readUIDiagnosticSink
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
     }
@@ -50,6 +86,7 @@ final class OwnerTruthPersonMemoryProfileViewController: UIViewController {
         view.backgroundColor = DJDesignTokens.Color.background
         configureNavigation()
         configureTable()
+        configureReadLifecycle()
         load()
     }
 
@@ -57,11 +94,58 @@ final class OwnerTruthPersonMemoryProfileViewController: UIViewController {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(false, animated: animated)
         navigationController?.navigationBar.tintColor = DJDesignTokens.Color.textPrimary
-        if hasAppeared {
+        if hasAppeared, needsReloadOnAppearance {
+            needsReloadOnAppearance = false
             load()
         } else {
             hasAppeared = true
         }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        detachReadForLifecycle()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        activeReadHandle?.cancel()
+    }
+
+    private func configureReadLifecycle() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+    }
+
+    @objc private func applicationDidEnterBackground() {
+        guard isViewLoaded, view.window != nil else { return }
+        detachReadForLifecycle()
+    }
+
+    @objc private func applicationWillEnterForeground() {
+        guard isViewLoaded, view.window != nil, needsReloadOnAppearance else { return }
+        needsReloadOnAppearance = false
+        load()
+    }
+
+    private func detachReadForLifecycle() {
+        activeReadHandle?.cancel()
+        activeReadHandle = nil
+        activeReadID = nil
+        requestGeneration &+= 1
+        isLoading = false
+        refreshButton.isEnabled = true
+        needsReloadOnAppearance = true
     }
 
     private var vaultID: OwnerTruthVaultID? {
@@ -141,28 +225,40 @@ final class OwnerTruthPersonMemoryProfileViewController: UIViewController {
     }
 
     private func load() {
-        guard !isLoading,
-              accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed,
               let vaultID else {
-            if !isLoading { failClosedForAccountChange() }
+            failClosedForAccountChange()
             return
         }
+        activeReadHandle?.cancel()
         requestGeneration &+= 1
         let generation = requestGeneration
+        let readID = UUID()
+        activeReadID = readID
         isLoading = true
         refreshButton.isEnabled = false
         statusLabel.text = "正在归纳正式记忆..."
         statusLabel.isHidden = false
-        profileClient.fetchOwnerTruthPersonMemoryProfile(vaultID: vaultID) { [weak self] result in
+        let handle = profileClient.fetchOwnerTruthPersonMemoryProfileRead(
+            accountLease: accountLease,
+            vaultID: vaultID,
+            readContext: readContextFactory(.personMemoryProfile)
+        ) { [weak self] outcome in
             DispatchQueue.main.async {
                 guard let self,
                       generation == self.requestGeneration,
-                      self.accountLeaseRuntime.validate(self.accountLease, at: .ui).allowed else {
+                      self.activeReadID == readID else {
                     return
                 }
+                guard self.accountLeaseRuntime.validate(self.accountLease, at: .ui).allowed else {
+                    self.failClosedForAccountChange()
+                    return
+                }
+                self.activeReadID = nil
+                self.activeReadHandle = nil
                 self.isLoading = false
                 self.refreshButton.isEnabled = true
-                switch result {
+                switch outcome.result {
                 case .success(let profile):
                     self.profile = profile
                     self.statusLabel.text = profile.state == .empty
@@ -170,17 +266,35 @@ final class OwnerTruthPersonMemoryProfileViewController: UIViewController {
                         : nil
                     self.statusLabel.isHidden = profile.state == .ready
                     self.tableView.reloadData()
+                    logOwnerTruthReadUICommit(
+                        outcome.readContext,
+                        outcome: "success",
+                        sink: self.readUIDiagnosticSink
+                    )
                 case .failure(let error):
                     self.profile = nil
                     self.tableView.reloadData()
                     self.statusLabel.text = "人物记忆归纳读取失败。\n\(error.localizedDescription)"
                     self.statusLabel.isHidden = false
+                    logOwnerTruthReadUICommit(
+                        outcome.readContext,
+                        outcome: "failure",
+                        sink: self.readUIDiagnosticSink
+                    )
                 }
             }
+        }
+        if activeReadID == readID, isLoading {
+            activeReadHandle = handle
+        } else {
+            handle.cancel()
         }
     }
 
     private func failClosedForAccountChange() {
+        activeReadHandle?.cancel()
+        activeReadHandle = nil
+        activeReadID = nil
         requestGeneration &+= 1
         isLoading = false
         profile = nil
@@ -402,6 +516,8 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
     private let client: OwnerTruthFormalMemoryClient
     private let publicationClient: PublicationDraftWriterClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let readContextFactory: (OwnerTruthReadResource) -> OwnerTruthReadContext
+    private let readUIDiagnosticSink: ((OwnerTruthReadDiagnosticEvent) -> Void)?
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
     private let statusLabel = UILabel()
     private let searchController = UISearchController(searchResultsController: nil)
@@ -440,10 +556,15 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
     private var selectedKind: OwnerTruthMemoryKind?
     private var selectedFacet: OwnerTruthFormalMemoryFacetFilter?
     private var requestGeneration: UInt64 = 0
+    private var activeReadID: UUID?
+    private var activeReadHandle: OwnerTruthReadHandle?
     private var searchWorkItem: DispatchWorkItem?
+    private var observedSearchText = ""
     private var isLoading = false
     private var isSelectingForPublication = false
     private var selectedPublicationMemoryIDs: Set<OwnerTruthRecordID> = []
+    private var hasAppeared = false
+    private var needsReloadOnAppearance = false
 
     private var memorySections: [(kind: OwnerTruthMemoryKind, items: [OwnerTruthFormalMemoryListItem])] {
         let kinds = selectedKind.map { [$0] } ?? OwnerTruthMemoryKind.allCases
@@ -463,18 +584,25 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
     }
     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
     var onPageRenderedForUIQA: ((OwnerTruthFormalMemoryListViewController) -> Void)?
+    private var hasPendingPageRenderForUIQA = false
     #endif
 
     init(
         accountLease: AccountLease,
         client: OwnerTruthFormalMemoryClient = DreamJourneyBackendClient.shared,
         publicationClient: PublicationDraftWriterClient = DreamJourneyBackendClient.shared,
-        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        readContextFactory: @escaping (OwnerTruthReadResource) -> OwnerTruthReadContext = {
+            OwnerTruthReadContext(resource: $0)
+        },
+        readUIDiagnosticSink: ((OwnerTruthReadDiagnosticEvent) -> Void)? = nil
     ) {
         self.accountLease = accountLease
         self.client = client
         self.publicationClient = publicationClient
         self.accountLeaseRuntime = accountLeaseRuntime
+        self.readContextFactory = readContextFactory
+        self.readUIDiagnosticSink = readUIDiagnosticSink
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
     }
@@ -489,6 +617,7 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
         view.backgroundColor = DJDesignTokens.Color.background
         configureNavigation()
         configureTable()
+        configureReadLifecycle()
         load(reset: true)
     }
 
@@ -499,6 +628,73 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
         if !isSelectingForPublication {
             updateNavigationItems()
         }
+        if hasAppeared, needsReloadOnAppearance {
+            needsReloadOnAppearance = false
+            load(reset: true)
+        } else {
+            hasAppeared = true
+        }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        #if UI_QA_SIMULATOR && targetEnvironment(simulator)
+        guard hasPendingPageRenderForUIQA else { return }
+        hasPendingPageRenderForUIQA = false
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.viewIfLoaded?.window != nil else { return }
+            self.onPageRenderedForUIQA?(self)
+        }
+        #endif
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        detachReadForLifecycle()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        searchWorkItem?.cancel()
+        activeReadHandle?.cancel()
+    }
+
+    private func configureReadLifecycle() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+    }
+
+    @objc private func applicationDidEnterBackground() {
+        guard isViewLoaded, view.window != nil else { return }
+        detachReadForLifecycle()
+    }
+
+    @objc private func applicationWillEnterForeground() {
+        guard isViewLoaded, view.window != nil, needsReloadOnAppearance else { return }
+        needsReloadOnAppearance = false
+        load(reset: true)
+    }
+
+    private func detachReadForLifecycle() {
+        searchWorkItem?.cancel()
+        searchWorkItem = nil
+        activeReadHandle?.cancel()
+        activeReadHandle = nil
+        activeReadID = nil
+        requestGeneration &+= 1
+        isLoading = false
+        refreshButton.isEnabled = true
+        needsReloadOnAppearance = true
     }
 
     private var vaultID: OwnerTruthVaultID? {
@@ -688,10 +884,12 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
     }
 
     private func load(reset: Bool) {
-        guard !isLoading,
-              accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed,
               let vaultID else {
             failClosedForAccountChange()
+            return
+        }
+        if isLoading, !reset {
             return
         }
         let cursor = reset ? nil : nextCursor
@@ -711,26 +909,42 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
             return
         }
         if reset {
+            activeReadHandle?.cancel()
+            activeReadHandle = nil
+            activeReadID = nil
             requestGeneration &+= 1
             items = []
             nextCursor = nil
             tableView.reloadData()
         }
         let generation = requestGeneration
+        let readID = UUID()
+        activeReadID = readID
         isLoading = true
         refreshButton.isEnabled = false
         statusLabel.text = reset ? "正在读取正式记忆..." : "正在载入更多记忆..."
         statusLabel.isHidden = false
-        client.fetchOwnerTruthFormalMemories(vaultID: vaultID, query: query) { [weak self] result in
+        let handle = client.fetchOwnerTruthFormalMemoriesRead(
+            accountLease: accountLease,
+            vaultID: vaultID,
+            query: query,
+            readContext: readContextFactory(.formalMemoryList)
+        ) { [weak self] outcome in
             DispatchQueue.main.async {
                 guard let self,
                       generation == self.requestGeneration,
-                      self.accountLeaseRuntime.validate(self.accountLease, at: .ui).allowed else {
+                      self.activeReadID == readID else {
                     return
                 }
+                guard self.accountLeaseRuntime.validate(self.accountLease, at: .ui).allowed else {
+                    self.failClosedForAccountChange()
+                    return
+                }
+                self.activeReadID = nil
+                self.activeReadHandle = nil
                 self.isLoading = false
                 self.refreshButton.isEnabled = true
-                switch result {
+                switch outcome.result {
                 case .success(let page):
                     let knownIDs = Set(self.items.map(\.id))
                     self.items.append(contentsOf: page.memories.filter { !knownIDs.contains($0.id) })
@@ -741,13 +955,35 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
                     self.statusLabel.isHidden = !self.items.isEmpty && self.activeFilterSummary == nil
                     self.tableView.reloadData()
                     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
-                    self.onPageRenderedForUIQA?(self)
+                    if self.viewIfLoaded?.window == nil {
+                        self.hasPendingPageRenderForUIQA = true
+                    } else {
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self, self.viewIfLoaded?.window != nil else { return }
+                            self.onPageRenderedForUIQA?(self)
+                        }
+                    }
                     #endif
+                    logOwnerTruthReadUICommit(
+                        outcome.readContext,
+                        outcome: "success",
+                        sink: self.readUIDiagnosticSink
+                    )
                 case .failure(let error):
                     self.statusLabel.text = "正式记忆读取失败。\n\(error.localizedDescription)"
                     self.statusLabel.isHidden = false
+                    logOwnerTruthReadUICommit(
+                        outcome.readContext,
+                        outcome: "failure",
+                        sink: self.readUIDiagnosticSink
+                    )
                 }
             }
+        }
+        if activeReadID == readID, isLoading {
+            activeReadHandle = handle
+        } else {
+            handle.cancel()
         }
     }
 
@@ -806,6 +1042,9 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
     }
 
     private func failClosedForAccountChange() {
+        activeReadHandle?.cancel()
+        activeReadHandle = nil
+        activeReadID = nil
         requestGeneration &+= 1
         isLoading = false
         items = []
@@ -837,8 +1076,26 @@ final class OwnerTruthFormalMemoryListViewController: UIViewController {
 
 extension OwnerTruthFormalMemoryListViewController: UISearchResultsUpdating {
     func updateSearchResults(for searchController: UISearchController) {
+        let nextSearchText = searchController.searchBar.text ?? ""
+        guard nextSearchText != observedSearchText else { return }
+        observedSearchText = nextSearchText
         searchWorkItem?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.load(reset: true) }
+        activeReadHandle?.cancel()
+        activeReadHandle = nil
+        activeReadID = nil
+        requestGeneration &+= 1
+        isLoading = false
+        items = []
+        nextCursor = nil
+        selectedPublicationMemoryIDs.removeAll()
+        tableView.reloadData()
+        statusLabel.text = "正在准备新的搜索..."
+        statusLabel.isHidden = false
+        refreshButton.isEnabled = true
+        let work = DispatchWorkItem { [weak self] in
+            self?.searchWorkItem = nil
+            self?.load(reset: true)
+        }
         searchWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
     }
@@ -942,11 +1199,17 @@ final class OwnerTruthFormalMemoryDetailViewController: UIViewController {
     private let memoryID: OwnerTruthRecordID
     private let client: OwnerTruthFormalMemoryClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
+    private let readContextFactory: (OwnerTruthReadResource) -> OwnerTruthReadContext
+    private let readUIDiagnosticSink: ((OwnerTruthReadDiagnosticEvent) -> Void)?
     private let scrollView = UIScrollView()
     private let stackView = UIStackView()
     private let statusLabel = UILabel()
     private var requestGeneration: UInt64 = 0
+    private var activeReadID: UUID?
+    private var activeReadHandle: OwnerTruthReadHandle?
     private var detail: OwnerTruthFormalMemoryDetail?
+    private var hasAppeared = false
+    private var needsReloadOnAppearance = false
     var onRevisionCommitted: (() -> Void)?
     #if UI_QA_SIMULATOR && targetEnvironment(simulator)
     var onDetailRenderedForUIQA: ((OwnerTruthFormalMemoryDetailViewController) -> Void)?
@@ -956,12 +1219,18 @@ final class OwnerTruthFormalMemoryDetailViewController: UIViewController {
         accountLease: AccountLease,
         memoryID: OwnerTruthRecordID,
         client: OwnerTruthFormalMemoryClient = DreamJourneyBackendClient.shared,
-        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared
+        accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
+        readContextFactory: @escaping (OwnerTruthReadResource) -> OwnerTruthReadContext = {
+            OwnerTruthReadContext(resource: $0)
+        },
+        readUIDiagnosticSink: ((OwnerTruthReadDiagnosticEvent) -> Void)? = nil
     ) {
         self.accountLease = accountLease
         self.memoryID = memoryID
         self.client = client
         self.accountLeaseRuntime = accountLeaseRuntime
+        self.readContextFactory = readContextFactory
+        self.readUIDiagnosticSink = readUIDiagnosticSink
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
     }
@@ -975,7 +1244,66 @@ final class OwnerTruthFormalMemoryDetailViewController: UIViewController {
         title = "正式记忆详情"
         view.backgroundColor = DJDesignTokens.Color.background
         configureView()
+        configureReadLifecycle()
         load()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        if hasAppeared, needsReloadOnAppearance {
+            needsReloadOnAppearance = false
+            load()
+        } else {
+            hasAppeared = true
+        }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        detachReadForLifecycle()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        activeReadHandle?.cancel()
+    }
+
+    private func configureReadLifecycle() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+    }
+
+    @objc private func applicationDidEnterBackground() {
+        guard isViewLoaded, view.window != nil else { return }
+        detachReadForLifecycle()
+    }
+
+    @objc private func applicationWillEnterForeground() {
+        guard isViewLoaded, view.window != nil, needsReloadOnAppearance else { return }
+        needsReloadOnAppearance = false
+        load()
+    }
+
+    private func detachReadForLifecycle() {
+        activeReadHandle?.cancel()
+        activeReadHandle = nil
+        activeReadID = nil
+        requestGeneration &+= 1
+        detail = nil
+        needsReloadOnAppearance = true
+        if isViewLoaded {
+            showReadStatus("返回页面后将重新读取正式记忆。")
+        }
     }
 
     private func configureView() {
@@ -1019,24 +1347,55 @@ final class OwnerTruthFormalMemoryDetailViewController: UIViewController {
             failClosedForAccountChange()
             return
         }
+        activeReadHandle?.cancel()
         requestGeneration &+= 1
         let generation = requestGeneration
-        statusLabel.text = "正在读取正式记忆..."
-        client.fetchOwnerTruthFormalMemory(vaultID: vaultID, memoryID: memoryID) { [weak self] result in
+        let readID = UUID()
+        activeReadID = readID
+        detail = nil
+        showReadStatus("正在读取正式记忆...")
+        let handle = client.fetchOwnerTruthFormalMemoryRead(
+            accountLease: accountLease,
+            vaultID: vaultID,
+            memoryID: memoryID,
+            readContext: readContextFactory(.formalMemoryDetail)
+        ) { [weak self] outcome in
             DispatchQueue.main.async {
                 guard let self,
                       generation == self.requestGeneration,
-                      self.accountLeaseRuntime.validate(self.accountLease, at: .ui).allowed else {
+                      self.activeReadID == readID else {
                     return
                 }
-                switch result {
+                guard self.accountLeaseRuntime.validate(self.accountLease, at: .ui).allowed else {
+                    self.failClosedForAccountChange()
+                    return
+                }
+                self.activeReadID = nil
+                self.activeReadHandle = nil
+                switch outcome.result {
                 case .success(let detail):
                     self.detail = detail
                     self.render(detail)
+                    logOwnerTruthReadUICommit(
+                        outcome.readContext,
+                        outcome: "success",
+                        sink: self.readUIDiagnosticSink
+                    )
                 case .failure(let error):
-                    self.statusLabel.text = "正式记忆读取失败。\n\(error.localizedDescription)"
+                    self.detail = nil
+                    self.showReadStatus("正式记忆读取失败。\n\(error.localizedDescription)")
+                    logOwnerTruthReadUICommit(
+                        outcome.readContext,
+                        outcome: "failure",
+                        sink: self.readUIDiagnosticSink
+                    )
                 }
             }
+        }
+        if activeReadID == readID {
+            activeReadHandle = handle
+        } else {
+            handle.cancel()
         }
     }
 
@@ -1104,6 +1463,16 @@ final class OwnerTruthFormalMemoryDetailViewController: UIViewController {
         #endif
     }
 
+    private func showReadStatus(_ text: String) {
+        stackView.arrangedSubviews.forEach {
+            stackView.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
+        statusLabel.text = text
+        statusLabel.isHidden = false
+        stackView.addArrangedSubview(statusLabel)
+    }
+
     private func sectionCard(title: String, lines: [String], accessibilityIdentifier: String) -> UIView {
         let titleLabel = UILabel()
         titleLabel.text = title
@@ -1139,9 +1508,12 @@ final class OwnerTruthFormalMemoryDetailViewController: UIViewController {
     }
 
     @objc private func editTapped() {
-        guard let detail,
-              accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
+        guard accountLeaseRuntime.validate(accountLease, at: .ui).allowed else {
             failClosedForAccountChange()
+            return
+        }
+        guard let detail, activeReadID == nil else {
+            showReadStatus("请等待正式记忆重新读取完成后再编辑。")
             return
         }
         let editor = OwnerTruthFormalMemoryEditViewController(
@@ -1158,9 +1530,12 @@ final class OwnerTruthFormalMemoryDetailViewController: UIViewController {
     }
 
     private func failClosedForAccountChange() {
+        activeReadHandle?.cancel()
+        activeReadHandle = nil
+        activeReadID = nil
         requestGeneration &+= 1
         detail = nil
-        statusLabel.text = "账号已变化，请返回后重新进入正式记忆。"
+        showReadStatus("账号已变化，请返回后重新进入正式记忆。")
         navigationItem.rightBarButtonItems = []
     }
 }

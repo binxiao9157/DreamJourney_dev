@@ -54,7 +54,8 @@ final class AppCoordinator: Coordinator {
     func start() {
         appComposition.prepareForProcessLaunch()
         AccountLeaseRuntime.shared.updateAuthorityEpoch(
-            RecoveryRuntimePolicyStore.shared.currentPolicy.authorityEpoch
+            RecoveryRuntimePolicyStore.shared.currentPolicy.authorityEpoch,
+            source: "appStart"
         )
         NotificationCenter.default.addObserver(
             self,
@@ -137,6 +138,7 @@ final class AppCoordinator: Coordinator {
         window?.rootViewController = tabCoordinator.tabBarController
         window?.makeKeyAndVisible()
         tabCoordinator.start()
+        NotificationCenter.default.post(name: .djPrivateAccountReadinessAccepted, object: nil)
         FeatureGateService.shared.refreshPolicy { _ in
             DreamJourneyBackendClient.shared.fetchRuntimeConfig { _ in }
         }

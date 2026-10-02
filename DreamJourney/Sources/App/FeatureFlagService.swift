@@ -90,6 +90,7 @@ enum QALaunchScenario: String, CaseIterable {
     case echoDigitalHumanLifecycleSmoke = "DJRunEchoDigitalHumanLifecycleSmoke"
     case echoAudioOwnerCoordinatorSmoke = "DJRunEchoAudioOwnerCoordinatorSmoke"
     case echoContinuousTurnSmoke = "DJRunEchoContinuousTurnSmoke"
+    case echoLiveMemoryColdStartRecoverySmoke = "DJRunEchoLiveMemoryColdStartRecoverySmoke"
     case digitalHumanRuntimeStubSmoke = "DJRunDigitalHumanRuntimeStubSmoke"
     case voiceCloneProfileSelectionSmoke = "DJRunVoiceCloneProfileSelectionSmoke"
     case voiceCloneSynthesisRuntimeSmoke = "DJRunVoiceCloneSynthesisRuntimeSmoke"
@@ -157,6 +158,7 @@ enum QALaunchScenario: String, CaseIterable {
         .echoDigitalHumanLifecycleSmoke,
         .echoAudioOwnerCoordinatorSmoke,
         .echoContinuousTurnSmoke,
+        .echoLiveMemoryColdStartRecoverySmoke,
         .digitalHumanRuntimeStubSmoke,
         .voiceCloneProfileSelectionSmoke,
         .voiceCloneSynthesisRuntimeSmoke,

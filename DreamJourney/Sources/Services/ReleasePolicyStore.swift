@@ -327,7 +327,8 @@ struct FeatureGateEvaluator {
         localEnabled: Bool,
         qaSyntheticOverride: Bool,
         accountGeneration: String,
-        policy: FeatureGatePolicySnapshot
+        policy: FeatureGatePolicySnapshot,
+        now: Date = Date()
     ) -> FeatureDecision {
         let normalizedGeneration = accountGeneration.trimmingCharacters(in: .whitespacesAndNewlines)
         let generation = normalizedGeneration.isEmpty ? "anonymous" : normalizedGeneration
@@ -340,6 +341,9 @@ struct FeatureGateEvaluator {
         } else if !localEnabled {
             allowed = false
             reason = "localFeatureDisabled"
+        } else if let expiresAt = policy.expiresAt, expiresAt <= now {
+            allowed = false
+            reason = "expiredPolicyCache"
         } else {
             switch policy.accessMode {
             case .useCachedPolicy:

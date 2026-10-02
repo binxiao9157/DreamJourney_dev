@@ -859,6 +859,126 @@ struct OwnerTruthFormalMemoryRevisionReceipt: Equatable, Sendable {
     }
 }
 
+enum OwnerTruthReadResource: String, Equatable, Sendable {
+    case sourceRecordList
+    case sourceRecordDetail
+    case liveThemeList
+    case formalMemoryList
+    case formalMemoryDetail
+    case personMemoryProfile
+    case liveMemoryRecoveryHandle
+    case liveMemoryRecoveryStatus
+}
+
+struct OwnerTruthReadContext: Equatable, Sendable {
+    let resource: OwnerTruthReadResource
+    let traceID: String
+    let attempt: Int
+    let intentStartedAt: Date
+    let deadline: Date
+    let resourceGETCount: Int
+    let policyFetchCount: Int
+    let authRecoveryCount: Int
+    let runtimeRecoveryCount: Int
+
+    init(
+        resource: OwnerTruthReadResource,
+        traceID: String = UUID().uuidString.lowercased(),
+        attempt: Int = 1,
+        intentStartedAt: Date = Date(),
+        deadline: Date? = nil,
+        resourceGETCount: Int = 0,
+        policyFetchCount: Int = 0,
+        authRecoveryCount: Int = 0,
+        runtimeRecoveryCount: Int = 0
+    ) {
+        self.resource = resource
+        self.traceID = traceID
+        self.attempt = max(1, attempt)
+        self.intentStartedAt = intentStartedAt
+        self.deadline = deadline ?? intentStartedAt.addingTimeInterval(30)
+        self.resourceGETCount = max(0, resourceGETCount)
+        self.policyFetchCount = max(0, policyFetchCount)
+        self.authRecoveryCount = max(0, authRecoveryCount)
+        self.runtimeRecoveryCount = max(0, runtimeRecoveryCount)
+    }
+
+    var nextAttempt: OwnerTruthReadContext {
+        OwnerTruthReadContext(
+            resource: resource,
+            traceID: traceID,
+            attempt: attempt + 1,
+            intentStartedAt: intentStartedAt,
+            deadline: deadline,
+            resourceGETCount: resourceGETCount,
+            policyFetchCount: policyFetchCount,
+            authRecoveryCount: authRecoveryCount,
+            runtimeRecoveryCount: runtimeRecoveryCount
+        )
+    }
+}
+
+struct OwnerTruthReadOutcome<Value> {
+    let readContext: OwnerTruthReadContext
+    let result: Result<Value, Error>
+}
+
+struct OwnerTruthReadDiagnosticEvent: Equatable, Sendable {
+    let resource: OwnerTruthReadResource
+    let traceID: String
+    let attempt: Int
+    let event: String
+    let stage: String
+    let reason: String?
+    let httpStatus: Int?
+    let occurredAt: Date
+
+    init(
+        resource: OwnerTruthReadResource,
+        traceID: String,
+        attempt: Int,
+        event: String,
+        stage: String,
+        reason: String? = nil,
+        httpStatus: Int? = nil,
+        occurredAt: Date = Date()
+    ) {
+        self.resource = resource
+        self.traceID = traceID
+        self.attempt = max(1, attempt)
+        self.event = event
+        self.stage = stage
+        self.reason = reason
+        self.httpStatus = httpStatus
+        self.occurredAt = occurredAt
+    }
+}
+
+final class OwnerTruthReadHandle: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancellation: (() -> Void)?
+    private var cancelled = false
+
+    init(cancellation: @escaping () -> Void = {}) {
+        self.cancellation = cancellation
+    }
+
+    func cancel() {
+        let action: (() -> Void)?
+        lock.lock()
+        guard !cancelled else {
+            lock.unlock()
+            return
+        }
+        cancelled = true
+        action = cancellation
+        cancellation = nil
+        lock.unlock()
+        action?()
+    }
+
+}
+
 protocol OwnerTruthFormalMemoryClient: AnyObject {
     func fetchOwnerTruthFormalMemories(
         vaultID: OwnerTruthVaultID,
@@ -871,6 +991,24 @@ protocol OwnerTruthFormalMemoryClient: AnyObject {
         memoryID: OwnerTruthRecordID,
         completion: @escaping (Result<OwnerTruthFormalMemoryDetail, Error>) -> Void
     )
+
+    @discardableResult
+    func fetchOwnerTruthFormalMemoriesRead(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        query: OwnerTruthFormalMemoryQuery,
+        readContext: OwnerTruthReadContext,
+        completion: @escaping (OwnerTruthReadOutcome<OwnerTruthFormalMemoryPage>) -> Void
+    ) -> OwnerTruthReadHandle
+
+    @discardableResult
+    func fetchOwnerTruthFormalMemoryRead(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        memoryID: OwnerTruthRecordID,
+        readContext: OwnerTruthReadContext,
+        completion: @escaping (OwnerTruthReadOutcome<OwnerTruthFormalMemoryDetail>) -> Void
+    ) -> OwnerTruthReadHandle
 
     func reviseOwnerTruthFormalMemory(
         vaultID: OwnerTruthVaultID,
@@ -885,6 +1023,59 @@ protocol OwnerTruthPersonMemoryProfileClient: AnyObject {
         vaultID: OwnerTruthVaultID,
         completion: @escaping (Result<OwnerTruthPersonMemoryProfile, Error>) -> Void
     )
+
+    @discardableResult
+    func fetchOwnerTruthPersonMemoryProfileRead(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        readContext: OwnerTruthReadContext,
+        completion: @escaping (OwnerTruthReadOutcome<OwnerTruthPersonMemoryProfile>) -> Void
+    ) -> OwnerTruthReadHandle
+}
+
+extension OwnerTruthFormalMemoryClient {
+    @discardableResult
+    func fetchOwnerTruthFormalMemoriesRead(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        query: OwnerTruthFormalMemoryQuery,
+        readContext: OwnerTruthReadContext,
+        completion: @escaping (OwnerTruthReadOutcome<OwnerTruthFormalMemoryPage>) -> Void
+    ) -> OwnerTruthReadHandle {
+        fetchOwnerTruthFormalMemories(vaultID: vaultID, query: query) { result in
+            completion(OwnerTruthReadOutcome(readContext: readContext, result: result))
+        }
+        return OwnerTruthReadHandle()
+    }
+
+    @discardableResult
+    func fetchOwnerTruthFormalMemoryRead(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        memoryID: OwnerTruthRecordID,
+        readContext: OwnerTruthReadContext,
+        completion: @escaping (OwnerTruthReadOutcome<OwnerTruthFormalMemoryDetail>) -> Void
+    ) -> OwnerTruthReadHandle {
+        fetchOwnerTruthFormalMemory(vaultID: vaultID, memoryID: memoryID) { result in
+            completion(OwnerTruthReadOutcome(readContext: readContext, result: result))
+        }
+        return OwnerTruthReadHandle()
+    }
+}
+
+extension OwnerTruthPersonMemoryProfileClient {
+    @discardableResult
+    func fetchOwnerTruthPersonMemoryProfileRead(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        readContext: OwnerTruthReadContext,
+        completion: @escaping (OwnerTruthReadOutcome<OwnerTruthPersonMemoryProfile>) -> Void
+    ) -> OwnerTruthReadHandle {
+        fetchOwnerTruthPersonMemoryProfile(vaultID: vaultID) { result in
+            completion(OwnerTruthReadOutcome(readContext: readContext, result: result))
+        }
+        return OwnerTruthReadHandle()
+    }
 }
 
 enum OwnerTruthSourceRecordContractError: LocalizedError, Equatable, Sendable {

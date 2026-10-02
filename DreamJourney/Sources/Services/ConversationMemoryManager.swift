@@ -728,3 +728,639 @@ enum PrivacySafeDiagnostics {
         print("[\(safeCode(subsystem, fallback: "Diagnostics"))] " + fields.joined(separator: " "))
     }
 }
+
+struct NativeLiveDiagnosticEvent: Codable, Equatable, Sendable {
+    let sequence: UInt64
+    let monotonicMilliseconds: UInt64
+    let recordedAt: Date
+    let source: String
+    let event: String
+    let eventCode: Int?
+    let callbackOrdinal: UInt64?
+    let sessionHash: String
+    let questionHash: String
+    let replyHash: String
+    let reason: String?
+    let speakingBefore: Bool?
+    let speakingAfter: Bool?
+    let resultCode: Int?
+    let requestExposure: String?
+    let errorDomain: String?
+    let errorCode: String?
+    let elapsedMilliseconds: Int?
+    let requestAttempt: Int?
+}
+
+struct NativeLiveDiagnosticSnapshot: Equatable, Sendable {
+    let events: [NativeLiveDiagnosticEvent]
+    let droppedCount: Int
+    let firstCriticalFailure: NativeLiveDiagnosticEvent?
+    let firstRequestFailure: NativeLiveDiagnosticEvent?
+    let persistenceUnavailable: Bool
+
+    init(
+        events: [NativeLiveDiagnosticEvent],
+        droppedCount: Int,
+        firstCriticalFailure: NativeLiveDiagnosticEvent? = nil,
+        firstRequestFailure: NativeLiveDiagnosticEvent? = nil,
+        persistenceUnavailable: Bool = false
+    ) {
+        self.events = events
+        self.droppedCount = droppedCount
+        self.firstCriticalFailure = firstCriticalFailure
+        self.firstRequestFailure = firstRequestFailure
+        self.persistenceUnavailable = persistenceUnavailable
+    }
+}
+
+/// Bounded, account-scoped evidence for native Live event ordering. The
+/// persisted envelope contains only approved state codes, numeric values, and
+/// one-way correlations; it never accepts transcript or provider payload text.
+final class NativeLiveDiagnosticsRingStore {
+    static let shared = NativeLiveDiagnosticsRingStore()
+
+    private static let schemaVersion = "native-live-diagnostics-v1"
+
+    private struct Envelope: Codable {
+        let schemaVersion: String
+        let scopeDigest: String
+        let sessionHash: String
+        var events: [NativeLiveDiagnosticEvent]
+        var droppedCount: Int
+        var firstCriticalFailure: NativeLiveDiagnosticEvent?
+        var firstRequestFailure: NativeLiveDiagnosticEvent?
+        var isActive: Bool?
+        var activePinReleasedAt: Date?
+        let createdAt: Date
+        var updatedAt: Date
+    }
+
+    private let rootDirectory: URL
+    private let fileManager: FileManager
+    private let now: () -> Date
+    private let maximumEventCount: Int
+    private let maximumSessionCount: Int
+    private let maximumTotalBytes: Int
+    private let retentionInterval: TimeInterval
+    private let costObservation: ((String, Double, Int) -> Void)?
+    private func measured<T>(_ stage: String, bytes: Int = 0, _ body: () throws -> T) rethrows -> T {
+        guard let costObservation else { return try body() }
+        let start = ProcessInfo.processInfo.systemUptime
+        defer { costObservation(stage, (ProcessInfo.processInfo.systemUptime - start) * 1000, bytes) }
+        return try body()
+    }
+    private let queue: DispatchQueue
+    private var unavailableSessionKeys: [String] = []
+    private let admissionLock = NSLock()
+    private var pendingOrdinaryEvents = 0
+    // Only routine PCM notifications are sampled. Identity/lifecycle/error
+    // records and the first-failure slots retain their existing guarantees.
+    private var audioSampleOrdinals: [String: Int] = [:]
+    private func admitAudioSample(scope: String) -> Bool {
+        admissionLock.lock(); defer { admissionLock.unlock() }
+        guard audioSampleOrdinals[scope] != nil || audioSampleOrdinals.count < 16 else { return true }
+        let ordinal = audioSampleOrdinals[scope, default: 0]
+        audioSampleOrdinals[scope] = (ordinal + 1) % 50
+        guard ordinal == 0 else {
+            if droppedBeforeEnqueue[scope] != nil || droppedBeforeEnqueue.count < 16 {
+                droppedBeforeEnqueue[scope, default: 0] += 1
+            }
+            return false
+        }
+        return true
+    }
+    private var droppedBeforeEnqueue: [String: Int] = [:]
+
+    private func reserveOrdinaryEvent(scope: String) -> Bool {
+        admissionLock.lock(); defer { admissionLock.unlock() }
+        guard pendingOrdinaryEvents < 256 else {
+            if droppedBeforeEnqueue[scope] != nil || droppedBeforeEnqueue.count < 16 {
+                droppedBeforeEnqueue[scope, default: 0] += 1
+            }
+            return false
+        }
+        pendingOrdinaryEvents += 1
+        return true
+    }
+
+    private func finishOrdinaryEvent() {
+        admissionLock.lock(); pendingOrdinaryEvents -= 1; admissionLock.unlock()
+    }
+
+    private func takeDroppedCount(scope: String) -> Int {
+        admissionLock.lock(); defer { admissionLock.unlock() }
+        return droppedBeforeEnqueue.removeValue(forKey: scope) ?? 0
+    }
+
+    private func markPersistenceUnavailable(scopeDigest: String, sessionHash: String) {
+        let key = scopeDigest + ":" + sessionHash
+        guard !unavailableSessionKeys.contains(key) else { return }
+        unavailableSessionKeys.append(key)
+        if unavailableSessionKeys.count > 16 {
+            unavailableSessionKeys.removeFirst(unavailableSessionKeys.count - 16)
+        }
+    }
+
+    init(
+        rootDirectory: URL? = nil,
+        fileManager: FileManager = .default,
+        now: @escaping () -> Date = Date.init,
+        maximumEventCount: Int = 4_096,
+        maximumSessionCount: Int = 3,
+        maximumTotalBytes: Int = 2 * 1_024 * 1_024,
+        retentionInterval: TimeInterval = 48 * 60 * 60,
+        queueLabel: String = "com.dreamjourney.native-live-diagnostics",
+        costObservation: ((String, Double, Int) -> Void)? = nil
+    ) {
+        let applicationSupport = fileManager.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first ?? fileManager.temporaryDirectory
+        self.rootDirectory = rootDirectory ?? applicationSupport.appendingPathComponent(
+            "NativeLiveDiagnostics",
+            isDirectory: true
+        )
+        self.costObservation = costObservation
+        self.fileManager = fileManager
+        self.now = now
+        self.maximumEventCount = max(1, maximumEventCount)
+        self.maximumSessionCount = max(1, maximumSessionCount)
+        self.maximumTotalBytes = max(1_024, maximumTotalBytes)
+        self.retentionInterval = max(1, retentionInterval)
+        queue = DispatchQueue(label: queueLabel, qos: .utility)
+    }
+
+    func record(
+        accountLease: AccountLease,
+        providerSessionID: String,
+        source: String,
+        event: String,
+        eventCode: Int? = nil,
+        callbackOrdinal: UInt64? = nil,
+        questionID: String? = nil,
+        replyID: String? = nil,
+        reason: String? = nil,
+        speakingBefore: Bool? = nil,
+        speakingAfter: Bool? = nil,
+        resultCode: Int? = nil
+    ) {
+        let scopeDigest = Self.scopeDigest(for: accountLease)
+        let sessionHash = PrivacySafeDiagnostics.correlationHash(providerSessionID)
+        let safeSource = PrivacySafeDiagnostics.safeCode(source, fallback: "unknown")
+        let safeEvent = PrivacySafeDiagnostics.safeCode(event, fallback: "unknown")
+        let safeReason = reason.map {
+            PrivacySafeDiagnostics.safeCode($0, fallback: "redacted")
+        }
+        let questionHash = PrivacySafeDiagnostics.correlationHash(questionID)
+        let replyHash = PrivacySafeDiagnostics.correlationHash(replyID)
+        if safeSource == "sdk", safeEvent == "providerCallback", eventCode == 3018,
+           safeReason == nil, resultCode == nil,
+           !admitAudioSample(scope: scopeDigest + ":" + sessionHash) { return }
+        guard reserveOrdinaryEvent(scope: scopeDigest + ":" + sessionHash) else { return }
+        let enqueuedAt = costObservation == nil ? 0 : ProcessInfo.processInfo.systemUptime
+        queue.async { [weak self] in
+            guard let self else { return }
+            defer { self.finishOrdinaryEvent() }
+            self.costObservation?("queueWait", (ProcessInfo.processInfo.systemUptime - enqueuedAt) * 1000, 0)
+            self.recordOnQueue(
+                scopeDigest: scopeDigest,
+                sessionHash: sessionHash,
+                source: safeSource,
+                event: safeEvent,
+                eventCode: eventCode,
+                callbackOrdinal: callbackOrdinal,
+                questionHash: questionHash,
+                replyHash: replyHash,
+                reason: safeReason,
+                speakingBefore: speakingBefore,
+                speakingAfter: speakingAfter,
+                resultCode: resultCode,
+                preservesFirstCriticalFailure: false
+            )
+        }
+    }
+
+    func recordFirstCriticalFailure(
+        accountLease: AccountLease,
+        providerSessionID: String,
+        stage: String,
+        reason: String,
+        callbackOrdinal: UInt64? = nil
+    ) {
+        let scopeDigest = Self.scopeDigest(for: accountLease)
+        let sessionHash = PrivacySafeDiagnostics.correlationHash(providerSessionID)
+        let safeStage = PrivacySafeDiagnostics.safeCode(stage, fallback: "unknown")
+        let safeReason = PrivacySafeDiagnostics.safeCode(reason, fallback: "redacted")
+        queue.async { [weak self] in
+            self?.recordOnQueue(
+                scopeDigest: scopeDigest,
+                sessionHash: sessionHash,
+                source: safeStage,
+                event: "firstCaptureFailure",
+                eventCode: nil,
+                callbackOrdinal: callbackOrdinal,
+                questionHash: PrivacySafeDiagnostics.correlationHash(nil),
+                replyHash: PrivacySafeDiagnostics.correlationHash(nil),
+                reason: safeReason,
+                speakingBefore: nil,
+                speakingAfter: nil,
+                resultCode: nil,
+                preservesFirstCriticalFailure: true
+            )
+        }
+    }
+
+    func recordFirstRequestFailure(
+        accountLease: AccountLease,
+        providerSessionID: String,
+        commandID: String?,
+        messageID: String?,
+        sequence: Int?,
+        stage: String,
+        reason: String,
+        httpStatus: Int? = nil,
+        requestExposure: String? = nil,
+        errorDomain: String? = nil,
+        errorCode: String? = nil,
+        elapsedMilliseconds: Int? = nil,
+        attempt: Int? = nil
+    ) {
+        let scopeDigest = Self.scopeDigest(for: accountLease)
+        let sessionHash = PrivacySafeDiagnostics.correlationHash(providerSessionID)
+        let commandHash = PrivacySafeDiagnostics.correlationHash(commandID)
+        let messageHash = PrivacySafeDiagnostics.correlationHash(messageID)
+        let safeStage = PrivacySafeDiagnostics.safeCode(stage, fallback: "unknown")
+        let safeReason = PrivacySafeDiagnostics.safeCode(reason, fallback: "unknown")
+        queue.async { [weak self] in
+            self?.recordOnQueue(
+                scopeDigest: scopeDigest,
+                sessionHash: sessionHash,
+                source: safeStage,
+                event: "firstRequestFailure",
+                eventCode: httpStatus,
+                callbackOrdinal: sequence.flatMap { $0 >= 0 ? UInt64($0) : nil },
+                questionHash: commandHash,
+                replyHash: messageHash,
+                reason: safeReason,
+                speakingBefore: nil,
+                speakingAfter: nil,
+                resultCode: nil,
+                preservesFirstCriticalFailure: false,
+                preservesFirstRequestFailure: true,
+                requestExposure: requestExposure.map { PrivacySafeDiagnostics.safeCode($0, fallback: "unknown") },
+                errorDomain: errorDomain.map { PrivacySafeDiagnostics.safeCode($0, fallback: "unknown") },
+                errorCode: errorCode.map { PrivacySafeDiagnostics.safeCode($0, fallback: "unknown") },
+                elapsedMilliseconds: elapsedMilliseconds.map { max(0, $0) },
+                requestAttempt: attempt.map { max(1, $0) }
+            )
+        }
+    }
+
+    func beginActiveSession(
+        accountLease: AccountLease,
+        providerSessionID: String
+    ) {
+        let scopeDigest = Self.scopeDigest(for: accountLease)
+        let sessionHash = PrivacySafeDiagnostics.correlationHash(providerSessionID)
+        queue.async { [weak self] in
+            self?.setActiveSessionOnQueue(
+                scopeDigest: scopeDigest,
+                sessionHash: sessionHash,
+                active: true
+            )
+        }
+    }
+
+    func endActiveSession(
+        accountLease: AccountLease,
+        providerSessionID: String
+    ) {
+        let scopeDigest = Self.scopeDigest(for: accountLease)
+        let sessionHash = PrivacySafeDiagnostics.correlationHash(providerSessionID)
+        queue.async { [weak self] in
+            self?.setActiveSessionOnQueue(
+                scopeDigest: scopeDigest,
+                sessionHash: sessionHash,
+                active: false
+            )
+        }
+    }
+
+    func snapshot(accountLease: AccountLease, providerSessionID: String) -> NativeLiveDiagnosticSnapshot {
+        queue.sync { snapshotOnQueue(accountLease: accountLease, providerSessionID: providerSessionID) }
+    }
+
+    func snapshotAsync(accountLease: AccountLease, providerSessionID: String,
+        completion: @escaping (NativeLiveDiagnosticSnapshot) -> Void) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            let result = self.snapshotOnQueue(accountLease: accountLease, providerSessionID: providerSessionID)
+            DispatchQueue.main.async { completion(result) }
+        }
+    }
+
+    private func snapshotOnQueue(accountLease: AccountLease, providerSessionID: String) -> NativeLiveDiagnosticSnapshot {
+    let scopeDigest = Self.scopeDigest(for: accountLease)
+    let sessionHash = PrivacySafeDiagnostics.correlationHash(providerSessionID)
+    guard let envelope = readEnvelope(
+        at: fileURL(scopeDigest: scopeDigest, sessionHash: sessionHash),
+        scopeDigest: scopeDigest,
+        sessionHash: sessionHash
+    ) else {
+        return NativeLiveDiagnosticSnapshot(
+            events: [], droppedCount: 0,
+            persistenceUnavailable: unavailableSessionKeys.contains(
+                scopeDigest + ":" + sessionHash
+            )
+        )
+    }
+    return NativeLiveDiagnosticSnapshot(
+        events: envelope.events,
+        droppedCount: envelope.droppedCount,
+        firstCriticalFailure: envelope.firstCriticalFailure,
+        firstRequestFailure: envelope.firstRequestFailure,
+        persistenceUnavailable: unavailableSessionKeys.contains(
+            scopeDigest + ":" + sessionHash
+        )
+    )
+    }
+
+    func waitForPendingWrites() {
+        queue.sync {}
+    }
+
+    private func recordOnQueue(
+        scopeDigest: String,
+        sessionHash: String,
+        source: String,
+        event: String,
+        eventCode: Int?,
+        callbackOrdinal: UInt64?,
+        questionHash: String,
+        replyHash: String,
+        reason: String?,
+        speakingBefore: Bool?,
+        speakingAfter: Bool?,
+        resultCode: Int?,
+        preservesFirstCriticalFailure: Bool,
+        preservesFirstRequestFailure: Bool = false,
+        requestExposure: String? = nil,
+        errorDomain: String? = nil,
+        errorCode: String? = nil,
+        elapsedMilliseconds: Int? = nil,
+        requestAttempt: Int? = nil
+    ) {
+        let beganAt = costObservation == nil ? 0 : ProcessInfo.processInfo.systemUptime
+        defer { costObservation?("execution", (ProcessInfo.processInfo.systemUptime - beganAt) * 1000, 0) }
+        let timestamp = now()
+        let url = fileURL(scopeDigest: scopeDigest, sessionHash: sessionHash)
+        var envelope = readEnvelope(
+            at: url,
+            scopeDigest: scopeDigest,
+            sessionHash: sessionHash
+        ) ?? Envelope(
+            schemaVersion: Self.schemaVersion,
+            scopeDigest: scopeDigest,
+            sessionHash: sessionHash,
+            events: [],
+            droppedCount: 0,
+            firstCriticalFailure: nil,
+            firstRequestFailure: nil,
+            isActive: nil,
+            activePinReleasedAt: nil,
+            createdAt: timestamp,
+            updatedAt: timestamp
+        )
+        envelope.droppedCount += takeDroppedCount(scope: scopeDigest + ":" + sessionHash)
+        let nextSequence = (envelope.events.last?.sequence ?? 0) &+ 1
+        let diagnostic = NativeLiveDiagnosticEvent(
+            sequence: nextSequence,
+            monotonicMilliseconds: DispatchTime.now().uptimeNanoseconds / 1_000_000,
+            recordedAt: timestamp,
+            source: source,
+            event: event,
+            eventCode: eventCode,
+            callbackOrdinal: callbackOrdinal,
+            sessionHash: sessionHash,
+            questionHash: questionHash,
+            replyHash: replyHash,
+            reason: reason,
+            speakingBefore: speakingBefore,
+            speakingAfter: speakingAfter,
+            resultCode: resultCode,
+            requestExposure: requestExposure,
+            errorDomain: errorDomain,
+            errorCode: errorCode,
+            elapsedMilliseconds: elapsedMilliseconds,
+            requestAttempt: requestAttempt
+        )
+        envelope.events.append(diagnostic)
+        if preservesFirstCriticalFailure, envelope.firstCriticalFailure == nil {
+            envelope.firstCriticalFailure = diagnostic
+        }
+        if preservesFirstRequestFailure, envelope.firstRequestFailure == nil {
+            envelope.firstRequestFailure = diagnostic
+        }
+        envelope.updatedAt = timestamp
+        if envelope.events.count > maximumEventCount {
+            let overflow = envelope.events.count - maximumEventCount
+            envelope.events.removeFirst(overflow)
+            envelope.droppedCount += overflow
+        }
+        measured("trim") { trimToByteLimit(&envelope) }
+        do {
+            let data = try measured("encode") { try Self.encoder.encode(envelope) }
+            _ = try measured("atomicReplace", bytes: data.count) { try KnowledgeLocalStoragePolicy.write(data, to: url) }
+            measured("prune") { pruneScopeDirectory(scopeDigest: scopeDigest, now: timestamp) }
+        } catch {
+            markPersistenceUnavailable(scopeDigest: scopeDigest, sessionHash: sessionHash)
+            PrivacySafeDiagnostics.log(
+                subsystem: "NativeLiveDiagnostics",
+                event: "diagnosticsPersistenceUnavailable",
+                states: ["storage": "writeFailed"]
+            )
+        }
+    }
+
+    private func setActiveSessionOnQueue(
+        scopeDigest: String,
+        sessionHash: String,
+        active: Bool
+    ) {
+        let timestamp = now()
+        let directory = rootDirectory.appendingPathComponent(scopeDigest, isDirectory: true)
+        if active,
+           let urls = try? fileManager.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+           ) {
+            for url in urls where url.pathExtension == "json" {
+                guard var envelope = readEnvelopeData(at: url, scopeDigest: scopeDigest),
+                      envelope.sessionHash != sessionHash,
+                      envelope.isActive == true else { continue }
+                envelope.isActive = false
+                envelope.activePinReleasedAt = timestamp
+                _ = try? KnowledgeLocalStoragePolicy.write(
+                    try Self.encoder.encode(envelope),
+                    to: url
+                )
+            }
+        }
+        let url = fileURL(scopeDigest: scopeDigest, sessionHash: sessionHash)
+        var envelope = readEnvelope(
+            at: url,
+            scopeDigest: scopeDigest,
+            sessionHash: sessionHash
+        ) ?? Envelope(
+            schemaVersion: Self.schemaVersion,
+            scopeDigest: scopeDigest,
+            sessionHash: sessionHash,
+            events: [],
+            droppedCount: 0,
+            firstCriticalFailure: nil,
+            firstRequestFailure: nil,
+            isActive: nil,
+            activePinReleasedAt: nil,
+            createdAt: timestamp,
+            updatedAt: timestamp
+        )
+        envelope.isActive = active
+        if active {
+            envelope.activePinReleasedAt = nil
+            envelope.updatedAt = timestamp
+        } else {
+            envelope.activePinReleasedAt = timestamp
+        }
+        do {
+            try KnowledgeLocalStoragePolicy.write(try Self.encoder.encode(envelope), to: url)
+            pruneScopeDirectory(scopeDigest: scopeDigest, now: timestamp)
+        } catch {
+            markPersistenceUnavailable(scopeDigest: scopeDigest, sessionHash: sessionHash)
+            // Diagnostics remain best-effort and cannot affect Live capture.
+        }
+    }
+
+    private func trimToByteLimit(_ envelope: inout Envelope) {
+        while envelope.events.count > 1,
+              ((try? Self.encoder.encode(envelope).count) ?? Int.max) > maximumTotalBytes {
+            envelope.events.removeFirst()
+            envelope.droppedCount += 1
+        }
+    }
+
+    private func pruneScopeDirectory(scopeDigest: String, now: Date) {
+        let directory = rootDirectory.appendingPathComponent(scopeDigest, isDirectory: true)
+        guard let urls = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+        var retained: [(URL, Envelope, Int)] = []
+        for url in urls where url.pathExtension == "json" {
+            guard let data = try? Data(contentsOf: url),
+                  let envelope = try? Self.decoder.decode(Envelope.self, from: data),
+                  envelope.schemaVersion == Self.schemaVersion,
+                  envelope.scopeDigest == scopeDigest else {
+                continue
+            }
+            if now.timeIntervalSince(envelope.updatedAt) > retentionInterval {
+                try? fileManager.removeItem(at: url)
+            } else {
+                retained.append((url, envelope, data.count))
+            }
+        }
+        retained.sort { lhs, rhs in
+            let lhsIsActive = lhs.1.isActive == true
+            let rhsIsActive = rhs.1.isActive == true
+            if lhsIsActive != rhsIsActive {
+                return lhsIsActive
+            }
+            let lhsHasFirstFailure = lhs.1.firstCriticalFailure != nil
+                || lhs.1.firstRequestFailure != nil
+            let rhsHasFirstFailure = rhs.1.firstCriticalFailure != nil
+                || rhs.1.firstRequestFailure != nil
+            if lhsHasFirstFailure != rhsHasFirstFailure {
+                return lhsHasFirstFailure
+            }
+            let lhsWasReleased = lhs.1.activePinReleasedAt != nil
+            let rhsWasReleased = rhs.1.activePinReleasedAt != nil
+            if lhsWasReleased != rhsWasReleased {
+                return !lhsWasReleased
+            }
+            return lhs.1.updatedAt > rhs.1.updatedAt
+        }
+        for item in retained.dropFirst(maximumSessionCount) {
+            try? fileManager.removeItem(at: item.0)
+        }
+        var total = retained.prefix(maximumSessionCount).reduce(0) { $0 + $1.2 }
+        for item in retained.prefix(maximumSessionCount).reversed()
+            where total > maximumTotalBytes {
+            try? fileManager.removeItem(at: item.0)
+            total -= item.2
+        }
+    }
+
+    private func readEnvelope(
+        at url: URL,
+        scopeDigest: String,
+        sessionHash: String
+    ) -> Envelope? {
+        guard let data = try? measured("read", { try Data(contentsOf: url) }),
+              let envelope = try? measured("decode", bytes: data.count, { try Self.decoder.decode(Envelope.self, from: data) }),
+              envelope.schemaVersion == Self.schemaVersion,
+              envelope.scopeDigest == scopeDigest,
+              envelope.sessionHash == sessionHash else {
+            return nil
+        }
+        return envelope
+    }
+
+    private func readEnvelopeData(
+        at url: URL,
+        scopeDigest: String
+    ) -> Envelope? {
+        guard let data = try? measured("read", { try Data(contentsOf: url) }),
+              let envelope = try? measured("decode", bytes: data.count, { try Self.decoder.decode(Envelope.self, from: data) }),
+              envelope.schemaVersion == Self.schemaVersion,
+              envelope.scopeDigest == scopeDigest else {
+            return nil
+        }
+        return envelope
+    }
+
+    private func fileURL(scopeDigest: String, sessionHash: String) -> URL {
+        rootDirectory
+            .appendingPathComponent(scopeDigest, isDirectory: true)
+            .appendingPathComponent(Self.fileSafeDigest(sessionHash) + ".json")
+    }
+
+    private static func scopeDigest(for lease: AccountLease) -> String {
+        fileSafeDigest([
+            lease.subjectId,
+            lease.vaultId,
+            String(lease.generation),
+            lease.generationId.uuidString.lowercased(),
+            lease.authorityEpoch,
+        ].joined(separator: "|"))
+    }
+
+    private static func fileSafeDigest(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    private static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }()
+
+    private static let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
+}

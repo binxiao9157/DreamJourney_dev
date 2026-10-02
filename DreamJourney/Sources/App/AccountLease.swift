@@ -144,6 +144,9 @@ extension Notification.Name {
     static let djAppLifecycleEventForwarded = Notification.Name(
         "dj.appLifecycle.eventForwarded"
     )
+    static let djPrivateAccountReadinessAccepted = Notification.Name(
+        "dj.account.privateReadinessAccepted"
+    )
 }
 
 struct AccountLeaseValidationDecision: Equatable, Sendable {
@@ -175,6 +178,9 @@ final class AccountLeaseRuntime: AccountLeaseRuntimePort, @unchecked Sendable {
     private let lock = NSLock()
     private var activeSession: AccountSession?
     private var authorityEpoch: String
+    #if DEBUG
+    private var authorityEpochUpdateObserverForTesting: ((String, Bool) -> Void)?
+    #endif
     private var acceptedByCheckpoint: [String: Int] = [:]
     private var rejectedByCheckpoint: [String: Int] = [:]
     private var rejectedByReason: [String: Int] = [:]
@@ -189,11 +195,29 @@ final class AccountLeaseRuntime: AccountLeaseRuntimePort, @unchecked Sendable {
         lock.unlock()
     }
 
-    func updateAuthorityEpoch(_ authorityEpoch: String) {
+    func updateAuthorityEpoch(_ authorityEpoch: String, source: String = "unspecified") {
         lock.lock()
-        self.authorityEpoch = Self.normalizedAuthorityEpoch(authorityEpoch)
+        let nextEpoch = Self.normalizedAuthorityEpoch(authorityEpoch)
+        let changed = self.authorityEpoch != nextEpoch
+        self.authorityEpoch = nextEpoch
+        #if DEBUG
+        let observer = authorityEpochUpdateObserverForTesting
+        #endif
+        lock.unlock()
+        #if DEBUG
+        observer?(source, changed)
+        #endif
+    }
+
+    #if DEBUG
+    func observeAuthorityEpochUpdatesForTesting(
+        _ observer: ((String, Bool) -> Void)?
+    ) {
+        lock.lock()
+        authorityEpochUpdateObserverForTesting = observer
         lock.unlock()
     }
+    #endif
 
     func capture(forSubjectId subjectId: String? = nil) -> AccountLease? {
         let expectedSubject = Self.normalized(subjectId)

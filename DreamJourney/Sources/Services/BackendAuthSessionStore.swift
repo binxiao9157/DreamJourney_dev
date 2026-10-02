@@ -52,6 +52,14 @@ struct BackendAuthSessionContract: Codable, Equatable, Sendable {
         return expiresAt > Date()
     }
 
+    func isAccessCredentialUsable(
+        at now: Date = Date(),
+        minimumValidity: TimeInterval = 0
+    ) -> Bool {
+        guard let expiresAt = Self.backendDate(from: accessExpiresAt) else { return false }
+        return expiresAt > now.addingTimeInterval(max(0, minimumValidity))
+    }
+
     func isPrivateAccessEligible(for userId: String) -> Bool {
         let expectedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
         return isPrivateAccessEligible

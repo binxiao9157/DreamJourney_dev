@@ -1349,6 +1349,218 @@ struct OwnerTruthCandidateChangeSetProposal: Codable, Equatable, Sendable {
     }
 }
 
+struct OwnerTruthSourceCandidateBinding: Codable, Equatable, Sendable {
+    let vaultID: OwnerTruthVaultID
+    let candidateID: OwnerTruthRecordID
+    let candidateVersion: Int
+    let candidateContentHash: String
+
+    init(candidate: OwnerTruthCandidateInboxItem) {
+        vaultID = candidate.vaultID
+        candidateID = candidate.id
+        candidateVersion = candidate.candidateVersion
+        candidateContentHash = candidate.contentHash
+    }
+}
+
+struct OwnerTruthFrozenCorrectionInput: Codable, Equatable, Sendable {
+    let correctedValueSchemaVersion: String
+    let correctedValue: [String: OwnerTruthJSONValue]
+}
+
+struct OwnerTruthCandidateCorrectionBinding: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-candidate-correction-binding-v1"
+
+    let sourceCandidateVersion: Int
+    let sourceCandidateContentHash: String
+    let submittedCorrection: OwnerTruthFrozenCorrectionInput
+    let resolvedContentHash: String
+
+    init(
+        sourceCandidateVersion: Int,
+        sourceCandidateContentHash: String,
+        submittedCorrection: OwnerTruthFrozenCorrectionInput,
+        resolvedContentHash: String
+    ) {
+        self.sourceCandidateVersion = sourceCandidateVersion
+        self.sourceCandidateContentHash = sourceCandidateContentHash
+        self.submittedCorrection = submittedCorrection
+        self.resolvedContentHash = resolvedContentHash
+    }
+
+    init(backendJSONObject object: [String: Any]) throws {
+        guard Self.nonEmptyString(object["schemaVersion"]) == Self.schemaVersion else {
+            throw OwnerTruthRemoteContractError.invalidInbox("bindingSchemaUnsupported")
+        }
+        guard let sourceCandidateVersion = Self.positiveInt(object["sourceCandidateVersion"]) else {
+            throw OwnerTruthRemoteContractError.invalidInbox("sourceCandidateVersionInvalid")
+        }
+        guard let sourceCandidateContentHash = Self.sha256(object["sourceCandidateContentHash"]) else {
+            throw OwnerTruthRemoteContractError.invalidInbox("sourceCandidateHashInvalid")
+        }
+        guard let submittedObject = object["submittedCorrection"] as? [String: Any],
+              let correctedValueSchemaVersion = Self.nonEmptyString(
+                submittedObject["correctedValueSchemaVersion"]
+              ),
+              let correctedObject = submittedObject["correctedValue"] as? [String: Any],
+              let correctedValue = Self.typedObject(correctedObject) else {
+            throw OwnerTruthRemoteContractError.invalidInbox("submittedCorrectionInvalid")
+        }
+        guard let resolvedContentHash = Self.sha256(object["resolvedContentHash"]) else {
+            throw OwnerTruthRemoteContractError.invalidInbox("resolvedContentHashInvalid")
+        }
+        self.sourceCandidateVersion = sourceCandidateVersion
+        self.sourceCandidateContentHash = sourceCandidateContentHash
+        submittedCorrection = OwnerTruthFrozenCorrectionInput(
+            correctedValueSchemaVersion: correctedValueSchemaVersion,
+            correctedValue: correctedValue
+        )
+        self.resolvedContentHash = resolvedContentHash
+    }
+
+    private static func typedObject(_ object: [String: Any]) -> [String: OwnerTruthJSONValue]? {
+        var result: [String: OwnerTruthJSONValue] = [:]
+        result.reserveCapacity(object.count)
+        for (key, value) in object {
+            guard let typedValue = OwnerTruthJSONValue(backendJSONObject: value) else { return nil }
+            result[key] = typedValue
+        }
+        return result
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func sha256(_ value: Any?) -> String? {
+        guard let value = nonEmptyString(value),
+              value.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+            return nil
+        }
+        return value
+    }
+
+    private static func positiveInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value > 0 { return value }
+        if let value = value as? NSNumber,
+           CFGetTypeID(value) != CFBooleanGetTypeID(),
+           value.doubleValue.rounded() == value.doubleValue,
+           value.intValue > 0 {
+            return value.intValue
+        }
+        return nil
+    }
+}
+
+struct OwnerTruthCandidateCorrectionPreviewEnvelope: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-candidate-changeset-preview-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let candidateID: OwnerTruthRecordID
+    let proposal: OwnerTruthCandidateChangeSetProposal
+    let correctionBinding: OwnerTruthCandidateCorrectionBinding
+
+    init(
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        proposal: OwnerTruthCandidateChangeSetProposal,
+        correctionBinding: OwnerTruthCandidateCorrectionBinding
+    ) {
+        self.vaultID = vaultID
+        self.candidateID = candidateID
+        self.proposal = proposal
+        self.correctionBinding = correctionBinding
+    }
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID,
+        expectedCandidateID: OwnerTruthRecordID
+    ) throws {
+        guard object["schemaVersion"] as? String == Self.schemaVersion else {
+            throw OwnerTruthRemoteContractError.invalidInbox("correctionPreviewEnvelopeInvalid")
+        }
+        guard object["vaultId"] as? String == expectedVaultID.rawValue else {
+            throw OwnerTruthRemoteContractError.invalidInbox("correctionPreviewVaultMismatch")
+        }
+        guard let rawCandidateID = object["candidateId"] as? String,
+              UUID(uuidString: rawCandidateID) == expectedCandidateID.rawValue else {
+            throw OwnerTruthRemoteContractError.invalidInbox("correctionPreviewCandidateMismatch")
+        }
+        guard let proposalObject = object["proposedChangeSet"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidInbox("correctionPreviewProposalMissing")
+        }
+        guard let bindingObject = object["correctionBinding"] as? [String: Any] else {
+            throw OwnerTruthRemoteContractError.invalidInbox("correctionBindingMissing")
+        }
+        vaultID = expectedVaultID
+        candidateID = expectedCandidateID
+        proposal = try OwnerTruthCandidateChangeSetProposal(backendJSONObject: proposalObject)
+        correctionBinding = try OwnerTruthCandidateCorrectionBinding(
+            backendJSONObject: bindingObject
+        )
+    }
+}
+
+struct OwnerTruthVerifiedCorrectionPreview: Equatable, Sendable {
+    let sourceCandidate: OwnerTruthSourceCandidateBinding
+    let frozenCorrection: OwnerTruthFrozenCorrectionInput
+    let proposal: OwnerTruthCandidateChangeSetProposal
+    let traceID: String
+
+    init(
+        envelope: OwnerTruthCandidateCorrectionPreviewEnvelope,
+        sourceCandidate: OwnerTruthSourceCandidateBinding,
+        frozenCorrection: OwnerTruthFrozenCorrectionInput,
+        memoryRevision: Int,
+        traceID: String
+    ) throws {
+        guard envelope.vaultID == sourceCandidate.vaultID else {
+            throw OwnerTruthRemoteContractError.invalidInbox("correctionPreviewVaultMismatch")
+        }
+        guard envelope.candidateID == sourceCandidate.candidateID else {
+            throw OwnerTruthRemoteContractError.invalidInbox("correctionPreviewCandidateMismatch")
+        }
+        guard envelope.correctionBinding.sourceCandidateVersion == sourceCandidate.candidateVersion else {
+            throw OwnerTruthRemoteContractError.invalidInbox("sourceCandidateVersionMismatch")
+        }
+        guard envelope.correctionBinding.sourceCandidateContentHash == sourceCandidate.candidateContentHash else {
+            throw OwnerTruthRemoteContractError.invalidInbox("sourceCandidateHashMismatch")
+        }
+        guard envelope.proposal.candidateVersion == sourceCandidate.candidateVersion else {
+            throw OwnerTruthRemoteContractError.invalidInbox("proposalCandidateVersionMismatch")
+        }
+        guard envelope.correctionBinding.submittedCorrection == frozenCorrection else {
+            throw OwnerTruthRemoteContractError.invalidInbox("submittedCorrectionMismatch")
+        }
+        guard envelope.correctionBinding.resolvedContentHash == envelope.proposal.candidateContentHash else {
+            throw OwnerTruthRemoteContractError.invalidInbox("resolvedContentHashMismatch")
+        }
+        guard envelope.proposal.baseMemoryRevision == memoryRevision else {
+            throw OwnerTruthRemoteContractError.invalidInbox("memoryRevisionMismatch")
+        }
+        guard envelope.proposal.reviewability == .reviewable else {
+            throw OwnerTruthRemoteContractError.invalidInbox("correctionPreviewNotReviewable")
+        }
+        self.sourceCandidate = sourceCandidate
+        self.frozenCorrection = frozenCorrection
+        proposal = envelope.proposal
+        self.traceID = traceID
+    }
+
+    func matches(candidate: OwnerTruthCandidateInboxItem, memoryRevision: Int?) -> Bool {
+        sourceCandidate.vaultID == candidate.vaultID
+            && sourceCandidate.candidateID == candidate.id
+            && sourceCandidate.candidateVersion == candidate.candidateVersion
+            && sourceCandidate.candidateContentHash == candidate.contentHash
+            && proposal.candidateVersion == candidate.candidateVersion
+            && proposal.baseMemoryRevision == memoryRevision
+            && proposal.reviewability == .reviewable
+    }
+}
+
 extension OwnerTruthCandidateChangeSetProposal {
     var reviewability: OwnerTruthCandidateChangeSetReviewability {
         operations.allSatisfy { $0.reviewability == .reviewable }
@@ -1486,6 +1698,7 @@ struct OwnerTruthCandidateInboxItem: Codable, Equatable, Sendable, Identifiable 
 
     private static func date(_ value: Any?) throws -> Date? {
         guard let value else { return nil }
+        if value is NSNull { return nil }
         guard let rawValue = nonEmptyString(value) else {
             throw OwnerTruthRemoteContractError.invalidInbox("createdAt must be an ISO-8601 value or null")
         }
@@ -2211,7 +2424,14 @@ struct OwnerTruthMemoryChangeSetGroupProposal: Equatable, Sendable {
     let members: [OwnerTruthMemoryChangeSetGroupProposalMember]
     let dependencies: [OwnerTruthMemoryChangeSetGroupDependency]
 
-    init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID) throws {
+    let themeBinding: OwnerTruthLiveThemeBinding?
+    init(backendJSONObject object: [String: Any], expectedVaultID: OwnerTruthVaultID,
+         expectedThemeBinding: OwnerTruthLiveThemeBinding? = nil) throws {
+        let binding = try (object["themeBinding"] as? [String: Any]).map { try OwnerTruthLiveThemeBinding(object: $0) }
+        guard binding == expectedThemeBinding else {
+            throw OwnerTruthRemoteContractError.invalidInbox("Theme preview does not bind the visible version")
+        }
+        themeBinding = binding
         guard OwnerTruthCandidateEvidenceReference.requiredString(object["schemaVersion"])
                 == Self.schemaVersion,
               let proposalID = OwnerTruthCandidateEvidenceReference.recordID(object["groupProposalId"]),
@@ -2221,9 +2441,9 @@ struct OwnerTruthMemoryChangeSetGroupProposal: Equatable, Sendable {
               let baseMemoryRevision = OwnerTruthCandidateEvidenceReference.nonNegativeInt(
                 object["baseMemoryRevision"]
               ), let memberObjects = object["members"] as? [[String: Any]],
-              memberObjects.count >= 2,
+              memberObjects.count >= (binding == nil ? 2 : 1),
               let dependencyObjects = object["dependencies"] as? [[String: Any]],
-              !dependencyObjects.isEmpty else {
+              (binding != nil || !dependencyObjects.isEmpty) else {
             throw OwnerTruthRemoteContractError.invalidInbox("ChangeSet group proposal is invalid")
         }
         let members = try memberObjects.map(OwnerTruthMemoryChangeSetGroupProposalMember.init)
@@ -4183,6 +4403,15 @@ protocol OwnerTruthCandidateReviewClient: AnyObject {
         completion: @escaping (Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void
     )
 
+    func previewOwnerTruthCandidateCorrectionChangeSet(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        candidateID: OwnerTruthRecordID,
+        frozenCorrection: OwnerTruthFrozenCorrectionInput,
+        traceID: String,
+        completion: @escaping (Result<OwnerTruthCandidateCorrectionPreviewEnvelope, Error>) -> Void
+    )
+
     func previewOwnerTruthCandidateChangeSetGroup(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthMemoryChangeSetGroupCommand,
@@ -5615,6 +5844,7 @@ struct OwnerTruthInterviewCandidateConfirmationSingleCommand: Equatable, Sendabl
     let action: OwnerTruthCandidateReviewAction
     let correctedValue: [String: OwnerTruthJSONValue]?
     let correctedValueSchemaVersion: String?
+    let reviewBinding: OwnerTruthCandidateReviewBinding?
 
     init(
         commandID: String,
@@ -5623,7 +5853,8 @@ struct OwnerTruthInterviewCandidateConfirmationSingleCommand: Equatable, Sendabl
         expectedCandidateVersion: Int,
         action: OwnerTruthCandidateReviewAction,
         correctedValue: [String: OwnerTruthJSONValue]? = nil,
-        correctedValueSchemaVersion: String? = nil
+        correctedValueSchemaVersion: String? = nil,
+        reviewBinding: OwnerTruthCandidateReviewBinding? = nil
     ) throws {
         let normalizedCommandID = commandID.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedSchemaVersion = correctedValueSchemaVersion?
@@ -5652,6 +5883,13 @@ struct OwnerTruthInterviewCandidateConfirmationSingleCommand: Equatable, Sendabl
             self.correctedValue = nil
             self.correctedValueSchemaVersion = nil
         }
+        if let reviewBinding {
+            guard reviewBinding.candidateID == candidateID,
+                  reviewBinding.candidateVersion == expectedCandidateVersion else {
+                throw OwnerTruthRemoteContractError.invalidCommand("confirmation proposal candidate binding mismatch")
+            }
+        }
+        self.reviewBinding = reviewBinding
         self.commandID = normalizedCommandID
         self.reviewBatchID = reviewBatchID
         self.candidateID = candidateID
@@ -5668,6 +5906,11 @@ struct OwnerTruthInterviewCandidateConfirmationSingleCommand: Equatable, Sendabl
         if let correctedValue, let correctedValueSchemaVersion {
             payload["correctedValue"] = correctedValue.mapValues(\.backendJSONObject)
             payload["correctedValueSchemaVersion"] = correctedValueSchemaVersion
+        }
+        if let reviewBinding {
+            payload["expectedMemoryRevision"] = reviewBinding.baseMemoryRevision
+            payload["expectedChangeSetId"] = reviewBinding.changeSetID.rawValue.uuidString.lowercased()
+            payload["expectedProposalHash"] = reviewBinding.proposalHash
         }
         return payload
     }
@@ -7193,7 +7436,7 @@ final class OwnerTruthInterviewCandidateConfirmationActionUseCase {
         confirmationReader: OwnerTruthInterviewCandidateConfirmationClient,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = { false },
-        commandIDFactory: @escaping CommandIDFactory = { UUID().uuidString.lowercased() }
+        commandIDFactory: @escaping CommandIDFactory = { "interview-batch-" + UUID().uuidString.lowercased() }
     ) {
         self.accountLease = accountLease
         self.vaultID = OwnerTruthVaultID(accountLease.vaultId)
@@ -7493,7 +7736,7 @@ final class OwnerTruthInterviewCandidateConfirmationSingleActionUseCase {
         confirmationReader: OwnerTruthInterviewCandidateConfirmationClient,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = { false },
-        commandIDFactory: @escaping CommandIDFactory = { UUID().uuidString.lowercased() }
+        commandIDFactory: @escaping CommandIDFactory = { "interview-single-" + UUID().uuidString.lowercased() }
     ) {
         self.accountLease = accountLease
         vaultID = OwnerTruthVaultID(accountLease.vaultId)
@@ -7574,6 +7817,23 @@ final class OwnerTruthInterviewCandidateConfirmationSingleActionUseCase {
             return nil
         }
 
+        let proposal = candidate.candidate.proposedChangeSet
+        var reviewBinding: OwnerTruthCandidateReviewBinding?
+        if candidate.candidate.contentSchemaVersion == "owner-truth-v5" {
+            // The interview-specific route requires the same displayed V5 proposal
+            // binding as the general archive route. A correction needs a separate
+            // verified correction preview; never bind it to the unchanged proposal.
+            guard action != .correct, let proposal,
+                  proposal.reviewability == .reviewable,
+                  proposal.candidateVersion == candidate.candidate.candidateVersion,
+                  proposal.candidateContentHash == candidate.candidate.contentHash else {
+                transitionFailure(.requestFailed)
+                return nil
+            }
+            reviewBinding = OwnerTruthCandidateReviewBinding(candidateID: candidateID,
+                candidateVersion: candidate.candidate.candidateVersion,
+                candidateContentHash: candidate.candidate.contentHash, proposal: proposal)
+        }
         let normalizedSummary = correctedSummary?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if action == .correct, normalizedSummary.isEmpty {
@@ -7596,7 +7856,8 @@ final class OwnerTruthInterviewCandidateConfirmationSingleActionUseCase {
                     reviewBatchID: confirmation.reviewBatchID,
                     candidateID: candidateID,
                     expectedCandidateVersion: candidate.candidate.candidateVersion,
-                    action: action
+                    action: action,
+                    reviewBinding: reviewBinding
                 )
             case .correct:
                 var correctedValue = candidate.candidate.content
@@ -8852,6 +9113,8 @@ struct OwnerTruthInterviewNaturalInputReceipt: Codable, Equatable, Sendable {
     let clientSequenceNumber: Int?
     let continuousClientSequence: Int?
     let deliveryState: OwnerTruthInterviewNaturalInputDeliveryState?
+    let authorityEpoch: Int?
+    private(set) var recoveryProgress: OwnerTruthLiveRecoveryProgress? = nil
 
     init(
         backendJSONObject object: [String: Any],
@@ -8867,6 +9130,13 @@ struct OwnerTruthInterviewNaturalInputReceipt: Codable, Equatable, Sendable {
             )
         }
         try self.init(receiptJSONObject: receipt, expectedVaultID: expectedVaultID)
+        if let raw = object["recovery"] {
+            guard let progressObject = raw as? [String: Any], messageID == nil else {
+                throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput("invalid recovery negotiation")
+            }
+            recoveryProgress = try OwnerTruthLiveRecoveryProgress(backendJSONObject: progressObject,
+                expectedSessionID: sessionID, expectedGeneration: 1)
+        }
     }
 
     fileprivate init(
@@ -8903,6 +9173,10 @@ struct OwnerTruthInterviewNaturalInputReceipt: Codable, Equatable, Sendable {
         let continuousClientSequence = try OwnerTruthInterviewNaturalInputContract.optionalNonNegativeInt(
             receipt["continuousClientSequence"],
             field: "continuousClientSequence"
+        )
+        let authorityEpoch = try OwnerTruthInterviewNaturalInputContract.optionalNonNegativeInt(
+            receipt["authorityEpoch"],
+            field: "authorityEpoch"
         )
         let deliveryState: OwnerTruthInterviewNaturalInputDeliveryState?
         if let deliveryStateRaw = try OwnerTruthInterviewNaturalInputContract.optionalString(
@@ -8967,6 +9241,7 @@ struct OwnerTruthInterviewNaturalInputReceipt: Codable, Equatable, Sendable {
         self.clientSequenceNumber = clientSequenceNumber
         self.continuousClientSequence = continuousClientSequence
         self.deliveryState = deliveryState
+        self.authorityEpoch = authorityEpoch
     }
 
     func matches(_ command: OwnerTruthInterviewNaturalInputStartCommand) -> Bool {
@@ -8976,6 +9251,9 @@ struct OwnerTruthInterviewNaturalInputReceipt: Codable, Equatable, Sendable {
             && messageSequence == nil
             && clientSequenceNumber == nil
             && deliveryState == nil
+            && (command.recoveryProtocol == nil
+                ? recoveryProgress == nil
+                : recoveryProgress?.protocol == command.recoveryProtocol)
     }
 
     func matches(_ command: OwnerTruthInterviewNaturalInputAppendCommand) -> Bool {
@@ -9127,7 +9405,7 @@ struct OwnerTruthInterviewNaturalInputCurrentSession: Equatable, Sendable {
     }
 }
 
-enum OwnerTruthInterviewEntryMode: String, Equatable, Sendable {
+enum OwnerTruthInterviewEntryMode: String, Codable, Equatable, Sendable {
     case naturalInput
     case live
     case recommendation
@@ -9184,25 +9462,31 @@ struct OwnerTruthInterviewNaturalInputContinuation: Equatable, Sendable {
     }
 }
 
-struct OwnerTruthInterviewNaturalInputStartCommand: Equatable, Sendable {
+struct OwnerTruthInterviewNaturalInputStartCommand: Codable, Equatable, Sendable {
     let commandID: String
     let threadID: OwnerTruthRecordID
     let sessionID: OwnerTruthRecordID
     let entryMode: OwnerTruthInterviewEntryMode
     let productSessionID: String?
+    let recoveryProtocol: String?
 
     init(
         commandID: String,
         threadID: OwnerTruthRecordID,
         sessionID: OwnerTruthRecordID,
         entryMode: OwnerTruthInterviewEntryMode = .naturalInput,
-        productSessionID: String? = nil
+        productSessionID: String? = nil,
+        recoveryProtocol: String? = nil
     ) throws {
         guard let commandID = OwnerTruthInterviewNaturalInputContract.nonEmptyString(commandID) else {
             throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
                 "start command id must be non-empty"
             )
         }
+        guard recoveryProtocol == nil || (recoveryProtocol == "live-recovery-v1" && entryMode == .live) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput("unsupported recovery protocol")
+        }
+        self.recoveryProtocol = recoveryProtocol
         self.commandID = commandID
         self.threadID = threadID
         self.sessionID = sessionID
@@ -9232,6 +9516,7 @@ struct OwnerTruthInterviewNaturalInputStartCommand: Equatable, Sendable {
         if let productSessionID {
             payload["productSessionId"] = productSessionID
         }
+        if let recoveryProtocol { payload["recoveryProtocol"] = recoveryProtocol }
         return payload
     }
 }
@@ -9301,9 +9586,396 @@ struct OwnerTruthInterviewLiveTurnDelivery: Codable, Equatable, Sendable {
             capturedAt: capturedAt
         )
     }
+
+    var commandIDHash: String {
+        SHA256.hash(data: Data(commandID.utf8)).map {
+            String(format: "%02x", $0)
+        }.joined()
+    }
+
+    func serverContentHash() throws -> String {
+        let content = [
+            ("captureMode", OwnerTruthInterviewNaturalInputCaptureMode.live.rawValue),
+            ("capturedAt", ISO8601DateFormatter().string(from: capturedAt)),
+            ("schemaVersion", "owner-truth-conversation-v1"),
+            ("text", text),
+        ].sorted { lhs, rhs in
+            lhs.0.unicodeScalars.lexicographicallyPrecedes(rhs.0.unicodeScalars) {
+                $0.value < $1.value
+            }
+        }
+        let canonical = "{" + content.map {
+            "\(Self.backendJSONStringLiteral($0.0)):\(Self.backendJSONStringLiteral($0.1))"
+        }.joined(separator: ",") + "}"
+        return SHA256.hash(data: Data(canonical.utf8)).map {
+            String(format: "%02x", $0)
+        }.joined()
+    }
+
+    private static func backendJSONStringLiteral(_ value: String) -> String {
+        var result = "\""
+        for scalar in value.unicodeScalars {
+            switch scalar.value {
+            case 0x08: result += "\\b"
+            case 0x09: result += "\\t"
+            case 0x0A: result += "\\n"
+            case 0x0C: result += "\\f"
+            case 0x0D: result += "\\r"
+            case 0x22: result += "\\\""
+            case 0x5C: result += "\\\\"
+            case 0x00...0x1F:
+                result += String(format: "\\u%04x", scalar.value)
+            default:
+                result.unicodeScalars.append(scalar)
+            }
+        }
+        result += "\""
+        return result
+    }
 }
 
-struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
+struct OwnerTruthLiveDeliveryStatusItem: Equatable, Sendable {
+    let messageID: OwnerTruthRecordID
+    let commandIDHash: String
+    let clientSequenceNumber: Int
+    let role: OwnerTruthInterviewNaturalInputMessageRole
+    let capturedAt: Date
+    let contentHash: String
+}
+
+enum OwnerTruthLiveDeliveryOperationKind: String, Equatable, Sendable {
+    case startInterviewSession
+    case endInterviewSession
+}
+
+struct OwnerTruthLiveDeliveryOperation: Equatable, Sendable {
+    let operation: OwnerTruthLiveDeliveryOperationKind
+    let commandIDHash: String
+    let receiptID: OwnerTruthRecordID
+    let threadID: OwnerTruthRecordID
+    let sessionID: OwnerTruthRecordID
+    let resultState: OwnerTruthInterviewSessionLifecycle
+}
+
+struct OwnerTruthLiveDeliveryStatus: Equatable, Sendable {
+    static let schemaVersion = "owner-truth-live-delivery-status-v1"
+
+    let vaultID: OwnerTruthVaultID
+    let productSessionID: String
+    let threadID: OwnerTruthRecordID
+    let sessionID: OwnerTruthRecordID
+    let lifecycle: OwnerTruthInterviewSessionLifecycle
+    let boundary: OwnerTruthInterviewSessionBoundary
+    let threadVersion: Int
+    let sessionVersion: Int
+    let authorityEpoch: Int
+    let continuousClientSequence: Int
+    let closeRequestedClientSequence: Int?
+    let observedAt: Date
+    let fromClientSequence: Int
+    let limit: Int
+    let missingClientSequences: [Int]
+    let nextFromClientSequence: Int?
+    let deliveries: [OwnerTruthLiveDeliveryStatusItem]
+    let operations: [OwnerTruthLiveDeliveryOperation]
+
+    init(
+        backendJSONObject object: [String: Any],
+        expectedVaultID: OwnerTruthVaultID,
+        expectedSessionID: OwnerTruthRecordID,
+        expectedProductSessionID: String
+    ) throws {
+        guard object["schemaVersion"] as? String == Self.schemaVersion,
+              object["vaultId"] as? String == expectedVaultID.rawValue,
+              object["productSessionId"] as? String == expectedProductSessionID,
+              let session = object["session"] as? [String: Any],
+              let threadRaw = session["threadId"] as? String,
+              let threadUUID = UUID(uuidString: threadRaw),
+              session["sessionId"] as? String
+                == expectedSessionID.rawValue.uuidString.lowercased(),
+              let lifecycleRaw = session["state"] as? String,
+              let lifecycle = OwnerTruthInterviewSessionLifecycle(rawValue: lifecycleRaw),
+              let boundaryRaw = session["boundary"] as? String,
+              let boundary = OwnerTruthInterviewSessionBoundary(rawValue: boundaryRaw),
+              let threadVersion = session["threadVersion"] as? Int,
+              threadVersion > 0,
+              let sessionVersion = session["sessionVersion"] as? Int,
+              sessionVersion > 0,
+              let authorityEpoch = session["authorityEpoch"] as? Int,
+              authorityEpoch >= 0,
+              let continuous = session["continuousClientSequence"] as? Int,
+              continuous >= 0,
+              let observedAtRaw = object["observedAt"] as? String,
+              let observedAt = Self.iso8601Date(observedAtRaw),
+              let window = object["window"] as? [String: Any],
+              let fromClientSequence = window["fromClientSequence"] as? Int,
+              fromClientSequence > 0,
+              let limit = window["limit"] as? Int,
+              (1...64).contains(limit),
+              let missingClientSequences = window["missingClientSequences"] as? [Int],
+              let rawDeliveries = object["deliveries"] as? [[String: Any]],
+              let rawOperations = object["operations"] as? [[String: Any]] else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "Live delivery status envelope is incomplete"
+            )
+        }
+        let closeSequence: Int?
+        if session["closeRequestedClientSequence"] is NSNull
+            || session["closeRequestedClientSequence"] == nil {
+            closeSequence = nil
+        } else if let value = session["closeRequestedClientSequence"] as? Int, value > 0 {
+            closeSequence = value
+        } else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "Live delivery status close watermark is invalid"
+            )
+        }
+        let parsedDeliveries = try rawDeliveries.map { item in
+            guard let messageRaw = item["messageId"] as? String,
+                  let messageUUID = UUID(uuidString: messageRaw),
+                  let commandIDHash = item["commandIdHash"] as? String,
+                  commandIDHash.count == 64,
+                  let sequence = item["clientSequenceNumber"] as? Int,
+                  sequence > 0,
+                  let roleRaw = item["author"] as? String,
+                  let role = OwnerTruthInterviewNaturalInputMessageRole(rawValue: roleRaw),
+                  let capturedAtRaw = item["capturedAt"] as? String,
+                  let capturedAt = Self.iso8601Date(capturedAtRaw),
+                  let contentHash = item["contentHash"] as? String,
+                  Self.isSHA256(contentHash),
+                  Self.isSHA256(commandIDHash) else {
+                throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                    "Live delivery status item is incomplete"
+                )
+            }
+            return OwnerTruthLiveDeliveryStatusItem(
+                messageID: OwnerTruthRecordID(rawValue: messageUUID),
+                commandIDHash: commandIDHash,
+                clientSequenceNumber: sequence,
+                role: role,
+                capturedAt: capturedAt,
+                contentHash: contentHash
+            )
+        }
+        let sequences = parsedDeliveries.map(\.clientSequenceNumber)
+        let windowEnd = fromClientSequence + limit - 1
+        let nextFromClientSequence: Int?
+        if window["nextFromClientSequence"] is NSNull
+            || window["nextFromClientSequence"] == nil {
+            nextFromClientSequence = nil
+        } else if let value = window["nextFromClientSequence"] as? Int,
+                  value == windowEnd + 1 {
+            nextFromClientSequence = value
+        } else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "Live delivery status next window is invalid"
+            )
+        }
+        guard sequences == sequences.sorted(),
+              Set(sequences).count == sequences.count,
+              sequences.allSatisfy((fromClientSequence...windowEnd).contains),
+              missingClientSequences == missingClientSequences.sorted(),
+              Set(missingClientSequences).count == missingClientSequences.count,
+              missingClientSequences.allSatisfy((fromClientSequence...windowEnd).contains),
+              Set(sequences).isDisjoint(with: Set(missingClientSequences)) else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "Live delivery status items are not strictly ordered"
+            )
+        }
+        let parsedOperations = try rawOperations.map { item in
+            guard let operationRaw = item["operation"] as? String,
+                  let operation = OwnerTruthLiveDeliveryOperationKind(rawValue: operationRaw),
+                  let commandIDHash = item["commandIdHash"] as? String,
+                  Self.isSHA256(commandIDHash),
+                  let receiptRaw = item["receiptId"] as? String,
+                  let receiptUUID = UUID(uuidString: receiptRaw),
+                  let operationThreadRaw = item["threadId"] as? String,
+                  let operationThreadUUID = UUID(uuidString: operationThreadRaw),
+                  operationThreadUUID == threadUUID,
+                  let operationSessionRaw = item["sessionId"] as? String,
+                  let operationSessionUUID = UUID(uuidString: operationSessionRaw),
+                  operationSessionUUID == expectedSessionID.rawValue,
+                  let resultStateRaw = item["resultState"] as? String,
+                  let resultState = OwnerTruthInterviewSessionLifecycle(rawValue: resultStateRaw) else {
+                throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                    "Live delivery status operation is incomplete"
+                )
+            }
+            return OwnerTruthLiveDeliveryOperation(
+                operation: operation,
+                commandIDHash: commandIDHash,
+                receiptID: OwnerTruthRecordID(rawValue: receiptUUID),
+                threadID: OwnerTruthRecordID(rawValue: operationThreadUUID),
+                sessionID: OwnerTruthRecordID(rawValue: operationSessionUUID),
+                resultState: resultState
+            )
+        }
+        guard Set(parsedOperations.map { "\($0.operation.rawValue)|\($0.commandIDHash)" }).count
+                == parsedOperations.count else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "Live delivery status operations are duplicated"
+            )
+        }
+        vaultID = expectedVaultID
+        productSessionID = expectedProductSessionID
+        threadID = OwnerTruthRecordID(rawValue: threadUUID)
+        sessionID = expectedSessionID
+        self.lifecycle = lifecycle
+        self.boundary = boundary
+        self.threadVersion = threadVersion
+        self.sessionVersion = sessionVersion
+        self.authorityEpoch = authorityEpoch
+        continuousClientSequence = continuous
+        closeRequestedClientSequence = closeSequence
+        self.observedAt = observedAt
+        self.fromClientSequence = fromClientSequence
+        self.limit = limit
+        self.missingClientSequences = missingClientSequences
+        self.nextFromClientSequence = nextFromClientSequence
+        deliveries = parsedDeliveries
+        operations = parsedOperations
+    }
+
+    private static func iso8601Date(_ value: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+    }
+
+    private static func isSHA256(_ value: String) -> Bool {
+        value.count == 64 && value.unicodeScalars.allSatisfy {
+            (48...57).contains($0.value) || (97...102).contains($0.value)
+        }
+    }
+
+    func delivery(matching local: OwnerTruthInterviewLiveTurnDelivery) -> OwnerTruthLiveDeliveryStatusItem? {
+        guard let remote = deliveries.first(where: {
+            $0.clientSequenceNumber == local.clientSequenceNumber
+        }),
+        remote.messageID == local.messageID,
+        remote.commandIDHash == local.commandIDHash,
+        remote.role == local.role,
+        ISO8601DateFormatter().string(from: remote.capturedAt)
+            == ISO8601DateFormatter().string(from: local.capturedAt),
+        (try? local.serverContentHash()) == remote.contentHash else {
+            return nil
+        }
+        return remote
+    }
+
+    func confirms(_ command: OwnerTruthInterviewNaturalInputStartCommand) -> Bool {
+        guard command.entryMode == .live,
+              command.productSessionID == productSessionID,
+              command.threadID == threadID,
+              command.sessionID == sessionID else { return false }
+        let commandHash = SHA256.hash(data: Data(command.commandID.utf8)).map {
+            String(format: "%02x", $0)
+        }.joined()
+        return operations.contains {
+            $0.operation == .startInterviewSession
+                && $0.commandIDHash == commandHash
+                && $0.threadID == command.threadID
+                && $0.sessionID == command.sessionID
+                && $0.resultState == lifecycle
+        }
+    }
+
+    func confirmedStartedReceipt(
+        for command: OwnerTruthInterviewNaturalInputStartCommand
+    ) -> OwnerTruthInterviewNaturalInputReceipt? {
+        guard confirms(command) else { return nil }
+        return try? OwnerTruthInterviewNaturalInputReceipt(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "receipt": [
+                    "status": OwnerTruthInterviewNaturalInputReceiptOutcome.deduplicated.rawValue,
+                    "threadId": threadID.rawValue.uuidString.lowercased(),
+                    "sessionId": sessionID.rawValue.uuidString.lowercased(),
+                    "threadVersion": threadVersion,
+                    "sessionVersion": sessionVersion,
+                    "state": lifecycle.rawValue,
+                    "boundary": boundary.rawValue,
+                    "continuousClientSequence": continuousClientSequence,
+                    "authorityEpoch": authorityEpoch,
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+    }
+
+    func confirms(_ command: OwnerTruthInterviewEndCommand) -> Bool {
+        guard lifecycle == .ended,
+              command.threadID == threadID,
+              command.sessionID == sessionID,
+              closeRequestedClientSequence == command.lastClientSequenceNumber else {
+            return false
+        }
+        let commandHash = SHA256.hash(data: Data(command.commandID.utf8)).map {
+            String(format: "%02x", $0)
+        }.joined()
+        return operations.contains {
+            $0.operation == .endInterviewSession
+                && $0.commandIDHash == commandHash
+                && $0.threadID == command.threadID
+                && $0.sessionID == command.sessionID
+                && $0.resultState == .ended
+        }
+    }
+
+    func confirmedEndedReceipt(
+        for command: OwnerTruthInterviewEndCommand
+    ) -> OwnerTruthInterviewNaturalInputReceipt? {
+        guard confirms(command) else { return nil }
+        return try? OwnerTruthInterviewNaturalInputReceipt(
+            backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                "vaultId": vaultID.rawValue,
+                "receipt": [
+                    "status": OwnerTruthInterviewNaturalInputReceiptOutcome.deduplicated.rawValue,
+                    "threadId": threadID.rawValue.uuidString.lowercased(),
+                    "sessionId": sessionID.rawValue.uuidString.lowercased(),
+                    "threadVersion": threadVersion,
+                    "sessionVersion": sessionVersion,
+                    "state": OwnerTruthInterviewSessionLifecycle.ended.rawValue,
+                    "boundary": boundary.rawValue,
+                    "continuousClientSequence": continuousClientSequence,
+                    "deliveryState": OwnerTruthInterviewNaturalInputDeliveryState
+                        .closedAfterContiguousDelivery.rawValue,
+                ],
+            ],
+            expectedVaultID: vaultID
+        )
+    }
+}
+
+protocol OwnerTruthLiveDeliveryStatusClient: AnyObject {
+    func fetchOwnerTruthLiveDeliveryStatus(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        productSessionID: String,
+        fromClientSequence: Int,
+        completion: @escaping (Result<OwnerTruthLiveDeliveryStatus, Error>) -> Void
+    )
+}
+
+extension OwnerTruthLiveDeliveryStatusClient {
+    func fetchOwnerTruthLiveDeliveryStatus(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID,
+        productSessionID: String,
+        fromClientSequence: Int,
+        completion: @escaping (Result<OwnerTruthLiveDeliveryStatus, Error>) -> Void
+    ) {
+        completion(.failure(OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+            "Live delivery status read is unavailable"
+        )))
+    }
+}
+
+struct OwnerTruthInterviewNaturalInputAppendCommand: Codable, Equatable, Sendable {
     static let maximumCharacterCount = 20_000
 
     let commandID: String
@@ -9388,6 +10060,59 @@ struct OwnerTruthInterviewNaturalInputAppendCommand: Equatable, Sendable {
             payload["capturedAt"] = ISO8601DateFormatter().string(from: capturedAt)
         }
         return payload
+    }
+
+    var canonicalPayloadHash: String {
+        let data = try? JSONSerialization.data(
+            withJSONObject: backendPayload,
+            options: [.sortedKeys]
+        )
+        return SHA256.hash(data: data ?? Data()).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+struct OwnerTruthInterviewPreHandlerAuthenticationRejectionEvidence:
+    Codable, Equatable, Sendable {
+    static let currentContractVersion = "owner-truth-live-auth-rejection-v1"
+
+    let contractVersion: String
+    let commandIDHash: String
+    let messageID: OwnerTruthRecordID
+    let clientSequenceNumber: Int
+    let payloadHash: String
+    let transportAttempt: Int
+
+    init(
+        command: OwnerTruthInterviewNaturalInputAppendCommand,
+        transportAttempt: Int
+    ) throws {
+        guard command.captureMode == .live,
+              let sequence = command.clientSequenceNumber,
+              sequence > 0,
+              transportAttempt > 0 else {
+            throw OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+                "authentication rejection evidence requires a bound Live append"
+            )
+        }
+        contractVersion = Self.currentContractVersion
+        commandIDHash = SHA256.hash(data: Data(command.commandID.utf8)).map {
+            String(format: "%02x", $0)
+        }.joined()
+        messageID = command.messageID
+        clientSequenceNumber = sequence
+        payloadHash = command.canonicalPayloadHash
+        self.transportAttempt = transportAttempt
+    }
+
+    func matches(_ command: OwnerTruthInterviewNaturalInputAppendCommand) -> Bool {
+        contractVersion == Self.currentContractVersion
+            && messageID == command.messageID
+            && clientSequenceNumber == command.clientSequenceNumber
+            && commandIDHash == SHA256.hash(data: Data(command.commandID.utf8)).map {
+                String(format: "%02x", $0)
+            }.joined()
+            && payloadHash == command.canonicalPayloadHash
+            && transportAttempt == 1
     }
 }
 
@@ -9647,6 +10372,15 @@ struct OwnerTruthInterviewRestoreCooldownCommand: Equatable, Sendable {
 }
 
 protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
+    func freshOwnerTruthInterviewNaturalInputDecision() -> FeatureDecision?
+
+    func prepareOwnerTruthInterviewNaturalInputAuthentication(
+        accountLease: AccountLease,
+        now: @escaping () -> Date,
+        minimumValidity: TimeInterval,
+        completion: @escaping (Bool) -> Void
+    )
+
     func fetchOwnerTruthInterviewNaturalInputCurrentSession(
         vaultID: OwnerTruthVaultID,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputCurrentSession, Error>) -> Void
@@ -9674,10 +10408,46 @@ protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
     )
 
+    func startOwnerTruthInterviewNaturalInputWrite(
+        authority: OwnerTruthInterviewNaturalInputRequestAuthority,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewNaturalInputStartCommand,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewNaturalInputReceipt>
+        ) -> Void
+    )
+
+    func appendOwnerTruthInterviewNaturalInputWrite(
+        authority: OwnerTruthInterviewNaturalInputRequestAuthority,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewNaturalInputAppendCommand,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewNaturalInputReceipt>
+        ) -> Void
+    )
+
+    func endOwnerTruthInterviewNaturalInputWrite(
+        authority: OwnerTruthInterviewNaturalInputRequestAuthority,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewEndCommand,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewNaturalInputReceipt>
+        ) -> Void
+    )
+
     func endOwnerTruthInterviewNaturalInput(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewEndCommand,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputReceipt, Error>) -> Void
+    )
+
+    func endOwnerTruthInterviewNaturalInputWrite(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewEndCommand,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewNaturalInputReceipt>
+        ) -> Void
     )
 
     func setOwnerTruthInterviewBoundary(
@@ -9715,6 +10485,114 @@ protocol OwnerTruthInterviewNaturalInputClient: AnyObject {
         sessionID: OwnerTruthRecordID,
         completion: @escaping (Result<OwnerTruthInterviewNaturalInputContinuation, Error>) -> Void
     )
+}
+
+struct OwnerTruthInterviewNaturalInputRequestAuthority {
+    let featureDecision: FeatureDecision
+    let accountLease: AccountLease
+    let operationGeneration: UInt
+    let diagnosticTraceID: String
+
+    init?(
+        featureDecision: FeatureDecision,
+        accountLease: AccountLease,
+        operationGeneration: UInt,
+        diagnosticTraceID: String,
+        now: Date = Date()
+    ) {
+        let trace = diagnosticTraceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        // FeatureDecision.accountGeneration belongs to the authentication/
+        // FeatureGate identity domain. AccountLease.generationId belongs to
+        // the independently validated app-session lease domain. Comparing the
+        // two rejects every production authority even when both are current.
+        // The decision is revalidated against the current FeatureGate source
+        // by requestJSON immediately before transport; the lease is validated
+        // independently at request and commit checkpoints.
+        guard featureDecision.feature == .echoTextInput,
+              featureDecision.purpose == .request,
+              featureDecision.allowed,
+              featureDecision.expiresAt.map({ $0 > now }) ?? true,
+              operationGeneration > 0,
+              !trace.isEmpty else { return nil }
+        self.featureDecision = featureDecision
+        self.accountLease = accountLease
+        self.operationGeneration = operationGeneration
+        self.diagnosticTraceID = trace
+    }
+
+    func matches(accountLease: AccountLease, generation: UInt) -> Bool {
+        self.accountLease == accountLease && operationGeneration == generation
+    }
+}
+
+extension OwnerTruthInterviewNaturalInputClient {
+    func freshOwnerTruthInterviewNaturalInputDecision() -> FeatureDecision? { nil }
+
+    func prepareOwnerTruthInterviewNaturalInputAuthentication(
+        accountLease _: AccountLease,
+        now _: @escaping () -> Date,
+        minimumValidity _: TimeInterval,
+        completion: @escaping (Bool) -> Void
+    ) {
+        completion(true)
+    }
+
+    func startOwnerTruthInterviewNaturalInputWrite(
+        authority: OwnerTruthInterviewNaturalInputRequestAuthority,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewNaturalInputStartCommand,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewNaturalInputReceipt>
+        ) -> Void
+    ) {
+        startOwnerTruthInterviewNaturalInput(vaultID: vaultID, command: command) {
+            completion(.classify($0, exposure: .unknown))
+        }
+    }
+
+    func appendOwnerTruthInterviewNaturalInputWrite(
+        authority: OwnerTruthInterviewNaturalInputRequestAuthority,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewNaturalInputAppendCommand,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewNaturalInputReceipt>
+        ) -> Void
+    ) {
+        appendOwnerTruthInterviewNaturalInput(vaultID: vaultID, command: command) {
+            completion(.classify($0, exposure: .unknown))
+        }
+    }
+
+    func endOwnerTruthInterviewNaturalInputWrite(
+        authority: OwnerTruthInterviewNaturalInputRequestAuthority,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewEndCommand,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewNaturalInputReceipt>
+        ) -> Void
+    ) {
+        endOwnerTruthInterviewNaturalInputWrite(
+            accountLease: authority.accountLease,
+            vaultID: vaultID,
+            command: command,
+            completion: completion
+        )
+    }
+}
+
+extension OwnerTruthInterviewNaturalInputClient {
+    func endOwnerTruthInterviewNaturalInputWrite(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewEndCommand,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewNaturalInputReceipt>
+        ) -> Void
+    ) {
+        endOwnerTruthInterviewNaturalInput(vaultID: vaultID, command: command) { result in
+            completion(.classify(result, exposure: .unknown))
+        }
+    }
 }
 
 extension OwnerTruthInterviewNaturalInputClient {
@@ -10002,6 +10880,24 @@ protocol OwnerTruthInterviewPendingReviewBatchInboxClient: AnyObject {
         vaultID: OwnerTruthVaultID,
         completion: @escaping (Result<OwnerTruthInterviewPendingReviewBatchInbox, Error>) -> Void
     )
+
+    func fetchOwnerTruthInterviewPendingReviewBatchInbox(
+        authority: OwnerTruthInterviewNaturalInputRequestAuthority,
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewPendingReviewBatchInbox, Error>) -> Void
+    )
+}
+
+extension OwnerTruthInterviewPendingReviewBatchInboxClient {
+    func fetchOwnerTruthInterviewPendingReviewBatchInbox(
+        authority: OwnerTruthInterviewNaturalInputRequestAuthority,
+        vaultID: OwnerTruthVaultID,
+        completion: @escaping (Result<OwnerTruthInterviewPendingReviewBatchInbox, Error>) -> Void
+    ) {
+        completion(.failure(OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+            "fresh acknowledgement inbox authority is unsupported"
+        )))
+    }
 }
 
 protocol OwnerTruthInterviewReviewBatchAcknowledgementClient: AnyObject {
@@ -10010,6 +10906,81 @@ protocol OwnerTruthInterviewReviewBatchAcknowledgementClient: AnyObject {
         command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
         completion: @escaping (Result<OwnerTruthInterviewReviewBatchAcknowledgementReceipt, Error>) -> Void
     )
+
+    func acknowledgeOwnerTruthInterviewReviewBatchWrite(
+        authority: OwnerTruthInterviewNaturalInputRequestAuthority,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
+        diagnosticTraceID: String,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewReviewBatchAcknowledgementReceipt>
+        ) -> Void
+    )
+
+    func acknowledgeOwnerTruthInterviewReviewBatchWrite(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewReviewBatchAcknowledgementReceipt>
+        ) -> Void
+    )
+
+    func acknowledgeOwnerTruthInterviewReviewBatchWrite(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
+        diagnosticTraceID: String,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewReviewBatchAcknowledgementReceipt>
+        ) -> Void
+    )
+}
+
+extension OwnerTruthInterviewReviewBatchAcknowledgementClient {
+    func acknowledgeOwnerTruthInterviewReviewBatchWrite(
+        authority: OwnerTruthInterviewNaturalInputRequestAuthority,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
+        diagnosticTraceID: String,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewReviewBatchAcknowledgementReceipt>
+        ) -> Void
+    ) {
+        completion(.notSent(OwnerTruthRemoteContractError.invalidInterviewNaturalInput(
+            "fresh acknowledgement write authority is unsupported"
+        )))
+    }
+
+    func acknowledgeOwnerTruthInterviewReviewBatchWrite(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
+        diagnosticTraceID: String,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewReviewBatchAcknowledgementReceipt>
+        ) -> Void
+    ) {
+        acknowledgeOwnerTruthInterviewReviewBatchWrite(
+            accountLease: accountLease,
+            vaultID: vaultID,
+            command: command,
+            completion: completion
+        )
+    }
+
+    func acknowledgeOwnerTruthInterviewReviewBatchWrite(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewReviewBatchAcknowledgementReceipt>
+        ) -> Void
+    ) {
+        acknowledgeOwnerTruthInterviewReviewBatch(vaultID: vaultID, command: command) { result in
+            completion(.classify(result, exposure: .unknown))
+        }
+    }
 }
 
 enum OwnerTruthInterviewReviewBatchAcknowledgementIntent: Equatable, Sendable {
@@ -10032,6 +11003,10 @@ enum OwnerTruthInterviewReviewBatchAcknowledgementNotice: Equatable, Sendable {
     case staleAccountLease
     case matchingBatchUnavailable
     case contractMismatch
+    case storageFailed
+    case requestNotSent
+    case outcomeUnknown
+    case serverRejected
     case requestFailed
 }
 
@@ -10062,7 +11037,14 @@ final class OwnerTruthInterviewReviewBatchAcknowledgementUseCase {
     private let identifierFactory: () -> UUID
     private let preparedCommand: OwnerTruthInterviewReviewBatchAcknowledgementCommand?
     private let willSendCommand: (OwnerTruthInterviewReviewBatchAcknowledgementCommand) throws -> Void
+    private let diagnosticTraceID: String
+    private let requiresFreshRequestAuthority: Bool
+    private let refreshRequestPolicy: (@escaping (Bool) -> Void) -> Void
+    private let requestAuthorityTimeout: TimeInterval
+    private let authorityNow: () -> Date
+    private var requestAuthorityTimeoutWorkItem: DispatchWorkItem?
     private var operationGeneration: UInt = 0
+    private var activeCommand: OwnerTruthInterviewReviewBatchAcknowledgementCommand?
 
     private(set) var viewState: OwnerTruthInterviewReviewBatchAcknowledgementViewState = .idle {
         didSet { onViewStateChange?(viewState) }
@@ -10080,6 +11062,11 @@ final class OwnerTruthInterviewReviewBatchAcknowledgementUseCase {
         releasePolicyAvailable: @escaping () -> Bool = { false },
         identifierFactory: @escaping () -> UUID = UUID.init,
         preparedCommand: OwnerTruthInterviewReviewBatchAcknowledgementCommand? = nil,
+        diagnosticTraceID: String = "b8-completion-\(UUID().uuidString.lowercased())",
+        requiresFreshRequestAuthority: Bool = false,
+        refreshRequestPolicy: @escaping (@escaping (Bool) -> Void) -> Void = { $0(false) },
+        requestAuthorityTimeout: TimeInterval = 15,
+        authorityNow: @escaping () -> Date = Date.init,
         willSendCommand: @escaping (
             OwnerTruthInterviewReviewBatchAcknowledgementCommand
         ) throws -> Void = { _ in }
@@ -10094,6 +11081,11 @@ final class OwnerTruthInterviewReviewBatchAcknowledgementUseCase {
         self.releasePolicyAvailable = releasePolicyAvailable
         self.identifierFactory = identifierFactory
         self.preparedCommand = preparedCommand
+        self.diagnosticTraceID = diagnosticTraceID
+        self.requiresFreshRequestAuthority = requiresFreshRequestAuthority
+        self.refreshRequestPolicy = refreshRequestPolicy
+        self.requestAuthorityTimeout = max(0.01, requestAuthorityTimeout)
+        self.authorityNow = authorityNow
         self.willSendCommand = willSendCommand
     }
 
@@ -10108,11 +11100,12 @@ final class OwnerTruthInterviewReviewBatchAcknowledgementUseCase {
         guard viewState.phase != .discovering,
               viewState.phase != .acknowledging,
               viewState.phase != .acknowledged,
+              viewState.notice != .outcomeUnknown,
               let vaultID = beginRequestOrFail() else {
             return
         }
-        if let preparedCommand {
-            sendAcknowledgement(preparedCommand, vaultID: vaultID)
+        if let command = activeCommand ?? preparedCommand {
+            sendAcknowledgement(command, vaultID: vaultID)
             return
         }
         operationGeneration &+= 1
@@ -10122,8 +11115,20 @@ final class OwnerTruthInterviewReviewBatchAcknowledgementUseCase {
             receipt: nil,
             notice: nil
         )
-        inboxClient.fetchOwnerTruthInterviewPendingReviewBatchInbox(vaultID: vaultID) { [weak self] result in
-            self?.receiveInbox(result, vaultID: vaultID, generation: generation)
+        if requiresFreshRequestAuthority {
+            withFreshRequestAuthority(generation: generation) { [weak self] authority in
+                guard let self, let authority else { return }
+                self.inboxClient.fetchOwnerTruthInterviewPendingReviewBatchInbox(
+                    authority: authority,
+                    vaultID: vaultID
+                ) { [weak self] result in
+                    self?.receiveInbox(result, vaultID: vaultID, generation: generation)
+                }
+            }
+        } else {
+            inboxClient.fetchOwnerTruthInterviewPendingReviewBatchInbox(vaultID: vaultID) { [weak self] result in
+                self?.receiveInbox(result, vaultID: vaultID, generation: generation)
+            }
         }
     }
 
@@ -10176,15 +11181,23 @@ final class OwnerTruthInterviewReviewBatchAcknowledgementUseCase {
     ) {
         guard command.threadID == threadID,
               command.sessionID == sessionID else {
+            log(event: "ackBindingChecked", reason: "commandBindingMismatch")
             transitionFailure(.contractMismatch)
             return
         }
         do {
             try willSendCommand(command)
+            log(event: "ackCommandPrepared", commandID: command.commandID)
         } catch {
-            transitionFailure(.requestFailed)
+            log(
+                event: "ackCheckpointCommitFailed",
+                reason: "storageFailed",
+                commandID: command.commandID
+            )
+            transitionFailure(.storageFailed)
             return
         }
+        activeCommand = command
         operationGeneration &+= 1
         let acknowledgementGeneration = operationGeneration
         viewState = OwnerTruthInterviewReviewBatchAcknowledgementViewState(
@@ -10192,10 +11205,9 @@ final class OwnerTruthInterviewReviewBatchAcknowledgementUseCase {
             receipt: nil,
             notice: nil
         )
-        acknowledgementClient.acknowledgeOwnerTruthInterviewReviewBatch(
-            vaultID: vaultID,
-            command: command
-        ) { [weak self] acknowledgementResult in
+        let receive: (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewReviewBatchAcknowledgementReceipt>
+        ) -> Void = { [weak self] acknowledgementResult in
             self?.receiveAcknowledgement(
                 acknowledgementResult,
                 vaultID: vaultID,
@@ -10203,23 +11215,73 @@ final class OwnerTruthInterviewReviewBatchAcknowledgementUseCase {
                 generation: acknowledgementGeneration
             )
         }
+        if requiresFreshRequestAuthority {
+            withFreshRequestAuthority(generation: acknowledgementGeneration) { [weak self] authority in
+                guard let self, let authority else { return }
+                self.acknowledgementClient.acknowledgeOwnerTruthInterviewReviewBatchWrite(
+                    authority: authority,
+                    vaultID: vaultID,
+                    command: command,
+                    diagnosticTraceID: self.diagnosticTraceID,
+                    completion: receive
+                )
+            }
+        } else {
+            acknowledgementClient.acknowledgeOwnerTruthInterviewReviewBatchWrite(
+                accountLease: accountLease,
+                vaultID: vaultID,
+                command: command,
+                diagnosticTraceID: diagnosticTraceID,
+                completion: receive
+            )
+        }
     }
 
     private func receiveAcknowledgement(
-        _ result: Result<OwnerTruthInterviewReviewBatchAcknowledgementReceipt, Error>,
+        _ result: OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewReviewBatchAcknowledgementReceipt>,
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
         generation: UInt
     ) {
-        guard canCommit(generation: generation) else { return }
+        guard canCommitWrite(generation: generation) else { return }
         switch result {
-        case .failure:
-            transitionFailure(.requestFailed)
-        case .success(let receipt):
+        case .notSent:
+            log(event: "transportClassified", reason: "notSent", commandID: command.commandID)
+            transitionFailure(.requestNotSent)
+        case .outcomeUnknown:
+            log(event: "transportClassified", reason: "outcomeUnknown", commandID: command.commandID)
+            transitionFailure(.outcomeUnknown)
+        case .serverRejected:
+            log(event: "transportClassified", reason: "serverRejected", commandID: command.commandID)
+            transitionFailure(.serverRejected)
+        case .committed(let receipt):
+            log(event: "ackDecoded", commandID: command.commandID)
+            let bindingStates = acknowledgementBindingStates(receipt, command: command, vaultID: vaultID)
             guard receipt.vaultID == vaultID, receipt.matches(command) else {
-                transitionFailure(.contractMismatch)
+                // A typed HTTP success has crossed the write boundary. If its
+                // receipt cannot be bound to the original command, the write
+                // is not safe to classify as unsent or to repeat.
+                log(
+                    event: "ackBindingChecked",
+                    reason: "receiptBindingMismatch",
+                    states: bindingStates,
+                    commandID: command.commandID
+                )
+                log(
+                    event: "transportClassified",
+                    reason: "outcomeUnknown",
+                    commandID: command.commandID
+                )
+                transitionFailure(.outcomeUnknown)
                 return
             }
+            log(
+                event: "ackBindingChecked",
+                reason: "accepted",
+                states: bindingStates,
+                commandID: command.commandID
+            )
+            log(event: "transportClassified", reason: "committed", commandID: command.commandID)
             viewState = OwnerTruthInterviewReviewBatchAcknowledgementViewState(
                 phase: .acknowledged,
                 receipt: receipt,
@@ -10228,32 +11290,136 @@ final class OwnerTruthInterviewReviewBatchAcknowledgementUseCase {
         }
     }
 
+    private func withFreshRequestAuthority(
+        generation: UInt,
+        completion: @escaping (OwnerTruthInterviewNaturalInputRequestAuthority?) -> Void
+    ) {
+        guard generation == operationGeneration,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+              let authorityClient = inboxClient as? OwnerTruthInterviewNaturalInputClient else {
+            transitionFailure(.requestNotSent)
+            completion(nil)
+            return
+        }
+        let makeAuthority: (
+            FeatureDecision
+        ) -> OwnerTruthInterviewNaturalInputRequestAuthority? = { decision in
+            return OwnerTruthInterviewNaturalInputRequestAuthority(
+                featureDecision: decision,
+                accountLease: self.accountLease,
+                operationGeneration: generation,
+                diagnosticTraceID: self.diagnosticTraceID,
+                now: self.authorityNow()
+            )
+        }
+        guard let initialDecision = authorityClient.freshOwnerTruthInterviewNaturalInputDecision() else {
+            transitionFailure(.requestNotSent)
+            completion(nil)
+            return
+        }
+        if let authority = makeAuthority(initialDecision) {
+            completion(authority)
+            return
+        }
+        let recoverableReasons = Set([
+            "expiredPolicyCache",
+            "capturedPolicyExpired",
+            "policyVersionChanged",
+        ])
+        let recoveryReason = initialDecision.expiresAt.map { $0 <= authorityNow() } == true
+            ? "expiredPolicyCache"
+            : initialDecision.reason
+        guard recoverableReasons.contains(recoveryReason) else {
+            transitionFailure(.releasePolicyDisabled)
+            completion(nil)
+            return
+        }
+        requestAuthorityTimeoutWorkItem?.cancel()
+        let timeout = DispatchWorkItem { [weak self] in
+            guard let self, generation == self.operationGeneration else { return }
+            self.requestAuthorityTimeoutWorkItem = nil
+            self.transitionFailure(.requestNotSent)
+            completion(nil)
+        }
+        requestAuthorityTimeoutWorkItem = timeout
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + requestAuthorityTimeout,
+            execute: timeout
+        )
+        refreshRequestPolicy { [weak self] refreshed in
+            DispatchQueue.main.async {
+                guard let self,
+                      generation == self.operationGeneration,
+                      self.requestAuthorityTimeoutWorkItem != nil else { return }
+                self.requestAuthorityTimeoutWorkItem?.cancel()
+                self.requestAuthorityTimeoutWorkItem = nil
+                guard refreshed,
+                      self.accountLeaseRuntime.validate(self.accountLease, at: .request).allowed,
+                      let refreshedDecision = authorityClient
+                        .freshOwnerTruthInterviewNaturalInputDecision(),
+                      let authority = makeAuthority(refreshedDecision) else {
+                    self.transitionFailure(.requestNotSent)
+                    completion(nil)
+                    return
+                }
+                completion(authority)
+            }
+        }
+    }
+
     private func beginRequestOrFail() -> OwnerTruthVaultID? {
-        guard releasePolicyAvailable() else {
-            transitionUnavailable(.releasePolicyDisabled)
-            return nil
+        if requiresFreshRequestAuthority {
+            log(event: "ackPolicyChecked", reason: "deferredToFreshAuthority")
+        } else {
+            guard releasePolicyAvailable() else {
+                log(event: "ackPolicyChecked", reason: "denied")
+                transitionUnavailable(.releasePolicyDisabled)
+                return nil
+            }
+            log(event: "ackPolicyChecked", reason: "allowed")
         }
         guard let vaultID else {
             transitionUnavailable(.invalidVault)
             return nil
         }
-        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+        let leaseDecision = accountLeaseRuntime.validate(accountLease, at: .request)
+        guard leaseDecision.allowed else {
+            log(event: "clientLeaseChecked", reason: leaseDecision.reason.rawValue)
             transitionUnavailable(.accountUnavailable)
             return nil
         }
+        log(event: "clientLeaseChecked", reason: leaseDecision.reason.rawValue)
         return vaultID
     }
 
     private func canCommit(generation: UInt) -> Bool {
         guard generation == operationGeneration else { return false }
-        guard releasePolicyAvailable() else {
-            transitionUnavailable(.releasePolicyDisabled)
-            return false
+        if !requiresFreshRequestAuthority {
+            guard releasePolicyAvailable() else {
+                transitionUnavailable(.releasePolicyDisabled)
+                return false
+            }
         }
         guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
             transitionUnavailable(.staleAccountLease)
             return false
         }
+        return true
+    }
+
+    private func canCommitWrite(generation: UInt) -> Bool {
+        guard generation == operationGeneration else { return false }
+        let leaseDecision = accountLeaseRuntime.validate(accountLease, at: .commit)
+        guard leaseDecision.allowed else {
+            // The request may already have crossed the transport boundary.
+            // Preserve it as unknown so recovery can only observe the original
+            // command instead of treating the write as safely unsent.
+            log(event: "clientLeaseChecked", reason: leaseDecision.reason.rawValue)
+            log(event: "transportClassified", reason: "outcomeUnknown")
+            transitionFailure(.outcomeUnknown)
+            return false
+        }
+        log(event: "clientLeaseChecked", reason: leaseDecision.reason.rawValue)
         return true
     }
 
@@ -10271,6 +11437,55 @@ final class OwnerTruthInterviewReviewBatchAcknowledgementUseCase {
             phase: .failed,
             receipt: nil,
             notice: notice
+        )
+    }
+
+    private func acknowledgementBindingStates(
+        _ receipt: OwnerTruthInterviewReviewBatchAcknowledgementReceipt,
+        command: OwnerTruthInterviewReviewBatchAcknowledgementCommand,
+        vaultID: OwnerTruthVaultID
+    ) -> [String: String] {
+        [
+            "vaultMatch": String(receipt.vaultID == vaultID),
+            "threadMatch": String(receipt.threadID == command.threadID),
+            "sessionMatch": String(receipt.sessionID == command.sessionID),
+            "batchMatch": String(receipt.reviewBatchID == command.reviewBatchID),
+            "sessionVersionRelation": versionRelation(
+                receipt.sessionVersion,
+                expected: command.expectedSessionVersion
+            ),
+            "batchVersionRelation": versionRelation(
+                receipt.reviewBatchVersion,
+                expected: command.expectedReviewBatchVersion
+            ),
+        ]
+    }
+
+    private func versionRelation(_ value: Int, expected: Int) -> String {
+        if value > expected { return "gt" }
+        if value < expected { return "lt" }
+        return "eq"
+    }
+
+    private func commandHash(_ commandID: String) -> String {
+        SHA256.hash(data: Data(commandID.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func log(
+        event: String,
+        reason: String? = nil,
+        states: [String: String] = [:],
+        commandID: String? = nil
+    ) {
+        var safeStates = states
+        if let reason { safeStates["reason"] = reason }
+        var correlations = ["trace": diagnosticTraceID]
+        if let commandID { correlations["command"] = commandHash(commandID) }
+        PrivacySafeDiagnostics.log(
+            subsystem: "EchoLiveMemoryCompletion",
+            event: event,
+            states: safeStates,
+            correlations: correlations
         )
     }
 }
@@ -10386,12 +11601,164 @@ struct OwnerTruthInterviewCandidateProposalAdmissionReceipt: Codable, Equatable,
     }
 }
 
+/// Exact request authority captured after any bounded policy refresh. It binds
+/// the decision used by requestJSON to the original account lease, operation
+/// generation, and completion trace instead of reducing authorization to Bool.
+struct OwnerTruthInterviewCandidateProposalAdmissionAuthority {
+    let featureDecision: FeatureDecision
+    let accountLease: AccountLease
+    let operationGeneration: UInt
+    let diagnosticTraceID: String
+
+    init?(
+        featureDecision: FeatureDecision,
+        accountLease: AccountLease,
+        operationGeneration: UInt,
+        diagnosticTraceID: String
+    ) {
+        let trace = diagnosticTraceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard featureDecision.feature == .ownerTruthCandidateReview,
+              featureDecision.purpose == .request,
+              featureDecision.allowed,
+              operationGeneration > 0,
+              !trace.isEmpty else {
+            return nil
+        }
+        self.featureDecision = featureDecision
+        self.accountLease = accountLease
+        self.operationGeneration = operationGeneration
+        self.diagnosticTraceID = trace
+    }
+
+    func matches(accountLease: AccountLease, generation: UInt) -> Bool {
+        self.accountLease == accountLease && operationGeneration == generation
+    }
+}
+
 protocol OwnerTruthInterviewCandidateProposalAdmissionClient: AnyObject {
+    func freshOwnerTruthInterviewCandidateProposalAdmissionDecision() -> FeatureDecision?
+
     func admitOwnerTruthInterviewCandidateProposal(
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
         completion: @escaping (Result<OwnerTruthInterviewCandidateProposalAdmissionReceipt, Error>) -> Void
     )
+
+    func admitOwnerTruthInterviewCandidateProposalWrite(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewCandidateProposalAdmissionReceipt>
+        ) -> Void
+    )
+
+    func admitOwnerTruthInterviewCandidateProposalWrite(
+        authority: OwnerTruthInterviewCandidateProposalAdmissionAuthority,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewCandidateProposalAdmissionReceipt>
+        ) -> Void
+    )
+}
+
+extension OwnerTruthInterviewCandidateProposalAdmissionClient {
+    func freshOwnerTruthInterviewCandidateProposalAdmissionDecision() -> FeatureDecision? {
+        nil
+    }
+
+    func admitOwnerTruthInterviewCandidateProposalWrite(
+        authority: OwnerTruthInterviewCandidateProposalAdmissionAuthority,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewCandidateProposalAdmissionReceipt>
+        ) -> Void
+    ) {
+        admitOwnerTruthInterviewCandidateProposalWrite(
+            accountLease: authority.accountLease,
+            vaultID: vaultID,
+            command: command,
+            completion: completion
+        )
+    }
+
+    func admitOwnerTruthInterviewCandidateProposalWrite(
+        accountLease: AccountLease,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
+        completion: @escaping (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewCandidateProposalAdmissionReceipt>
+        ) -> Void
+    ) {
+        admitOwnerTruthInterviewCandidateProposal(vaultID: vaultID, command: command) { result in
+            completion(.classify(result, exposure: .unknown))
+        }
+    }
+}
+
+enum OwnerTruthInterviewWriteTransportOutcome<Receipt> {
+    case notSent(Error)
+    case outcomeUnknown(Error)
+    case serverRejected(Error)
+    case committed(Receipt)
+
+    static func classify(
+        _ result: Result<Receipt, Error>,
+        exposure: OwnerTruthCandidateReviewTransportExposure
+    ) -> OwnerTruthInterviewWriteTransportOutcome<Receipt> {
+        switch result {
+        case .success(let receipt):
+            return .committed(receipt)
+        case .failure(let error):
+            if exposure == .notExposed { return .notSent(error) }
+            if exposure == .exposed {
+                if let clientError = error as? DreamJourneyBackendClient.ClientError,
+                   case .verifiedPreHandlerAuthenticationRejection = clientError {
+                    return .serverRejected(error)
+                }
+                if let clientError = error as? DreamJourneyBackendClient.ClientError,
+                   case .backendError(let statusCode, let context) = clientError {
+                    if let statusCode, (400..<500).contains(statusCode) {
+                        return .serverRejected(error)
+                    }
+                    if [
+                        "ownerTruthInterviewSessionVersionConflict",
+                        "ownerTruthInterviewReviewBatchVersionConflict",
+                        "ownerTruthInterviewCandidateProposalUnavailable",
+                        "release_policy_denied",
+                    ].contains(context.code ?? "") {
+                        return .serverRejected(error)
+                    }
+                }
+                return .outcomeUnknown(error)
+            }
+            if error is CancellationError || error is URLError {
+                return .outcomeUnknown(error)
+            }
+            if let clientError = error as? DreamJourneyBackendClient.ClientError {
+                switch clientError {
+                case .userAuthenticationRequired, .sessionUpgradeRequired,
+                     .accountScopeChanged, .featurePolicyDenied, .recoveryAccessDenied:
+                    return .notSent(error)
+                case .verifiedPreHandlerAuthenticationRejection:
+                    return .serverRejected(error)
+                case .backendError(let statusCode, _):
+                    guard let statusCode else { return .outcomeUnknown(error) }
+                    return (400..<500).contains(statusCode)
+                        ? .serverRejected(error)
+                        : .outcomeUnknown(error)
+                case .invalidJSONResponse, .unsupportedJSONRoot:
+                    return .outcomeUnknown(error)
+                }
+            }
+            if error is OwnerTruthRemoteContractError {
+                return .outcomeUnknown(error)
+            }
+            return .outcomeUnknown(error)
+        }
+    }
 }
 
 enum OwnerTruthInterviewCandidateProposalAdmissionIntent: Equatable, Sendable {
@@ -10400,18 +11767,25 @@ enum OwnerTruthInterviewCandidateProposalAdmissionIntent: Equatable, Sendable {
 
 enum OwnerTruthInterviewCandidateProposalAdmissionPhase: Equatable, Sendable {
     case idle
+    case waitingForPolicy
     case admitting
     case admitted
+    case outcomeUnknown
     case unavailable
     case failed
 }
 
 enum OwnerTruthInterviewCandidateProposalAdmissionNotice: Equatable, Sendable {
     case releasePolicyDisabled
+    case policyRefreshTimedOut
     case invalidVault
     case accountUnavailable
     case staleAccountLease
     case contractMismatch
+    case storageFailed
+    case requestNotSent
+    case outcomeUnknown
+    case serverRejected
     case requestFailed
 }
 
@@ -10437,16 +11811,28 @@ final class OwnerTruthInterviewCandidateProposalAdmissionUseCase {
     private let client: OwnerTruthInterviewCandidateProposalAdmissionClient
     private let accountLeaseRuntime: AccountLeaseRuntimePort
     private let releasePolicyAvailable: () -> Bool
+    private let refreshReleasePolicy: ((@escaping (Bool) -> Void) -> Void)?
     private let identifierFactory: () -> UUID
     private let preparedCommand: OwnerTruthInterviewCandidateProposalAdmissionCommand?
     private let willSendCommand: (OwnerTruthInterviewCandidateProposalAdmissionCommand) throws -> Void
+    private let diagnosticTraceID: String
+    private let policyRefreshTimeout: TimeInterval
+    private let schedulePolicyRefreshTimeout: (
+        TimeInterval,
+        @escaping () -> Void
+    ) -> DispatchWorkItem
     private var operationGeneration: UInt = 0
+    private var activeCommand: OwnerTruthInterviewCandidateProposalAdmissionCommand?
+    private var policyRefreshTimeoutWorkItem: DispatchWorkItem?
 
     private(set) var viewState: OwnerTruthInterviewCandidateProposalAdmissionViewState = .idle {
         didSet { onViewStateChange?(viewState) }
     }
 
     var onViewStateChange: ((OwnerTruthInterviewCandidateProposalAdmissionViewState) -> Void)?
+    var preparedAdmissionCommand: OwnerTruthInterviewCandidateProposalAdmissionCommand? {
+        activeCommand ?? preparedCommand
+    }
 
     init(
         accountLease: AccountLease,
@@ -10454,8 +11840,19 @@ final class OwnerTruthInterviewCandidateProposalAdmissionUseCase {
         client: OwnerTruthInterviewCandidateProposalAdmissionClient,
         accountLeaseRuntime: AccountLeaseRuntimePort = AccountLeaseRuntime.shared,
         releasePolicyAvailable: @escaping () -> Bool = { false },
+        refreshReleasePolicy: ((@escaping (Bool) -> Void) -> Void)? = nil,
         identifierFactory: @escaping () -> UUID = UUID.init,
         preparedCommand: OwnerTruthInterviewCandidateProposalAdmissionCommand? = nil,
+        diagnosticTraceID: String = "b8-completion-\(UUID().uuidString.lowercased())",
+        policyRefreshTimeout: TimeInterval = 30,
+        schedulePolicyRefreshTimeout: @escaping (
+            TimeInterval,
+            @escaping () -> Void
+        ) -> DispatchWorkItem = { delay, action in
+            let workItem = DispatchWorkItem(block: action)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+            return workItem
+        },
         willSendCommand: @escaping (
             OwnerTruthInterviewCandidateProposalAdmissionCommand
         ) throws -> Void = { _ in }
@@ -10466,8 +11863,12 @@ final class OwnerTruthInterviewCandidateProposalAdmissionUseCase {
         self.client = client
         self.accountLeaseRuntime = accountLeaseRuntime
         self.releasePolicyAvailable = releasePolicyAvailable
+        self.refreshReleasePolicy = refreshReleasePolicy
         self.identifierFactory = identifierFactory
         self.preparedCommand = preparedCommand
+        self.diagnosticTraceID = diagnosticTraceID
+        self.policyRefreshTimeout = policyRefreshTimeout
+        self.schedulePolicyRefreshTimeout = schedulePolicyRefreshTimeout
         self.willSendCommand = willSendCommand
     }
 
@@ -10479,57 +11880,189 @@ final class OwnerTruthInterviewCandidateProposalAdmissionUseCase {
     }
 
     private func admit() {
-        guard viewState.phase != .admitting,
+        guard viewState.phase != .waitingForPolicy,
+              viewState.phase != .admitting,
               viewState.phase != .admitted,
-              let vaultID = beginRequestOrFail(),
-              acknowledgementReceipt.vaultID == vaultID else {
+              viewState.phase != .outcomeUnknown,
+              let vaultID = beginRequestOrFail() else {
             return
         }
+        guard acknowledgementReceipt.vaultID == vaultID else {
+            log(event: "admissionBindingChecked", reason: "ackVaultMismatch")
+            transitionFailure(.contractMismatch)
+            return
+        }
+        let command: OwnerTruthInterviewCandidateProposalAdmissionCommand
         do {
-            let command = try preparedCommand ?? OwnerTruthInterviewCandidateProposalAdmissionCommand(
+            command = try activeCommand ?? preparedCommand
+                ?? OwnerTruthInterviewCandidateProposalAdmissionCommand(
                 commandID: identifierFactory().uuidString.lowercased(),
                 reviewBatchID: acknowledgementReceipt.reviewBatchID,
                 expectedReviewBatchVersion: acknowledgementReceipt.reviewBatchVersion
             )
-            guard command.reviewBatchID == acknowledgementReceipt.reviewBatchID,
-                  command.expectedReviewBatchVersion == acknowledgementReceipt.reviewBatchVersion else {
-                transitionFailure(.contractMismatch)
-                return
-            }
+        } catch {
+            transitionFailure(.contractMismatch)
+            return
+        }
+        guard command.reviewBatchID == acknowledgementReceipt.reviewBatchID,
+              command.expectedReviewBatchVersion == acknowledgementReceipt.reviewBatchVersion else {
+            transitionFailure(.contractMismatch)
+            return
+        }
+        do {
             try willSendCommand(command)
-            operationGeneration &+= 1
-            let generation = operationGeneration
+            log(event: "admissionCommandPrepared", commandID: command.commandID)
+        } catch {
+            log(
+                event: "admissionCheckpointCommitFailed",
+                reason: "storageFailed",
+                commandID: command.commandID
+            )
+            transitionFailure(.storageFailed)
+            return
+        }
+        activeCommand = command
+        operationGeneration &+= 1
+        let generation = operationGeneration
+        if let authority = freshAuthority(generation: generation) {
+            log(event: "admissionPolicyChecked", reason: "freshAllowed", commandID: command.commandID)
+            sendPrepared(
+                command,
+                vaultID: vaultID,
+                generation: generation,
+                authority: authority
+            )
+        } else if releasePolicyAvailable() {
+            log(event: "admissionPolicyChecked", reason: "legacyAllowed", commandID: command.commandID)
+            sendPrepared(command, vaultID: vaultID, generation: generation, authority: nil)
+        } else if let refreshReleasePolicy {
             viewState = OwnerTruthInterviewCandidateProposalAdmissionViewState(
-                phase: .admitting,
+                phase: .waitingForPolicy,
                 receipt: nil,
                 notice: nil
             )
-            client.admitOwnerTruthInterviewCandidateProposal(
-                vaultID: vaultID,
-                command: command
-            ) { [weak self] result in
-                self?.receive(result, vaultID: vaultID, command: command, generation: generation)
+            log(event: "policyRefreshStarted", commandID: command.commandID)
+            policyRefreshTimeoutWorkItem = schedulePolicyRefreshTimeout(policyRefreshTimeout) {
+                [weak self] in
+                guard let self,
+                      generation == self.operationGeneration,
+                      self.viewState.phase == .waitingForPolicy else { return }
+                self.policyRefreshTimeoutWorkItem = nil
+                self.log(event: "policyRefreshTimedOut", reason: "deadlineExceeded", commandID: command.commandID)
+                self.transitionUnavailable(.policyRefreshTimedOut)
             }
-        } catch {
-            transitionFailure(.contractMismatch)
+            refreshReleasePolicy { [weak self] refreshed in
+                guard let self, generation == self.operationGeneration else { return }
+                self.cancelPolicyRefreshTimeout()
+                guard refreshed else {
+                    self.log(event: "policyRefreshFinished", reason: "failed", commandID: command.commandID)
+                    self.transitionUnavailable(.releasePolicyDisabled)
+                    return
+                }
+                let refreshedAuthority = self.freshAuthority(generation: generation)
+                guard refreshedAuthority != nil || self.releasePolicyAvailable() else {
+                    self.log(event: "admissionPolicyChecked", reason: "denied", commandID: command.commandID)
+                    self.transitionUnavailable(.releasePolicyDisabled)
+                    return
+                }
+                guard self.accountLeaseRuntime.validate(self.accountLease, at: .request).allowed else {
+                    self.log(event: "clientLeaseChecked", reason: "accountUnavailable", commandID: command.commandID)
+                    self.transitionUnavailable(.accountUnavailable)
+                    return
+                }
+                self.log(
+                    event: "policyRefreshFinished",
+                    reason: refreshedAuthority == nil ? "legacyAllowed" : "freshAllowed",
+                    commandID: command.commandID
+                )
+                self.sendPrepared(
+                    command,
+                    vaultID: vaultID,
+                    generation: generation,
+                    authority: refreshedAuthority
+                )
+            }
+        } else {
+            log(event: "admissionPolicyChecked", reason: "denied", commandID: command.commandID)
+            transitionUnavailable(.releasePolicyDisabled)
+        }
+    }
+
+    private func sendPrepared(
+        _ command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
+        vaultID: OwnerTruthVaultID,
+        generation: UInt,
+        authority: OwnerTruthInterviewCandidateProposalAdmissionAuthority?
+    ) {
+        guard generation == operationGeneration else { return }
+        viewState = OwnerTruthInterviewCandidateProposalAdmissionViewState(
+            phase: .admitting,
+            receipt: nil,
+            notice: nil
+        )
+        log(event: "admissionTransportRequested", commandID: command.commandID)
+        let completion: (
+            OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewCandidateProposalAdmissionReceipt>
+        ) -> Void = { [weak self] outcome in
+            self?.receive(outcome, vaultID: vaultID, command: command, generation: generation)
+        }
+        if let authority,
+           authority.matches(accountLease: accountLease, generation: generation) {
+            client.admitOwnerTruthInterviewCandidateProposalWrite(
+                authority: authority,
+                vaultID: vaultID,
+                command: command,
+                completion: completion
+            )
+        } else {
+            client.admitOwnerTruthInterviewCandidateProposalWrite(
+                accountLease: accountLease,
+                vaultID: vaultID,
+                command: command,
+                completion: completion
+            )
         }
     }
 
     private func receive(
-        _ result: Result<OwnerTruthInterviewCandidateProposalAdmissionReceipt, Error>,
+        _ outcome: OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewCandidateProposalAdmissionReceipt>,
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewCandidateProposalAdmissionCommand,
         generation: UInt
     ) {
-        guard canCommit(generation: generation) else { return }
-        switch result {
-        case .failure:
-            transitionFailure(.requestFailed)
-        case .success(let receipt):
+        guard canCommitWrite(generation: generation) else { return }
+        switch outcome {
+        case .notSent:
+            log(event: "transportClassified", reason: "notSent", commandID: command.commandID)
+            transitionFailure(.requestNotSent)
+        case .outcomeUnknown:
+            log(event: "transportClassified", reason: "outcomeUnknown", commandID: command.commandID)
+            viewState = OwnerTruthInterviewCandidateProposalAdmissionViewState(
+                phase: .outcomeUnknown,
+                receipt: nil,
+                notice: .outcomeUnknown
+            )
+        case .serverRejected:
+            log(event: "transportClassified", reason: "serverRejected", commandID: command.commandID)
+            transitionFailure(.serverRejected)
+        case .committed(let receipt):
+            log(event: "admissionReceiptDecoded", commandID: command.commandID)
             guard receipt.vaultID == vaultID, receipt.matches(command) else {
-                transitionFailure(.contractMismatch)
+                log(
+                    event: "admissionReceiptChecked",
+                    reason: "receiptBindingMismatch",
+                    states: [
+                        "vaultMatch": String(receipt.vaultID == vaultID),
+                        "batchMatch": String(receipt.reviewBatchID == command.reviewBatchID),
+                    ],
+                    commandID: command.commandID
+                )
+                log(event: "transportClassified", reason: "outcomeUnknown", commandID: command.commandID)
+                transitionOutcomeUnknown()
                 return
             }
+            log(event: "admissionReceiptChecked", reason: "accepted", commandID: command.commandID)
+            log(event: "transportClassified", reason: "committed", commandID: command.commandID)
             viewState = OwnerTruthInterviewCandidateProposalAdmissionViewState(
                 phase: .admitted,
                 receipt: receipt,
@@ -10539,35 +12072,62 @@ final class OwnerTruthInterviewCandidateProposalAdmissionUseCase {
     }
 
     private func beginRequestOrFail() -> OwnerTruthVaultID? {
-        guard releasePolicyAvailable() else {
-            transitionUnavailable(.releasePolicyDisabled)
-            return nil
-        }
         guard let vaultID else {
             transitionUnavailable(.invalidVault)
             return nil
         }
-        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+        let leaseDecision = accountLeaseRuntime.validate(accountLease, at: .request)
+        guard leaseDecision.allowed else {
+            log(event: "clientLeaseChecked", reason: leaseDecision.reason.rawValue)
             transitionUnavailable(.accountUnavailable)
             return nil
         }
+        log(event: "clientLeaseChecked", reason: leaseDecision.reason.rawValue)
         return vaultID
     }
 
-    private func canCommit(generation: UInt) -> Bool {
+    private func canCommitWrite(generation: UInt) -> Bool {
         guard generation == operationGeneration else { return false }
-        guard releasePolicyAvailable() else {
-            transitionUnavailable(.releasePolicyDisabled)
+        let leaseDecision = accountLeaseRuntime.validate(accountLease, at: .commit)
+        guard leaseDecision.allowed else {
+            log(event: "clientLeaseChecked", reason: leaseDecision.reason.rawValue)
+            log(event: "transportClassified", reason: "outcomeUnknown")
+            transitionOutcomeUnknown()
             return false
         }
-        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
-            transitionUnavailable(.staleAccountLease)
-            return false
-        }
+        log(event: "clientLeaseChecked", reason: leaseDecision.reason.rawValue)
         return true
     }
 
+    private func cancelPolicyRefreshTimeout() {
+        policyRefreshTimeoutWorkItem?.cancel()
+        policyRefreshTimeoutWorkItem = nil
+    }
+
+    private func freshAuthority(
+        generation: UInt
+    ) -> OwnerTruthInterviewCandidateProposalAdmissionAuthority? {
+        guard let decision = client.freshOwnerTruthInterviewCandidateProposalAdmissionDecision()
+        else { return nil }
+        return OwnerTruthInterviewCandidateProposalAdmissionAuthority(
+            featureDecision: decision,
+            accountLease: accountLease,
+            operationGeneration: generation,
+            diagnosticTraceID: diagnosticTraceID
+        )
+    }
+
+    private func transitionOutcomeUnknown() {
+        cancelPolicyRefreshTimeout()
+        viewState = OwnerTruthInterviewCandidateProposalAdmissionViewState(
+            phase: .outcomeUnknown,
+            receipt: nil,
+            notice: .outcomeUnknown
+        )
+    }
+
     private func transitionUnavailable(_ notice: OwnerTruthInterviewCandidateProposalAdmissionNotice) {
+        cancelPolicyRefreshTimeout()
         operationGeneration &+= 1
         viewState = OwnerTruthInterviewCandidateProposalAdmissionViewState(
             phase: .unavailable,
@@ -10577,10 +12137,33 @@ final class OwnerTruthInterviewCandidateProposalAdmissionUseCase {
     }
 
     private func transitionFailure(_ notice: OwnerTruthInterviewCandidateProposalAdmissionNotice) {
+        cancelPolicyRefreshTimeout()
         viewState = OwnerTruthInterviewCandidateProposalAdmissionViewState(
             phase: .failed,
             receipt: nil,
             notice: notice
+        )
+    }
+
+    private func commandHash(_ commandID: String) -> String {
+        SHA256.hash(data: Data(commandID.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func log(
+        event: String,
+        reason: String? = nil,
+        states: [String: String] = [:],
+        commandID: String? = nil
+    ) {
+        var safeStates = states
+        if let reason { safeStates["reason"] = reason }
+        var correlations = ["trace": diagnosticTraceID]
+        if let commandID { correlations["command"] = commandHash(commandID) }
+        PrivacySafeDiagnostics.log(
+            subsystem: "EchoLiveMemoryCompletion",
+            event: event,
+            states: safeStates,
+            correlations: correlations
         )
     }
 }
@@ -13162,6 +14745,11 @@ enum OwnerTruthInterviewNaturalInputNotice: Equatable, Sendable {
     case staleAccountLease
     case invalidInput
     case contractMismatch
+    case storageFailed
+    case requestNotSent
+    case outcomeUnknown
+    case serverRejected
+    case authenticationRejectedBeforeApplication
     case requestFailed
 }
 
@@ -13195,7 +14783,22 @@ final class OwnerTruthInterviewNaturalInputUseCase {
     private let allowsEntryModeTransition: Bool
     private let allowStartWhenCurrentMissing: Bool
     private let productSessionID: String?
+    private let requestedRecoveryProtocol: String?
+    private var preparedStartCommand: OwnerTruthInterviewNaturalInputStartCommand?
+    private var preparedStartDispatchState: OwnerTruthInterviewLiveStartDispatchState?
+    private let willPrepareStartCommand: (OwnerTruthInterviewNaturalInputStartCommand) throws -> Void
+    private let willExposeStartCommand: (OwnerTruthInterviewNaturalInputStartCommand) throws -> Void
+    private let willExposeLiveTurnCommand: (OwnerTruthInterviewNaturalInputAppendCommand) throws -> Void
+    private let didClassifyStartCommand: (
+        OwnerTruthInterviewNaturalInputStartCommand,
+        OwnerTruthInterviewLiveStartDispatchState
+    ) -> Void
     private let willSendEndCommand: (OwnerTruthInterviewEndCommand) throws -> Void
+    private let refreshLiveRequestPolicy: (@escaping (Bool) -> Void) -> Void
+    private let liveAuthorityTimeout: TimeInterval
+    private let authorityNow: () -> Date
+    private let diagnosticTraceID: String
+    private var liveAuthorityTimeoutWorkItem: DispatchWorkItem?
     private var operationGeneration: UInt = 0
     /// This is a delivery cursor, not a transcript counter. A durable Live
     /// outbox may supply its own number; the in-memory path still needs a
@@ -13207,6 +14810,12 @@ final class OwnerTruthInterviewNaturalInputUseCase {
     }
 
     var onViewStateChange: ((OwnerTruthInterviewNaturalInputViewState) -> Void)?
+    var onPreHandlerAuthenticationRejection: ((
+        OwnerTruthInterviewPreHandlerAuthenticationRejectionEvidence
+    ) -> Void)?
+    var onAppendTransportFailure: ((
+        Error, OwnerTruthInterviewNaturalInputAppendCommand, String
+    ) -> Void)?
 
     init(
         accountLease: AccountLease,
@@ -13218,6 +14827,26 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         allowsEntryModeTransition: Bool = false,
         allowStartWhenCurrentMissing: Bool = true,
         productSessionID: String? = nil,
+        requestedRecoveryProtocol: String? = nil,
+        refreshLiveRequestPolicy: @escaping (@escaping (Bool) -> Void) -> Void = { $0(false) },
+        liveAuthorityTimeout: TimeInterval = 15,
+        authorityNow: @escaping () -> Date = Date.init,
+        diagnosticTraceID: String = "live-natural-input-\(UUID().uuidString.lowercased())",
+        preparedStartCommand: OwnerTruthInterviewNaturalInputStartCommand? = nil,
+        preparedStartDispatchState: OwnerTruthInterviewLiveStartDispatchState? = nil,
+        willPrepareStartCommand: @escaping (
+            OwnerTruthInterviewNaturalInputStartCommand
+        ) throws -> Void = { _ in },
+        willExposeStartCommand: @escaping (
+            OwnerTruthInterviewNaturalInputStartCommand
+        ) throws -> Void = { _ in },
+        willExposeLiveTurnCommand: @escaping (
+            OwnerTruthInterviewNaturalInputAppendCommand
+        ) throws -> Void = { _ in },
+        didClassifyStartCommand: @escaping (
+            OwnerTruthInterviewNaturalInputStartCommand,
+            OwnerTruthInterviewLiveStartDispatchState
+        ) -> Void = { _, _ in },
         willSendEndCommand: @escaping (OwnerTruthInterviewEndCommand) throws -> Void = { _ in }
     ) {
         self.accountLease = accountLease
@@ -13230,6 +14859,17 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         self.allowsEntryModeTransition = allowsEntryModeTransition
         self.allowStartWhenCurrentMissing = allowStartWhenCurrentMissing
         self.willSendEndCommand = willSendEndCommand
+        self.refreshLiveRequestPolicy = refreshLiveRequestPolicy
+        self.liveAuthorityTimeout = max(0.01, liveAuthorityTimeout)
+        self.authorityNow = authorityNow
+        self.diagnosticTraceID = diagnosticTraceID
+        self.preparedStartCommand = preparedStartCommand
+        self.preparedStartDispatchState = preparedStartDispatchState
+        self.willPrepareStartCommand = willPrepareStartCommand
+        self.willExposeStartCommand = willExposeStartCommand
+        self.willExposeLiveTurnCommand = willExposeLiveTurnCommand
+        self.didClassifyStartCommand = didClassifyStartCommand
+        self.requestedRecoveryProtocol = requestedRecoveryProtocol
         self.productSessionID = productSessionID?.trimmingCharacters(
             in: .whitespacesAndNewlines
         ).isEmpty == false
@@ -13264,8 +14904,43 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         }
     }
 
+    /// A manual Live close may outlive an earlier failed current-session read.
+    /// Only that read-only failure is safe to resume automatically: no start or
+    /// message write may have crossed the exposure boundary.
+    @discardableResult
+    func resumeCurrentSessionReadForClosingIfSafe() -> Bool {
+        guard entryMode == .live,
+              viewState.latestReceipt == nil,
+              viewState.phase == .failed || viewState.phase == .unavailable,
+              viewState.notice == .requestFailed || viewState.notice == .requestNotSent,
+              preparedStartDispatchState == nil
+                || preparedStartDispatchState == .preparedNotExposed else {
+            return false
+        }
+        start()
+        return viewState.phase == .starting
+    }
+
+    /// Invalidates a closing operation whose owner deadline expired. A late
+    /// callback keeps its original generation and therefore cannot resume the
+    /// pipeline or manufacture a replacement write.
+    func invalidateClosingOperationAfterDeadline(outcomeUnknown: Bool) {
+        guard viewState.phase == .starting || viewState.phase == .submitting else { return }
+        operationGeneration &+= 1
+        liveAuthorityTimeoutWorkItem?.cancel()
+        liveAuthorityTimeoutWorkItem = nil
+        viewState = OwnerTruthInterviewNaturalInputViewState(
+            phase: .failed,
+            latestReceipt: viewState.latestReceipt,
+            continuation: viewState.continuation,
+            notice: outcomeUnknown ? .outcomeUnknown : .requestNotSent
+        )
+    }
+
     private func start() {
-        guard viewState.latestReceipt == nil, viewState.phase != .starting else { return }
+        guard viewState.latestReceipt == nil,
+              viewState.phase != .starting,
+              viewState.notice != .outcomeUnknown else { return }
         guard let vaultID = beginRequestOrFail() else { return }
         operationGeneration &+= 1
         let generation = operationGeneration
@@ -13285,13 +14960,32 @@ final class OwnerTruthInterviewNaturalInputUseCase {
 
     private func startNewSession(vaultID: OwnerTruthVaultID) {
         do {
-            let command = try OwnerTruthInterviewNaturalInputStartCommand(
+            let command = try (entryMode == .live ? preparedStartCommand : nil)
+                ?? OwnerTruthInterviewNaturalInputStartCommand(
                 commandID: identifierFactory().uuidString.lowercased(),
                 threadID: OwnerTruthRecordID(rawValue: identifierFactory()),
                 sessionID: OwnerTruthRecordID(rawValue: identifierFactory()),
                 entryMode: entryMode,
-                productSessionID: productSessionID
+                productSessionID: productSessionID,
+                recoveryProtocol: requestedRecoveryProtocol
             )
+            if entryMode == .live {
+                try willPrepareStartCommand(command)
+                preparedStartCommand = command
+                if preparedStartDispatchState == nil {
+                    preparedStartDispatchState = .preparedNotExposed
+                }
+                switch preparedStartDispatchState {
+                case .mayExpose, .outcomeUnknown, .committed:
+                    transitionFailure(.outcomeUnknown)
+                    return
+                case .serverRejected:
+                    transitionFailure(.serverRejected)
+                    return
+                case .preparedNotExposed, .none:
+                    break
+                }
+            }
             operationGeneration &+= 1
             let generation = operationGeneration
             viewState = OwnerTruthInterviewNaturalInputViewState(
@@ -13300,8 +14994,44 @@ final class OwnerTruthInterviewNaturalInputUseCase {
                 continuation: nil,
                 notice: nil
             )
-            client.startOwnerTruthInterviewNaturalInput(vaultID: vaultID, command: command) { [weak self] result in
-                self?.receiveStart(result, vaultID: vaultID, command: command, generation: generation)
+            withLiveRequestAuthority(generation: generation) { [weak self] authority in
+                guard let self else { return }
+                if self.entryMode == .live {
+                    do {
+                        try self.willExposeStartCommand(command)
+                        self.preparedStartCommand = command
+                        self.preparedStartDispatchState = .mayExpose
+                    } catch {
+                        self.transitionFailure(.storageFailed)
+                        return
+                    }
+                }
+                if let authority {
+                    self.client.startOwnerTruthInterviewNaturalInputWrite(
+                        authority: authority,
+                        vaultID: vaultID,
+                        command: command
+                    ) { [weak self] result in
+                        self?.receiveStartWrite(
+                            result,
+                            vaultID: vaultID,
+                            command: command,
+                            generation: generation
+                        )
+                    }
+                } else {
+                    self.client.startOwnerTruthInterviewNaturalInput(
+                        vaultID: vaultID,
+                        command: command
+                    ) { [weak self] result in
+                        self?.receiveStart(
+                            result,
+                            vaultID: vaultID,
+                            command: command,
+                            generation: generation
+                        )
+                    }
+                }
             }
         } catch {
             transitionFailure(.invalidInput)
@@ -13319,6 +15049,18 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             guard current.vaultID == vaultID else {
                 transitionFailure(.contractMismatch)
                 return
+            }
+            if preparedStartCommand != nil {
+                switch preparedStartDispatchState {
+                case .mayExpose, .outcomeUnknown:
+                    // A current-session read identifies the active session, not
+                    // the outcome of this exact start command. Only the
+                    // command-scoped delivery-status result may resolve it.
+                    transitionFailure(.outcomeUnknown)
+                    return
+                case .preparedNotExposed, .committed, .serverRejected, .none:
+                    break
+                }
             }
             guard let receipt = current.receipt else {
                 guard allowStartWhenCurrentMissing else {
@@ -13448,8 +15190,40 @@ final class OwnerTruthInterviewNaturalInputUseCase {
                 continuation: viewState.continuation,
                 notice: nil
             )
-            client.appendOwnerTruthInterviewNaturalInput(vaultID: vaultID, command: command) { [weak self] result in
-                self?.receiveAppend(result, vaultID: vaultID, command: command, generation: generation)
+            withLiveRequestAuthority(generation: generation) { [weak self] authority in
+                guard let self else { return }
+                do {
+                    try self.willExposeLiveTurnCommand(command)
+                } catch {
+                    self.transitionFailure(.storageFailed)
+                    return
+                }
+                if let authority {
+                    self.client.appendOwnerTruthInterviewNaturalInputWrite(
+                        authority: authority,
+                        vaultID: vaultID,
+                        command: command
+                    ) { [weak self] result in
+                        self?.receiveAppendWrite(
+                            result,
+                            vaultID: vaultID,
+                            command: command,
+                            generation: generation
+                        )
+                    }
+                } else {
+                    self.client.appendOwnerTruthInterviewNaturalInput(
+                        vaultID: vaultID,
+                        command: command
+                    ) { [weak self] result in
+                        self?.receiveAppend(
+                            result,
+                            vaultID: vaultID,
+                            command: command,
+                            generation: generation
+                        )
+                    }
+                }
             }
         } catch {
             viewState = OwnerTruthInterviewNaturalInputViewState(
@@ -13482,8 +15256,41 @@ final class OwnerTruthInterviewNaturalInputUseCase {
                 continuation: viewState.continuation,
                 notice: nil
             )
-            client.appendOwnerTruthInterviewNaturalInput(vaultID: vaultID, command: command) { [weak self] result in
-                self?.receiveAppend(result, vaultID: vaultID, command: command, generation: generation)
+            withLiveRequestAuthority(generation: generation) { [weak self] authority in
+                guard let self else { return }
+                do {
+                    try self.willExposeLiveTurnCommand(command)
+                } catch {
+                    self.transitionFailure(.storageFailed)
+                    return
+                }
+                if let authority {
+                    let completion: (OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewNaturalInputReceipt>) -> Void = { [weak self] result in
+                        self?.receiveAppendWrite(result, vaultID: vaultID, command: command, generation: generation)
+                    }
+                    if self.requestedRecoveryProtocol == "live-recovery-v1" {
+                        guard let recovery = self.client as? OwnerTruthLiveRecoveryClient else {
+                            self.transitionFailure(.requestNotSent); return
+                        }
+                        recovery.replayOwnerTruthLiveRecoveryWrite(authority: authority, vaultID: vaultID,
+                            command: command, generation: 1, completion: completion)
+                    } else {
+                        self.client.appendOwnerTruthInterviewNaturalInputWrite(authority: authority,
+                            vaultID: vaultID, command: command, completion: completion)
+                    }
+                } else {
+                    self.client.appendOwnerTruthInterviewNaturalInput(
+                        vaultID: vaultID,
+                        command: command
+                    ) { [weak self] result in
+                        self?.receiveAppend(
+                            result,
+                            vaultID: vaultID,
+                            command: command,
+                            generation: generation
+                        )
+                    }
+                }
             }
         } catch {
             viewState = OwnerTruthInterviewNaturalInputViewState(
@@ -13498,6 +15305,7 @@ final class OwnerTruthInterviewNaturalInputUseCase {
     private func end(lastClientSequenceNumber: Int? = nil) {
         guard let receipt = viewState.latestReceipt,
               viewState.phase == .ready,
+              viewState.notice != .outcomeUnknown,
               receipt.lifecycle == .active,
               receipt.boundary == .open,
               (receipt.messageSequence != nil || receipt.continuousClientSequence != nil) else {
@@ -13527,15 +15335,32 @@ final class OwnerTruthInterviewNaturalInputUseCase {
                 continuation: viewState.continuation,
                 notice: nil
             )
-            client.endOwnerTruthInterviewNaturalInput(vaultID: vaultID, command: command) { [weak self] result in
-                self?.receiveEnd(result, vaultID: vaultID, command: command, generation: generation)
+            withLiveRequestAuthority(generation: generation) { [weak self] authority in
+                guard let self else { return }
+                if let authority {
+                    self.client.endOwnerTruthInterviewNaturalInputWrite(
+                        authority: authority,
+                        vaultID: vaultID,
+                        command: command
+                    ) { [weak self] result in
+                        self?.receiveEnd(result, vaultID: vaultID, command: command, generation: generation)
+                    }
+                } else {
+                    self.client.endOwnerTruthInterviewNaturalInputWrite(
+                        accountLease: self.accountLease,
+                        vaultID: vaultID,
+                        command: command
+                    ) { [weak self] result in
+                        self?.receiveEnd(result, vaultID: vaultID, command: command, generation: generation)
+                    }
+                }
             }
         } catch {
             viewState = OwnerTruthInterviewNaturalInputViewState(
                 phase: .ready,
                 latestReceipt: receipt,
                 continuation: viewState.continuation,
-                notice: .invalidInput
+                notice: .storageFailed
             )
         }
     }
@@ -13727,7 +15552,7 @@ final class OwnerTruthInterviewNaturalInputUseCase {
     }
 
     private func beginRequestOrFail() -> OwnerTruthVaultID? {
-        guard qaGateEnabled() else {
+        guard entryMode == .live || qaGateEnabled() else {
             transitionUnavailable(.qaOnlyDisabled)
             return nil
         }
@@ -13742,6 +15567,121 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         return vaultID
     }
 
+    private func withLiveRequestAuthority(
+        generation: UInt,
+        completion: @escaping (OwnerTruthInterviewNaturalInputRequestAuthority?) -> Void
+    ) {
+        guard entryMode == .live else {
+            completion(nil)
+            return
+        }
+        guard generation == operationGeneration,
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+            transitionUnavailable(.accountUnavailable)
+            return
+        }
+        armLiveAuthorityTimeout(generation: generation)
+        client.prepareOwnerTruthInterviewNaturalInputAuthentication(
+            accountLease: accountLease,
+            now: authorityNow,
+            minimumValidity: 30
+        ) { [weak self] authenticated in
+            DispatchQueue.main.async {
+                guard let self,
+                      generation == self.operationGeneration,
+                      self.liveAuthorityTimeoutWorkItem != nil else { return }
+                guard authenticated,
+                      self.accountLeaseRuntime.validate(self.accountLease, at: .request).allowed else {
+                    self.finishLiveAuthorityFailure(.requestNotSent)
+                    return
+                }
+                self.continueWithLivePolicyAuthority(
+                    generation: generation,
+                    completion: completion
+                )
+            }
+        }
+    }
+
+    private func continueWithLivePolicyAuthority(
+        generation: UInt,
+        completion: @escaping (OwnerTruthInterviewNaturalInputRequestAuthority?) -> Void
+    ) {
+        if let authority = freshLiveRequestAuthority(generation: generation) {
+            finishLiveAuthorityTimeout()
+            completion(authority)
+            return
+        }
+        guard let decision = client.freshOwnerTruthInterviewNaturalInputDecision() else {
+            finishLiveAuthorityFailure(.requestNotSent)
+            return
+        }
+        let recoverableReasons = Set([
+            "expiredPolicyCache",
+            "capturedPolicyExpired",
+            "policyVersionChanged",
+        ])
+        let recoveryReason = decision.expiresAt.map { $0 <= authorityNow() } == true
+            ? "expiredPolicyCache"
+            : decision.reason
+        guard recoverableReasons.contains(recoveryReason) else {
+            finishLiveAuthorityTimeout()
+            transitionUnavailable(.qaOnlyDisabled)
+            return
+        }
+        refreshLiveRequestPolicy { [weak self] refreshed in
+            DispatchQueue.main.async {
+                guard let self,
+                      generation == self.operationGeneration,
+                      self.liveAuthorityTimeoutWorkItem != nil else { return }
+                guard refreshed,
+                      self.accountLeaseRuntime.validate(self.accountLease, at: .request).allowed,
+                      let authority = self.freshLiveRequestAuthority(generation: generation) else {
+                    self.finishLiveAuthorityFailure(.requestNotSent)
+                    return
+                }
+                self.finishLiveAuthorityTimeout()
+                completion(authority)
+            }
+        }
+    }
+
+    private func armLiveAuthorityTimeout(generation: UInt) {
+        liveAuthorityTimeoutWorkItem?.cancel()
+        let timeout = DispatchWorkItem { [weak self] in
+            guard let self, generation == self.operationGeneration else { return }
+            self.liveAuthorityTimeoutWorkItem = nil
+            self.transitionFailure(.requestNotSent)
+        }
+        liveAuthorityTimeoutWorkItem = timeout
+        DispatchQueue.main.asyncAfter(deadline: .now() + liveAuthorityTimeout, execute: timeout)
+    }
+
+    private func finishLiveAuthorityTimeout() {
+        liveAuthorityTimeoutWorkItem?.cancel()
+        liveAuthorityTimeoutWorkItem = nil
+    }
+
+    private func finishLiveAuthorityFailure(_ notice: OwnerTruthInterviewNaturalInputNotice) {
+        finishLiveAuthorityTimeout()
+        transitionFailure(notice)
+    }
+
+    private func freshLiveRequestAuthority(
+        generation: UInt
+    ) -> OwnerTruthInterviewNaturalInputRequestAuthority? {
+        guard let decision = client.freshOwnerTruthInterviewNaturalInputDecision() else {
+            return nil
+        }
+        return OwnerTruthInterviewNaturalInputRequestAuthority(
+            featureDecision: decision,
+            accountLease: accountLease,
+            operationGeneration: generation,
+            diagnosticTraceID: diagnosticTraceID,
+            now: authorityNow()
+        )
+    }
+
     private func receiveStart(
         _ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>,
         vaultID: OwnerTruthVaultID,
@@ -13752,8 +15692,14 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         switch result {
         case .success(let receipt):
             guard receipt.vaultID == vaultID, receipt.matches(command) else {
+                if entryMode == .live {
+                    classifyStartCommand(command, as: .outcomeUnknown)
+                }
                 transitionFailure(.contractMismatch)
                 return
+            }
+            if entryMode == .live {
+                classifyStartCommand(command, as: .committed)
             }
             viewState = OwnerTruthInterviewNaturalInputViewState(
                 phase: .ready,
@@ -13763,8 +15709,118 @@ final class OwnerTruthInterviewNaturalInputUseCase {
             )
             refreshContinuation(vaultID: vaultID, receipt: receipt)
         case .failure:
+            if entryMode == .live {
+                classifyStartCommand(command, as: .outcomeUnknown)
+            }
             transitionFailure(.requestFailed)
         }
+    }
+
+    private func receiveStartWrite(
+        _ result: OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewNaturalInputReceipt>,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewNaturalInputStartCommand,
+        generation: UInt
+    ) {
+        guard canCommitWrite(generation: generation) else { return }
+        switch result {
+        case .committed(let receipt):
+            guard receipt.vaultID == vaultID, receipt.matches(command) else {
+                classifyStartCommand(command, as: .outcomeUnknown)
+                transitionFailure(.outcomeUnknown)
+                return
+            }
+            classifyStartCommand(command, as: .committed)
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .ready,
+                latestReceipt: receipt,
+                continuation: nil,
+                notice: nil
+            )
+            refreshContinuation(vaultID: vaultID, receipt: receipt)
+        case .notSent:
+            // The durable journal was fenced as mayExpose before transport.
+            // A later callback must not regress that fence and enable replay.
+            classifyStartCommand(command, as: .outcomeUnknown)
+            transitionFailure(.requestNotSent)
+        case .outcomeUnknown:
+            classifyStartCommand(command, as: .outcomeUnknown)
+            transitionFailure(.outcomeUnknown)
+        case .serverRejected:
+            classifyStartCommand(command, as: .serverRejected)
+            transitionFailure(.serverRejected)
+        }
+    }
+
+    private func classifyStartCommand(
+        _ command: OwnerTruthInterviewNaturalInputStartCommand,
+        as state: OwnerTruthInterviewLiveStartDispatchState
+    ) {
+        preparedStartCommand = command
+        preparedStartDispatchState = state
+        didClassifyStartCommand(command, state)
+    }
+
+    func bindReadOnlyVerifiedStart(_ receipt: OwnerTruthInterviewNaturalInputReceipt) {
+        guard let command = preparedStartCommand,
+              receipt.matches(command),
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else { return }
+        operationGeneration &+= 1
+        classifyStartCommand(command, as: .committed)
+        viewState = OwnerTruthInterviewNaturalInputViewState(
+            phase: .ready,
+            latestReceipt: receipt,
+            continuation: nil,
+            notice: nil
+        )
+        if let vaultID {
+            refreshContinuation(vaultID: vaultID, receipt: receipt)
+        }
+    }
+
+    func bindRecoverySession(_ progress: OwnerTruthLiveRecoveryProgress) -> Bool {
+        guard requestedRecoveryProtocol == "live-recovery-v1",
+              viewState.phase != .submitting,
+              let binding = progress.sessionBinding, let start = preparedStartCommand,
+              binding.threadId == start.threadID.rawValue,
+              progress.sessionId == start.sessionID.rawValue,
+              binding.productSessionId == productSessionID,
+              binding.threadVersion > 0, binding.sessionVersion > 0, binding.authorityEpoch >= 0,
+              let vaultID, accountLeaseRuntime.validate(accountLease, at: .commit).allowed else { return false }
+        let object: [String: Any] = ["schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+            "vaultId": vaultID.rawValue, "receipt": ["status": "resumed", "threadId": binding.threadId.uuidString,
+                "sessionId": progress.sessionId.uuidString, "threadVersion": binding.threadVersion,
+                "sessionVersion": binding.sessionVersion, "authorityEpoch": binding.authorityEpoch,
+                "state": binding.state, "boundary": binding.boundary]]
+        guard let receipt = try? OwnerTruthInterviewNaturalInputReceipt(backendJSONObject: object, expectedVaultID: vaultID) else { return false }
+        // Status reads must not emit another ready transition for an unchanged
+        // binding, nor replace a newer append receipt with a stale status read.
+        if let current = viewState.latestReceipt, current.sessionID == receipt.sessionID {
+            guard receipt.threadVersion >= current.threadVersion,
+                  receipt.sessionVersion >= current.sessionVersion,
+                  (receipt.authorityEpoch ?? -1) >= (current.authorityEpoch ?? -1) else { return false }
+            if viewState.phase == .ready, current.threadVersion == receipt.threadVersion,
+               current.sessionVersion == receipt.sessionVersion,
+               current.authorityEpoch == receipt.authorityEpoch,
+               current.lifecycle == receipt.lifecycle { return true }
+        }
+        operationGeneration &+= 1; finishLiveAuthorityTimeout()
+        viewState = OwnerTruthInterviewNaturalInputViewState(phase: .ready, latestReceipt: receipt, continuation: nil, notice: nil)
+        return true
+    }
+
+    func bindRecoveryAppend(_ receipt: OwnerTruthInterviewNaturalInputReceipt,
+                            command: OwnerTruthInterviewNaturalInputAppendCommand) -> Bool {
+        guard requestedRecoveryProtocol == "live-recovery-v1",
+              command.captureMode == .live,
+              receipt.matches(command), receipt.vaultID == vaultID,
+              preparedStartCommand?.sessionID == receipt.sessionID,
+              accountLeaseRuntime.validate(accountLease, at: .commit).allowed else { return false }
+        operationGeneration &+= 1
+        finishLiveAuthorityTimeout()
+        viewState = OwnerTruthInterviewNaturalInputViewState(
+            phase: .ready, latestReceipt: receipt, continuation: nil, notice: nil)
+        return true
     }
 
     private func receiveAppend(
@@ -13803,15 +15859,64 @@ final class OwnerTruthInterviewNaturalInputUseCase {
         }
     }
 
+    private func receiveAppendWrite(
+        _ result: OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewNaturalInputReceipt>,
+        vaultID: OwnerTruthVaultID,
+        command: OwnerTruthInterviewNaturalInputAppendCommand,
+        generation: UInt
+    ) {
+        guard canCommitWrite(generation: generation) else { return }
+        switch result {
+        case .committed(let receipt):
+            guard receipt.vaultID == vaultID, receipt.matches(command) else {
+                transitionFailure(.outcomeUnknown)
+                return
+            }
+            if let deliveredSequence = receipt.continuousClientSequence {
+                nextLiveClientSequenceNumber = max(nextLiveClientSequenceNumber, deliveredSequence + 1)
+            }
+            viewState = OwnerTruthInterviewNaturalInputViewState(
+                phase: .ready,
+                latestReceipt: receipt,
+                continuation: nil,
+                notice: nil
+            )
+            refreshContinuation(vaultID: vaultID, receipt: receipt)
+        case .notSent(let error):
+            onAppendTransportFailure?(error, command, "notSent")
+            transitionFailure(.requestNotSent)
+        case .outcomeUnknown(let error):
+            onAppendTransportFailure?(error, command, "outcomeUnknown")
+            transitionFailure(.outcomeUnknown)
+        case .serverRejected(let error):
+            onAppendTransportFailure?(error, command, "serverRejected")
+            if let clientError = error as? DreamJourneyBackendClient.ClientError,
+               let evidence = clientError.preHandlerAuthenticationRejectionEvidence,
+               evidence.matches(command) {
+                onPreHandlerAuthenticationRejection?(evidence)
+                transitionFailure(.authenticationRejectedBeforeApplication)
+            } else {
+                transitionFailure(.serverRejected)
+            }
+        }
+    }
+
     private func receiveEnd(
-        _ result: Result<OwnerTruthInterviewNaturalInputReceipt, Error>,
+        _ result: OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewNaturalInputReceipt>,
         vaultID: OwnerTruthVaultID,
         command: OwnerTruthInterviewEndCommand,
         generation: UInt
     ) {
-        guard canCommit(generation: generation) else { return }
+        guard generation == operationGeneration else { return }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            // The end request may already be on the wire. Account rotation
+            // fences the old UI, but it cannot prove that the write was not
+            // accepted, so retain the original command for read-only lookup.
+            transitionFailure(.outcomeUnknown)
+            return
+        }
         switch result {
-        case .success(let receipt):
+        case .committed(let receipt):
             guard receipt.vaultID == vaultID, receipt.matches(command) else {
                 transitionFailure(.contractMismatch)
                 return
@@ -13823,8 +15928,12 @@ final class OwnerTruthInterviewNaturalInputUseCase {
                 notice: nil
             )
             refreshContinuation(vaultID: vaultID, receipt: receipt)
-        case .failure:
-            transitionFailure(.requestFailed)
+        case .notSent:
+            transitionFailure(.requestNotSent)
+        case .outcomeUnknown:
+            transitionFailure(.outcomeUnknown)
+        case .serverRejected:
+            transitionFailure(.serverRejected)
         }
     }
 
@@ -13952,12 +16061,21 @@ final class OwnerTruthInterviewNaturalInputUseCase {
 
     private func canCommit(generation: UInt) -> Bool {
         guard generation == operationGeneration else { return false }
-        guard qaGateEnabled() else {
+        guard entryMode == .live || qaGateEnabled() else {
             transitionUnavailable(.qaOnlyDisabled)
             return false
         }
         guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
             transitionUnavailable(.staleAccountLease)
+            return false
+        }
+        return true
+    }
+
+    private func canCommitWrite(generation: UInt) -> Bool {
+        guard generation == operationGeneration else { return false }
+        guard accountLeaseRuntime.validate(accountLease, at: .commit).allowed else {
+            transitionFailure(.outcomeUnknown)
             return false
         }
         return true
@@ -14013,6 +16131,8 @@ final class OwnerTruthInterviewNaturalInputUseCase {
     }
 
     private func transitionUnavailable(_ notice: OwnerTruthInterviewNaturalInputNotice) {
+        liveAuthorityTimeoutWorkItem?.cancel()
+        liveAuthorityTimeoutWorkItem = nil
         operationGeneration &+= 1
         viewState = OwnerTruthInterviewNaturalInputViewState(
             phase: .unavailable,
@@ -14023,6 +16143,8 @@ final class OwnerTruthInterviewNaturalInputUseCase {
     }
 
     private func transitionFailure(_ notice: OwnerTruthInterviewNaturalInputNotice) {
+        liveAuthorityTimeoutWorkItem?.cancel()
+        liveAuthorityTimeoutWorkItem = nil
         viewState = OwnerTruthInterviewNaturalInputViewState(
             phase: .failed,
             latestReceipt: nil,
@@ -14152,16 +16274,204 @@ enum OwnerTruthInterviewLiveTurnOutboxError: Error, Equatable {
     case turnAlreadyAcknowledged
     case closeSequenceMismatch
     case storageFailure
+    case canonicalTurnConflict
+}
+
+enum NativeLiveCanonicalTranscriptFinality: String, Codable, Equatable, Sendable {
+    case interim
+    case complete
+}
+
+enum NativeLiveCanonicalTranscriptFinalityEvidence: String, Codable, Equatable, Sendable {
+    case explicitFinal
+    case explicitInterim
+    case confirmed
+    case unknown
+    case invalid
+}
+
+enum NativeLiveCanonicalTranscriptEvidenceSource: String, Codable, Equatable, Sendable {
+    case resultsIsInterim
+    case legacyDefinite
+    case queryConfirmed
+    case assistantStream
+    case absent
+    case invalid
+}
+
+enum NativeLiveCanonicalTranscriptSealing: String, Codable, Equatable, Sendable {
+    case observeOnly
+    case observeAndSeal
+}
+
+struct NativeLiveCanonicalTranscriptEvent: Equatable, Sendable {
+    let canonicalTurnID: String
+    let role: OwnerTruthInterviewNaturalInputMessageRole
+    let text: String
+    let finality: NativeLiveCanonicalTranscriptFinality
+    let finalityEvidence: NativeLiveCanonicalTranscriptFinalityEvidence
+    let evidenceSource: NativeLiveCanonicalTranscriptEvidenceSource
+    let observationID: String?
+    let ingressOrdinal: UInt64?
+    let sealing: NativeLiveCanonicalTranscriptSealing
+    let capturedAt: Date
+
+    init(
+        canonicalTurnID: String,
+        role: OwnerTruthInterviewNaturalInputMessageRole,
+        text: String,
+        finality: NativeLiveCanonicalTranscriptFinality,
+        finalityEvidence: NativeLiveCanonicalTranscriptFinalityEvidence = .unknown,
+        evidenceSource: NativeLiveCanonicalTranscriptEvidenceSource = .absent,
+        observationID: String? = nil,
+        ingressOrdinal: UInt64? = nil,
+        sealing: NativeLiveCanonicalTranscriptSealing? = nil,
+        capturedAt: Date
+    ) {
+        self.canonicalTurnID = canonicalTurnID
+        self.role = role
+        self.text = text
+        self.finality = finality
+        self.finalityEvidence = finalityEvidence
+        self.evidenceSource = evidenceSource
+        self.observationID = observationID
+        self.ingressOrdinal = ingressOrdinal
+        self.sealing = sealing
+            ?? (finality == .complete ? .observeAndSeal : .observeOnly)
+        self.capturedAt = capturedAt
+    }
+}
+
+enum NativeLiveCanonicalTranscriptIngressKind: String, Codable, Equatable, Sendable {
+    case asrInfo
+    case asrResponse
+    case queryConfirmed
+    case assistantStream
+}
+
+/// Identity-only provider ingress observed before transcript text is available.
+/// Persisting this member lets shutdown freeze the exact accepted question set
+/// while still allowing matching final text to drain after close begins.
+struct NativeLiveCanonicalTranscriptMember: Equatable, Sendable {
+    let canonicalTurnID: String
+    /// One provider callback may observe and later seal the same canonical
+    /// turn. Each queued handoff owns its own stop-barrier reservation even
+    /// though both operations share the canonical identity.
+    let handoffID: String
+    let role: OwnerTruthInterviewNaturalInputMessageRole
+    let capturedAt: Date
+    let ingressOrdinal: UInt64
+    let ingressKind: NativeLiveCanonicalTranscriptIngressKind?
+
+    init(
+        canonicalTurnID: String,
+        handoffID: String? = nil,
+        role: OwnerTruthInterviewNaturalInputMessageRole,
+        capturedAt: Date,
+        ingressOrdinal: UInt64,
+        ingressKind: NativeLiveCanonicalTranscriptIngressKind? = nil
+    ) {
+        self.canonicalTurnID = canonicalTurnID
+        let normalizedHandoffID = handoffID?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        self.handoffID = normalizedHandoffID.flatMap { $0.isEmpty ? nil : $0 }
+            ?? canonicalTurnID
+        self.role = role
+        self.capturedAt = capturedAt
+        self.ingressOrdinal = ingressOrdinal
+        self.ingressKind = ingressKind
+    }
+}
+
+enum OwnerTruthInterviewCanonicalGapReason: String, Equatable, Sendable {
+    case missingBody
+    case partialBody
+}
+
+struct OwnerTruthInterviewCanonicalCoverageSummary: Equatable, Sendable {
+    let registeredMemberCount: Int
+    let memberWithoutBodyCount: Int
+    let partialTurnCount: Int
+    let completeBlockedTurnCount: Int
+    let deliveryCount: Int
+    let serverConfirmedCount: Int
+    let firstGapOrdinal: Int?
+    let firstGapIngressOrdinal: UInt64?
+    let firstGapRole: OwnerTruthInterviewNaturalInputMessageRole?
+    let firstGapReason: OwnerTruthInterviewCanonicalGapReason?
+    let firstGapIngressKind: NativeLiveCanonicalTranscriptIngressKind?
+    let hasPersistedLocalText: Bool
+
+    static let empty = OwnerTruthInterviewCanonicalCoverageSummary(
+        registeredMemberCount: 0,
+        memberWithoutBodyCount: 0,
+        partialTurnCount: 0,
+        completeBlockedTurnCount: 0,
+        deliveryCount: 0,
+        serverConfirmedCount: 0,
+        firstGapOrdinal: nil,
+        firstGapIngressOrdinal: nil,
+        firstGapRole: nil,
+        firstGapReason: nil,
+        firstGapIngressKind: nil,
+        hasPersistedLocalText: false
+    )
 }
 
 struct OwnerTruthInterviewLiveTurnOutboxSnapshot: Equatable, Sendable {
     let productSessionID: String
+    let createdAt: Date
+    let updatedAt: Date
     let ownerTurnCount: Int
     let lastClientSequenceNumber: Int
     let closeRequestedLastClientSequenceNumber: Int?
+    let closeIntentRequestedAt: Date?
     let pendingTurns: [OwnerTruthInterviewLiveTurnDelivery]
+    let pendingDispatchStates: [OwnerTruthRecordID: OwnerTruthInterviewLiveTurnDispatchState]
+    let frozenAppendCommands: [OwnerTruthRecordID: OwnerTruthInterviewNaturalInputAppendCommand]
+    let authenticationRejectionEvidence: [OwnerTruthRecordID: OwnerTruthInterviewPreHandlerAuthenticationRejectionEvidence]
+    let authenticationRetryClaimedMessageIDs: Set<OwnerTruthRecordID>
+    let unsealedCanonicalTurnCount: Int
+    let canonicalConflictCount: Int
+    let firstCanonicalConflictReason: OwnerTruthInterviewCanonicalCaptureIssueReason?
+    let firstCanonicalConflictEvidenceSource: NativeLiveCanonicalTranscriptEvidenceSource?
+    let firstCanonicalConflictIngressOrdinal: UInt64?
+    let firstCanonicalConflictObservationIDHash: String?
+    let pendingCloseManifestHandoffCount: Int
+    let hasCanonicalOverflowGap: Bool
+    let canonicalCoverageSummary: OwnerTruthInterviewCanonicalCoverageSummary
+    let preparedStartCommand: OwnerTruthInterviewNaturalInputStartCommand?
+    let startDispatchState: OwnerTruthInterviewLiveStartDispatchState?
 
-    var isClosing: Bool { closeRequestedLastClientSequenceNumber != nil }
+    var acceptedRecoveryProtocol: String? = nil
+    var recoveryProgress: OwnerTruthLiveRecoveryProgress? = nil
+    var recoveryGracefulStopRequestedAt: Date? = nil
+
+    var isClosing: Bool {
+        closeIntentRequestedAt != nil || closeRequestedLastClientSequenceNumber != nil
+    }
+}
+
+enum OwnerTruthInterviewCanonicalCaptureIssueReason: String, Codable, Equatable, Sendable {
+    case immutableBodyConflict
+}
+
+enum OwnerTruthInterviewLiveStartDispatchState: String, Codable, Equatable, Sendable {
+    case preparedNotExposed
+    case mayExpose
+    case outcomeUnknown
+    case serverRejected
+    case committed
+}
+
+enum OwnerTruthInterviewLiveTurnDispatchState: String, Codable, Equatable, Sendable {
+    case preparedNotExposed
+    case mayExpose
+    case authenticationRejected
+    case authenticationRetryExposed
+    case outcomeUnknown
+    case serverRejected
 }
 
 /// File-backed, product-session isolated queue for unsent Live transcript
@@ -14174,6 +16484,71 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
     private struct StoredTurn: Codable, Equatable {
         let delivery: OwnerTruthInterviewLiveTurnDelivery
         let contentHash: String
+        var dispatchState: OwnerTruthInterviewLiveTurnDispatchState?
+        var frozenAppendCommand: OwnerTruthInterviewNaturalInputAppendCommand?
+        var frozenPayloadHash: String?
+        var authenticationRejectionEvidence: OwnerTruthInterviewPreHandlerAuthenticationRejectionEvidence?
+        var authenticationRetryClaimed: Bool?
+        var recoveryReplayCount: Int?
+    }
+
+    private struct StoredCanonicalTurn: Codable, Equatable {
+        let canonicalTurnID: String
+        let role: OwnerTruthInterviewNaturalInputMessageRole
+        var text: String
+        var finality: NativeLiveCanonicalTranscriptFinality
+        let capturedAt: Date
+        let captureOrdinal: Int
+        var deliveryMessageID: OwnerTruthRecordID?
+        var latestObservationID: String?
+        var latestIngressOrdinal: UInt64?
+        var isSealed: Bool?
+        var selectedFinalityEvidence: NativeLiveCanonicalTranscriptFinalityEvidence?
+        var selectedEvidenceSource: NativeLiveCanonicalTranscriptEvidenceSource?
+        var selectedObservationID: String?
+        var selectedIngressOrdinal: UInt64?
+        var latestObservedText: String?
+        var latestObservedFinality: NativeLiveCanonicalTranscriptFinality?
+        var latestObservedFinalityEvidence: NativeLiveCanonicalTranscriptFinalityEvidence?
+        var latestObservedEvidenceSource: NativeLiveCanonicalTranscriptEvidenceSource?
+        var sealRequested: Bool?
+    }
+
+    private struct StoredCanonicalMember: Codable, Equatable {
+        let canonicalTurnID: String
+        let role: OwnerTruthInterviewNaturalInputMessageRole
+        let capturedAt: Date
+        let captureOrdinal: Int
+        let ingressOrdinal: UInt64
+        let ingressKind: NativeLiveCanonicalTranscriptIngressKind?
+        var handledIngressOrdinals: [UInt64]?
+    }
+
+    private struct StoredCanonicalCaptureIssue: Codable, Equatable {
+        let canonicalTurnID: String
+        let reason: OwnerTruthInterviewCanonicalCaptureIssueReason
+        let observedAt: Date
+        let evidenceSource: NativeLiveCanonicalTranscriptEvidenceSource?
+        let ingressOrdinal: UInt64?
+        let observationIDHash: String?
+    }
+
+    private struct StoredCloseManifestEntry: Codable, Equatable {
+        let handoffID: String
+        let canonicalTurnID: String
+        let role: OwnerTruthInterviewNaturalInputMessageRole
+        let ingressOrdinal: UInt64
+    }
+
+    private struct StoredHandledCanonicalHandoff: Codable, Equatable {
+        let handoffID: String
+        let canonicalTurnID: String
+        let role: OwnerTruthInterviewNaturalInputMessageRole
+        let ingressOrdinal: UInt64
+        let observationIDHash: String?
+        let eventIngressOrdinal: UInt64?
+        let evidenceSource: NativeLiveCanonicalTranscriptEvidenceSource?
+        let persistedBody: Bool
     }
 
     private struct Envelope: Codable, Equatable {
@@ -14183,7 +16558,25 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
         var ownerTurnCount: Int
         var lastClientSequenceNumber: Int
         var closeRequestedLastClientSequenceNumber: Int?
+        var closeIntentRequestedAt: Date?
         var pendingTurns: [StoredTurn]
+        var canonicalTurns: [StoredCanonicalTurn]?
+        var canonicalMembers: [StoredCanonicalMember]?
+        var canonicalCaptureIssues: [StoredCanonicalCaptureIssue]?
+        var closeManifest: [StoredCloseManifestEntry]?
+        var resolvedCloseManifestHandoffIDs: [String]?
+        var handledCanonicalHandoffs: [StoredHandledCanonicalHandoff]?
+        var canonicalOverflowGap: Bool?
+        var nextCaptureOrdinal: Int?
+        var preparedStartCommand: OwnerTruthInterviewNaturalInputStartCommand?
+        var startDispatchState: OwnerTruthInterviewLiveStartDispatchState?
+        var acceptedRecoveryProtocol: String?
+        var recoveryProgress: OwnerTruthLiveRecoveryProgress?
+        var recoveryReplayDeadline: Date?
+        var recoveryReplayNotBefore: Date?
+        var recoveryReplayCycleID: UUID?
+        var recoveryReplayCycleCount: Int?
+        var recoveryGracefulStopRequestedAt: Date?
         let createdAt: Date
         var updatedAt: Date
     }
@@ -14192,18 +16585,40 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
     private let fileManager: FileManager
     private let now: () -> Date
     private let identifierFactory: () -> UUID
-    private let lock = NSLock()
+    private let atomicWrite: (Data, URL) throws -> Void
+    // Fixed stripes avoid an unbounded registry. Every instance for the same root
+    // shares a transaction lock; no cached envelope can overwrite a newer ACK.
+    private static let transactionLocks = (0..<64).map { _ in NSLock() }
+    private let lock: NSLock
+    /// Optional in-memory measurement sink; callers must not perform synchronous I/O here.
+    private let costObservation: ((String, Double, Int) -> Void)?
+    private func measured<T>(_ stage: String, bytes: Int = 0, _ work: () throws -> T) rethrows -> T {
+        guard let costObservation else { return try work() }
+        let start = ProcessInfo.processInfo.systemUptime
+        defer { costObservation(stage, (ProcessInfo.processInfo.systemUptime - start) * 1000, bytes) }
+        return try work()
+    }
 
     init(
         rootDirectory: URL? = nil,
         fileManager: FileManager = .default,
         now: @escaping () -> Date = Date.init,
-        identifierFactory: @escaping () -> UUID = UUID.init
+        identifierFactory: @escaping () -> UUID = UUID.init,
+        costObservation: ((String, Double, Int) -> Void)? = nil,
+        atomicWrite: @escaping (Data, URL) throws -> Void = { data, url in
+            _ = try KnowledgeLocalStoragePolicy.write(data, to: url)
+        }
     ) {
-        self.rootDirectory = rootDirectory ?? Self.defaultRootDirectory(fileManager: fileManager)
+        let directory = (rootDirectory ?? Self.defaultRootDirectory(fileManager: fileManager))
+            .standardizedFileURL.resolvingSymlinksInPath()
+        self.rootDirectory = directory
+        let stripe = directory.path.utf8.reduce(0) { ($0 &* 31 &+ Int($1)) & 63 }
+        self.lock = Self.transactionLocks[stripe]
         self.fileManager = fileManager
         self.now = now
+        self.costObservation = costObservation
         self.identifierFactory = identifierFactory
+        self.atomicWrite = atomicWrite
     }
 
     func load(
@@ -14220,6 +16635,233 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
                 productSessionID: normalizedProductSessionID
             )
             return Self.snapshot(from: envelope)
+        }
+    }
+
+    @discardableResult
+    func prepareStart(
+        _ command: OwnerTruthInterviewNaturalInputStartCommand,
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            guard command.entryMode == .live,
+                  command.productSessionID == normalizedProductSessionID else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            var envelope = try existingOrNewEnvelope(
+                at: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            if let existing = envelope.preparedStartCommand {
+                guard existing == command else {
+                    throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+                }
+                return Self.snapshot(from: envelope)
+            }
+            envelope.preparedStartCommand = command
+            envelope.startDispatchState = .preparedNotExposed
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            return Self.snapshot(from: envelope)
+        }
+    }
+
+    @discardableResult
+    func markStartDispatchState(
+        _ state: OwnerTruthInterviewLiveStartDispatchState,
+        command: OwnerTruthInterviewNaturalInputStartCommand,
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            var envelope = try read(
+                from: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            guard envelope.preparedStartCommand == command,
+                  let previous = envelope.startDispatchState else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            let allowed: Bool
+            switch (previous, state) {
+            case (.preparedNotExposed, .preparedNotExposed),
+                 (.preparedNotExposed, .mayExpose),
+                 (.mayExpose, .mayExpose),
+                 (.mayExpose, .outcomeUnknown),
+                 (.mayExpose, .serverRejected),
+                 (.mayExpose, .committed),
+                 (.outcomeUnknown, .outcomeUnknown),
+                 (.outcomeUnknown, .committed),
+                 (.serverRejected, .serverRejected),
+                 (.committed, .committed):
+                allowed = true
+            default:
+                allowed = false
+            }
+            guard allowed else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            envelope.startDispatchState = state
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            return Self.snapshot(from: envelope)
+        }
+    }
+
+    @discardableResult
+    func registerCanonicalMember(
+        _ member: NativeLiveCanonicalTranscriptMember,
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            var envelope = try existingOrNewEnvelope(
+                at: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            try applyCanonicalMember(member, to: &envelope)
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            return Self.snapshot(from: envelope)
+        }
+    }
+
+    @discardableResult
+    func persistCanonicalHandoff(
+        member: NativeLiveCanonicalTranscriptMember,
+        event: NativeLiveCanonicalTranscriptEvent?,
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            var envelope = try existingOrNewEnvelope(
+                at: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            try applyCanonicalHandoff(member: member, event: event, to: &envelope)
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            let persisted = try read(
+                from: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            return Self.snapshot(from: persisted)
+        }
+    }
+
+    private func applyCanonicalHandoff(
+        member: NativeLiveCanonicalTranscriptMember,
+        event: NativeLiveCanonicalTranscriptEvent?,
+        to envelope: inout Envelope
+    ) throws {
+        try applyCanonicalMember(member, to: &envelope)
+        if let event {
+            guard event.canonicalTurnID == member.canonicalTurnID,
+                  event.role == member.role else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.canonicalTurnConflict
+            }
+            try applyCanonicalTurn(event, to: &envelope)
+        }
+        let handled = StoredHandledCanonicalHandoff(
+            handoffID: member.handoffID,
+            canonicalTurnID: member.canonicalTurnID,
+            role: member.role,
+            ingressOrdinal: member.ingressOrdinal,
+            observationIDHash: event?.observationID.map(Self.digest),
+            eventIngressOrdinal: event?.ingressOrdinal,
+            evidenceSource: event?.evidenceSource,
+            persistedBody: event != nil
+        )
+        var handledHandoffs = envelope.handledCanonicalHandoffs ?? []
+        if let existing = handledHandoffs.first(where: { $0.handoffID == member.handoffID }) {
+            guard existing == handled else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.canonicalTurnConflict
+            }
+        } else {
+            handledHandoffs.append(handled)
+            envelope.handledCanonicalHandoffs = handledHandoffs
+        }
+        if let manifestEntry = envelope.closeManifest?.first(where: {
+            $0.handoffID == member.handoffID
+        }), manifestEntry.canonicalTurnID == member.canonicalTurnID,
+           manifestEntry.role == member.role,
+           manifestEntry.ingressOrdinal == member.ingressOrdinal {
+            var resolved = Set(envelope.resolvedCloseManifestHandoffIDs ?? [])
+            resolved.insert(member.handoffID)
+            envelope.resolvedCloseManifestHandoffIDs = Array(resolved).sorted()
+        }
+    }
+
+    enum CanonicalWrite {
+        case member(NativeLiveCanonicalTranscriptMember)
+        case event(NativeLiveCanonicalTranscriptEvent)
+        case handoff(NativeLiveCanonicalTranscriptMember, NativeLiveCanonicalTranscriptEvent?)
+    }
+
+    struct CanonicalBatchCommit {
+        let snapshot: OwnerTruthInterviewLiveTurnOutboxSnapshot?
+        let committedCount: Int
+        let firstError: Error?
+    }
+
+    /// Commit an ordered prefix. A malformed operation cannot discard earlier
+    /// valid operations or mutate the envelope that is actually committed.
+    func persistCanonicalBatch(
+        _ operations: [CanonicalWrite],
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> CanonicalBatchCommit {
+        guard !operations.isEmpty, operations.count <= 32 else {
+            throw OwnerTruthInterviewLiveTurnOutboxError.storageFailure
+        }
+        return try withLock {
+            let session = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: session)
+            var envelope = try existingOrNewEnvelope(at: url, accountLease: accountLease, productSessionID: session)
+            var committed = 0
+            var firstError: Error?
+            for operation in operations {
+                var next = envelope
+                do {
+                    switch operation {
+                    case .member(let member): try applyCanonicalMember(member, to: &next)
+                    case .event(let event): try applyCanonicalTurn(event, to: &next)
+                    case .handoff(let member, let event):
+                        try applyCanonicalHandoff(member: member, event: event, to: &next)
+                    }
+                    envelope = next
+                    committed += 1
+                } catch {
+                    firstError = error
+                    break
+                }
+            }
+            guard committed > 0 else {
+                return CanonicalBatchCommit(snapshot: nil, committedCount: 0, firstError: firstError)
+            }
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            let persisted = try read(from: url, accountLease: accountLease, productSessionID: session)
+            // A valid but stale file is not proof that this batch reached disk.
+            guard try Self.encoder().encode(persisted) == Self.encoder().encode(envelope) else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.storageFailure
+            }
+            return CanonicalBatchCommit(snapshot: Self.snapshot(from: persisted),
+                                        committedCount: committed, firstError: firstError)
         }
     }
 
@@ -14251,7 +16893,12 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
             )
             envelope.pendingTurns.append(StoredTurn(
                 delivery: delivery,
-                contentHash: Self.contentHash(for: delivery)
+                contentHash: Self.contentHash(for: delivery),
+                dispatchState: .preparedNotExposed,
+                frozenAppendCommand: nil,
+                frozenPayloadHash: nil,
+                authenticationRejectionEvidence: nil,
+                authenticationRetryClaimed: nil
             ))
             envelope.lastClientSequenceNumber = delivery.clientSequenceNumber
             if role == .owner {
@@ -14259,7 +16906,332 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
             }
             envelope.updatedAt = now()
             try write(envelope, to: url)
+            let persisted = try read(
+                from: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            return Self.snapshot(from: persisted)
+        }
+    }
+
+    @discardableResult
+    func markDispatchState(
+        _ dispatchState: OwnerTruthInterviewLiveTurnDispatchState,
+        messageID: OwnerTruthRecordID,
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            var envelope = try read(
+                from: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            guard let index = envelope.pendingTurns.firstIndex(where: {
+                $0.delivery.messageID == messageID
+            }) else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            let previous = envelope.pendingTurns[index].dispatchState ?? .outcomeUnknown
+            let allowed: Bool
+            switch (previous, dispatchState) {
+            case (.preparedNotExposed, .mayExpose),
+                 (.preparedNotExposed, .preparedNotExposed),
+                 (.mayExpose, .outcomeUnknown),
+                 (.mayExpose, .serverRejected),
+                 (.mayExpose, .authenticationRejected),
+                 (.mayExpose, .preparedNotExposed),
+                 (.mayExpose, .mayExpose),
+                 (.authenticationRejected, .authenticationRejected),
+                 (.authenticationRejected, .authenticationRetryExposed),
+                 (.authenticationRetryExposed, .authenticationRetryExposed),
+                 (.authenticationRetryExposed, .outcomeUnknown),
+                 (.authenticationRetryExposed, .serverRejected),
+                 (.outcomeUnknown, .outcomeUnknown),
+                 (.serverRejected, .serverRejected):
+                allowed = true
+            default:
+                allowed = false
+            }
+            guard allowed else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            envelope.pendingTurns[index].dispatchState = dispatchState
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
             return Self.snapshot(from: envelope)
+        }
+    }
+
+    @discardableResult
+    func prepareAppendExposure(
+        command: OwnerTruthInterviewNaturalInputAppendCommand,
+        retry: Bool,
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            var envelope = try read(
+                from: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            guard let index = envelope.pendingTurns.firstIndex(where: {
+                $0.delivery.messageID == command.messageID
+            }) else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            let stored = envelope.pendingTurns[index]
+            guard stored.delivery.commandID == command.commandID,
+                  stored.delivery.clientSequenceNumber == command.clientSequenceNumber,
+                  stored.delivery.role == command.role,
+                  stored.delivery.text == command.text,
+                  stored.delivery.capturedAt == command.capturedAt else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            if let frozen = stored.frozenAppendCommand {
+                guard frozen == command,
+                      stored.frozenPayloadHash == command.canonicalPayloadHash else {
+                    throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+                }
+            } else {
+                guard !retry else {
+                    throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+                }
+                envelope.pendingTurns[index].frozenAppendCommand = command
+                envelope.pendingTurns[index].frozenPayloadHash = command.canonicalPayloadHash
+            }
+            if retry {
+                guard stored.dispatchState == .authenticationRejected,
+                      stored.authenticationRetryClaimed == true,
+                      let evidence = stored.authenticationRejectionEvidence,
+                      evidence.matches(command) else {
+                    throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+                }
+                envelope.pendingTurns[index].dispatchState = .authenticationRetryExposed
+            } else {
+                guard stored.dispatchState == .preparedNotExposed else {
+                    throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+                }
+                envelope.pendingTurns[index].dispatchState = .mayExpose
+            }
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            return Self.snapshot(from: envelope)
+        }
+    }
+
+    @discardableResult
+    func recordAuthenticationRejection(
+        _ evidence: OwnerTruthInterviewPreHandlerAuthenticationRejectionEvidence,
+        messageID: OwnerTruthRecordID,
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            var envelope = try read(
+                from: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            guard let index = envelope.pendingTurns.firstIndex(where: {
+                $0.delivery.messageID == messageID
+            }), let command = envelope.pendingTurns[index].frozenAppendCommand,
+                  evidence.matches(command),
+                  envelope.pendingTurns[index].dispatchState == .mayExpose else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            envelope.pendingTurns[index].authenticationRejectionEvidence = evidence
+            envelope.pendingTurns[index].authenticationRetryClaimed = false
+            envelope.pendingTurns[index].dispatchState = .authenticationRejected
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            return Self.snapshot(from: envelope)
+        }
+    }
+
+    @discardableResult
+    func claimAuthenticationRetry(
+        messageID: OwnerTruthRecordID,
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            var envelope = try read(
+                from: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            guard let index = envelope.pendingTurns.firstIndex(where: {
+                $0.delivery.messageID == messageID
+            }), envelope.pendingTurns[index].dispatchState == .authenticationRejected,
+                  envelope.pendingTurns[index].authenticationRetryClaimed != true,
+                  let command = envelope.pendingTurns[index].frozenAppendCommand,
+                  let evidence = envelope.pendingTurns[index].authenticationRejectionEvidence,
+                  evidence.matches(command) else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            envelope.pendingTurns[index].authenticationRetryClaimed = true
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            return Self.snapshot(from: envelope)
+        }
+    }
+
+    /// Opt-in is persisted only after the matching server start has committed.
+    /// Old envelopes decode these optional fields as nil and remain read-only on unknown writes.
+    func acceptRecoveryProtocol(
+        _ protocolVersion: String, sessionID: OwnerTruthRecordID,
+        for accountLease: AccountLease, productSessionID: String
+    ) throws {
+        try withLock {
+            let normalized = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalized)
+            var envelope = try read(from: url, accountLease: accountLease, productSessionID: normalized)
+            guard protocolVersion == "live-recovery-v1",
+                  envelope.preparedStartCommand?.recoveryProtocol == protocolVersion,
+                  envelope.preparedStartCommand?.sessionID == sessionID,
+                  envelope.startDispatchState == .committed else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            envelope.acceptedRecoveryProtocol = protocolVersion
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+        }
+    }
+
+    func saveRecoveryProgress(_ progress: OwnerTruthLiveRecoveryProgress,
+        for accountLease: AccountLease, productSessionID: String) throws {
+        try withLock {
+            let normalized = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalized)
+            var envelope = try read(from: url, accountLease: accountLease, productSessionID: normalized)
+            guard envelope.acceptedRecoveryProtocol == progress.protocol,
+                  envelope.preparedStartCommand?.sessionID.rawValue == progress.sessionId,
+                  progress.generation == 1,
+                  progress.version >= (envelope.recoveryProgress?.version ?? 0),
+                  progress.snapshotRevision >= (envelope.recoveryProgress?.snapshotRevision ?? 0) else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            // A status read cannot undo an immutable final boundary or a
+            // publication already observed at the same snapshot revision.
+            if let old = envelope.recoveryProgress {
+                if let final = old.finalSequence, progress.finalSequence != final {
+                    throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+                }
+                if let publication = old.publication,
+                   publication.state != "pending",
+                   progress.publication?.snapshotRevision == publication.snapshotRevision,
+                   progress.publication != publication {
+                    throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+                }
+            }
+            envelope.recoveryProgress = progress
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+        }
+    }
+
+    func deferRecoveryReplay(until date: Date, for lease: AccountLease, productSessionID: String) throws {
+        try withLock {
+            let id = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: lease, productSessionID: id)
+            var envelope = try read(from: url, accountLease: lease, productSessionID: id)
+            guard envelope.acceptedRecoveryProtocol == "live-recovery-v1" else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            envelope.recoveryReplayNotBefore = max(envelope.recoveryReplayNotBefore ?? .distantPast, date)
+            try write(envelope, to: url)
+        }
+    }
+
+    /// Explicit foreground recovery only. Page refresh and store reconstruction
+    /// cannot refund a cycle, and a new cycle is throttled for five minutes.
+    @discardableResult
+    func beginForegroundRecoveryCycle(id: UUID, for lease: AccountLease, productSessionID: String) throws -> Bool {
+        try withLock {
+            let normalized = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: lease, productSessionID: normalized)
+            var envelope = try read(from: url, accountLease: lease, productSessionID: normalized)
+            guard envelope.acceptedRecoveryProtocol == "live-recovery-v1", !envelope.pendingTurns.isEmpty,
+                  envelope.recoveryReplayCycleID != id, let deadline = envelope.recoveryReplayDeadline,
+                  now() >= deadline.addingTimeInterval(240),
+                  now() >= (envelope.recoveryReplayNotBefore ?? .distantPast) else { return false }
+            envelope.recoveryReplayCycleID = id
+            envelope.recoveryReplayCycleCount = (envelope.recoveryReplayCycleCount ?? 1) + 1
+            envelope.recoveryReplayDeadline = now().addingTimeInterval(60)
+            for index in envelope.pendingTurns.indices { envelope.pendingTurns[index].recoveryReplayCount = nil }
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            return true
+        }
+    }
+
+    /// Claim before transport exposure. A crash consumes an attempt, never refunds it.
+    /// This only returns an immutable body command; it cannot replay end/admit/confirmation.
+    func claimRecoveryReplay(
+        messageID: OwnerTruthRecordID,
+        for accountLease: AccountLease, productSessionID: String
+    ) throws -> OwnerTruthInterviewNaturalInputAppendCommand {
+        try withLock {
+            let normalized = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalized)
+            var envelope = try read(from: url, accountLease: accountLease, productSessionID: normalized)
+            guard envelope.acceptedRecoveryProtocol == "live-recovery-v1",
+                  let index = envelope.pendingTurns.firstIndex(where: { $0.delivery.messageID == messageID }),
+                  let command = envelope.pendingTurns[index].frozenAppendCommand,
+                  envelope.pendingTurns[index].frozenPayloadHash == command.canonicalPayloadHash,
+                  envelope.pendingTurns[index].dispatchState == .outcomeUnknown,
+                  (envelope.pendingTurns[index].recoveryReplayCount ?? 0) < 3 else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            let timestamp = now()
+            let deadline = envelope.recoveryReplayDeadline ?? timestamp.addingTimeInterval(60)
+            guard timestamp < deadline, timestamp >= (envelope.recoveryReplayNotBefore ?? .distantPast) else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            envelope.recoveryReplayDeadline = deadline
+            envelope.pendingTurns[index].recoveryReplayCount =
+                (envelope.pendingTurns[index].recoveryReplayCount ?? 0) + 1
+            envelope.pendingTurns[index].dispatchState = .mayExpose
+            envelope.updatedAt = timestamp
+            try write(envelope, to: url)
+            return command
+        }
+    }
+
+    @discardableResult
+    func upsertCanonicalTurn(
+        _ event: NativeLiveCanonicalTranscriptEvent,
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            var envelope = try existingOrNewEnvelope(
+                at: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            try applyCanonicalTurn(event, to: &envelope)
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            let persisted = try read(
+                from: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            return Self.snapshot(from: persisted)
         }
     }
 
@@ -14310,6 +17282,106 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
         }
     }
 
+    /// Record the bounded stop decision without sealing the current utterance.
+    /// A rebuilt controller closes abandoned sessions through the normal manifest path.
+    @discardableResult
+    func requestRecoveryGracefulStop(for accountLease: AccountLease, productSessionID: String)
+        throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        try withLock {
+            let normalized = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalized)
+            var envelope = try existingOrNewEnvelope(at: url, accountLease: accountLease, productSessionID: normalized)
+            guard envelope.acceptedRecoveryProtocol == "live-recovery-v1" else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            if envelope.recoveryGracefulStopRequestedAt == nil {
+                envelope.recoveryGracefulStopRequestedAt = now()
+                envelope.updatedAt = now()
+                try write(envelope, to: url)
+            }
+            return Self.snapshot(from: envelope)
+        }
+    }
+
+    @discardableResult
+    func requestClose(
+        acceptedHandoffs: [NativeLiveCanonicalTranscriptMember] = [],
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            var envelope = try existingOrNewEnvelope(
+                at: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            if envelope.closeIntentRequestedAt == nil {
+                envelope.closeIntentRequestedAt = now()
+            }
+            let manifest = acceptedHandoffs.map {
+                StoredCloseManifestEntry(
+                    handoffID: $0.handoffID,
+                    canonicalTurnID: $0.canonicalTurnID,
+                    role: $0.role,
+                    ingressOrdinal: $0.ingressOrdinal
+                )
+            }.sorted { $0.handoffID < $1.handoffID }
+            guard Set(manifest.map(\.handoffID)).count == manifest.count else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+            }
+            if let existing = envelope.closeManifest {
+                guard existing == manifest || manifest.isEmpty else {
+                    throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
+                }
+            } else {
+                envelope.closeManifest = manifest
+            }
+            let effectiveManifest = envelope.closeManifest ?? manifest
+            let manifestByID = Dictionary(
+                uniqueKeysWithValues: effectiveManifest.map { ($0.handoffID, $0) }
+            )
+            let handledIDs = Set<String>((envelope.handledCanonicalHandoffs ?? []).compactMap { handled in
+                guard let expected = manifestByID[handled.handoffID],
+                      expected.canonicalTurnID == handled.canonicalTurnID,
+                      expected.role == handled.role,
+                      expected.ingressOrdinal == handled.ingressOrdinal else {
+                    return nil
+                }
+                return handled.handoffID
+            })
+            let legacyResolved = Set(envelope.resolvedCloseManifestHandoffIDs ?? [])
+                .intersection(Set(manifestByID.keys))
+            envelope.resolvedCloseManifestHandoffIDs = Array(
+                legacyResolved.union(handledIDs)
+            ).sorted()
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            return Self.snapshot(from: envelope)
+        }
+    }
+
+    @discardableResult
+    func markCanonicalOverflowGap(
+        for accountLease: AccountLease,
+        productSessionID: String
+    ) throws -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
+        try withLock {
+            let normalizedProductSessionID = try Self.normalizedProductSessionID(productSessionID)
+            let url = fileURL(accountLease: accountLease, productSessionID: normalizedProductSessionID)
+            var envelope = try existingOrNewEnvelope(
+                at: url,
+                accountLease: accountLease,
+                productSessionID: normalizedProductSessionID
+            )
+            envelope.canonicalOverflowGap = true
+            envelope.updatedAt = now()
+            try write(envelope, to: url)
+            return Self.snapshot(from: envelope)
+        }
+    }
+
     func remove(
         for accountLease: AccountLease,
         productSessionID: String
@@ -14344,7 +17416,12 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
                   envelope.scopeDigest == Self.scopeDigest(for: accountLease),
                   Self.isValid(envelope),
                   (!envelope.pendingTurns.isEmpty
-                    || envelope.closeRequestedLastClientSequenceNumber != nil) else {
+                    || envelope.closeRequestedLastClientSequenceNumber != nil
+                    || envelope.closeIntentRequestedAt != nil
+                    || Self.snapshot(from: envelope).unsealedCanonicalTurnCount > 0
+                    || Self.snapshot(from: envelope).canonicalConflictCount > 0
+                    || envelope.startDispatchState == .mayExpose
+                    || envelope.startDispatchState == .outcomeUnknown) else {
                 return nil
             }
             return (envelope.createdAt, envelope.productSessionID)
@@ -14370,7 +17447,7 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
                   let envelope = try? Self.decoder().decode(Envelope.self, from: data),
                   envelope.schemaVersion == Self.schemaVersion,
                   envelope.scopeDigest == Self.scopeDigest(for: accountLease),
-                  Self.isValid(envelope) else {
+                  measured("readValidation", { Self.isValid(envelope) }) else {
                 return nil
             }
             return Self.snapshot(from: envelope)
@@ -14397,7 +17474,18 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
             ownerTurnCount: 0,
             lastClientSequenceNumber: 0,
             closeRequestedLastClientSequenceNumber: nil,
+            closeIntentRequestedAt: nil,
             pendingTurns: [],
+            canonicalTurns: [],
+            canonicalMembers: [],
+            canonicalCaptureIssues: [],
+            closeManifest: nil,
+            resolvedCloseManifestHandoffIDs: nil,
+            handledCanonicalHandoffs: nil,
+            canonicalOverflowGap: nil,
+            nextCaptureOrdinal: 0,
+            preparedStartCommand: nil,
+            startDispatchState: nil,
             createdAt: timestamp,
             updatedAt: timestamp
         )
@@ -14409,11 +17497,12 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
         productSessionID: String
     ) throws -> Envelope {
         do {
-            let envelope = try Self.decoder().decode(Envelope.self, from: Data(contentsOf: url))
+            let data = try measured("read") { try Data(contentsOf: url) }
+            let envelope = try measured("decode", bytes: data.count) { try Self.decoder().decode(Envelope.self, from: data) }
             guard envelope.schemaVersion == Self.schemaVersion,
                   envelope.scopeDigest == Self.scopeDigest(for: accountLease),
                   envelope.productSessionID == productSessionID,
-                  Self.isValid(envelope) else {
+                  measured("readValidation", { Self.isValid(envelope) }) else {
                 throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
             }
             return envelope
@@ -14425,13 +17514,30 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
     }
 
     private func write(_ envelope: Envelope, to url: URL) throws {
-        guard Self.isValid(envelope) else {
+        guard measured("writeValidation", { Self.isValid(envelope) }) else {
             throw OwnerTruthInterviewLiveTurnOutboxError.invalidPersistenceEnvelope
         }
-        do {
-            try KnowledgeLocalStoragePolicy.write(try Self.encoder().encode(envelope), to: url)
-        } catch {
-            throw OwnerTruthInterviewLiveTurnOutboxError.storageFailure
+        let data = try measured("encode") { try Self.encoder().encode(envelope) }
+        for attempt in 1...2 {
+            do {
+                try measured("atomicReplace", bytes: data.count) { try atomicWrite(data, url) }
+                return
+            } catch {
+                // An atomic replacement can report an error after committing.
+                // Read back the exact envelope before considering a retry.
+                if (try? Data(contentsOf: url)) == data {
+                    return
+                }
+                guard attempt == 1 else {
+                    throw OwnerTruthInterviewLiveTurnOutboxError.storageFailure
+                }
+                PrivacySafeDiagnostics.log(
+                    subsystem: "EchoLiveMemory",
+                    event: "outboxAtomicWriteRetry",
+                    states: ["reason": "storageFailure"],
+                    counts: ["attempt": attempt]
+                )
+            }
         }
     }
 
@@ -14445,18 +17551,106 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
     }
 
     private func withLock<T>(_ body: () throws -> T) throws -> T {
-        lock.lock()
+        measured("lockWait") { lock.lock() }
         defer { lock.unlock() }
         return try body()
     }
 
     private static func snapshot(from envelope: Envelope) -> OwnerTruthInterviewLiveTurnOutboxSnapshot {
-        OwnerTruthInterviewLiveTurnOutboxSnapshot(
+        let canonicalTurns = envelope.canonicalTurns ?? []
+        let registeredMembers = normalizedCanonicalMembers(from: envelope)
+        let turnByID = Dictionary(uniqueKeysWithValues: canonicalTurns.map {
+            ($0.canonicalTurnID, $0)
+        })
+        let pendingMessageIDs = Set(envelope.pendingTurns.map(\.delivery.messageID))
+        let firstGapIndex = registeredMembers.firstIndex { member in
+            guard let turn = turnByID[member.canonicalTurnID] else { return true }
+            return turn.deliveryMessageID == nil
+        }
+        let completeBlockedTurnCount: Int
+        if let firstGapIndex {
+            completeBlockedTurnCount = registeredMembers.dropFirst(firstGapIndex + 1).reduce(0) {
+                partialResult, member in
+                guard let turn = turnByID[member.canonicalTurnID],
+                      turn.finality == .complete,
+                      turn.deliveryMessageID == nil else {
+                    return partialResult
+                }
+                return partialResult + 1
+            }
+        } else {
+            completeBlockedTurnCount = 0
+        }
+        let firstGapMember = firstGapIndex.map { registeredMembers[$0] }
+        let firstGapTurn = firstGapMember.flatMap { turnByID[$0.canonicalTurnID] }
+        let coverageSummary = OwnerTruthInterviewCanonicalCoverageSummary(
+            registeredMemberCount: registeredMembers.count,
+            memberWithoutBodyCount: registeredMembers.filter {
+                turnByID[$0.canonicalTurnID] == nil
+            }.count,
+            partialTurnCount: canonicalTurns.filter {
+                $0.finality == .interim && $0.deliveryMessageID == nil
+            }.count,
+            completeBlockedTurnCount: completeBlockedTurnCount,
+            deliveryCount: canonicalTurns.filter { $0.deliveryMessageID != nil }.count,
+            serverConfirmedCount: canonicalTurns.filter { turn in
+                guard let messageID = turn.deliveryMessageID else { return false }
+                return !pendingMessageIDs.contains(messageID)
+            }.count,
+            firstGapOrdinal: firstGapMember?.captureOrdinal,
+            firstGapIngressOrdinal: firstGapMember?.ingressOrdinal,
+            firstGapRole: firstGapMember?.role,
+            firstGapReason: firstGapMember.map { _ in
+                firstGapTurn == nil ? .missingBody : .partialBody
+            },
+            firstGapIngressKind: firstGapMember?.ingressKind,
+            hasPersistedLocalText: canonicalTurns.contains {
+                !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+        )
+        let manifestIDs = Set((envelope.closeManifest ?? []).map(\.handoffID))
+        let resolvedManifestIDs = Set(envelope.resolvedCloseManifestHandoffIDs ?? [])
+        let pendingManifestCount = manifestIDs.subtracting(resolvedManifestIDs).count
+        return OwnerTruthInterviewLiveTurnOutboxSnapshot(
             productSessionID: envelope.productSessionID,
+            createdAt: envelope.createdAt,
+            updatedAt: envelope.updatedAt,
             ownerTurnCount: envelope.ownerTurnCount,
             lastClientSequenceNumber: envelope.lastClientSequenceNumber,
             closeRequestedLastClientSequenceNumber: envelope.closeRequestedLastClientSequenceNumber,
-            pendingTurns: envelope.pendingTurns.map(\.delivery)
+            closeIntentRequestedAt: envelope.closeIntentRequestedAt,
+            pendingTurns: envelope.pendingTurns.map(\.delivery),
+            pendingDispatchStates: Dictionary(uniqueKeysWithValues: envelope.pendingTurns.map {
+                ($0.delivery.messageID, $0.dispatchState ?? .outcomeUnknown)
+            }),
+            frozenAppendCommands: Dictionary(uniqueKeysWithValues: envelope.pendingTurns.compactMap {
+                guard let command = $0.frozenAppendCommand else { return nil }
+                return ($0.delivery.messageID, command)
+            }),
+            authenticationRejectionEvidence: Dictionary(uniqueKeysWithValues: envelope.pendingTurns.compactMap {
+                guard let evidence = $0.authenticationRejectionEvidence else { return nil }
+                return ($0.delivery.messageID, evidence)
+            }),
+            authenticationRetryClaimedMessageIDs: Set(envelope.pendingTurns.compactMap {
+                $0.authenticationRetryClaimed == true ? $0.delivery.messageID : nil
+            }),
+            unsealedCanonicalTurnCount: registeredMembers.filter { member in
+                guard let turn = turnByID[member.canonicalTurnID] else { return true }
+                return !(turn.isSealed ?? (turn.finality == .complete))
+            }.count + pendingManifestCount + (envelope.canonicalOverflowGap == true ? 1 : 0),
+            canonicalConflictCount: (envelope.canonicalCaptureIssues ?? []).count,
+            firstCanonicalConflictReason: envelope.canonicalCaptureIssues?.first?.reason,
+            firstCanonicalConflictEvidenceSource: envelope.canonicalCaptureIssues?.first?.evidenceSource,
+            firstCanonicalConflictIngressOrdinal: envelope.canonicalCaptureIssues?.first?.ingressOrdinal,
+            firstCanonicalConflictObservationIDHash: envelope.canonicalCaptureIssues?.first?.observationIDHash,
+            pendingCloseManifestHandoffCount: pendingManifestCount,
+            hasCanonicalOverflowGap: envelope.canonicalOverflowGap == true,
+            canonicalCoverageSummary: coverageSummary,
+            preparedStartCommand: envelope.preparedStartCommand,
+            startDispatchState: envelope.startDispatchState,
+            acceptedRecoveryProtocol: envelope.acceptedRecoveryProtocol,
+            recoveryProgress: envelope.recoveryProgress,
+            recoveryGracefulStopRequestedAt: envelope.recoveryGracefulStopRequestedAt
         )
     }
 
@@ -14468,17 +17662,461 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
               (try? normalizedProductSessionID(envelope.productSessionID)) != nil else {
             return false
         }
+        if let protocolVersion = envelope.acceptedRecoveryProtocol {
+            guard protocolVersion == "live-recovery-v1",
+                  envelope.preparedStartCommand?.recoveryProtocol == protocolVersion,
+                  envelope.startDispatchState == .committed else { return false }
+        }
+        if envelope.recoveryReplayDeadline != nil && envelope.acceptedRecoveryProtocol == nil { return false }
+        guard envelope.pendingTurns.allSatisfy({ turn in
+            guard let count = turn.recoveryReplayCount else { return true }
+            return (1...3).contains(count) && turn.frozenAppendCommand != nil
+                && envelope.recoveryReplayDeadline != nil && envelope.acceptedRecoveryProtocol != nil
+        }) else { return false }
         let sequences = envelope.pendingTurns.map(\.delivery.clientSequenceNumber)
         guard sequences == sequences.sorted(),
               Set(sequences).count == sequences.count,
               sequences.allSatisfy({ $0 > 0 && $0 <= envelope.lastClientSequenceNumber }),
               Set(envelope.pendingTurns.map(\.delivery.messageID)).count == envelope.pendingTurns.count,
               envelope.pendingTurns.allSatisfy({
-                  contentHash(for: $0.delivery) == $0.contentHash
+                  guard contentHash(for: $0.delivery) == $0.contentHash else { return false }
+                  if let command = $0.frozenAppendCommand {
+                      guard command.messageID == $0.delivery.messageID,
+                            command.commandID == $0.delivery.commandID,
+                            command.clientSequenceNumber == $0.delivery.clientSequenceNumber,
+                            command.role == $0.delivery.role,
+                            command.text == $0.delivery.text,
+                            command.capturedAt == $0.delivery.capturedAt,
+                            $0.frozenPayloadHash == command.canonicalPayloadHash else {
+                          return false
+                      }
+                  } else if $0.frozenPayloadHash != nil
+                        || $0.authenticationRejectionEvidence != nil
+                        || $0.authenticationRetryClaimed == true {
+                      return false
+                  }
+                  if let evidence = $0.authenticationRejectionEvidence {
+                      guard let command = $0.frozenAppendCommand,
+                            evidence.matches(command) else { return false }
+                  }
+                  if $0.authenticationRetryClaimed == true,
+                     $0.authenticationRejectionEvidence == nil {
+                      return false
+                  }
+                  return true
               }) else {
             return false
         }
+        let canonicalTurns = envelope.canonicalTurns ?? []
+        let canonicalMembers = normalizedCanonicalMembers(from: envelope)
+        let canonicalCaptureIssues = envelope.canonicalCaptureIssues ?? []
+        let closeManifest = envelope.closeManifest ?? []
+        let resolvedManifestIDs = envelope.resolvedCloseManifestHandoffIDs ?? []
+        let handledCanonicalHandoffs = envelope.handledCanonicalHandoffs ?? []
+        let canonicalIDs = canonicalTurns.map(\.canonicalTurnID)
+        let memberIDs = canonicalMembers.map(\.canonicalTurnID)
+        let captureOrdinals = canonicalMembers.map(\.captureOrdinal)
+        let deliveredCanonicalIDs = canonicalTurns.compactMap(\.deliveryMessageID)
+        guard Set(canonicalIDs).count == canonicalIDs.count,
+              Set(memberIDs).count == memberIDs.count,
+              canonicalIDs.allSatisfy({ id in
+                  let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines)
+                  return !normalized.isEmpty && normalized.utf8.count <= 256
+              }),
+              canonicalTurns.allSatisfy({ turn in
+                  !turn.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                      && turn.captureOrdinal > 0
+                      && ((turn.isSealed ?? (turn.finality == .complete))
+                        || turn.deliveryMessageID == nil)
+              }),
+              canonicalMembers.allSatisfy({ member in
+                  !member.canonicalTurnID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                      && member.canonicalTurnID.utf8.count <= 256
+                      && member.captureOrdinal > 0
+                      && member.ingressOrdinal > 0
+                      && (member.handledIngressOrdinals ?? [member.ingressOrdinal])
+                        .allSatisfy { $0 > 0 }
+                      && Set(member.handledIngressOrdinals ?? [member.ingressOrdinal]).count
+                        == (member.handledIngressOrdinals ?? [member.ingressOrdinal]).count
+                      && Set(member.handledIngressOrdinals ?? [member.ingressOrdinal])
+                        .contains(member.ingressOrdinal)
+              }),
+              canonicalTurns.allSatisfy({ turn in
+                  canonicalMembers.contains(where: {
+                      $0.canonicalTurnID == turn.canonicalTurnID
+                          && $0.role == turn.role
+                          && $0.captureOrdinal == turn.captureOrdinal
+                  })
+              }),
+              captureOrdinals == captureOrdinals.sorted(),
+              Set(captureOrdinals).count == captureOrdinals.count,
+              Set(deliveredCanonicalIDs).count == deliveredCanonicalIDs.count else {
+            return false
+        }
+        // Build once after uniqueness validation. Each SDK handoff otherwise
+        // reconstructs its member's full ordinal set during every read/write/readback.
+        let memberByID = Dictionary(uniqueKeysWithValues: canonicalMembers.map { ($0.canonicalTurnID, $0) })
+        let ingressByID = Dictionary(uniqueKeysWithValues: canonicalMembers.map {
+            ($0.canonicalTurnID, Set($0.handledIngressOrdinals ?? [$0.ingressOrdinal]))
+        })
+        let turnByID = Dictionary(uniqueKeysWithValues: canonicalTurns.map { ($0.canonicalTurnID, $0) })
+        guard canonicalCaptureIssues.allSatisfy({ issue in
+            issue.canonicalTurnID.utf8.count <= 256
+                && memberByID[issue.canonicalTurnID] != nil
+        }) else {
+            return false
+        }
+        let manifestIDs = closeManifest.map(\.handoffID)
+        guard Set(manifestIDs).count == manifestIDs.count,
+              Set(resolvedManifestIDs).isSubset(of: Set(manifestIDs)),
+              Set(handledCanonicalHandoffs.map(\.handoffID)).count
+                == handledCanonicalHandoffs.count,
+              handledCanonicalHandoffs.allSatisfy({ handled in
+                  !handled.handoffID.isEmpty
+                      && !handled.canonicalTurnID.isEmpty
+                      && handled.ingressOrdinal > 0
+                      && memberByID[handled.canonicalTurnID]?.role == handled.role
+                      && ingressByID[handled.canonicalTurnID]?.contains(handled.ingressOrdinal) == true
+                      && (!handled.persistedBody || turnByID[handled.canonicalTurnID]?.role == handled.role)
+              }),
+              closeManifest.allSatisfy({ entry in
+                  !entry.handoffID.isEmpty
+                      && !entry.canonicalTurnID.isEmpty
+                      && entry.ingressOrdinal > 0
+              }) else {
+            return false
+        }
+        if canonicalTurns.isEmpty {
+            guard canonicalMembers.isEmpty
+                    ? (envelope.nextCaptureOrdinal == nil || envelope.nextCaptureOrdinal == 0)
+                    : envelope.nextCaptureOrdinal == captureOrdinals.last else {
+                return false
+            }
+        } else {
+            guard envelope.nextCaptureOrdinal == captureOrdinals.last else { return false }
+        }
+        if let command = envelope.preparedStartCommand {
+            guard command.entryMode == .live,
+                  command.productSessionID == envelope.productSessionID,
+                  envelope.startDispatchState != nil else { return false }
+        } else if envelope.startDispatchState != nil {
+            return false
+        }
+        let pendingByMessageID = Dictionary(
+            uniqueKeysWithValues: envelope.pendingTurns.map { ($0.delivery.messageID, $0.delivery) }
+        )
+        guard canonicalTurns.allSatisfy({ turn in
+            guard let messageID = turn.deliveryMessageID,
+                  let pending = pendingByMessageID[messageID] else {
+                // An acknowledged delivery intentionally keeps its canonical
+                // identity after the pending body is removed.
+                return true
+            }
+            return pending.role == turn.role
+                && pending.text == turn.text
+                && pending.capturedAt == turn.capturedAt
+        }) else {
+            return false
+        }
         return true
+    }
+
+    private func applyCanonicalMember(
+        _ member: NativeLiveCanonicalTranscriptMember,
+        to envelope: inout Envelope
+    ) throws {
+        let canonicalID = member.canonicalTurnID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !canonicalID.isEmpty,
+              canonicalID.utf8.count <= 256,
+              !member.handoffID.isEmpty,
+              member.ingressOrdinal > 0 else {
+            throw OwnerTruthInterviewLiveTurnOutboxError.canonicalTurnConflict
+        }
+        let manifestEntry = envelope.closeManifest?.first(where: {
+            $0.handoffID == member.handoffID
+        })
+        if envelope.closeIntentRequestedAt != nil {
+            guard let manifestEntry,
+                  manifestEntry.canonicalTurnID == canonicalID,
+                  manifestEntry.role == member.role,
+                  manifestEntry.ingressOrdinal == member.ingressOrdinal else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.canonicalTurnConflict
+            }
+        }
+        var members = envelope.canonicalMembers ?? []
+        if let index = members.firstIndex(where: { $0.canonicalTurnID == canonicalID }) {
+            guard members[index].role == member.role else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.canonicalTurnConflict
+            }
+            var handledOrdinals = Set(
+                members[index].handledIngressOrdinals ?? [members[index].ingressOrdinal]
+            )
+            handledOrdinals.insert(member.ingressOrdinal)
+            members[index].handledIngressOrdinals = Array(handledOrdinals).sorted()
+            envelope.canonicalMembers = members
+            return
+        }
+        if let existingTurn = (envelope.canonicalTurns ?? []).first(where: {
+            $0.canonicalTurnID == canonicalID
+        }) {
+            guard existingTurn.role == member.role else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.canonicalTurnConflict
+            }
+            var migratedMembers = Self.normalizedCanonicalMembers(from: envelope)
+            guard let migratedIndex = migratedMembers.firstIndex(where: {
+                $0.canonicalTurnID == canonicalID && $0.role == member.role
+            }) else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.canonicalTurnConflict
+            }
+            var handledOrdinals = Set(
+                migratedMembers[migratedIndex].handledIngressOrdinals
+                    ?? [migratedMembers[migratedIndex].ingressOrdinal]
+            )
+            handledOrdinals.insert(member.ingressOrdinal)
+            migratedMembers[migratedIndex].handledIngressOrdinals = Array(handledOrdinals).sorted()
+            envelope.canonicalMembers = migratedMembers
+            envelope.nextCaptureOrdinal = migratedMembers.map(\.captureOrdinal).max()
+            return
+        }
+        guard envelope.closeIntentRequestedAt == nil || manifestEntry != nil else {
+            throw OwnerTruthInterviewLiveTurnOutboxError.canonicalTurnConflict
+        }
+        let ordinal = (envelope.nextCaptureOrdinal ?? 0) + 1
+        members.append(StoredCanonicalMember(
+            canonicalTurnID: canonicalID,
+            role: member.role,
+            capturedAt: member.capturedAt,
+            captureOrdinal: ordinal,
+            ingressOrdinal: member.ingressOrdinal,
+            ingressKind: member.ingressKind,
+            handledIngressOrdinals: [member.ingressOrdinal]
+        ))
+        envelope.canonicalMembers = members
+        envelope.nextCaptureOrdinal = ordinal
+    }
+
+    private func applyCanonicalTurn(
+        _ event: NativeLiveCanonicalTranscriptEvent,
+        to envelope: inout Envelope
+    ) throws {
+        let normalizedCanonicalID = event.canonicalTurnID
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedText = event.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedCanonicalID.isEmpty,
+              normalizedCanonicalID.utf8.count <= 256,
+              !normalizedText.isEmpty else {
+            throw OwnerTruthInterviewLiveTurnOutboxError.canonicalTurnConflict
+        }
+        var canonicalTurns = envelope.canonicalTurns ?? []
+        if let index = canonicalTurns.firstIndex(where: {
+            $0.canonicalTurnID == normalizedCanonicalID
+        }) {
+            guard canonicalTurns[index].role == event.role else {
+                throw OwnerTruthInterviewLiveTurnOutboxError.canonicalTurnConflict
+            }
+            let existingIsSealed = canonicalTurns[index].isSealed
+                ?? (canonicalTurns[index].finality == .complete)
+            canonicalTurns[index].latestObservationID = event.observationID
+            canonicalTurns[index].latestIngressOrdinal = event.ingressOrdinal
+            canonicalTurns[index].latestObservedText = normalizedText
+            canonicalTurns[index].latestObservedFinality = event.finality
+            canonicalTurns[index].latestObservedFinalityEvidence = event.finalityEvidence
+            canonicalTurns[index].latestObservedEvidenceSource = event.evidenceSource
+            if event.sealing == .observeAndSeal {
+                canonicalTurns[index].sealRequested = true
+            }
+            if existingIsSealed, !Self.isTrustedFinal(event) {
+                envelope.canonicalTurns = canonicalTurns
+                return
+            }
+            if canonicalTurns[index].text != normalizedText, existingIsSealed {
+                if Self.isSingleChinesePeriodEquivalent(
+                    canonicalTurns[index].text,
+                    normalizedText
+                ) {
+                    envelope.canonicalTurns = canonicalTurns
+                    return
+                }
+                var issues = envelope.canonicalCaptureIssues ?? []
+                if !issues.contains(where: {
+                    $0.canonicalTurnID == normalizedCanonicalID
+                        && $0.reason == .immutableBodyConflict
+                }) {
+                    issues.append(StoredCanonicalCaptureIssue(
+                        canonicalTurnID: normalizedCanonicalID,
+                        reason: .immutableBodyConflict,
+                        observedAt: event.capturedAt,
+                        evidenceSource: event.evidenceSource,
+                        ingressOrdinal: event.ingressOrdinal,
+                        observationIDHash: event.observationID.map(Self.digest)
+                    ))
+                }
+                envelope.canonicalCaptureIssues = issues
+                envelope.canonicalTurns = canonicalTurns
+                return
+            }
+            let selectedIsTrusted = Self.isTrustedStoredFinal(canonicalTurns[index])
+            if Self.isTrustedFinal(event) || !selectedIsTrusted {
+                canonicalTurns[index].text = normalizedText
+                canonicalTurns[index].finality = event.finality
+                canonicalTurns[index].selectedFinalityEvidence = event.finalityEvidence
+                canonicalTurns[index].selectedEvidenceSource = event.evidenceSource
+                canonicalTurns[index].selectedObservationID = event.observationID
+                canonicalTurns[index].selectedIngressOrdinal = event.ingressOrdinal
+            }
+            if canonicalTurns[index].sealRequested == true,
+               Self.isTrustedStoredFinal(canonicalTurns[index]) {
+                canonicalTurns[index].isSealed = true
+            }
+        } else {
+            var members = envelope.canonicalMembers ?? []
+            let member: StoredCanonicalMember
+            if let registered = members.first(where: {
+                $0.canonicalTurnID == normalizedCanonicalID
+            }) {
+                guard registered.role == event.role else {
+                    throw OwnerTruthInterviewLiveTurnOutboxError.canonicalTurnConflict
+                }
+                member = registered
+            } else {
+                guard envelope.closeIntentRequestedAt == nil else {
+                    throw OwnerTruthInterviewLiveTurnOutboxError.canonicalTurnConflict
+                }
+                let ordinal = (envelope.nextCaptureOrdinal ?? 0) + 1
+                member = StoredCanonicalMember(
+                    canonicalTurnID: normalizedCanonicalID,
+                    role: event.role,
+                    capturedAt: event.capturedAt,
+                    captureOrdinal: ordinal,
+                    ingressOrdinal: UInt64(ordinal),
+                    ingressKind: Self.inferredIngressKind(for: event),
+                    handledIngressOrdinals: [UInt64(ordinal)]
+                )
+                members.append(member)
+                envelope.canonicalMembers = members
+                envelope.nextCaptureOrdinal = ordinal
+            }
+            canonicalTurns.append(StoredCanonicalTurn(
+                canonicalTurnID: normalizedCanonicalID,
+                role: event.role,
+                text: normalizedText,
+                finality: event.finality,
+                capturedAt: member.capturedAt,
+                captureOrdinal: member.captureOrdinal,
+                deliveryMessageID: nil,
+                latestObservationID: event.observationID,
+                latestIngressOrdinal: event.ingressOrdinal,
+                isSealed: event.sealing == .observeAndSeal && Self.isTrustedFinal(event),
+                selectedFinalityEvidence: event.finalityEvidence,
+                selectedEvidenceSource: event.evidenceSource,
+                selectedObservationID: event.observationID,
+                selectedIngressOrdinal: event.ingressOrdinal,
+                latestObservedText: normalizedText,
+                latestObservedFinality: event.finality,
+                latestObservedFinalityEvidence: event.finalityEvidence,
+                latestObservedEvidenceSource: event.evidenceSource,
+                sealRequested: event.sealing == .observeAndSeal
+            ))
+        }
+        envelope.canonicalTurns = canonicalTurns
+        try flushCompletedCanonicalPrefix(&envelope)
+    }
+
+    private func flushCompletedCanonicalPrefix(_ envelope: inout Envelope) throws {
+        guard var canonicalTurns = envelope.canonicalTurns else { return }
+        for member in Self.normalizedCanonicalMembers(from: envelope) {
+            guard let index = canonicalTurns.firstIndex(where: {
+                $0.canonicalTurnID == member.canonicalTurnID
+            }) else { break }
+            guard canonicalTurns[index].deliveryMessageID == nil else { continue }
+            guard canonicalTurns[index].isSealed
+                    ?? (canonicalTurns[index].finality == .complete) else { break }
+            guard Self.isTrustedStoredFinal(canonicalTurns[index]) else { break }
+            let delivery = try OwnerTruthInterviewLiveTurnDelivery(
+                commandID: identifierFactory().uuidString.lowercased(),
+                messageID: OwnerTruthRecordID(rawValue: identifierFactory()),
+                clientSequenceNumber: envelope.lastClientSequenceNumber + 1,
+                role: canonicalTurns[index].role,
+                text: canonicalTurns[index].text,
+                capturedAt: canonicalTurns[index].capturedAt
+            )
+            envelope.pendingTurns.append(StoredTurn(
+                delivery: delivery,
+                contentHash: Self.contentHash(for: delivery),
+                dispatchState: .preparedNotExposed,
+                frozenAppendCommand: nil,
+                frozenPayloadHash: nil,
+                authenticationRejectionEvidence: nil,
+                authenticationRetryClaimed: nil
+            ))
+            envelope.lastClientSequenceNumber = delivery.clientSequenceNumber
+            if delivery.role == .owner {
+                envelope.ownerTurnCount += 1
+            }
+            canonicalTurns[index].deliveryMessageID = delivery.messageID
+        }
+        envelope.canonicalTurns = canonicalTurns
+    }
+
+    private static func normalizedCanonicalMembers(from envelope: Envelope) -> [StoredCanonicalMember] {
+        if let members = envelope.canonicalMembers, !members.isEmpty {
+            return members.sorted { $0.captureOrdinal < $1.captureOrdinal }
+        }
+        // V1 envelopes written before identity-only registration contained
+        // only textual turns. Treat those turns as their own registered set.
+        return (envelope.canonicalTurns ?? []).map {
+            StoredCanonicalMember(
+                canonicalTurnID: $0.canonicalTurnID,
+                role: $0.role,
+                capturedAt: $0.capturedAt,
+                captureOrdinal: $0.captureOrdinal,
+                ingressOrdinal: UInt64($0.captureOrdinal),
+                ingressKind: nil,
+                handledIngressOrdinals: [UInt64($0.captureOrdinal)]
+            )
+        }.sorted { $0.captureOrdinal < $1.captureOrdinal }
+    }
+
+    private static func inferredIngressKind(
+        for event: NativeLiveCanonicalTranscriptEvent
+    ) -> NativeLiveCanonicalTranscriptIngressKind {
+        if event.role == .assistant { return .assistantStream }
+        if event.evidenceSource == .queryConfirmed { return .queryConfirmed }
+        return .asrResponse
+    }
+
+    private static func isTrustedFinal(
+        _ event: NativeLiveCanonicalTranscriptEvent
+    ) -> Bool {
+        guard event.finality == .complete else { return false }
+        switch event.finalityEvidence {
+        case .explicitFinal, .confirmed:
+            return true
+        case .unknown:
+            // Backward-compatible local producers predate typed provider
+            // evidence. Provider events always carry a concrete source.
+            return event.evidenceSource == .absent
+                || event.evidenceSource == .assistantStream
+        case .explicitInterim, .invalid:
+            return false
+        }
+    }
+
+    private static func isTrustedStoredFinal(_ turn: StoredCanonicalTurn) -> Bool {
+        guard turn.finality == .complete else { return false }
+        guard let evidence = turn.selectedFinalityEvidence else {
+            return true
+        }
+        switch evidence {
+        case .explicitFinal, .confirmed:
+            return true
+        case .unknown:
+            return turn.selectedEvidenceSource == nil
+                || turn.selectedEvidenceSource == .absent
+                || turn.selectedEvidenceSource == .assistantStream
+        case .explicitInterim, .invalid:
+            return false
+        }
     }
 
     private static func normalizedProductSessionID(_ value: String) throws -> String {
@@ -14509,6 +18147,17 @@ final class OwnerTruthInterviewLiveTurnOutboxStore {
             ISO8601DateFormatter().string(from: delivery.capturedAt),
             delivery.text,
         ].map { "\($0.utf8.count):\($0)" }.joined(separator: "|"))
+    }
+
+    private static func isSingleChinesePeriodEquivalent(
+        _ lhs: String,
+        _ rhs: String
+    ) -> Bool {
+        func removingOneTrailingPeriod(_ value: String) -> String {
+            value.hasSuffix("。") ? String(value.dropLast()) : value
+        }
+        return lhs != rhs
+            && removingOneTrailingPeriod(lhs) == removingOneTrailingPeriod(rhs)
     }
 
     private static func scopeDigest(for accountLease: AccountLease) -> String {
@@ -15331,7 +18980,8 @@ enum OwnerTruthCandidateReviewIntent: Equatable, Sendable {
         correctedPrimaryValue: String,
         correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]? = nil,
         proposedChangeSet: OwnerTruthCandidateChangeSetProposal? = nil,
-        displayedBinding: OwnerTruthCandidateReviewBinding? = nil
+        displayedBinding: OwnerTruthCandidateReviewBinding? = nil,
+        verifiedCorrectionPreview: OwnerTruthVerifiedCorrectionPreview? = nil
     )
     case reject(
         candidateID: OwnerTruthRecordID,
@@ -15530,6 +19180,8 @@ enum OwnerTruthCandidateReviewTransportOutcome {
                 case .userAuthenticationRequired, .sessionUpgradeRequired,
                      .accountScopeChanged, .featurePolicyDenied, .recoveryAccessDenied:
                     return .notSent(error)
+                case .verifiedPreHandlerAuthenticationRejection:
+                    return .outcomeUnknown(error)
                 case .backendError(let statusCode, _):
                     guard let statusCode else { return .outcomeUnknown(error) }
                     if (400..<500).contains(statusCode) {
@@ -15600,6 +19252,8 @@ enum OwnerTruthMemoryChangeSetGroupReviewTransportOutcome {
                 case .userAuthenticationRequired, .sessionUpgradeRequired,
                      .accountScopeChanged, .featurePolicyDenied, .recoveryAccessDenied:
                     return .notSent(error)
+                case .verifiedPreHandlerAuthenticationRejection:
+                    return .outcomeUnknown(error)
                 case .backendError(let statusCode, _):
                     guard let statusCode else { return .outcomeUnknown(error) }
                     return (400..<500).contains(statusCode)
@@ -15633,6 +19287,7 @@ struct OwnerTruthCandidateReviewPendingResultRecord: Codable, Equatable, Sendabl
     let expectedMemoryRevision: Int?
     let expectedChangeSetID: UUID?
     let expectedProposalHash: String?
+    let expectedCorrectedContentHash: String?
     let createdAt: Date
 
     init(
@@ -15641,6 +19296,7 @@ struct OwnerTruthCandidateReviewPendingResultRecord: Codable, Equatable, Sendabl
         candidate: OwnerTruthCandidateInboxItem,
         command: OwnerTruthCandidateReviewCommand,
         operationID: UUID,
+        expectedCorrectedContentHash: String? = nil,
         createdAt: Date = Date()
     ) {
         schemaVersion = Self.schemaVersion
@@ -15655,6 +19311,7 @@ struct OwnerTruthCandidateReviewPendingResultRecord: Codable, Equatable, Sendabl
         expectedMemoryRevision = command.expectedMemoryRevision
         expectedChangeSetID = command.expectedChangeSetID?.rawValue
         expectedProposalHash = command.expectedProposalHash
+        self.expectedCorrectedContentHash = expectedCorrectedContentHash
         self.createdAt = createdAt
     }
 
@@ -16767,7 +20424,8 @@ final class OwnerTruthCandidateReviewUseCase {
             let correctedPrimaryValue,
             let correctedFacetValues,
             let proposedChangeSet,
-            let displayedBinding
+            let displayedBinding,
+            let verifiedCorrectionPreview
         ):
             submit(
                 candidateID: candidateID,
@@ -16776,6 +20434,7 @@ final class OwnerTruthCandidateReviewUseCase {
                 correctedFacetValues: correctedFacetValues,
                 proposedChangeSet: proposedChangeSet,
                 displayedBinding: displayedBinding,
+                verifiedCorrectionPreview: verifiedCorrectionPreview,
                 intentID: intentID
             )
         case .reject(let candidateID, let displayedBinding):
@@ -16866,6 +20525,7 @@ final class OwnerTruthCandidateReviewUseCase {
         correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]? = nil,
         proposedChangeSet: OwnerTruthCandidateChangeSetProposal? = nil,
         displayedBinding: OwnerTruthCandidateReviewBinding? = nil,
+        verifiedCorrectionPreview: OwnerTruthVerifiedCorrectionPreview? = nil,
         intentID: UUID
     ) {
         guard let vaultID = beginRequestOrFail() else {
@@ -16951,7 +20611,7 @@ final class OwnerTruthCandidateReviewUseCase {
         }
         if action == .correct,
            candidate.contentSchemaVersion == "owner-truth-v5",
-           proposedChangeSet == nil {
+           verifiedCorrectionPreview == nil {
             // A correction can change the target, dependencies and fact diff.
             // It must be previewed and bound before a review command is sent.
             transitionFailure(.changeSetPreviewUnavailable)
@@ -16968,7 +20628,8 @@ final class OwnerTruthCandidateReviewUseCase {
             correctedPrimaryValue: correctedPrimaryValue,
             correctedFacetValues: correctedFacetValues,
             proposedChangeSet: proposedChangeSet,
-            displayedBinding: displayedBinding
+            displayedBinding: displayedBinding,
+            verifiedCorrectionPreview: verifiedCorrectionPreview
         ) else {
             finishReviewIntent(
                 candidateID: candidateID,
@@ -16985,7 +20646,8 @@ final class OwnerTruthCandidateReviewUseCase {
             vaultID: vaultID,
             candidate: candidate,
             command: command,
-            operationID: operationID
+            operationID: operationID,
+            expectedCorrectedContentHash: verifiedCorrectionPreview?.proposal.candidateContentHash
         )
         do {
             try pendingResultStore.upsert(pendingRecord)
@@ -17033,7 +20695,7 @@ final class OwnerTruthCandidateReviewUseCase {
         candidateID: OwnerTruthRecordID,
         correctedPrimaryValue: String,
         correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]? = nil,
-        completion: @escaping (Result<OwnerTruthCandidateChangeSetProposal, Error>) -> Void
+        completion: @escaping (Result<OwnerTruthVerifiedCorrectionPreview, Error>) -> Void
     ) {
         guard let vaultID = beginRequestOrFail() else {
             completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
@@ -17064,12 +20726,20 @@ final class OwnerTruthCandidateReviewUseCase {
             )))
             return
         }
+        let sourceBinding = OwnerTruthSourceCandidateBinding(candidate: candidate)
+        let frozenCorrection = OwnerTruthFrozenCorrectionInput(
+            correctedValueSchemaVersion: candidate.contentSchemaVersion,
+            correctedValue: correctedValue
+        )
         let generation = operationGeneration
-        client.previewOwnerTruthCandidateChangeSet(
+        let traceID = UUID().uuidString.lowercased()
+        logCorrectionPreviewEvent("previewIntentCreated", stage: "intent", traceID: traceID)
+        client.previewOwnerTruthCandidateCorrectionChangeSet(
+            accountLease: accountLease,
             vaultID: vaultID,
             candidateID: candidate.id,
-            correctedValue: correctedValue,
-            correctedValueSchemaVersion: candidate.contentSchemaVersion
+            frozenCorrection: frozenCorrection,
+            traceID: traceID
         ) { [weak self] result in
             guard let self else { return }
             guard generation == self.operationGeneration else {
@@ -17078,7 +20748,8 @@ final class OwnerTruthCandidateReviewUseCase {
                 )))
                 return
             }
-            guard self.accountLeaseRuntime.validate(self.accountLease, at: .commit).allowed else {
+            let leaseValidation = self.accountLeaseRuntime.validate(self.accountLease, at: .commit)
+            guard leaseValidation.allowed, !leaseValidation.sessionRotated else {
                 self.resetForUnavailable(.staleAccountLease)
                 completion(.failure(OwnerTruthRemoteContractError.invalidCommand(
                     "Account changed while its correction preview was loading"
@@ -17095,20 +20766,44 @@ final class OwnerTruthCandidateReviewUseCase {
                 return
             }
             switch result {
-            case .success(let proposal):
-                guard proposal.candidateVersion == candidate.candidateVersion,
-                      proposal.candidateContentHash == candidate.contentHash,
-                      proposal.baseMemoryRevision == self.memoryRevision,
-                      proposal.reviewability == .reviewable else {
+            case .success(let envelope):
+                do {
+                    guard let memoryRevision = self.memoryRevision else {
+                        throw OwnerTruthRemoteContractError.invalidInbox(
+                            "Correction preview requires a bound memory revision"
+                        )
+                    }
+                    let verified = try OwnerTruthVerifiedCorrectionPreview(
+                        envelope: envelope,
+                        sourceCandidate: sourceBinding,
+                        frozenCorrection: frozenCorrection,
+                        memoryRevision: memoryRevision,
+                        traceID: traceID
+                    )
+                    self.logCorrectionPreviewEvent(
+                        "previewVerified",
+                        stage: "binding",
+                        traceID: traceID
+                    )
+                    completion(.success(verified))
+                } catch {
                     self.transitionFailure(.changeSetPreviewUnavailable)
-                    completion(.failure(OwnerTruthRemoteContractError.invalidInbox(
-                        "Correction ChangeSet proposal does not bind the displayed Candidate"
-                    )))
-                    return
+                    self.logCorrectionPreviewEvent(
+                        "previewDiscarded",
+                        stage: "binding",
+                        reason: Self.correctionPreviewDiagnosticCode(for: error),
+                        traceID: traceID
+                    )
+                    completion(.failure(error))
                 }
-                completion(.success(proposal))
             case .failure(let error):
                 self.transitionFailure(Self.failureNotice(for: error))
+                self.logCorrectionPreviewEvent(
+                    "previewDiscarded",
+                    stage: "transportOrContract",
+                    reason: Self.failureDiagnosticCode(for: error),
+                    traceID: traceID
+                )
                 completion(.failure(error))
             }
         }
@@ -17365,17 +21060,29 @@ final class OwnerTruthCandidateReviewUseCase {
         correctedFacetValues: [OwnerTruthMemoryFacetKind: [String]]? = nil,
         proposedChangeSet: OwnerTruthCandidateChangeSetProposal? = nil,
         displayedBinding: OwnerTruthCandidateReviewBinding? = nil,
+        verifiedCorrectionPreview: OwnerTruthVerifiedCorrectionPreview? = nil,
         commandID: String? = nil
     ) -> OwnerTruthCandidateReviewCommand? {
         do {
             let stableCommandID = commandID ?? commandIDFactory()
             let requiresChangeSetBinding = candidate.contentSchemaVersion == "owner-truth-v5"
-            let effectiveProposal = proposedChangeSet ?? candidate.proposedChangeSet
+            let effectiveProposal = verifiedCorrectionPreview?.proposal
+                ?? proposedChangeSet
+                ?? candidate.proposedChangeSet
             if requiresChangeSetBinding && effectiveProposal == nil {
                 transitionFailure(.changeSetPreviewUnavailable)
                 return nil
             }
-            if requiresChangeSetBinding {
+            if requiresChangeSetBinding && action == .correct {
+                guard let verifiedCorrectionPreview,
+                      verifiedCorrectionPreview.matches(
+                        candidate: candidate,
+                        memoryRevision: memoryRevision
+                      ) else {
+                    transitionFailure(.candidateVersionChanged)
+                    return nil
+                }
+            } else if requiresChangeSetBinding {
                 guard let effectiveProposal else {
                     transitionFailure(.changeSetPreviewUnavailable)
                     return nil
@@ -17422,11 +21129,17 @@ final class OwnerTruthCandidateReviewUseCase {
                     expectedProposalHash: expectedProposalHash
                 )
             case .correct:
-                guard let correctedValue = correctedContent(
-                    candidate: candidate,
-                    correctedPrimaryValue: correctedPrimaryValue,
-                    correctedFacetValues: correctedFacetValues
-                ) else { return nil }
+                let correctedValue: [String: OwnerTruthJSONValue]
+                if let verifiedCorrectionPreview {
+                    correctedValue = verifiedCorrectionPreview.frozenCorrection.correctedValue
+                } else {
+                    guard let rebuilt = correctedContent(
+                        candidate: candidate,
+                        correctedPrimaryValue: correctedPrimaryValue,
+                        correctedFacetValues: correctedFacetValues
+                    ) else { return nil }
+                    correctedValue = rebuilt
+                }
                 return try OwnerTruthCandidateReviewCommand(
                     commandID: stableCommandID,
                     expectedCandidateVersion: candidate.candidateVersion,
@@ -17648,6 +21361,24 @@ final class OwnerTruthCandidateReviewUseCase {
         activeReviewOperationID = nil
         switch outcome {
         case .committed(let decision):
+            guard !hasCorrectedContentHashMismatch(
+                decision,
+                record: pendingRecord
+            ) else {
+                pendingReviewNotice = .reviewResultMismatch
+                transitionFailure(.reviewResultMismatch)
+                onReviewOperationOutcome?(
+                    candidate.id,
+                    .outcomeUnknown(.reviewResultMismatch)
+                )
+                onReviewOperationEvent?(OwnerTruthCandidateReviewOperationEvent(
+                    intentID: operationID,
+                    candidateID: candidate.id,
+                    outcome: .outcomeUnknown(.reviewResultMismatch)
+                ))
+                lookupPendingReviewResult(pendingRecord, continueInboxRefresh: true)
+                return
+            }
             guard validateDurableDecisionBinding(
                 decision,
                 record: pendingRecord,
@@ -18052,8 +21783,7 @@ final class OwnerTruthCandidateReviewUseCase {
         case .success(let lookup) where lookup.status == .found:
             guard let action = record.reviewAction,
                   let decision = lookup.decisionResult,
-                  validateDurableLookup(lookup, record: record),
-                  validateDurableDecision(decision, record: record, command: nil) else {
+                  validateDurableLookup(lookup, record: record) else {
                 pendingReviewNotice = .reviewResultInconsistent
                 transitionFailure(.reviewResultInconsistent)
                 onReviewOperationOutcome?(
@@ -18065,6 +21795,26 @@ final class OwnerTruthCandidateReviewUseCase {
                     candidateID: record.recordCandidateID,
                     outcome: .outcomeUnknown(.reviewResultInconsistent)
                 ))
+                return
+            }
+            guard !hasCorrectedContentHashMismatch(decision, record: record) else {
+                pendingReviewNotice = .reviewResultMismatch
+                transitionFailure(.reviewResultMismatch)
+                finishReviewIntent(
+                    candidateID: record.recordCandidateID,
+                    intentID: record.operationID,
+                    outcome: .outcomeUnknown(.reviewResultMismatch)
+                )
+                return
+            }
+            guard validateDurableDecision(decision, record: record, command: nil) else {
+                pendingReviewNotice = .reviewResultInconsistent
+                transitionFailure(.reviewResultInconsistent)
+                finishReviewIntent(
+                    candidateID: record.recordCandidateID,
+                    intentID: record.operationID,
+                    outcome: .outcomeUnknown(.reviewResultInconsistent)
+                )
                 return
             }
             guard removePendingRecord(record) else {
@@ -18145,12 +21895,43 @@ final class OwnerTruthCandidateReviewUseCase {
             return false
         }
         if let command {
-            return command.commandID == record.commandID
+            guard command.commandID == record.commandID
                 && command.expectedCandidateVersion == record.expectedCandidateVersion
                 && command.expectedChangeSetID?.rawValue == record.expectedChangeSetID
-                && command.expectedProposalHash == record.expectedProposalHash
+                && command.expectedProposalHash == record.expectedProposalHash else {
+                return false
+            }
         }
-        return true
+        return record.expectedCorrectedContentHash.map {
+            decision.receipt.candidateAfterHash == $0
+        } ?? true
+    }
+
+    private func hasCorrectedContentHashMismatch(
+        _ decision: OwnerTruthCandidateDecisionResult,
+        record: OwnerTruthCandidateReviewPendingResultRecord
+    ) -> Bool {
+        guard let expectedHash = record.expectedCorrectedContentHash else { return false }
+        return decision.receipt.candidateAfterHash != expectedHash
+    }
+
+    private func logCorrectionPreviewEvent(
+        _ event: String,
+        stage: String,
+        reason: String? = nil,
+        traceID: String
+    ) {
+        var states = ["stage": stage]
+        if let reason {
+            states["reason"] = PrivacySafeDiagnostics.safeCode(reason, fallback: "unknown")
+        }
+        PrivacySafeDiagnostics.log(
+            subsystem: "CandidateCorrectionPreview",
+            event: event,
+            states: states,
+            counts: ["attempt": 1],
+            correlations: ["trace": traceID]
+        )
     }
 
     private func commitDurableDecision(
@@ -18311,6 +22092,33 @@ final class OwnerTruthCandidateReviewUseCase {
         }
     }
 
+    private static func correctionPreviewDiagnosticCode(for error: Error) -> String {
+        let allowed = Set([
+            "correctionPreviewEnvelopeInvalid",
+            "correctionPreviewVaultMismatch",
+            "correctionPreviewCandidateMismatch",
+            "correctionPreviewProposalMissing",
+            "correctionBindingMissing",
+            "bindingSchemaUnsupported",
+            "sourceCandidateVersionInvalid",
+            "sourceCandidateHashInvalid",
+            "submittedCorrectionInvalid",
+            "resolvedContentHashInvalid",
+            "sourceCandidateVersionMismatch",
+            "sourceCandidateHashMismatch",
+            "proposalCandidateVersionMismatch",
+            "submittedCorrectionMismatch",
+            "resolvedContentHashMismatch",
+            "memoryRevisionMismatch",
+            "correctionPreviewNotReviewable",
+        ])
+        guard case OwnerTruthRemoteContractError.invalidInbox(let detail) = error,
+              allowed.contains(detail) else {
+            return "bindingMismatch"
+        }
+        return detail
+    }
+
     private func transitionFailure(
         _ notice: OwnerTruthCandidateInboxNotice,
         latestReceipt: OwnerTruthCandidateReviewReceiptViewState? = nil,
@@ -18441,6 +22249,8 @@ final class OwnerTruthCandidateReviewUseCase {
                 return .permissionUnavailable
             case .recoveryAccessDenied:
                 return .recoveryRestricted
+            case .verifiedPreHandlerAuthenticationRejection:
+                return .authenticationUnavailable
             case .invalidJSONResponse, .unsupportedJSONRoot:
                 return .contractMismatch
             case .backendError(let statusCode, _):
@@ -22563,5 +26373,379 @@ enum OwnerTruthMigrationParityViewStateComparator {
 
     private static func fingerprint(_ value: String) -> OwnerTruthMigrationParityDigest {
         OwnerTruthMigrationParityDigest.make("owner-truth-migration-parity-v1|\(value)")
+    }
+}
+
+/// Local user edits are independent from immutable model proposals. Loading a
+/// newer proposal never writes over this file; confirmation still uses V5 binding.
+final class OwnerTruthCandidateEditDraftStore {
+    static let shared = OwnerTruthCandidateEditDraftStore()
+    struct Draft: Codable, Equatable {
+        let schemaVersion: Int
+        let scopeDigest: String
+        let candidateID: String
+        let baseProposalVersion: Int
+        let baseContentHash: String
+        let primaryValue: String
+        let facetValues: [String: String]
+        let editRevision: Int
+    }
+    enum StoreError: Error { case invalidDraft, staleEdit, corruptDraft }
+    private let directory: URL
+    private static let lock = NSLock()
+    init(directory: URL? = nil) {
+        self.directory = directory ?? (FileManager.default.urls(for: .applicationSupportDirectory,
+            in: .userDomainMask).first ?? FileManager.default.temporaryDirectory)
+            .appendingPathComponent("OwnerTruthCandidateEdits", isDirectory: true)
+    }
+    private func digest(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+    private func scope(_ lease: AccountLease) throws -> String {
+        let data = try JSONEncoder().encode([lease.subjectId, lease.vaultId])
+        return digest(String(decoding: data, as: UTF8.self))
+    }
+    private func location(_ candidateID: String, _ lease: AccountLease) throws -> URL {
+        directory.appendingPathComponent(try scope(lease), isDirectory: true)
+            .appendingPathComponent(digest(candidateID) + ".json")
+    }
+    private func read(_ candidateID: String, _ lease: AccountLease) throws -> Draft? {
+        let url = try location(candidateID, lease)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let size = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber
+        guard let size, size.intValue <= 128 * 1_024 else { throw StoreError.corruptDraft }
+        let data = try Data(contentsOf: url)
+        guard data.count <= 128 * 1_024,
+              let draft = try? JSONDecoder().decode(Draft.self, from: data),
+              draft.schemaVersion == 1, draft.scopeDigest == (try scope(lease)),
+              draft.candidateID == candidateID, draft.baseProposalVersion > 0,
+              draft.editRevision > 0 else { throw StoreError.corruptDraft }
+        return draft
+    }
+    func load(candidateID: String, for lease: AccountLease) throws -> Draft? {
+        Self.lock.lock(); defer { Self.lock.unlock() }
+        return try read(candidateID, lease)
+    }
+    @discardableResult
+    func save(candidateID: String, baseProposalVersion: Int, baseContentHash: String,
+              primaryValue: String, facetValues: [String: String], expectedEditRevision: Int,
+              for lease: AccountLease) throws -> Draft {
+        Self.lock.lock(); defer { Self.lock.unlock() }
+        guard !candidateID.isEmpty, !baseContentHash.isEmpty, baseProposalVersion > 0,
+              primaryValue.utf8.count <= 64 * 1_024, facetValues.count <= 16,
+              facetValues.values.allSatisfy({ $0.utf8.count <= 4_096 }) else {
+            throw StoreError.invalidDraft
+        }
+        let old = try read(candidateID, lease)
+        guard (old?.editRevision ?? 0) == expectedEditRevision else { throw StoreError.staleEdit }
+        // A caller cannot silently rebase user text onto a different model proposal.
+        if let old, old.baseProposalVersion != baseProposalVersion || old.baseContentHash != baseContentHash {
+            throw StoreError.staleEdit
+        }
+        let draft = Draft(schemaVersion: 1, scopeDigest: try scope(lease), candidateID: candidateID,
+            baseProposalVersion: baseProposalVersion, baseContentHash: baseContentHash,
+            primaryValue: primaryValue, facetValues: facetValues, editRevision: expectedEditRevision + 1)
+        let url = try location(candidateID, lease)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let data = try JSONEncoder().encode(draft)
+        guard data.count <= 128 * 1_024 else { throw StoreError.invalidDraft }
+        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        guard try Data(contentsOf: url) == data else { throw StoreError.corruptDraft }
+        return draft
+    }
+    /// Explicit user-reviewed merge. Persist the old edit as an archive before
+    /// replacing its base; a failed write leaves the original draft readable.
+    @discardableResult
+    func mergeOntoProposal(candidateID: String, baseProposalVersion: Int, baseContentHash: String,
+                           primaryValue: String, expectedEditRevision: Int, for lease: AccountLease) throws -> Draft {
+        Self.lock.lock(); defer { Self.lock.unlock() }
+        guard let old = try read(candidateID, lease), old.editRevision == expectedEditRevision,
+              baseProposalVersion > old.baseProposalVersion, !baseContentHash.isEmpty,
+              primaryValue.utf8.count <= 64 * 1_024 else { throw StoreError.staleEdit }
+        let url = try location(candidateID, lease)
+        let archive = url.deletingPathExtension().appendingPathExtension("edit-\(old.editRevision).archive")
+        try JSONEncoder().encode(old).write(to: archive, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        let next = Draft(schemaVersion: 1, scopeDigest: old.scopeDigest, candidateID: candidateID,
+            baseProposalVersion: baseProposalVersion, baseContentHash: baseContentHash, primaryValue: primaryValue,
+            facetValues: old.facetValues, editRevision: old.editRevision + 1)
+        let data = try JSONEncoder().encode(next)
+        guard data.count <= 128 * 1_024 else { throw StoreError.invalidDraft }
+        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        guard try read(candidateID, lease) == next else { throw StoreError.corruptDraft }
+        return next
+    }
+    func discard(candidateID: String, expectedEditRevision: Int, for lease: AccountLease) throws {
+        Self.lock.lock(); defer { Self.lock.unlock() }
+        guard let old = try read(candidateID, lease) else { return }
+        guard old.editRevision == expectedEditRevision else { throw StoreError.staleEdit }
+        try FileManager.default.removeItem(at: location(candidateID, lease))
+    }
+}
+
+struct OwnerTruthLiveRecoveryProgress: Codable, Equatable, Sendable {
+    enum Phase: String, Codable { case collecting, disconnected, repairing, frozen }
+    let `protocol`: String
+    let sessionId: UUID
+    let generation: Int
+    let version: Int
+    let state: Phase
+    let continuousSequence: Int
+    let highestSeenSequence: Int
+    let finalSequence: Int?
+    let endPositionKnown: Bool
+    let receivedRanges: [[Int]]
+    let missingRanges: [[Int]]
+    let rangeOffset: Int
+    let nextRangeOffset: Int?
+    let rangePageTruncated: Bool
+    let snapshotRevision: Int
+    let repairDeadline: String?
+    struct Publication: Codable, Equatable, Sendable {
+        let snapshotRevision: Int
+        let state: String
+        let themeCount: Int
+        var isPartial: Bool? = nil
+    }
+    struct SessionBinding: Codable, Equatable, Sendable {
+        let threadId: UUID
+        let sessionVersion: Int
+        let threadVersion: Int
+        let authorityEpoch: Int
+        let state: String
+        let boundary: String
+        let productSessionId: String
+    }
+    var sessionBinding: SessionBinding? = nil
+    struct Backlog: Codable, Equatable, Sendable {
+        let pendingUnits: Int
+        let completedUnits: Int
+        let oldestAgeSeconds: Int
+        let budgetExhausted: Bool
+    }
+    var backlog: Backlog? = nil
+    var publication: Publication? = nil
+    struct ObservationBudget: Codable, Equatable, Sendable {
+        let serverTime: String
+        let leaseDeadline: String
+        let repairSeconds: Int
+        let heartbeatSeconds: Int
+        let disconnectSeconds: Int
+        var requestDeadlineSeconds: Int?
+        var unitExtraRequests: Int?
+        var remainingProviderRequests: Int?
+        var organizationAbsoluteRemainingSeconds: Double?
+        var organizationInactivityRemainingSeconds: Double?
+        var policyHash: String?
+    }
+    var observationBudget: ObservationBudget? = nil
+
+    init(backendJSONObject: [String: Any], expectedSessionID: OwnerTruthRecordID,
+         expectedGeneration: Int, expectedVersion: Int? = nil) throws {
+        let data = try JSONSerialization.data(withJSONObject: backendJSONObject)
+        let decoded = try JSONDecoder().decode(Self.self, from: data)
+        func invalid() -> OwnerTruthRemoteContractError {
+            .invalidInterviewNaturalInput("Recovery progress identity or ranges are invalid")
+        }
+        guard decoded.protocol == "live-recovery-v1", decoded.sessionId == expectedSessionID.rawValue,
+              decoded.generation == expectedGeneration, expectedGeneration > 0, decoded.version > 0,
+              expectedVersion == nil || decoded.version == expectedVersion,
+              decoded.snapshotRevision >= 0, decoded.rangeOffset >= 0, decoded.rangeOffset <= 10_000,
+              decoded.rangeOffset % 256 == 0,
+              (0...10_000).contains(decoded.highestSeenSequence),
+              (0...decoded.highestSeenSequence).contains(decoded.continuousSequence),
+              decoded.endPositionKnown == (decoded.finalSequence != nil) else { throw invalid() }
+        if let final = decoded.finalSequence {
+            guard (decoded.highestSeenSequence...10_000).contains(final) else { throw invalid() }
+        }
+        guard decoded.rangePageTruncated == (decoded.nextRangeOffset != nil),
+              decoded.nextRangeOffset == nil || decoded.nextRangeOffset == decoded.rangeOffset + 256 else { throw invalid() }
+        let upper = decoded.finalSequence ?? decoded.highestSeenSequence
+        func expand(_ ranges: [[Int]]) throws -> Set<Int> {
+            guard ranges.count <= 256 else { throw invalid() }
+            var end = 0; var result = Set<Int>()
+            for range in ranges {
+                guard range.count == 2, range[0] > end, range[0] > 0,
+                      range[1] >= range[0], range[1] <= upper else { throw invalid() }
+                result.formUnion(range[0]...range[1]); end = range[1]
+            }
+            return result
+        }
+        let received = try expand(decoded.receivedRanges)
+        let missing = try expand(decoded.missingRanges)
+        guard received.isDisjoint(with: missing),
+              received.allSatisfy({ $0 <= decoded.highestSeenSequence }) else { throw invalid() }
+        if decoded.rangeOffset == 0 {
+            let continuous = decoded.receivedRanges.first?.first == 1 ? decoded.receivedRanges[0][1] : 0
+            guard continuous == decoded.continuousSequence else { throw invalid() }
+        }
+        if decoded.rangeOffset == 0 && !decoded.rangePageTruncated {
+            guard received.count + missing.count == upper else { throw invalid() }
+        }
+        if let publication = decoded.publication {
+            guard publication.snapshotRevision > 0,
+                  publication.snapshotRevision <= decoded.snapshotRevision,
+                  ["pending", "published", "noChange", "failed"].contains(publication.state),
+                  publication.themeCount >= 0,
+                  publication.state != "published" || publication.themeCount > 0 else { throw invalid() }
+        }
+        self = decoded
+    }
+}
+
+
+/// New protocol is opt-in at both endpoints; no default protocol implementation
+/// can silently replay a legacy body. Old clients retain their read-only fence.
+protocol OwnerTruthLiveRecoveryClient: OwnerTruthInterviewNaturalInputClient {
+    func controlOwnerTruthLiveRecovery(authority: OwnerTruthInterviewNaturalInputRequestAuthority,
+        vaultID: OwnerTruthVaultID, sessionID: OwnerTruthRecordID, generation: Int,
+        action: String, finalSequence: Int?, rangeOffset: Int, expectedVersion: Int?,
+        completion: @escaping (Result<OwnerTruthLiveRecoveryProgress, Error>) -> Void)
+    func replayOwnerTruthLiveRecoveryWrite(authority: OwnerTruthInterviewNaturalInputRequestAuthority,
+        vaultID: OwnerTruthVaultID, command: OwnerTruthInterviewNaturalInputAppendCommand, generation: Int,
+        completion: @escaping (OwnerTruthInterviewWriteTransportOutcome<OwnerTruthInterviewNaturalInputReceipt>) -> Void)
+    func authorizeOwnerTruthLiveRecoveryPublication(accountLease: AccountLease, vaultID: OwnerTruthVaultID,
+        sessionID: OwnerTruthRecordID, generation: Int,
+        completion: @escaping (Result<OwnerTruthLiveRecoveryProgress, Error>) -> Void)
+}
+
+extension DreamJourneyBackendClient: OwnerTruthLiveRecoveryClient {}
+
+/// A visible theme version is a container of supported V5 facts, not a new
+/// fact kind. Its binding participates in the existing atomic review hash.
+struct OwnerTruthLiveThemeBinding: Codable, Equatable, Sendable {
+    let topicId: String
+    let version: Int
+    let proposalHash: String
+    var backendPayload: [String: Any] { ["topicId": topicId, "version": version, "proposalHash": proposalHash] }
+    init(object: [String: Any]) throws {
+        guard let topic = object["topicId"] as? String, UUID(uuidString: topic) != nil,
+              let version = OwnerTruthCandidateEvidenceReference.positiveInt(object["version"]),
+              let hash = object["proposalHash"] as? String,
+              hash.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+            throw OwnerTruthRemoteContractError.invalidInbox("Invalid theme binding")
+        }
+        self.topicId = topic; self.version = version; self.proposalHash = hash
+    }
+}
+
+struct OwnerTruthLiveTheme: Equatable, Sendable {
+    struct Member: Equatable, Sendable {
+        let atomID: String
+        let sourceID: OwnerTruthRecordID
+        let candidateID: OwnerTruthRecordID
+        let proposalHash: String
+        let statement: String
+    }
+    let binding: OwnerTruthLiveThemeBinding
+    let sourceID: OwnerTruthRecordID
+    let title: String
+    let summary: String
+    let dimensions: [String]
+    let members: [Member]
+    let linkedTopicID: String?
+    init(object: [String: Any], lease: AccountLease) throws {
+        binding = try OwnerTruthLiveThemeBinding(object: object)
+        guard object["schemaVersion"] as? String == "owner-truth-live-theme-v1",
+              object["ownerId"] as? String == lease.subjectId,
+              object["vaultId"] as? String == lease.vaultId,
+              object["state"] as? String == "pending",
+              let source = OwnerTruthCandidateEvidenceReference.recordID(object["sourceId"]),
+              let theme = object["theme"] as? [String: Any],
+              let title = theme["title"] as? String, !title.isEmpty, title.count <= 120,
+              let summary = theme["summary"] as? String, !summary.isEmpty, summary.count <= 4000,
+              let dims = theme["dimensions"] as? [String], !dims.isEmpty, dims.count <= 16,
+              let atomIDs = theme["atomIds"] as? [String], !atomIDs.isEmpty,
+              Set(atomIDs).count == atomIDs.count,
+              let bindings = object["members"] as? [String: [String: Any]],
+              let details = object["memberDetails"] as? [String: [String: Any]],
+              Set(bindings.keys) == Set(atomIDs), Set(details.keys) == Set(atomIDs) else {
+            throw OwnerTruthRemoteContractError.invalidInbox("Theme identity or membership mismatch")
+        }
+        members = try atomIDs.sorted().map { atom in
+            let binding = bindings[atom]!, detail = details[atom]!
+            guard UUID(uuidString: atom) != nil,
+                  let id = OwnerTruthCandidateEvidenceReference.recordID(binding["candidateId"]),
+                  detail["candidateId"] as? String == id.rawValue.uuidString.lowercased(),
+                  let memberSource = OwnerTruthCandidateEvidenceReference.recordID(binding["sourceId"]),
+                  let hash = binding["proposalHash"] as? String,
+                  hash.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil,
+                  let text = detail["statement"] as? String, !text.isEmpty else {
+                throw OwnerTruthRemoteContractError.invalidInbox("Theme fact binding mismatch")
+            }
+            return Member(atomID: atom, sourceID: memberSource, candidateID: id, proposalHash: hash, statement: text)
+        }
+        guard Set(members.map(\.candidateID)).count == members.count else {
+            throw OwnerTruthRemoteContractError.invalidInbox("Repeated theme candidate")
+        }
+        sourceID = source; self.title = title; self.summary = summary; dimensions = dims
+        linkedTopicID = object["linkedTopicId"] as? String
+    }
+    func payload(commandID: String, edits: [String: String], rejecting: Bool = false,
+                 proposal: OwnerTruthMemoryChangeSetGroupProposal? = nil) -> [String: Any] {
+        var payload = binding.backendPayload
+        payload["commandId"] = commandID; payload["action"] = rejecting ? "reject" : "accept"
+        payload["primaryEdits"] = rejecting ? [:] : edits
+        if let proposal {
+            payload["expectedMemoryRevision"] = proposal.baseMemoryRevision
+            payload["expectedGroupProposalId"] = proposal.proposalID.rawValue.uuidString.lowercased()
+            payload["expectedGroupProposalHash"] = proposal.proposalHash
+        }
+        return payload
+    }
+}
+struct OwnerTruthLiveThemePage {
+    let themes: [OwnerTruthLiveTheme]
+    let nextCursor: String?
+    init(object: [String: Any], lease: AccountLease) throws {
+        guard object["schemaVersion"] as? String == "owner-truth-live-theme-inbox-v1",
+              object["vaultId"] as? String == lease.vaultId,
+              let raw = object["themes"] as? [[String: Any]], raw.count <= 100 else {
+            throw OwnerTruthRemoteContractError.invalidInbox("Invalid theme page")
+        }
+        themes = try raw.map { try OwnerTruthLiveTheme(object: $0, lease: lease) }
+        guard Set(themes.map(\.binding.topicId)).count == themes.count else {
+            throw OwnerTruthRemoteContractError.invalidInbox("Repeated theme identity")
+        }
+        if let cursor = object["nextCursor"] as? String {
+            guard UUID(uuidString: cursor) != nil, themes.last?.binding.topicId == cursor else {
+                throw OwnerTruthRemoteContractError.invalidInbox("Invalid theme cursor")
+            }
+            nextCursor = cursor
+        } else { nextCursor = nil }
+    }
+}
+protocol OwnerTruthLiveThemeClient: OwnerTruthCandidateReviewClient {
+    func fetchOwnerTruthLiveThemes(lease: AccountLease, after: String?, completion: @escaping (Result<OwnerTruthLiveThemePage, Error>) -> Void)
+    func previewOwnerTruthLiveTheme(lease: AccountLease, theme: OwnerTruthLiveTheme, commandID: String,
+        edits: [String: String], rejecting: Bool, completion: @escaping (Result<OwnerTruthMemoryChangeSetGroupProposal, Error>) -> Void)
+    func confirmOwnerTruthLiveTheme(lease: AccountLease, theme: OwnerTruthLiveTheme, commandID: String,
+        edits: [String: String], rejecting: Bool, proposal: OwnerTruthMemoryChangeSetGroupProposal,
+        completion: @escaping (OwnerTruthMemoryChangeSetGroupReviewTransportOutcome) -> Void)
+}
+
+
+/// Progress and pressure are independent. A growing healthy conversation must
+/// not be stopped merely because it has reached a particular duration.
+struct OwnerTruthLiveBackpressureMonitor {
+    private var lastClientValue: Int?
+    private var lastServerValue: Int?
+    private var clientStalledSince: Date?
+    private var serverStalledSince: Date?
+    private(set) var didStop = false
+    mutating func observe(now: Date, acknowledged: Int, oldestClientAge: TimeInterval?,
+                          backlog: OwnerTruthLiveRecoveryProgress.Backlog?) -> Bool {
+        guard !didStop else { return false }
+        if lastClientValue != acknowledged { clientStalledSince = nil; lastClientValue = acknowledged }
+        if (oldestClientAge ?? 0) > 30 { if clientStalledSince == nil { clientStalledSince = now } }
+        else { clientStalledSince = nil }
+        if let backlog {
+            if lastServerValue != backlog.completedUnits { serverStalledSince = nil; lastServerValue = backlog.completedUnits }
+            if backlog.pendingUnits > 0 && backlog.oldestAgeSeconds > 120 {
+                if serverStalledSince == nil { serverStalledSince = now }
+            } else { serverStalledSince = nil }
+        }
+        let stalled = [clientStalledSince, serverStalledSince].compactMap { $0 }.contains { now.timeIntervalSince($0) >= 60 }
+        didStop = stalled || backlog?.budgetExhausted == true
+        return didStop
     }
 }

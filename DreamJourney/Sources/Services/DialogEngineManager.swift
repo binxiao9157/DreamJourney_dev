@@ -832,11 +832,13 @@ struct DialogEngineAudiblePlaybackPolicy: Equatable, Sendable {
     let providerPlayerEnabled: Bool
     let providerPlayerAudioCallbackEnabled: Bool
     let applicationPCMPlaybackEnabled: Bool
+    let decoderObservationEnabled: Bool
 
     init(enablePlayer: Bool, usesDelegatedLivePlayback: Bool = false) {
         providerPlayerEnabled = enablePlayer
-        providerPlayerAudioCallbackEnabled = enablePlayer && usesDelegatedLivePlayback
+        providerPlayerAudioCallbackEnabled = enablePlayer
         applicationPCMPlaybackEnabled = false
+        decoderObservationEnabled = enablePlayer && !usesDelegatedLivePlayback
     }
 }
 
@@ -1034,11 +1036,827 @@ struct DialogProviderEventMetadata: Equatable, Sendable {
     }
 }
 
+enum DialogProviderASRTextSource: String, Equatable, Sendable {
+    case resultsText
+    case originText
+    case legacyText
+    case legacyResult
+    case legacyUtterance
+}
+
+struct DialogProviderASRParseResult: Equatable, Sendable {
+    let text: String
+    let finalityEvidence: NativeLiveCanonicalTranscriptFinalityEvidence
+    let evidenceSource: NativeLiveCanonicalTranscriptEvidenceSource
+    let textSource: DialogProviderASRTextSource
+
+    var isFinal: Bool { finalityEvidence == .explicitFinal }
+}
+
+enum DialogProviderASRParser {
+    static func parse(_ data: Data) -> DialogProviderASRParseResult? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        if let results = json["results"] as? [[String: Any]], let first = results.first {
+            let primary = normalized(first["text"] as? String)
+            let origin = normalized((json["extra"] as? [String: Any])?["origin_text"] as? String)
+            if let text = primary ?? origin {
+                let evidence = strictBoolean(first["is_interim"]).map {
+                    $0 ? NativeLiveCanonicalTranscriptFinalityEvidence.explicitInterim : .explicitFinal
+                } ?? (first.keys.contains("is_interim") ? .invalid : .unknown)
+                return DialogProviderASRParseResult(
+                    text: text,
+                    finalityEvidence: evidence,
+                    evidenceSource: evidence == .invalid ? .invalid : (evidence == .unknown ? .absent : .resultsIsInterim),
+                    textSource: primary != nil ? .resultsText : .originText
+                )
+            }
+        }
+        let topLevelEvidence = strictLegacyDefinite(json["definite"])
+        if let text = normalized(json["text"] as? String) {
+            return legacyResult(text, source: .legacyText, evidence: topLevelEvidence, raw: json["definite"])
+        }
+        if let text = normalized(json["result"] as? String) {
+            return legacyResult(text, source: .legacyResult, evidence: topLevelEvidence, raw: json["definite"])
+        }
+        if let utterance = (json["utterances"] as? [[String: Any]])?.first,
+           let text = normalized(utterance["text"] as? String) {
+            let raw = utterance["definite"] ?? json["definite"]
+            return legacyResult(text, source: .legacyUtterance, evidence: strictLegacyDefinite(raw), raw: raw)
+        }
+        return nil
+    }
+
+    private static func legacyResult(
+        _ text: String,
+        source: DialogProviderASRTextSource,
+        evidence: NativeLiveCanonicalTranscriptFinalityEvidence?,
+        raw: Any?
+    ) -> DialogProviderASRParseResult {
+        DialogProviderASRParseResult(
+            text: text,
+            finalityEvidence: evidence ?? (raw == nil ? .unknown : .invalid),
+            evidenceSource: raw == nil ? .absent : (evidence == nil ? .invalid : .legacyDefinite),
+            textSource: source
+        )
+    }
+
+    private static func strictBoolean(_ value: Any?) -> Bool? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+        return number.boolValue
+    }
+
+    private static func strictLegacyDefinite(_ value: Any?) -> NativeLiveCanonicalTranscriptFinalityEvidence? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        switch number.intValue {
+        case 0 where number.doubleValue == 0: return .explicitInterim
+        case 1 where number.doubleValue == 1: return .explicitFinal
+        default: return nil
+        }
+    }
+
+    private static func normalized(_ text: String?) -> String? {
+        guard let normalized = text?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !normalized.isEmpty else { return nil }
+        return normalized
+    }
+}
+
+enum DialogProviderCanonicalOwnerFinalityMapper {
+    static func finality(
+        evidence: NativeLiveCanonicalTranscriptFinalityEvidence
+    ) -> NativeLiveCanonicalTranscriptFinality {
+        evidence == .explicitFinal || evidence == .confirmed ? .complete : .interim
+    }
+}
+
+enum DialogProviderCanonicalIngressKind: String, Equatable, Sendable {
+    case asrInfo
+    case asrResponse
+    case asrEnded
+    case queryConfirmed
+    case other
+
+    var ownerIngressKind: NativeLiveCanonicalTranscriptIngressKind? {
+        switch self {
+        case .asrInfo: return .asrInfo
+        case .asrResponse: return .asrResponse
+        case .asrEnded, .queryConfirmed, .other: return nil
+        }
+    }
+}
+
+/// Keeps the locked SpeechEngine event-code contract in one place so the
+/// production callback and deterministic tests exercise the same classifier.
+enum DialogProviderSDKEventClassifier {
+    static let ttsSentenceStart = 3008
+    static let ttsSentenceEnd = 3009
+    static let ttsEnded = 3011
+    static let asrInfo = 3012
+    static let asrResponse = 3013
+    static let asrEnded = 3014
+    static let chatResponse = 3015
+    static let chatEnded = 3016
+    static let queryConfirmed = 3021
+
+    static func canonicalIngressKind(rawValue: Int) -> DialogProviderCanonicalIngressKind {
+        switch rawValue {
+        case asrInfo: return .asrInfo
+        case asrResponse: return .asrResponse
+        case asrEnded: return .asrEnded
+        case queryConfirmed: return .queryConfirmed
+        default: return .other
+        }
+    }
+}
+
+struct DialogProviderCanonicalIngressResult: Equatable, Sendable {
+    let callbackOrdinal: UInt64
+    let metadata: DialogProviderEventMetadata
+    let member: NativeLiveCanonicalTranscriptMember?
+    let event: NativeLiveCanonicalTranscriptEvent?
+}
+
+struct DialogCanonicalTranscriptDeliveryBinding {
+    let reserve: (NativeLiveCanonicalTranscriptMember) -> Bool
+    let deliver: (
+        NativeLiveCanonicalTranscriptMember?,
+        NativeLiveCanonicalTranscriptEvent?
+    ) -> Void
+
+    init(
+        deliver: @escaping (
+            NativeLiveCanonicalTranscriptMember?,
+            NativeLiveCanonicalTranscriptEvent?
+        ) -> Void
+    ) {
+        reserve = { _ in true }
+        self.deliver = deliver
+    }
+
+    init(
+        reserve: @escaping (NativeLiveCanonicalTranscriptMember) -> Bool,
+        deliver: @escaping (
+            NativeLiveCanonicalTranscriptMember?,
+            NativeLiveCanonicalTranscriptEvent?
+        ) -> Void
+    ) {
+        self.reserve = reserve
+        self.deliver = deliver
+    }
+}
+
+private struct DialogProviderCanonicalIngressBinding {
+    let engineGeneration: UUID
+    let dialogOperationID: UUID
+    let reserve: (NativeLiveCanonicalTranscriptMember) -> Bool
+    let deliver: (
+        NativeLiveCanonicalTranscriptMember?,
+        NativeLiveCanonicalTranscriptEvent?
+    ) -> Void
+}
+
+/// Freezes provider identity and receive order at the SDK callback boundary.
+/// The active question window is used only when the provider omits an ID from
+/// a later packet in the same ordered ASR stream.
+final class DialogProviderCanonicalIngressRouter {
+    typealias DeliveryScheduler = (@escaping () -> Void) -> Void
+
+    private let lock = NSLock()
+    private var ordinal: UInt64 = 0
+    private var binding: DialogProviderCanonicalIngressBinding?
+    private var activeQuestionID: String?
+    private var activeQuestionMember: NativeLiveCanonicalTranscriptMember?
+    private var latestOwnerObservations: [String: NativeLiveCanonicalTranscriptEvent] = [:]
+    private var latestTrustedOwnerFinalObservations:
+        [String: NativeLiveCanonicalTranscriptEvent] = [:]
+    private var boundarySeenQuestionIDs = Set<String>()
+    private var registeredQuestionIDs = Set<String>()
+    private var deliveryScheduler: DeliveryScheduler = { $0() }
+
+    func accepts(engineGeneration: UUID) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return binding?.engineGeneration == engineGeneration
+    }
+
+    @discardableResult
+    func deliverAssistant(
+        _ event: NativeLiveCanonicalTranscriptEvent,
+        engineGeneration: UUID
+    ) -> Bool {
+        freezeAssistant(
+            event,
+            metadata: DialogProviderEventMetadata(data: Data()),
+            engineGeneration: engineGeneration
+        ) != nil
+    }
+
+    func freezeAssistant(
+        _ event: NativeLiveCanonicalTranscriptEvent,
+        metadata: DialogProviderEventMetadata,
+        engineGeneration: UUID
+    ) -> DialogProviderCanonicalIngressResult? {
+        lock.lock()
+        guard let binding, binding.engineGeneration == engineGeneration else {
+            lock.unlock()
+            return nil
+        }
+        ordinal &+= 1
+        let assistantOrdinal = ordinal
+        let handoffMember = NativeLiveCanonicalTranscriptMember(
+            canonicalTurnID: event.canonicalTurnID,
+            handoffID: "\(event.canonicalTurnID):handoff:\(assistantOrdinal)",
+            role: event.role,
+            capturedAt: event.capturedAt,
+            ingressOrdinal: assistantOrdinal,
+            ingressKind: .assistantStream
+        )
+        guard binding.reserve(handoffMember) else {
+            lock.unlock()
+            return nil
+        }
+        let deliver = binding.deliver
+        let deliveryScheduler = deliveryScheduler
+        lock.unlock()
+        deliveryScheduler { deliver(handoffMember, event) }
+        return DialogProviderCanonicalIngressResult(
+            callbackOrdinal: assistantOrdinal,
+            metadata: metadata,
+            member: handoffMember,
+            event: event
+        )
+    }
+
+    #if DEBUG
+    func setDeliverySchedulerForTesting(_ scheduler: @escaping DeliveryScheduler) {
+        lock.lock()
+        deliveryScheduler = scheduler
+        lock.unlock()
+    }
+    #endif
+
+    func install(
+        engineGeneration: UUID,
+        dialogOperationID: UUID,
+        reserve: @escaping (NativeLiveCanonicalTranscriptMember) -> Bool = { _ in true },
+        deliver: @escaping (
+            NativeLiveCanonicalTranscriptMember?,
+            NativeLiveCanonicalTranscriptEvent?
+        ) -> Void
+    ) {
+        lock.lock()
+        ordinal = 0
+        activeQuestionID = nil
+        activeQuestionMember = nil
+        latestOwnerObservations.removeAll()
+        latestTrustedOwnerFinalObservations.removeAll()
+        boundarySeenQuestionIDs.removeAll()
+        registeredQuestionIDs.removeAll()
+        binding = DialogProviderCanonicalIngressBinding(
+            engineGeneration: engineGeneration,
+            dialogOperationID: dialogOperationID,
+            reserve: reserve,
+            deliver: deliver
+        )
+        lock.unlock()
+    }
+
+    @discardableResult
+    func close(expectedDialogOperationID: UUID? = nil) -> Bool {
+        lock.lock()
+        let didClose = expectedDialogOperationID == nil
+            || binding?.dialogOperationID == expectedDialogOperationID
+        if didClose {
+            binding = nil
+            activeQuestionID = nil
+            activeQuestionMember = nil
+            latestOwnerObservations.removeAll()
+            latestTrustedOwnerFinalObservations.removeAll()
+            boundarySeenQuestionIDs.removeAll()
+            registeredQuestionIDs.removeAll()
+        }
+        lock.unlock()
+        return didClose
+    }
+
+    func freeze(
+        kind: DialogProviderCanonicalIngressKind,
+        data: Data,
+        engineGeneration: UUID,
+        capturedAt: Date = Date()
+    ) -> DialogProviderCanonicalIngressResult? {
+        let metadata = DialogProviderEventMetadata(data: data)
+        lock.lock()
+        guard let binding, binding.engineGeneration == engineGeneration else {
+            lock.unlock()
+            return nil
+        }
+        ordinal &+= 1
+        let callbackOrdinal = ordinal
+        let ownerIngressKind = kind.ownerIngressKind
+        let explicitQuestionID = ownerIngressKind == nil
+            ? nil
+            : Self.normalized(metadata.questionID)
+        var boundaryPacket: (
+            NativeLiveCanonicalTranscriptMember,
+            NativeLiveCanonicalTranscriptEvent
+        )?
+        var boundaryFollowsCurrentEvent = false
+        if let explicitQuestionID {
+            // An already registered explicit ID may be a late packet for an
+            // older question. It still belongs to that question, but must not
+            // roll the identifier-less stream window back from the newer one.
+            if !registeredQuestionIDs.contains(explicitQuestionID) {
+                boundaryPacket = sealActiveQuestionPacket(handoffOrdinal: callbackOrdinal)
+                activeQuestionID = explicitQuestionID
+                activeQuestionMember = nil
+            }
+        }
+        let questionID = explicitQuestionID ?? activeQuestionID
+        let canonicalID = questionID.map {
+            [
+                engineGeneration.uuidString.lowercased(),
+                OwnerTruthInterviewNaturalInputMessageRole.owner.rawValue,
+                $0,
+            ].joined(separator: ":")
+        }
+        let isNewMember = questionID.map { registeredQuestionIDs.insert($0).inserted } ?? false
+        let member = isNewMember ? canonicalID.map {
+            NativeLiveCanonicalTranscriptMember(
+                canonicalTurnID: $0,
+                handoffID: "\($0):handoff:\(callbackOrdinal)",
+                role: .owner,
+                capturedAt: capturedAt,
+                ingressOrdinal: callbackOrdinal,
+                ingressKind: ownerIngressKind
+            )
+        } : nil
+        if let member { activeQuestionMember = member }
+        let parsed = Self.parse(kind: kind, data: data)
+        let event: NativeLiveCanonicalTranscriptEvent?
+        if let canonicalID, let parsed {
+            event = NativeLiveCanonicalTranscriptEvent(
+                canonicalTurnID: canonicalID,
+                role: .owner,
+                text: parsed.text,
+                finality: DialogProviderCanonicalOwnerFinalityMapper.finality(
+                    evidence: parsed.finalityEvidence
+                ),
+                finalityEvidence: parsed.finalityEvidence,
+                evidenceSource: parsed.evidenceSource,
+                observationID: "provider-callback-\(callbackOrdinal)",
+                ingressOrdinal: callbackOrdinal,
+                sealing: .observeOnly,
+                capturedAt: capturedAt
+            )
+        } else {
+            event = nil
+        }
+        if let event {
+            latestOwnerObservations[event.canonicalTurnID] = event
+            if event.finality == .complete,
+               event.finalityEvidence == .explicitFinal {
+                latestTrustedOwnerFinalObservations[event.canonicalTurnID] = event
+            }
+            if event.finalityEvidence == .explicitFinal,
+               boundarySeenQuestionIDs.contains(questionID ?? "") {
+                boundaryPacket = sealActiveQuestionPacket(
+                    handoffOrdinal: callbackOrdinal
+                ) ?? boundaryPacket
+                boundaryFollowsCurrentEvent = boundaryPacket != nil
+            }
+        }
+        if kind == .asrEnded {
+            let boundaryQuestionID = Self.normalized(metadata.questionID)
+            if boundaryQuestionID == nil || boundaryQuestionID == activeQuestionID {
+                let activeCanonicalID = activeQuestionMember?.canonicalTurnID
+                let hasTrustedFinal = activeCanonicalID.flatMap {
+                    latestTrustedOwnerFinalObservations[$0]
+                } != nil
+                let sealedPacket = sealActiveQuestionPacket(
+                    handoffOrdinal: callbackOrdinal
+                )
+                boundaryPacket = sealedPacket ?? boundaryPacket
+                if !hasTrustedFinal, let activeQuestionID {
+                    boundarySeenQuestionIDs.insert(activeQuestionID)
+                }
+            }
+        }
+        let eventHandoffMember: NativeLiveCanonicalTranscriptMember? = {
+            if let member { return member }
+            guard let event, let activeQuestionMember else { return nil }
+            return NativeLiveCanonicalTranscriptMember(
+                canonicalTurnID: event.canonicalTurnID,
+                handoffID: "\(event.canonicalTurnID):handoff:\(callbackOrdinal)",
+                role: event.role,
+                capturedAt: activeQuestionMember.capturedAt,
+                ingressOrdinal: activeQuestionMember.ingressOrdinal,
+                ingressKind: activeQuestionMember.ingressKind
+            )
+        }()
+        if let eventHandoffMember, !binding.reserve(eventHandoffMember) {
+            if let questionID {
+                if member != nil {
+                    registeredQuestionIDs.remove(questionID)
+                    if activeQuestionID == questionID {
+                        activeQuestionID = nil
+                    }
+                }
+            }
+            Self.recordIngressDiagnostic(
+                kind: kind,
+                callbackOrdinal: callbackOrdinal,
+                metadata: metadata,
+                parsed: parsed,
+                memberRegistration: "rejected",
+                eventUpsert: event == nil ? "none" : "notDelivered"
+            )
+            lock.unlock()
+            return nil
+        }
+        if let boundaryPacket, !binding.reserve(boundaryPacket.0) {
+            Self.recordIngressDiagnostic(
+                kind: kind,
+                callbackOrdinal: callbackOrdinal,
+                metadata: metadata,
+                parsed: parsed,
+                memberRegistration: "boundaryRejected",
+                eventUpsert: "notDelivered"
+            )
+            lock.unlock()
+            return nil
+        }
+        let deliver = binding.deliver
+        let deliveryScheduler = deliveryScheduler
+        lock.unlock()
+
+        if let boundaryPacket, !boundaryFollowsCurrentEvent {
+            deliveryScheduler {
+                deliver(boundaryPacket.0, boundaryPacket.1)
+            }
+        }
+        if eventHandoffMember != nil || event != nil {
+            deliveryScheduler {
+                deliver(eventHandoffMember, event)
+            }
+        }
+        if let boundaryPacket, boundaryFollowsCurrentEvent {
+            deliveryScheduler {
+                deliver(boundaryPacket.0, boundaryPacket.1)
+            }
+        }
+        Self.recordIngressDiagnostic(
+            kind: kind,
+            callbackOrdinal: callbackOrdinal,
+            metadata: metadata,
+            parsed: parsed,
+            memberRegistration: member == nil ? "none" : "accepted",
+            eventUpsert: event == nil ? "none" : "scheduled"
+        )
+        return DialogProviderCanonicalIngressResult(
+            callbackOrdinal: callbackOrdinal,
+            metadata: metadata,
+            member: member,
+            event: event
+        )
+    }
+
+    @discardableResult
+    func sealActiveOwnerForStop(engineGeneration: UUID) -> Bool {
+        lock.lock()
+        ordinal &+= 1
+        let stopOrdinal = ordinal
+        guard let binding, binding.engineGeneration == engineGeneration,
+              let packet = sealActiveQuestionPacket(handoffOrdinal: stopOrdinal),
+              binding.reserve(packet.0) else {
+            lock.unlock()
+            return false
+        }
+        let deliver = binding.deliver
+        let deliveryScheduler = deliveryScheduler
+        lock.unlock()
+        deliveryScheduler { deliver(packet.0, packet.1) }
+        return true
+    }
+
+    private func sealActiveQuestionPacket(handoffOrdinal: UInt64) -> (
+        NativeLiveCanonicalTranscriptMember,
+        NativeLiveCanonicalTranscriptEvent
+    )? {
+        guard let member = activeQuestionMember else { return nil }
+        let trustedFinal = latestTrustedOwnerFinalObservations[member.canonicalTurnID]
+        guard let observation = trustedFinal
+            ?? latestOwnerObservations[member.canonicalTurnID] else { return nil }
+        if trustedFinal != nil {
+            latestOwnerObservations.removeValue(forKey: member.canonicalTurnID)
+            latestTrustedOwnerFinalObservations.removeValue(forKey: member.canonicalTurnID)
+            boundarySeenQuestionIDs.remove(activeQuestionID ?? "")
+        }
+        let sealingMember = NativeLiveCanonicalTranscriptMember(
+            canonicalTurnID: member.canonicalTurnID,
+            handoffID: "\(member.canonicalTurnID):seal:\(handoffOrdinal)",
+            role: member.role,
+            capturedAt: member.capturedAt,
+            ingressOrdinal: member.ingressOrdinal,
+            ingressKind: member.ingressKind
+        )
+        return (sealingMember, NativeLiveCanonicalTranscriptEvent(
+            canonicalTurnID: observation.canonicalTurnID,
+            role: observation.role,
+            text: observation.text,
+            finality: observation.finality,
+            finalityEvidence: observation.finalityEvidence,
+            evidenceSource: observation.evidenceSource,
+            observationID: observation.observationID,
+            ingressOrdinal: observation.ingressOrdinal,
+            sealing: .observeAndSeal,
+            capturedAt: observation.capturedAt
+        ))
+    }
+
+    #if DEBUG
+    @discardableResult
+    func deliverAssistantForTesting(
+        replyID: String,
+        text: String,
+        engineGeneration: UUID,
+        capturedAt: Date
+    ) -> Bool {
+        guard let normalizedReplyID = Self.normalized(replyID),
+              let normalizedText = Self.normalized(text) else { return false }
+        return deliverAssistant(NativeLiveCanonicalTranscriptEvent(
+            canonicalTurnID: [
+                engineGeneration.uuidString.lowercased(),
+                OwnerTruthInterviewNaturalInputMessageRole.assistant.rawValue,
+                normalizedReplyID,
+            ].joined(separator: ":"),
+            role: .assistant,
+            text: normalizedText,
+            finality: .complete,
+            finalityEvidence: .confirmed,
+            evidenceSource: .assistantStream,
+            sealing: .observeAndSeal,
+            capturedAt: capturedAt
+        ), engineGeneration: engineGeneration)
+    }
+    #endif
+
+    private static func parse(
+        kind: DialogProviderCanonicalIngressKind,
+        data: Data
+    ) -> DialogProviderASRParseResult? {
+        switch kind {
+        case .asrInfo, .asrResponse:
+            return DialogProviderASRParser.parse(data)
+        case .asrEnded, .queryConfirmed, .other:
+            return nil
+        }
+    }
+
+    private static func parseQueryConfirmedText(from data: Data) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return normalized(String(data: data, encoding: .utf8)?.trimmingCharacters(
+                in: CharacterSet.whitespacesAndNewlines.union(.init(charactersIn: "\""))
+            ))
+        }
+        for key in ["text", "query", "content", "input", "result", "message"] {
+            if let text = normalized(json[key] as? String) { return text }
+        }
+        if let asr = json["asr"] as? [String: Any] {
+            return normalized(asr["text"] as? String)
+                ?? normalized(asr["result"] as? String)
+        }
+        return nil
+    }
+
+    private static func normalized(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else { return nil }
+        return value
+    }
+
+    private static func recordIngressDiagnostic(
+        kind: DialogProviderCanonicalIngressKind,
+        callbackOrdinal: UInt64,
+        metadata: DialogProviderEventMetadata,
+        parsed: DialogProviderASRParseResult?,
+        memberRegistration: String,
+        eventUpsert: String
+    ) {
+        PrivacySafeDiagnostics.log(
+            subsystem: "DialogEngine",
+            event: "canonicalIngressClassified",
+            states: [
+                "kind": kind.rawValue,
+                "hasQuestionIdentity": metadata.questionID == nil ? "false" : "true",
+                "hasBody": parsed == nil ? "false" : "true",
+                "finality": parsed.map {
+                    DialogProviderCanonicalOwnerFinalityMapper.finality(
+                        evidence: $0.finalityEvidence
+                    ).rawValue
+                } ?? "none",
+                "memberRegistration": memberRegistration,
+                "eventUpsert": eventUpsert,
+            ],
+            counts: ["callbackOrdinal": Int(callbackOrdinal)]
+        )
+    }
+}
+
 enum DialogProviderReplyCorrelation: String, Equatable, Sendable {
     case matched
     case unobserved
+    case ambiguousReply
     case staleQuestion
     case staleGeneration
+}
+
+enum DialogProviderPlaybackProgress: Equatable, Sendable {
+    case synthesisEnded
+    case playerStarted
+    case playerFinished
+}
+
+enum DialogProviderPlaybackOutcome: Equatable, Sendable {
+    case ignored
+    case waiting
+    case drained
+}
+
+/// SpeechEngine 0.0.14.6.1 drops the core's 2001/2002 player events before
+/// its public listener (the header still declares 3019/3020). Verify actual
+/// player PCM instead: every nonzero sample must match the decoded stream,
+/// synthesis must be sealed, then 200 ms of real player silence must follow.
+/// No elapsed-time or text-length completion, and no second audio player.
+struct DialogProviderPCMDrainVerifier {
+    private(set) var generation: UUID?
+    private(set) var replyID: String?
+    private(set) var decodedSamples = 0
+    private(set) var playedSamples = 0
+    private(set) var silentPlayerSamples = 0
+    private(set) var synthesisEnded = false
+    private(set) var didDrain = false
+    private(set) var invalid = false
+    private var decodedHash = SHA256()
+    private var playedHash = SHA256()
+    // The canonical Dialog downstream PCM is 24 kHz, mono, signed Int16.
+    static let requiredSilentSamples = 4_800
+    static let maximumSamples = 24_000 * 300
+
+    mutating func reset() { self = Self() }
+
+    private mutating func bind(replyID: String?, generation: UUID) -> Bool {
+        guard let replyID, !replyID.isEmpty, !invalid, !didDrain else { return false }
+        if self.replyID == nil { self.replyID = replyID; self.generation = generation }
+        return self.replyID == replyID && self.generation == generation
+    }
+
+    private static func audibleSamples(_ data: Data) -> Data? {
+        guard data.count % 2 == 0 else { return nil }
+        var result = Data()
+        result.reserveCapacity(data.count)
+        data.withUnsafeBytes { raw in
+            let bytes = raw.bindMemory(to: UInt8.self)
+            for i in stride(from: 0, to: bytes.count, by: 2) {
+                // Ignore exact zero padding only, not quiet speech. SDK player
+                // callbacks include underrun/idle zeros absent from decoder PCM.
+                if bytes[i] != 0 || bytes[i + 1] != 0 {
+                    result.append(bytes[i]); result.append(bytes[i + 1])
+                }
+            }
+        }
+        return result
+    }
+
+    mutating func decoded(_ data: Data, replyID: String?, generation: UUID) {
+        guard bind(replyID: replyID, generation: generation) else { return }
+        guard !synthesisEnded, let samples = Self.audibleSamples(data) else {
+            invalid = true; return
+        }
+        decodedSamples += samples.count / 2
+        if decodedSamples > Self.maximumSamples { invalid = true; return }
+        decodedHash.update(data: samples)
+        silentPlayerSamples = 0
+    }
+
+    mutating func synthesized(replyID: String?, generation: UUID) {
+        guard bind(replyID: replyID, generation: generation) else { return }
+        synthesisEnded = true
+        // Require observed silence after the terminal synthesis event.
+        silentPlayerSamples = 0
+    }
+
+    mutating func played(_ data: Data, replyID: String?, generation: UUID) -> Bool {
+        guard bind(replyID: replyID, generation: generation) else { return false }
+        guard let samples = Self.audibleSamples(data) else { invalid = true; return false }
+        playedSamples += samples.count / 2
+        if playedSamples > Self.maximumSamples { invalid = true; return false }
+        playedHash.update(data: samples)
+        if samples.isEmpty && synthesisEnded {
+            silentPlayerSamples = min(Self.requiredSilentSamples, silentPlayerSamples + data.count / 2)
+        } else { silentPlayerSamples = 0 }
+        guard synthesisEnded, decodedSamples > 0, playedSamples == decodedSamples,
+              silentPlayerSamples >= Self.requiredSilentSamples,
+              decodedHash.finalize() == playedHash.finalize() else { return false }
+        didDrain = true
+        return true
+    }
+}
+
+struct DialogProviderReplyPlaybackState: Equatable, Sendable {
+    private(set) var generation: UUID?
+    private(set) var replyID: String?
+    private(set) var synthesisEnded = false
+    private(set) var activePlayerSegments = 0
+    private(set) var observedPlayerStart = false
+    private(set) var didDrain = false
+
+    mutating func reset() {
+        generation = nil
+        replyID = nil
+        synthesisEnded = false
+        activePlayerSegments = 0
+        observedPlayerStart = false
+        didDrain = false
+    }
+
+    mutating func receive(
+        _ progress: DialogProviderPlaybackProgress,
+        replyID: String?,
+        generation: UUID
+    ) -> DialogProviderPlaybackOutcome {
+        guard let replyID,
+              !replyID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .ignored
+        }
+        if self.replyID == nil {
+            self.replyID = replyID
+            self.generation = generation
+        }
+        guard self.replyID == replyID, self.generation == generation, !didDrain else {
+            return .ignored
+        }
+        switch progress {
+        case .synthesisEnded:
+            synthesisEnded = true
+        case .playerStarted:
+            observedPlayerStart = true
+            activePlayerSegments += 1
+        case .playerFinished:
+            guard activePlayerSegments > 0 else { return .ignored }
+            activePlayerSegments -= 1
+        }
+        if synthesisEnded, observedPlayerStart, activePlayerSegments == 0 {
+            didDrain = true
+            return .drained
+        }
+        return .waiting
+    }
+}
+
+struct DialogProviderInterruptionState: Equatable, Sendable {
+    private(set) var generation: UUID?
+    private(set) var audibleQuestionID: String?
+    private var claimedQuestionIDs: Set<String> = []
+
+    mutating func beginSession(generation: UUID) {
+        self.generation = generation
+        audibleQuestionID = nil
+        claimedQuestionIDs.removeAll()
+    }
+
+    mutating func beginAudibleReply(questionID: String?, generation: UUID) {
+        guard self.generation == generation,
+              let questionID,
+              !questionID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        audibleQuestionID = questionID
+    }
+
+    mutating func clearAudibleReply() {
+        audibleQuestionID = nil
+    }
+
+    mutating func claimNewSpokenQuestion(
+        incomingQuestionID: String?,
+        currentQuestionID: String?,
+        hasRecognizedSpeech: Bool,
+        generation: UUID
+    ) -> Bool {
+        guard self.generation == generation,
+              hasRecognizedSpeech,
+              let incomingQuestionID,
+              incomingQuestionID == currentQuestionID,
+              incomingQuestionID != audibleQuestionID,
+              !claimedQuestionIDs.contains(incomingQuestionID) else {
+            return false
+        }
+        claimedQuestionIDs.insert(incomingQuestionID)
+        return true
+    }
 }
 
 struct DialogProviderTurnCorrelationState: Equatable, Sendable {
@@ -1046,12 +1864,16 @@ struct DialogProviderTurnCorrelationState: Equatable, Sendable {
     private(set) var turnSequence = 0
     private(set) var currentQuestionID: String?
     private(set) var currentReplyID: String?
+    private var observedQuestionIDs: Set<String> = []
+    private var replyQuestionIDs: [String: String] = [:]
 
     mutating func beginSession(generation: UUID) {
         self.generation = generation
         turnSequence = 0
         currentQuestionID = nil
         currentReplyID = nil
+        observedQuestionIDs.removeAll()
+        replyQuestionIDs.removeAll()
     }
 
     @discardableResult
@@ -1065,9 +1887,11 @@ struct DialogProviderTurnCorrelationState: Equatable, Sendable {
             return currentQuestionID == nil ? nil : turnSequence
         }
         if currentQuestionID != id {
+            guard !observedQuestionIDs.contains(id) else { return nil }
             turnSequence += 1
             currentQuestionID = id
             currentReplyID = nil
+            observedQuestionIDs.insert(id)
         }
         return turnSequence
     }
@@ -1082,13 +1906,300 @@ struct DialogProviderTurnCorrelationState: Equatable, Sendable {
               !replyID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .unobserved
         }
-        if let questionID,
-           let currentQuestionID,
-           questionID != currentQuestionID {
-            return .staleQuestion
+        if let boundQuestionID = replyQuestionIDs[replyID] {
+            guard boundQuestionID == currentQuestionID else { return .staleQuestion }
+            if let questionID, questionID != boundQuestionID { return .staleQuestion }
+            currentReplyID = replyID
+            return .matched
+        }
+        if let questionID {
+            guard questionID == currentQuestionID else { return .staleQuestion }
+            replyQuestionIDs[replyID] = questionID
+        } else if let currentReplyID, currentReplyID != replyID {
+            // Without a question binding, a different reply cannot safely be
+            // assigned to the current turn. It may be a late callback from the
+            // preceding answer.
+            return .ambiguousReply
+        } else if let currentQuestionID {
+            replyQuestionIDs[replyID] = currentQuestionID
         }
         currentReplyID = replyID
         return .matched
+    }
+}
+
+struct DialogProviderCanonicalReplyTextState: Equatable, Sendable {
+    private(set) var replyID: String?
+    private(set) var text = ""
+
+    mutating func reset() {
+        replyID = nil
+        text = ""
+    }
+
+    mutating func beginReply(_ nextReplyID: String?) {
+        guard let nextReplyID,
+              !nextReplyID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        guard replyID != nextReplyID else { return }
+        replyID = nextReplyID
+        text = ""
+    }
+
+    @discardableResult
+    mutating func update(_ nextText: String, replyID: String?) -> String {
+        beginReply(replyID)
+        let normalized = nextText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return text }
+        if normalized.hasPrefix(text) {
+            text = normalized
+        } else if !text.hasSuffix(normalized) {
+            text += normalized
+        }
+        return text
+    }
+
+    mutating func replace(_ nextText: String, replyID: String?) {
+        beginReply(replyID)
+        text = nextText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+enum DialogProviderCanonicalAssistantStreamKind: Equatable, Sendable {
+    case response
+    case ended
+}
+
+/// Shared by the SDK ChatResponse/ChatEnded path and deterministic local
+/// assembly tests. Local packets exercise the production fragment/final
+/// contract but are never reported as real SDK evidence.
+struct DialogProviderCanonicalAssistantStreamState: Equatable, Sendable {
+    private(set) var replyID: String?
+    private(set) var text = ""
+    private var replyTexts: [String: String] = [:]
+    private var replyOrder: [String] = []
+    private var completedReplyIDs = Set<String>()
+    private static let maximumRetainedReplyCount = 32
+
+    mutating func reset() {
+        replyID = nil
+        text = ""
+        replyTexts.removeAll()
+        replyOrder.removeAll()
+        completedReplyIDs.removeAll()
+    }
+
+    mutating func consume(
+        kind: DialogProviderCanonicalAssistantStreamKind,
+        data: Data,
+        engineGeneration: UUID,
+        capturedAt: Date
+    ) -> NativeLiveCanonicalTranscriptEvent? {
+        let metadata = DialogProviderEventMetadata(data: data)
+        guard let nextReplyID = metadata.replyID?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ), !nextReplyID.isEmpty else {
+            return nil
+        }
+        guard !completedReplyIDs.contains(nextReplyID) else { return nil }
+        replyID = nextReplyID
+        var replyText = replyTexts[nextReplyID] ?? ""
+        if replyTexts[nextReplyID] == nil {
+            replyOrder.append(nextReplyID)
+        }
+
+        switch kind {
+        case .response:
+            guard let fragment = Self.textFragment(from: data) else { return nil }
+            if fragment.hasPrefix(replyText) {
+                replyText = fragment
+            } else if !replyText.hasSuffix(fragment) {
+                replyText += fragment
+            }
+            guard !replyText.isEmpty else { return nil }
+            replyTexts[nextReplyID] = replyText
+            text = replyText
+            trimReplyBuffersIfNeeded()
+            return event(
+                engineGeneration: engineGeneration,
+                replyID: nextReplyID,
+                text: replyText,
+                finality: .interim,
+                capturedAt: capturedAt
+            )
+        case .ended:
+            if let terminalText = Self.textFragment(from: data) {
+                if terminalText.hasPrefix(replyText) {
+                    replyText = terminalText
+                } else if !replyText.hasSuffix(terminalText) {
+                    replyText += terminalText
+                }
+            }
+            guard !replyText.isEmpty else { return nil }
+            replyTexts.removeValue(forKey: nextReplyID)
+            replyOrder.removeAll { $0 == nextReplyID }
+            completedReplyIDs.insert(nextReplyID)
+            text = replyText
+            trimReplyBuffersIfNeeded()
+            return event(
+                engineGeneration: engineGeneration,
+                replyID: nextReplyID,
+                text: replyText,
+                finality: .complete,
+                capturedAt: capturedAt
+            )
+        }
+    }
+
+    private mutating func trimReplyBuffersIfNeeded() {
+        while replyOrder.count > Self.maximumRetainedReplyCount {
+            let expired = replyOrder.removeFirst()
+            replyTexts.removeValue(forKey: expired)
+        }
+    }
+
+    private func event(
+        engineGeneration: UUID,
+        replyID: String,
+        text: String,
+        finality: NativeLiveCanonicalTranscriptFinality,
+        capturedAt: Date
+    ) -> NativeLiveCanonicalTranscriptEvent {
+        NativeLiveCanonicalTranscriptEvent(
+            canonicalTurnID: [
+                engineGeneration.uuidString.lowercased(),
+                OwnerTruthInterviewNaturalInputMessageRole.assistant.rawValue,
+                replyID,
+            ].joined(separator: ":"),
+            role: .assistant,
+            text: text,
+            finality: finality,
+            finalityEvidence: finality == .complete ? .confirmed : .unknown,
+            evidenceSource: .assistantStream,
+            sealing: finality == .complete ? .observeAndSeal : .observeOnly,
+            capturedAt: capturedAt
+        )
+    }
+
+    private static func textFragment(from data: Data) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        for key in ["text", "content", "message", "delta"] {
+            if let value = json[key] as? String {
+                let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !normalized.isEmpty { return normalized }
+            }
+        }
+        return nil
+    }
+}
+
+@discardableResult
+private func deliverCanonicalAssistantStreamPacket(
+    state: inout DialogProviderCanonicalAssistantStreamState,
+    router: DialogProviderCanonicalIngressRouter,
+    kind: DialogProviderCanonicalAssistantStreamKind,
+    data: Data,
+    engineGeneration: UUID,
+    capturedAt: Date
+) -> NativeLiveCanonicalTranscriptEvent? {
+    guard router.accepts(engineGeneration: engineGeneration),
+          let event = state.consume(
+        kind: kind,
+        data: data,
+        engineGeneration: engineGeneration,
+        capturedAt: capturedAt
+    ), router.deliverAssistant(event, engineGeneration: engineGeneration) else {
+        return nil
+    }
+    return event
+}
+
+private enum DialogProviderCanonicalMemoryEventKind {
+    case owner(DialogProviderCanonicalIngressKind)
+    case assistant(DialogProviderCanonicalAssistantStreamKind)
+    case playbackOnly
+    case other
+}
+
+private func canonicalMemoryEventKind(rawEventCode: Int) -> DialogProviderCanonicalMemoryEventKind {
+    switch rawEventCode {
+    case DialogProviderSDKEventClassifier.asrInfo:
+        return .owner(.asrInfo)
+    case DialogProviderSDKEventClassifier.asrResponse:
+        return .owner(.asrResponse)
+    case DialogProviderSDKEventClassifier.asrEnded:
+        return .owner(.asrEnded)
+    case DialogProviderSDKEventClassifier.queryConfirmed:
+        return .owner(.queryConfirmed)
+    case DialogProviderSDKEventClassifier.chatResponse:
+        return .assistant(.response)
+    case DialogProviderSDKEventClassifier.chatEnded:
+        return .assistant(.ended)
+    case DialogProviderSDKEventClassifier.ttsSentenceStart,
+         DialogProviderSDKEventClassifier.ttsSentenceEnd,
+         DialogProviderSDKEventClassifier.ttsEnded:
+        return .playbackOnly
+    default:
+        return .other
+    }
+}
+
+private func freezeCanonicalMemoryPacket(
+    rawEventCode: Int,
+    data: Data,
+    engineGeneration: UUID,
+    capturedAt: Date,
+    assistantState: inout DialogProviderCanonicalAssistantStreamState,
+    router: DialogProviderCanonicalIngressRouter
+) -> (result: DialogProviderCanonicalIngressResult?, assistantDelivered: Bool) {
+    switch canonicalMemoryEventKind(rawEventCode: rawEventCode) {
+    case .owner(let kind):
+        return (
+            router.freeze(
+                kind: kind,
+                data: data,
+                engineGeneration: engineGeneration,
+                capturedAt: capturedAt
+            ),
+            false
+        )
+    case .assistant(let kind):
+        let metadata = DialogProviderEventMetadata(data: data)
+        guard router.accepts(engineGeneration: engineGeneration),
+              let event = assistantState.consume(
+            kind: kind,
+            data: data,
+            engineGeneration: engineGeneration,
+            capturedAt: capturedAt
+        ) else {
+            return (
+                router.freeze(
+                    kind: .other,
+                    data: data,
+                    engineGeneration: engineGeneration,
+                    capturedAt: capturedAt
+                ),
+                false
+            )
+        }
+        let result = router.freezeAssistant(
+            event,
+            metadata: metadata,
+            engineGeneration: engineGeneration
+        )
+        return (result, result != nil)
+    case .playbackOnly, .other:
+        return (
+            router.freeze(
+                kind: .other,
+                data: data,
+                engineGeneration: engineGeneration,
+                capturedAt: capturedAt
+            ),
+            false
+        )
     }
 }
 
@@ -1210,7 +2321,96 @@ struct DialogEngineScopedTTSVoiceSelectionStore {
     }
 }
 
-#if (UI_QA_SIMULATOR || RELEASE_SCOPE_SIMULATOR) && targetEnvironment(simulator)
+// This control is shared by the native Manager and local controlled-SDK tests.
+// It owns only launch identity, not the SDK or the transcript lifecycle.
+final class DialogVoiceLaunchExecutionControl {
+    private(set) var operationID: UUID?
+    private(set) var pendingID: String?
+    private var isValid: (() -> Bool)?
+    private(set) var startSubmitted = false
+
+    func begin(operationID: UUID, pendingID: String?, isValid: (() -> Bool)?) {
+        self.operationID = operationID
+        self.pendingID = pendingID
+        self.isValid = isValid
+        startSubmitted = false
+    }
+
+    func permits(_ expectedOperationID: UUID) -> Bool {
+        operationID == expectedOperationID && (isValid?() ?? true)
+    }
+
+    @discardableResult
+    func markStartSubmitted(_ expectedOperationID: UUID) -> Bool {
+        guard permits(expectedOperationID) else { return false }
+        startSubmitted = true
+        return true
+    }
+
+    // This is the Manager's actual preflight, ingress, and SDK submission sequence.
+    // Keeping the final check here lets controlled SDK tests exercise that sequence.
+    func performStartSubmission<Result>(
+        operationID expectedOperationID: UUID,
+        preflight: () -> Bool,
+        installIngress: () -> Void,
+        onRejected: () -> Void,
+        send: () -> Result
+    ) -> Result? {
+        guard permits(expectedOperationID), preflight() else {
+            onRejected()
+            return nil
+        }
+        installIngress()
+        guard preflight(), markStartSubmitted(expectedOperationID) else {
+            onRejected()
+            return nil
+        }
+        return send()
+    }
+
+    func acceptsSessionStarted(_ expectedOperationID: UUID) -> Bool {
+        permits(expectedOperationID) && startSubmitted
+    }
+
+    @discardableResult
+    func failStart(_ expectedOperationID: UUID) -> Bool {
+        guard permits(expectedOperationID), startSubmitted else { return false }
+        invalidate()
+        return true
+    }
+
+    @discardableResult
+    func cancel(pendingID expectedID: String?) -> Bool {
+        guard let expectedID, pendingID == expectedID else { return false }
+        invalidate()
+        return true
+    }
+
+    @discardableResult
+    func cancel(operationID expectedOperationID: UUID) -> Bool {
+        guard operationID == expectedOperationID else { return false }
+        invalidate()
+        return true
+    }
+
+    @discardableResult
+    func complete(pendingID expectedID: String) -> Bool {
+        guard pendingID == expectedID, operationID != nil else { return false }
+        pendingID = nil
+        isValid = nil
+        startSubmitted = false
+        return true
+    }
+
+    func invalidate() {
+        operationID = nil
+        pendingID = nil
+        isValid = nil
+        startSubmitted = false
+    }
+}
+
+#if (UI_QA_SIMULATOR || RELEASE_SCOPE_SIMULATOR) && targetEnvironment(simulator) && !LIVE_MANAGER_CONTROLLED_SDK
 
 enum DialogEndReason {
     case manual
@@ -1230,12 +2430,27 @@ protocol DialogEngineDelegate: AnyObject {
     func onChatStreaming(text: String)
     func onError(error: Error)
     func onDialogEnded(reason: DialogEndReason)
+    func onCanonicalTranscriptMemberRegistered(_ member: NativeLiveCanonicalTranscriptMember)
+    func onCanonicalTranscriptEvent(_ event: NativeLiveCanonicalTranscriptEvent)
+    func makeCanonicalTranscriptDeliveryBinding() -> DialogCanonicalTranscriptDeliveryBinding
 }
 
 extension DialogEngineDelegate {
     func onTTSPlaybackStarted() {}
     func onDelegatedPlaybackProgress(_ progress: DialogEngineDelegatedPlaybackProgress) {}
     func onTTSPlaybackInterruptedByUser() {}
+    func onCanonicalTranscriptMemberRegistered(_ member: NativeLiveCanonicalTranscriptMember) {}
+    func onCanonicalTranscriptEvent(_ event: NativeLiveCanonicalTranscriptEvent) {}
+    func makeCanonicalTranscriptDeliveryBinding() -> DialogCanonicalTranscriptDeliveryBinding {
+        DialogCanonicalTranscriptDeliveryBinding(deliver: { [weak self] member, event in
+            if let member {
+                self?.onCanonicalTranscriptMemberRegistered(member)
+            }
+            if let event {
+                self?.onCanonicalTranscriptEvent(event)
+            }
+        })
+    }
 }
 
 final class DialogEngineManager: NSObject {
@@ -1260,6 +2475,12 @@ final class DialogEngineManager: NSObject {
     private(set) var lastSubmittedTurnKnowledgeContextLength = 0
     private var scopedTTSVoiceSelectionStore = DialogEngineScopedTTSVoiceSelectionStore()
     private var externallyManagedAudioSessionLease: AudioOwnerLease?
+    private let rawCanonicalIngressRouter = DialogProviderCanonicalIngressRouter()
+    private var providerCanonicalAssistantStreamState =
+        DialogProviderCanonicalAssistantStreamState()
+    private var providerCanonicalAssistantIngressState =
+        DialogProviderCanonicalAssistantStreamState()
+    private let providerCanonicalMemoryIngressLock = NSLock()
 
     private override init() {
         super.init()
@@ -1382,9 +2603,12 @@ final class DialogEngineManager: NSObject {
         sendsGreeting: Bool = true,
         usesTurnScopedKnowledgeContext: Bool = false,
         lifetimePolicy: DialogSessionLifetimePolicy = .automatic,
-        answerAuthority: DialogAnswerAuthority = .provider
+        answerAuthority: DialogAnswerAuthority = .provider,
+        voiceLaunchID: String? = nil,
+        voiceLaunchIsValid: (() -> Bool)? = nil
     ) {
         guard isActiveAccountLeaseValid(at: .request),
+              voiceLaunchIsValid?() ?? true,
               let accountLease = boundAccountLease,
               let bindingHandle = boundBindingHandle else { return }
         activeDialogAccountLease = accountLease
@@ -1399,6 +2623,14 @@ final class DialogEngineManager: NSObject {
             delegate?.onDialogStarted()
         }
     }
+
+    func cancelPendingVoiceLaunch(id: String?) {
+        guard id != nil, !isDialogActive else { return }
+        activeDialogAccountLease = nil
+        activeDialogBindingHandle = nil
+    }
+
+    func completeVoiceLaunch(id: String) {}
 
     @discardableResult
     func startTextReplyPlayback(
@@ -1488,6 +2720,123 @@ final class DialogEngineManager: NSObject {
         return true
     }
 
+    #if DEBUG
+    func installCanonicalIngressForTesting(
+        engineGeneration: UUID,
+        dialogOperationID: UUID,
+        delegate: DialogEngineDelegate
+    ) {
+        providerCanonicalMemoryIngressLock.lock()
+        providerCanonicalAssistantStreamState.reset()
+        providerCanonicalAssistantIngressState.reset()
+        let deliveryBinding = delegate.makeCanonicalTranscriptDeliveryBinding()
+        rawCanonicalIngressRouter.install(
+            engineGeneration: engineGeneration,
+            dialogOperationID: dialogOperationID,
+            reserve: deliveryBinding.reserve,
+            deliver: deliveryBinding.deliver
+        )
+        providerCanonicalMemoryIngressLock.unlock()
+    }
+
+    @discardableResult
+    func enqueueCanonicalProviderMessageForTesting(
+        kind: DialogProviderCanonicalIngressKind,
+        data: Data,
+        engineGeneration: UUID,
+        capturedAt: Date = Date()
+    ) -> DialogProviderCanonicalIngressResult? {
+        rawCanonicalIngressRouter.freeze(
+            kind: kind,
+            data: data,
+            engineGeneration: engineGeneration,
+            capturedAt: capturedAt
+        )
+    }
+
+    @discardableResult
+    func enqueueCanonicalRawProviderMessageForTesting(
+        rawEventCode: Int,
+        data: Data,
+        engineGeneration: UUID,
+        capturedAt: Date = Date()
+    ) -> DialogProviderCanonicalIngressResult? {
+        providerCanonicalMemoryIngressLock.lock()
+        defer { providerCanonicalMemoryIngressLock.unlock() }
+        return freezeCanonicalMemoryPacket(
+            rawEventCode: rawEventCode,
+            data: data,
+            engineGeneration: engineGeneration,
+            capturedAt: capturedAt,
+            assistantState: &providerCanonicalAssistantIngressState,
+            router: rawCanonicalIngressRouter
+        ).result
+    }
+
+    func closeCanonicalIngressForTesting(dialogOperationID: UUID? = nil) {
+        providerCanonicalMemoryIngressLock.lock()
+        if rawCanonicalIngressRouter.close(expectedDialogOperationID: dialogOperationID) {
+            providerCanonicalAssistantStreamState.reset()
+            providerCanonicalAssistantIngressState.reset()
+        }
+        providerCanonicalMemoryIngressLock.unlock()
+    }
+
+    func stopCanonicalIngressForTesting(
+        engineGeneration: UUID,
+        dialogOperationID: UUID
+    ) {
+        providerCanonicalMemoryIngressLock.lock()
+        _ = rawCanonicalIngressRouter.sealActiveOwnerForStop(
+            engineGeneration: engineGeneration
+        )
+        rawCanonicalIngressRouter.close(expectedDialogOperationID: dialogOperationID)
+        providerCanonicalAssistantStreamState.reset()
+        providerCanonicalAssistantIngressState.reset()
+        providerCanonicalMemoryIngressLock.unlock()
+    }
+
+    func setCanonicalIngressDeliverySchedulerForTesting(
+        _ scheduler: @escaping DialogProviderCanonicalIngressRouter.DeliveryScheduler
+    ) {
+        rawCanonicalIngressRouter.setDeliverySchedulerForTesting(scheduler)
+    }
+
+    @discardableResult
+    func enqueueCanonicalAssistantForTesting(
+        replyID: String,
+        text: String,
+        engineGeneration: UUID,
+        capturedAt: Date = Date()
+    ) -> Bool {
+        rawCanonicalIngressRouter.deliverAssistantForTesting(
+            replyID: replyID,
+            text: text,
+            engineGeneration: engineGeneration,
+            capturedAt: capturedAt
+        )
+    }
+
+    @discardableResult
+    func enqueueCanonicalAssistantProviderMessageForTesting(
+        kind: DialogProviderCanonicalAssistantStreamKind,
+        data: Data,
+        engineGeneration: UUID,
+        capturedAt: Date = Date()
+    ) -> NativeLiveCanonicalTranscriptEvent? {
+        providerCanonicalMemoryIngressLock.lock()
+        defer { providerCanonicalMemoryIngressLock.unlock() }
+        return deliverCanonicalAssistantStreamPacket(
+            state: &providerCanonicalAssistantStreamState,
+            router: rawCanonicalIngressRouter,
+            kind: kind,
+            data: data,
+            engineGeneration: engineGeneration,
+            capturedAt: capturedAt
+        )
+    }
+    #endif
+
     func stopDialog() {
         guard isDialogActive else { return }
         let shouldDeliver = isActiveAccountLeaseValid(at: .runtime)
@@ -1566,9 +2915,128 @@ enum DialogEngineError: LocalizedError {
 import Foundation
 import AVFoundation
 import CocoaLumberjack
+// Only the vendor boundary is controlled. The native Manager below is unchanged
+// in this build, including setup, delegate proxy, operation and cleanup code.
+// This is not a wire/SDK implementation and cannot establish Provider acceptance.
+#if LIVE_MANAGER_CONTROLLED_SDK
+#if !DEBUG || !targetEnvironment(simulator)
+#error("LIVE_MANAGER_CONTROLLED_SDK is restricted to Debug Simulator tests")
+#endif
+struct MICControlledSDKValue: Equatable {
+    let rawValue: Int
+}
+typealias SEMessageType = MICControlledSDKValue
+protocol SpeechEngineDelegate: AnyObject {
+    func onMessage(with type: SEMessageType, andData data: Data)
+}
+let SEDecoderAudioData = MICControlledSDKValue(rawValue: 3100)
+let SEDialogWorkModeDefault = MICControlledSDKValue(rawValue: 0)
+let SEDialogWorkModeDelegateChatTtsText = MICControlledSDKValue(rawValue: 1)
+let SEDirectiveDialogUseClientTriggerTts = MICControlledSDKValue(rawValue: 4000)
+let SEDirectiveEventChatRagText = MICControlledSDKValue(rawValue: 3009)
+let SEDirectiveEventClientInterrupt = MICControlledSDKValue(rawValue: 3010)
+let SEDirectiveEventSayHello = MICControlledSDKValue(rawValue: 3006)
+let SEDirectivePauseRecorder = MICControlledSDKValue(rawValue: 1502)
+let SEDirectiveResumeRecorder = MICControlledSDKValue(rawValue: 1503)
+let SEDirectiveStartEngine = MICControlledSDKValue(rawValue: 1000)
+let SEDirectiveSyncStopEngine = MICControlledSDKValue(rawValue: 2001)
+let SEEngineError = MICControlledSDKValue(rawValue: 1003)
+let SEEngineStart = MICControlledSDKValue(rawValue: 1001)
+let SEEngineStop = MICControlledSDKValue(rawValue: 1002)
+let SEEventASREnded = MICControlledSDKValue(rawValue: 3014)
+let SEEventASRInfo = MICControlledSDKValue(rawValue: 3012)
+let SEEventASRResponse = MICControlledSDKValue(rawValue: 3013)
+let SEEventChatEnded = MICControlledSDKValue(rawValue: 3016)
+let SEEventChatResponse = MICControlledSDKValue(rawValue: 3015)
+let SEEventChatTextQueryConfirmed = MICControlledSDKValue(rawValue: 3021)
+let SEEventConnectionFailed = MICControlledSDKValue(rawValue: 3001)
+let SEEventConnectionFinished = MICControlledSDKValue(rawValue: 3002)
+let SEEventConnectionStarted = MICControlledSDKValue(rawValue: 3000)
+let SEEventSessionCanceled = MICControlledSDKValue(rawValue: 3004)
+let SEEventSessionFailed = MICControlledSDKValue(rawValue: 3006)
+let SEEventSessionFinished = MICControlledSDKValue(rawValue: 3005)
+let SEEventSessionStarted = MICControlledSDKValue(rawValue: 3003)
+let SEEventTTSEnded = MICControlledSDKValue(rawValue: 3011)
+let SEEventTTSResponse = MICControlledSDKValue(rawValue: 3010)
+let SEEventTTSSentenceEnd = MICControlledSDKValue(rawValue: 3009)
+let SEEventTTSSentenceStart = MICControlledSDKValue(rawValue: 3008)
+let SENoError = MICControlledSDKValue(rawValue: 0)
+let SEPlayerAudioData = MICControlledSDKValue(rawValue: 3018)
+let SEPlayerFinishPlayAudio = MICControlledSDKValue(rawValue: 3020)
+let SEPlayerStartPlayAudio = MICControlledSDKValue(rawValue: 3019)
+let SE_DIALOG_ENGINE = "SE_DIALOG_ENGINE"
+let SE_LOG_LEVEL_WARN = "SE_LOG_LEVEL_WARN"
+let SE_PARAMS_KEY_APP_ID_STRING = "SE_PARAMS_KEY_APP_ID_STRING"
+let SE_PARAMS_KEY_APP_KEY_STRING = "SE_PARAMS_KEY_APP_KEY_STRING"
+let SE_PARAMS_KEY_APP_TOKEN_STRING = "SE_PARAMS_KEY_APP_TOKEN_STRING"
+let SE_PARAMS_KEY_DIALOG_ADDRESS_STRING = "SE_PARAMS_KEY_DIALOG_ADDRESS_STRING"
+let SE_PARAMS_KEY_DIALOG_ENABLE_DECODER_AUDIO_CALLBACK_BOOL = "SE_PARAMS_KEY_DIALOG_ENABLE_DECODER_AUDIO_CALLBACK_BOOL"
+let SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_AUDIO_CALLBACK_BOOL = "SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_AUDIO_CALLBACK_BOOL"
+let SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_BOOL = "SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_BOOL"
+let SE_PARAMS_KEY_DIALOG_URI_STRING = "SE_PARAMS_KEY_DIALOG_URI_STRING"
+let SE_PARAMS_KEY_DIALOG_WORK_MODE_INT = "SE_PARAMS_KEY_DIALOG_WORK_MODE_INT"
+let SE_PARAMS_KEY_ENABLE_AEC_BOOL = "SE_PARAMS_KEY_ENABLE_AEC_BOOL"
+let SE_PARAMS_KEY_ENABLE_GET_VOLUME_BOOL = "SE_PARAMS_KEY_ENABLE_GET_VOLUME_BOOL"
+let SE_PARAMS_KEY_ENABLE_WS_RECONNECT_BOOL = "SE_PARAMS_KEY_ENABLE_WS_RECONNECT_BOOL"
+let SE_PARAMS_KEY_ENGINE_NAME_STRING = "SE_PARAMS_KEY_ENGINE_NAME_STRING"
+let SE_PARAMS_KEY_FULLLINK_DISABLE_TTS_BOOL = "SE_PARAMS_KEY_FULLLINK_DISABLE_TTS_BOOL"
+let SE_PARAMS_KEY_LOG_LEVEL_STRING = "SE_PARAMS_KEY_LOG_LEVEL_STRING"
+let SE_PARAMS_KEY_PREVENT_PLAYER_CREATION_BOOL = "SE_PARAMS_KEY_PREVENT_PLAYER_CREATION_BOOL"
+let SE_PARAMS_KEY_RECORDER_TYPE_STRING = "SE_PARAMS_KEY_RECORDER_TYPE_STRING"
+let SE_PARAMS_KEY_REQUEST_HEADERS_STRING = "SE_PARAMS_KEY_REQUEST_HEADERS_STRING"
+let SE_PARAMS_KEY_RESET_AUDIOSESSION_BOOL = "SE_PARAMS_KEY_RESET_AUDIOSESSION_BOOL"
+let SE_PARAMS_KEY_RESOURCE_ID_STRING = "SE_PARAMS_KEY_RESOURCE_ID_STRING"
+let SE_PARAMS_KEY_RESTART_AUDIOSESSION_BOOL = "SE_PARAMS_KEY_RESTART_AUDIOSESSION_BOOL"
+let SE_PARAMS_KEY_RESUME_OTHERS_INTERRUPTED_PLAYBACK_BOOL = "SE_PARAMS_KEY_RESUME_OTHERS_INTERRUPTED_PLAYBACK_BOOL"
+let SE_PARAMS_KEY_UID_STRING = "SE_PARAMS_KEY_UID_STRING"
+let SE_RECORDER_TYPE_RECORDER = "SE_RECORDER_TYPE_RECORDER"
+final class SpeechEngine {
+    static var instances: [SpeechEngine] = []
+    static var onInitialize: (() -> Void)?
+    static var initializationResult = SENoError
+    static var startResult = SENoError
+    static var createResult = true
+    static func prepareEnvironment() {}
+    static func resetControlledBoundary() {
+        instances = []; onInitialize = nil
+        initializationResult = SENoError; startResult = SENoError; createResult = true
+    }
+    private var callback: SpeechEngineDelegate?
+    private(set) var directives: [(MICControlledSDKValue, String?)] = []
+    private(set) var parameters: [String: String] = [:]
+    private(set) var destroyCount = 0
+    init() { Self.instances.append(self) }
+    func createEngine(with delegate: SpeechEngineDelegate) -> Bool {
+        callback = delegate
+        return Self.createResult
+    }
+    func setStringParam(_ value: String, forKey key: String) { parameters[key] = value }
+    func setIntParam<T: BinaryInteger>(_ value: T, forKey key: String) { parameters[key] = String(value) }
+    func setBoolParam(_ value: Bool, forKey key: String) { parameters[key] = String(value) }
+    func initEngine() -> MICControlledSDKValue {
+        Self.onInitialize?()
+        return Self.initializationResult
+    }
+    @discardableResult
+    func send(_ directive: MICControlledSDKValue, data: String? = nil) -> MICControlledSDKValue {
+        directives.append((directive, data))
+        return directive == SEDirectiveStartEngine ? Self.startResult : SENoError
+    }
+    func destroy() { destroyCount += 1 }
+    // Retain the old proxy to exercise late callbacks from a destroyed engine.
+    func emit(_ type: SEMessageType, data: Data = Data("{}".utf8)) {
+        callback?.onMessage(with: type, andData: data)
+    }
+    func count(_ directive: MICControlledSDKValue) -> Int {
+        directives.filter { $0.0 == directive }.count
+    }
+}
+#else
 import SpeechEngineToB
+#endif
 
-#if DEBUG
+
+#if DEBUG && !LIVE_MANAGER_CONTROLLED_SDK
 private final class DialogT06ControlledWebSocketClient: NSObject, SpeechWsClientProtocol {
     private var listener: SpeechWsListenerProtocol?
     private var didRecordTerminalEvidence = false
@@ -1643,6 +3111,125 @@ private final class DialogT06ControlledWebSocketClient: NSObject, SpeechWsClient
     func stopConnection() -> Bool {
         listener = nil
         return true
+    }
+}
+#endif
+
+#if DEBUG
+extension DialogEngineManager {
+    func installCanonicalIngressForTesting(
+        engineGeneration: UUID,
+        dialogOperationID: UUID,
+        delegate: DialogEngineDelegate
+    ) {
+        providerCanonicalMemoryIngressLock.lock()
+        providerCanonicalAssistantStreamState.reset()
+        providerCanonicalAssistantIngressState.reset()
+        let deliveryBinding = delegate.makeCanonicalTranscriptDeliveryBinding()
+        rawCanonicalIngressRouter.install(
+            engineGeneration: engineGeneration,
+            dialogOperationID: dialogOperationID,
+            reserve: deliveryBinding.reserve,
+            deliver: deliveryBinding.deliver
+        )
+        providerCanonicalMemoryIngressLock.unlock()
+    }
+
+    @discardableResult
+    func enqueueCanonicalProviderMessageForTesting(
+        kind: DialogProviderCanonicalIngressKind,
+        data: Data,
+        engineGeneration: UUID,
+        capturedAt: Date = Date()
+    ) -> DialogProviderCanonicalIngressResult? {
+        rawCanonicalIngressRouter.freeze(
+            kind: kind,
+            data: data,
+            engineGeneration: engineGeneration,
+            capturedAt: capturedAt
+        )
+    }
+
+    @discardableResult
+    func enqueueCanonicalRawProviderMessageForTesting(
+        rawEventCode: Int,
+        data: Data,
+        engineGeneration: UUID,
+        capturedAt: Date = Date()
+    ) -> DialogProviderCanonicalIngressResult? {
+        providerCanonicalMemoryIngressLock.lock()
+        defer { providerCanonicalMemoryIngressLock.unlock() }
+        return freezeCanonicalMemoryPacket(
+            rawEventCode: rawEventCode,
+            data: data,
+            engineGeneration: engineGeneration,
+            capturedAt: capturedAt,
+            assistantState: &providerCanonicalAssistantIngressState,
+            router: rawCanonicalIngressRouter
+        ).result
+    }
+
+    func closeCanonicalIngressForTesting(dialogOperationID: UUID? = nil) {
+        providerCanonicalMemoryIngressLock.lock()
+        if rawCanonicalIngressRouter.close(expectedDialogOperationID: dialogOperationID) {
+            providerCanonicalAssistantStreamState.reset()
+            providerCanonicalAssistantIngressState.reset()
+        }
+        providerCanonicalMemoryIngressLock.unlock()
+    }
+
+    func stopCanonicalIngressForTesting(
+        engineGeneration: UUID,
+        dialogOperationID: UUID
+    ) {
+        providerCanonicalMemoryIngressLock.lock()
+        _ = rawCanonicalIngressRouter.sealActiveOwnerForStop(
+            engineGeneration: engineGeneration
+        )
+        rawCanonicalIngressRouter.close(expectedDialogOperationID: dialogOperationID)
+        providerCanonicalAssistantStreamState.reset()
+        providerCanonicalAssistantIngressState.reset()
+        providerCanonicalMemoryIngressLock.unlock()
+    }
+
+    func setCanonicalIngressDeliverySchedulerForTesting(
+        _ scheduler: @escaping DialogProviderCanonicalIngressRouter.DeliveryScheduler
+    ) {
+        rawCanonicalIngressRouter.setDeliverySchedulerForTesting(scheduler)
+    }
+
+    @discardableResult
+    func enqueueCanonicalAssistantForTesting(
+        replyID: String,
+        text: String,
+        engineGeneration: UUID,
+        capturedAt: Date = Date()
+    ) -> Bool {
+        rawCanonicalIngressRouter.deliverAssistantForTesting(
+            replyID: replyID,
+            text: text,
+            engineGeneration: engineGeneration,
+            capturedAt: capturedAt
+        )
+    }
+
+    @discardableResult
+    func enqueueCanonicalAssistantProviderMessageForTesting(
+        kind: DialogProviderCanonicalAssistantStreamKind,
+        data: Data,
+        engineGeneration: UUID,
+        capturedAt: Date = Date()
+    ) -> NativeLiveCanonicalTranscriptEvent? {
+        providerCanonicalMemoryIngressLock.lock()
+        defer { providerCanonicalMemoryIngressLock.unlock() }
+        return deliverCanonicalAssistantStreamPacket(
+            state: &providerCanonicalAssistantStreamState,
+            router: rawCanonicalIngressRouter,
+            kind: kind,
+            data: data,
+            engineGeneration: engineGeneration,
+            capturedAt: capturedAt
+        )
     }
 }
 #endif
@@ -1727,12 +3314,27 @@ protocol DialogEngineDelegate: AnyObject {
     func onChatStreaming(text: String)
     func onError(error: Error)
     func onDialogEnded(reason: DialogEndReason)
+    func onCanonicalTranscriptMemberRegistered(_ member: NativeLiveCanonicalTranscriptMember)
+    func onCanonicalTranscriptEvent(_ event: NativeLiveCanonicalTranscriptEvent)
+    func makeCanonicalTranscriptDeliveryBinding() -> DialogCanonicalTranscriptDeliveryBinding
 }
 
 extension DialogEngineDelegate {
     func onTTSPlaybackStarted() {}
     func onDelegatedPlaybackProgress(_ progress: DialogEngineDelegatedPlaybackProgress) {}
     func onTTSPlaybackInterruptedByUser() {}
+    func onCanonicalTranscriptMemberRegistered(_ member: NativeLiveCanonicalTranscriptMember) {}
+    func onCanonicalTranscriptEvent(_ event: NativeLiveCanonicalTranscriptEvent) {}
+    func makeCanonicalTranscriptDeliveryBinding() -> DialogCanonicalTranscriptDeliveryBinding {
+        DialogCanonicalTranscriptDeliveryBinding { [weak self] member, event in
+            if let member {
+                self?.onCanonicalTranscriptMemberRegistered(member)
+            }
+            if let event {
+                self?.onCanonicalTranscriptEvent(event)
+            }
+        }
+    }
 }
 
 private final class DialogEngineProviderDelegateProxy: NSObject, SpeechEngineDelegate {
@@ -1758,6 +3360,25 @@ private struct DialogEngineProviderCallbackContext {
     let dialogOperationId: UUID
     let bindingHandle: DialogEngineBindingHandle
     let delegateIdentity: ObjectIdentifier
+}
+
+private struct DialogEngineFrozenProviderMessage {
+    let type: SEMessageType
+    let data: Data
+    let engineGeneration: UUID
+    let callbackOrdinal: UInt64
+    let metadata: DialogProviderEventMetadata
+    let canonicalOwnerDeliveredAtIngress: Bool
+    let canonicalAssistantDeliveredAtIngress: Bool
+}
+
+private struct DialogEngineRawCanonicalIngressBinding {
+    let engineGeneration: UUID
+    let dialogOperationID: UUID
+    let deliver: (
+        NativeLiveCanonicalTranscriptMember?,
+        NativeLiveCanonicalTranscriptEvent?
+    ) -> Void
 }
 
 private struct DialogEngineTextReplyPlayback {
@@ -1795,6 +3416,15 @@ final class DialogEngineManager: NSObject {
     private var activeDialogBindingHandle: DialogEngineBindingHandle?
     private var activeDialogOperationId: UUID?
     private var providerSessionOperationId: UUID?
+    private var pendingVoiceLaunchID: String?
+    #if LIVE_MANAGER_CONTROLLED_SDK
+    private(set) var controlledCallbackDrainForTesting = 0
+    var controlledCanonicalIngressOpenForTesting: Bool {
+        engineCallbackGeneration.map { rawCanonicalIngressRouter.accepts(engineGeneration: $0) } ?? false
+    }
+    #endif
+    private let voiceLaunchControl = DialogVoiceLaunchExecutionControl()
+    private var pendingVoiceStartSubmitted = false
     private var engineCallbackGeneration: UUID?
     private var engineDelegateProxy: DialogEngineProviderDelegateProxy?
     private var requiresEngineRecreationBeforeNextDialog = false
@@ -1825,10 +3455,21 @@ final class DialogEngineManager: NSObject {
     private var liveStartDirectiveReturnCode: Int?
     private var liveFirstResponseObserved = false
     private var providerTurnCorrelation = DialogProviderTurnCorrelationState()
+    private var providerReplyPlaybackState = DialogProviderReplyPlaybackState()
+    private var providerPCMDrain = DialogProviderPCMDrainVerifier()
+    private var providerInterruptionState = DialogProviderInterruptionState()
     private var providerActiveChatReplyID: String?
+    private var providerCanonicalAssistantTextState = DialogProviderCanonicalReplyTextState()
+    private var providerCanonicalAssistantStreamState =
+        DialogProviderCanonicalAssistantStreamState()
+    private var providerCanonicalAssistantIngressState =
+        DialogProviderCanonicalAssistantStreamState()
+    private let providerCanonicalMemoryIngressLock = NSLock()
     private var providerQuestionObservedAt: Date?
     private var providerFirstTextKeys = Set<String>()
     private var providerFirstAudioKeys = Set<String>()
+    private var providerCallbackOrdinal: UInt64 = 0
+    private let rawCanonicalIngressRouter = DialogProviderCanonicalIngressRouter()
 
     /// 引擎是否就绪（已初始化完成）
     private(set) var isEngineReady = false
@@ -1999,7 +3640,7 @@ final class DialogEngineManager: NSObject {
 
     private var engine: SpeechEngine?
     private var isSettingUp = false
-    #if DEBUG
+    #if DEBUG && !LIVE_MANAGER_CONTROLLED_SDK
     private var t06ControlledWebSocketClient: DialogT06ControlledWebSocketClient?
     #endif
 
@@ -2201,7 +3842,15 @@ final class DialogEngineManager: NSObject {
         let callbackContext = currentProviderCallbackContext()
         let delegatedLivePlayback = sessionLifetimePolicy == .userControlledLive
             && answerAuthority == .dreamJourneyBackend
+        let speakingBefore = isAISpeaking
         let result = engine.send(SEDirectiveEventClientInterrupt, data: "{}")
+        recordNativeLiveDiagnostic(
+            event: "clientInterrupt",
+            reason: notifiesUserInterruption ? "newBoundQuestion" : "explicitRequest",
+            speakingBefore: speakingBefore,
+            speakingAfter: result == SENoError ? false : speakingBefore,
+            resultCode: Int(result.rawValue)
+        )
         if result == SENoError {
             if delegatedLivePlayback, let callbackContext {
                 _ = emitDelegatedPlaybackProgress(
@@ -2210,6 +3859,9 @@ final class DialogEngineManager: NSObject {
                 )
             }
             isAISpeaking = false
+            providerReplyPlaybackState.reset()
+        providerPCMDrain.reset()
+            providerInterruptionState.clearAudibleReply()
             resetDelegatedClientPlaybackState()
             print("[DialogEngine] ✅ 已打断 AI 播报")
             DDLogInfo("[DialogEngine] 客户端打断 AI")
@@ -2272,7 +3924,7 @@ final class DialogEngineManager: NSObject {
             return
         }
 
-        #if DEBUG
+        #if DEBUG && !LIVE_MANAGER_CONTROLLED_SDK
         if DialogT06DiagnosticMode.isEnabled {
             let controlledClient = DialogT06ControlledWebSocketClient()
             t06ControlledWebSocketClient = controlledClient
@@ -2322,11 +3974,14 @@ final class DialogEngineManager: NSObject {
         sendsGreeting: Bool = true,
         usesTurnScopedKnowledgeContext: Bool = false,
         lifetimePolicy: DialogSessionLifetimePolicy = .automatic,
-        answerAuthority: DialogAnswerAuthority = .provider
+        answerAuthority: DialogAnswerAuthority = .provider,
+        voiceLaunchID: String? = nil,
+        voiceLaunchIsValid: (() -> Bool)? = nil
     ) {
         guard let accountLease = boundAccountLease,
               let bindingHandle = boundBindingHandle,
-              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+              accountLeaseRuntime.validate(accountLease, at: .request).allowed,
+              voiceLaunchIsValid?() ?? true else {
             return
         }
         if isDialogActive, let engine {
@@ -2335,6 +3990,7 @@ final class DialogEngineManager: NSObject {
             activeDialogAccountLease = nil
             activeDialogBindingHandle = nil
             activeDialogOperationId = nil
+            voiceLaunchControl.invalidate()
             providerSessionOperationId = nil
             requiresEngineRecreationBeforeNextDialog = true
         }
@@ -2350,8 +4006,16 @@ final class DialogEngineManager: NSObject {
         activeDialogAccountLease = accountLease
         activeDialogBindingHandle = bindingHandle
         activeDialogOperationId = dialogOperationId
+        pendingVoiceLaunchID = voiceLaunchID
+        voiceLaunchControl.begin(
+            operationID: dialogOperationId,
+            pendingID: voiceLaunchID,
+            isValid: voiceLaunchIsValid
+        )
+        pendingVoiceStartSubmitted = false
         if let engineCallbackGeneration {
             providerTurnCorrelation.beginSession(generation: engineCallbackGeneration)
+            providerInterruptionState.beginSession(generation: engineCallbackGeneration)
         }
         self.usesTurnScopedKnowledgeContext = usesTurnScopedKnowledgeContext
         sessionLifetimePolicy = lifetimePolicy
@@ -2360,6 +4024,10 @@ final class DialogEngineManager: NSObject {
         liveStartDirectiveReturnCode = nil
         liveFirstResponseObserved = false
         providerActiveChatReplyID = nil
+        providerReplyPlaybackState.reset()
+        providerPCMDrain.reset()
+        providerCanonicalAssistantTextState.reset()
+        providerCanonicalAssistantStreamState.reset()
         providerQuestionObservedAt = nil
         providerFirstTextKeys.removeAll()
         providerFirstAudioKeys.removeAll()
@@ -2371,6 +4039,10 @@ final class DialogEngineManager: NSObject {
         guard isEngineReady, engine != nil else {
             DDLogInfo("[DialogEngine] 引擎未就绪，先初始化")
             setup()
+            guard voiceLaunchStillValid(dialogOperationId) else {
+                cancelPendingVoiceLaunch(id: voiceLaunchID)
+                return
+            }
             if isEngineReady {
                 performStartDialog(
                     accountLease: accountLease,
@@ -2387,6 +4059,10 @@ final class DialogEngineManager: NSObject {
                       self.activeDialogAccountLease == accountLease,
                       self.accountLeaseRuntime.validate(accountLease, at: .timer).allowed,
                       self.isEngineReady else { return }
+                guard self.voiceLaunchStillValid(dialogOperationId) else {
+                    self.cancelPendingVoiceLaunch(id: voiceLaunchID)
+                    return
+                }
                 self.performStartDialog(
                     accountLease: accountLease,
                     bindingHandle: bindingHandle,
@@ -2401,6 +4077,52 @@ final class DialogEngineManager: NSObject {
             bindingHandle: bindingHandle,
             dialogOperationId: dialogOperationId
         )
+    }
+
+    private func voiceLaunchStillValid(_ operationID: UUID) -> Bool {
+        activeDialogOperationId == operationID && voiceLaunchControl.permits(operationID)
+    }
+
+    func cancelPendingVoiceLaunch(id: String?) {
+        guard voiceLaunchControl.cancel(pendingID: id) else { return }
+        finishCancelledVoiceLaunch()
+    }
+
+    private func cancelPendingVoiceLaunch(operationID: UUID) {
+        guard activeDialogOperationId == operationID,
+              voiceLaunchControl.cancel(operationID: operationID) else { return }
+        finishCancelledVoiceLaunch()
+    }
+
+    private func finishCancelledVoiceLaunch() {
+        pendingVoiceLaunchID = nil
+        if isDialogActive {
+            stopDialog()
+            return
+        }
+        // A launch can own ingress before SessionStarted. Pending cancellation
+        // must close that exact operation too; clearing IDs alone leaves the
+        // synchronous transcript ingress bound to a cancelled capture.
+        if let operationID = activeDialogOperationId {
+            closeRawCanonicalIngressBinding(expectedDialogOperationID: operationID)
+        }
+        if pendingVoiceStartSubmitted, let engine {
+            _ = engine.send(SEDirectiveSyncStopEngine)
+        }
+        pendingVoiceStartSubmitted = false
+        activeDialogAccountLease = nil
+        activeDialogBindingHandle = nil
+        activeDialogOperationId = nil
+        voiceLaunchControl.invalidate()
+        providerSessionOperationId = nil
+        requiresEngineRecreationBeforeNextDialog = true
+        restoreAudioSessionIfNeeded()
+    }
+
+    func completeVoiceLaunch(id: String) {
+        guard isDialogActive, voiceLaunchControl.complete(pendingID: id) else { return }
+        pendingVoiceLaunchID = nil
+        pendingVoiceStartSubmitted = false
     }
 
     /// Speaks a backend-generated text reply through the same Fire realtime
@@ -2471,9 +4193,18 @@ final class DialogEngineManager: NSObject {
               let engine,
               let callbackContext = currentProviderCallbackContext() else { return }
 
+        _ = rawCanonicalIngressRouter.sealActiveOwnerForStop(
+            engineGeneration: callbackContext.engineGeneration
+        )
+        closeRawCanonicalIngressBinding(
+            expectedDialogOperationID: callbackContext.dialogOperationId
+        )
         isEnding = true
         invalidateSilenceTimer()
         resetDelegatedClientPlaybackState()
+        providerReplyPlaybackState.reset()
+        providerPCMDrain.reset()
+        providerInterruptionState.clearAudibleReply()
         pendingEndReason = reason
 
         // 同步停止引擎（官方推荐）
@@ -2489,6 +4220,7 @@ final class DialogEngineManager: NSObject {
         activeDialogAccountLease = nil
         activeDialogBindingHandle = nil
         activeDialogOperationId = nil
+        voiceLaunchControl.invalidate()
         providerSessionOperationId = nil
         requiresEngineRecreationBeforeNextDialog = true
         restoreAudioSessionIfNeeded()
@@ -2896,6 +4628,7 @@ final class DialogEngineManager: NSObject {
 
     /// 销毁引擎（登出/退出时调用）
     func destroyEngine() {
+        closeRawCanonicalIngressBinding()
         let coordinatorOwnedAudioSession = DialogAudioSessionOwnershipPolicy.requiresCoordinator(
             lifetimePolicy: sessionLifetimePolicy,
             hasExternalLease: externallyManagedAudioSessionLease != nil
@@ -2921,6 +4654,7 @@ final class DialogEngineManager: NSObject {
         liveFirstResponseObserved = false
         activeDialogBindingHandle = nil
         activeDialogOperationId = nil
+        voiceLaunchControl.invalidate()
         providerSessionOperationId = nil
         requiresEngineRecreationBeforeNextDialog = false
         activeDialogAccountLease = nil
@@ -2933,6 +4667,9 @@ final class DialogEngineManager: NSObject {
         answerAuthority = .provider
         usesTurnScopedKnowledgeContext = false
         providerTurnCorrelation = DialogProviderTurnCorrelationState()
+        providerReplyPlaybackState = DialogProviderReplyPlaybackState()
+        providerPCMDrain.reset()
+        providerInterruptionState = DialogProviderInterruptionState()
         providerActiveChatReplyID = nil
         providerQuestionObservedAt = nil
         providerFirstTextKeys.removeAll()
@@ -3188,7 +4925,7 @@ final class DialogEngineManager: NSObject {
             forKey: SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_AUDIO_CALLBACK_BOOL
         )
         engine.setBoolParam(
-            audiblePlaybackPolicy.applicationPCMPlaybackEnabled,
+            audiblePlaybackPolicy.decoderObservationEnabled,
             forKey: SE_PARAMS_KEY_DIALOG_ENABLE_DECODER_AUDIO_CALLBACK_BOOL
         )
         engine.setBoolParam(
@@ -3236,6 +4973,10 @@ final class DialogEngineManager: NSObject {
             print("[DialogEngine] ❌ performStartDialog: engine 为 nil")
             return
         }
+        guard voiceLaunchStillValid(dialogOperationId) else {
+            cancelPendingVoiceLaunch(id: pendingVoiceLaunchID)
+            return
+        }
 
         print("[DialogEngine] 配置 AudioSession...")
         guard configureAudioSession() else {
@@ -3243,6 +4984,10 @@ final class DialogEngineManager: NSObject {
                 .failure(DialogTextReplyPlaybackError.unavailable),
                 stopsProviderSession: true
             )
+            return
+        }
+        guard voiceLaunchStillValid(dialogOperationId) else {
+            cancelPendingVoiceLaunch(id: pendingVoiceLaunchID)
             return
         }
 
@@ -3369,15 +5114,42 @@ final class DialogEngineManager: NSObject {
 
         // 启动引擎（SDK 内部自动处理连接、会话、录音）。StartEngine 的
         // JSON 可能包含正式记忆，日志只保留形状、哈希和返回码。
-        liveStartSubmittedAt = isProviderOwnedLive ? Date() : nil
-        recordLiveStartEngineSubmitted(
-            promptHash: livePromptHash,
-            dialogOperationID: dialogOperationId
-        )
-        let startResult = engine.send(SEDirectiveStartEngine, data: configJSON)
+        guard let startResult = voiceLaunchControl.performStartSubmission(
+            operationID: dialogOperationId,
+            preflight: { voiceLaunchStillValid(dialogOperationId) },
+            installIngress: {
+                if isProviderOwnedLive,
+                   let engineGeneration = engineCallbackGeneration,
+                   let delegate {
+                    installRawCanonicalIngressBinding(
+                        engineGeneration: engineGeneration,
+                        dialogOperationID: dialogOperationId,
+                        delegate: delegate
+                    )
+                }
+            },
+            onRejected: {
+                closeRawCanonicalIngressBinding(expectedDialogOperationID: dialogOperationId)
+                cancelPendingVoiceLaunch(operationID: dialogOperationId)
+            },
+            send: {
+                pendingVoiceStartSubmitted = true
+                liveStartSubmittedAt = isProviderOwnedLive ? Date() : nil
+                let result = engine.send(SEDirectiveStartEngine, data: configJSON)
+                recordLiveStartEngineSubmitted(
+                    promptHash: livePromptHash,
+                    dialogOperationID: dialogOperationId
+                )
+                return result
+            }
+        ) else {
+            return
+        }
         liveStartDirectiveReturnCode = Int(startResult.rawValue)
 
         if startResult != SENoError {
+            voiceLaunchControl.failStart(dialogOperationId)
+            closeRawCanonicalIngressBinding(expectedDialogOperationID: dialogOperationId)
             DDLogError("[DialogEngine] StartEngine 失败: \(startResult.rawValue)")
             restoreAudioSessionIfNeeded()
             if completeTextReplyPlayback(
@@ -3554,6 +5326,14 @@ final class DialogEngineManager: NSObject {
             id: metadata.questionID,
             generation: callbackContext.engineGeneration
         )
+        if previousQuestionID != providerTurnCorrelation.currentQuestionID {
+            providerReplyPlaybackState.reset()
+        providerPCMDrain.reset()
+            providerCanonicalAssistantTextState.reset()
+            providerCanonicalAssistantStreamState.reset()
+            providerActiveChatReplyID = nil
+            chatBuffer = ""
+        }
         if let questionID = metadata.questionID,
            questionID != previousQuestionID,
            turnSequence != nil {
@@ -3575,6 +5355,38 @@ final class DialogEngineManager: NSObject {
             ]
         )
         return metadata
+    }
+
+    private func interruptForNewProviderQuestionIfNeeded(
+        metadata: DialogProviderEventMetadata,
+        recognizedText: String?,
+        callbackContext: DialogEngineProviderCallbackContext
+    ) {
+        guard isAISpeaking,
+              sessionLifetimePolicy == .userControlledLive else { return }
+        let hasRecognizedSpeech = recognizedText?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty == false
+        if answerAuthority != .provider {
+            guard hasRecognizedSpeech else { return }
+            _ = interruptAI(notifiesUserInterruption: true)
+            return
+        }
+        guard providerInterruptionState.claimNewSpokenQuestion(
+            incomingQuestionID: metadata.questionID,
+            currentQuestionID: providerTurnCorrelation.currentQuestionID,
+            hasRecognizedSpeech: hasRecognizedSpeech,
+            generation: callbackContext.engineGeneration
+        ) else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "DialogEngine",
+                event: "liveClientInterruptSuppressed",
+                states: ["reason": "notNewBoundQuestion"],
+                counts: ["textObserved": hasRecognizedSpeech ? 1 : 0]
+            )
+            return
+        }
+        _ = interruptAI(notifiesUserInterruption: true)
     }
 
     private func recordProviderFirstOutput(
@@ -3639,17 +5451,21 @@ final class DialogEngineManager: NSObject {
         callbackContext: DialogEngineProviderCallbackContext
     ) -> (DialogProviderEventMetadata, DialogProviderReplyCorrelation) {
         let metadata = DialogProviderEventMetadata(data: data)
-        if metadata.questionID != nil {
-            _ = providerTurnCorrelation.observeQuestion(
-                id: metadata.questionID,
-                generation: callbackContext.engineGeneration
-            )
-        }
+        let previousReplyID = providerTurnCorrelation.currentReplyID
         let correlation = providerTurnCorrelation.observeReply(
             questionID: metadata.questionID,
             replyID: metadata.replyID,
             generation: callbackContext.engineGeneration
         )
+        if correlation == .matched,
+           providerTurnCorrelation.currentReplyID != previousReplyID {
+            providerCanonicalAssistantTextState.beginReply(
+                providerTurnCorrelation.currentReplyID
+            )
+            chatBuffer = ""
+            providerReplyPlaybackState.reset()
+        providerPCMDrain.reset()
+        }
         if isProviderOwnedLive {
             PrivacySafeDiagnostics.log(
                 subsystem: "DialogEngine",
@@ -3670,11 +5486,71 @@ final class DialogEngineManager: NSObject {
         return (metadata, correlation)
     }
 
+    private func emitCanonicalTranscriptEvent(
+        text: String,
+        role: OwnerTruthInterviewNaturalInputMessageRole,
+        finality: NativeLiveCanonicalTranscriptFinality,
+        finalityEvidence: NativeLiveCanonicalTranscriptFinalityEvidence = .unknown,
+        evidenceSource: NativeLiveCanonicalTranscriptEvidenceSource = .absent,
+        metadata: DialogProviderEventMetadata,
+        callbackContext: DialogEngineProviderCallbackContext
+    ) {
+        guard isProviderOwnedLive else { return }
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+        let providerTurnID: String?
+        switch role {
+        case .owner:
+            providerTurnID = metadata.questionID
+                ?? providerTurnCorrelation.currentQuestionID
+        case .assistant:
+            providerTurnID = metadata.replyID
+                ?? providerTurnCorrelation.currentReplyID
+        }
+        guard let providerTurnID,
+              !providerTurnID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            PrivacySafeDiagnostics.log(
+                subsystem: "DialogEngine",
+                event: "liveCanonicalTranscriptUnbound",
+                states: [
+                    "role": role.rawValue,
+                    "finalityEvidence": finalityEvidence.rawValue,
+                    "evidenceSource": evidenceSource.rawValue,
+                ],
+                counts: ["textCharacters": normalized.count]
+            )
+            return
+        }
+        let event = NativeLiveCanonicalTranscriptEvent(
+            canonicalTurnID: [
+                callbackContext.engineGeneration.uuidString.lowercased(),
+                role.rawValue,
+                providerTurnID,
+            ].joined(separator: ":"),
+            role: role,
+            text: normalized,
+            finality: finality,
+            finalityEvidence: finalityEvidence,
+            evidenceSource: evidenceSource,
+            capturedAt: Date()
+        )
+        deliverProviderCallback(callbackContext) { _, delegate in
+            delegate.onCanonicalTranscriptEvent(event)
+        }
+    }
+
+    private func updateCanonicalAssistantText(_ text: String) -> String {
+        providerCanonicalAssistantTextState.update(
+            text,
+            replyID: providerTurnCorrelation.currentReplyID
+        )
+    }
+
     private func acceptsProviderReply(_ correlation: DialogProviderReplyCorrelation) -> Bool {
         switch correlation {
         case .matched, .unobserved:
             return true
-        case .staleQuestion, .staleGeneration:
+        case .ambiguousReply, .staleQuestion, .staleGeneration:
             DDLogWarn("[DialogEngine] dropped stale provider reply correlation=\(correlation.rawValue)")
             return false
         }
@@ -3729,9 +5605,16 @@ final class DialogEngineManager: NSObject {
         invalidateSilenceTimer()
         guard sessionLifetimePolicy == .automatic,
               !isRecorderPaused,
+              !isAISpeaking,
               config.silenceTimeoutSeconds > 0,
               let accountLease = activeDialogAccountLease,
-              accountLeaseRuntime.validate(accountLease, at: .timer).allowed else { return }
+              accountLeaseRuntime.validate(accountLease, at: .timer).allowed else {
+            recordNativeLiveDiagnostic(
+                event: "silenceTimerNotArmed",
+                reason: "stateGuard"
+            )
+            return
+        }
 
         silenceTimer = Timer.scheduledTimer(
             withTimeInterval: config.silenceTimeoutSeconds,
@@ -3740,16 +5623,69 @@ final class DialogEngineManager: NSObject {
             guard let self,
                   self.activeDialogAccountLease == accountLease,
                   self.accountLeaseRuntime.validate(accountLease, at: .timer).allowed,
-                  self.isDialogActive else { return }
+                  self.isDialogActive,
+                  !self.isAISpeaking else { return }
+            self.recordNativeLiveDiagnostic(
+                event: "silenceTimerFired",
+                reason: "userWaitExpired"
+            )
             print("[DialogEngine] ⏰ 静音超时 \(self.config.silenceTimeoutSeconds)秒，自动结束对话")
             self.stopDialog(reason: .silenceTimeout)
         }
+        recordNativeLiveDiagnostic(
+            event: "silenceTimerArmed",
+            reason: "waitingForUser"
+        )
     }
 
     /// 停止静音超时计时器
     private func invalidateSilenceTimer() {
+        let didCancel = silenceTimer != nil
         silenceTimer?.invalidate()
         silenceTimer = nil
+        if didCancel {
+            recordNativeLiveDiagnostic(
+                event: "silenceTimerCancelled",
+                reason: "stateChanged"
+            )
+        }
+    }
+
+    private func recordNativeLiveDiagnostic(
+        event: String,
+        eventCode: Int? = nil,
+        callbackOrdinal: UInt64? = nil,
+        questionID: String? = nil,
+        replyID: String? = nil,
+        reason: String? = nil,
+        speakingBefore: Bool? = nil,
+        speakingAfter: Bool? = nil,
+        resultCode: Int? = nil,
+        accountLease: AccountLease? = nil,
+        providerSessionID: String? = nil
+    ) {
+        guard sessionLifetimePolicy == .userControlledLive,
+              let accountLease = accountLease
+                ?? activeDialogAccountLease
+                ?? engineAccountLease,
+              let providerSessionID = providerSessionID
+                ?? activeDialogOperationId?.uuidString else {
+            return
+        }
+        NativeLiveDiagnosticsRingStore.shared.record(
+            accountLease: accountLease,
+            providerSessionID: providerSessionID,
+            source: "sdk",
+            event: event,
+            eventCode: eventCode,
+            callbackOrdinal: callbackOrdinal,
+            questionID: questionID,
+            replyID: replyID,
+            reason: reason,
+            speakingBefore: speakingBefore,
+            speakingAfter: speakingAfter,
+            resultCode: resultCode
+        )
     }
 }
 
@@ -3762,13 +5698,91 @@ extension DialogEngineManager {
         data: Data,
         engineGeneration: UUID
     ) {
+        let frozen = freezeProviderMessageAtIngress(
+            type: type,
+            data: data,
+            engineGeneration: engineGeneration
+        )
+        #if LIVE_MANAGER_CONTROLLED_SDK
+        controlledCallbackDrainForTesting += 1
+        #endif
         DispatchQueue.main.async { [weak self] in
-            self?.handleProviderMessage(
-                type: type,
-                data: data,
-                engineGeneration: engineGeneration
-            )
+            guard let self else { return }
+            #if LIVE_MANAGER_CONTROLLED_SDK
+            defer { self.controlledCallbackDrainForTesting -= 1 }
+            #endif
+            if let frozen {
+                self.handleProviderMessage(frozen)
+            } else {
+                self.handleProviderMessage(
+                    DialogEngineFrozenProviderMessage(
+                        type: type,
+                        data: data,
+                        engineGeneration: engineGeneration,
+                        callbackOrdinal: 0,
+                        metadata: DialogProviderEventMetadata(data: data),
+                        canonicalOwnerDeliveredAtIngress: false,
+                        canonicalAssistantDeliveredAtIngress: false
+                    )
+                )
+            }
         }
+    }
+
+    private func freezeProviderMessageAtIngress(
+        type: SEMessageType,
+        data: Data,
+        engineGeneration: UUID
+    ) -> DialogEngineFrozenProviderMessage? {
+        providerCanonicalMemoryIngressLock.lock()
+        let frozenMemory = freezeCanonicalMemoryPacket(
+            rawEventCode: Int(type.rawValue),
+            data: data,
+            engineGeneration: engineGeneration,
+            capturedAt: Date(),
+            assistantState: &providerCanonicalAssistantIngressState,
+            router: rawCanonicalIngressRouter
+        )
+        providerCanonicalMemoryIngressLock.unlock()
+        guard let result = frozenMemory.result else { return nil }
+        return DialogEngineFrozenProviderMessage(
+            type: type,
+            data: data,
+            engineGeneration: engineGeneration,
+            callbackOrdinal: result.callbackOrdinal,
+            metadata: result.metadata,
+            canonicalOwnerDeliveredAtIngress: result.event?.role == .owner,
+            canonicalAssistantDeliveredAtIngress: frozenMemory.assistantDelivered
+        )
+    }
+
+    private func installRawCanonicalIngressBinding(
+        engineGeneration: UUID,
+        dialogOperationID: UUID,
+        delegate: DialogEngineDelegate
+    ) {
+        providerCanonicalMemoryIngressLock.lock()
+        providerCanonicalAssistantIngressState.reset()
+        let deliveryBinding = delegate.makeCanonicalTranscriptDeliveryBinding()
+        rawCanonicalIngressRouter.install(
+            engineGeneration: engineGeneration,
+            dialogOperationID: dialogOperationID,
+            reserve: deliveryBinding.reserve,
+            deliver: deliveryBinding.deliver
+        )
+        providerCanonicalMemoryIngressLock.unlock()
+    }
+
+    private func closeRawCanonicalIngressBinding(
+        expectedDialogOperationID: UUID? = nil
+    ) {
+        providerCanonicalMemoryIngressLock.lock()
+        if rawCanonicalIngressRouter.close(
+            expectedDialogOperationID: expectedDialogOperationID
+        ) {
+            providerCanonicalAssistantIngressState.reset()
+        }
+        providerCanonicalMemoryIngressLock.unlock()
     }
 
     private func currentProviderCallbackContext(
@@ -3841,23 +5855,29 @@ extension DialogEngineManager {
             checkpoint: .runtime,
             requiresActiveOperation: true
         ) else { return false }
+        closeRawCanonicalIngressBinding(
+            expectedDialogOperationID: context.dialogOperationId
+        )
         isDialogActive = false
         isRecorderPaused = false
         isAISpeaking = false
+        providerReplyPlaybackState.reset()
+        providerPCMDrain.reset()
+        providerInterruptionState.clearAudibleReply()
         activeDialogAccountLease = nil
         activeDialogBindingHandle = nil
         activeDialogOperationId = nil
+        voiceLaunchControl.invalidate()
         providerSessionOperationId = nil
         requiresEngineRecreationBeforeNextDialog = true
         return true
     }
 
-    private func handleProviderMessage(
-        type: SEMessageType,
-        data: Data,
-        engineGeneration: UUID
-    ) {
+    private func handleProviderMessage(_ frozen: DialogEngineFrozenProviderMessage) {
         dispatchPrecondition(condition: .onQueue(.main))
+        let type = frozen.type
+        let data = frozen.data
+        let engineGeneration = frozen.engineGeneration
         guard let callbackContext = currentProviderCallbackContext(
             engineGeneration: engineGeneration
         ) else {
@@ -3866,6 +5886,24 @@ extension DialogEngineManager {
                 "type=\(type.rawValue) generation=\(engineGeneration.uuidString)"
             )
             return
+        }
+        providerCallbackOrdinal = max(providerCallbackOrdinal &+ 1, frozen.callbackOrdinal)
+        let callbackOrdinal = providerCallbackOrdinal
+        let diagnosticMetadata = frozen.metadata
+        let speakingBefore = isAISpeaking
+        defer {
+            recordNativeLiveDiagnostic(
+                event: "providerCallback",
+                eventCode: Int(type.rawValue),
+                callbackOrdinal: callbackOrdinal,
+                questionID: diagnosticMetadata.questionID,
+                replyID: diagnosticMetadata.replyID,
+                reason: "handled",
+                speakingBefore: speakingBefore,
+                speakingAfter: isAISpeaking,
+                accountLease: callbackContext.bindingHandle.accountLease,
+                providerSessionID: callbackContext.dialogOperationId.uuidString
+            )
         }
         switch type {
         case SEEventConnectionStarted,
@@ -3982,12 +6020,22 @@ extension DialogEngineManager {
 
         // MARK: Session Events
         case SEEventSessionStarted:
+            guard voiceLaunchControl.acceptsSessionStarted(callbackContext.dialogOperationId),
+                  voiceLaunchStillValid(callbackContext.dialogOperationId) else {
+                cancelPendingVoiceLaunch(id: pendingVoiceLaunchID)
+                return
+            }
             print("[DialogEngine] ✅ 对话会话已开始")
             DDLogInfo("[DialogEngine] 对话会话已开始")
             isDialogActive = true
             providerSessionOperationId = callbackContext.dialogOperationId
             providerTurnCorrelation.beginSession(generation: callbackContext.engineGeneration)
+            providerReplyPlaybackState.reset()
+        providerPCMDrain.reset()
+            providerInterruptionState.beginSession(generation: callbackContext.engineGeneration)
             providerActiveChatReplyID = nil
+            providerCanonicalAssistantTextState.reset()
+            providerCanonicalAssistantStreamState.reset()
             providerQuestionObservedAt = nil
             providerFirstTextKeys.removeAll()
             providerFirstAudioKeys.removeAll()
@@ -4090,25 +6138,32 @@ extension DialogEngineManager {
                 stage: "asrInfo",
                 callbackContext: callbackContext
             )
-            let parsedASRInfo = parseASRResult(from: data)
+            let parsedASRInfo = DialogProviderASRParser.parse(data)
 
-            // Live 模式允许用户直接开口打断本地 AI 播报。只有识别到非空
-            // 用户文本时才发送 ClientInterrupt，避免纯播放器回声误触发。
-            if isAISpeaking {
-                let interruptText = parsedASRInfo?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                guard sessionLifetimePolicy == .userControlledLive,
-                      !interruptText.isEmpty else {
-                    print("[DialogEngine] 🎤 AI播报中，忽略ASRInfo回声")
-                    return
-                }
-                interruptAI(notifiesUserInterruption: true)
-            }
+            interruptForNewProviderQuestionIfNeeded(
+                metadata: providerMetadata,
+                recognizedText: parsedASRInfo?.text,
+                callbackContext: callbackContext
+            )
             // 重置静音超时计时器
             deliverProviderCallback(callbackContext) { manager, _ in
                 manager.resetSilenceTimer()
             }
             // 解析 ASR 结果
             if let result = parsedASRInfo {
+                if !frozen.canonicalOwnerDeliveredAtIngress {
+                    emitCanonicalTranscriptEvent(
+                        text: result.text,
+                        role: .owner,
+                        finality: DialogProviderCanonicalOwnerFinalityMapper.finality(
+                            evidence: result.finalityEvidence
+                        ),
+                        finalityEvidence: result.finalityEvidence,
+                        evidenceSource: result.evidenceSource,
+                        metadata: providerMetadata,
+                        callbackContext: callbackContext
+                    )
+                }
                 PrivacySafeDiagnostics.log(
                     subsystem: "DialogEngine",
                     event: "liveASRObserved",
@@ -4182,26 +6237,35 @@ extension DialogEngineManager {
             }
 
         case SEEventASRResponse:
-            _ = observeProviderQuestionEvent(
+            let providerMetadata = observeProviderQuestionEvent(
                 data,
                 stage: "asrResponse",
                 callbackContext: callbackContext
             )
-            let parsedASRResponse = parseASRResult(from: data)
-            if isAISpeaking {
-                let interruptText = parsedASRResponse?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                guard sessionLifetimePolicy == .userControlledLive,
-                      !interruptText.isEmpty else {
-                    print("[DialogEngine] 🎤 AI播报中，忽略ASRResponse回声")
-                    return
-                }
-                interruptAI(notifiesUserInterruption: true)
-            }
+            let parsedASRResponse = DialogProviderASRParser.parse(data)
+            interruptForNewProviderQuestionIfNeeded(
+                metadata: providerMetadata,
+                recognizedText: parsedASRResponse?.text,
+                callbackContext: callbackContext
+            )
             // ASR 识别结果（流式，通过 is_interim 区分中间/最终）
             deliverProviderCallback(callbackContext) { manager, _ in
                 manager.resetSilenceTimer()
             }
             if let result = parsedASRResponse {
+                if !frozen.canonicalOwnerDeliveredAtIngress {
+                    emitCanonicalTranscriptEvent(
+                        text: result.text,
+                        role: .owner,
+                        finality: DialogProviderCanonicalOwnerFinalityMapper.finality(
+                            evidence: result.finalityEvidence
+                        ),
+                        finalityEvidence: result.finalityEvidence,
+                        evidenceSource: result.evidenceSource,
+                        metadata: providerMetadata,
+                        callbackContext: callbackContext
+                    )
+                }
                 PrivacySafeDiagnostics.log(
                     subsystem: "DialogEngine",
                     event: "liveASRResponseObserved",
@@ -4242,7 +6306,7 @@ extension DialogEngineManager {
             }
 
         case SEEventASREnded:
-            _ = observeProviderQuestionEvent(
+            let providerMetadata = observeProviderQuestionEvent(
                 data,
                 stage: "asrEnded",
                 callbackContext: callbackContext
@@ -4250,21 +6314,17 @@ extension DialogEngineManager {
             DDLogInfo("[DialogEngine] ASR 结束")
 
         case SEEventChatTextQueryConfirmed:
-            _ = observeProviderQuestionEvent(
+            let providerMetadata = observeProviderQuestionEvent(
                 data,
                 stage: "queryConfirmed",
                 callbackContext: callbackContext
             )
             let confirmedQueryText = parseQueryConfirmedText(from: data)
-            if isAISpeaking {
-                let interruptText = confirmedQueryText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                guard sessionLifetimePolicy == .userControlledLive,
-                      !interruptText.isEmpty else {
-                    print("[DialogEngine] 🎤 AI播报中，忽略ChatTextQueryConfirmed回声")
-                    return
-                }
-                interruptAI(notifiesUserInterruption: true)
-            }
+            interruptForNewProviderQuestionIfNeeded(
+                metadata: providerMetadata,
+                recognizedText: confirmedQueryText,
+                callbackContext: callbackContext
+            )
             guard selectDelegatedClientTTSRouteIfNeeded(force: true) else {
                 deliverProviderCallback(callbackContext) { _, delegate in
                     delegate.onError(
@@ -4338,6 +6398,7 @@ extension DialogEngineManager {
                 manager.resetSilenceTimer()
             }
             if let text = parseTTSText(from: data), !text.isEmpty {
+                _ = updateCanonicalAssistantText(text)
                 if !chatBuffer.isEmpty {
                     // streaming 已经展示了内容，不重复调用 onTTSStarted
                     chatBuffer = ""
@@ -4370,6 +6431,7 @@ extension DialogEngineManager {
             // 部分 SpeechEngine 版本在 SentenceStart 只给空文本，完整文本出现在
             // SentenceEnd。数字人主音频模式依赖这里的文本转交给腾讯云渲染。
             if let text = parseTTSText(from: data), !text.isEmpty {
+                _ = updateCanonicalAssistantText(text)
                 chatBuffer = ""
                 deliverProviderCallback(callbackContext) { _, delegate in
                     delegate.onTTSStarted(text: text)
@@ -4404,15 +6466,42 @@ extension DialogEngineManager {
                 DDLogInfo("[DialogEngine] delegated Live synthesis ended; awaiting player terminal event")
                 return
             }
-            isAISpeaking = false
-            deliverProviderCallback(callbackContext) { _, delegate in
-                delegate.onTTSFinished()
+            if isProviderOwnedLive {
+                providerPCMDrain.synthesized(
+                    replyID: providerTurnCorrelation.currentReplyID,
+                    generation: callbackContext.engineGeneration
+                )
+            }
+            let playbackOutcome = providerReplyPlaybackState.receive(
+                .synthesisEnded,
+                replyID: providerTurnCorrelation.currentReplyID,
+                generation: callbackContext.engineGeneration
+            )
+            if playbackOutcome == .drained {
+                isAISpeaking = false
+                providerInterruptionState.clearAudibleReply()
+                deliverProviderCallback(callbackContext) { manager, delegate in
+                    manager.resetSilenceTimer()
+                    delegate.onTTSFinished()
+                }
             }
 
         case SEEventTTSResponse:
             break
 
         case SEPlayerAudioData:
+            if isProviderOwnedLive, config.enablePlayer,
+               providerPCMDrain.played(data,
+                   replyID: providerTurnCorrelation.currentReplyID,
+                   generation: callbackContext.engineGeneration) {
+                isAISpeaking = false
+                providerInterruptionState.clearAudibleReply()
+                recordNativeLiveDiagnostic(event: "playerPCMDrained", reason: "decodedPlayerSamplesVerified")
+                deliverProviderCallback(callbackContext) { manager, delegate in
+                    manager.resetSilenceTimer()
+                    delegate.onTTSFinished()
+                }
+            }
             if sessionLifetimePolicy == .userControlledLive,
                answerAuthority == .dreamJourneyBackend,
                let replyID = delegatedClientPlaybackReplyID,
@@ -4428,6 +6517,11 @@ extension DialogEngineManager {
             break
 
         case SEDecoderAudioData:
+            if isProviderOwnedLive, config.enablePlayer {
+                providerPCMDrain.decoded(data,
+                    replyID: providerTurnCorrelation.currentReplyID,
+                    generation: callbackContext.engineGeneration)
+            }
             break
 
         case SEPlayerStartPlayAudio:
@@ -4452,12 +6546,22 @@ extension DialogEngineManager {
                 return
             }
             isAISpeaking = true
+            providerInterruptionState.beginAudibleReply(
+                questionID: providerTurnCorrelation.currentQuestionID,
+                generation: callbackContext.engineGeneration
+            )
             DDLogInfo("[DialogEngine] 播放器开始播放")
+            _ = providerReplyPlaybackState.receive(
+                .playerStarted,
+                replyID: providerTurnCorrelation.currentReplyID,
+                generation: callbackContext.engineGeneration
+            )
             deliverProviderCallback(callbackContext) { _, delegate in
                 delegate.onTTSPlaybackStarted()
             }
 
         case SEPlayerFinishPlayAudio:
+            if isProviderOwnedLive, providerPCMDrain.didDrain { return }
             guard config.enablePlayer else {
                 print("[DialogEngine] skipped Fire player finish; Tencent owns audible playback")
                 return
@@ -4474,13 +6578,22 @@ extension DialogEngineManager {
                 isAISpeaking = false
                 return
             }
-            isAISpeaking = false
             DDLogInfo("[DialogEngine] 播放器播放完毕")
             if completeTextReplyPlayback(.success(()), stopsProviderSession: true) {
                 return
             }
-            deliverProviderCallback(callbackContext) { _, delegate in
-                delegate.onTTSFinished()
+            let playbackOutcome = providerReplyPlaybackState.receive(
+                .playerFinished,
+                replyID: providerTurnCorrelation.currentReplyID,
+                generation: callbackContext.engineGeneration
+            )
+            if playbackOutcome == .drained {
+                isAISpeaking = false
+                providerInterruptionState.clearAudibleReply()
+                deliverProviderCallback(callbackContext) { manager, delegate in
+                    manager.resetSilenceTimer()
+                    delegate.onTTSFinished()
+                }
             }
 
         // MARK: Chat Events
@@ -4510,11 +6623,20 @@ extension DialogEngineManager {
                         callbackContext: callbackContext
                     )
                 }
-                chatBuffer += text
-                // 实时更新 UI（流式效果）
-                let currentText = chatBuffer
-                deliverProviderCallback(callbackContext) { _, delegate in
-                    delegate.onChatStreaming(text: currentText)
+                if let event = providerCanonicalAssistantStreamState.consume(
+                    kind: .response,
+                    data: data,
+                    engineGeneration: callbackContext.engineGeneration,
+                    capturedAt: Date()
+                ) {
+                    chatBuffer = event.text
+                    providerCanonicalAssistantTextState.replace(
+                        event.text,
+                        replyID: providerTurnCorrelation.currentReplyID
+                    )
+                    deliverProviderCallback(callbackContext) { _, delegate in
+                        delegate.onChatStreaming(text: event.text)
+                    }
                 }
             }
 
@@ -4523,7 +6645,7 @@ extension DialogEngineManager {
                 chatBuffer = ""
                 return
             }
-            let (_, replyCorrelation) = observeProviderReplyEvent(
+            let (metadata, replyCorrelation) = observeProviderReplyEvent(
                 data,
                 stage: "chatEnded",
                 callbackContext: callbackContext
@@ -4531,8 +6653,17 @@ extension DialogEngineManager {
             guard acceptsProviderReply(replyCorrelation) else { return }
             DDLogInfo("[DialogEngine] Chat 结束")
             // 如果 chatBuffer 有内容但未通过 TTS 展示，展示它
-            if !chatBuffer.isEmpty {
-                let finalText = chatBuffer
+            if let event = providerCanonicalAssistantStreamState.consume(
+                kind: .ended,
+                data: data,
+                engineGeneration: callbackContext.engineGeneration,
+                capturedAt: Date()
+            ) {
+                let finalText = event.text
+                providerCanonicalAssistantTextState.replace(
+                    finalText,
+                    replyID: providerTurnCorrelation.currentReplyID
+                )
                 chatBuffer = ""
                 deliverProviderCallback(callbackContext) { _, delegate in
                     delegate.onTTSStarted(text: finalText)
@@ -4711,42 +6842,6 @@ extension DialogEngineManager {
         providerSessionOperationId = nil
         requiresEngineRecreationBeforeNextDialog = true
         restoreAudioSessionIfNeeded()
-    }
-
-    /// 解析 ASR 文本和是否为最终结果
-    private func parseASRResult(from data: Data) -> (text: String, isFinal: Bool)? {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-
-        // === 方式1: results[] 数组结构（实际 SDK 格式） ===
-        // {"results": [{"text": "能听到我", "is_interim": true, ...}], "extra": {"origin_text": "能听到我"}}
-        if let results = json["results"] as? [[String: Any]], let first = results.first {
-            let text = first["text"] as? String ?? ""
-            if !text.isEmpty {
-                let isInterim = first["is_interim"] as? Bool ?? true
-                return (text, !isInterim)  // is_interim=false 表示最终结果
-            }
-        }
-
-        // === 方式2: extra.origin_text 字段（备用） ===
-        if let extra = json["extra"] as? [String: Any],
-           let originText = extra["origin_text"] as? String, !originText.isEmpty {
-            let results = json["results"] as? [[String: Any]]
-            let isInterim = results?.first?["is_interim"] as? Bool ?? true
-            return (originText, !isInterim)
-        }
-
-        // === 方式3: 旧格式兼容 ===
-        let definite = json["definite"] as? Int ?? 0
-        let isFinal = (definite == 1)
-        if let text = json["text"] as? String, !text.isEmpty { return (text, isFinal) }
-        if let result = json["result"] as? String, !result.isEmpty { return (result, isFinal) }
-        if let utterances = json["utterances"] as? [[String: Any]],
-           let first = utterances.first,
-           let text = first["text"] as? String, !text.isEmpty {
-            let uttDefinite = first["definite"] as? Int ?? definite
-            return (text, uttDefinite == 1)
-        }
-        return nil
     }
 
     private func parseTTSText(from data: Data) -> String? {

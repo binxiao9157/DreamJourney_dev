@@ -1,0 +1,145 @@
+{
+  "backendHead": "ffd02f37e0e50c43e23420f1a69e69a0ccdb08cc",
+  "cases": {
+    "failed": {
+      "candidateExtraction": {
+        "attempt": 2,
+        "deadLetterState": "admitted",
+        "failureCategory": "internal",
+        "failureCode": "candidateExtraction.live.supportValidate.factOmitted",
+        "firstFailureCode": "candidateExtraction.live.supportValidate.factOmitted",
+        "jobState": "failed",
+        "maxAttempts": 3,
+        "retryAvailableAt": null,
+        "retryable": false,
+        "status": "failed",
+        "terminationCode": "candidateExtractionRetriesExhausted"
+      },
+      "candidateProposal": {
+        "status": "admitted"
+      },
+      "candidateReview": {
+        "status": "extractionFailed"
+      },
+      "effectExecution": {
+        "status": "disabled"
+      },
+      "reviewBatch": {
+        "reviewBatchId": "00000000-0000-0000-0000-00000000f171",
+        "state": "acknowledged"
+      },
+      "schemaVersion": "owner-truth-interview-candidate-proposal-status-v3",
+      "source": {
+        "status": "admitted"
+      },
+      "vaultId": "00000000-0000-0000-0000-00000000f170"
+    },
+    "queued": {
+      "candidateExtraction": {
+        "attempt": 0,
+        "deadLetterState": null,
+        "failureCategory": null,
+        "failureCode": null,
+        "firstFailureCode": null,
+        "jobState": "pending",
+        "maxAttempts": 3,
+        "retryAvailableAt": null,
+        "retryable": false,
+        "status": "requested",
+        "terminationCode": null
+      },
+      "candidateProposal": {
+        "status": "admitted"
+      },
+      "candidateReview": {
+        "status": "notReady"
+      },
+      "effectExecution": {
+        "status": "disabled"
+      },
+      "reviewBatch": {
+        "reviewBatchId": "00000000-0000-0000-0000-00000000f171",
+        "state": "acknowledged"
+      },
+      "schemaVersion": "owner-truth-interview-candidate-proposal-status-v3",
+      "source": {
+        "status": "admitted"
+      },
+      "vaultId": "00000000-0000-0000-0000-00000000f170"
+    },
+    "retryWaiting": {
+      "candidateExtraction": {
+        "attempt": 1,
+        "deadLetterState": null,
+        "failureCategory": "internal",
+        "failureCode": "candidateExtraction.live.supportValidate.factOmitted",
+        "firstFailureCode": "candidateExtraction.live.supportValidate.factOmitted",
+        "jobState": "retryWait",
+        "maxAttempts": 3,
+        "retryAvailableAt": "2099-01-01T00:00:05Z",
+        "retryable": true,
+        "status": "requested",
+        "terminationCode": null
+      },
+      "candidateProposal": {
+        "status": "admitted"
+      },
+      "candidateReview": {
+        "status": "notReady"
+      },
+      "effectExecution": {
+        "status": "disabled"
+      },
+      "reviewBatch": {
+        "reviewBatchId": "00000000-0000-0000-0000-00000000f171",
+        "state": "acknowledged"
+      },
+      "schemaVersion": "owner-truth-interview-candidate-proposal-status-v3",
+      "source": {
+        "status": "admitted"
+      },
+      "vaultId": "00000000-0000-0000-0000-00000000f170"
+    },
+    "reviewReady": {
+      "candidateExtraction": {
+        "attempt": 2,
+        "deadLetterState": null,
+        "failureCategory": null,
+        "failureCode": null,
+        "firstFailureCode": null,
+        "jobState": "succeeded",
+        "maxAttempts": 3,
+        "retryAvailableAt": null,
+        "retryable": false,
+        "status": "succeeded",
+        "terminationCode": null
+      },
+      "candidateProposal": {
+        "status": "admitted"
+      },
+      "candidateReview": {
+        "status": "reviewReady"
+      },
+      "effectExecution": {
+        "status": "disabled"
+      },
+      "reviewBatch": {
+        "reviewBatchId": "00000000-0000-0000-0000-00000000f171",
+        "state": "acknowledged"
+      },
+      "schemaVersion": "owner-truth-interview-candidate-proposal-status-v3",
+      "source": {
+        "status": "admitted"
+      },
+      "vaultId": "00000000-0000-0000-0000-00000000f170"
+    }
+  },
+  "generatedBy": "scripts/generate-owner-truth-candidate-status-ios-fixtures.py",
+  "generatedVia": "fastapiStatusRoute",
+  "productionRouteSHA256": "dfb4ee13b74c459e408a8ff2d6a3e3cca0320e7d16d61500439829bd2a48ea54",
+  "productionSerializerSHA256": "8ac81dc44580682c6abdfa4cd7f9fa3b93301da2a993941b410e93b41543675c",
+  "reviewBatchId": "00000000-0000-0000-0000-00000000f171",
+  "schemaVersion": "dreamjourney-ios-owner-truth-status-fixtures-v1",
+  "syntheticDataOnly": true,
+  "vaultId": "00000000-0000-0000-0000-00000000f170"
+}
