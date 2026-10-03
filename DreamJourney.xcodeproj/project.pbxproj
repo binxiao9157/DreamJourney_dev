@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1EC03000000000000000003 /* EchoOrb-NOTICE.txt in Resources */ = {isa = PBXBuildFile; fileRef = B1EC03000000000000000003; };
+		A1EC03000000000000000002 /* EchoOrb-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = B1EC03000000000000000002; };
 		04FA5845CC27422438AE44DA /* WarmTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B274A4971D76C1D3BFEE4E9A /* WarmTabBarController.swift */; };
 		06F7BBC5219F555B3CF8DCDD /* UIColor+WarmTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71EF8575113A0367F332FE72 /* UIColor+WarmTheme.swift */; };
 		0E5676BC344BFB67294DA939 /* MiniMateLoader.js in Resources */ = {isa = PBXBuildFile; fileRef = AA3777B38C40C14928088B38 /* MiniMateLoader.js */; };
@@ -69,6 +71,8 @@
 		A1A000000000000000000055 /* OwnerPublicationDraftViewControllers.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000055 /* OwnerPublicationDraftViewControllers.swift */; };
 		A1A000000000000000000004 /* EchoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000004 /* EchoViewModel.swift */; };
 		A1A000000000000000000005 /* EchoViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000005 /* EchoViewController.swift */; };
+		A1EC02000000000000000001 /* EchoPresentationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EC02000000000000000001 /* EchoPresentationViews.swift */; };
+		A1EC03000000000000000001 /* EchoOrbShader.metal in Sources */ = {isa = PBXBuildFile; fileRef = B1EC03000000000000000001 /* EchoOrbShader.metal */; };
 		A1A000000000000000000006 /* ProfileCareModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000006 /* ProfileCareModels.swift */; };
 		A1A000000000000000000007 /* ProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000007 /* ProfileViewController.swift */; };
 		A1A000000000000000000008 /* MemoryArchiveCreationOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B000000000000000000008 /* MemoryArchiveCreationOption.swift */; };
@@ -235,6 +239,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B1EC03000000000000000003 /* EchoOrb-NOTICE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "DreamJourney/Resources/EchoOrb-NOTICE.txt"; sourceTree = SOURCE_ROOT; };
+		B1EC03000000000000000002 /* EchoOrb-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "DreamJourney/Resources/EchoOrb-LICENSE.txt"; sourceTree = SOURCE_ROOT; };
 		00898E98E95E3808561BEB51 /* MemoirTTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoirTTSService.swift; sourceTree = "<group>"; };
 		04D035B5F78F66A15EB0C01A /* Main.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Main.storyboard; sourceTree = "<group>"; };
 		0616F4B34725AE4D0BCCA4D9 /* KBLiteSemanticSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBLiteSemanticSearch.swift; sourceTree = "<group>"; };
@@ -309,6 +315,8 @@
 		B1B000000000000000000055 /* OwnerPublicationDraftViewControllers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerPublicationDraftViewControllers.swift; sourceTree = "<group>"; };
 		B1B000000000000000000004 /* EchoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoViewModel.swift; sourceTree = "<group>"; };
 		B1B000000000000000000005 /* EchoViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoViewController.swift; sourceTree = "<group>"; };
+		B1EC02000000000000000001 /* EchoPresentationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoPresentationViews.swift; sourceTree = "<group>"; };
+		B1EC03000000000000000001 /* EchoOrbShader.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = EchoOrbShader.metal; sourceTree = "<group>"; };
 		B1B000000000000000000006 /* ProfileCareModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCareModels.swift; sourceTree = "<group>"; };
 		B1B000000000000000000007 /* ProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewController.swift; sourceTree = "<group>"; };
 		B1B000000000000000000008 /* MemoryArchiveCreationOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryArchiveCreationOption.swift; sourceTree = "<group>"; };
@@ -696,6 +704,8 @@
 				B1B000000000000000000052 /* EchoNativeSpeechCapture.swift */,
 				B1B000000000000000000004 /* EchoViewModel.swift */,
 				B1B000000000000000000005 /* EchoViewController.swift */,
+		B1EC02000000000000000001 /* EchoPresentationViews.swift */,
+		B1EC03000000000000000001 /* EchoOrbShader.metal */,
 			);
 			path = Echo;
 			sourceTree = "<group>";
@@ -1044,6 +1054,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1EC03000000000000000003 /* EchoOrb-NOTICE.txt in Resources */,
+				A1EC03000000000000000002 /* EchoOrb-LICENSE.txt in Resources */,
 				91391B0756631C32D65DDFEC /* 01.mp4 in Resources */,
 				56272F68DA6D144F29C65952 /* Assets.xcassets in Resources */,
 				BB2AF9827A8D9A984A4DAE81 /* DHLiveMini.js in Resources */,
@@ -1249,6 +1261,8 @@
 				A1A000000000000000000046 /* DigitalHumanLivePanelView.swift in Sources */,
 				D3A000000000000000000003 /* TencentDigitalHumanRuntimeStub.swift in Sources */,
 				A1A000000000000000000005 /* EchoViewController.swift in Sources */,
+		A1EC02000000000000000001 /* EchoPresentationViews.swift in Sources */,
+		A1EC03000000000000000001 /* EchoOrbShader.metal in Sources */,
 				A1A000000000000000000051 /* EchoSafetyPolicy.swift in Sources */,
 				A1A000000000000000000052 /* EchoNativeSpeechCapture.swift in Sources */,
 				A1A000000000000000000004 /* EchoViewModel.swift in Sources */,

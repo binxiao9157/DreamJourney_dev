@@ -1,6 +1,7 @@
 import CryptoKit
 import Alamofire
 import UIKit
+import MetalKit
 import XCTest
 #if canImport(DreamJourney)
 @testable import DreamJourney
@@ -9,6 +10,248 @@ import XCTest
 #endif
 
 final class OwnerTruthContractsTests: XCTestCase {
+    func testEchoAudioOrbPCMEnvelopeAndSilence() {
+        func pcm(_ value: Int16) -> Data { var v = value.littleEndian; return withUnsafeBytes(of: &v) { Data($0) } }
+        XCTAssertEqual(DialogOrbPCM.level(Data()), 0)
+        XCTAssertEqual(DialogOrbPCM.level(Data([1])), 0)
+        XCTAssertEqual(DialogOrbPCM.level(pcm(0)), 0)
+        XCTAssertEqual(DialogOrbPCM.level(pcm(10)), 0)
+        XCTAssertGreaterThan(DialogOrbPCM.level(pcm(8000)), DialogOrbPCM.level(pcm(800)))
+        XCTAssertEqual(DialogOrbPCM.level(pcm(Int16.min)), 1)
+        var envelope = EchoOrbEnvelope()
+        envelope.receive(1, at: 1)
+        let onset = envelope.advance(at: 1)
+        XCTAssertGreaterThan(onset, 0); XCTAssertLessThan(onset, 1)
+        XCTAssertGreaterThan(envelope.advance(at: 1.1), onset)
+        for i in 1...25 { _ = envelope.advance(at: 1.2 + Double(i) / 10) }
+        XCTAssertEqual(envelope.value, 0, "No callback must decay to silence, not a sine wave")
+        envelope.receive(.nan, at: 9); XCTAssertEqual(envelope.advance(at: 9), 0)
+        envelope.receive(1, at: 10); envelope.reset(); XCTAssertEqual(envelope.advance(at: 10), 0)
+    }
+
+    func testEchoAudioOrbRelayBoundsAndRejectsOldIdentity() throws {
+        let relay = DialogOrbAudioRelay(), generation = UUID(), a = UUID(), b = UUID()
+        let pcm = Data(repeating: 32, count: 1024)
+        relay.activate(generation: generation, operation: a)
+        let first = try XCTUnwrap(relay.sample(channel: .input, pcm: pcm, generation: generation, now: 1))
+        XCTAssertEqual(first.operation, a)
+        XCTAssertNil(relay.sample(channel: .input, pcm: pcm, generation: generation, now: 2), "One pending UI sample, even under congestion")
+        relay.complete(first)
+        XCTAssertNil(relay.sample(channel: .input, pcm: pcm, generation: generation, now: 1.01), "30 Hz maximum")
+        XCTAssertNotNil(relay.sample(channel: .output, pcm: pcm, generation: generation, now: 1.01))
+        relay.activate(generation: generation, operation: b)
+        let next = try XCTUnwrap(relay.sample(channel: .input, pcm: pcm, generation: generation, now: 3))
+        relay.complete(first)
+        XCTAssertNil(relay.sample(channel: .input, pcm: pcm, generation: generation, now: 4), "Old completion cannot release new pending sample")
+        relay.close(operation: a)
+        relay.complete(next)
+        XCTAssertEqual(relay.sample(channel: .input, pcm: pcm, generation: generation, now: 5)?.operation, b)
+        XCTAssertNil(relay.sample(channel: .output, pcm: pcm, generation: UUID(), now: 6))
+        relay.close(operation: b)
+        XCTAssertNil(relay.sample(channel: .input, pcm: pcm, generation: generation, now: 7))
+    }
+
+    @MainActor
+    func testEchoAudioOrbRealMetalRenderingAndLifecycle() throws {
+        XCTAssertEqual(MemoryLayout<EchoOrbUniforms>.stride, 96)
+        XCTAssertEqual(MemoryLayout<EchoOrbUniforms>.offset(of: \.color1), 48)
+        XCTAssertEqual(MemoryLayout<EchoOrbUniforms>.offset(of: \.volumes), 80)
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let library = try XCTUnwrap(device.makeDefaultLibrary())
+        let descriptor = MTLRenderPipelineDescriptor()
+        descriptor.vertexFunction = library.makeFunction(name: "echoOrbVertexShader")
+        descriptor.fragmentFunction = library.makeFunction(name: "echoOrbFragmentShader")
+        descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+        let pipeline = try device.makeRenderPipelineState(descriptor: descriptor)
+        let queue = try XCTUnwrap(device.makeCommandQueue())
+        func render(_ input: Float, _ output: Float, name: String) throws -> Data {
+            let textureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 320, height: 320, mipmapped: false)
+            textureDescriptor.usage = [.renderTarget]; textureDescriptor.storageMode = .shared
+            let texture = try XCTUnwrap(device.makeTexture(descriptor: textureDescriptor))
+            let pass = MTLRenderPassDescriptor()
+            pass.colorAttachments[0].texture = texture; pass.colorAttachments[0].loadAction = .clear
+            pass.colorAttachments[0].storeAction = .store
+            let command = try XCTUnwrap(queue.makeCommandBuffer())
+            let encoder = try XCTUnwrap(command.makeRenderCommandEncoder(descriptor: pass))
+            encoder.setRenderPipelineState(pipeline)
+            let vertices: [Float] = [-1,1,-1,-1,1,1,1,-1]
+            vertices.withUnsafeBytes { encoder.setVertexBytes($0.baseAddress!, length: $0.count, index: 0) }
+            var uniforms = EchoOrbUniforms(); uniforms.timing.x = 2; uniforms.timing.y = 0.4
+            uniforms.volumes.x = input; uniforms.volumes.y = output
+            encoder.setFragmentBytes(&uniforms, length: MemoryLayout<EchoOrbUniforms>.stride, index: 0)
+            encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+            encoder.endEncoding(); command.commit(); command.waitUntilCompleted()
+            XCTAssertNil(command.error)
+            var data = Data(count: 320 * 320 * 4)
+            data.withUnsafeMutableBytes { texture.getBytes($0.baseAddress!, bytesPerRow: 1280, from: MTLRegionMake2D(0,0,320,320), mipmapLevel: 0) }
+            XCTAssertEqual(data[3], 0, "Corners must be transparent")
+            XCTAssertEqual(data[(160 * 320 + 160) * 4 + 3], 255)
+            let provider = try XCTUnwrap(CGDataProvider(data: data as CFData))
+            let cg = try XCTUnwrap(CGImage(width: 320, height: 320, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: 1280, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue).union(.byteOrder32Little), provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent))
+            let image = UIImage(cgImage: cg)
+            let attachment = XCTAttachment(image: image); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+            try image.pngData()?.write(to: URL(fileURLWithPath: "/tmp/\(name).png"))
+            return data
+        }
+        let silent = try render(0, 0, name: "echo-orb-silent")
+        XCTAssertNotEqual(silent, try render(DialogOrbPCM.level(Data(repeating: 32, count: 1024)), 0, name: "echo-orb-input"))
+        XCTAssertNotEqual(silent, try render(0, DialogOrbPCM.level(Data(repeating: 32, count: 1024)), name: "echo-orb-output"))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 500))
+        let root = UIViewController(); window.rootViewController = root; window.isHidden = false
+        let orb = EchoCloudOrbView(frame: CGRect(x: 0, y: 0, width: 300, height: 300))
+        root.view.addSubview(orb); orb.active = true; orb.speaking = true; orb.layoutIfNeeded()
+        XCTAssertTrue(orb.hasMetalRenderer)
+        let fallback = EchoCloudOrbView(frame: orb.frame, allowsMetal: false)
+        root.view.addSubview(fallback); fallback.active = true; fallback.layoutIfNeeded()
+        XCTAssertFalse(fallback.hasMetalRenderer, "Unsupported Metal must remain a usable static view")
+        orb.receiveAudioLevel(1, channel: .input, capturedAt: ProcessInfo.processInfo.systemUptime - 1)
+        XCTAssertEqual(orb.renderedLevels, .zero)
+        fallback.removeFromSuperview()
+        window.windowLevel = .alert + 1; window.makeKeyAndVisible()
+        root.view.backgroundColor = DJDesignTokens.Color.background
+        orb.receiveAudioLevel(1, channel: .input, capturedAt: ProcessInfo.processInfo.systemUptime)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.12))
+        XCTAssertGreaterThan(orb.renderedLevels.x, 0, "Actual MTKView must consume fresh input")
+        orb.active = false; XCTAssertEqual(orb.renderedLevels, .zero)
+        window.isHidden = true
+    }
+
+    @MainActor
+    func testEchoRedesignSmallScreenLayoutAndScreenshots() throws {
+        for (name, size, live) in [("idle", CGSize(width: 393, height: 852), false),
+                                   ("live", CGSize(width: 393, height: 852), true),
+                                   ("small-live", CGSize(width: 320, height: 568), true)] {
+            let controller = EchoViewController()
+            let image = controller.renderRedesignedLayoutForTesting(size: size, live: live)
+            let frames = controller.redesignedLayoutFramesForTesting
+            XCTAssertGreaterThan(frames.orb.height, 0)
+            XCTAssertGreaterThan(frames.reply.height, 0)
+            XCTAssertLessThan(frames.reply.maxY, frames.mic.minY)
+            XCTAssertLessThan(frames.mic.maxY, size.height - 80)
+            let attachment = XCTAttachment(image: image); attachment.name = "echo-redesign-\(name)"
+            attachment.lifetime = .keepAlways; add(attachment)
+            try image.pngData()?.write(to: URL(fileURLWithPath: "/tmp/echo-redesign-\(name).png"))
+        }
+    }
+
+    func testEchoRedesignSlowReadNeverOverlapsAcrossSuspendResume() {
+        var scheduled: [DispatchWorkItem] = []
+        var callbacks: [(Result<OwnerTruthLiveRecoveryProgress, Error>) -> Void] = []
+        let observer = EchoPublicationObserver(initial: nil, request: { callbacks.append($0) },
+            schedule: { _, action in let item = DispatchWorkItem(block: action); scheduled.append(item); return item })
+        observer.start()
+        scheduled[0].perform()
+        observer.suspend(); observer.start()
+        XCTAssertEqual(callbacks.count, 1, "A UI timeout or foreground transition cannot overlap the in-flight HTTP read")
+        callbacks[0](.failure(NSError(domain: "controlled-timeout", code: 1)))
+        XCTAssertEqual(callbacks.count, 2)
+        observer.suspend()
+    }
+
+
+    @MainActor
+    func testEchoRedesignReplyViewportKeepsFullTextWithinFourLines() {
+        let reply = EchoReplyTextView()
+        reply.frame = CGRect(x: 0, y: 0, width: 280, height: 100)
+        let long = String(repeating: "这是完整的长回复，不应挤走麦克风。", count: 100)
+        reply.text = long
+        reply.layoutIfNeeded()
+        XCTAssertEqual(reply.text, long)
+        XCTAssertLessThanOrEqual(reply.intrinsicContentSize.height, (reply.font?.lineHeight ?? 0) * 4)
+        reply.scrollViewWillBeginDragging(reply)
+        reply.text = long + "新的补充"
+        XCTAssertFalse(reply.followsTail)
+        reply.beginReply()
+        XCTAssertTrue(reply.followsTail)
+    }
+
+    @MainActor
+    func testEchoRedesignLiveHidesComposerAndPreservesWholeScene() {
+        let controller = EchoViewController()
+        controller.configureRedesignedPresentationForTesting(live: true, replies: (0..<12).map { "回复\($0)" })
+        let live = controller.redesignedPresentationForTesting
+        XCTAssertTrue(live.inputHidden)
+        XCTAssertEqual(live.recordCount, 12)
+        XCTAssertEqual(live.reply, "回复11")
+        XCTAssertFalse(live.hasVerifyButton)
+        controller.configureRedesignedPresentationForTesting(live: false, replies: [])
+        XCTAssertFalse(controller.redesignedPresentationForTesting.inputHidden)
+        XCTAssertEqual(controller.redesignedPresentationForTesting.recordCount, 12)
+    }
+
+    func testEchoRedesignUnknownIsNotFailureAndPartialPublicationIsComplete() {
+        XCTAssertEqual(EchoOrganizationPresentation.capture(.statusUnknown)?.phase, .organizing)
+        XCTAssertEqual(EchoOrganizationPresentation.capture(.pendingReview, partial: true)?.phase, .completed)
+        XCTAssertEqual(EchoOrganizationPresentation.capture(.empty)?.text, "整理完成，本次没有新增记忆")
+        XCTAssertEqual(EchoOrganizationPresentation.capture(.terminalFailure(code: "failed"))?.phase, .incomplete)
+        XCTAssertFalse(EchoOrganizationPresentation.capture(.unavailable)!.text.contains("已保存"))
+    }
+
+    @MainActor
+    func testEchoRedesignPublicationReadsPastOldDeadlineWithoutBusinessRetries() throws {
+        let session = OwnerTruthRecordID(rawValue: UUID())
+        func progress(_ state: String, _ version: Int) throws -> OwnerTruthLiveRecoveryProgress {
+            try OwnerTruthLiveRecoveryProgress(backendJSONObject: [
+                "protocol": "live-recovery-v1", "sessionId": session.rawValue.uuidString,
+                "generation": 1, "version": version, "state": "frozen", "continuousSequence": 4,
+                "highestSeenSequence": 4, "finalSequence": 4, "endPositionKnown": true,
+                "receivedRanges": [[1,4]], "missingRanges": [], "rangeOffset": 0,
+                "rangePageTruncated": false, "snapshotRevision": 1,
+                "publication": ["snapshotRevision": 1, "state": state, "themeCount": state == "published" ? 1 : 0]
+            ], expectedSessionID: session, expectedGeneration: 1)
+        }
+        var scheduled: [(TimeInterval, DispatchWorkItem)] = []
+        var calls = 0
+        var seen: [String] = []
+        let pending = try progress("pending", 1), published = try progress("published", 2)
+        let observer = EchoPublicationObserver(initial: pending, request: { done in
+            calls += 1; done(.success(calls < 15 ? pending : published))
+        }, schedule: { delay, action in
+            let work = DispatchWorkItem(block: action); scheduled.append((delay, work)); return work
+        })
+        observer.onProgress = { seen.append($0.publication!.state) }
+        observer.start(); observer.start()
+        XCTAssertEqual(calls, 1)
+        var elapsed: TimeInterval = 0
+        while seen.last != "published", !scheduled.isEmpty {
+            let next = scheduled.removeFirst()
+            if !next.1.isCancelled { elapsed += next.0; next.1.perform() }
+        }
+        XCTAssertGreaterThan(elapsed, 180)
+        XCTAssertEqual(seen.last, "published")
+        XCTAssertEqual(calls, 15)
+        XCTAssertFalse(scheduled.contains { !$0.1.isCancelled })
+        observer.suspend()
+    }
+
+    @MainActor
+    func testEchoRedesignPublicationDropsSuspendedAndForeignCallbacks() throws {
+        let session = OwnerTruthRecordID(rawValue: UUID())
+        func progress(_ id: OwnerTruthRecordID) throws -> OwnerTruthLiveRecoveryProgress {
+            try OwnerTruthLiveRecoveryProgress(backendJSONObject: [
+                "protocol": "live-recovery-v1", "sessionId": id.rawValue.uuidString,
+                "generation": 1, "version": 1, "state": "frozen", "continuousSequence": 0,
+                "highestSeenSequence": 0, "finalSequence": 0, "endPositionKnown": true,
+                "receivedRanges": [], "missingRanges": [], "rangeOffset": 0,
+                "rangePageTruncated": false, "snapshotRevision": 1
+            ], expectedSessionID: id, expectedGeneration: 1)
+        }
+        var callbacks: [(Result<OwnerTruthLiveRecoveryProgress, Error>) -> Void] = []
+        var received = 0
+        let observer = EchoPublicationObserver(initial: try progress(session), request: { callbacks.append($0) },
+            schedule: { _, action in DispatchWorkItem(block: action) })
+        observer.onProgress = { _ in received += 1 }
+        observer.start(); observer.start()
+        XCTAssertEqual(callbacks.count, 1)
+        observer.suspend()
+        callbacks[0](.success(try progress(session)))
+        XCTAssertEqual(received, 0)
+        observer.start()
+        callbacks[1](.success(try progress(OwnerTruthRecordID(rawValue: UUID()))))
+        XCTAssertEqual(received, 0)
+        observer.suspend()
+    }
+
     @MainActor
     func testLiveReviewPolicyExpiredRouteRecoversAllThreeReadEntrypoints() throws {
         try assertLiveReviewPolicyReads(mode: "fresh")
@@ -1292,6 +1535,19 @@ final class OwnerTruthContractsTests: XCTestCase {
                 })
                 XCTAssertEqual(engine.count(SEDirectiveEventSayHello), greetings)
                 XCTAssertTrue(manager.isDialogActive)
+                if scenario == "handoff" {
+                    engine.emit(SERecorderAudioData, data: Data(repeating: 32, count: 1024))
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { controller.orbAudioSampleForTesting?.channel == .input })
+                    XCTAssertGreaterThan(controller.orbAudioSampleForTesting?.level ?? 0, 0)
+                    engine.emit(SEPlayerAudioData, data: Data(repeating: 32, count: 1024))
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { controller.orbAudioSampleForTesting?.channel == .output })
+                    let lastSample = controller.orbAudioSampleForTesting?.nonce
+                    controller.cancelVoiceLaunchForTesting()
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { controller.isVoiceIdleForTesting })
+                    engine.emit(SERecorderAudioData, data: Data(repeating: 64, count: 1024))
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+                    XCTAssertEqual(controller.orbAudioSampleForTesting?.nonce, lastSample, "Closed SDK callbacks must not reach the orb")
+                }
                 if scenario == "replacement" {
                     controller.cancelVoiceLaunchForTesting()
                     XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { controller.isVoiceIdleForTesting })
@@ -3441,7 +3697,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         controller.renderInteractionIdleForTesting()
 
         let presentation = controller.liveMemoryCapturePresentationForTesting()
-        XCTAssertEqual(presentation.statusText, "已保存收到的内容，部分内容尚未完整记录")
+        XCTAssertEqual(presentation.statusText, "正在整理\n已保存收到的内容，部分内容尚未完整记录")
         XCTAssertEqual(presentation.statusIdentifier, "echoLiveMemoryCoverageGap")
         XCTAssertTrue(presentation.statusVisible)
     }
@@ -3506,7 +3762,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertFalse(snapshot.canonicalCoverageSummary.hasPersistedLocalText)
 
         let presentation = controller.liveMemoryCapturePresentationForTesting()
-        XCTAssertEqual(presentation.statusText, "尚无法确认本次内容已完整保存")
+        XCTAssertEqual(presentation.statusText, "正在整理\n尚无法确认本次内容已完整保存")
         XCTAssertTrue(presentation.statusVisible)
     }
 
@@ -3551,7 +3807,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
             let presentation = controller.liveMemoryCapturePresentationForTesting()
             return presentation.statusIdentifier == "echoLiveMemoryCoverageGap"
-                && presentation.statusText == "尚无法确认本次内容已完整保存"
+                && presentation.statusText == "正在整理\n尚无法确认本次内容已完整保存"
         })
 
         coordinator.appendCanonicalTurn(NativeLiveCanonicalTranscriptEvent(
@@ -3581,7 +3837,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(snapshot.unsealedCanonicalTurnCount, 1)
         XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
             controller.liveMemoryCapturePresentationForTesting().statusText
-                == "已保存收到的内容，部分内容尚未完整记录"
+                == "正在整理\n已保存收到的内容，部分内容尚未完整记录"
         })
         XCTAssertEqual(coordinator.state, .coverageGap(unsealedTurnCount: 1))
     }
@@ -11545,10 +11801,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
             recoveryReads >= 1 && recovery.state == .organizing
         })
-        XCTAssertEqual(
-            controller.liveMemoryRecoveryPresentationForTesting().actionTitle,
-            "核实整理状态"
-        )
+        XCTAssertFalse(controller.liveMemoryRecoveryPresentationForTesting().actionVisible)
         let capture = EchoLiveMemoryCaptureCoordinator(
             accountLease: lease, client: harness.client,
             accountLeaseRuntime: runtime,
@@ -12129,9 +12382,8 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
             let presentation = controller.liveMemoryRecoveryPresentationForTesting()
             return presentation.statusIdentifier == "echoLiveMemoryRecoveryStatusUnknown"
-                && presentation.actionTitle == "核实整理状态"
-                && presentation.actionIdentifier == "echoLiveMemoryVerifyStatus"
-                && presentation.actionVisible
+                && presentation.statusText?.hasPrefix("正在整理") == true
+                && !presentation.actionVisible
         })
 
         controller.tapLiveMemoryRecoveryVerificationForTesting()
@@ -13038,10 +13290,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             client.liveDeliveryStatusRequestCount == 1
                 && current.state == .statusUnknown(.notObserved)
         })
-        XCTAssertEqual(
-            controller.liveMemoryRecoveryPresentationForTesting().actionTitle,
-            "核实整理状态"
-        )
+        XCTAssertFalse(controller.liveMemoryRecoveryPresentationForTesting().actionVisible)
         controller.tapLiveMemoryRecoveryVerificationForTesting()
         XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
             client.liveDeliveryStatusRequestCount == 2

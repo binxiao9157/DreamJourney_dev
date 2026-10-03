@@ -1,0 +1,7 @@
+DreamJourney Echo Orb — third-party attribution
+Original work Copyright 2024 LiveKit, Inc.
+Modifications Copyright 2025 Eleven Labs Inc.
+Source: https://github.com/elevenlabs/components-swift
+Commit: 8762e8d81238701fd4cebde4ba8369bb6f3894fe
+Files: OrbShader.metal and OrbVisualizer.swift. Licensed under Apache-2.0; see EchoOrb-LICENSE.txt.
+DreamJourney modifications (2026-10-03): UIKit renderer; explicit uniform layout; blue-white colors; circular alpha; bounded real-audio envelopes; reduced motion, lifecycle and fallback support. No LiveKit dependency included.

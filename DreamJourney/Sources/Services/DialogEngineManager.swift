@@ -2,6 +2,95 @@ import Foundation
 import CryptoKit
 import zlib
 
+// Presentation metering only: never persists PCM, controls audio, or completes a turn.
+enum DialogOrbAudioChannel: Int { case input, output }
+struct DialogOrbAudioSample {
+    let channel: DialogOrbAudioChannel
+    let level: Float
+    let capturedAt: TimeInterval
+    let generation: UUID
+    let operation: UUID
+    let nonce: UUID
+}
+
+enum DialogOrbPCM {
+    static func level(_ data: Data) -> Float {
+        guard data.count >= 2, data.count.isMultiple(of: 2) else { return 0 }
+        return data.withUnsafeBytes { raw in
+            let bytes = raw.bindMemory(to: UInt8.self)
+            let count = bytes.count / 2
+            let step = max(1, (count + 1023) / 1024)
+            var energy = 0.0
+            var measured = 0
+            for index in stride(from: 0, to: count, by: step) {
+                let bits = UInt16(bytes[index * 2]) | (UInt16(bytes[index * 2 + 1]) << 8)
+                let sample = Double(Int16(bitPattern: bits)) / 32768
+                energy += sample * sample; measured += 1
+            }
+            let rms = sqrt(energy / Double(max(1, measured)))
+            guard rms > 0 else { return 0 }
+            return Float(min(1, max(0, (20 * log10(rms) + 50) / 38)))
+        }
+    }
+}
+
+/// At most one outstanding UI message per channel. Main-thread congestion cannot
+/// create a PCM backlog. The generation/operation pair is frozen at SDK ingress.
+final class DialogOrbAudioRelay {
+    private let lock = NSLock()
+    private var generation: UUID?
+    private var operation: UUID?
+    private var last = [TimeInterval](repeating: -.infinity, count: 2)
+    private var pending: [UUID?] = [nil, nil]
+    func activate(generation: UUID, operation: UUID) {
+        lock.lock(); defer { lock.unlock() }
+        self.generation = generation; self.operation = operation
+        last = [-.infinity, -.infinity]; pending = [nil, nil]
+    }
+    func close(operation expected: UUID? = nil) {
+        lock.lock(); defer { lock.unlock() }
+        guard expected == nil || operation == expected else { return }
+        generation = nil; operation = nil; pending = [nil, nil]
+    }
+    func sample(channel: DialogOrbAudioChannel, pcm: Data, generation: UUID,
+                now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> DialogOrbAudioSample? {
+        lock.lock(); defer { lock.unlock() }
+        let index = channel.rawValue
+        guard self.generation == generation, let operation,
+              pending[index] == nil, now - last[index] >= 1.0 / 30 else { return nil }
+        last[index] = now
+        let nonce = UUID(); pending[index] = nonce
+        return DialogOrbAudioSample(channel: channel, level: DialogOrbPCM.level(pcm),
+            capturedAt: now, generation: generation, operation: operation, nonce: nonce)
+    }
+    func complete(_ sample: DialogOrbAudioSample) {
+        lock.lock(); defer { lock.unlock() }
+        if pending[sample.channel.rawValue] == sample.nonce { pending[sample.channel.rawValue] = nil }
+    }
+}
+
+struct EchoOrbEnvelope {
+    private(set) var value: Float = 0
+    private var target: Float = 0
+    private var sampleTime: TimeInterval = -.infinity
+    private var frameTime: TimeInterval?
+    mutating func receive(_ level: Float, at time: TimeInterval) {
+        guard level.isFinite, time.isFinite, time >= sampleTime else { return }
+        target = max(0, min(1, level)); sampleTime = time
+    }
+    mutating func advance(at time: TimeInterval) -> Float {
+        let delta = min(0.1, max(0, time - (frameTime ?? time - 1.0 / 30)))
+        frameTime = time
+        let wanted: Float = time - sampleTime <= 0.18 ? target : 0
+        let tau = wanted > value ? 0.06 : 0.20
+        value += (wanted - value) * Float(1 - exp(-delta / tau))
+        if value < 0.001 { value = 0 }
+        return value
+    }
+    mutating func reset() { self = Self() }
+}
+
+
 enum DialogProviderLiveStartConfigError: Error {
     case missingRoleText
     case invalidDialogShape
@@ -2421,6 +2510,7 @@ enum DialogEndReason {
 
 protocol DialogEngineDelegate: AnyObject {
     func onDialogStarted()
+    func onOrbAudioLevel(_ sample: DialogOrbAudioSample)
     func onASRResult(text: String, isFinal: Bool)
     func onTTSStarted(text: String)
     func onTTSPlaybackStarted()
@@ -2436,6 +2526,7 @@ protocol DialogEngineDelegate: AnyObject {
 }
 
 extension DialogEngineDelegate {
+    func onOrbAudioLevel(_ sample: DialogOrbAudioSample) {}
     func onTTSPlaybackStarted() {}
     func onDelegatedPlaybackProgress(_ progress: DialogEngineDelegatedPlaybackProgress) {}
     func onTTSPlaybackInterruptedByUser() {}
@@ -2961,6 +3052,7 @@ let SEEventTTSResponse = MICControlledSDKValue(rawValue: 3010)
 let SEEventTTSSentenceEnd = MICControlledSDKValue(rawValue: 3009)
 let SEEventTTSSentenceStart = MICControlledSDKValue(rawValue: 3008)
 let SENoError = MICControlledSDKValue(rawValue: 0)
+let SERecorderAudioData = MICControlledSDKValue(rawValue: 3017)
 let SEPlayerAudioData = MICControlledSDKValue(rawValue: 3018)
 let SEPlayerFinishPlayAudio = MICControlledSDKValue(rawValue: 3020)
 let SEPlayerStartPlayAudio = MICControlledSDKValue(rawValue: 3019)
@@ -2971,6 +3063,7 @@ let SE_PARAMS_KEY_APP_KEY_STRING = "SE_PARAMS_KEY_APP_KEY_STRING"
 let SE_PARAMS_KEY_APP_TOKEN_STRING = "SE_PARAMS_KEY_APP_TOKEN_STRING"
 let SE_PARAMS_KEY_DIALOG_ADDRESS_STRING = "SE_PARAMS_KEY_DIALOG_ADDRESS_STRING"
 let SE_PARAMS_KEY_DIALOG_ENABLE_DECODER_AUDIO_CALLBACK_BOOL = "SE_PARAMS_KEY_DIALOG_ENABLE_DECODER_AUDIO_CALLBACK_BOOL"
+let SE_PARAMS_KEY_DIALOG_ENABLE_RECORDER_AUDIO_CALLBACK_BOOL = "SE_PARAMS_KEY_DIALOG_ENABLE_RECORDER_AUDIO_CALLBACK_BOOL"
 let SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_AUDIO_CALLBACK_BOOL = "SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_AUDIO_CALLBACK_BOOL"
 let SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_BOOL = "SE_PARAMS_KEY_DIALOG_ENABLE_PLAYER_BOOL"
 let SE_PARAMS_KEY_DIALOG_URI_STRING = "SE_PARAMS_KEY_DIALOG_URI_STRING"
@@ -3305,6 +3398,7 @@ enum DialogEndReason {
 /// Dialog 引擎对外回调协议
 protocol DialogEngineDelegate: AnyObject {
     func onDialogStarted()
+    func onOrbAudioLevel(_ sample: DialogOrbAudioSample)
     func onASRResult(text: String, isFinal: Bool)
     func onTTSStarted(text: String)
     func onTTSPlaybackStarted()
@@ -3320,6 +3414,7 @@ protocol DialogEngineDelegate: AnyObject {
 }
 
 extension DialogEngineDelegate {
+    func onOrbAudioLevel(_ sample: DialogOrbAudioSample) {}
     func onTTSPlaybackStarted() {}
     func onDelegatedPlaybackProgress(_ progress: DialogEngineDelegatedPlaybackProgress) {}
     func onTTSPlaybackInterruptedByUser() {}
@@ -3399,6 +3494,8 @@ private enum DelegatedTTSEventPhase {
 /// Dialog 语音对话引擎管理器 - 直接封装火山引擎 SpeechEngineToB SDK
 /// 提供语音对话的启动、停止、生命周期管理
 final class DialogEngineManager: NSObject {
+
+    private let orbAudioRelay = DialogOrbAudioRelay()
 
     // MARK: - Singleton
 
@@ -4906,6 +5003,9 @@ final class DialogEngineManager: NSObject {
         // 录音类型：使用设备内置录音机
         engine.setStringParam(SE_RECORDER_TYPE_RECORDER, forKey: SE_PARAMS_KEY_RECORDER_TYPE_STRING)
 
+        // Observe the existing recorder only; no second recorder or audio-session change.
+        engine.setBoolParam(isProviderOwnedLive, forKey: SE_PARAMS_KEY_DIALOG_ENABLE_RECORDER_AUDIO_CALLBACK_BOOL)
+
         // AEC 回声消除
         engine.setBoolParam(config.enableAEC, forKey: SE_PARAMS_KEY_ENABLE_AEC_BOOL)
 
@@ -5698,6 +5798,26 @@ extension DialogEngineManager {
         data: Data,
         engineGeneration: UUID
     ) {
+        if type == SERecorderAudioData || type == SEPlayerAudioData {
+            let channel: DialogOrbAudioChannel = type == SERecorderAudioData ? .input : .output
+            if let sample = orbAudioRelay.sample(channel: channel, pcm: data, generation: engineGeneration) {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    defer { self.orbAudioRelay.complete(sample) }
+                    guard let context = self.currentProviderCallbackContext(engineGeneration: sample.generation),
+                          context.dialogOperationId == sample.operation,
+                          self.providerSessionOperationId == sample.operation,
+                          !self.isEnding,
+                          ProcessInfo.processInfo.systemUptime - sample.capturedAt <= 0.18,
+                          channel != .input || !self.isRecorderPaused,
+                          channel != .output || self.config.enablePlayer else { return }
+                    self.deliverProviderCallback(context) { _, delegate in delegate.onOrbAudioLevel(sample) }
+                }
+            }
+            // Recorder PCM is presentation-only. Never enqueue it into transcript diagnostics.
+            if type == SERecorderAudioData { return }
+            // Player PCM still follows the original drain/verification path below.
+        }
         let frozen = freezeProviderMessageAtIngress(
             type: type,
             data: data,
@@ -5761,6 +5881,7 @@ extension DialogEngineManager {
         dialogOperationID: UUID,
         delegate: DialogEngineDelegate
     ) {
+        orbAudioRelay.activate(generation: engineGeneration, operation: dialogOperationID)
         providerCanonicalMemoryIngressLock.lock()
         providerCanonicalAssistantIngressState.reset()
         let deliveryBinding = delegate.makeCanonicalTranscriptDeliveryBinding()
@@ -5776,6 +5897,7 @@ extension DialogEngineManager {
     private func closeRawCanonicalIngressBinding(
         expectedDialogOperationID: UUID? = nil
     ) {
+        orbAudioRelay.close(operation: expectedDialogOperationID)
         providerCanonicalMemoryIngressLock.lock()
         if rawCanonicalIngressRouter.close(
             expectedDialogOperationID: expectedDialogOperationID

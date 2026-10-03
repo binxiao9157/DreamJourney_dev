@@ -6521,14 +6521,29 @@ final class EchoViewController: UIViewController {
         return view
     }()
 
-    private let quoteLabel: UILabel = {
-        let label = UILabel()
-        label.text = "\"我一直都在，风吹过树叶的声音就是我的回答。\""
-        label.font = DJDesignTokens.Font.body(17)
-        label.textColor = DJDesignTokens.Color.textSecondary
-        label.numberOfLines = 0
-        return label
-    }()
+    private let quoteLabel = EchoReplyTextView()
+    private let cloudOrb = EchoCloudOrbView()
+    #if DEBUG
+    private(set) var orbAudioSampleForTesting: DialogOrbAudioSample?
+    #endif
+    private let conversationContent = UIScrollView()
+    private var cloudOrbHeightConstraint: NSLayoutConstraint?
+    private let composer = EchoComposerView()
+    private let expandReplyButton = UIButton(type: .system)
+    private let showMemoriesButton = UIButton(type: .system)
+    private let finishTextButton = UIButton(type: .system)
+    private var micCenterConstraint: NSLayoutConstraint?
+    private var micTrailingConstraint: NSLayoutConstraint?
+    private var presentationVisible = false
+    private var keyboardOverlap: CGFloat = 0
+    private var publicationObservers: [String: EchoPublicationObserver] = [:]
+    private var observedPublicationSessionID: String?
+    private var publicationDiscoveryTimer: DispatchWorkItem?
+    private var publicationDiscoveryInFlight = false
+    private var lastOrganizationPresentation: EchoOrganizationPresentation?
+    private let presentationPersistenceQueue = DispatchQueue(label: "echo.presentation.progress", qos: .utility)
+    private weak var conversationSheet: UIViewController?
+    private weak var conversationSheetText: UITextView?
 
     private let archiveContextStatusView: UIView = {
         let archiveContextStatusView = UIView()
@@ -6744,7 +6759,14 @@ final class EchoViewController: UIViewController {
     private var currentLiveMemoryCapturePresentationCoordinatorID: UUID?
     private var transcriptEntries: [(text: String, isUser: Bool)] = []
     private var recentEchoConversation = EchoRecentConversationBuffer()
-    private var pendingAIText: String?
+    private var pendingAIText: String? {
+        didSet {
+            if let text = pendingAIText, !text.isEmpty, isViewLoaded {
+                quoteLabel.text = text
+                refreshConversationSheet()
+            }
+        }
+    }
     private var digitalHumanReplyPrewarmWorkItem: DispatchWorkItem?
     private var digitalHumanProviderTextOverTimeoutWorkItem: DispatchWorkItem?
     private var digitalHumanRuntimeRecoveryWorkItem: DispatchWorkItem?
@@ -6766,6 +6788,13 @@ final class EchoViewController: UIViewController {
     private var isStoppingVoiceCaptureManually = false
     private var isUserControlledLiveSessionOpen = false {
         didSet {
+            if isUserControlledLiveSessionOpen && !oldValue {
+                transcriptEntries.removeAll()
+                quoteLabel.beginReply()
+                quoteLabel.text = nil
+                composer.field.resignFirstResponder()
+            }
+            if isViewLoaded { updateOwnerTruthInterviewNaturalInputProductEntryVisibility() }
             if !isUserControlledLiveSessionOpen {
                 cancelLiveSessionLimit()
                 cancelLiveUserInactivityTimeout()
@@ -7195,6 +7224,8 @@ final class EchoViewController: UIViewController {
 
     deinit {
         liveSessionLimitTimer?.cancel()
+        publicationDiscoveryTimer?.cancel()
+        publicationObservers.values.forEach { $0.suspend() }
         liveFarewellSpeaker?.cancel()
         if let id = activeVoiceLaunchAttempt?.id {
             DispatchQueue.main.async {
@@ -7236,6 +7267,9 @@ final class EchoViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        presentationVisible = true
+        cloudOrb.active = true
+        startAutomaticPublicationObservation()
         guard validateEchoAccountLease(at: .request, reason: "viewDidAppear") else {
             return
         }
@@ -7246,6 +7280,12 @@ final class EchoViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        // Reading the transcript is a presentation overlay, not leaving Live.
+        if conversationSheet != nil { return }
+        presentationVisible = false
+        cloudOrb.active = false
+        publicationDiscoveryTimer?.cancel()
+        publicationObservers.values.forEach { $0.suspend() }
         DialogEngineManager.shared.cancelPendingVoiceLaunch(id: activeVoiceLaunchAttempt?.id)
         activeVoiceLaunchAttempt?.finish("pageLeft")
         activeVoiceLaunchAttempt = nil
@@ -7279,7 +7319,11 @@ final class EchoViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let safeBottom = Self.systemBottomSafeInset
-        micButtonBottomConstraint?.constant = -(WarmTabBarView.tabBarHeight + safeBottom + 28)
+        micButtonBottomConstraint?.constant = -max(WarmTabBarView.tabBarHeight + safeBottom + 40, keyboardOverlap + 12)
+        let orbHeight = min(300, max(60, conversationContent.bounds.height - 250))
+        if abs((cloudOrbHeightConstraint?.constant ?? 0) - orbHeight) > 0.5 {
+            cloudOrbHeightConstraint?.constant = orbHeight
+        }
     }
 
     private static var systemBottomSafeInset: CGFloat {
@@ -7314,8 +7358,37 @@ final class EchoViewController: UIViewController {
             action: #selector(messageCenterBellTapped),
             for: .touchUpInside
         )
-        view.addSubview(quoteBubble)
-        view.addSubview(voiceStatusView)
+        view.backgroundColor = DJDesignTokens.Color.background
+        scenicView.isHidden = true
+        digitalHumanLivePanelView?.alpha = 0
+        digitalHumanStatusView.alpha = 0
+        view.addSubview(conversationContent)
+        conversationContent.showsVerticalScrollIndicator = false
+        conversationContent.addSubview(cloudOrb)
+        view.addSubview(composer)
+        composer.onSend = { [weak self] text in
+            guard let self, !self.isUserControlledLiveSessionOpen,
+                  self.isOwnerTruthInterviewNaturalInputProductPolicyPermitted else { return }
+            self.beginEchoTextQuestion(text)
+            self.composer.field.text = ""
+            self.composer.field.resignFirstResponder()
+        }
+        conversationContent.addSubview(quoteBubble)
+        conversationContent.addSubview(voiceStatusView)
+        expandReplyButton.setTitle("展开本场记录", for: .normal)
+        expandReplyButton.titleLabel?.font = DJDesignTokens.Font.label(12)
+        expandReplyButton.tintColor = DJDesignTokens.Color.accentDeep
+        expandReplyButton.accessibilityIdentifier = "echoExpandTranscript"
+        expandReplyButton.addTarget(self, action: #selector(expandConversationTapped), for: .touchUpInside)
+        quoteBubble.addSubview(expandReplyButton)
+        showMemoriesButton.setTitle("查看待确认记忆", for: .normal)
+        showMemoriesButton.addTarget(self, action: #selector(showOrganizedMemories), for: .touchUpInside)
+        showMemoriesButton.isHidden = true
+        conversationContent.addSubview(showMemoriesButton)
+        finishTextButton.setTitle("结束文字对话并整理", for: .normal)
+        finishTextButton.titleLabel?.font = DJDesignTokens.Font.label(12)
+        finishTextButton.addTarget(self, action: #selector(finishTextTapped), for: .touchUpInside)
+        view.addSubview(finishTextButton)
         if shouldShowEchoRuntimeDiagnosticsPanel {
             view.addSubview(echoRuntimeDiagnosticsPanelView)
             echoRuntimeDiagnosticsPanelView.addSubview(echoRuntimeDiagnosticsScrollView)
@@ -7324,7 +7397,7 @@ final class EchoViewController: UIViewController {
         }
         view.addSubview(micRingView)
         view.addSubview(micButton)
-        view.addSubview(ownerTruthInterviewNaturalInputProductEntryButton)
+        // Legacy query button is intentionally not installed on the product page.
         if shouldShowOwnerTruthInterviewNaturalInputEntry {
             view.addSubview(ownerTruthInterviewNaturalInputEntryButton)
         }
@@ -7350,7 +7423,7 @@ final class EchoViewController: UIViewController {
         voiceStatusView.addSubview(voiceStatusLabel)
 
         [
-            scenicView,
+            scenicView, conversationContent, cloudOrb, composer, expandReplyButton, showMemoriesButton, finishTextButton,
             personaBadgeView,
             messageCenterBellButton,
             personaAvatarView,
@@ -7377,124 +7450,95 @@ final class EchoViewController: UIViewController {
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
         digitalHumanLivePanelView?.translatesAutoresizingMaskIntoConstraints = false
 
-        let micBottomConstraint = micButton.bottomAnchor.constraint(
-            equalTo: view.bottomAnchor,
-            constant: -(WarmTabBarView.tabBarHeight + 28)
-        )
+        let micBottomConstraint = micButton.bottomAnchor.constraint(equalTo: view.bottomAnchor,
+            constant: -(WarmTabBarView.tabBarHeight + 40))
         micButtonBottomConstraint = micBottomConstraint
-        let voiceStatusHeight = voiceStatusView.heightAnchor.constraint(equalToConstant: 0)
-        voiceStatusHeightConstraint = voiceStatusHeight
-        let quoteBubbleBottomToVoiceStatus = quoteBubble.bottomAnchor.constraint(
-            equalTo: voiceStatusView.topAnchor,
-            constant: -12
-        )
-        let quoteBubbleBottomToNaturalInput = quoteBubble.bottomAnchor.constraint(
-            equalTo: ownerTruthInterviewNaturalInputProductEntryButton.topAnchor,
-            constant: -12
-        )
-        quoteBubbleBottomToVoiceStatusConstraint = quoteBubbleBottomToVoiceStatus
-        quoteBubbleBottomToNaturalInputConstraint = quoteBubbleBottomToNaturalInput
-
+        micCenterConstraint = micButton.centerXAnchor.constraint(equalTo: view.centerXAnchor)
+        micTrailingConstraint = micButton.trailingAnchor.constraint(equalTo: composer.trailingAnchor, constant: -4)
+        let orbHeight = cloudOrb.heightAnchor.constraint(equalToConstant: 260)
+        cloudOrbHeightConstraint = orbHeight
+        orbHeight.priority = .defaultLow
+        let quoteBottom = quoteBubble.bottomAnchor.constraint(equalTo: conversationContent.contentLayoutGuide.bottomAnchor, constant: -8)
+        quoteBottom.priority = .required
         NSLayoutConstraint.activate([
             scenicView.topAnchor.constraint(equalTo: view.topAnchor),
             scenicView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scenicView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scenicView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-
-            personaBadgeView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 18),
+            personaBadgeView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
             personaBadgeView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
-            personaBadgeView.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
-            personaBadgeView.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.78),
-            personaBadgeView.trailingAnchor.constraint(
-                lessThanOrEqualTo: messageCenterBellButton.leadingAnchor,
-                constant: -8
-            ),
-
-            messageCenterBellButton.topAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.topAnchor,
-                constant: 18
-            ),
-            messageCenterBellButton.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor,
-                constant: -DJDesignTokens.Spacing.page
-            ),
+            personaBadgeView.trailingAnchor.constraint(lessThanOrEqualTo: messageCenterBellButton.leadingAnchor, constant: -12),
+            messageCenterBellButton.centerYAnchor.constraint(equalTo: personaBadgeView.centerYAnchor),
+            messageCenterBellButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             messageCenterBellButton.widthAnchor.constraint(equalToConstant: 44),
             messageCenterBellButton.heightAnchor.constraint(equalToConstant: 44),
-
             personaAvatarView.topAnchor.constraint(equalTo: personaBadgeView.topAnchor, constant: 8),
             personaAvatarView.leadingAnchor.constraint(equalTo: personaBadgeView.leadingAnchor, constant: 8),
             personaAvatarView.bottomAnchor.constraint(equalTo: personaBadgeView.bottomAnchor, constant: -8),
             personaAvatarView.widthAnchor.constraint(equalToConstant: 40),
             personaAvatarView.heightAnchor.constraint(equalToConstant: 40),
-
             personaIconView.centerXAnchor.constraint(equalTo: personaAvatarView.centerXAnchor),
             personaIconView.centerYAnchor.constraint(equalTo: personaAvatarView.centerYAnchor),
             personaIconView.widthAnchor.constraint(equalToConstant: 22),
             personaIconView.heightAnchor.constraint(equalToConstant: 22),
-
             personaTextStack.leadingAnchor.constraint(equalTo: personaAvatarView.trailingAnchor, constant: 10),
             personaTextStack.centerYAnchor.constraint(equalTo: personaAvatarView.centerYAnchor),
             personaTextStack.trailingAnchor.constraint(equalTo: personaBadgeView.trailingAnchor, constant: -14),
-
-            quoteBubble.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
-            quoteBubble.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
-            quoteBubbleBottomToVoiceStatus,
-            quoteBubble.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.74),
-
-            archiveContextStatusView.leadingAnchor.constraint(equalTo: quoteBubble.leadingAnchor),
-            archiveContextStatusView.bottomAnchor.constraint(equalTo: quoteBubble.topAnchor, constant: -12),
-            archiveContextStatusView.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
-            archiveContextStatusView.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.78),
-
-            archiveContextStatusLabel.topAnchor.constraint(equalTo: archiveContextStatusView.topAnchor, constant: 8),
-            archiveContextStatusLabel.leadingAnchor.constraint(equalTo: archiveContextStatusView.leadingAnchor, constant: 14),
-            archiveContextStatusLabel.trailingAnchor.constraint(equalTo: archiveContextStatusView.trailingAnchor, constant: -14),
-            archiveContextStatusLabel.bottomAnchor.constraint(equalTo: archiveContextStatusView.bottomAnchor, constant: -8),
-
+            conversationContent.topAnchor.constraint(equalTo: personaBadgeView.bottomAnchor, constant: 16),
+            conversationContent.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            conversationContent.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            conversationContent.bottomAnchor.constraint(equalTo: finishTextButton.topAnchor, constant: -12),
+            conversationContent.contentLayoutGuide.widthAnchor.constraint(equalTo: conversationContent.frameLayoutGuide.widthAnchor),
+            cloudOrb.topAnchor.constraint(equalTo: conversationContent.contentLayoutGuide.topAnchor),
+            cloudOrb.centerXAnchor.constraint(equalTo: conversationContent.contentLayoutGuide.centerXAnchor),
+            cloudOrb.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.82), orbHeight,
+            cloudOrb.heightAnchor.constraint(greaterThanOrEqualToConstant: 60),
+            voiceStatusView.topAnchor.constraint(equalTo: cloudOrb.bottomAnchor, constant: 8),
+            voiceStatusView.centerXAnchor.constraint(equalTo: conversationContent.contentLayoutGuide.centerXAnchor),
+            voiceStatusView.leadingAnchor.constraint(greaterThanOrEqualTo: conversationContent.contentLayoutGuide.leadingAnchor, constant: 24),
+            voiceStatusView.trailingAnchor.constraint(lessThanOrEqualTo: conversationContent.contentLayoutGuide.trailingAnchor, constant: -24),
+            voiceStatusLabel.topAnchor.constraint(equalTo: voiceStatusView.topAnchor, constant: 8),
+            voiceStatusLabel.bottomAnchor.constraint(equalTo: voiceStatusView.bottomAnchor, constant: -8),
+            voiceStatusLabel.leadingAnchor.constraint(equalTo: voiceStatusView.leadingAnchor, constant: 16),
+            voiceStatusLabel.trailingAnchor.constraint(equalTo: voiceStatusView.trailingAnchor, constant: -16),
+            showMemoriesButton.topAnchor.constraint(equalTo: voiceStatusView.bottomAnchor, constant: 2),
+            showMemoriesButton.centerXAnchor.constraint(equalTo: conversationContent.contentLayoutGuide.centerXAnchor),
+            showMemoriesButton.heightAnchor.constraint(equalToConstant: 28),
+            quoteBubble.topAnchor.constraint(equalTo: showMemoriesButton.bottomAnchor, constant: 8),
+            quoteBubble.leadingAnchor.constraint(equalTo: conversationContent.contentLayoutGuide.leadingAnchor, constant: 24),
+            quoteBubble.trailingAnchor.constraint(equalTo: conversationContent.contentLayoutGuide.trailingAnchor, constant: -24), quoteBottom,
             quoteLabel.topAnchor.constraint(equalTo: quoteBubble.topAnchor, constant: 16),
             quoteLabel.leadingAnchor.constraint(equalTo: quoteBubble.leadingAnchor, constant: 16),
             quoteLabel.trailingAnchor.constraint(equalTo: quoteBubble.trailingAnchor, constant: -16),
-            quoteLabel.bottomAnchor.constraint(equalTo: quoteBubble.bottomAnchor, constant: -16),
-
-            voiceStatusView.centerXAnchor.constraint(equalTo: micButton.centerXAnchor),
-            voiceStatusView.bottomAnchor.constraint(equalTo: micButton.topAnchor, constant: -8),
-            voiceStatusView.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
-            voiceStatusView.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
-            voiceStatusHeight,
-
-            voiceStatusLabel.centerYAnchor.constraint(equalTo: voiceStatusView.centerYAnchor),
-            voiceStatusLabel.leadingAnchor.constraint(equalTo: voiceStatusView.leadingAnchor, constant: 16),
-            voiceStatusLabel.trailingAnchor.constraint(equalTo: voiceStatusView.trailingAnchor, constant: -16),
-
-            ownerTruthInterviewNaturalInputProductEntryButton.centerXAnchor.constraint(equalTo: micButton.centerXAnchor),
-            ownerTruthInterviewNaturalInputProductEntryButton.bottomAnchor.constraint(
-                equalTo: voiceStatusView.topAnchor,
-                constant: -10
-            ),
-            ownerTruthInterviewNaturalInputProductEntryButton.leadingAnchor.constraint(
-                greaterThanOrEqualTo: view.leadingAnchor,
-                constant: DJDesignTokens.Spacing.page
-            ),
-            ownerTruthInterviewNaturalInputProductEntryButton.trailingAnchor.constraint(
-                lessThanOrEqualTo: view.trailingAnchor,
-                constant: -DJDesignTokens.Spacing.page
-            ),
-            ownerTruthInterviewNaturalInputProductEntryButton.heightAnchor.constraint(equalToConstant: 42),
-            ownerTruthInterviewNaturalInputProductEntryButton.widthAnchor.constraint(
-                lessThanOrEqualTo: view.widthAnchor,
-                multiplier: 0.74
-            ),
-
-            micButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            expandReplyButton.topAnchor.constraint(equalTo: quoteLabel.bottomAnchor, constant: 4),
+            expandReplyButton.trailingAnchor.constraint(equalTo: quoteBubble.trailingAnchor, constant: -16),
+            expandReplyButton.heightAnchor.constraint(equalToConstant: 32),
+            expandReplyButton.bottomAnchor.constraint(equalTo: quoteBubble.bottomAnchor, constant: -8),
+            composer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            composer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            composer.heightAnchor.constraint(equalToConstant: 64),
+            composer.centerYAnchor.constraint(equalTo: micButton.centerYAnchor),
+            finishTextButton.bottomAnchor.constraint(equalTo: composer.topAnchor, constant: -4),
+            finishTextButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            finishTextButton.heightAnchor.constraint(equalToConstant: 30),
             micBottomConstraint,
             micButton.widthAnchor.constraint(equalToConstant: 56),
             micButton.heightAnchor.constraint(equalToConstant: 56),
-
             micRingView.centerXAnchor.constraint(equalTo: micButton.centerXAnchor),
             micRingView.centerYAnchor.constraint(equalTo: micButton.centerYAnchor),
             micRingView.widthAnchor.constraint(equalToConstant: 76),
-            micRingView.heightAnchor.constraint(equalToConstant: 76)
+            micRingView.heightAnchor.constraint(equalToConstant: 76),
+            archiveContextStatusView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            archiveContextStatusView.topAnchor.constraint(equalTo: personaBadgeView.bottomAnchor, constant: 4),
+            archiveContextStatusLabel.topAnchor.constraint(equalTo: archiveContextStatusView.topAnchor, constant: 4),
+            archiveContextStatusLabel.bottomAnchor.constraint(equalTo: archiveContextStatusView.bottomAnchor, constant: -4),
+            archiveContextStatusLabel.leadingAnchor.constraint(equalTo: archiveContextStatusView.leadingAnchor, constant: 8),
+            archiveContextStatusLabel.trailingAnchor.constraint(equalTo: archiveContextStatusView.trailingAnchor, constant: -8)
         ])
+        voiceStatusLabel.numberOfLines = 0
+        voiceStatusLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+        NotificationCenter.default.addObserver(self, selector: #selector(echoKeyboardChanged(_:)),
+            name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
 
         if shouldShowOwnerTruthInterviewNaturalInputEntry {
             NSLayoutConstraint.activate([
@@ -7789,6 +7833,11 @@ final class EchoViewController: UIViewController {
         lastEchoRuntimeFallbackReason = nil
         pendingAIText = nil
         transcriptEntries.removeAll()
+        composer.field.text = nil
+        publicationObservers.values.forEach { $0.suspend() }
+        publicationObservers.removeAll()
+        observedPublicationSessionID = nil
+        lastOrganizationPresentation = nil
         recentEchoConversation.reset()
         resetDigitalHumanReplyDispatchState()
         echoRuntimeDiagnosticsPanelLabel.text = ""
@@ -7836,6 +7885,14 @@ final class EchoViewController: UIViewController {
         guard validateEchoAccountLease(at: .ui, reason: "digitalHumanContextDidChange") else {
             return
         }
+        transcriptEntries.removeAll()
+        quoteLabel.text = nil
+        composer.field.text = nil
+        closeConversationSheet()
+        publicationObservers.values.forEach { $0.suspend() }
+        publicationObservers.removeAll()
+        observedPublicationSessionID = nil
+        lastOrganizationPresentation = nil
         recentEchoConversation.reset()
         viewModel.resetTransientStateForAccountRebind()
         if isEchoDelayedReplyProductEnabled, let echoAccountLease {
@@ -7895,6 +7952,9 @@ final class EchoViewController: UIViewController {
     }
 
     @objc private func echoAppWillResignActive() {
+        cloudOrb.active = false
+        publicationObservers.values.forEach { $0.suspend() }
+        publicationDiscoveryTimer?.cancel()
         suspendEchoForAppLifecycle(reason: "willResignActive")
     }
 
@@ -7914,6 +7974,8 @@ final class EchoViewController: UIViewController {
     }
 
     @objc private func echoAppDidBecomeActive() {
+        cloudOrb.active = presentationVisible
+        startAutomaticPublicationObservation()
         cancelCloudDigitalHumanBackgroundRelease(reason: "didBecomeActive")
         restoreEchoAfterAppLifecycleIfNeeded(reason: "didBecomeActive")
         refreshDelayedReplyAnswerReconciliation(reason: "didBecomeActive")
@@ -9139,10 +9201,7 @@ final class EchoViewController: UIViewController {
     }
 
     private func seedTranscriptPreview() {
-        transcriptEntries = [
-            (text: makeContextualOpeningLine(), isUser: false)
-        ]
-        reloadTranscriptPreview()
+        if transcriptEntries.isEmpty { quoteLabel.text = makeContextualOpeningLine() }
     }
 
     private func refreshTranscriptPreviewForCurrentContextIfIdle() {
@@ -9160,14 +9219,13 @@ final class EchoViewController: UIViewController {
 
     private func appendTranscript(text: String, isUser: Bool) {
         transcriptEntries.append((text: text, isUser: isUser))
-        if transcriptEntries.count > 4 {
-            transcriptEntries.removeFirst(transcriptEntries.count - 4)
-        }
+        if !isUser { quoteLabel.beginReply() }
         reloadTranscriptPreview()
+        refreshConversationSheet()
     }
 
     private func reloadTranscriptPreview() {
-        guard let latestEntry = transcriptEntries.last else {
+        guard let latestEntry = transcriptEntries.last(where: { !$0.isUser }) else {
             return
         }
         quoteLabel.text = latestEntry.text
@@ -9175,6 +9233,7 @@ final class EchoViewController: UIViewController {
 
     private func render(state: EchoInteractionState) {
         currentState = state
+        switch state { case .speaking, .listening, .thinking: cloudOrb.speaking = true; default: cloudOrb.speaking = false }
         #if DEBUG
         if case .listening = state {
             let completion = voiceListeningCompletionForTesting
@@ -9201,10 +9260,10 @@ final class EchoViewController: UIViewController {
         case .starting:
             renderVoiceStatus(text: "正在准备麦克风", isVisible: true)
             configureMicButton(
-                systemName: "mic.fill",
-                backgroundColor: DJDesignTokens.Color.surfaceContainer,
-                isEnabled: false,
-                accessibilityLabel: "正在准备麦克风"
+                systemName: "stop.fill",
+                backgroundColor: DJDesignTokens.Color.accentDeep,
+                isEnabled: true,
+                accessibilityLabel: "取消开启语音"
             )
             setMicPulse(active: false)
         case .listening:
@@ -9275,10 +9334,10 @@ final class EchoViewController: UIViewController {
             } else {
                 renderVoiceStatus(text: "回信已抵达", isVisible: true)
                 configureMicButton(
-                    systemName: "checkmark",
+                    systemName: "mic.fill",
                     backgroundColor: DJDesignTokens.Color.accentDeep,
-                    isEnabled: false,
-                    accessibilityLabel: "回信已抵达"
+                    isEnabled: true,
+                    accessibilityLabel: "开始语音"
                 )
                 setMicPulse(active: false)
             }
@@ -13484,8 +13543,19 @@ final class EchoViewController: UIViewController {
         isVisible: Bool,
         accessibilityIdentifier: String = "echoVoiceStatus"
     ) {
-        voiceStatusLabel.text = text
-        voiceStatusLabel.accessibilityLabel = text
+        let displayText: String?
+        let identifier = accessibilityIdentifier
+        if identifier.hasPrefix("echoLiveMemory"),
+           let state = currentLiveMemoryCapturePresentationState,
+           !identifier.hasPrefix("echoLiveMemoryRecovery") {
+            if case .coverageGap = state {
+                displayText = "正在整理\n" + (text ?? "")
+            } else {
+                displayText = EchoOrganizationPresentation.capture(state, partial: currentLiveMemoryPartialPublication)?.text ?? text
+            }
+        } else { displayText = text }
+        voiceStatusLabel.text = displayText
+        voiceStatusLabel.accessibilityLabel = displayText
         voiceStatusLabel.accessibilityIdentifier = accessibilityIdentifier
         voiceStatusHeightConstraint?.constant = isVisible ? 32 : 0
         voiceStatusView.isHidden = !isVisible
@@ -13542,6 +13612,9 @@ final class EchoViewController: UIViewController {
     }
 
     @objc private func micTapped() {
+        if activeVoiceLaunchAttempt?.isActive == true {
+            stopVoiceCapture(); return
+        }
         if isUserControlledLiveSessionOpen, isLiveVoiceTransportSuspended {
             isLiveVoiceTransportSuspended = false
             startVoiceCapture()
@@ -13570,11 +13643,6 @@ final class EchoViewController: UIViewController {
 
     @objc private func ownerTruthInterviewNaturalInputProductEntryTapped() {
         guard isOwnerTruthInterviewNaturalInputProductEntryVisible else { return }
-        if let coordinator = activeLiveMemoryRecoveryCoordinator,
-           ownsLiveMemoryPresentation(coordinator) {
-            coordinator.verifyStatus(startsNewRound: true)
-            return
-        }
         if let handoff = pendingMemoryGapHandoff,
            handoff.contextKey == currentDigitalHumanRuntimeContextKey() {
             pendingMemoryGapHandoff = nil
@@ -13622,6 +13690,7 @@ final class EchoViewController: UIViewController {
     }
 
     private func beginEchoTextQuestion(_ rawQuestion: String) {
+        guard !isUserControlledLiveSessionOpen else { return }
         let question = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty else {
             renderVoiceStatus(
@@ -13632,6 +13701,8 @@ final class EchoViewController: UIViewController {
             return
         }
         if !isTypedEchoConversationOpen {
+            transcriptEntries.removeAll(); quoteLabel.text = ""; quoteLabel.beginReply()
+            refreshConversationSheet()
             recentEchoConversation.reset()
         }
         guard let accountLease = echoAccountLease,
@@ -14657,10 +14728,9 @@ final class EchoViewController: UIViewController {
     }
 
     private var isOwnerTruthInterviewNaturalInputProductEntryVisible: Bool {
-        activeLiveMemoryRecoveryCoordinator != nil
-            || (isOwnerTruthInterviewNaturalInputProductPolicyPermitted
+        !isUserControlledLiveSessionOpen && isOwnerTruthInterviewNaturalInputProductPolicyPermitted
             && !shouldShowOwnerTruthInterviewNaturalInputEntry
-            && canShowOwnerTruthInterviewNaturalInputProductEntry(for: currentState))
+            && canShowOwnerTruthInterviewNaturalInputProductEntry(for: currentState)
     }
 
     private func canShowOwnerTruthInterviewNaturalInputProductEntry(
@@ -14716,34 +14786,20 @@ final class EchoViewController: UIViewController {
     }
 
     private func updateOwnerTruthInterviewNaturalInputProductEntryVisibility() {
-        let isVisible = isOwnerTruthInterviewNaturalInputProductEntryVisible
-        var configuration = ownerTruthInterviewNaturalInputProductEntryButton.configuration
-        ownerTruthInterviewNaturalInputProductEntryButton.accessibilityIdentifier =
-            "ownerTruthInterviewNaturalInputProductEntryButton"
-        if activeLiveMemoryRecoveryCoordinator != nil {
-            configuration?.title = "核实整理状态"
-            configuration?.image = UIImage(systemName: "arrow.clockwise")
-            ownerTruthInterviewNaturalInputProductEntryButton.accessibilityLabel = "核实会后整理状态"
-            ownerTruthInterviewNaturalInputProductEntryButton.accessibilityIdentifier = "echoLiveMemoryVerifyStatus"
-        } else if isTypedEchoConversationOpen {
-            configuration?.title = "继续文字回响"
-            configuration?.image = UIImage(systemName: "keyboard.fill")
-            ownerTruthInterviewNaturalInputProductEntryButton.accessibilityLabel = "继续文字回响或结束整理"
-        } else if pendingMemoryGapHandoff?.contextKey == currentDigitalHumanRuntimeContextKey() {
-            configuration?.title = "继续聊聊"
-            configuration?.image = UIImage(systemName: "bubble.left.and.bubble.right.fill")
-            ownerTruthInterviewNaturalInputProductEntryButton.accessibilityLabel = "继续补充这段记忆"
-        } else {
-            configuration?.title = "文字回响"
-            configuration?.image = UIImage(systemName: "keyboard")
-            ownerTruthInterviewNaturalInputProductEntryButton.accessibilityLabel = "输入文字开始回响"
-        }
-        ownerTruthInterviewNaturalInputProductEntryButton.configuration = configuration
-        ownerTruthInterviewNaturalInputProductEntryButton.isHidden = !isVisible
-        ownerTruthInterviewNaturalInputProductEntryButton.alpha = isVisible ? 1 : 0
-        ownerTruthInterviewNaturalInputProductEntryButton.isUserInteractionEnabled = isVisible
-        quoteBubbleBottomToVoiceStatusConstraint?.isActive = !isVisible
-        quoteBubbleBottomToNaturalInputConstraint?.isActive = isVisible
+        let starting: Bool
+        if case .starting = currentState { starting = true } else { starting = false }
+        let live = isUserControlledLiveSessionOpen || starting
+        composer.isHidden = live
+        composer.isUserInteractionEnabled = isOwnerTruthInterviewNaturalInputProductEntryVisible
+        composer.alpha = composer.isUserInteractionEnabled ? 1 : 0.65
+        if live { composer.field.resignFirstResponder() }
+        ownerTruthInterviewNaturalInputProductEntryButton.isHidden = true
+        ownerTruthInterviewNaturalInputProductEntryButton.isUserInteractionEnabled = false
+        micCenterConstraint?.isActive = false
+        micTrailingConstraint?.isActive = false
+        if live { micCenterConstraint?.isActive = true } else { micTrailingConstraint?.isActive = true }
+        finishTextButton.isHidden = live || !isTypedEchoConversationOpen
+        if live { showMemoriesButton.isHidden = true }
         view.setNeedsLayout()
     }
 
@@ -15318,8 +15374,259 @@ final class EchoViewController: UIViewController {
         stopVoiceCapture()
     }
 
+    #if DEBUG
+    func configureRedesignedPresentationForTesting(live: Bool, replies: [String]) {
+        loadViewIfNeeded()
+        isOwnerTruthInterviewNaturalInputProductPolicyPermitted = true
+        isUserControlledLiveSessionOpen = live
+        for reply in replies { appendTranscript(text: reply, isUser: false) }
+        updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
+    }
+    func renderRedesignedLayoutForTesting(size: CGSize, live: Bool) -> UIImage {
+        configureRedesignedPresentationForTesting(live: live, replies: [String(repeating: "今天我们聊到了家人的旅行，还有那些值得记住的小事。", count: 12)])
+        view.frame = CGRect(origin: .zero, size: size)
+        render(state: live ? .listening : .idle)
+        view.setNeedsLayout(); view.layoutIfNeeded()
+        let navigation = WarmTabBarView()
+        navigation.updateSelection(1)
+        navigation.frame = CGRect(x: 24, y: size.height - WarmTabBarView.tabBarHeight - 16,
+            width: size.width - 48, height: WarmTabBarView.tabBarHeight)
+        view.addSubview(navigation); navigation.layoutIfNeeded()
+        defer { navigation.removeFromSuperview() }
+        return UIGraphicsImageRenderer(size: size).image { view.layer.render(in: $0.cgContext) }
+    }
+    var redesignedLayoutFramesForTesting: (reply: CGRect, mic: CGRect, orb: CGRect) {
+        (quoteBubble.convert(quoteBubble.bounds, to: view).intersection(conversationContent.frame), micButton.frame, cloudOrb.convert(cloudOrb.bounds, to: view))
+    }
+    var redesignedPresentationForTesting: (inputHidden: Bool, recordCount: Int, reply: String, hasVerifyButton: Bool) {
+        (composer.isHidden, transcriptEntries.count, quoteLabel.text ?? "", ownerTruthInterviewNaturalInputProductEntryButton.superview != nil)
+    }
+    #endif
+
+    @objc private func finishTextTapped() { finishTypedEchoConversation() }
+
+    @objc private func echoKeyboardChanged(_ notification: Notification) {
+        guard !isUserControlledLiveSessionOpen,
+              let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+        let local = view.convert(frame, from: nil)
+        let overlap = max(0, view.bounds.maxY - local.minY)
+        keyboardOverlap = overlap
+        micButtonBottomConstraint?.constant = -max(WarmTabBarView.tabBarHeight + Self.systemBottomSafeInset + 40, overlap + 12)
+        UIView.animate(withDuration: 0.25) { self.view.layoutIfNeeded() }
+    }
+
+    @objc private func expandConversationTapped() {
+        guard presentedViewController == nil else { return }
+        let sheet = UIViewController()
+        sheet.title = "本场对话"
+        sheet.view.backgroundColor = DJDesignTokens.Color.background
+        let text = UITextView()
+        text.isEditable = false; text.backgroundColor = .clear
+        text.font = UIFontMetrics.default.scaledFont(for: DJDesignTokens.Font.body(17))
+        text.adjustsFontForContentSizeCategory = true
+        text.textColor = DJDesignTokens.Color.textPrimary
+        text.translatesAutoresizingMaskIntoConstraints = false
+        sheet.view.addSubview(text)
+        NSLayoutConstraint.activate([
+            text.topAnchor.constraint(equalTo: sheet.view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            text.leadingAnchor.constraint(equalTo: sheet.view.leadingAnchor, constant: 24),
+            text.trailingAnchor.constraint(equalTo: sheet.view.trailingAnchor, constant: -24),
+            text.bottomAnchor.constraint(equalTo: sheet.view.safeAreaLayoutGuide.bottomAnchor)
+        ])
+        sheet.navigationItem.rightBarButtonItem = UIBarButtonItem(title: "收起", style: .done,
+            target: self, action: #selector(closeConversationSheet))
+        if isUserControlledLiveSessionOpen {
+            sheet.navigationItem.leftBarButtonItem = UIBarButtonItem(title: "结束 Live", style: .plain,
+                target: self, action: #selector(stopFromConversationSheet))
+        }
+        let nav = UINavigationController(rootViewController: sheet)
+        nav.modalPresentationStyle = .pageSheet
+        if let presentation = nav.sheetPresentationController {
+            presentation.detents = [.medium(), .large()]; presentation.prefersGrabberVisible = true
+        }
+        conversationSheet = nav; conversationSheetText = text
+        refreshConversationSheet()
+        present(nav, animated: true)
+    }
+
+    private func refreshConversationSheet() {
+        guard let textView = conversationSheetText else { return }
+        var lines = transcriptEntries.map { ($0.isUser ? "我：\n" : "回响：\n") + $0.text }
+        if let pendingAIText, !pendingAIText.isEmpty,
+           transcriptEntries.last?.text != pendingAIText { lines.append("回响：\n" + pendingAIText) }
+        let offset = textView.contentOffset
+        textView.text = lines.isEmpty ? "本场还没有对话记录" : lines.joined(separator: "\n\n")
+        textView.setContentOffset(offset, animated: false)
+    }
+    @objc private func closeConversationSheet() {
+        conversationSheet?.dismiss(animated: true)
+        conversationSheet = nil; conversationSheetText = nil
+    }
+    @objc private func stopFromConversationSheet() {
+        stopVoiceCapture()
+        (conversationSheet as? UINavigationController)?.topViewController?.navigationItem.leftBarButtonItem = nil
+    }
+    @objc private func showOrganizedMemories() {
+        guard !isUserControlledLiveSessionOpen, let lease = echoAccountLease,
+              validateEchoAccountLease(at: .ui, expected: lease, reason: "showOrganizedMemories") else { return }
+        let controller = OwnerTruthCandidateInboxViewController(accountLease: lease)
+        navigationController?.pushViewController(controller, animated: true)
+    }
+
+    private func startAutomaticPublicationObservation() {
+        publicationDiscoveryTimer?.cancel()
+        guard presentationVisible, UIApplication.shared.applicationState == .active,
+              DigitalHumanContextStore.shared.current.isSelfAssistant,
+              let lease = echoAccountLease,
+              validateEchoAccountLease(at: .request, expected: lease, reason: "publicationObservation") else { return }
+        guard !publicationDiscoveryInFlight else { return }
+        publicationDiscoveryInFlight = true
+        presentationPersistenceQueue.async { [weak self] in
+            let snapshots = OwnerTruthInterviewLiveTurnOutboxStore.shared.snapshots(for: lease)
+                .filter { $0.acceptedRecoveryProtocol == "live-recovery-v1" && $0.isClosing }
+                .sorted { $0.createdAt > $1.createdAt }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.publicationDiscoveryInFlight = false
+                guard self.presentationVisible, UIApplication.shared.applicationState == .active,
+                      self.echoAccountLease == lease else { return }
+                self.applyPublicationSnapshots(Array(snapshots.prefix(2)), lease: lease)
+            }
+        }
+    }
+
+    private func applyPublicationSnapshots(_ snapshots: [OwnerTruthInterviewLiveTurnOutboxSnapshot], lease: AccountLease) {
+        verifyRetainedRecoveryReadOnly()
+        let kept = Set(snapshots.map(\.productSessionID))
+        for key in Array(publicationObservers.keys) where !kept.contains(key) {
+            publicationObservers.removeValue(forKey: key)?.suspend()
+        }
+        if presentedLiveMemoryProductSessionID == nil, let newest = snapshots.first {
+            presentedLiveMemoryProductSessionID = newest.productSessionID
+            presentedLiveMemoryAccountLease = lease
+        }
+        for snapshot in snapshots.prefix(2) {
+            let productID = snapshot.productSessionID
+            guard let start = snapshot.preparedStartCommand, let vault = OwnerTruthVaultID(lease.vaultId) else { continue }
+            if productID == presentedLiveMemoryProductSessionID { observedPublicationSessionID = productID }
+            if let existing = publicationObservers[productID] { existing.start(); continue }
+            let observer = EchoPublicationObserver(initial: snapshot.recoveryProgress, request: { [weak self] done in
+                guard let self, self.presentationVisible, self.echoAccountLease == lease,
+                      self.validateEchoAccountLease(at: .request, expected: lease, reason: "publicationRead") else {
+                    done(.failure(DreamJourneyBackendClient.ClientError.accountScopeChanged)); return
+                }
+                let client = DreamJourneyBackendClient.shared
+                client.prepareOwnerTruthInterviewNaturalInputAuthentication(accountLease: lease,
+                    now: Date.init, minimumValidity: 30) { [weak self] ready in
+                    DispatchQueue.main.async {
+                        guard let self, ready, self.presentationVisible, self.echoAccountLease == lease,
+                              let decision = client.freshOwnerTruthInterviewNaturalInputDecision() else {
+                            done(.failure(DreamJourneyBackendClient.ClientError.accountScopeChanged)); return
+                        }
+                        guard let authority = OwnerTruthInterviewNaturalInputRequestAuthority(featureDecision: decision,
+                            accountLease: lease, operationGeneration: 1,
+                            diagnosticTraceID: "echo-publication-observation", now: Date()) else {
+                            done(.failure(DreamJourneyBackendClient.ClientError.accountScopeChanged)); return
+                        }
+                        // This action is a read in the server route. Never authorize/replay/close here.
+                        client.controlOwnerTruthLiveRecovery(authority: authority, vaultID: vault,
+                            sessionID: start.sessionID, generation: 1, action: "status") { result in
+                            DispatchQueue.main.async {
+                                done(result.flatMap { progress in Result {
+                                    guard progress.sessionBinding?.productSessionId == productID,
+                                          progress.sessionBinding?.threadId == start.threadID.rawValue,
+                                          self.echoAccountLease == lease,
+                                          self.validateEchoAccountLease(at: .commit, expected: lease, reason: "publicationCommit") else {
+                                        throw DreamJourneyBackendClient.ClientError.accountScopeChanged
+                                    }
+                                    return progress
+                                } })
+                            }
+                        }
+                    }
+                }
+            })
+            observer.onUnavailable = { [weak self] in
+                guard let self, self.echoAccountLease == lease,
+                      self.presentedLiveMemoryProductSessionID == productID,
+                      !self.isUserControlledLiveSessionOpen, !self.isTypedEchoConversationOpen,
+                      self.activeVoiceLaunchAttempt?.isActive != true else { return }
+                self.currentLiveMemoryCapturePresentationState = .statusUnknown
+                self.renderVoiceStatus(text: EchoOrganizationPresentation.capture(.statusUnknown)?.text,
+                    isVisible: true, accessibilityIdentifier: "echoLiveMemoryStatusUnknown")
+            }
+            observer.onProgress = { [weak self] (progress: OwnerTruthLiveRecoveryProgress) in
+                guard let self, self.echoAccountLease == lease else { return }
+                // The existing store enforces monotonic progress and the original scene binding.
+                self.presentationPersistenceQueue.async {
+                    do {
+                        try OwnerTruthInterviewLiveTurnOutboxStore.shared.saveRecoveryProgress(progress,
+                            for: lease, productSessionID: productID)
+                    } catch {
+                        PrivacySafeDiagnostics.log(subsystem: "EchoPublicationObservation",
+                            event: "progressPersistenceFailed", states: ["source": "statusRead"])
+                    }
+                }
+                if self.presentedLiveMemoryProductSessionID == productID,
+                   self.presentedLiveMemoryAccountLease == lease {
+                    self.renderObservedPublication(progress)
+                }
+            }
+            publicationObservers[productID] = observer
+            observer.start()
+        }
+        // Re-scan only coordinates, so a newly closed scene is picked up without a button.
+        let item = DispatchWorkItem { [weak self] in self?.startAutomaticPublicationObservation() }
+        publicationDiscoveryTimer = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: item)
+    }
+
+    private func verifyRetainedRecoveryReadOnly() {
+        // Old protocol only. The coordinator coalesces its in-flight read and owns
+        // its bounded round; never reset a live round or replay a business write.
+        for coordinator in retainedLiveMemoryRecoveryCoordinators.values {
+            guard publicationObservers[coordinator.trackedProductSessionID] == nil else { continue }
+            switch coordinator.state {
+            case .statusUnknown, .waitingForAccount, .waitingForAuthority, .waitingForPolicy:
+                coordinator.verifyStatus(startsNewRound: true)
+            default: break
+            }
+        }
+    }
+
+    private func renderObservedPublication(_ progress: OwnerTruthLiveRecoveryProgress) {
+        guard !isUserControlledLiveSessionOpen, !isTypedEchoConversationOpen,
+              activeVoiceLaunchAttempt?.isActive != true else { return }
+        let state: EchoLiveMemoryCaptureState
+        switch progress.publication?.state {
+        case "published": state = .pendingReview
+        case "noChange": state = .empty
+        case "failed": state = .terminalFailure(code: "recoverySnapshotFailed")
+        default: state = .organizing
+        }
+        guard let presentation = EchoOrganizationPresentation.capture(state, partial: progress.publication?.isPartial == true) else { return }
+        lastOrganizationPresentation = presentation
+        currentLiveMemoryCapturePresentationState = state
+        currentLiveMemoryPartialPublication = progress.publication?.isPartial == true
+        let identifier: String
+        switch state {
+        case .pendingReview: identifier = "echoLiveMemoryPendingReview"
+        case .empty: identifier = "echoLiveMemoryEmpty"
+        case .terminalFailure: identifier = "echoLiveMemoryTerminalFailure"
+        default: identifier = "echoLiveMemoryOrganizing"
+        }
+        renderVoiceStatus(text: presentation.text, isVisible: true, accessibilityIdentifier: identifier)
+        showMemoriesButton.isHidden = state != .pendingReview
+    }
+
     private func renderLiveMemoryCaptureState(_ state: EchoLiveMemoryCaptureState) {
+        if let session = observedPublicationSessionID, session == presentedLiveMemoryProductSessionID,
+           let progress = publicationObservers[session]?.latest {
+            renderObservedPublication(progress)
+            return
+        }
         guard !isUserControlledLiveSessionOpen else { return }
+        showMemoriesButton.isHidden = state != .pendingReview
         switch state {
         case .live:
             break
@@ -15423,12 +15730,31 @@ final class EchoViewController: UIViewController {
     }
 
     private func renderLiveMemoryRecoveryState(_ state: EchoLiveMemoryRecoveryState) {
+        if observedPublicationSessionID == presentedLiveMemoryProductSessionID,
+           observedPublicationSessionID != nil { return }
         guard !isUserControlledLiveSessionOpen else { return }
         PrivacySafeDiagnostics.log(
             subsystem: "EchoLiveMemoryRecovery",
             event: "uiCommitted",
             states: ["state": Self.safeLiveMemoryRecoveryStateCode(state)]
         )
+        let displayState: EchoLiveMemoryCaptureState
+        switch state {
+        case .pendingReview: displayState = .pendingReview
+        case .empty: displayState = .empty
+        case .terminalFailure(let code): displayState = .terminalFailure(code: code)
+        case .quarantined: displayState = .quarantined
+        case .statusUnknown, .accessBlocked, .contractBlocked, .waitingForAccount, .waitingForAuthority, .waitingForPolicy:
+            displayState = .statusUnknown
+        default: displayState = .organizing
+        }
+        defer {
+            if let presentation = EchoOrganizationPresentation.capture(displayState) {
+                voiceStatusLabel.text = presentation.text
+                voiceStatusLabel.accessibilityLabel = presentation.text
+                showMemoriesButton.isHidden = displayState != .pendingReview
+            }
+        }
         switch state {
         case .discovered, .checking:
             renderVoiceStatus(
@@ -17200,6 +17526,15 @@ final class EchoViewController: UIViewController {
 }
 
 extension EchoViewController: DialogEngineDelegate {
+    func onOrbAudioLevel(_ sample: DialogOrbAudioSample) {
+        // Manager has already checked callback ownership and account/session identity.
+        // Do not enqueue another task or mutate conversation/persistence state here.
+        #if DEBUG
+        orbAudioSampleForTesting = sample
+        #endif
+        cloudOrb.receiveAudioLevel(sample.level, channel: sample.channel, capturedAt: sample.capturedAt)
+    }
+
     func onDialogStarted() {
         let receivedAttempt = activeVoiceLaunchAttempt
         let receivedToken = activeVoiceInteractionLifecycleToken
@@ -18028,12 +18363,14 @@ extension EchoViewController {
             voiceStatusLabel.accessibilityIdentifier,
             ownerTruthInterviewNaturalInputProductEntryButton.configuration?.title,
             ownerTruthInterviewNaturalInputProductEntryButton.accessibilityIdentifier,
-            !ownerTruthInterviewNaturalInputProductEntryButton.isHidden
+            ownerTruthInterviewNaturalInputProductEntryButton.superview != nil
+                && !ownerTruthInterviewNaturalInputProductEntryButton.isHidden
         )
     }
 
     func tapLiveMemoryRecoveryVerificationForTesting() {
-        ownerTruthInterviewNaturalInputProductEntryTapped()
+        // Compatibility seam for old tests: drive the automatic read, not a UI button.
+        verifyRetainedRecoveryReadOnly()
     }
 
     func presentLiveMemoryRecoveryResultForTesting(
