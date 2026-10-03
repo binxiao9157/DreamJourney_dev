@@ -260,8 +260,10 @@ final class EchoPublicationObserver {
     }
     deinit { timer?.cancel(); deadline?.cancel() }
     func start() {
+        // The first delivery may have been hidden by an open conversation gate.
+        // Re-present settled data without issuing another HTTP request.
+        if let latest, Self.settled(latest) { active = true; onProgress?(latest); return }
         guard !active else { return }; active = true
-        if let latest, Self.settled(latest) { onProgress?(latest); return }
         read()
     }
     func suspend() {
@@ -272,8 +274,27 @@ final class EchoPublicationObserver {
         guard let publication = value.publication else { return false }
         return ["published", "noChange", "failed"].contains(publication.state)
     }
+    /// Accept only progress for this observer's original session and generation.
+    /// Disk discovery, capture callbacks and HTTP share one monotonic cache.
+    @discardableResult
+    func receive(_ value: OwnerTruthLiveRecoveryProgress) -> Bool {
+        if let old = latest {
+            guard value.sessionId == old.sessionId, value.generation == old.generation,
+                  value.version >= old.version, value.snapshotRevision >= old.snapshotRevision else { return false }
+            if ["published", "noChange"].contains(old.publication?.state ?? ""),
+               value.snapshotRevision == old.snapshotRevision {
+                if active { onProgress?(old) }
+                return false
+            }
+        }
+        latest = value
+        if Self.settled(value) { timer?.cancel(); timer = nil; deadline?.cancel() }
+        if active { onProgress?(value) }
+        return true
+    }
     private func read() {
         guard active, !inFlight else { return }
+        if let latest, Self.settled(latest) { return }
         inFlight = true; let token = UUID(); generation = token
         deadline = schedule(15) { [weak self] in
             guard let self, self.generation == token, self.inFlight else { return }
@@ -287,19 +308,12 @@ final class EchoPublicationObserver {
             guard self.active else { return }
             guard self.generation == token else { self.read(); return }
             if case .success(let value) = result {
-                if let old = self.latest {
-                    guard value.sessionId == old.sessionId, value.generation == old.generation,
-                          value.version >= old.version,
-                          value.snapshotRevision >= old.snapshotRevision else { self.next(); return }
-                    // Success for this snapshot cannot regress due to a late/legacy failure.
-                    if ["published", "noChange"].contains(old.publication?.state ?? ""),
-                       value.publication?.snapshotRevision == old.publication?.snapshotRevision {
-                        return
-                    }
-                }
-                self.latest = value; self.onProgress?(value)
-                if Self.settled(value) { return }
-            } else { self.onUnavailable?() }
+                self.receive(value)
+                if let latest = self.latest, Self.settled(latest) { return }
+            } else {
+                if let latest = self.latest, Self.settled(latest) { return }
+                self.onUnavailable?()
+            }
             self.next()
         }
     }

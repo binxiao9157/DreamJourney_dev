@@ -10,6 +10,205 @@ import XCTest
 #endif
 
 final class OwnerTruthContractsTests: XCTestCase {
+    @MainActor
+    func testEchoColdDiskPublicationReplacesLegacyOwnerAndSurvivesLateBlockedResult() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("cold-publication-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = OwnerTruthInterviewLiveTurnOutboxStore(rootDirectory: root)
+        let product = "newest-published"
+        let start = try OwnerTruthInterviewNaturalInputStartCommand(commandID: "start",
+            threadID: OwnerTruthRecordID(rawValue: UUID()), sessionID: OwnerTruthRecordID(rawValue: UUID()),
+            entryMode: .live, productSessionID: product, recoveryProtocol: "live-recovery-v1")
+        _ = try store.prepareStart(start, for: lease, productSessionID: product)
+        _ = try store.markStartDispatchState(.mayExpose, command: start, for: lease, productSessionID: product)
+        _ = try store.markStartDispatchState(.committed, command: start, for: lease, productSessionID: product)
+        try store.acceptRecoveryProtocol("live-recovery-v1", sessionID: start.sessionID, for: lease, productSessionID: product)
+        _ = try store.requestClose(for: lease, productSessionID: product)
+        try store.saveRecoveryProgress(publicationUIProgress(session: start.sessionID), for: lease, productSessionID: product)
+        let rebuilt = OwnerTruthInterviewLiveTurnOutboxStore(rootDirectory: root)
+        let controller = EchoViewController()
+        controller.bindPublicationPageForTesting(lease: lease, productSessionID: "legacy-blocked")
+        controller.discoverPublicationForTesting(store: rebuilt, lease: lease)
+        XCTAssertEqual(controller.publicationPageIDForTesting, product)
+        XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText, "整理完成，已存入待确认记忆")
+        controller.presentBlockedRecoveryForTesting(productSessionID: "legacy-blocked", lease: lease)
+        XCTAssertEqual(controller.publicationPageIDForTesting, product, "Late legacy restore cannot replace the selected published scene")
+        controller.renderInteractionIdleForTesting()
+        XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText, "整理完成，已存入待确认记忆")
+        XCTAssertTrue(controller.organizedMemoriesButtonVisibleForTesting)
+
+        controller.bindPublicationPageForTesting(lease: lease, productSessionID: "new-live")
+        controller.configureRedesignedPresentationForTesting(live: true, replies: [])
+        controller.discoverPublicationForTesting(store: rebuilt, lease: lease)
+        XCTAssertEqual(controller.publicationPageIDForTesting, "new-live", "An open new conversation owns the page")
+    }
+
+    private func publicationUIProgress(state: String = "published", version: Int = 12,
+        session: OwnerTruthRecordID = OwnerTruthRecordID(rawValue: UUID())) throws -> OwnerTruthLiveRecoveryProgress {
+        try OwnerTruthLiveRecoveryProgress(backendJSONObject: [
+            "protocol": "live-recovery-v1", "sessionId": session.rawValue.uuidString,
+            "generation": 1, "version": version, "state": "frozen", "continuousSequence": 4,
+            "highestSeenSequence": 4, "finalSequence": 4, "endPositionKnown": true,
+            "receivedRanges": [[1,4]], "missingRanges": [], "rangeOffset": 0,
+            "rangePageTruncated": false, "snapshotRevision": 1,
+            "publication": ["snapshotRevision": 1, "state": state, "themeCount": state == "published" ? 1 : 0]
+        ], expectedSessionID: session, expectedGeneration: 1)
+    }
+
+    @MainActor
+    func testEchoPublicationUIClosingCaptureDoesNotMasqueradeAsTypedConversation() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("publication-ui-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let coordinator = EchoLiveMemoryCaptureCoordinator(accountLease: lease,
+            client: InterviewNaturalInputClientSpy(), accountLeaseRuntime: runtime,
+            productSessionID: "publication-ui", liveTurnOutboxStore: .init(rootDirectory: root),
+            naturalInputPolicyAvailable: { false }, candidateReviewPolicyAvailable: { false })
+        let controller = EchoViewController()
+        controller.installLiveMemoryCaptureForTesting(accountLease: lease, coordinator: coordinator)
+        controller.bindPublicationPageForTesting(lease: lease, productSessionID: "publication-ui")
+        XCTAssertTrue(controller.typedConversationOpenForTesting)
+        coordinator.finish()
+        XCTAssertTrue(controller.hasActiveLiveMemoryCaptureForTesting(coordinator), "Completion callback has not released ownership yet")
+        XCTAssertFalse(controller.typedConversationOpenForTesting, "Retaining a closing capture is not an open text conversation")
+        controller.observePublicationForTesting(try publicationUIProgress(), productSessionID: "publication-ui", lease: lease)
+        XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText, "整理完成，已存入待确认记忆")
+        XCTAssertTrue(controller.organizedMemoriesButtonVisibleForTesting)
+        controller.renderInteractionIdleForTesting()
+        XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText, "整理完成，已存入待确认记忆")
+    }
+
+    @MainActor
+    func testEchoPublicationUISettledResultReplaysAfterConversationGateCloses() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("publication-replay-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let coordinator = EchoLiveMemoryCaptureCoordinator(accountLease: lease,
+            client: InterviewNaturalInputClientSpy(), accountLeaseRuntime: runtime,
+            productSessionID: "publication-replay", liveTurnOutboxStore: .init(rootDirectory: root),
+            naturalInputPolicyAvailable: { false }, candidateReviewPolicyAvailable: { false })
+        let controller = EchoViewController()
+        controller.installLiveMemoryCaptureForTesting(accountLease: lease, coordinator: coordinator)
+        controller.bindPublicationPageForTesting(lease: lease, productSessionID: "publication-replay")
+        controller.configureRedesignedPresentationForTesting(live: true, replies: [])
+        controller.observePublicationForTesting(try publicationUIProgress(), productSessionID: "publication-replay", lease: lease)
+        XCTAssertNotEqual(controller.liveMemoryCapturePresentationForTesting().statusText, "整理完成，已存入待确认记忆", "Do not interrupt active Live")
+        controller.configureRedesignedPresentationForTesting(live: false, replies: [])
+        coordinator.finish()
+        controller.replayPublicationForTesting(productSessionID: "publication-replay")
+        XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText, "整理完成，已存入待确认记忆")
+    }
+
+    @MainActor
+    func testEchoPublicationUICachedCompletionAndColdPageUseSamePresentation() throws {
+        let (_, lease) = try makeActiveRuntime()
+        for (state, expected, button) in [
+            ("published", "整理完成，已存入待确认记忆", true),
+            ("noChange", "整理完成，本次没有新增记忆", false),
+            ("failed", "整理暂未完成", false)] {
+            let controller = EchoViewController()
+            controller.bindPublicationPageForTesting(lease: lease, productSessionID: "cold-page")
+            controller.observePublicationForTesting(try publicationUIProgress(state: state), productSessionID: "cold-page", lease: lease)
+            XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText, expected)
+            XCTAssertTrue(controller.liveMemoryCapturePresentationForTesting().statusVisible)
+            XCTAssertEqual(controller.organizedMemoriesButtonVisibleForTesting, button)
+            controller.renderInteractionIdleForTesting()
+            XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText, expected)
+        }
+        var partial = try publicationUIProgress()
+        partial.publication?.isPartial = true
+        let controller = EchoViewController()
+        controller.bindPublicationPageForTesting(lease: lease, productSessionID: "partial")
+        controller.observePublicationForTesting(partial, productSessionID: "partial", lease: lease)
+        XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText,
+            "整理完成，已存入待确认记忆\n少量内容暂未整理完成")
+    }
+
+    @MainActor
+    func testEchoPublicationUIOtherAccountAndSceneCannotReplaceCurrentPage() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let other = AccountLease(subjectId: "other", vaultId: lease.vaultId, sessionId: lease.sessionId,
+            generation: lease.generation, generationId: lease.generationId, authorityEpoch: lease.authorityEpoch)
+        let controller = EchoViewController()
+        controller.bindPublicationPageForTesting(lease: lease, productSessionID: "current-page")
+        let original = controller.liveMemoryCapturePresentationForTesting().statusText
+        controller.observePublicationForTesting(try publicationUIProgress(), productSessionID: "old-page", lease: lease)
+        XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText, original)
+        controller.observePublicationForTesting(try publicationUIProgress(), productSessionID: "current-page", lease: other)
+        XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText, original)
+    }
+
+    @MainActor
+    func testEchoPublicationUIOpenTypedConversationDefersPublishedResult() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("publication-typed-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let coordinator = EchoLiveMemoryCaptureCoordinator(accountLease: lease,
+            client: InterviewNaturalInputClientSpy(), accountLeaseRuntime: runtime,
+            productSessionID: "typed-open", liveTurnOutboxStore: .init(rootDirectory: root),
+            naturalInputPolicyAvailable: { false }, candidateReviewPolicyAvailable: { false })
+        let controller = EchoViewController()
+        controller.installLiveMemoryCaptureForTesting(accountLease: lease, coordinator: coordinator)
+        controller.bindPublicationPageForTesting(lease: lease, productSessionID: "typed-open")
+        let original = controller.liveMemoryCapturePresentationForTesting().statusText
+        controller.observePublicationForTesting(try publicationUIProgress(), productSessionID: "typed-open", lease: lease)
+        XCTAssertTrue(controller.typedConversationOpenForTesting)
+        XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText, original)
+    }
+
+    @MainActor
+    func testEchoPublicationCacheAdvancesFromDurableProgressWithoutExtraRequest() throws {
+        let session = OwnerTruthRecordID(rawValue: UUID())
+        let pending = try publicationUIProgress(state: "pending", version: 11, session: session)
+        let published = try publicationUIProgress(session: session)
+        var callbacks: [(Result<OwnerTruthLiveRecoveryProgress, Error>) -> Void] = []
+        var unavailable = 0, states: [String] = [], work: [DispatchWorkItem] = []
+        let observer = EchoPublicationObserver(initial: pending, request: { callbacks.append($0) },
+            schedule: { _, action in let item = DispatchWorkItem(block: action); work.append(item); return item })
+        observer.onProgress = { states.append($0.publication?.state ?? "none") }
+        observer.onUnavailable = { unavailable += 1 }
+        observer.start()
+        XCTAssertTrue(observer.receive(published))
+        XCTAssertEqual(states.last, "published")
+        callbacks[0](.failure(NSError(domain: "late transport error", code: 1)))
+        XCTAssertEqual(unavailable, 0)
+        XCTAssertFalse(observer.receive(pending), "Older disk/HTTP progress cannot regress success")
+        XCTAssertFalse(observer.receive(try publicationUIProgress(state: "pending", version: 13, session: session)), "Same snapshot cannot revert to pending")
+        XCTAssertFalse(observer.receive(try publicationUIProgress()), "Foreign session cannot replace cache")
+        var generationJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(published)) as! [String: Any]
+        generationJSON["generation"] = 2
+        let otherGeneration = try OwnerTruthLiveRecoveryProgress(backendJSONObject: generationJSON, expectedSessionID: session, expectedGeneration: 2)
+        XCTAssertFalse(observer.receive(otherGeneration))
+        observer.start()
+        XCTAssertEqual(callbacks.count, 1)
+        XCTAssertEqual(observer.latest?.publication?.state, "published")
+        XCTAssertFalse(work.contains { !$0.isCancelled })
+        observer.suspend()
+        let delivered = states.count
+        _ = observer.receive(published)
+        XCTAssertEqual(states.count, delivered, "Background cache updates do not render")
+        observer.start()
+        XCTAssertEqual(states.count, delivered + 1)
+        XCTAssertEqual(callbacks.count, 1)
+    }
+
+    @MainActor
+    func testEchoPublicationCacheSettledDuringSuspendDoesNotRestartTransport() throws {
+        let session = OwnerTruthRecordID(rawValue: UUID())
+        let pending = try publicationUIProgress(state: "pending", version: 11, session: session)
+        var callbacks: [(Result<OwnerTruthLiveRecoveryProgress, Error>) -> Void] = []
+        let observer = EchoPublicationObserver(initial: pending, request: { callbacks.append($0) },
+            schedule: { _, action in DispatchWorkItem(block: action) })
+        observer.start(); observer.suspend()
+        XCTAssertTrue(observer.receive(try publicationUIProgress(session: session)))
+        observer.start()
+        callbacks[0](.success(pending))
+        XCTAssertEqual(callbacks.count, 1, "Late pre-background completion cannot restart reads after published")
+        XCTAssertEqual(observer.latest?.publication?.state, "published")
+        observer.suspend()
+    }
+
     func testEchoAudioOrbPCMEnvelopeAndSilence() {
         func pcm(_ value: Int16) -> Data { var v = value.littleEndian; return withUnsafeBytes(of: &v) { Data($0) } }
         XCTAssertEqual(DialogOrbPCM.level(Data()), 0)
@@ -1029,6 +1228,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                        "live-recovery-v1")
         let controller = EchoViewController()
         controller.installLiveMemoryCaptureForTesting(accountLease: lease, coordinator: coordinator)
+        controller.bindPublicationPageForTesting(lease: lease, productSessionID: "recovery-controller")
         let started = Date()
         if tenMinute {
             var goodbye: (() -> Void)?
@@ -1071,6 +1271,9 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(client.endCommands.isEmpty)
         XCTAssertTrue(client.admissionCommands.isEmpty)
         XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 8) { coordinator.state == .pendingReview })
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            controller.liveMemoryCapturePresentationForTesting().statusText == "整理完成，已存入待确认记忆"
+        }, "Actual recovery publication must reach the page, not just coordinator.state")
         let countAfterPublication = client.recoveryControls.count
         // Exceed the normal 5-second poll interval: a settled publication must
         // not rebind ready, regress to saving or keep polling in a tight loop.
@@ -1351,6 +1554,11 @@ final class OwnerTruthContractsTests: XCTestCase {
 
     #if LIVE_MANAGER_CONTROLLED_SDK
     @MainActor
+    func testMICStopSealsCaptureBeforeNativeStopReturns() throws {
+        try exerciseMICProductionManager(scenario: "stopClose")
+    }
+
+    @MainActor
     func testMICProductionManagerControlledSDKLifecycle() throws {
         for scenario in ["setupDeadline", "directiveFailure", "missingStarted", "lateAfterCancel", "handoff", "replacement", "cumulative", "authDeadline", "authRotation", "runtimeDeadline", "networkLoss"] {
             try XCTContext.runActivity(named: scenario) { _ in
@@ -1496,7 +1704,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             engine.emit(SEEngineError)
         } else {
             XCTAssertEqual(engine.count(SEDirectiveStartEngine), 1)
-            if scenario == "handoff" || scenario == "replacement" {
+            if scenario == "handoff" || scenario == "replacement" || scenario == "stopClose" {
                 if scenario == "handoff" { uptime += 3 }
                 engine.emit(SEEventSessionStarted)
                 XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { listening == 1 })
@@ -1518,6 +1726,41 @@ final class OwnerTruthContractsTests: XCTestCase {
                     XCTAssertEqual(current.last(where: { $0.stage == .sdkStart })?.elapsedMilliseconds, 1_000, "sdkStart marks stage entry before Manager initialization")
                     XCTAssertEqual(current.last(where: { $0.stage == .listening })?.elapsedMilliseconds, 6_000)
                     XCTAssertEqual(last.requestCount, 1)
+                }
+                if scenario == "stopClose" {
+                    let root = FileManager.default.temporaryDirectory.appendingPathComponent("stop-close-\(UUID())")
+                    defer { try? FileManager.default.removeItem(at: root) }
+                    let outbox = OwnerTruthInterviewLiveTurnOutboxStore(rootDirectory: root)
+                    let capture = EchoLiveMemoryCaptureCoordinator(accountLease: lease,
+                        client: InterviewNaturalInputClientSpy(), accountLeaseRuntime: runtime,
+                        productSessionID: "native-stop-close", liveTurnOutboxStore: outbox,
+                        naturalInputPolicyAvailable: { false }, candidateReviewPolicyAvailable: { false })
+                    controller.installLiveMemoryCaptureForTesting(accountLease: lease, coordinator: capture)
+                    capture.appendOwnerTurn("合成测试：我每周六整理工具柜。")
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+                        (try? outbox.load(for: lease, productSessionID: "native-stop-close"))?.ownerTurnCount == 1
+                    })
+                    var nativeStops = 0
+                    SpeechEngine.onSyncStop = {
+                        nativeStops += 1
+                        XCTAssertFalse(capture.acceptsTurns, "Capture must close before external SDK stop returns or delivers onDialogEnded")
+                        XCTAssertTrue(self.waitForOwnerTruthHTTPUI(timeout: 2) {
+                            (try? outbox.load(for: lease, productSessionID: "native-stop-close"))?.closeIntentRequestedAt != nil
+                        }, "Durable close cannot depend on native stop completion")
+                    }
+                    var goodbye: (() -> Void)?
+                    controller.beginLiveLimitForTesting(now: 0, pause: { true }, playback: { _, done in goodbye = done })
+                    controller.tickLiveLimitForTesting(now: 610, busy: false)
+                    try XCTUnwrap(goodbye)()
+                    XCTAssertEqual(nativeStops, 1)
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+                        (try? outbox.load(for: lease, productSessionID: "native-stop-close"))?.closeIntentRequestedAt != nil
+                    })
+                    let before = try outbox.load(for: lease, productSessionID: "native-stop-close")?.closeIntentRequestedAt
+                    controller.stopVoiceForTesting()
+                    XCTAssertEqual(try outbox.load(for: lease, productSessionID: "native-stop-close")?.closeIntentRequestedAt, before)
+                    SpeechEngine.onSyncStop = nil
+                    return
                 }
                 // The handoff removes the launch timer without terminating a live session.
                 uptime = 120
@@ -11014,10 +11257,12 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.allSatisfy {
             $0.httpMethod == "GET"
         })
-        XCTAssertNil(try checkpointStore.load(
-            productSessionID: productSessionID,
-            for: lease
-        ), "coordinates may be cleaned only after the terminal observation is persisted")
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+            // Terminal presentation intentionally precedes asynchronous cleanup.
+            // Assert the durable outcome, not the first state-change callback.
+            do { return try checkpointStore.load(productSessionID: productSessionID, for: lease) == nil }
+            catch { return false }
+        }, "coordinates must be cleaned after the terminal observation is persisted")
     }
 
     @MainActor
@@ -11712,7 +11957,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(statusReadCount, 1)
         XCTAssertEqual(coordinator.state, .organizing)
 
-        controller.tapLiveMemoryRecoveryVerificationForTesting()
+        controller.completeRecoveryPolicyRefreshForTesting()
         XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
             coordinator.state == .pendingReview
         })
@@ -11957,6 +12202,9 @@ final class OwnerTruthContractsTests: XCTestCase {
                     && $0.event == "resourceContractDecoded"
             })?.traceID
         )
+        // Drive the actual post-policy controller boundary explicitly; do not
+        // depend on an unrelated shared-policy request completing by chance.
+        controller.completeRecoveryPolicyRefreshForTesting()
         XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
             readEvents.contains(where: {
                 $0.resource == .liveMemoryRecoveryStatus
@@ -35982,6 +36230,14 @@ final class OwnerTruthContractsTests: XCTestCase {
             userId: lease.subjectId, launchAttempt: attempt
         ) { _ in }
         wait(for: [secondExposed], timeout: 5)
+        // URLProtocol delivery and Alamofire's task-resumed notification use
+        // different queues. Advance the synthetic watchdog only after the
+        // observation this scenario promises (second ticket exposed) is durable.
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            store.waitForPendingWrites()
+            let current = store.recent(ownerID: lease.subjectId).last
+            return current?.requestCount == 2 && current?.ticketExposure == "taskResumed"
+        })
         XCTAssertEqual(authRefreshes, 1)
         XCTAssertEqual(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.count, 2)
         XCTAssertNil(attempt.note(

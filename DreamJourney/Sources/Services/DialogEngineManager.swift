@@ -2928,7 +2928,9 @@ final class DialogEngineManager: NSObject {
     }
     #endif
 
-    func stopDialog() {
+    func stopDialog(onInputSealed: (() -> Void)? = nil) {
+        // UI-QA Manager has no native engine; preserve the same close boundary.
+        onInputSealed?()
         guard isDialogActive else { return }
         let shouldDeliver = isActiveAccountLeaseValid(at: .runtime)
         isDialogActive = false
@@ -3086,12 +3088,13 @@ let SE_RECORDER_TYPE_RECORDER = "SE_RECORDER_TYPE_RECORDER"
 final class SpeechEngine {
     static var instances: [SpeechEngine] = []
     static var onInitialize: (() -> Void)?
+    static var onSyncStop: (() -> Void)?
     static var initializationResult = SENoError
     static var startResult = SENoError
     static var createResult = true
     static func prepareEnvironment() {}
     static func resetControlledBoundary() {
-        instances = []; onInitialize = nil
+        instances = []; onInitialize = nil; onSyncStop = nil
         initializationResult = SENoError; startResult = SENoError; createResult = true
     }
     private var callback: SpeechEngineDelegate?
@@ -3113,6 +3116,7 @@ final class SpeechEngine {
     @discardableResult
     func send(_ directive: MICControlledSDKValue, data: String? = nil) -> MICControlledSDKValue {
         directives.append((directive, data))
+        if directive == SEDirectiveSyncStopEngine { Self.onSyncStop?() }
         return directive == SEDirectiveStartEngine ? Self.startResult : SENoError
     }
     func destroy() { destroyCount += 1 }
@@ -4276,19 +4280,30 @@ final class DialogEngineManager: NSObject {
     }
 
     /// 结束语音对话
-    func stopDialog() {
-        stopDialog(reason: .manual)
+    func stopDialog(onInputSealed: (() -> Void)? = nil) {
+        stopDialog(reason: .manual, onInputSealed: onInputSealed)
     }
 
-    /// 结束语音对话（带原因）
-    func stopDialog(reason: DialogEndReason) {
+    /// Seal business input before entering the external synchronous stop. The
+    /// durable close must not depend on SDK completion or delegate delivery.
+    func stopDialog(reason: DialogEndReason, onInputSealed: (() -> Void)? = nil) {
         if pendingTextReplyPlayback != nil {
+            onInputSealed?()
             cancelTextReplyPlayback()
             return
         }
         guard isDialogActive,
               let engine,
-              let callbackContext = currentProviderCallbackContext() else { return }
+              let callbackContext = currentProviderCallbackContext() else {
+            if let onInputSealed {
+                if let generation = engineCallbackGeneration {
+                    _ = rawCanonicalIngressRouter.sealActiveOwnerForStop(engineGeneration: generation)
+                }
+                closeRawCanonicalIngressBinding(expectedDialogOperationID: activeDialogOperationId)
+                onInputSealed()
+            }
+            return
+        }
 
         _ = rawCanonicalIngressRouter.sealActiveOwnerForStop(
             engineGeneration: callbackContext.engineGeneration
@@ -4296,6 +4311,7 @@ final class DialogEngineManager: NSObject {
         closeRawCanonicalIngressBinding(
             expectedDialogOperationID: callbackContext.dialogOperationId
         )
+        onInputSealed?()
         isEnding = true
         invalidateSilenceTimer()
         resetDelegatedClientPlaybackState()

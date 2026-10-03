@@ -1840,6 +1840,7 @@ final class EchoLiveMemoryCaptureCoordinator {
     private(set) var recoveryGracefulStopPersistenceFinished = false
     private var recoveryDidRequestBackpressureStop = false
     private var recoveryBackpressureMonitor = OwnerTruthLiveBackpressureMonitor()
+    var publicationProgress: OwnerTruthLiveRecoveryProgress? { recoveryProgress }
     var isPartialRecoveryPublication: Bool { recoveryProgress?.publication?.isPartial == true }
     var onRecoveryBackpressureStop: (() -> Void)?
     private var naturalInputUseCase: OwnerTruthInterviewNaturalInputUseCase?
@@ -6540,6 +6541,9 @@ final class EchoViewController: UIViewController {
     private var observedPublicationSessionID: String?
     private var publicationDiscoveryTimer: DispatchWorkItem?
     private var publicationDiscoveryInFlight = false
+    private var publicationOutboxStore = OwnerTruthInterviewLiveTurnOutboxStore.shared
+    // A scene started on this page outranks asynchronously discovered history.
+    private var foregroundPublicationSessionID: String?
     private var lastOrganizationPresentation: EchoOrganizationPresentation?
     private let presentationPersistenceQueue = DispatchQueue(label: "echo.presentation.progress", qos: .utility)
     private weak var conversationSheet: UIViewController?
@@ -6875,7 +6879,7 @@ final class EchoViewController: UIViewController {
     private static let livePlaybackTerminalWatchdogTimeout: TimeInterval = 45.0
 
     private var isTypedEchoConversationOpen: Bool {
-        liveMemoryCaptureCoordinator != nil && !isUserControlledLiveSessionOpen
+        liveMemoryCaptureCoordinator?.acceptsTurns == true && !isUserControlledLiveSessionOpen
     }
 
     private struct TencentPCMDriveTestSignal {
@@ -7804,6 +7808,7 @@ final class EchoViewController: UIViewController {
         activeVoiceLaunchAttempt = nil
         detachLiveMemoryRecoveryObservers()
         presentedLiveMemoryProductSessionID = nil
+        foregroundPublicationSessionID = nil
         presentedLiveMemoryAccountLease = nil
         ownerTruthInterviewNaturalInputPolicyRefreshGeneration &+= 1
         pendingMemoryGapHandoff = nil
@@ -8637,6 +8642,7 @@ final class EchoViewController: UIViewController {
             }
             echoAccountLease = nil
             presentedLiveMemoryProductSessionID = nil
+            foregroundPublicationSessionID = nil
             presentedLiveMemoryAccountLease = nil
             activeLiveMemoryRecoveryCoordinator = nil
             print("[Echo][AccountLease] capture rejected reason=\(reason)")
@@ -8645,6 +8651,7 @@ final class EchoViewController: UIViewController {
         echoAccountLease = accountLease
         if previousAccountLease != accountLease {
             presentedLiveMemoryProductSessionID = nil
+            foregroundPublicationSessionID = nil
             presentedLiveMemoryAccountLease = nil
             activeLiveMemoryRecoveryCoordinator = nil
         }
@@ -14744,6 +14751,12 @@ final class EchoViewController: UIViewController {
         }
     }
 
+    private func verifyRetainedRecoveryAfterPolicyRefresh() {
+        retainedLiveMemoryRecoveryCoordinators.values.forEach {
+            $0.verifyStatus(startsNewRound: true)
+        }
+    }
+
     private func refreshOwnerTruthInterviewNaturalInputProductEntryPolicy() {
         ownerTruthInterviewNaturalInputPolicyRefreshGeneration &+= 1
         let refreshGeneration = ownerTruthInterviewNaturalInputPolicyRefreshGeneration
@@ -14778,9 +14791,7 @@ final class EchoViewController: UIViewController {
                 }
                 self.updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
                 self.resumePendingLiveMemoryOrganizationsIfNeeded()
-                self.retainedLiveMemoryRecoveryCoordinators.values.forEach {
-                    $0.verifyStatus(startsNewRound: true)
-                }
+                self.verifyRetainedRecoveryAfterPolicyRefresh()
             }
         }
     }
@@ -14949,6 +14960,7 @@ final class EchoViewController: UIViewController {
         if asActive {
             currentLiveMemoryCapturePresentationCoordinatorID = coordinatorID
             presentedLiveMemoryProductSessionID = coordinator.trackedProductSessionID
+            foregroundPublicationSessionID = coordinator.trackedProductSessionID
             presentedLiveMemoryAccountLease = echoAccountLease
             activeLiveMemoryRecoveryCoordinator = nil
             PrivacySafeDiagnostics.log(
@@ -15168,7 +15180,9 @@ final class EchoViewController: UIViewController {
         accountLease: AccountLease
     ) {
         if let blocked = result.presentationBlockedRecord,
-           liveMemoryCaptureCoordinator == nil {
+           liveMemoryCaptureCoordinator == nil,
+           presentedLiveMemoryProductSessionID == nil,
+           echoAccountLease == accountLease {
             presentedLiveMemoryProductSessionID = blocked.productSessionID
             presentedLiveMemoryAccountLease = accountLease
             activeLiveMemoryRecoveryCoordinator = nil
@@ -15375,6 +15389,45 @@ final class EchoViewController: UIViewController {
     }
 
     #if DEBUG
+    func discoverPublicationForTesting(store: OwnerTruthInterviewLiveTurnOutboxStore, lease: AccountLease) {
+        publicationOutboxStore = store
+        applyPublicationSnapshots(store.snapshots(for: lease)
+            .filter { $0.acceptedRecoveryProtocol == "live-recovery-v1" && $0.isClosing }
+            .sorted { $0.createdAt > $1.createdAt }, lease: lease)
+    }
+    func presentBlockedRecoveryForTesting(productSessionID: String, lease: AccountLease) {
+        let blocked = EchoLiveMemoryRecoveryBlockedRecord(productSessionID: productSessionID, reason: .bindingMismatch)
+        presentLiveMemoryRecoveryResult(.init(coordinators: [], blockedRecords: [blocked], presentationBlockedRecord: blocked), accountLease: lease)
+    }
+    var publicationPageIDForTesting: String? { presentedLiveMemoryProductSessionID }
+    func stopVoiceForTesting() { stopVoiceCapture() }
+    func bindPublicationPageForTesting(lease: AccountLease, productSessionID: String) {
+        skipAncillaryVoiceCloneFetchForTesting = true
+        echoAccountLease = lease
+        loadViewIfNeeded()
+        echoAccountLease = lease
+        presentedLiveMemoryAccountLease = lease
+        presentedLiveMemoryProductSessionID = productSessionID
+    }
+    func observePublicationForTesting(_ progress: OwnerTruthLiveRecoveryProgress,
+        productSessionID: String, lease: AccountLease) {
+        let observer = EchoPublicationObserver(initial: progress, request: { _ in })
+        publicationObservers[productSessionID] = observer
+        observedPublicationSessionID = productSessionID
+        observer.onProgress = { [weak self] progress in
+            guard let self, self.echoAccountLease == lease,
+                  self.presentedLiveMemoryAccountLease == lease,
+                  self.presentedLiveMemoryProductSessionID == productSessionID else { return }
+            self.renderObservedPublication(progress)
+        }
+        observer.start()
+    }
+    func replayPublicationForTesting(productSessionID: String) {
+        publicationObservers[productSessionID]?.start()
+    }
+    var typedConversationOpenForTesting: Bool { isTypedEchoConversationOpen }
+    var organizedMemoriesButtonVisibleForTesting: Bool { !showMemoriesButton.isHidden }
+
     func configureRedesignedPresentationForTesting(live: Bool, replies: [String]) {
         loadViewIfNeeded()
         isOwnerTruthInterviewNaturalInputProductPolicyPermitted = true
@@ -15482,7 +15535,7 @@ final class EchoViewController: UIViewController {
         guard !publicationDiscoveryInFlight else { return }
         publicationDiscoveryInFlight = true
         presentationPersistenceQueue.async { [weak self] in
-            let snapshots = OwnerTruthInterviewLiveTurnOutboxStore.shared.snapshots(for: lease)
+            let snapshots = (self?.publicationOutboxStore.snapshots(for: lease) ?? [])
                 .filter { $0.acceptedRecoveryProtocol == "live-recovery-v1" && $0.isClosing }
                 .sorted { $0.createdAt > $1.createdAt }
             DispatchQueue.main.async {
@@ -15496,12 +15549,21 @@ final class EchoViewController: UIViewController {
     }
 
     private func applyPublicationSnapshots(_ snapshots: [OwnerTruthInterviewLiveTurnOutboxSnapshot], lease: AccountLease) {
+        guard echoAccountLease == lease else { return }
         verifyRetainedRecoveryReadOnly()
         let kept = Set(snapshots.map(\.productSessionID))
         for key in Array(publicationObservers.keys) where !kept.contains(key) {
             publicationObservers.removeValue(forKey: key)?.suspend()
         }
-        if presentedLiveMemoryProductSessionID == nil, let newest = snapshots.first {
+        if !isUserControlledLiveSessionOpen, !isTypedEchoConversationOpen,
+           activeVoiceLaunchAttempt?.isActive != true,
+           let newest = snapshots.first,
+           foregroundPublicationSessionID == nil || foregroundPublicationSessionID == newest.productSessionID {
+            if presentedLiveMemoryProductSessionID != newest.productSessionID {
+                PrivacySafeDiagnostics.log(subsystem: "EchoPublicationObservation", event: "pageOwnerSelected",
+                    states: ["source": "durableClosingScene", "publication": newest.recoveryProgress?.publication?.state ?? "unknown"],
+                    correlations: ["workflow": PrivacySafeDiagnostics.correlationHash(newest.productSessionID)])
+            }
             presentedLiveMemoryProductSessionID = newest.productSessionID
             presentedLiveMemoryAccountLease = lease
         }
@@ -15509,7 +15571,11 @@ final class EchoViewController: UIViewController {
             let productID = snapshot.productSessionID
             guard let start = snapshot.preparedStartCommand, let vault = OwnerTruthVaultID(lease.vaultId) else { continue }
             if productID == presentedLiveMemoryProductSessionID { observedPublicationSessionID = productID }
-            if let existing = publicationObservers[productID] { existing.start(); continue }
+            if let existing = publicationObservers[productID] {
+                if let progress = snapshot.recoveryProgress { existing.receive(progress) }
+                existing.start()
+                continue
+            }
             let observer = EchoPublicationObserver(initial: snapshot.recoveryProgress, request: { [weak self] done in
                 guard let self, self.presentationVisible, self.echoAccountLease == lease,
                       self.validateEchoAccountLease(at: .request, expected: lease, reason: "publicationRead") else {
@@ -15560,7 +15626,7 @@ final class EchoViewController: UIViewController {
                 // The existing store enforces monotonic progress and the original scene binding.
                 self.presentationPersistenceQueue.async {
                     do {
-                        try OwnerTruthInterviewLiveTurnOutboxStore.shared.saveRecoveryProgress(progress,
+                        try self.publicationOutboxStore.saveRecoveryProgress(progress,
                             for: lease, productSessionID: productID)
                     } catch {
                         PrivacySafeDiagnostics.log(subsystem: "EchoPublicationObservation",
@@ -15620,6 +15686,19 @@ final class EchoViewController: UIViewController {
     }
 
     private func renderLiveMemoryCaptureState(_ state: EchoLiveMemoryCaptureState) {
+        // A capture can receive publication before the independent status observer.
+        // Merge the exact same scene's bound progress before consulting that cache.
+        if let coordinator = liveMemoryCaptureCoordinator,
+           coordinator.trackedProductSessionID == presentedLiveMemoryProductSessionID,
+           presentedLiveMemoryAccountLease == echoAccountLease,
+           let progress = coordinator.publicationProgress, progress.publication != nil {
+            if let observer = publicationObservers[coordinator.trackedProductSessionID] {
+                observer.receive(progress)
+            } else {
+                renderObservedPublication(progress)
+                return
+            }
+        }
         if let session = observedPublicationSessionID, session == presentedLiveMemoryProductSessionID,
            let progress = publicationObservers[session]?.latest {
             renderObservedPublication(progress)
@@ -17325,7 +17404,17 @@ final class EchoViewController: UIViewController {
         }
         if ownsCurrentDialogEngineBinding(),
            DialogEngineManager.shared.isDialogActive {
-            DialogEngineManager.shared.stopDialog()
+            let closingCapture = liveMemoryCaptureCoordinator
+            let closingLease = echoAccountLease
+            DialogEngineManager.shared.stopDialog { [weak self] in
+                guard let self, self.echoAccountLease == closingLease,
+                      self.liveMemoryCaptureCoordinator === closingCapture else { return }
+                PrivacySafeDiagnostics.log(subsystem: "EchoLiveMemory", event: "stopInputSealed",
+                    states: ["source": "managerBeforeNativeStop"],
+                    correlations: ["workflow": PrivacySafeDiagnostics.correlationHash(closingCapture?.trackedProductSessionID ?? "none")])
+                self.flushPendingAIReplyIfNeeded()
+                self.finishLiveMemoryCaptureIfNeeded()
+            }
         } else {
             isStoppingVoiceCaptureManually = false
             flushPendingAIReplyIfNeeded()
@@ -18331,6 +18420,9 @@ extension EchoViewController {
     ) {
         echoAccountLease = accountLease
         loadViewIfNeeded()
+        // The test injects its own policy and read scheduler. A policy refresh
+        // launched by viewDidLoad must not start an unrelated observation round.
+        ownerTruthInterviewNaturalInputPolicyRefreshGeneration &+= 1
         detachLiveMemoryRecoveryObservers()
         echoAccountLease = accountLease
         retainLiveMemoryRecoveryCoordinator(coordinator)
@@ -18366,6 +18458,10 @@ extension EchoViewController {
             ownerTruthInterviewNaturalInputProductEntryButton.superview != nil
                 && !ownerTruthInterviewNaturalInputProductEntryButton.isHidden
         )
+    }
+
+    func completeRecoveryPolicyRefreshForTesting() {
+        verifyRetainedRecoveryAfterPolicyRefresh()
     }
 
     func tapLiveMemoryRecoveryVerificationForTesting() {
