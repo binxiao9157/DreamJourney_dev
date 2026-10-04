@@ -1673,6 +1673,30 @@ final class OwnerTruthContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testLiveFarewellPlaybackBoundariesKeepSavedTail() throws {
+        for scenario in ["farewellPlayer", "farewellReject", "farewellEmpty", "farewellCancel"] {
+            try XCTContext.runActivity(named: scenario) { _ in
+                try exerciseMICProductionManager(scenario: scenario)
+            }
+        }
+    }
+
+    @MainActor
+    func testLiveFarewellUsesCurrentProviderAndWaitsForPCMDrain() throws {
+        try exerciseMICProductionManager(scenario: "farewellPCM")
+    }
+
+    @MainActor
+    func testLiveFarewellProviderErrorStillSealsTail() throws {
+        try exerciseMICProductionManager(scenario: "farewellError")
+    }
+
+    @MainActor
+    func testLiveFarewellMissingPlaybackTimesOutAndSealsTail() throws {
+        try exerciseMICProductionManager(scenario: "farewellTimeout")
+    }
+
+    @MainActor
     func testMICProductionManagerControlledSDKLifecycle() throws {
         for scenario in ["setupDeadline", "directiveFailure", "missingStarted", "lateAfterCancel", "handoff", "replacement", "cumulative", "authDeadline", "authRotation", "runtimeDeadline", "networkLoss"] {
             try XCTContext.runActivity(named: scenario) { _ in
@@ -1696,7 +1720,12 @@ final class OwnerTruthContractsTests: XCTestCase {
         manager.destroyEngine()
         SpeechEngine.resetControlledBoundary()
         let controller = EchoViewController()
+        let farewellRoot = FileManager.default.temporaryDirectory.appendingPathComponent("native-farewell-\(UUID())")
+        let farewellOutbox = OwnerTruthInterviewLiveTurnOutboxStore(rootDirectory: farewellRoot)
+        var farewellCapture: EchoLiveMemoryCaptureCoordinator?
+        var captureIndex = 0
         defer {
+            try? FileManager.default.removeItem(at: farewellRoot)
             controller.cancelVoiceLaunchForTesting()
             manager.destroyEngine()
             SpeechEngine.resetControlledBoundary()
@@ -1764,7 +1793,20 @@ final class OwnerTruthContractsTests: XCTestCase {
             permission: { done in
                 if scenario == "handoff" { uptime += 1 }
                 done(true)
-            }, configureSDK: nil, startSDK: nil, prepareAudio: nil)
+            }, configureSDK: nil, startSDK: nil, prepareAudio: nil,
+            capturesMemory: scenario.hasPrefix("farewell"))
+        if scenario.hasPrefix("farewell") {
+            controller.setVoiceLaunchCaptureFactoryForTesting { currentLease, _ in
+                captureIndex += 1
+                let capture = EchoLiveMemoryCaptureCoordinator(accountLease: currentLease,
+                    client: InterviewNaturalInputClientSpy(), accountLeaseRuntime: runtime,
+                    productSessionID: captureIndex == 1 ? "native-farewell" : "native-farewell-next",
+                    liveTurnOutboxStore: farewellOutbox,
+                    naturalInputPolicyAvailable: { false }, candidateReviewPolicyAvailable: { false })
+                farewellCapture = capture
+                return capture
+            }
+        }
         controller.setVoiceDelegateEventSchedulerForTesting { $0() }
         controller.onVoiceLaunchTerminalForTesting { terminals.append($0) }
         controller.onVoiceListeningForTesting { listening += 1 }
@@ -1818,7 +1860,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             engine.emit(SEEngineError)
         } else {
             XCTAssertEqual(engine.count(SEDirectiveStartEngine), 1)
-            if scenario == "handoff" || scenario == "replacement" || scenario == "stopClose" {
+            if scenario == "handoff" || scenario == "replacement" || scenario == "stopClose" || scenario.hasPrefix("farewell") {
                 if scenario == "handoff" { uptime += 3 }
                 engine.emit(SEEventSessionStarted)
                 XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { listening == 1 })
@@ -1840,6 +1882,121 @@ final class OwnerTruthContractsTests: XCTestCase {
                     XCTAssertEqual(current.last(where: { $0.stage == .sdkStart })?.elapsedMilliseconds, 1_000, "sdkStart marks stage entry before Manager initialization")
                     XCTAssertEqual(current.last(where: { $0.stage == .listening })?.elapsedMilliseconds, 6_000)
                     XCTAssertEqual(last.requestCount, 1)
+                }
+                if scenario.hasPrefix("farewell") {
+                    let outbox = farewellOutbox
+                    let capture = try XCTUnwrap(farewellCapture)
+                    capture.appendOwnerTurn("合成测试：我每周六整理工具柜。")
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+                        (try? outbox.load(for: lease, productSessionID: "native-farewell"))?.ownerTurnCount == 1
+                    })
+                    // Positive control: prove this native callback binding really reaches the
+                    // persisted transcript before checking that farewell is excluded.
+                    let priorText = Data("{\"reply_id\":\"prior-business\",\"content\":\"这是上一轮的合成回答。\"}".utf8)
+                    engine.emit(SEEventChatResponse, data: priorText)
+                    engine.emit(SEEventChatEnded, data: priorText)
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+                        (try? outbox.load(for: lease, productSessionID: "native-farewell"))?.pendingTurns.count == 2
+                    }, "Positive control: real native assistant ingress must persist before farewell")
+                    let parameters = engine.parameters
+                    let starts = engine.count(SEDirectiveStartEngine)
+                    let greetings = engine.count(SEDirectiveEventSayHello)
+                    XCTAssertFalse(manager.submitLiveFarewell("错误绑定", bindingHandle: nil, completion: {
+                        XCTFail("Foreign binding must not start or complete farewell")
+                    }))
+                    let old = Data("{\"reply_id\":\"old-greeting\",\"tts_type\":\"chat_tts_text\"}".utf8)
+                    engine.emit(SEEventTTSEnded, data: old)
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { manager.controlledCallbackDrainForTesting == 0 })
+                    if scenario == "farewellReject" { SpeechEngine.sayHelloResult = MICControlledSDKValue(rawValue: -17) }
+                    controller.beginLiveLimitForTesting(now: 0)
+                    controller.tickLiveLimitForTesting(now: 600, busy: false)
+                    // Same assertion must fail against the previous system-TTS implementation.
+                    XCTAssertEqual(engine.count(SEDirectiveEventSayHello), greetings + 1,
+                        "Farewell must be submitted to the existing provider engine, never iOS system speech")
+                    guard engine.count(SEDirectiveEventSayHello) == greetings + 1 else {
+                        controller.stopVoiceForTesting(); return
+                    }
+                    XCTAssertEqual(engine.parameters, parameters, "Keep the current speaker and session configuration")
+                    XCTAssertEqual(engine.count(SEDirectiveStartEngine), starts, "No second voice session")
+                    XCTAssertEqual(SpeechEngine.instances.count, 1)
+                    XCTAssertEqual(manager.isRecorderPaused, scenario != "farewellReject")
+                    controller.tickLiveLimitForTesting(now: 601, busy: false)
+                    XCTAssertEqual(engine.count(SEDirectiveEventSayHello), greetings + 1)
+                    let metadata = Data("{\"reply_id\":\"farewell-current\",\"tts_type\":\"chat_tts_text\",\"text\":\"我们先休息一下\"}".utf8)
+                    // Previously seen client TTS and ordinary reply endings must not claim this request.
+                    engine.emit(SEEventTTSSentenceStart, data: old)
+                    engine.emit(SEEventTTSEnded, data: old)
+                    engine.emit(SEEventTTSEnded, data: Data("{\"reply_id\":\"previous-reply\",\"tts_type\":\"default\"}".utf8))
+                    engine.emit(SEPlayerFinishPlayAudio)
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { manager.controlledCallbackDrainForTesting == 0 })
+                    XCTAssertEqual(controller.liveLimitSessionOpenForTesting, scenario != "farewellReject")
+                    if scenario == "farewellReject" {
+                        // Directive rejection closes immediately; no alternate speaker or retry.
+                    } else if scenario == "farewellCancel" {
+                        controller.stopVoiceForTesting()
+                        engine.emit(SEEventTTSSentenceStart, data: metadata)
+                        engine.emit(SEEventTTSEnded, data: metadata)
+                    } else if scenario == "farewellEmpty" {
+                        engine.emit(SEEventTTSSentenceStart, data: metadata)
+                        engine.emit(SEPlayerStartPlayAudio)
+                        engine.emit(SEEventTTSEnded, data: metadata)
+                        engine.emit(SEPlayerFinishPlayAudio)
+                        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { manager.controlledCallbackDrainForTesting == 0 })
+                        XCTAssertTrue(controller.liveLimitSessionOpenForTesting, "Empty playback is not audible completion")
+                        controller.tickLiveLimitForTesting(now: 620, busy: false)
+                    } else if scenario == "farewellError" {
+                        engine.emit(SEEngineError)
+                    } else if scenario == "farewellTimeout" {
+                        controller.tickLiveLimitForTesting(now: 620, busy: false)
+                    } else {
+                        engine.emit(SEEventTTSSentenceStart, data: metadata)
+                        if scenario == "farewellPlayer" { engine.emit(SEPlayerStartPlayAudio) }
+                        engine.emit(SEEventChatResponse, data: metadata)
+                        engine.emit(SEEventChatEnded, data: metadata)
+                        let pcm = Data(repeating: 32, count: 2048)
+                        if scenario == "farewellPlayer" {
+                            // Delegated mode can expose real player PCM without decoder callbacks.
+                            engine.emit(SEPlayerAudioData, data: pcm)
+                        } else { engine.emit(SEDecoderAudioData, data: pcm) }
+                        engine.emit(SEEventTTSEnded, data: metadata)
+                        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { manager.controlledCallbackDrainForTesting == 0 })
+                        XCTAssertTrue(controller.liveLimitSessionOpenForTesting, "Synthesis completion is not audible completion")
+                        if scenario == "farewellPlayer" {
+                            engine.emit(SEPlayerFinishPlayAudio)
+                        } else {
+                            engine.emit(SEPlayerAudioData, data: pcm)
+                            engine.emit(SEPlayerAudioData, data: Data(repeating: 0, count: 9600))
+                        }
+                    }
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { !controller.liveLimitSessionOpenForTesting })
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+                        (try? outbox.load(for: lease, productSessionID: "native-farewell"))?.closeIntentRequestedAt != nil
+                    }, "Every farewell outcome must still persist close intent")
+                    let saved = try XCTUnwrap(outbox.load(for: lease, productSessionID: "native-farewell"))
+                    XCTAssertEqual(saved.ownerTurnCount, 1, "The already saved owner tail survives")
+                    XCTAssertEqual(saved.pendingTurns.count, 2, "Only the existing owner and assistant turns survive; farewell must not create a memory turn")
+                    engine.emit(SEEventTTSEnded, data: metadata)
+                    engine.emit(SEPlayerFinishPlayAudio)
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { manager.controlledCallbackDrainForTesting == 0 })
+                    XCTAssertFalse(manager.isDialogActive)
+                    if scenario == "farewellCancel" {
+                        uptime = 200
+                        controller.onVoiceListeningForTesting { listening += 1 }
+                        controller.tapMicrophoneForTesting()
+                        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { SpeechEngine.instances.count == 2 })
+                        let replacement = try XCTUnwrap(SpeechEngine.instances.last)
+                        replacement.emit(SEEventSessionStarted)
+                        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { listening == 2 })
+                        engine.emit(SEEventTTSSentenceStart, data: metadata)
+                        engine.emit(SEDecoderAudioData, data: Data(repeating: 32, count: 2048))
+                        engine.emit(SEEventTTSEnded, data: metadata)
+                        engine.emit(SEPlayerFinishPlayAudio)
+                        engine.emit(SEEngineError)
+                        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { manager.controlledCallbackDrainForTesting == 0 })
+                        XCTAssertTrue(manager.isDialogActive, "Old farewell/error must not close the replacement session")
+                        XCTAssertEqual(replacement.count(SEDirectiveSyncStopEngine), 1, "Only initial pre-start stop")
+                    }
+                    return
                 }
                 if scenario == "stopClose" {
                     let root = FileManager.default.temporaryDirectory.appendingPathComponent("stop-close-\(UUID())")

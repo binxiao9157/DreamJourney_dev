@@ -41,30 +41,6 @@ struct EchoLiveSessionLimit {
     }
 }
 
-/// Local, fixed product farewell. Never injected as a provider/user message.
-private final class EchoLiveFarewellSpeaker: NSObject, AVSpeechSynthesizerDelegate {
-    private let synthesizer = AVSpeechSynthesizer()
-    private var completion: (() -> Void)?
-    override init() { super.init(); synthesizer.delegate = self }
-    func speak(_ text: String, completion: @escaping () -> Void) {
-        self.completion = completion
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
-        synthesizer.speak(utterance)
-    }
-    func cancel() {
-        completion = nil
-        synthesizer.stopSpeaking(at: .immediate)
-    }
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        finish()
-    }
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        finish()
-    }
-    private func finish() { let done = completion; completion = nil; done?() }
-}
-
 private enum EchoDigitalHumanAudioOwner: String {
     case tencentDigitalHuman
     case localPreview
@@ -6860,7 +6836,6 @@ final class EchoViewController: UIViewController {
     private var liveSessionLimitTimer: DispatchWorkItem?
     private var liveSessionLimitIdentity = UUID()
     private var liveLimitAwaitingReply = false
-    private var liveFarewellSpeaker: EchoLiveFarewellSpeaker?
     private var liveLimitPauseForTesting: (() -> Bool)?
     private var liveLimitPlaybackForTesting: ((String, @escaping () -> Void) -> Void)?
     private var isLiveFarewellActive: Bool { liveSessionLimit.farewellAt != nil && !liveSessionLimit.closed }
@@ -7244,7 +7219,6 @@ final class EchoViewController: UIViewController {
         liveSessionLimitTimer?.cancel()
         publicationDiscoveryTimer?.cancel()
         publicationObservers.values.forEach { $0.suspend() }
-        liveFarewellSpeaker?.cancel()
         if let id = activeVoiceLaunchAttempt?.id {
             DispatchQueue.main.async {
                 DialogEngineManager.shared.cancelPendingVoiceLaunch(id: id)
@@ -15282,7 +15256,6 @@ final class EchoViewController: UIViewController {
         liveSessionLimitIdentity = UUID()
         liveSessionLimitTimer?.cancel(); liveSessionLimitTimer = nil
         liveSessionLimit.cancel()
-        liveFarewellSpeaker?.cancel(); liveFarewellSpeaker = nil
         liveLimitAwaitingReply = false
     }
 
@@ -15335,8 +15308,13 @@ final class EchoViewController: UIViewController {
             }
             if let playback = liveLimitPlaybackForTesting { playback(text, complete) }
             else {
-                let speaker = EchoLiveFarewellSpeaker(); liveFarewellSpeaker = speaker
-                speaker.speak(text, completion: complete)
+                guard DialogEngineManager.shared.submitLiveFarewell(
+                    text, bindingHandle: dialogEngineBindingHandle, completion: complete
+                ) else {
+                    // Keep the visual farewell and persist the same close intent.
+                    // Never substitute another voice when the provider is unavailable.
+                    complete(); return
+                }
             }
         case .stalledClose:
             renderVoiceStatus(text: "语音暂时未能继续，我先把已收到的内容保存下来，我们稍后再聊。",
@@ -18386,8 +18364,8 @@ extension EchoViewController {
         retainLiveMemoryCaptureCoordinator(coordinator, asActive: true)
     }
 
-    func beginLiveLimitForTesting(now: TimeInterval, pause: @escaping () -> Bool,
-        playback: @escaping (String, @escaping () -> Void) -> Void) {
+    func beginLiveLimitForTesting(now: TimeInterval, pause: (() -> Bool)? = nil,
+        playback: ((String, @escaping () -> Void) -> Void)? = nil) {
         cancelLiveSessionLimit()
         liveSessionLimit = EchoLiveSessionLimit(); liveSessionLimit.start(now: now)
         isUserControlledLiveSessionOpen = true

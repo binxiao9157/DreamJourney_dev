@@ -2786,6 +2786,14 @@ final class DialogEngineManager: NSObject {
     }
 
     @discardableResult
+    func submitLiveFarewell(_ content: String, bindingHandle: DialogEngineBindingHandle?,
+        completion: @escaping () -> Void) -> Bool {
+        // The UI-only simulator has no provider. Native controlled-SDK tests
+        // exercise the production implementation instead of faking success here.
+        return false
+    }
+
+    @discardableResult
     func submitLiveAnswerText(
         _ content: String,
         traceID: String?,
@@ -3091,11 +3099,12 @@ final class SpeechEngine {
     static var onSyncStop: (() -> Void)?
     static var initializationResult = SENoError
     static var startResult = SENoError
+    static var sayHelloResult = SENoError
     static var createResult = true
     static func prepareEnvironment() {}
     static func resetControlledBoundary() {
         instances = []; onInitialize = nil; onSyncStop = nil
-        initializationResult = SENoError; startResult = SENoError; createResult = true
+        initializationResult = SENoError; startResult = SENoError; sayHelloResult = SENoError; createResult = true
     }
     private var callback: SpeechEngineDelegate?
     private(set) var directives: [(MICControlledSDKValue, String?)] = []
@@ -3117,6 +3126,7 @@ final class SpeechEngine {
     func send(_ directive: MICControlledSDKValue, data: String? = nil) -> MICControlledSDKValue {
         directives.append((directive, data))
         if directive == SEDirectiveSyncStopEngine { Self.onSyncStop?() }
+        if directive == SEDirectiveEventSayHello { return Self.sayHelloResult }
         return directive == SEDirectiveStartEngine ? Self.startResult : SENoError
     }
     func destroy() { destroyCount += 1 }
@@ -3461,6 +3471,16 @@ private struct DialogEngineProviderCallbackContext {
     let delegateIdentity: ObjectIdentifier
 }
 
+private struct DialogLiveFarewellRequest {
+    let context: DialogEngineProviderCallbackContext
+    let excludedReplyIDs: Set<String>
+    let completion: () -> Void
+    var replyID: String?
+    var observedAudio = false
+    var pcm = DialogProviderPCMDrainVerifier()
+    var player = DialogProviderReplyPlaybackState()
+}
+
 private struct DialogEngineFrozenProviderMessage {
     let type: SEMessageType
     let data: Data
@@ -3532,6 +3552,10 @@ final class DialogEngineManager: NSObject {
     private var scopedTTSVoiceSelectionStore = DialogEngineScopedTTSVoiceSelectionStore()
     private var externallyManagedAudioSessionLease: AudioOwnerLease?
     private var pendingTextReplyPlayback: DialogEngineTextReplyPlayback?
+    private var liveFarewellRequest: DialogLiveFarewellRequest?
+    private var observedLiveReplyIDs = Set<String>()
+    // Read/write only under providerCanonicalMemoryIngressLock.
+    private var farewellIngressScope: (generation: UUID, excludedReplyIDs: Set<String>)?
     private var textReplyPlaybackFallbackWorkItem: DispatchWorkItem?
     private var engineAnswerAuthority: DialogAnswerAuthority?
     private var engineUsesDelegatedLivePlayback = false
@@ -4397,6 +4421,103 @@ final class DialogEngineManager: NSObject {
         resetSilenceTimer()
         DDLogInfo("[DialogEngine] recorder resumed in existing provider Live session")
         return .directiveSent
+    }
+
+    /// Product farewell uses the current provider connection, speaker and native
+    /// player. It is not a user query, a normal answer, or a second TTS session.
+    @discardableResult
+    func submitLiveFarewell(_ content: String, bindingHandle: DialogEngineBindingHandle?,
+        completion: @escaping () -> Void) -> Bool {
+        dispatchPrecondition(condition: .onQueue(.main))
+        let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, isCurrentBinding(bindingHandle),
+              isDialogActive, !isEnding, !isAISpeaking, isRecorderPaused,
+              sessionLifetimePolicy == .userControlledLive, config.enablePlayer,
+              pendingTextReplyPlayback == nil, liveFarewellRequest == nil,
+              let context = currentProviderCallbackContext(),
+              isCurrentProviderCallbackContext(context, checkpoint: .request, requiresActiveOperation: true),
+              let engine,
+              let bytes = try? JSONSerialization.data(withJSONObject: ["content": text]),
+              let payload = String(data: bytes, encoding: .utf8),
+              selectDelegatedClientTTSRouteIfNeeded() else { return false }
+        invalidateSilenceTimer()
+        liveFarewellRequest = DialogLiveFarewellRequest(context: context,
+            excludedReplyIDs: observedLiveReplyIDs, completion: completion)
+        providerCanonicalMemoryIngressLock.lock()
+        farewellIngressScope = (context.engineGeneration, observedLiveReplyIDs)
+        providerCanonicalMemoryIngressLock.unlock()
+        let result = engine.send(SEDirectiveEventSayHello, data: payload)
+        guard result == SENoError else {
+            liveFarewellRequest = nil
+            recordNativeLiveDiagnostic(event: "liveFarewellRejected", resultCode: Int(result.rawValue))
+            return false
+        }
+        recordNativeLiveDiagnostic(event: "liveFarewellSubmitted", reason: "currentSessionVoice")
+        return true
+    }
+
+    private func completeLiveFarewell(reason: String) {
+        guard let request = liveFarewellRequest else { return }
+        liveFarewellRequest = nil
+        isAISpeaking = false
+        recordNativeLiveDiagnostic(event: "liveFarewellTerminal", replyID: request.replyID, reason: reason)
+        // Keep the ingress exclusion until stop closes the binding. The caller
+        // owns its existing 20-second budget and the durable close operation.
+        guard isCurrentProviderCallbackContext(request.context,
+            checkpoint: .runtime, requiresActiveOperation: true) else { return }
+        request.completion()
+    }
+
+    private func consumeLiveFarewell(_ frozen: DialogEngineFrozenProviderMessage) -> Bool {
+        guard var request = liveFarewellRequest else { return false }
+        let type = frozen.type
+        let data = frozen.data
+        let metadata = frozen.metadata
+        let generation = request.context.engineGeneration
+        guard generation == frozen.engineGeneration else { return true }
+        var drained = false
+        switch type {
+        case SEEventTTSSentenceStart:
+            guard metadata.ttsType == "chat_tts_text", let id = metadata.replyID,
+                  !request.excludedReplyIDs.contains(id),
+                  request.replyID == nil || request.replyID == id else { return true }
+            request.replyID = id
+            isAISpeaking = true
+        case SEEventTTSEnded:
+            guard let id = request.replyID, metadata.replyID == id else { return true }
+            request.pcm.synthesized(replyID: id, generation: generation)
+            drained = request.player.receive(.synthesisEnded, replyID: id,
+                generation: generation) == .drained && request.observedAudio
+        case SEDecoderAudioData:
+            if request.replyID != nil, DialogPCM16WaveEncoder.containsAudibleSamples(data) {
+                request.observedAudio = true
+            }
+            request.pcm.decoded(data, replyID: request.replyID, generation: generation)
+        case SEPlayerAudioData:
+            if request.replyID != nil, DialogPCM16WaveEncoder.containsAudibleSamples(data) {
+                request.observedAudio = true
+            }
+            drained = request.pcm.played(data, replyID: request.replyID, generation: generation)
+        case SEPlayerStartPlayAudio:
+            _ = request.player.receive(.playerStarted, replyID: request.replyID, generation: generation)
+        case SEPlayerFinishPlayAudio:
+            drained = request.player.receive(.playerFinished, replyID: request.replyID,
+                generation: generation) == .drained && request.observedAudio
+        case SEEventTTSSentenceEnd, SEEventTTSResponse, SEEventChatResponse, SEEventChatEnded,
+             SEEventASRInfo, SEEventASRResponse, SEEventASREnded, SEEventChatTextQueryConfirmed:
+            // Owner ingress was already durably observed before this UI queue;
+            // never turn the product farewell into an ordinary answer/turn.
+            break
+        case SEEngineError, SEEngineStop, SEEventConnectionFailed, SEEventConnectionFinished,
+             SEEventSessionFailed, SEEventSessionFinished, SEEventSessionCanceled:
+            completeLiveFarewell(reason: "providerUnavailable")
+            return true
+        default:
+            return false
+        }
+        liveFarewellRequest = request
+        if drained && !request.pcm.invalid { completeLiveFarewell(reason: "playbackDrained") }
+        return true
     }
 
     /// 播报开场白（对应豆包SDK的 SayHello 事件 3006）
@@ -5871,6 +5992,12 @@ extension DialogEngineManager {
         engineGeneration: UUID
     ) -> DialogEngineFrozenProviderMessage? {
         providerCanonicalMemoryIngressLock.lock()
+        if let scope = farewellIngressScope, scope.generation == engineGeneration,
+           case .assistant = canonicalMemoryEventKind(rawEventCode: Int(type.rawValue)),
+           !scope.excludedReplyIDs.contains(DialogProviderEventMetadata(data: data).replyID ?? "") {
+            providerCanonicalMemoryIngressLock.unlock()
+            return nil
+        }
         let frozenMemory = freezeCanonicalMemoryPacket(
             rawEventCode: Int(type.rawValue),
             data: data,
@@ -5898,7 +6025,10 @@ extension DialogEngineManager {
         delegate: DialogEngineDelegate
     ) {
         orbAudioRelay.activate(generation: engineGeneration, operation: dialogOperationID)
+        liveFarewellRequest = nil
+        observedLiveReplyIDs.removeAll()
         providerCanonicalMemoryIngressLock.lock()
+        farewellIngressScope = nil
         providerCanonicalAssistantIngressState.reset()
         let deliveryBinding = delegate.makeCanonicalTranscriptDeliveryBinding()
         rawCanonicalIngressRouter.install(
@@ -5914,10 +6044,14 @@ extension DialogEngineManager {
         expectedDialogOperationID: UUID? = nil
     ) {
         orbAudioRelay.close(operation: expectedDialogOperationID)
+        if expectedDialogOperationID == nil || liveFarewellRequest?.context.dialogOperationId == expectedDialogOperationID {
+            liveFarewellRequest = nil
+        }
         providerCanonicalMemoryIngressLock.lock()
         if rawCanonicalIngressRouter.close(
             expectedDialogOperationID: expectedDialogOperationID
         ) {
+            farewellIngressScope = nil
             providerCanonicalAssistantIngressState.reset()
         }
         providerCanonicalMemoryIngressLock.unlock()
@@ -6077,6 +6211,9 @@ extension DialogEngineManager {
         DDLogVerbose(
             "[DialogEngine] provider event type=\(type.rawValue) bytes=\(data.count)"
         )
+
+        if consumeLiveFarewell(frozen) { return }
+        if let replyID = diagnosticMetadata.replyID { observedLiveReplyIDs.insert(replyID) }
 
         if pendingTextReplyPlayback != nil {
             switch type {
