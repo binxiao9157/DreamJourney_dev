@@ -10,6 +10,120 @@ import XCTest
 #endif
 
 final class OwnerTruthContractsTests: XCTestCase {
+    private func makePublicationDiscoveryStore(lease: AccountLease, root: URL) throws -> OwnerTruthInterviewLiveTurnOutboxStore {
+        let store = OwnerTruthInterviewLiveTurnOutboxStore(rootDirectory: root)
+        let product = "auto-discovery-published"
+        let start = try OwnerTruthInterviewNaturalInputStartCommand(commandID: "start",
+            threadID: OwnerTruthRecordID(rawValue: UUID()), sessionID: OwnerTruthRecordID(rawValue: UUID()),
+            entryMode: .live, productSessionID: product, recoveryProtocol: "live-recovery-v1")
+        _ = try store.prepareStart(start, for: lease, productSessionID: product)
+        _ = try store.markStartDispatchState(.mayExpose, command: start, for: lease, productSessionID: product)
+        _ = try store.markStartDispatchState(.committed, command: start, for: lease, productSessionID: product)
+        try store.acceptRecoveryProtocol("live-recovery-v1", sessionID: start.sessionID, for: lease, productSessionID: product)
+        _ = try store.requestClose(for: lease, productSessionID: product)
+        try store.saveRecoveryProgress(publicationUIProgress(session: start.sessionID), for: lease, productSessionID: product)
+        return OwnerTruthInterviewLiveTurnOutboxStore(rootDirectory: root)
+    }
+
+    @MainActor
+    func testEchoPublicationDiscoveryContinuesWhenAccountBecomesReadyWithoutNavigation() async throws {
+        let runtime = AccountLeaseRuntime.shared
+        let previousUser = UserManager.shared.currentUser
+        runtime.updateAuthorityEpoch("discovery-test")
+        runtime.publish(session: accountSession(subjectId: "discovery-owner", vaultId: "discovery-vault", generation: 1, generationID: UUID()))
+        UserManager.shared.setSyntheticCurrentUserForTesting(UserModel(id: "discovery-owner", nickname: "Synthetic", phone: ""))
+        defer { UserManager.shared.setSyntheticCurrentUserForTesting(previousUser); runtime.publish(session: nil) }
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "discovery-owner"))
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try makePublicationDiscoveryStore(lease: lease, root: root)
+        let controller = EchoViewController()
+        var ticks: [DispatchWorkItem] = []
+        controller.configurePublicationDiscoveryForTesting(store: store, lease: nil) { delay, action in
+            XCTAssertEqual(delay, 15)
+            let tick = DispatchWorkItem(block: action); ticks.append(tick); return tick
+        }
+        controller.startPublicationDiscoveryForTesting()
+        controller.changePublicationDiscoveryLeaseForTesting(lease)
+        let tick = try XCTUnwrap(ticks.last, "Account-not-ready must keep a local wake-up without navigation")
+        tick.perform()
+        let drained = expectation(description: "real disk discovery")
+        controller.drainPublicationDiscoveryForTesting { drained.fulfill() }
+        await fulfillment(of: [drained], timeout: 3)
+        XCTAssertEqual(controller.publicationPageIDForTesting, "auto-discovery-published")
+        XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText, "整理完成，已存入待确认记忆")
+    }
+
+    @MainActor
+    func testEchoPublicationDiscoveryDiscardedLeaseResultKeepsNextWakeup() async throws {
+        let runtime = AccountLeaseRuntime.shared
+        let previousUser = UserManager.shared.currentUser
+        runtime.updateAuthorityEpoch("discovery-test")
+        runtime.publish(session: accountSession(subjectId: "discovery-owner", vaultId: "discovery-vault", generation: 1, generationID: UUID()))
+        UserManager.shared.setSyntheticCurrentUserForTesting(UserModel(id: "discovery-owner", nickname: "Synthetic", phone: ""))
+        defer { UserManager.shared.setSyntheticCurrentUserForTesting(previousUser); runtime.publish(session: nil) }
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "discovery-owner"))
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try makePublicationDiscoveryStore(lease: lease, root: root)
+        let controller = EchoViewController()
+        var ticks: [DispatchWorkItem] = []
+        controller.configurePublicationDiscoveryForTesting(store: store, lease: lease) { _, action in
+            let tick = DispatchWorkItem(block: action); ticks.append(tick); return tick
+        }
+        controller.startPublicationDiscoveryForTesting()
+        controller.changePublicationDiscoveryLeaseForTesting(nil)
+        let discarded = expectation(description: "stale disk result discarded")
+        controller.drainPublicationDiscoveryForTesting { discarded.fulfill() }
+        await fulfillment(of: [discarded], timeout: 3)
+        XCTAssertNil(controller.publicationPageIDForTesting)
+        controller.changePublicationDiscoveryLeaseForTesting(lease)
+        let tick = try XCTUnwrap(ticks.last, "Discarded discovery must not lose all automatic wake-ups")
+        tick.perform()
+        let drained = expectation(description: "next disk discovery")
+        controller.drainPublicationDiscoveryForTesting { drained.fulfill() }
+        await fulfillment(of: [drained], timeout: 3)
+        XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText, "整理完成，已存入待确认记忆")
+    }
+
+    @MainActor
+    func testEchoPublicationDiscoveryCoalescesInflightWakeupsAndStopsWhenHidden() async throws {
+        let runtime = AccountLeaseRuntime.shared
+        let previousUser = UserManager.shared.currentUser
+        runtime.updateAuthorityEpoch("discovery-test")
+        runtime.publish(session: accountSession(subjectId: "discovery-owner", vaultId: "discovery-vault", generation: 1, generationID: UUID()))
+        UserManager.shared.setSyntheticCurrentUserForTesting(UserModel(id: "discovery-owner", nickname: "Synthetic", phone: ""))
+        defer { UserManager.shared.setSyntheticCurrentUserForTesting(previousUser); runtime.publish(session: nil) }
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: "discovery-owner"))
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try makePublicationDiscoveryStore(lease: lease, root: root)
+        let controller = EchoViewController()
+        var ticks: [DispatchWorkItem] = []
+        controller.configurePublicationDiscoveryForTesting(store: store, lease: lease) { _, action in
+            let tick = DispatchWorkItem(block: action); ticks.append(tick); return tick
+        }
+        controller.startPublicationDiscoveryForTesting()
+        controller.startPublicationDiscoveryForTesting() // First disk completion is still queued behind this actor.
+        XCTAssertEqual(ticks.filter { !$0.isCancelled }.count, 1)
+        let drained = expectation(description: "inflight completion")
+        controller.drainPublicationDiscoveryForTesting { drained.fulfill() }
+        await fulfillment(of: [drained], timeout: 3)
+        XCTAssertEqual(controller.publicationPageIDForTesting, "auto-discovery-published")
+        XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText, "整理完成，已存入待确认记忆")
+        controller.setPublicationDiscoveryVisibilityForTesting(visible: false, active: true)
+        XCTAssertTrue(ticks.allSatisfy(\.isCancelled))
+        let count = ticks.count
+        controller.setPublicationDiscoveryVisibilityForTesting(visible: true, active: false)
+        XCTAssertEqual(ticks.count, count, "No periodic discovery in background")
+        controller.setPublicationDiscoveryVisibilityForTesting(visible: true, active: true)
+        XCTAssertEqual(ticks.filter { !$0.isCancelled }.count, 1)
+        let resumed = expectation(description: "foreground cached completion")
+        controller.drainPublicationDiscoveryForTesting { resumed.fulfill() }
+        await fulfillment(of: [resumed], timeout: 3)
+        XCTAssertEqual(controller.liveMemoryCapturePresentationForTesting().statusText, "整理完成，已存入待确认记忆")
+    }
+
     @MainActor
     func testEchoColdDiskPublicationReplacesLegacyOwnerAndSurvivesLateBlockedResult() throws {
         let (_, lease) = try makeActiveRuntime()

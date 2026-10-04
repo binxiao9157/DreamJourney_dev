@@ -6541,6 +6541,20 @@ final class EchoViewController: UIViewController {
     private var observedPublicationSessionID: String?
     private var publicationDiscoveryTimer: DispatchWorkItem?
     private var publicationDiscoveryInFlight = false
+    private var publicationDiscoverySchedule: (TimeInterval, @escaping () -> Void) -> DispatchWorkItem = { delay, action in
+        let item = DispatchWorkItem(block: action)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+        return item
+    }
+    #if DEBUG
+    private var publicationAppActiveForTesting: Bool?
+    #endif
+    private var isPublicationAppActive: Bool {
+        #if DEBUG
+        if let active = publicationAppActiveForTesting { return active }
+        #endif
+        return UIApplication.shared.applicationState == .active
+    }
     private var publicationOutboxStore = OwnerTruthInterviewLiveTurnOutboxStore.shared
     // A scene started on this page outranks asynchronously discovered history.
     private var foregroundPublicationSessionID: String?
@@ -14792,6 +14806,7 @@ final class EchoViewController: UIViewController {
                 self.updateOwnerTruthInterviewNaturalInputProductEntryVisibility()
                 self.resumePendingLiveMemoryOrganizationsIfNeeded()
                 self.verifyRetainedRecoveryAfterPolicyRefresh()
+                self.startAutomaticPublicationObservation()
             }
         }
     }
@@ -15389,6 +15404,28 @@ final class EchoViewController: UIViewController {
     }
 
     #if DEBUG
+    func configurePublicationDiscoveryForTesting(store: OwnerTruthInterviewLiveTurnOutboxStore,
+        lease: AccountLease?, visible: Bool = true, active: Bool = true,
+        schedule: @escaping (TimeInterval, @escaping () -> Void) -> DispatchWorkItem) {
+        skipAncillaryVoiceCloneFetchForTesting = true
+        loadViewIfNeeded()
+        ownerTruthInterviewNaturalInputPolicyRefreshGeneration &+= 1
+        publicationOutboxStore = store
+        echoAccountLease = lease
+        presentationVisible = visible
+        publicationAppActiveForTesting = active
+        publicationDiscoverySchedule = schedule
+    }
+    func changePublicationDiscoveryLeaseForTesting(_ lease: AccountLease?) { echoAccountLease = lease }
+    func setPublicationDiscoveryVisibilityForTesting(visible: Bool, active: Bool) {
+        presentationVisible = visible
+        publicationAppActiveForTesting = active
+        startAutomaticPublicationObservation()
+    }
+    func startPublicationDiscoveryForTesting() { startAutomaticPublicationObservation() }
+    func drainPublicationDiscoveryForTesting(_ done: @escaping () -> Void) {
+        presentationPersistenceQueue.async { DispatchQueue.main.async(execute: done) }
+    }
     func discoverPublicationForTesting(store: OwnerTruthInterviewLiveTurnOutboxStore, lease: AccountLease) {
         publicationOutboxStore = store
         applyPublicationSnapshots(store.snapshots(for: lease)
@@ -15528,9 +15565,16 @@ final class EchoViewController: UIViewController {
 
     private func startAutomaticPublicationObservation() {
         publicationDiscoveryTimer?.cancel()
-        guard presentationVisible, UIApplication.shared.applicationState == .active,
-              DigitalHumanContextStore.shared.current.isSelfAssistant,
-              let lease = echoAccountLease,
+        publicationDiscoveryTimer = nil
+        guard presentationVisible, isPublicationAppActive,
+              DigitalHumanContextStore.shared.current.isSelfAssistant else { return }
+        // Discovery belongs to the visible page, not to a successful read. Keep
+        // one local wake-up even while account readiness changes or disk I/O is
+        // in flight; a discarded old-lease result must not strand the page.
+        publicationDiscoveryTimer = publicationDiscoverySchedule(15) { [weak self] in
+            self?.startAutomaticPublicationObservation()
+        }
+        guard let lease = echoAccountLease,
               validateEchoAccountLease(at: .request, expected: lease, reason: "publicationObservation") else { return }
         guard !publicationDiscoveryInFlight else { return }
         publicationDiscoveryInFlight = true
@@ -15541,7 +15585,7 @@ final class EchoViewController: UIViewController {
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.publicationDiscoveryInFlight = false
-                guard self.presentationVisible, UIApplication.shared.applicationState == .active,
+                guard self.presentationVisible, self.isPublicationAppActive,
                       self.echoAccountLease == lease else { return }
                 self.applyPublicationSnapshots(Array(snapshots.prefix(2)), lease: lease)
             }
@@ -15641,10 +15685,6 @@ final class EchoViewController: UIViewController {
             publicationObservers[productID] = observer
             observer.start()
         }
-        // Re-scan only coordinates, so a newly closed scene is picked up without a button.
-        let item = DispatchWorkItem { [weak self] in self?.startAutomaticPublicationObservation() }
-        publicationDiscoveryTimer = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: item)
     }
 
     private func verifyRetainedRecoveryReadOnly() {
