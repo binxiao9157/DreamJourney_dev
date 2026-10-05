@@ -34793,6 +34793,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         ])
         OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
             XCTAssertEqual(request.url?.path, "/voice/realtime-token")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "X-DreamJourney-Time-Zone"), TimeZone.current.identifier)
             XCTAssertEqual(request.httpMethod, "POST")
             loader.respond(statusCode: 200, body: response)
         }

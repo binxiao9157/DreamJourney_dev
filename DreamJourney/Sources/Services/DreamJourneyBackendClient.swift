@@ -17029,6 +17029,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 value: liveVoiceLaunchAttempt.id
             )
         }
+        // Only timezone metadata is supplied by the client; the backend owns the clock.
+        if path == "/voice/realtime-token" || path == "/echo/answers" {
+            baselineHeaders.add(name: "X-DreamJourney-Time-Zone", value: TimeZone.current.identifier)
+        }
         var requestHeaders: HTTPHeaders? = baselineHeaders
         if !additionalHeaders.isEmpty {
             var headers = requestHeaders ?? HTTPHeaders()
