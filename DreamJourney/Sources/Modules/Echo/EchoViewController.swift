@@ -5929,6 +5929,13 @@ final class EchoLiveMemoryRecoveryCoordinator {
     }
 
     private static func safeReason(for error: Error) -> EchoLiveMemoryRecoveryAccessReason {
+        if let readError = error as? DreamJourneyBackendClient.ReadError {
+            switch readError {
+            case .deadlineExceeded: return .timeout
+            case .budgetExhausted: return .budgetExhausted
+            case .cancelled: return .staleAttempt
+            }
+        }
         if let clientError = error as? DreamJourneyBackendClient.ClientError {
             switch clientError {
             case .accountScopeChanged:
@@ -5965,8 +5972,8 @@ final class EchoLiveMemoryRecoveryCoordinator {
                 return .policyDenied
             }
         }
-        if let urlError = error as? URLError {
-            switch urlError.code {
+        if let code = DreamJourneyBackendClient.ownerTruthURLFailureCode(error) {
+            switch URLError.Code(rawValue: code) {
             case .notConnectedToInternet, .networkConnectionLost:
                 return .offline
             case .cannotFindHost, .dnsLookupFailed:

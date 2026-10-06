@@ -6906,6 +6906,22 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         }
     }
 
+    // Bounded reads can end without a policy rejection. Keep these separate from
+    // ClientError so read exhaustion cannot authorize a replay of an unknown write.
+    enum ReadError: LocalizedError, Equatable {
+        case deadlineExceeded
+        case budgetExhausted
+        case cancelled
+
+        var errorDescription: String? {
+            switch self {
+            case .deadlineExceeded: return "读取超时，请稍后重试。"
+            case .budgetExhausted: return "本次读取暂未完成，请稍后重试。"
+            case .cancelled: return "本次读取已取消。"
+            }
+        }
+    }
+
     enum ClientError: LocalizedError {
         case invalidJSONResponse
         case unsupportedJSONRoot
@@ -7148,6 +7164,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             lock.lock()
             defer { lock.unlock() }
             return !cancelled && Date() < deadline
+        }
+
+        var readLimitError: ReadError {
+            lock.lock()
+            defer { lock.unlock() }
+            if cancelled { return .cancelled }
+            return Date() >= deadline ? .deadlineExceeded : .budgetExhausted
         }
 
         var inactivityReason: String {
@@ -8810,10 +8833,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             )
             finish(OwnerTruthCandidateInboxReadOutcome(
                 readContext: effectiveContext,
-                result: .failure(ClientError.featurePolicyDenied(
-                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
-                    reason: "candidateReadDeadlineExceeded"
-                ))
+                result: .failure(ReadError.deadlineExceeded)
             ))
         }
         completionGate.installTimeout(timeoutWorkItem)
@@ -8891,7 +8911,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                             attemptState: attemptState,
                             completion: completion
                         )
-                    case .failure:
+                    case .failure(let error):
                         self.logCandidateInboxRead(
                             event: "policyRefreshFailed",
                             stage: "policyRefresh",
@@ -8900,10 +8920,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                         )
                         completion(OwnerTruthCandidateInboxReadOutcome(
                             readContext: attemptState.context(traceID: readContext.traceID),
-                            result: .failure(ClientError.featurePolicyDenied(
-                                feature: "ownerTruthCandidateReview",
-                                reason: "policyRefreshFailed"
-                            ))
+                            result: .failure(error)
                         ))
                     }
                 }
@@ -8937,12 +8954,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             )
             completion(OwnerTruthCandidateInboxReadOutcome(
                 readContext: attemptState.context(traceID: readContext.traceID),
-                result: .failure(ClientError.featurePolicyDenied(
-                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
-                    reason: attemptState.isWithinDeadline
-                        ? "candidateReadBudgetExhausted"
-                        : "candidateReadDeadlineExceeded"
-                ))
+                result: .failure(attemptState.readLimitError)
             ))
             return
         }
@@ -9034,7 +9046,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                                 attemptState: attemptState,
                                 completion: completion
                             )
-                        case .failure:
+                        case .failure(let error):
                             self.logCandidateInboxRead(
                                 event: "policyRefreshFailed",
                                 stage: "policyRefresh",
@@ -9043,10 +9055,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                             )
                             completion(OwnerTruthCandidateInboxReadOutcome(
                                 readContext: attemptState.context(traceID: readContext.traceID),
-                                result: .failure(ClientError.featurePolicyDenied(
-                                    feature: "ownerTruthCandidateReview",
-                                    reason: "policyRefreshFailed"
-                                ))
+                                result: .failure(error)
                             ))
                         }
                     }
@@ -9231,6 +9240,13 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
     }
 
     private func candidateInboxFailureCode(_ error: Error) -> String {
+        if let readError = error as? ReadError {
+            switch readError {
+            case .deadlineExceeded: return "timeout"
+            case .budgetExhausted: return "readBudgetExhausted"
+            case .cancelled: return "cancelled"
+            }
+        }
         if let alamofireError = error as? AFError,
            let underlyingError = alamofireError.underlyingError {
             return candidateInboxFailureCode(underlyingError)
@@ -9653,10 +9669,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             )
             finish(OwnerTruthReadOutcome(
                 readContext: context,
-                result: .failure(ClientError.featurePolicyDenied(
-                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
-                    reason: "readDeadlineExceeded"
-                ))
+                result: .failure(ReadError.deadlineExceeded)
             ))
         }
         completionGate.installTimeout(timeout)
@@ -9693,12 +9706,18 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         completion: @escaping (OwnerTruthReadOutcome<Value>) -> Void
     ) {
         attemptState.record(context.attempt)
-        guard attemptState.isActive,
-              accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
+        guard accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
             let effective = attemptState.context(resource: resource, traceID: context.traceID)
             completion(OwnerTruthReadOutcome(
                 readContext: effective,
                 result: .failure(ClientError.accountScopeChanged)
+            ))
+            return
+        }
+        guard attemptState.isActive else {
+            completion(OwnerTruthReadOutcome(
+                readContext: attemptState.context(resource: resource, traceID: context.traceID),
+                result: .failure(attemptState.readLimitError)
             ))
             return
         }
@@ -9847,12 +9866,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             let effective = attemptState.context(resource: resource, traceID: context.traceID)
             completion(OwnerTruthReadOutcome(
                 readContext: effective,
-                result: .failure(ClientError.featurePolicyDenied(
-                    feature: DJFeature.ownerTruthCandidateReview.rawValue,
-                    reason: attemptState.isWithinDeadline
-                        ? "readBudgetExhausted"
-                        : "readDeadlineExceeded"
-                ))
+                result: .failure(attemptState.readLimitError)
             ))
             return
         }
@@ -16623,10 +16637,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 resource: diagnosticResource,
                 reason: diagnosticAttemptState.inactivityReason
             )
-            completion(.failure(ClientError.featurePolicyDenied(
-                feature: DJFeature.ownerTruthCandidateReview.rawValue,
-                reason: diagnosticAttemptState.inactivityReason
-            )))
+            completion(.failure(diagnosticAttemptState.readLimitError))
             return
         }
         let endpoint = EndpointDescriptor(
@@ -16785,13 +16796,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             if allowsRecoveryRefresh, path != "/config/runtime" {
                 if let readAttemptState = diagnosticAttemptState {
                     guard readAttemptState.claimRuntimeRecovery() else {
-                        completion(.failure(ClientError.recoveryAccessDenied(
-                            mode: recoveryRuntimePolicyStore.currentPolicy.mode.rawValue,
-                            code: "readRecoveryBudgetExhausted",
-                            reason: readAttemptState.isWithinDeadline
-                                ? "readRecoveryBudgetExhausted"
-                                : "readDeadlineExceeded"
-                        )))
+                        completion(.failure(readAttemptState.readLimitError))
                         return
                     }
                     let runtimeAttempt = diagnosticAttempt + 1
@@ -17273,12 +17278,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                                   !diagnosticIsResourceGET
                                     || diagnosticAttemptState.claimCandidateGET() else {
                                 self.deliverRequestResult(
-                                    .failure(ClientError.featurePolicyDenied(
-                                        feature: DJFeature.ownerTruthCandidateReview.rawValue,
-                                        reason: diagnosticAttemptState.isWithinDeadline
-                                            ? "candidateReadBudgetExhausted"
-                                            : "candidateReadDeadlineExceeded"
-                                    )),
+                                    .failure(diagnosticAttemptState.readLimitError),
                                     accountLease: requestAccountLease,
                                     applicationLease: requestApplicationLease,
                                     completion: completion

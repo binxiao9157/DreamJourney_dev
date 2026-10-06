@@ -13006,6 +13006,9 @@ final class OwnerTruthContractsTests: XCTestCase {
             ("dns", URLError(.dnsLookupFailed), .statusUnknown(.dnsFailure)),
             ("tls", URLError(.secureConnectionFailed), .statusUnknown(.tlsFailure)),
             ("timeout", URLError(.timedOut), .statusUnknown(.timeout)),
+            ("read-deadline", DreamJourneyBackendClient.ReadError.deadlineExceeded, .statusUnknown(.timeout)),
+            ("read-budget", DreamJourneyBackendClient.ReadError.budgetExhausted, .statusUnknown(.budgetExhausted)),
+            ("read-cancelled", DreamJourneyBackendClient.ReadError.cancelled, .statusUnknown(.staleAttempt)),
             ("server", DreamJourneyBackendClient.ClientError.backendError(
                 statusCode: 503,
                 context: DreamJourneyBackendClient.BackendErrorContext(detail: "safe")
@@ -16435,8 +16438,10 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
         useCase.send(.refresh)
         XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
-            policyRequestCount == 1 && useCase.viewState.phase == .unavailable
+            policyRequestCount == 1 && useCase.viewState.phase == .failed
         })
+        XCTAssertEqual(useCase.viewState.notice, .networkUnavailable)
+        XCTAssertEqual(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.count, 1)
 
         useCase.send(.refresh)
         XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
@@ -22382,6 +22387,8 @@ final class OwnerTruthContractsTests: XCTestCase {
             renderedState?.phase == .failed
                 && renderedState?.readContext?.traceID == "candidate-overall-deadline-1"
         })
+        XCTAssertEqual(renderedState?.notice, .networkUnavailable)
+        XCTAssertEqual(candidateGETCount, 1, "Deadline must not create a new read intent")
         XCTAssertTrue(events.contains {
             $0.traceID == "candidate-overall-deadline-1"
                 && $0.stage == "intentDeadline"
@@ -41391,6 +41398,68 @@ final class OwnerTruthContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testBoundedReadBudgetsRemainReadFailuresWithoutNewRequests() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: Self.ownerTruthHTTPTestFeatureDecision,
+            accountLeaseRuntime: runtime
+        )
+        OwnerTruthReviewReadyHTTPURLProtocol.install { _, loader in
+            XCTFail("An exhausted read budget must not issue any HTTP request")
+            loader.fail(URLError(.unsupportedURL))
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+        var completions = 0
+        let candidateDone = expectation(description: "candidate budget completes")
+        client.fetchOwnerTruthCandidateInboxRead(
+            accountLease: lease, vaultID: vaultID,
+            readContext: OwnerTruthCandidateInboxReadContext(candidateGETCount: 2)
+        ) { outcome in
+            completions += 1
+            if case .failure(let error) = outcome.result {
+                XCTAssertEqual(error as? DreamJourneyBackendClient.ReadError, .budgetExhausted)
+            } else { XCTFail("Exhausted budget cannot succeed") }
+            candidateDone.fulfill()
+        }
+        let formalDone = expectation(description: "formal budget completes")
+        let handle = client.fetchOwnerTruthFormalMemoriesRead(
+            accountLease: lease, vaultID: vaultID, query: try OwnerTruthFormalMemoryQuery(),
+            readContext: OwnerTruthReadContext(resource: .formalMemoryList, resourceGETCount: 2)
+        ) { outcome in
+            completions += 1
+            if case .failure(let error) = outcome.result {
+                XCTAssertEqual(error as? DreamJourneyBackendClient.ReadError, .budgetExhausted)
+                XCTAssertFalse(error.localizedDescription.contains("发布策略"))
+            } else { XCTFail("Exhausted budget cannot succeed") }
+            formalDone.fulfill()
+        }
+        let expiredDone = expectation(description: "expired context remains a deadline")
+        let expiredHandle = client.fetchOwnerTruthFormalMemoriesRead(
+            accountLease: lease, vaultID: vaultID, query: try OwnerTruthFormalMemoryQuery(),
+            readContext: OwnerTruthReadContext(resource: .formalMemoryList,
+                intentStartedAt: Date().addingTimeInterval(-2), deadline: Date().addingTimeInterval(-1))
+        ) { outcome in
+            completions += 1
+            if case .failure(let error) = outcome.result {
+                XCTAssertEqual(error as? DreamJourneyBackendClient.ReadError, .deadlineExceeded)
+            } else { XCTFail("Expired read cannot succeed") }
+            expiredDone.fulfill()
+        }
+        wait(for: [candidateDone, formalDone, expiredDone], timeout: 2)
+        withExtendedLifetime((handle, expiredHandle)) {}
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertEqual(completions, 3)
+        XCTAssertTrue(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.isEmpty)
+    }
+
+    @MainActor
     func testFormalMemoryPolicyM09M10DeadlineReleasesReadAndDropsLateResponse() throws {
         let (runtime, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
@@ -41464,8 +41533,11 @@ final class OwnerTruthContractsTests: XCTestCase {
             accessibilityIdentifier: "owner-truth-formal-memory-status"
         ) as? UILabel)
         XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
-            status.text?.contains("readDeadlineExceeded") == true
+            status.text?.contains("读取超时") == true
         })
+
+        XCTAssertFalse(status.text?.contains("发布策略") == true)
+        XCTAssertEqual(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.count, 1)
 
         controller.perform(NSSelectorFromString("refreshTapped"))
         XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {

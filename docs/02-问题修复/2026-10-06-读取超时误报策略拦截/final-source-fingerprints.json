@@ -1,0 +1,10 @@
+{
+  "iosHead": "047b72bf29754617f252f4971bbdf6aef4baa268",
+  "backendHead": "4515404034821d900926d2e758dbc41ee1dc2b47",
+  "files": {
+    "DreamJourney/Sources/Services/DreamJourneyBackendClient.swift": "c7a5418215e17d90532617932eef33de6a5af1867c8a07b0d6c49d249dadc292",
+    "DreamJourney/Sources/Domain/OwnerTruth/OwnerTruthContracts.swift": "ba53786c6947781c69003af4aa72fffef452f9813f598611538cd9f340bebfb9",
+    "DreamJourney/Sources/Modules/Echo/EchoViewController.swift": "85a41e6250eb4d2b1a0ce405a92cef5e16e5aa0bd21f020c0390719496171a95",
+    "DreamJourneyTests/OwnerTruthContractsTests.swift": "f8d85eee6d1d3739aefdf9ceeb3e39f1d43701e7a7badc3613c439f55235c0ae"
+  }
+}

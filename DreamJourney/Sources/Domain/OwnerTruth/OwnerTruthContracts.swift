@@ -21209,7 +21209,16 @@ final class OwnerTruthCandidateReviewUseCase {
             markFreshInboxAfterGroupResolutionUnresolved()
             return
         }
-        guard qaGateEnabled() else {
+        // A failed read commits no data. An expired cache must not mask the
+        // transport failure that prevented its refresh as a confirmed denial.
+        let hasReadFailure: Bool
+        if case .failure(let error) = outcome.result {
+            hasReadFailure = error is DreamJourneyBackendClient.ReadError
+                || DreamJourneyBackendClient.ownerTruthURLFailureCode(error) != nil
+        } else {
+            hasReadFailure = false
+        }
+        guard qaGateEnabled() || hasReadFailure else {
             resetForUnavailable(.qaOnlyDisabled)
             return
         }
@@ -22224,11 +22233,18 @@ final class OwnerTruthCandidateReviewUseCase {
     }
 
     private static func failureNotice(for error: Error) -> OwnerTruthCandidateInboxNotice {
+        if let readError = error as? DreamJourneyBackendClient.ReadError {
+            switch readError {
+            case .deadlineExceeded: return .networkUnavailable
+            case .budgetExhausted: return .requestFailed
+            case .cancelled: return .cancelledOrSuperseded
+            }
+        }
         if error is CancellationError {
             return .cancelledOrSuperseded
         }
-        if let urlError = error as? URLError {
-            switch urlError.code {
+        if let code = DreamJourneyBackendClient.ownerTruthURLFailureCode(error) {
+            switch URLError.Code(rawValue: code) {
             case .cancelled:
                 return .cancelledOrSuperseded
             case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost,
