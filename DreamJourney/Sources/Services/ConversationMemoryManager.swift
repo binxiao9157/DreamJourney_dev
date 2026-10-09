@@ -913,8 +913,11 @@ final class NativeLiveDiagnosticsRingStore {
         }
         let questionHash = PrivacySafeDiagnostics.correlationHash(questionID)
         let replyHash = PrivacySafeDiagnostics.correlationHash(replyID)
+        // Manager marks normal PCM callbacks as handled. Sample these before
+        // enqueueing, but retain errors, unknown reasons and speaking transitions.
         if safeSource == "sdk", safeEvent == "providerCallback", eventCode == 3018,
-           safeReason == nil, resultCode == nil,
+           (safeReason == nil || safeReason == "handled"), resultCode == nil,
+           speakingBefore == speakingAfter,
            !admitAudioSample(scope: scopeDigest + ":" + sessionHash) { return }
         guard reserveOrdinaryEvent(scope: scopeDigest + ":" + sessionHash) else { return }
         let enqueuedAt = costObservation == nil ? 0 : ProcessInfo.processInfo.systemUptime

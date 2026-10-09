@@ -1926,7 +1926,7 @@ final class MemoryArchiveViewController: UIViewController {
         formalMemoryButton.contentHorizontalAlignment = .leading
         formalMemoryButton.layer.cornerRadius = 8
         formalMemoryButton.accessibilityIdentifier = "archive-owner-truth-formal-memory"
-        formalMemoryButton.accessibilityLabel = "正式记忆，查看已确认内容与历史版本"
+        formalMemoryButton.accessibilityLabel = "正式记忆，查看人生记录"
         formalMemoryButton.isHidden = true
         formalMemoryButton.addTarget(
             self,
@@ -2033,9 +2033,9 @@ final class MemoryArchiveViewController: UIViewController {
     }
 
     private func updateSourceRecordsButton() {
-        let isVisible = isSelfAutobiographyMode && isOwnerTruthCandidateReviewEnabled
-        sourceRecordsButton.isHidden = !isVisible
-        sourceRecordsButton.isUserInteractionEnabled = isVisible
+        // Hide navigation only; source storage and new-record capture stay intact.
+        sourceRecordsButton.isHidden = true
+        sourceRecordsButton.isUserInteractionEnabled = false
     }
 
     private func reloadFeatureCards(summary: (total: Int, photos: Int, audio: Int, text: Int)) {
@@ -6711,24 +6711,51 @@ private func ownerTruthStructuredFieldTitle(_ path: String) -> String {
     case "goals": return "目标与愿望"
     case "identity": return "身份与角色"
     case "reflections": return "反思与理解"
-    default: return path
+    default: return "补充内容"
     }
 }
 
 private func ownerTruthStructuredFieldDiffTexts(
     _ field: OwnerTruthCandidateChangeSetFieldDiff
 ) -> [String] {
-    let presentation = field.structuredPresentation
-    guard presentation.isComplete else {
-        return ["字段变化无法完整展示：\(presentation.incompleteReason ?? "未知结构错误")"]
+    // Validate with the original full diff. The projection cannot relax reviewability.
+    guard field.structuredPresentation.isComplete else {
+        return ["部分变更暂时无法完整展示，请刷新后再确认。"]
     }
-    return presentation.changes.map { change in
-        let title = ownerTruthStructuredFieldTitle(change.path)
-        if change.hasChanged {
-            return "字段变化：\(title)｜确认前：\(change.beforeText)｜确认后：\(change.afterText)"
+    func compare(_ path: String, _ before: OwnerTruthJSONValue?, _ after: OwnerTruthJSONValue?) -> [String] {
+        let segments = path.split(separator: ".").map { String($0).replacingOccurrences(of: #"\[\d+\]$"#, with: "", options: .regularExpression) }
+        let hidden = ["confidence", "evidenceMode", "memorySubjectId", "claimSubjectId", "evidenceRefs", "sourceRefs", "sourceTurnIndices"]
+        guard !segments.contains(where: hidden.contains), before != after else { return [] }
+        if segments.last == "polarity" {
+            func wording(_ value: OwnerTruthJSONValue?) -> String? {
+                guard case .string(let text) = value else { return nil }
+                return ["unknown": "未明确是否肯定这件事", "positive": "明确表示这件事成立",
+                        "negative": "明确表示这件事不成立", "neutral": "对这件事持中立表述"][text]
+            }
+            if let old = wording(before), let new = wording(after) {
+                return ["表述变化：原记录\(old)；本次\(new)。"]
+            }
         }
-        return "字段变化：\(title)｜前后相同（由服务端列入变更范围）：\(change.beforeText)"
+        let oldObject: [String: OwnerTruthJSONValue]? = { if case .object(let value) = before { return value }; return nil }()
+        let newObject: [String: OwnerTruthJSONValue]? = { if case .object(let value) = after { return value }; return nil }()
+        if (oldObject != nil || before == nil) && (newObject != nil || after == nil), oldObject != nil || newObject != nil {
+            return Set((oldObject ?? [:]).keys).union((newObject ?? [:]).keys).sorted().flatMap {
+                compare(path + "." + $0, oldObject?[$0], newObject?[$0])
+            }
+        }
+        let oldArray: [OwnerTruthJSONValue]? = { if case .array(let value) = before { return value }; return nil }()
+        let newArray: [OwnerTruthJSONValue]? = { if case .array(let value) = after { return value }; return nil }()
+        if (oldArray != nil || before == nil) && (newArray != nil || after == nil), oldArray != nil || newArray != nil {
+            return (0..<max(oldArray?.count ?? 0, newArray?.count ?? 0)).flatMap { index in
+                compare("\(path)[\(index)]", index < (oldArray?.count ?? 0) ? oldArray?[index] : nil,
+                        index < (newArray?.count ?? 0) ? newArray?[index] : nil)
+            }
+        }
+        return OwnerTruthStructuredDiffPresentation.build(path: path, before: before, after: after).changes.map {
+            "字段变化：\(ownerTruthStructuredFieldTitle($0.path))｜确认前：\($0.beforeText)｜确认后：\($0.afterText)"
+        }
     }
+    return compare(field.path, field.before, field.after)
 }
 
 private final class OwnerTruthReviewPreviewViewController: UIViewController {
@@ -7034,7 +7061,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = sourceIDFilter == nil ? "候选记忆审核" : "素材候选记忆"
+        title = sourceIDFilter == nil ? "待确认记忆" : "本次待确认记忆"
         view.backgroundColor = DJDesignTokens.Color.background
         refreshButton.accessibilityIdentifier = "owner-truth-candidate-inbox-refresh"
         batchSelectionButton.accessibilityIdentifier = "owner-truth-candidate-inbox-batch-select"
@@ -7481,7 +7508,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         }
         let alert = UIAlertController(
             title: "确认 \(selectedCandidateIDs.count) 条候选记忆",
-            message: "每条候选会分别提交并生成可追溯的正式记忆版本；若中途失败，未完成的内容会保留供你重新载入后重试。",
+            message: "将保存所选记忆。未完成的内容仍保留在待确认列表中。",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
@@ -7772,9 +7799,8 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
             tableView.setEditing(false, animated: false)
             navigationItem.leftBarButtonItem = nil
             var items = [refreshButton, batchSelectionButton]
-            items.append(relatedGroupSelectionButton)
-            if sourceIDFilter == nil {
-                items.append(historyButton)
+            if renderedState.items.filter(\.supportsRelatedGroupReview).count >= 2 {
+                items.append(relatedGroupSelectionButton)
             }
             navigationItem.rightBarButtonItems = items
             batchSelectionButton.isEnabled = !isSubmitting
@@ -7909,7 +7935,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
         let isReviewable = proposal.reviewability == .reviewable
         let previewController = OwnerTruthReviewPreviewViewController(
             title: "确认关联候选的变更预览",
-            statusText: "请完整核对以下变化。提交后，整组候选会按同一份预览原子处理。",
+            statusText: "请完整核对以下变化。提交后，请核对以下内容后确认。",
             previewText: message,
             isReviewable: isReviewable,
             returnTitle: "返回调整",
@@ -7953,7 +7979,7 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
                     let accepted = receipt.members.filter { $0.decision == .accepted }.count
                     let corrected = receipt.members.filter { $0.decision == .corrected }.count
                     let rejected = receipt.members.filter { $0.decision == .rejected }.count
-                    self.relatedGroupNotice = "已原子提交 \(receipt.members.count) 条关联候选：确认 \(accepted) 条、更正 \(corrected) 条、拒绝 \(rejected) 条。正式记忆与审核记录已同步更新。"
+                    self.relatedGroupNotice = "已处理 \(receipt.members.count) 条记忆：确认 \(accepted) 条、更正 \(corrected) 条、拒绝 \(rejected) 条。正式记忆与审核记录已同步更新。"
                     self.endRelatedGroupSelection()
                     self.useCase.send(.refresh)
                 case .failure(let error):
@@ -7982,16 +8008,13 @@ final class OwnerTruthCandidateInboxViewController: UIViewController {
                         : "信息不完整")
                 let heading = "\(operationTitleTextForGroup(operation.operationKind))：\(before) -> \(after)"
                 let fieldLines = operation.factDiff.changedFields.flatMap(ownerTruthStructuredFieldDiffTexts)
-                return [heading] + fieldLines + [
-                    "证据：\(operation.factDiff.beforeEvidenceCount) → \(operation.factDiff.afterEvidenceCount) 条",
-                ]
+                return [heading] + fieldLines
             }
         }
         let dependencyText = proposal.dependencies.count == 1
             ? "第 1 条确认成功后才会提交第 2 条。"
             : "会按显示顺序核验关联关系；任一环节失败，整组都不会提交。"
         return ([
-            "基于正式记忆第 \(proposal.baseMemoryRevision) 次修订快照。",
             dependencyText,
         ] + memberLines).joined(separator: "\n\n")
     }
@@ -8269,7 +8292,10 @@ extension OwnerTruthCandidateInboxViewController: UITableViewDataSource, UITable
             if indexPath.row == themes.count { cell.textLabel?.text = "载入更多主题"; return cell }
             let theme = themes[indexPath.row]
             cell.textLabel?.text = theme.title
-            cell.detailTextLabel?.text = (theme.binding.version > 1 ? "有新补充 · " : "") + theme.summary
+            cell.detailTextLabel?.text = [(theme.binding.version > 1 ? "有新补充 · " : "") + theme.summary, OwnerTruthMemoryDisplay.timestamp(theme.sourceCreatedAt, prefix: "记录于")].compactMap { $0 }.joined(separator: "\n")
+            cell.backgroundColor = DJDesignTokens.Color.surface
+            cell.textLabel?.textColor = DJDesignTokens.Color.textPrimary
+            cell.detailTextLabel?.textColor = DJDesignTokens.Color.textSecondary
             cell.detailTextLabel?.numberOfLines = 3; cell.accessoryType = .disclosureIndicator
             cell.accessibilityIdentifier = "live-theme-card-\(theme.binding.topicId)"
             return cell
@@ -8412,6 +8438,8 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
     var onRenderedForUIQA: ((OwnerTruthCandidateInboxItemViewState) -> Void)?
     var onCorrectionPreviewRenderedForUIQA: ((OwnerTruthCandidateChangeSetProposal, String) -> Void)?
 
+    var displayedBindingForUIQA: OwnerTruthCandidateReviewBinding? { item.reviewBinding }
+
     var renderedTextForUIQA: String {
         labelTexts(in: view).joined(separator: "\n")
     }
@@ -8532,7 +8560,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "候选记忆"
+        title = "待确认记忆"
         view.backgroundColor = DJDesignTokens.Color.background
         configureLayout()
         configureContent()
@@ -8587,7 +8615,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
         heading.textColor = DJDesignTokens.Color.textPrimary
 
         let introduction = UILabel()
-        introduction.text = "核对内容和来源后再确认。更正只会修改下方标明的权威字段，原候选与来源记录会保留。"
+        introduction.text = "看看是否准确，你可以修改内容，或选择不保存。"
         introduction.font = DJDesignTokens.Font.body(14)
         introduction.textColor = DJDesignTokens.Color.textTertiary
         introduction.numberOfLines = 0
@@ -8597,8 +8625,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
         contentStack.addArrangedSubview(makePrimaryContentCard())
         contentStack.addArrangedSubview(makeChangeSetCard())
         contentStack.addArrangedSubview(makeFacetsCard())
-        contentStack.addArrangedSubview(makeMetadataCard())
-        contentStack.addArrangedSubview(makeSourcesCard())
+
         configureCorrectionCard()
         correctionCard.isHidden = true
         contentStack.addArrangedSubview(correctionCard)
@@ -8615,7 +8642,8 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
         valueLabel.accessibilityIdentifier = "owner-truth-candidate-primary-value"
 
         let versionLabel = UILabel()
-        versionLabel.text = "候选第 \(item.candidateVersion) 版"
+        versionLabel.text = OwnerTruthMemoryDisplay.timestamp(item.createdAt, prefix: "整理于")
+        versionLabel.isHidden = item.createdAt == nil
         versionLabel.font = DJDesignTokens.Font.label(12)
         versionLabel.textColor = DJDesignTokens.Color.textTertiary
 
@@ -8623,7 +8651,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
     }
 
     private func makeChangeSetCard() -> UIView {
-        let titleLabel = sectionTitle("本次确认将如何更改正式记忆")
+        let titleLabel = sectionTitle("确认后将保存的变化")
         guard let proposal = item.proposedChangeSet else {
             let unavailable = messageLabel(
                 item.contentSchemaVersion == "owner-truth-v5"
@@ -8639,10 +8667,14 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
             return card(containing: [titleLabel, unavailable])
         }
 
+        if proposal.operations.count == 1, let operation = proposal.operations.first,
+           operation.recognizedKind == .add,
+           factSummary(operation.factDiff.after) == item.primaryValue,
+           operation.factDiff.changedFields.flatMap(ownerTruthStructuredFieldDiffTexts).isEmpty {
+            let empty = UIView(); empty.isHidden = true; return empty
+        }
         var rows: [UIView] = [titleLabel]
-        let revisionLabel = messageLabel(Self.changeSetBaseRevisionText(proposal.baseMemoryRevision))
-        revisionLabel.accessibilityIdentifier = "owner-truth-candidate-changeset-base-revision"
-        rows.append(revisionLabel)
+
         for operation in proposal.operations {
             let operationTitle = UILabel()
             operationTitle.text = operationTitleText(operation.operationKind)
@@ -8677,12 +8709,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
                     }
                 }
             }
-            let evidenceLabel = messageLabel(
-                "证据：\(operation.factDiff.beforeEvidenceCount) → \(operation.factDiff.afterEvidenceCount) 条"
-            )
-            evidenceLabel.accessibilityIdentifier =
-                "owner-truth-candidate-operation-\(operation.operationIndex)-evidence"
-            rows.append(evidenceLabel)
+
         }
         if !proposal.dependencies.isEmpty {
             rows.append(messageLabel("本次变更包含前后依赖关系，系统会按显示顺序核验。"))
@@ -8701,30 +8728,25 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
     }
 
     private func makeFacetsCard() -> UIView {
-        var views: [UIView] = [sectionTitle("记忆线索")]
+        var views: [UIView] = [sectionTitle("请核对以下补充")]
         switch item.facetsState {
         case .available(let facets):
-            if facets.isEmpty {
-                views.append(messageLabel("本次整理没有提取到需要确认的结构化线索。"))
-            } else {
-                for kind in OwnerTruthMemoryFacetKind.allCases {
-                    let values = facets.values(for: kind)
-                    guard !values.isEmpty else { continue }
-                    let valueText = values.map { value in
-                        "\(value.value)（\(value.evidenceMode.title)）"
-                    }.joined(separator: "、")
-                    views.append(metadataRow(title: kind.title, value: valueText))
+            for kind in OwnerTruthMemoryFacetKind.allCases {
+                let values = facets.values(for: kind).filter {
+                    $0.evidenceMode == .inferred || !item.primaryValue.contains($0.value)
                 }
+                guard !values.isEmpty else { continue }
+                views.append(metadataRow(title: kind.title, value: values.map(\.value).joined(separator: "、")))
             }
-            views.append(messageLabel("整体可信度 \(Int((facets.confidence * 100).rounded()))%。系统推断需由你确认后才会成为正式记忆的一部分。"))
-        case .legacyNotAvailable:
-            views.append(messageLabel("这条旧版候选尚未包含结构化线索，不会显示为已分析。"))
         case .invalid:
-            views.append(messageLabel("结构化线索数据不完整，请刷新后再确认。"))
+            views.append(messageLabel("部分内容暂时无法读取，请刷新后再确认。"))
         case .unsupportedSchema:
-            views.append(messageLabel("这条候选使用较新的线索格式，当前版本暂不展示或编辑。"))
+            views.append(messageLabel("部分内容需要更新 App 后查看。"))
+        case .legacyNotAvailable:
+            break
         }
         let result = card(containing: views)
+        result.isHidden = views.count == 1
         result.accessibilityIdentifier = "owner-truth-candidate-facets-card"
         return result
     }
@@ -8768,7 +8790,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
 
         let titleLabel = sectionTitle("更正\(item.primaryFieldTitle)")
         let helpLabel = UILabel()
-        helpLabel.text = "来源引用会保持不变；你提交的线索将标记为本人确认。"
+        helpLabel.text = "修改需要调整的内容，确认前还可以核对。"
         helpLabel.font = DJDesignTokens.Font.label(12)
         helpLabel.textColor = DJDesignTokens.Color.textTertiary
         helpLabel.numberOfLines = 0
@@ -8805,7 +8827,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
 
         [titleLabel, helpLabel, correctionTextView].forEach(stack.addArrangedSubview)
         if case .available(let facets) = item.facetsState {
-            let facetTitle = sectionTitle("更正结构化线索")
+            let facetTitle = sectionTitle("补充内容")
             stack.addArrangedSubview(facetTitle)
             let facetHelp = messageLabel("多项内容请使用逗号分隔；留空表示移除该类线索。")
             stack.addArrangedSubview(facetHelp)
@@ -8863,7 +8885,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
         stack.spacing = 10
 
         let acceptButton = actionButton(
-            title: "确认并纳入正式记忆",
+            title: "确认保存",
             backgroundColor: DJDesignTokens.Color.accent,
             foregroundColor: DJDesignTokens.Color.accentDeep,
             selector: #selector(acceptTapped)
@@ -8874,7 +8896,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
 
         if item.supportsCorrection {
             let correctionButton = actionButton(
-                title: "更正后确认",
+                title: "修改内容",
                 backgroundColor: DJDesignTokens.Color.surface,
                 foregroundColor: DJDesignTokens.Color.accentDeep,
                 selector: #selector(showCorrectionTapped)
@@ -8887,7 +8909,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
         }
 
         let rejectButton = actionButton(
-            title: "拒绝这条候选记忆",
+            title: "不保存",
             backgroundColor: .clear,
             foregroundColor: .systemRed,
             selector: #selector(rejectTapped)
@@ -8914,9 +8936,9 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
         case "addEvidence": return "为现有正式记忆补充证据"
         case "refine": return "补充现有正式记忆的缺失细节"
         case "temporalChange": return "新增一条与原记录有关的时间变化"
-        case "correct": return "修订指定正式记忆版本"
+        case "correct": return "更正已有记忆"
         case "dispute": return "保留一条与现有事实相冲突的待辨记录"
-        case "duplicate": return "识别为已有正式记忆，不新增版本"
+        case "duplicate": return "与已有记忆相同，不重复保存"
         case "noPersonalFact": return "不写入跨会话正式记忆"
         default: return "无法识别的正式记忆操作"
         }
@@ -8936,7 +8958,8 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
             guard let targetVersion = operation.targetMemoryVersion else {
                 return "目标：信息不完整"
             }
-            return Self.changeSetTargetVersionText(targetVersion)
+            _ = targetVersion // The version still participates in binding, never in display.
+            return "目标：已有记忆"
         }
     }
 
@@ -9012,6 +9035,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
         valueLabel.font = DJDesignTokens.Font.body(14)
         valueLabel.textColor = DJDesignTokens.Color.textPrimary
         valueLabel.textAlignment = .right
+        valueLabel.numberOfLines = 0
         row.addArrangedSubview(titleLabel)
         row.addArrangedSubview(valueLabel)
         titleLabel.setContentHuggingPriority(.required, for: .horizontal)
@@ -9248,14 +9272,14 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
     private func correctionPreviewMessage(
         _ proposal: OwnerTruthCandidateChangeSetProposal
     ) -> String {
-        var lines = ["基于正式记忆第 \(proposal.baseMemoryRevision) 次修订快照。"]
+        var lines: [String] = []
         for operation in proposal.operations {
             lines.append(operationTitleText(operation.operationKind))
             lines.append(operationTargetText(operation))
             lines.append(operationBeforeText(operation, summary: factSummary(operation.factDiff.before)))
             lines.append(operationAfterText(operation, summary: factSummary(operation.factDiff.after)))
             lines.append(contentsOf: operation.factDiff.changedFields.flatMap(ownerTruthStructuredFieldDiffTexts))
-            lines.append("证据：\(operation.factDiff.beforeEvidenceCount) → \(operation.factDiff.afterEvidenceCount) 条")
+
         }
         if !proposal.dependencies.isEmpty {
             lines.append("本次包含前后依赖，系统会按方案整体校验。")
@@ -9266,7 +9290,7 @@ final class OwnerTruthCandidateDetailViewController: UIViewController, UITextVie
     @objc private func acceptTapped() {
         presentConfirmation(
             title: "确认纳入正式记忆",
-            message: "确认后会生成可追溯的正式记忆版本。",
+            message: "确认后会保存到正式记忆。",
             actionTitle: "确认"
         ) { [weak self] in self?.onAccept?() }
     }
@@ -9410,15 +9434,14 @@ private final class OwnerTruthCandidateInboxCell: UITableViewCell {
 
     func configure(_ item: OwnerTruthCandidateInboxItemViewState) {
         summaryLabel.text = item.proposalPreview
-        metadataLabel.text = "\(memoryKindText(item.memoryKind)) · \(perspectiveText(item.perspective)) · \(epistemicText(item.epistemicStatus))"
-        evidenceLabel.text = "\(item.evidenceCount) 条证据 · \(sensitivityText(item.sensitivity))"
-        reviewBadgeLabel.text = item.supportsRelatedGroupReview
-            ? "可关联确认"
-            : (item.supportsBatchAcceptance
-                ? "可批量确认"
-                : (item.reviewMode == "single" ? "待本人确认" : "待确认"))
+        metadataLabel.text = OwnerTruthMemoryDisplay.timestamp(item.createdAt, prefix: "整理于")
+        metadataLabel.isHidden = item.createdAt == nil
+        evidenceLabel.text = nil
+        evidenceLabel.isHidden = true
+        reviewBadgeLabel.text = "待确认"
         accessibilityIdentifier = "owner-truth-candidate-inbox-item"
-        accessibilityLabel = "候选记忆，\(item.proposalPreview)，\(item.evidenceCount) 条证据，\(reviewBadgeLabel.text ?? "待确认")"
+        accessibilityLabel = [item.proposalPreview, metadataLabel.text].compactMap { $0 }.joined(separator: "，")
+
     }
 
     private func memoryKindText(_ value: OwnerTruthMemoryKind) -> String {
@@ -20996,7 +21019,8 @@ final class OwnerTruthLiveThemeDetailViewController: UIViewController, UITextVie
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func viewDidLoad() {
-        super.viewDidLoad(); title = "待确认记忆"; view.backgroundColor = .systemBackground
+        super.viewDidLoad(); title = "待确认记忆"; view.backgroundColor = DJDesignTokens.Color.background
+        view.tintColor = DJDesignTokens.Color.accentDeep
         let scroll = UIScrollView(); scroll.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scroll); stack.axis = .vertical; stack.spacing = 18
         stack.translatesAutoresizingMaskIntoConstraints = false; scroll.addSubview(stack)
@@ -21009,6 +21033,9 @@ final class OwnerTruthLiveThemeDetailViewController: UIViewController, UITextVie
             stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -30),
             stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -40)])
         addLabel(theme.title, font: .preferredFont(forTextStyle: .title2))
+        if let time = OwnerTruthMemoryDisplay.timestamp(theme.sourceCreatedAt, prefix: "记录于") {
+            addLabel(time, font: .preferredFont(forTextStyle: .footnote))
+        }
         addLabel(theme.summary, font: .preferredFont(forTextStyle: .body))
         if theme.linkedTopicID != nil { addLabel("这是对已处理记忆的补充或更正，确认前不会修改原记忆。", font: .preferredFont(forTextStyle: .footnote)) }
         notice.numberOfLines = 0; notice.font = .preferredFont(forTextStyle: .footnote); stack.addArrangedSubview(notice)
@@ -21037,7 +21064,7 @@ final class OwnerTruthLiveThemeDetailViewController: UIViewController, UITextVie
         for member in theme.members {
             let field = UITextView(); field.font = .preferredFont(forTextStyle: .body); field.isScrollEnabled = false
             field.text = restored[member.atomID] ?? member.statement; field.delegate = self
-            field.backgroundColor = .secondarySystemBackground; field.layer.cornerRadius = 8
+            field.backgroundColor = DJDesignTokens.Color.surface; field.textColor = DJDesignTokens.Color.textPrimary; field.layer.cornerRadius = 8
             field.accessibilityIdentifier = "live-theme-fact-\(member.atomID)"
             field.isHidden = !editingFields; field.heightAnchor.constraint(greaterThanOrEqualToConstant: 64).isActive = true
             fields[member.atomID] = field; stack.addArrangedSubview(field)
@@ -21051,7 +21078,7 @@ final class OwnerTruthLiveThemeDetailViewController: UIViewController, UITextVie
         updateControls()
     }
     private func addLabel(_ text: String, font: UIFont) {
-        let label = UILabel(); label.text = text; label.numberOfLines = 0; label.font = font; stack.addArrangedSubview(label)
+        let label = UILabel(); label.text = text; label.numberOfLines = 0; label.font = font; label.textColor = DJDesignTokens.Color.textPrimary; stack.addArrangedSubview(label)
     }
     private func updateControls() {
         let allowed = runtime.validate(lease, at: .commit).allowed && !busy && !unresolved && !staleDraft
@@ -21133,7 +21160,7 @@ final class OwnerTruthLiveThemeDetailViewController: UIViewController, UITextVie
                     guard proposal.reviewability == .reviewable else {
                         self.busy = false; self.notice.text = "确认信息不完整，暂不能提交。"; self.updateControls(); return
                     }
-                    let body = rejecting ? "这条待确认记忆将移出列表。" : self.theme.members.map { edits[$0.atomID] ?? $0.statement }.joined(separator: "\n\n")
+                    let body = rejecting ? "这条待确认记忆将移出列表。" : Self.confirmationText(theme: self.theme, edits: edits, proposal: proposal)
                     let alert = UIAlertController(title: rejecting ? "不保存这条记忆？" : "确认保存以下内容？", message: body, preferredStyle: .alert)
                     alert.addAction(UIAlertAction(title: "返回编辑", style: .cancel) { [weak self] _ in self?.busy = false; self?.updateControls() })
                     alert.addAction(UIAlertAction(title: rejecting ? "不保存" : "确认保存", style: rejecting ? .destructive : .default) { [weak self] _ in
@@ -21143,6 +21170,25 @@ final class OwnerTruthLiveThemeDetailViewController: UIViewController, UITextVie
             }
         }
     }
+    static func confirmationText(theme: OwnerTruthLiveTheme, edits: [String: String], proposal: OwnerTruthMemoryChangeSetGroupProposal) -> String {
+        let statements = theme.members.map { edits[$0.atomID] ?? $0.statement }
+        let changes = proposal.members.flatMap { member in
+            member.proposedChangeSet.operations.flatMap { operation -> [String] in
+                var lines: [String] = []
+                if let before = operation.factDiff.before?.ownerTruthFactPreviewText {
+                    lines.append("原有内容：" + before)
+                }
+                if let after = operation.factDiff.after?.ownerTruthFactPreviewText,
+                   operation.recognizedKind != .add || !statements.contains(after) {
+                    lines.append("确认后：" + after)
+                }
+                lines += operation.factDiff.changedFields.flatMap(ownerTruthStructuredFieldDiffTexts)
+                return lines
+            }
+        }
+        return (statements + changes).joined(separator: "\n\n")
+    }
+
     private func submit(commandID: String, edits: [String: String], rejecting: Bool, proposal: OwnerTruthMemoryChangeSetGroupProposal) {
         guard runtime.validate(lease, at: .request).allowed, let vault = OwnerTruthVaultID(lease.vaultId) else { busy = false; updateControls(); return }
         do {
@@ -21171,5 +21217,16 @@ final class OwnerTruthLiveThemeDetailViewController: UIViewController, UITextVie
                 self.updateControls()
             }
         }
+    }
+}
+
+/// Display-only formatting; a missing timestamp is never replaced by the current time.
+enum OwnerTruthMemoryDisplay {
+    static func timestamp(_ date: Date?, prefix: String) -> String? {
+        guard let date else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy年M月d日 HH:mm"
+        return "\(prefix) \(formatter.string(from: date))"
     }
 }

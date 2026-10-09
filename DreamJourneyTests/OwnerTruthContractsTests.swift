@@ -10,6 +10,75 @@ import XCTest
 #endif
 
 final class OwnerTruthContractsTests: XCTestCase {
+    func testLiveContextUpdateWaitsForDrainAndRejectsLateRead() {
+        var state = LiveContextUpdateState()
+        let operation = UUID()
+        state.begin(operation: operation, ticketID: "ticket", hash: "hash0")
+        XCTAssertNil(state.afterPlaybackDrained(now: 0))
+        state.observeASR("咖啡", isFinal: false)
+        XCTAssertNil(state.afterPlaybackDrained(now: 0))
+        state.observeASR("我现在喝咖啡", isFinal: true)
+        let request = state.afterPlaybackDrained(now: 1)!
+        XCTAssertNil(state.afterPlaybackDrained(now: 1.1))
+        XCTAssertFalse(state.prepareSend(request, hash: "hash1", now: 1.5))
+        state.readFailed(request)
+        XCTAssertNil(state.afterPlaybackDrained(now: 2))
+    }
+
+    func testLiveContextUpdateNewSpeechCancelsReadAndOldSessionCannotCommit() {
+        var state = LiveContextUpdateState()
+        state.begin(operation: UUID(), ticketID: "ticket", hash: "hash0")
+        state.observeASR("咖啡", isFinal: true)
+        let old = state.afterPlaybackDrained(now: 1)!
+        state.observeASR("换个话题", isFinal: false)
+        XCTAssertFalse(state.prepareSend(old, hash: "hash1", now: 1.1))
+        state.observeASR("我养了一只猫", isFinal: true)
+        let next = state.afterPlaybackDrained(now: 2)!
+        state.end()
+        state.begin(operation: UUID(), ticketID: "new-ticket", hash: "new-hash")
+        XCTAssertFalse(state.prepareSend(next, hash: "hash2", now: 2.1))
+        XCTAssertFalse(state.acknowledge(now: 2.2))
+        XCTAssertEqual(state.appliedHash, "new-hash")
+    }
+
+    func testLiveContextUpdateACKAdvancesOnlyOnceAndTimeoutDisablesSession() {
+        var state = LiveContextUpdateState()
+        state.begin(operation: UUID(), ticketID: "ticket", hash: "hash0")
+        state.observeASR("咖啡", isFinal: true)
+        let first = state.afterPlaybackDrained(now: 1)!
+        XCTAssertTrue(state.prepareSend(first, hash: "hash1", now: 1.1))
+        state.observeASR("猫", isFinal: true)
+        XCTAssertNil(state.afterPlaybackDrained(now: 1.2))
+        XCTAssertTrue(state.acknowledge(now: 1.3))
+        XCTAssertFalse(state.acknowledge(now: 1.4))
+        let second = state.afterPlaybackDrained(now: 2)!
+        XCTAssertEqual(second.previousHash, "hash1")
+        XCTAssertEqual(second.sequence, 2)
+        XCTAssertTrue(state.prepareSend(second, hash: "hash2", now: 2.1))
+        state.expireACK(requestID: first.id, now: 4)
+        XCTAssertFalse(state.disabled)
+        state.expireACK(requestID: second.id, now: 4)
+        XCTAssertTrue(state.disabled)
+        XCTAssertFalse(state.acknowledge(now: 4.1))
+        state.observeASR("新主题", isFinal: true)
+        XCTAssertNil(state.afterPlaybackDrained(now: 4.2))
+    }
+
+    func testLiveContextUpdateDefaultOffAndBoundedQueryBudget() {
+        var state = LiveContextUpdateState()
+        state.begin(operation: UUID(), ticketID: nil, hash: "hash0")
+        state.observeASR("咖啡", isFinal: true)
+        XCTAssertNil(state.afterPlaybackDrained(now: 0))
+        state.begin(operation: UUID(), ticketID: "ticket", hash: "hash0")
+        for index in 0..<128 {
+            state.observeASR("事实\(index)", isFinal: true)
+            let request = state.afterPlaybackDrained(now: Double(index))!
+            state.readFailed(request)
+        }
+        state.observeASR("事实129", isFinal: true)
+        XCTAssertNil(state.afterPlaybackDrained(now: 130))
+    }
+
     private func makePublicationDiscoveryStore(lease: AccountLease, root: URL) throws -> OwnerTruthInterviewLiveTurnOutboxStore {
         let store = OwnerTruthInterviewLiveTurnOutboxStore(rootDirectory: root)
         let product = "auto-discovery-published"
@@ -1000,6 +1069,90 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertLessThan(windows.last?["lastDepth"] as? Int ?? 9999, 16)
     }
 
+    func testOctober9HandledAudioBurstSamplesBeforeQueueAndPreservesFirstFailure() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("handled-burst-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let lock = NSLock(); var writes = 0; var bytes = 0
+        let store = NativeLiveDiagnosticsRingStore(rootDirectory: root, costObservation: { stage, _, count in
+            if stage == "atomicReplace" {
+                lock.lock(); writes += 1; bytes += count; lock.unlock()
+            }
+        })
+        // Match the real Manager's normal PCM metadata; enqueue the burst without draining each callback.
+        for ordinal in 1...500 {
+            store.record(accountLease: lease, providerSessionID: "handled-burst", source: "sdk", event: "providerCallback",
+                eventCode: 3018, callbackOrdinal: UInt64(ordinal), reason: "handled",
+                speakingBefore: true, speakingAfter: true)
+        }
+        store.recordFirstCriticalFailure(accountLease: lease, providerSessionID: "handled-burst", stage: "capture", reason: "originalFailure")
+        store.recordFirstCriticalFailure(accountLease: lease, providerSessionID: "handled-burst", stage: "capture", reason: "laterFailure")
+        store.waitForPendingWrites()
+        let snapshot = NativeLiveDiagnosticsRingStore(rootDirectory: root).snapshot(accountLease: lease, providerSessionID: "handled-burst")
+        XCTAssertEqual(snapshot.events.filter { $0.eventCode == 3018 }.map { $0.callbackOrdinal },
+                       stride(from: 1, through: 500, by: 50).map { Optional(UInt64($0)) })
+        XCTAssertEqual(snapshot.droppedCount, 490)
+        XCTAssertEqual(snapshot.firstCriticalFailure?.reason, "originalFailure")
+        lock.lock(); let actualWrites = writes; let actualBytes = bytes; lock.unlock()
+        XCTAssertEqual(actualWrites, 12)
+        print("HANDLED_PCM_COST writes=\(actualWrites) bytes=\(actualBytes) dropped=\(snapshot.droppedCount)")
+    }
+
+    func testOctober9AudioSamplingPreservesExceptionalMetadataAndLifecycle() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("sampling-boundary-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = NativeLiveDiagnosticsRingStore(rootDirectory: root)
+        store.record(accountLease: lease, providerSessionID: "boundary", source: "sdk", event: "providerCallback", eventCode: 3018)
+        // These follow the first sampled PCM so an over-broad sampler would incorrectly discard them.
+        store.record(accountLease: lease, providerSessionID: "boundary", source: "sdk", event: "providerCallback", eventCode: 3018,
+            callbackOrdinal: 2, reason: "handled", speakingBefore: false, speakingAfter: true)
+        store.record(accountLease: lease, providerSessionID: "boundary", source: "sdk", event: "providerCallback", eventCode: 3018,
+            callbackOrdinal: 3, reason: "unexpectedAudio")
+        store.record(accountLease: lease, providerSessionID: "boundary", source: "sdk", event: "providerCallback", eventCode: 3018,
+            callbackOrdinal: 4, reason: "handled", resultCode: -1)
+        store.record(accountLease: lease, providerSessionID: "boundary", source: "sdk", event: "providerCallback", eventCode: 3018,
+            callbackOrdinal: 5, reason: "handled", resultCode: 0)
+        store.record(accountLease: lease, providerSessionID: "boundary", source: "sdk", event: "providerCallback", eventCode: 3018,
+            callbackOrdinal: 6, reason: "handled", speakingBefore: true, speakingAfter: nil)
+        store.record(accountLease: lease, providerSessionID: "boundary", source: "sdk", event: "providerCallback", eventCode: 3000,
+            callbackOrdinal: 7, reason: "handled")
+        store.record(accountLease: lease, providerSessionID: "boundary", source: "sdk", event: "sessionFinished", eventCode: 3018,
+            callbackOrdinal: 8, reason: "handled")
+        store.recordFirstRequestFailure(accountLease: lease, providerSessionID: "boundary", commandID: nil,
+            messageID: nil, sequence: nil, stage: "append", reason: "deadline", httpStatus: 503)
+        store.waitForPendingWrites()
+        let snapshot = NativeLiveDiagnosticsRingStore(rootDirectory: root).snapshot(accountLease: lease, providerSessionID: "boundary")
+        XCTAssertEqual(snapshot.events.compactMap { $0.callbackOrdinal }, Array(UInt64(2)...UInt64(8)))
+        XCTAssertEqual(snapshot.droppedCount, 0)
+        XCTAssertEqual(snapshot.firstRequestFailure?.reason, "deadline")
+    }
+
+    func testOctober9AudioSamplingScopesAccountsAndSessionsIndependently() throws {
+        let (_, lease) = try makeActiveRuntime()
+        let other = AccountLease(subjectId: "other-owner", vaultId: "other-vault", sessionId: lease.sessionId,
+            generation: lease.generation, generationId: lease.generationId, authorityEpoch: lease.authorityEpoch)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("sampling-scopes-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = NativeLiveDiagnosticsRingStore(rootDirectory: root)
+        let scopes = [(lease, "one"), (lease, "two"), (other, "one")]
+        for (account, session) in scopes {
+            for ordinal in 1...100 {
+                store.record(accountLease: account, providerSessionID: session, source: "sdk", event: "providerCallback",
+                    eventCode: 3018, callbackOrdinal: UInt64(ordinal), reason: "handled", speakingBefore: false, speakingAfter: false)
+            }
+            store.record(accountLease: account, providerSessionID: session, source: "capture", event: "end")
+        }
+        store.waitForPendingWrites()
+        let restored = NativeLiveDiagnosticsRingStore(rootDirectory: root)
+        for (account, session) in scopes {
+            let snapshot = restored.snapshot(accountLease: account, providerSessionID: session)
+            XCTAssertEqual(snapshot.events.filter { $0.eventCode == 3018 }.map { $0.callbackOrdinal }, [1, 51])
+            XCTAssertEqual(snapshot.droppedCount, 98)
+            XCTAssertEqual(snapshot.events.last?.event, "end")
+        }
+    }
+
     func testSeptember30SampledAudioPreservesFirstFailure() throws {
         let (_, lease) = try makeActiveRuntime()
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("diagnostic-cost-\(UUID())")
@@ -1706,6 +1859,25 @@ final class OwnerTruthContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testLiveContextProductionManagerUpdatesAfterPCMDrainAndAcceptsCurrentACK() throws {
+        try exerciseMICProductionManager(scenario: "contextUpdate")
+    }
+
+    @MainActor
+    func testLiveContextProductionManagerDropsReadAfterNewUserSpeech() throws {
+        try exerciseMICProductionManager(scenario: "contextUpdateLate")
+    }
+
+    @MainActor
+    func testLiveContextProductionManagerReadFailureCannotRefreshOrStopVoice() throws {
+        for scenario in ["contextUpdate401", "contextUpdate426", "contextUpdateTimeout"] {
+            try XCTContext.runActivity(named: scenario) { _ in
+                try exerciseMICProductionManager(scenario: scenario)
+            }
+        }
+    }
+
+    @MainActor
     private func exerciseMICProductionManager(scenario: String) throws {
         let owner = "mic-native-\(scenario)"
         let auth = try makeOwnerTruthHTTPTestAuthSession(userID: owner)
@@ -1728,6 +1900,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             try? FileManager.default.removeItem(at: farewellRoot)
             controller.cancelVoiceLaunchForTesting()
             manager.destroyEngine()
+            manager.setLiveContextClientForTesting(nil)
             SpeechEngine.resetControlledBoundary()
             OwnerTruthReviewReadyHTTPURLProtocol.reset()
             UserManager.shared.setSyntheticCurrentUserForTesting(previousUser)
@@ -1777,8 +1950,33 @@ final class OwnerTruthContractsTests: XCTestCase {
                 policyReady = true
                 done(.success(()))
             })
-        let ticket = try micVoiceTicketResponse(ownerID: owner, productSessionID: "native-\(scenario)")
+        var ticket = try micVoiceTicketResponse(ownerID: owner, productSessionID: "native-\(scenario)")
+        var contextLoader: OwnerTruthReviewReadyHTTPURLProtocol?
+        var contextReply = Data()
+        if scenario.hasPrefix("contextUpdate") {
+            manager.setLiveContextClientForTesting(client)
+            var object = try XCTUnwrap(JSONSerialization.jsonObject(with: ticket) as? [String: Any])
+            object["contextUpdate"] = ["version": 1, "ticketId": "synthetic-context-ticket"]
+            ticket = try JSONSerialization.data(withJSONObject: object)
+        }
         OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            if request.url?.path == "/voice/realtime-context" {
+                let body = OwnerTruthReviewReadyHTTPURLProtocol.recordedRequestBodies.last ?? nil
+                let payload = (body.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]) ?? [:]
+                let grant: [String: Any] = ["version": 1, "sequence": payload["sequence"] ?? 1,
+                    "previousHash": payload["previousHash"] ?? "", "providerContextHash": "sha256:" + String(repeating: "a", count: 64),
+                    "expiresAtUnix": Date().timeIntervalSince1970 + 5,
+                    "envelope": "DJ_CONTEXT_V1:controlled-sdk-fixture"]
+                contextReply = (try? JSONSerialization.data(withJSONObject: grant)) ?? Data()
+                contextLoader = loader
+                if scenario == "contextUpdate401" || scenario == "contextUpdate426" {
+                    loader.respond(statusCode: scenario == "contextUpdate401" ? 401 : 426,
+                                   body: Data("{\"detail\":\"context unavailable\"}".utf8))
+                } else if scenario != "contextUpdateLate" && scenario != "contextUpdateTimeout" {
+                    loader.respond(statusCode: 200, body: contextReply)
+                }
+                return
+            }
             XCTAssertEqual(request.url?.path, "/voice/realtime-token")
             if scenario == "networkLoss" { loader.fail(URLError(.networkConnectionLost)); return }
             if ["cumulative", "authDeadline", "authRotation"].contains(scenario), OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.count == 1 {
@@ -1860,11 +2058,63 @@ final class OwnerTruthContractsTests: XCTestCase {
             engine.emit(SEEngineError)
         } else {
             XCTAssertEqual(engine.count(SEDirectiveStartEngine), 1)
-            if scenario == "handoff" || scenario == "replacement" || scenario == "stopClose" || scenario.hasPrefix("farewell") {
+            if scenario == "handoff" || scenario == "replacement" || scenario == "stopClose" || scenario.hasPrefix("farewell") || scenario.hasPrefix("contextUpdate") {
                 if scenario == "handoff" { uptime += 3 }
                 engine.emit(SEEventSessionStarted)
                 XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { listening == 1 })
                 XCTAssertTrue(manager.isDialogActive)
+                if scenario.hasPrefix("contextUpdate") {
+                    let utterance = Data("{\"question_id\":\"context-question\",\"results\":[{\"text\":\"我最近喜欢喝咖啡\",\"is_interim\":false}]}".utf8)
+                    engine.emit(SEEventASRResponse, data: utterance)
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { manager.controlledCallbackDrainForTesting == 0 })
+                    XCTAssertEqual(engine.count(SEDirectiveEventUpdateConfig), 0)
+                    XCTAssertEqual(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.count, 1)
+                    let metadata = Data("{\"question_id\":\"context-question\",\"reply_id\":\"context-reply\",\"text\":\"你什么时候开始喝咖啡的？\"}".utf8)
+                    engine.emit(SEEventTTSSentenceStart, data: metadata)
+                    let pcm = Data(repeating: 32, count: 2048)
+                    engine.emit(SEDecoderAudioData, data: pcm)
+                    engine.emit(SEEventTTSEnded, data: metadata)
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { manager.controlledCallbackDrainForTesting == 0 })
+                    XCTAssertEqual(engine.count(SEDirectiveEventUpdateConfig), 0, "TTS synthesis ending is not playback drain")
+                    engine.emit(SEPlayerAudioData, data: pcm)
+                    engine.emit(SEPlayerAudioData, data: Data(repeating: 0, count: 4096))
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { manager.controlledCallbackDrainForTesting == 0 })
+                    XCTAssertNil(contextLoader, "Playback verifier requires its full quiet tail")
+                    engine.emit(SEPlayerAudioData, data: Data(repeating: 0, count: 6000))
+                    XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { contextLoader != nil })
+                    if ["contextUpdate401", "contextUpdate426", "contextUpdateTimeout"].contains(scenario) {
+                        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { manager.liveContextStateForTesting.fetching == nil })
+                        XCTAssertEqual(engine.count(SEDirectiveEventUpdateConfig), 0)
+                        XCTAssertEqual(currentAuth.sessionId, auth.sessionId)
+                        XCTAssertEqual(OwnerTruthReviewReadyHTTPURLProtocol.recordedRequests.count, 2)
+                        if scenario == "contextUpdateTimeout" {
+                            XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { contextLoader?.didStopLoading == true })
+                        }
+                    } else if scenario == "contextUpdateLate" {
+                        engine.emit(SEEventASRResponse, data: Data("{\"question_id\":\"next-question\",\"results\":[{\"text\":\"换个话题\",\"is_interim\":true}]}".utf8))
+                        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { manager.controlledCallbackDrainForTesting == 0 })
+                        contextLoader?.respond(statusCode: 200, body: contextReply)
+                        let tick = expectation(description: "late read")
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { tick.fulfill() }
+                        wait(for: [tick], timeout: 1)
+                        XCTAssertEqual(engine.count(SEDirectiveEventUpdateConfig), 0)
+                    } else {
+                        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { engine.count(SEDirectiveEventUpdateConfig) == 1 })
+                        XCTAssertEqual(manager.liveContextStateForTesting.sequence, 1)
+                        engine.emit(SEEventConfigUpdated)
+                        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { manager.liveContextStateForTesting.sequence == 2 })
+                        XCTAssertEqual(manager.liveContextStateForTesting.appliedHash, "sha256:" + String(repeating: "a", count: 64))
+                        engine.emit(SEEventConfigUpdated)
+                        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { manager.controlledCallbackDrainForTesting == 0 })
+                        XCTAssertEqual(manager.liveContextStateForTesting.sequence, 2)
+                    }
+                    XCTAssertTrue(manager.isDialogActive)
+                    XCTAssertEqual(authRefreshes, 0)
+                    XCTAssertEqual(policyRefreshes, 0)
+                    controller.stopVoiceForTesting()
+                    XCTAssertNil(manager.liveContextStateForTesting.operation)
+                    return
+                }
                 if scenario == "handoff" {
                     let headers = try XCTUnwrap(engine.parameters[SE_PARAMS_KEY_REQUEST_HEADERS_STRING])
                     let headerObject = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(headers.utf8)) as? [String: String])
@@ -18043,7 +18293,9 @@ final class OwnerTruthContractsTests: XCTestCase {
         let rendered = allLabelText(in: controller.view)
 
         XCTAssertTrue(rendered.contains("字段变化：当前适用性｜确认前：historical｜确认后：current"))
-        XCTAssertTrue(rendered.contains("字段变化：倾向｜确认前：positive｜确认后：negative"))
+        XCTAssertTrue(rendered.contains("表述变化：原记录明确表示这件事成立；本次明确表示这件事不成立。"))
+        XCTAssertFalse(rendered.contains("positive"))
+        XCTAssertFalse(rendered.contains("negative"))
         XCTAssertTrue(rendered.contains("字段变化：有效时间｜确认前：2016年｜确认后：无"))
         XCTAssertEqual(
             button(in: controller.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled,
@@ -18078,7 +18330,7 @@ final class OwnerTruthContractsTests: XCTestCase {
                 identifier: "owner-truth-correction-preview-content"
             )).isScrollEnabled
         )
-        XCTAssertTrue(message.contains("基于正式记忆第 5 次修订快照"))
+        XCTAssertFalse(message.contains("基于正式记忆第 5 次修订快照"))
         XCTAssertTrue(message.contains("字段变化：有效时间｜确认前：2016年｜确认后：2018年"))
     }
 
@@ -18091,7 +18343,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         let rendered = allLabelText(in: controller.view)
 
         XCTAssertTrue(rendered.contains("字段变化：有效时间｜确认前：2016年｜确认后：2018年"))
-        XCTAssertTrue(rendered.contains("字段变化：习惯与偏好可信度｜确认前：0.721｜确认后：0.724"))
+        XCTAssertFalse(rendered.contains("字段变化：习惯与偏好可信度｜确认前：0.721｜确认后：0.724"))
         XCTAssertEqual(
             button(in: controller.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled,
             true
@@ -18118,7 +18370,7 @@ final class OwnerTruthContractsTests: XCTestCase {
 
         let message = try XCTUnwrap(renderedMessage)
         XCTAssertTrue(message.contains("字段变化：有效时间｜确认前：2016年｜确认后：2018年"))
-        XCTAssertTrue(message.contains("字段变化：习惯与偏好可信度｜确认前：0.721｜确认后：0.724"))
+        XCTAssertFalse(message.contains("字段变化：习惯与偏好可信度｜确认前：0.721｜确认后：0.724"))
     }
 
     @MainActor
@@ -18147,7 +18399,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         let message = try XCTUnwrap(renderedMessage)
         XCTAssertTrue(message.contains("第 2 条（确认）"))
         XCTAssertTrue(message.contains("字段变化：有效时间｜确认前：2016年｜确认后：2018年"))
-        XCTAssertTrue(message.contains("字段变化：习惯与偏好可信度｜确认前：0.721｜确认后：0.724"))
+        XCTAssertFalse(message.contains("字段变化：习惯与偏好可信度｜确认前：0.721｜确认后：0.724"))
     }
 
     @MainActor
@@ -18275,6 +18527,97 @@ final class OwnerTruthContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testMemoryPresentationKeepsConcreteDateAndBoundActions() throws {
+        var item = try v5CandidateDetailItem()
+        item.createdAt = Date(timeIntervalSince1970: 1791437400)
+        let originalBinding = item.reviewBinding
+        let controller = OwnerTruthCandidateDetailViewController(item: item)
+        controller.loadViewIfNeeded()
+        let text = allLabelText(in: controller.view)
+        XCTAssertTrue(text.contains("整理于 2026年10月"))
+        XCTAssertFalse(text.contains("候选第"))
+        XCTAssertEqual(controller.displayedBindingForUIQA, originalBinding)
+        for action in ["accept", "correct", "reject"] {
+            XCTAssertEqual(button(in: controller.view, identifier: "owner-truth-candidate-detail-" + action)?.isEnabled, true)
+        }
+        attachMemoryPresentation(controller, name: "pending-correction")
+    }
+
+    @MainActor
+    func testSameSourceRepeatActualBackendProposalIsReviewableAndReadable() throws {
+        let data = #"{"proposal":{"schemaVersion":"owner-truth-memory-changeset-proposal-v1","proposalId":"35ba5c22-b670-59bc-a802-a6837fbbfd0e","proposalHash":"9f970a6ae839b2367d4d549e24ca22c350fa362990394d6f2e5079c325a7ef15","candidateContentHash":"5d9dbf00da75a6974cc180049302b095de689f604a515c61fa79dfc0d7fcf09c","candidateVersion":1,"changeSetId":"a701cf47-933e-52f1-84c2-b9c591555b98","baseMemoryRevision":1,"operations":[{"addedEvidenceCount":1,"anticipatedActivation":"revise","candidateAssertionKey":["","event","occurred","我先记录阳台薄荷的新叶数量。"],"candidateId":"d3bcc6ab-b596-54d3-8d2a-29a9ceb19e66","changedFields":["evidenceRefs"],"factDiff":{"after":{"affect":null,"claimSubjectId":null,"dimensions":["lifeEvents"],"event":"我先记录阳台薄荷的新叶数量。","facets":{"confidence":0.9,"emotions":[],"goals":[],"habits":[],"identity":[],"people":[],"personality":[],"places":[{"confidence":1.0,"evidenceMode":"ownerStated","sourceTurnIndices":[25],"value":"阳台"}],"reflections":[],"relationships":[],"time":[],"values":[]},"factType":"event","memorySubjectId":null,"object":null,"predicate":"occurred","provenance":{"contributorAccountId":null,"evidenceRefs":[{"relation":"supports","sourceId":"59617333-8ebe-568c-8d39-6c43cee92e1e","sourceVersion":1,"turnId":null}],"mode":"selfReport","speakerPersonId":null},"qualifiers":{"currentApplicability":"historical","place":{"category":null,"entityId":null,"label":"阳台"},"polarity":"unknown","scenario":null,"strengthExpression":null,"superlativeAsserted":false,"validTime":{"end":null,"expression":null,"precision":"unknown","start":null}},"semantic":{"emotionEvidence":[],"entities":[{"confidence":1.0,"entityType":"place","evidenceMode":"ownerStated","name":"阳台"}],"eventTime":{"end":null,"precision":"unknown","start":null},"facets":["lifeEvent"],"narrative":"我先记录阳台薄荷的新叶数量。","primaryKind":"lifeEvent","title":"我先记录阳台薄荷的新叶数量"},"sourceTurnIndices":[25],"statement":"我先记录阳台薄荷的新叶数量。","summary":"我先记录阳台薄荷的新叶数量。","time":{"end":null,"precision":"unknown","start":null}},"before":{"affect":null,"claimSubjectId":null,"dimensions":["lifeEvents"],"event":"我先记录阳台薄荷的新叶数量。","facets":{"confidence":0.9,"emotions":[],"goals":[],"habits":[],"identity":[],"people":[],"personality":[],"places":[{"confidence":1.0,"evidenceMode":"ownerStated","sourceTurnIndices":[25],"value":"阳台"}],"reflections":[],"relationships":[],"time":[],"values":[]},"factType":"event","memorySubjectId":null,"object":null,"predicate":"occurred","provenance":{"contributorAccountId":null,"evidenceRefs":[{"relation":"supports","sourceId":"59617333-8ebe-568c-8d39-6c43cee92e1e","sourceVersion":1,"turnId":null}],"mode":"selfReport","speakerPersonId":null},"qualifiers":{"currentApplicability":"historical","place":{"category":null,"entityId":null,"label":"阳台"},"polarity":"unknown","scenario":null,"strengthExpression":null,"superlativeAsserted":false,"validTime":{"end":null,"expression":null,"precision":"unknown","start":null}},"semantic":{"emotionEvidence":[],"entities":[{"confidence":1.0,"entityType":"place","evidenceMode":"ownerStated","name":"阳台"}],"eventTime":{"end":null,"precision":"unknown","start":null},"facets":["lifeEvent"],"narrative":"我先记录阳台薄荷的新叶数量。","primaryKind":"lifeEvent","title":"我先记录阳台薄荷的新叶数量"},"sourceTurnIndices":[25],"statement":"我先记录阳台薄荷的新叶数量。","summary":"我先记录阳台薄荷的新叶数量。","time":{"end":null,"precision":"unknown","start":null}},"candidate":{"affect":null,"claimSubjectId":null,"dimensions":["lifeEvents"],"event":"我先记录阳台薄荷的新叶数量。","facets":{"confidence":0.9,"emotions":[],"goals":[],"habits":[],"identity":[],"people":[],"personality":[],"places":[{"confidence":1.0,"evidenceMode":"ownerStated","sourceTurnIndices":[45],"value":"阳台"}],"reflections":[],"relationships":[],"time":[],"values":[]},"factType":"event","memorySubjectId":null,"object":null,"predicate":"occurred","provenance":{"contributorAccountId":null,"evidenceRefs":[{"relation":"supports","sourceId":"59617333-8ebe-568c-8d39-6c43cee92e1e","sourceVersion":1,"turnId":null}],"mode":"selfReport","speakerPersonId":null},"qualifiers":{"currentApplicability":"historical","place":{"category":null,"entityId":null,"label":"阳台"},"polarity":"positive","scenario":null,"strengthExpression":null,"superlativeAsserted":false,"validTime":{"end":null,"expression":null,"precision":"unknown","start":null}},"semantic":{"emotionEvidence":[],"entities":[{"confidence":1.0,"entityType":"place","evidenceMode":"ownerStated","name":"阳台"}],"eventTime":{"end":null,"precision":"unknown","start":null},"facets":["lifeEvent"],"narrative":"我先记录阳台薄荷的新叶数量。","primaryKind":"lifeEvent","title":"我先记录阳台薄荷的新叶数量"},"sourceTurnIndices":[45],"statement":"我先记录阳台薄荷的新叶数量。","summary":"我先记录阳台薄荷的新叶数量。","time":{"end":null,"precision":"unknown","start":null}},"changedFields":[],"evidence":{"addedCount":1,"afterCount":2,"beforeCount":1,"candidateCount":1}},"operationIndex":0,"operationKind":"addEvidence","reason":"sameSourceExactStatementPreservesReviewedFact","targetMemoryId":"3eca59dd-73a2-4d85-a6de-c43bceb14d05","targetMemoryVersion":1,"targetMemoryVersionId":"adc2cf9e-3142-4ea1-ace0-f4c52157ba8e"}],"dependencies":[]},"operation":{"addedEvidenceCount":1,"anticipatedActivation":"revise","candidateAssertionKey":["","event","occurred","我先记录阳台薄荷的新叶数量。"],"candidateId":"d3bcc6ab-b596-54d3-8d2a-29a9ceb19e66","changedFields":["evidenceRefs"],"factDiff":{"after":{"affect":null,"claimSubjectId":null,"dimensions":["lifeEvents"],"event":"我先记录阳台薄荷的新叶数量。","facets":{"confidence":0.9,"emotions":[],"goals":[],"habits":[],"identity":[],"people":[],"personality":[],"places":[{"confidence":1.0,"evidenceMode":"ownerStated","sourceTurnIndices":[25],"value":"阳台"}],"reflections":[],"relationships":[],"time":[],"values":[]},"factType":"event","memorySubjectId":null,"object":null,"predicate":"occurred","provenance":{"contributorAccountId":null,"evidenceRefs":[{"relation":"supports","sourceId":"59617333-8ebe-568c-8d39-6c43cee92e1e","sourceVersion":1,"turnId":null}],"mode":"selfReport","speakerPersonId":null},"qualifiers":{"currentApplicability":"historical","place":{"category":null,"entityId":null,"label":"阳台"},"polarity":"unknown","scenario":null,"strengthExpression":null,"superlativeAsserted":false,"validTime":{"end":null,"expression":null,"precision":"unknown","start":null}},"semantic":{"emotionEvidence":[],"entities":[{"confidence":1.0,"entityType":"place","evidenceMode":"ownerStated","name":"阳台"}],"eventTime":{"end":null,"precision":"unknown","start":null},"facets":["lifeEvent"],"narrative":"我先记录阳台薄荷的新叶数量。","primaryKind":"lifeEvent","title":"我先记录阳台薄荷的新叶数量"},"sourceTurnIndices":[25],"statement":"我先记录阳台薄荷的新叶数量。","summary":"我先记录阳台薄荷的新叶数量。","time":{"end":null,"precision":"unknown","start":null}},"before":{"affect":null,"claimSubjectId":null,"dimensions":["lifeEvents"],"event":"我先记录阳台薄荷的新叶数量。","facets":{"confidence":0.9,"emotions":[],"goals":[],"habits":[],"identity":[],"people":[],"personality":[],"places":[{"confidence":1.0,"evidenceMode":"ownerStated","sourceTurnIndices":[25],"value":"阳台"}],"reflections":[],"relationships":[],"time":[],"values":[]},"factType":"event","memorySubjectId":null,"object":null,"predicate":"occurred","provenance":{"contributorAccountId":null,"evidenceRefs":[{"relation":"supports","sourceId":"59617333-8ebe-568c-8d39-6c43cee92e1e","sourceVersion":1,"turnId":null}],"mode":"selfReport","speakerPersonId":null},"qualifiers":{"currentApplicability":"historical","place":{"category":null,"entityId":null,"label":"阳台"},"polarity":"unknown","scenario":null,"strengthExpression":null,"superlativeAsserted":false,"validTime":{"end":null,"expression":null,"precision":"unknown","start":null}},"semantic":{"emotionEvidence":[],"entities":[{"confidence":1.0,"entityType":"place","evidenceMode":"ownerStated","name":"阳台"}],"eventTime":{"end":null,"precision":"unknown","start":null},"facets":["lifeEvent"],"narrative":"我先记录阳台薄荷的新叶数量。","primaryKind":"lifeEvent","title":"我先记录阳台薄荷的新叶数量"},"sourceTurnIndices":[25],"statement":"我先记录阳台薄荷的新叶数量。","summary":"我先记录阳台薄荷的新叶数量。","time":{"end":null,"precision":"unknown","start":null}},"candidate":{"affect":null,"claimSubjectId":null,"dimensions":["lifeEvents"],"event":"我先记录阳台薄荷的新叶数量。","facets":{"confidence":0.9,"emotions":[],"goals":[],"habits":[],"identity":[],"people":[],"personality":[],"places":[{"confidence":1.0,"evidenceMode":"ownerStated","sourceTurnIndices":[45],"value":"阳台"}],"reflections":[],"relationships":[],"time":[],"values":[]},"factType":"event","memorySubjectId":null,"object":null,"predicate":"occurred","provenance":{"contributorAccountId":null,"evidenceRefs":[{"relation":"supports","sourceId":"59617333-8ebe-568c-8d39-6c43cee92e1e","sourceVersion":1,"turnId":null}],"mode":"selfReport","speakerPersonId":null},"qualifiers":{"currentApplicability":"historical","place":{"category":null,"entityId":null,"label":"阳台"},"polarity":"positive","scenario":null,"strengthExpression":null,"superlativeAsserted":false,"validTime":{"end":null,"expression":null,"precision":"unknown","start":null}},"semantic":{"emotionEvidence":[],"entities":[{"confidence":1.0,"entityType":"place","evidenceMode":"ownerStated","name":"阳台"}],"eventTime":{"end":null,"precision":"unknown","start":null},"facets":["lifeEvent"],"narrative":"我先记录阳台薄荷的新叶数量。","primaryKind":"lifeEvent","title":"我先记录阳台薄荷的新叶数量"},"sourceTurnIndices":[45],"statement":"我先记录阳台薄荷的新叶数量。","summary":"我先记录阳台薄荷的新叶数量。","time":{"end":null,"precision":"unknown","start":null}},"changedFields":[],"evidence":{"addedCount":1,"afterCount":2,"beforeCount":1,"candidateCount":1}},"operationIndex":0,"operationKind":"addEvidence","reason":"sameSourceExactStatementPreservesReviewedFact","targetMemoryId":"3eca59dd-73a2-4d85-a6de-c43bceb14d05","targetMemoryVersion":1,"targetMemoryVersionId":"adc2cf9e-3142-4ea1-ace0-f4c52157ba8e"}}"#.data(using: .utf8)!
+        let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let item = try v5CandidateDetailItemFromBackendFixture(fixture)
+        let controller = OwnerTruthCandidateDetailViewController(item: item)
+        controller.loadViewIfNeeded()
+        let text = allLabelText(in: controller.view)
+        XCTAssertEqual(button(in: controller.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled, true)
+        XCTAssertFalse(text.contains("unknown"))
+        XCTAssertFalse(text.contains("positive"))
+        XCTAssertFalse(text.contains("表述变化"))
+    }
+
+    @MainActor
+    func testSameSourcePolarityDisputeActualBackendProposalIsReviewableAndReadable() throws {
+        let data = #"{"proposal":{"schemaVersion":"owner-truth-memory-changeset-proposal-v1","proposalId":"b1821c0a-c9fc-51bc-b92c-23f93d253bfe","proposalHash":"a117f608dfeec9363b04f4d7a1281937b554079cc31b2b3809138dfa374f6a16","candidateContentHash":"5d9dbf00da75a6974cc180049302b095de689f604a515c61fa79dfc0d7fcf09c","candidateVersion":1,"changeSetId":"2244484d-5ed9-556f-b8d1-31432283d8bf","baseMemoryRevision":1,"operations":[{"addedEvidenceCount":1,"anticipatedActivation":"createContradictory","candidateAssertionKey":["","event","occurred","我先记录阳台薄荷的新叶数量。"],"candidateId":"d3bcc6ab-b596-54d3-8d2a-29a9ceb19e66","changedFields":["qualifiers.polarity"],"factDiff":{"after":{"affect":null,"claimSubjectId":null,"dimensions":["lifeEvents"],"event":"我先记录阳台薄荷的新叶数量。","facets":{"confidence":0.9,"emotions":[],"goals":[],"habits":[],"identity":[],"people":[],"personality":[],"places":[{"confidence":1.0,"evidenceMode":"ownerStated","sourceTurnIndices":[45],"value":"阳台"}],"reflections":[],"relationships":[],"time":[],"values":[]},"factType":"event","memorySubjectId":null,"object":null,"predicate":"occurred","provenance":{"contributorAccountId":null,"evidenceRefs":[{"relation":"supports","sourceId":"59617333-8ebe-568c-8d39-6c43cee92e1e","sourceVersion":1,"turnId":null}],"mode":"selfReport","speakerPersonId":null},"qualifiers":{"currentApplicability":"historical","place":{"category":null,"entityId":null,"label":"阳台"},"polarity":"positive","scenario":null,"strengthExpression":null,"superlativeAsserted":false,"validTime":{"end":null,"expression":null,"precision":"unknown","start":null}},"semantic":{"emotionEvidence":[],"entities":[{"confidence":1.0,"entityType":"place","evidenceMode":"ownerStated","name":"阳台"}],"eventTime":{"end":null,"precision":"unknown","start":null},"facets":["lifeEvent"],"narrative":"我先记录阳台薄荷的新叶数量。","primaryKind":"lifeEvent","title":"我先记录阳台薄荷的新叶数量"},"sourceTurnIndices":[45],"statement":"我先记录阳台薄荷的新叶数量。","summary":"我先记录阳台薄荷的新叶数量。","time":{"end":null,"precision":"unknown","start":null}},"before":{"affect":null,"claimSubjectId":null,"dimensions":["lifeEvents"],"event":"我先记录阳台薄荷的新叶数量。","facets":{"confidence":0.9,"emotions":[],"goals":[],"habits":[],"identity":[],"people":[],"personality":[],"places":[{"confidence":1.0,"evidenceMode":"ownerStated","sourceTurnIndices":[25],"value":"阳台"}],"reflections":[],"relationships":[],"time":[],"values":[]},"factType":"event","memorySubjectId":null,"object":null,"predicate":"occurred","provenance":{"contributorAccountId":null,"evidenceRefs":[{"relation":"supports","sourceId":"59617333-8ebe-568c-8d39-6c43cee92e1e","sourceVersion":1,"turnId":null}],"mode":"selfReport","speakerPersonId":null},"qualifiers":{"currentApplicability":"historical","place":{"category":null,"entityId":null,"label":"阳台"},"polarity":"unknown","scenario":null,"strengthExpression":null,"superlativeAsserted":false,"validTime":{"end":null,"expression":null,"precision":"unknown","start":null}},"semantic":{"emotionEvidence":[],"entities":[{"confidence":1.0,"entityType":"place","evidenceMode":"ownerStated","name":"阳台"}],"eventTime":{"end":null,"precision":"unknown","start":null},"facets":["lifeEvent"],"narrative":"我先记录阳台薄荷的新叶数量。","primaryKind":"lifeEvent","title":"我先记录阳台薄荷的新叶数量"},"sourceTurnIndices":[25],"statement":"我先记录阳台薄荷的新叶数量。","summary":"我先记录阳台薄荷的新叶数量。","time":{"end":null,"precision":"unknown","start":null}},"candidate":{"affect":null,"claimSubjectId":null,"dimensions":["lifeEvents"],"event":"我先记录阳台薄荷的新叶数量。","facets":{"confidence":0.9,"emotions":[],"goals":[],"habits":[],"identity":[],"people":[],"personality":[],"places":[{"confidence":1.0,"evidenceMode":"ownerStated","sourceTurnIndices":[45],"value":"阳台"}],"reflections":[],"relationships":[],"time":[],"values":[]},"factType":"event","memorySubjectId":null,"object":null,"predicate":"occurred","provenance":{"contributorAccountId":null,"evidenceRefs":[{"relation":"supports","sourceId":"59617333-8ebe-568c-8d39-6c43cee92e1e","sourceVersion":1,"turnId":null}],"mode":"selfReport","speakerPersonId":null},"qualifiers":{"currentApplicability":"historical","place":{"category":null,"entityId":null,"label":"阳台"},"polarity":"positive","scenario":null,"strengthExpression":null,"superlativeAsserted":false,"validTime":{"end":null,"expression":null,"precision":"unknown","start":null}},"semantic":{"emotionEvidence":[],"entities":[{"confidence":1.0,"entityType":"place","evidenceMode":"ownerStated","name":"阳台"}],"eventTime":{"end":null,"precision":"unknown","start":null},"facets":["lifeEvent"],"narrative":"我先记录阳台薄荷的新叶数量。","primaryKind":"lifeEvent","title":"我先记录阳台薄荷的新叶数量"},"sourceTurnIndices":[45],"statement":"我先记录阳台薄荷的新叶数量。","summary":"我先记录阳台薄荷的新叶数量。","time":{"end":null,"precision":"unknown","start":null}},"changedFields":[{"after":"positive","before":"unknown","path":"qualifiers.polarity"}],"evidence":{"addedCount":1,"afterCount":2,"beforeCount":1,"candidateCount":1}},"operationIndex":0,"operationKind":"dispute","reason":"sameAssertionCannotSafelyMerge","targetMemoryId":"3eca59dd-73a2-4d85-a6de-c43bceb14d05","targetMemoryVersion":1,"targetMemoryVersionId":"adc2cf9e-3142-4ea1-ace0-f4c52157ba8e"}],"dependencies":[]},"operation":{"addedEvidenceCount":1,"anticipatedActivation":"createContradictory","candidateAssertionKey":["","event","occurred","我先记录阳台薄荷的新叶数量。"],"candidateId":"d3bcc6ab-b596-54d3-8d2a-29a9ceb19e66","changedFields":["qualifiers.polarity"],"factDiff":{"after":{"affect":null,"claimSubjectId":null,"dimensions":["lifeEvents"],"event":"我先记录阳台薄荷的新叶数量。","facets":{"confidence":0.9,"emotions":[],"goals":[],"habits":[],"identity":[],"people":[],"personality":[],"places":[{"confidence":1.0,"evidenceMode":"ownerStated","sourceTurnIndices":[45],"value":"阳台"}],"reflections":[],"relationships":[],"time":[],"values":[]},"factType":"event","memorySubjectId":null,"object":null,"predicate":"occurred","provenance":{"contributorAccountId":null,"evidenceRefs":[{"relation":"supports","sourceId":"59617333-8ebe-568c-8d39-6c43cee92e1e","sourceVersion":1,"turnId":null}],"mode":"selfReport","speakerPersonId":null},"qualifiers":{"currentApplicability":"historical","place":{"category":null,"entityId":null,"label":"阳台"},"polarity":"positive","scenario":null,"strengthExpression":null,"superlativeAsserted":false,"validTime":{"end":null,"expression":null,"precision":"unknown","start":null}},"semantic":{"emotionEvidence":[],"entities":[{"confidence":1.0,"entityType":"place","evidenceMode":"ownerStated","name":"阳台"}],"eventTime":{"end":null,"precision":"unknown","start":null},"facets":["lifeEvent"],"narrative":"我先记录阳台薄荷的新叶数量。","primaryKind":"lifeEvent","title":"我先记录阳台薄荷的新叶数量"},"sourceTurnIndices":[45],"statement":"我先记录阳台薄荷的新叶数量。","summary":"我先记录阳台薄荷的新叶数量。","time":{"end":null,"precision":"unknown","start":null}},"before":{"affect":null,"claimSubjectId":null,"dimensions":["lifeEvents"],"event":"我先记录阳台薄荷的新叶数量。","facets":{"confidence":0.9,"emotions":[],"goals":[],"habits":[],"identity":[],"people":[],"personality":[],"places":[{"confidence":1.0,"evidenceMode":"ownerStated","sourceTurnIndices":[25],"value":"阳台"}],"reflections":[],"relationships":[],"time":[],"values":[]},"factType":"event","memorySubjectId":null,"object":null,"predicate":"occurred","provenance":{"contributorAccountId":null,"evidenceRefs":[{"relation":"supports","sourceId":"59617333-8ebe-568c-8d39-6c43cee92e1e","sourceVersion":1,"turnId":null}],"mode":"selfReport","speakerPersonId":null},"qualifiers":{"currentApplicability":"historical","place":{"category":null,"entityId":null,"label":"阳台"},"polarity":"unknown","scenario":null,"strengthExpression":null,"superlativeAsserted":false,"validTime":{"end":null,"expression":null,"precision":"unknown","start":null}},"semantic":{"emotionEvidence":[],"entities":[{"confidence":1.0,"entityType":"place","evidenceMode":"ownerStated","name":"阳台"}],"eventTime":{"end":null,"precision":"unknown","start":null},"facets":["lifeEvent"],"narrative":"我先记录阳台薄荷的新叶数量。","primaryKind":"lifeEvent","title":"我先记录阳台薄荷的新叶数量"},"sourceTurnIndices":[25],"statement":"我先记录阳台薄荷的新叶数量。","summary":"我先记录阳台薄荷的新叶数量。","time":{"end":null,"precision":"unknown","start":null}},"candidate":{"affect":null,"claimSubjectId":null,"dimensions":["lifeEvents"],"event":"我先记录阳台薄荷的新叶数量。","facets":{"confidence":0.9,"emotions":[],"goals":[],"habits":[],"identity":[],"people":[],"personality":[],"places":[{"confidence":1.0,"evidenceMode":"ownerStated","sourceTurnIndices":[45],"value":"阳台"}],"reflections":[],"relationships":[],"time":[],"values":[]},"factType":"event","memorySubjectId":null,"object":null,"predicate":"occurred","provenance":{"contributorAccountId":null,"evidenceRefs":[{"relation":"supports","sourceId":"59617333-8ebe-568c-8d39-6c43cee92e1e","sourceVersion":1,"turnId":null}],"mode":"selfReport","speakerPersonId":null},"qualifiers":{"currentApplicability":"historical","place":{"category":null,"entityId":null,"label":"阳台"},"polarity":"positive","scenario":null,"strengthExpression":null,"superlativeAsserted":false,"validTime":{"end":null,"expression":null,"precision":"unknown","start":null}},"semantic":{"emotionEvidence":[],"entities":[{"confidence":1.0,"entityType":"place","evidenceMode":"ownerStated","name":"阳台"}],"eventTime":{"end":null,"precision":"unknown","start":null},"facets":["lifeEvent"],"narrative":"我先记录阳台薄荷的新叶数量。","primaryKind":"lifeEvent","title":"我先记录阳台薄荷的新叶数量"},"sourceTurnIndices":[45],"statement":"我先记录阳台薄荷的新叶数量。","summary":"我先记录阳台薄荷的新叶数量。","time":{"end":null,"precision":"unknown","start":null}},"changedFields":[{"after":"positive","before":"unknown","path":"qualifiers.polarity"}],"evidence":{"addedCount":1,"afterCount":2,"beforeCount":1,"candidateCount":1}},"operationIndex":0,"operationKind":"dispute","reason":"sameAssertionCannotSafelyMerge","targetMemoryId":"3eca59dd-73a2-4d85-a6de-c43bceb14d05","targetMemoryVersion":1,"targetMemoryVersionId":"adc2cf9e-3142-4ea1-ace0-f4c52157ba8e"}}"#.data(using: .utf8)!
+        let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let item = try v5CandidateDetailItemFromBackendFixture(fixture)
+        let controller = OwnerTruthCandidateDetailViewController(item: item)
+        controller.loadViewIfNeeded()
+        let text = allLabelText(in: controller.view)
+        XCTAssertEqual(button(in: controller.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled, true)
+        XCTAssertFalse(text.contains("unknown"))
+        XCTAssertFalse(text.contains("positive"))
+        XCTAssertTrue(text.contains("原记录未明确是否肯定这件事"))
+        XCTAssertTrue(text.contains("本次明确表示这件事成立"))
+    }
+
+    func testMemoryPresentationMissingTimeDoesNotInventNow() {
+        XCTAssertNil(OwnerTruthMemoryDisplay.timestamp(nil, prefix: "整理于"))
+    }
+
+    @MainActor
+    func testMemoryPresentationThemeDateIsOptionalAndCannotChangeCommand() throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let topic = UUID().uuidString.lowercased(), atom = UUID().uuidString.lowercased()
+        let source = UUID().uuidString.lowercased(), candidate = UUID().uuidString.lowercased()
+        let object: [String: Any] = ["schemaVersion": "owner-truth-live-theme-v1",
+            "topicId": topic, "version": 1, "proposalHash": String(repeating: "a", count: 64),
+            "ownerId": lease.subjectId, "vaultId": lease.vaultId, "state": "pending", "sourceId": source,
+            "theme": ["title": "窗边的小工作台", "summary": "我喜欢在窗边整理照片，每周六写手账。", "dimensions": ["experience"], "atomIds": [atom]],
+            "members": [atom: ["candidateId": candidate, "sourceId": source, "proposalHash": String(repeating: "c", count: 64)]],
+            "memberDetails": [atom: ["candidateId": candidate, "statement": "每周六在窗边写手账。", "kind": "experience"]]]
+        let base = try OwnerTruthLiveTheme(object: object, lease: lease)
+        for timestamp in ["2026-10-08T07:32:00Z", "2026-10-08T07:32:00.000Z", "invalid"] {
+            var datedObject = object; datedObject["sourceCreatedAt"] = timestamp
+            let dated = try OwnerTruthLiveTheme(object: datedObject, lease: lease)
+            XCTAssertEqual(dated.binding, base.binding)
+            XCTAssertEqual(NSDictionary(dictionary: dated.payload(commandID: "same", edits: [:])),
+                           NSDictionary(dictionary: base.payload(commandID: "same", edits: [:])))
+            XCTAssertEqual(dated.sourceCreatedAt != nil, timestamp != "invalid")
+            let controller = OwnerTruthLiveThemeDetailViewController(theme: dated, lease: lease,
+                client: CandidateReviewClientSpy(), runtime: runtime,
+                pending: OwnerTruthCandidateReviewTransientPendingResultStore())
+            controller.loadViewIfNeeded()
+            XCTAssertTrue(button(in: controller.view, identifier: "live-theme-confirm")!.isEnabled)
+            XCTAssertEqual(allLabelText(in: controller.view).contains("记录于"), timestamp != "invalid")
+            if timestamp.hasSuffix("00Z") { attachMemoryPresentation(controller, name: "pending-live-theme") }
+        }
+        XCTAssertNil(base.sourceCreatedAt)
+    }
+
+    @MainActor
+    private func attachMemoryPresentation(_ controller: UIViewController, name: String) {
+        controller.view.frame = CGRect(x: 0, y: 0, width: 393, height: 852)
+        controller.view.setNeedsLayout(); controller.view.layoutIfNeeded()
+        let image = UIGraphicsImageRenderer(size: controller.view.bounds.size).image { context in
+            controller.view.layer.render(in: context.cgContext)
+        }
+        let attachment = XCTAttachment(image: image)
+        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+    }
+
+    @MainActor
     func testV5CandidateDetailRendersBoundProposalAndFacetsThroughActualUIKitController() throws {
         let item = try v5CandidateDetailItem()
         let controller = OwnerTruthCandidateDetailViewController(item: item)
@@ -18282,11 +18625,17 @@ final class OwnerTruthContractsTests: XCTestCase {
         controller.loadViewIfNeeded()
 
         let renderedText = allLabelText(in: controller.view)
-        XCTAssertTrue(renderedText.contains("基于正式记忆第 9 次修订快照"))
+        XCTAssertFalse(renderedText.contains("基于正式记忆第 9 次修订快照"))
         XCTAssertTrue(renderedText.contains("确认后：我在 2016 年从 A 大学计算机专业毕业。"))
-        XCTAssertTrue(renderedText.contains("证据：1 → 2 条"))
-        XCTAssertTrue(renderedText.contains("外公（本人表达）"))
-        XCTAssertTrue(renderedText.contains("杭州（系统推断）"))
+        XCTAssertFalse(renderedText.contains("证据：1 → 2 条"))
+        XCTAssertTrue(renderedText.contains("外公"))
+        XCTAssertTrue(renderedText.contains("杭州"))
+        XCTAssertFalse(renderedText.contains("可信度"))
+        XCTAssertFalse(renderedText.contains("confidence"))
+        XCTAssertFalse(renderedText.contains("content.facets"))
+        XCTAssertTrue(renderedText.contains("2016 年"))
+        XCTAssertFalse(renderedText.contains("候选属性"))
+        XCTAssertFalse(renderedText.contains("来源依据"))
         XCTAssertFalse(renderedText.contains("proposal.baseMemoryRevision"))
         XCTAssertFalse(renderedText.contains("(afterText)"))
         XCTAssertFalse(renderedText.contains("当前版本暂不展示或编辑"))
@@ -18371,12 +18720,12 @@ final class OwnerTruthContractsTests: XCTestCase {
     func testV5CandidateDetailRendersAllEightOperationKindsWithTheirOwnSemantics() throws {
         let expected: [(String, String)] = [
             ("add", "目标：新建一条独立正式记忆"),
-            ("addEvidence", "目标：正式记忆第 2 版"),
-            ("refine", "目标：正式记忆第 2 版"),
-            ("temporalChange", "目标：正式记忆第 2 版"),
-            ("correct", "目标：正式记忆第 2 版"),
-            ("dispute", "目标：正式记忆第 2 版"),
-            ("duplicate", "识别为已有正式记忆，不新增版本"),
+            ("addEvidence", "目标：已有记忆"),
+            ("refine", "目标：已有记忆"),
+            ("temporalChange", "目标：已有记忆"),
+            ("correct", "目标：已有记忆"),
+            ("dispute", "目标：已有记忆"),
+            ("duplicate", "与已有记忆相同，不重复保存"),
             ("noPersonalFact", "确认后：不写入跨会话正式记忆"),
         ]
 
@@ -18487,8 +18836,8 @@ final class OwnerTruthContractsTests: XCTestCase {
 
         let rendered = allLabelText(in: controller.view)
         XCTAssertTrue(rendered.contains("字段变化：情绪内容｜确认前：平静｜确认后：安心"))
-        XCTAssertTrue(rendered.contains("字段变化：情绪证据方式｜确认前：inferred｜确认后：ownerStated"))
-        XCTAssertTrue(rendered.contains("字段变化：情绪可信度｜确认前：0.72｜确认后：1.0"))
+        XCTAssertFalse(rendered.contains("字段变化：情绪证据方式｜确认前：inferred｜确认后：ownerStated"))
+        XCTAssertFalse(rendered.contains("字段变化：情绪可信度｜确认前：0.72｜确认后：1.0"))
         XCTAssertEqual(
             button(in: controller.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled,
             true
@@ -19331,8 +19680,10 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(prompt.contains("不得把润色后的回答反向当作新事实"))
     }
 
+    @MainActor
     func testPersonMemoryProfileDecodesOneNarrativePerStableDimension() throws {
-        let vaultID = try XCTUnwrap(OwnerTruthVaultID("vault-person-profile"))
+        let (runtime, lease) = try makeActiveRuntime()
+        let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
         let experienceID = "00000000-0000-0000-0000-000000000101"
         let knowledgeID = "00000000-0000-0000-0000-000000000102"
         func dimension(
@@ -19472,6 +19823,24 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertEqual(profile.memoryModel.consolidatedMemoryCount, 2)
         XCTAssertEqual(profile.memoryModel.unresolvedConflictCount, 0)
         XCTAssertEqual(profile.memoryModel.biographyDocumentVersion, profile.lifeStory.documentVersion)
+        let client = LifecycleFormalMemoryReadClient(vaultID: vaultID.rawValue)
+        client.profileResultForPresentation = profile
+        let page = OwnerTruthPersonMemoryProfileViewController(accountLease: lease,
+            profileClient: client, formalMemoryClient: client, accountLeaseRuntime: runtime)
+        page.loadViewIfNeeded()
+        page.view.frame = CGRect(x: 0, y: 0, width: 393, height: 852)
+        page.view.layoutIfNeeded()
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+            page.view.setNeedsLayout()
+            page.view.layoutIfNeeded()
+            return self.allLabelText(in: page.view).contains("我的人生记录")
+        })
+        let displayed = allLabelText(in: page.view)
+        XCTAssertFalse(displayed.contains("版本"))
+        XCTAssertFalse(displayed.contains("基于 2 条"))
+        XCTAssertTrue(displayed.contains("更新于 2026年8月25日"))
+        XCTAssertFalse(page.navigationItem.rightBarButtonItems?.contains { $0.title == "记忆记录" } ?? false)
+        attachMemoryPresentation(page, name: "formal-life-story")
     }
 
     func testPersonMemoryProfileRejectsGroupedRowsMasqueradingAsNarrative() throws {
@@ -20939,7 +21308,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             ) as? UITextView
         ).text ?? ""
         XCTAssertTrue(previewText.contains(correctedText))
-        XCTAssertTrue(previewText.contains("基于正式记忆第 \(memoryRevision) 次修订快照"))
+        XCTAssertFalse(previewText.contains("基于正式记忆第 \(memoryRevision) 次修订快照"))
         attachUIKitEvidence(view: window, name: "T01-correction-preview-h1-not-h0")
 
         try XCTUnwrap(button(
@@ -21588,7 +21957,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 1) {
             navigationController.transitionCoordinator == nil
         })
-        XCTAssertTrue(firstDetail.renderedTextForUIQA.contains("基于正式记忆第 9 次修订快照"))
+        XCTAssertEqual(firstDetail.displayedBindingForUIQA?.baseMemoryRevision, 9)
         XCTAssertTrue(
             button(in: firstDetail.view, identifier: "owner-truth-candidate-detail-accept")?.isEnabled
                 == true
@@ -21616,7 +21985,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
         let secondRenderedText = secondDetail.renderedTextForUIQA
         XCTAssertTrue(secondRenderedText.contains("第二条合成审核事实"))
-        XCTAssertTrue(secondRenderedText.contains("基于正式记忆第 10 次修订快照"))
+        XCTAssertFalse(secondRenderedText.contains("基于正式记忆第 10 次修订快照"))
         XCTAssertFalse(secondRenderedText.contains("基于正式记忆第 9 次修订快照"))
         attachUIKitEvidence(
             view: window,
@@ -21794,7 +22163,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         let secondDetail = try XCTUnwrap(
             navigationController.topViewController as? OwnerTruthCandidateDetailViewController
         )
-        XCTAssertTrue(secondDetail.renderedTextForUIQA.contains("基于正式记忆第 10 次修订快照"))
+        XCTAssertEqual(secondDetail.displayedBindingForUIQA?.baseMemoryRevision, 10)
         policy = FeatureGatePolicySnapshot(
             accessMode: .useCachedPolicy,
             policyVersion: "candidate-write-visible-failure-v1",
@@ -41310,6 +41679,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             readUIDiagnosticSink: { uiEvents.append($0) }
         )
         profile.loadViewIfNeeded()
+        XCTAssertFalse(profile.navigationItem.rightBarButtonItems?.contains { $0.accessibilityIdentifier == "owner-truth-person-memory-details" } ?? false)
         let profileStatus = try XCTUnwrap(findView(
             in: profile.view,
             accessibilityIdentifier: "owner-truth-person-memory-profile-status"
@@ -43403,6 +43773,7 @@ private final class LifecycleFormalMemoryReadClient:
     private(set) var listCancellationCount = 0
     private(set) var detailRequestCount = 0
     private(set) var detailCancellationCount = 0
+    var profileResultForPresentation: OwnerTruthPersonMemoryProfile?
     private(set) var profileRequestCount = 0
     private(set) var profileCancellationCount = 0
     private var detailCompletions: [(OwnerTruthReadOutcome<OwnerTruthFormalMemoryDetail>) -> Void] = []
@@ -43465,6 +43836,9 @@ private final class LifecycleFormalMemoryReadClient:
         completion: @escaping (OwnerTruthReadOutcome<OwnerTruthPersonMemoryProfile>) -> Void
     ) -> OwnerTruthReadHandle {
         profileRequestCount += 1
+        if let profileResultForPresentation {
+            completion(OwnerTruthReadOutcome(readContext: readContext, result: .success(profileResultForPresentation)))
+        }
         return OwnerTruthReadHandle { [weak self] in self?.profileCancellationCount += 1 }
     }
 

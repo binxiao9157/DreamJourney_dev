@@ -157,7 +157,7 @@ final class OwnerTruthPersonMemoryProfileViewController: UIViewController {
         refreshButton.accessibilityLabel = "刷新人物记忆归纳"
         detailsButton.accessibilityIdentifier = "owner-truth-person-memory-details"
         detailsButton.accessibilityLabel = "查看逐条已确认记忆"
-        navigationItem.rightBarButtonItems = [refreshButton, detailsButton]
+        navigationItem.rightBarButtonItems = [refreshButton]
     }
 
     private func configureTable() {
@@ -415,17 +415,8 @@ private final class OwnerTruthLifeStoryOverviewCell: UITableViewCell {
         memoryCount: Int
     ) {
         titleLabel.text = title
-        let versionText = documentVersion.map { "版本 \($0.prefix(8))" } ?? ""
-        let sourceText = "基于 \(memoryCount) 条已确认记忆"
-        if let updatedAt {
-            metadataLabel.text = [versionText, sourceText, "更新于 \(updatedAt.formalMemoryDateText)"]
-                .filter { !$0.isEmpty }
-                .joined(separator: " · ")
-        } else {
-            metadataLabel.text = [versionText, sourceText]
-                .filter { !$0.isEmpty }
-                .joined(separator: " · ")
-        }
+        metadataLabel.text = OwnerTruthMemoryDisplay.timestamp(updatedAt, prefix: "更新于")
+        metadataLabel.isHidden = updatedAt == nil
         bodyLabel.attributedText = lifeStoryAttributedText(overview, fontSize: 18)
         accessibilityLabel = "\(title)，\(overview)"
     }

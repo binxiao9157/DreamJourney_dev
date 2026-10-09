@@ -17709,6 +17709,7 @@ extension EchoViewController: DialogEngineDelegate {
                 text,
                 reason: isFinal ? "dialogASRFinal" : "dialogASRPartial"
             )
+            DialogEngineManager.shared.observeLiveContextASR(text, isFinal: isFinal)
             guard isFinal else { return }
             self.cancelLiveUserInactivityTimeout()
             let acceptedUserTurn = self.viewModel.finishUserVoice(
@@ -17964,6 +17965,7 @@ extension EchoViewController: DialogEngineDelegate {
                 self.evaluateLiveSessionLimit()
                 if self.isLiveFarewellActive || !self.isUserControlledLiveSessionOpen { return }
                 self.armLiveUserInactivityTimeout(reason: "providerOwnedTTSFinished")
+                DialogEngineManager.shared.updateLiveContextAfterPlayback()
                 self.renderVoiceStatus(
                     text: "正在聆听",
                     isVisible: true,

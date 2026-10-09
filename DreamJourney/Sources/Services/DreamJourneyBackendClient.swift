@@ -766,7 +766,7 @@ final class FeatureGateService {
             }
         }
         if normalizedPath.hasPrefix("/digital-human/") { return .digitalHumanLivePanel }
-        if normalizedPath == "/voice/realtime-token" { return .echoTextInput }
+        if normalizedPath == "/voice/realtime-token" || normalizedPath == "/voice/realtime-context" { return .echoTextInput }
         if normalizedPath.hasPrefix("/voice/") || normalizedPath == "/tts" { return .voiceCloneShell }
         if normalizedPath.hasPrefix("/family/") { return .familyManagement }
         if normalizedPath.hasPrefix("/care/") { return .careDashboard }
@@ -3216,7 +3216,61 @@ struct DigitalHumanSessionContract {
     }
 }
 
+// A separate bounded read; never refreshes/logout or waits on the save queue.
+final class LiveContextReadControl: @unchecked Sendable {
+    private let lock = NSLock()
+    private let deadline = ProcessInfo.processInfo.systemUptime + 0.5
+    private var terminal = false
+    private var cancelTransport: (() -> Void)?
+    var isActive: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return !terminal && ProcessInfo.processInfo.systemUptime < deadline
+    }
+    func bindCancellation(_ action: @escaping () -> Void) {
+        lock.lock()
+        let active = !terminal && ProcessInfo.processInfo.systemUptime < deadline
+        if active { cancelTransport = action }
+        lock.unlock()
+        if !active { action() }
+    }
+    func finish() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard !terminal, ProcessInfo.processInfo.systemUptime < deadline else { return false }
+        terminal = true
+        cancelTransport = nil
+        return true
+    }
+    func cancel() {
+        lock.lock()
+        terminal = true
+        let action = cancelTransport
+        cancelTransport = nil
+        lock.unlock()
+        action?()
+    }
+}
+
+struct LiveContextUpdateGrant {
+    let sequence: Int
+    let previousHash: String
+    let hash: String
+    let envelope: String
+    let expiresAt: TimeInterval
+    init?(json: [String: Any]) {
+        guard json["version"] as? Int == 1,
+              let sequence = json["sequence"] as? Int, (1...128).contains(sequence),
+              let previous = json["previousHash"] as? String, previous.count == 71,
+              let hash = json["providerContextHash"] as? String, hash.count == 71,
+              let envelope = json["envelope"] as? String,
+              envelope.hasPrefix("DJ_CONTEXT_V1:"), envelope.utf8.count <= 20_000,
+              let expires = json["expiresAtUnix"] as? Double, expires > Date().timeIntervalSince1970 else { return nil }
+        self.sequence = sequence; previousHash = previous; self.hash = hash
+        self.envelope = envelope; expiresAt = expires
+    }
+}
+
 struct RealtimeVoiceRuntimeConfig {
+    let contextUpdateTicketID: String?
     let status: String
     let credentialMode: String
     let accessPath: String
@@ -3371,6 +3425,8 @@ struct RealtimeVoiceRuntimeConfig {
         self.speakingStyle = self.sessionContext?["speakingStyle"] as? String
         self.formalMemorySnapshot = self.sessionContext?["formalMemorySnapshot"] as? [String: Any]
         self.providerRoleText = self.sessionContext?["providerRoleText"] as? String
+        let update = json["contextUpdate"] as? [String: Any]
+        self.contextUpdateTicketID = update?["version"] as? Int == 1 ? update?["ticketId"] as? String : nil
     }
 
     private static func intValue(_ value: Any?) -> Int? {
@@ -8199,6 +8255,36 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         }
     }
 
+    @discardableResult
+    func fetchLiveContextUpdate(
+        request: LiveContextUpdateState.Request,
+        applicationLease: AccountLease,
+        completion: @escaping (Result<LiveContextUpdateGrant, Error>) -> Void
+    ) -> LiveContextReadControl {
+        let control = LiveContextReadControl()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { control.cancel() }
+        requestJSON(
+            path: "/voice/realtime-context", method: .post,
+            payload: ["userId": applicationLease.subjectId, "ticketId": request.ticketID,
+                      "query": request.query, "sequence": request.sequence,
+                      "previousHash": request.previousHash],
+            authPolicy: .userRequired, allowsRefresh: false, allowsRecoveryRefresh: false,
+            mutatesAuthenticatedSessionForRecoveryPolicy: false,
+            applicationLease: applicationLease, liveContextReadControl: control
+        ) { result in
+            DispatchQueue.main.async {
+                guard control.finish() else { return }
+                completion(result.flatMap { json in
+                    guard let grant = LiveContextUpdateGrant(json: json) else {
+                        return .failure(ClientError.invalidJSONResponse)
+                    }
+                    return .success(grant)
+                })
+            }
+        }
+        return control
+    }
+
     func fetchRealtimeVoiceConfig(
         userId: String,
         purpose: String = "echoLive",
@@ -8213,6 +8299,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             "userId": userId,
             "purpose": purpose,
             "personaScope": personaScope,
+            "supportsLiveContextUpdateV1": personaScope == "personal" && purpose == "echoLive",
         ]
         if let targetPersonaId,
            !targetPersonaId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -16624,9 +16711,11 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         liveAppendCommandForAuthenticationEvidence:
             OwnerTruthInterviewNaturalInputAppendCommand? = nil,
         liveVoiceLaunchAttempt: EchoVoiceLaunchAttempt? = nil,
+        liveContextReadControl: LiveContextReadControl? = nil,
         completion: @escaping (Result<[String: Any], Error>) -> Void
     ) {
-        guard liveVoiceLaunchAttempt?.isActive ?? true else { return }
+        guard liveVoiceLaunchAttempt?.isActive ?? true,
+              liveContextReadControl?.isActive ?? true else { return }
         diagnosticAttemptState?.record(diagnosticAttempt)
         if let diagnosticAttemptState, !diagnosticAttemptState.isActive {
             logRequestStage(
@@ -17035,7 +17124,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             )
         }
         // Only timezone metadata is supplied by the client; the backend owns the clock.
-        if path == "/voice/realtime-token" || path == "/echo/answers" {
+        if path == "/voice/realtime-token" || path == "/voice/realtime-context" || path == "/echo/answers" {
             baselineHeaders.add(name: "X-DreamJourney-Time-Zone", value: TimeZone.current.identifier)
         }
         var requestHeaders: HTTPHeaders? = baselineHeaders
@@ -17076,7 +17165,8 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             lifecycleProbe = nil
         }
         let dataRequest: DataRequest
-        guard liveVoiceLaunchAttempt?.isActive ?? true else { return }
+        guard liveVoiceLaunchAttempt?.isActive ?? true,
+              liveContextReadControl?.isActive ?? true else { return }
         if let bodyData {
             guard let rawURL = URL(string: url) else {
                 DispatchQueue.main.async {
@@ -17113,6 +17203,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             )
             liveVoiceLaunchAttempt?.bindTicketCancellation { dataRequest.cancel() }
         }
+        liveContextReadControl?.bindCancellation { dataRequest.cancel() }
         lifecycleProbe?.bind(to: dataRequest)
         let transportStartedAt = Date()
         dataRequest
@@ -17127,6 +17218,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             }
             .validate(statusCode: 200..<300)
             .responseData(queue: .global(qos: .utility)) { response in
+                guard liveContextReadControl?.isActive ?? true else { return }
                 if liveVoiceLaunchAttempt != nil {
                     if response.response != nil {
                         liveVoiceLaunchAttempt?.note(
@@ -17219,6 +17311,15 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                     }
                 case .failure(let error):
                     let statusCode = response.response?.statusCode
+                    if liveContextReadControl != nil {
+                        // Optional context reads cannot mutate login/recovery state.
+                        let context = Self.backendErrorContext(from: response.data, response: response.response)
+                            ?? .init(detail: "Live context unavailable")
+                        self.deliverRequestResult(.failure(ClientError.backendError(statusCode: statusCode, context: context)),
+                            accountLease: requestAccountLease, applicationLease: requestApplicationLease,
+                            completion: completion)
+                        return
+                    }
                     if let recoveryPolicy = Self.recoveryRuntimePolicy(from: response.data) {
                         DispatchQueue.main.async {
                             guard self.isCurrentAccountLease(

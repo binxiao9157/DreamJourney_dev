@@ -19063,6 +19063,7 @@ struct OwnerTruthCandidateInboxItemViewState: Equatable, Sendable, Identifiable 
     let supportsCorrection: Bool
     let supportsBatchAcceptance: Bool
     let supportsRelatedGroupReview: Bool
+    var createdAt: Date? = nil
 
     var reviewBinding: OwnerTruthCandidateReviewBinding? {
         guard let proposedChangeSet else { return nil }
@@ -22037,7 +22038,8 @@ final class OwnerTruthCandidateReviewUseCase {
                 supportsBatchAcceptance: Self.supportsBatchAcceptance(candidate),
                 supportsRelatedGroupReview: candidate.contentSchemaVersion == "owner-truth-v5"
                     && candidate.sensitivity == .standard
-                    && candidate.proposedChangeSet != nil
+                    && candidate.proposedChangeSet != nil,
+                createdAt: candidate.createdAt
             )
         }
     }
@@ -26659,6 +26661,7 @@ struct OwnerTruthLiveTheme: Equatable, Sendable {
     let dimensions: [String]
     let members: [Member]
     let linkedTopicID: String?
+    let sourceCreatedAt: Date?
     init(object: [String: Any], lease: AccountLease) throws {
         binding = try OwnerTruthLiveThemeBinding(object: object)
         guard object["schemaVersion"] as? String == "owner-truth-live-theme-v1",
@@ -26695,6 +26698,12 @@ struct OwnerTruthLiveTheme: Equatable, Sendable {
         }
         sourceID = source; self.title = title; self.summary = summary; dimensions = dims
         linkedTopicID = object["linkedTopicId"] as? String
+        // Optional display metadata is outside proposal identity and command payloads.
+        if let raw = object["sourceCreatedAt"] as? String {
+            let fractional = ISO8601DateFormatter()
+            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            sourceCreatedAt = fractional.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
+        } else { sourceCreatedAt = nil }
     }
     func payload(commandID: String, edits: [String: String], rejecting: Bool = false,
                  proposal: OwnerTruthMemoryChangeSetGroupProposal? = nil) -> [String: Any] {

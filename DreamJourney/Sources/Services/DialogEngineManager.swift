@@ -2,6 +2,95 @@ import Foundation
 import CryptoKit
 import zlib
 
+// S2: main-queue state only; does not own audio, capture or memory writes.
+struct LiveContextUpdateState {
+    struct Request: Equatable {
+        let id: UUID
+        let operation: UUID
+        let generation: Int
+        let ticketID: String
+        let sequence: Int
+        let previousHash: String
+        let query: String
+        let deadline: TimeInterval
+    }
+    private(set) var operation: UUID?
+    private(set) var ticketID: String?
+    private(set) var appliedHash = ""
+    private(set) var sequence = 1
+    private(set) var generation = 0
+    private(set) var disabled = false
+    private(set) var fetching: Request?
+    private(set) var awaitingACK: (request: Request, hash: String, deadline: TimeInterval)?
+    private var query: String?
+    private var attemptedGeneration = -1
+    private var requestCount = 0
+
+    mutating func begin(operation: UUID, ticketID: String?, hash: String?) {
+        self = Self()
+        self.operation = operation
+        self.ticketID = ticketID
+        self.appliedHash = hash ?? ""
+        self.disabled = ticketID == nil || hash == nil
+    }
+
+    mutating func end() { self = Self(); disabled = true }
+
+    mutating func observeASR(_ text: String, isFinal: Bool) {
+        guard !disabled, operation != nil, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isFinal, query == trimmed { return }
+        generation += 1
+        fetching = nil
+        query = isFinal && trimmed.count <= 512 ? trimmed : nil
+    }
+
+    mutating func afterPlaybackDrained(now: TimeInterval) -> Request? {
+        guard !disabled, fetching == nil, awaitingACK == nil,
+              let operation, let ticketID, let query,
+              attemptedGeneration != generation, requestCount < 128 else { return nil }
+        let request = Request(id: UUID(), operation: operation, generation: generation,
+                              ticketID: ticketID, sequence: sequence, previousHash: appliedHash,
+                              query: query, deadline: now + 0.5)
+        fetching = request
+        attemptedGeneration = generation
+        requestCount += 1
+        return request
+    }
+
+    mutating func prepareSend(_ request: Request, hash: String, now: TimeInterval) -> Bool {
+        guard !disabled, fetching == request, operation == request.operation,
+              generation == request.generation, now < request.deadline else { return false }
+        fetching = nil
+        awaitingACK = (request, hash, now + 1)
+        return true
+    }
+
+    mutating func readFailed(_ request: Request) {
+        if fetching == request { fetching = nil }
+    }
+
+    mutating func acknowledge(now: TimeInterval) -> Bool {
+        guard !disabled, let pending = awaitingACK else { return false }
+        guard now < pending.deadline else { disable(); return false }
+        appliedHash = pending.hash
+        sequence += 1
+        awaitingACK = nil
+        return true
+    }
+
+    mutating func expireACK(requestID: UUID, now: TimeInterval) {
+        if let pending = awaitingACK, pending.request.id == requestID, now >= pending.deadline { disable() }
+    }
+
+    mutating func disable() {
+        disabled = true
+        fetching = nil
+        awaitingACK = nil
+        query = nil
+    }
+}
+
 // Presentation metering only: never persists PCM, controls audio, or completes a turn.
 enum DialogOrbAudioChannel: Int { case input, output }
 struct DialogOrbAudioSample {
@@ -2786,6 +2875,9 @@ final class DialogEngineManager: NSObject {
     }
 
     @discardableResult
+    func observeLiveContextASR(_ text: String, isFinal: Bool) {}
+    func updateLiveContextAfterPlayback() {}
+
     func submitLiveFarewell(_ content: String, bindingHandle: DialogEngineBindingHandle?,
         completion: @escaping () -> Void) -> Bool {
         // The UI-only simulator has no provider. Native controlled-SDK tests
@@ -3039,6 +3131,8 @@ let SEDirectiveEventClientInterrupt = MICControlledSDKValue(rawValue: 3010)
 let SEDirectiveEventSayHello = MICControlledSDKValue(rawValue: 3006)
 let SEDirectivePauseRecorder = MICControlledSDKValue(rawValue: 1502)
 let SEDirectiveResumeRecorder = MICControlledSDKValue(rawValue: 1503)
+let SEDirectiveEventUpdateConfig = MICControlledSDKValue(rawValue: 3011)
+let SEEventConfigUpdated = MICControlledSDKValue(rawValue: 3022)
 let SEDirectiveStartEngine = MICControlledSDKValue(rawValue: 1000)
 let SEDirectiveSyncStopEngine = MICControlledSDKValue(rawValue: 2001)
 let SEEngineError = MICControlledSDKValue(rawValue: 1003)
@@ -3571,6 +3665,10 @@ final class DialogEngineManager: NSObject {
     private var runtimeSystemRole: String?
     private var runtimeSpeakingStyle: String?
     private var runtimeFormalMemorySnapshot: [String: Any]?
+    private var runtimeContextUpdateTicketID: String?
+    private var liveContextUpdates = LiveContextUpdateState()
+    private var liveContextReadControl: LiveContextReadControl?
+    private var liveContextClient = DreamJourneyBackendClient.shared
     private var runtimeProviderRoleText: String?
     private var runtimeProviderContextHash: String?
     private var runtimeProjectionCheckpoint: String?
@@ -3945,12 +4043,88 @@ final class DialogEngineManager: NSObject {
         runtimeFormalMemorySnapshot = runtimeConfig.formalMemorySnapshot
         runtimeProviderRoleText = runtimeConfig.providerRoleText
         runtimeProviderContextHash = runtimeConfig.providerContextHash
+        runtimeContextUpdateTicketID = runtimeConfig.contextUpdateTicketID
         runtimeProjectionCheckpoint = runtimeConfig.projectionCheckpoint
         runtimeMemoryRevision = runtimeConfig.memoryRevision
         runtimeProductSessionID = runtimeConfig.productSessionID
         recordLiveSnapshotDecoded(runtimeConfig)
         DDLogInfo("[DialogEngine] backend realtime proxy ticket applied")
         return true
+    }
+
+    func observeLiveContextASR(_ text: String, isFinal: Bool) {
+        guard isProviderOwnedLive, isDialogActive, !isEnding else { return }
+        let before = liveContextUpdates.fetching?.id
+        liveContextUpdates.observeASR(text, isFinal: isFinal)
+        if before != liveContextUpdates.fetching?.id {
+            liveContextReadControl?.cancel()
+            liveContextReadControl = nil
+        }
+    }
+
+    /// Called only after Echo accepted actual player completion and elected to keep listening.
+    func updateLiveContextAfterPlayback() {
+        guard isProviderOwnedLive, isDialogActive, !isEnding, !isAISpeaking,
+              liveFarewellRequest == nil,
+              let operation = activeDialogOperationId,
+              let lease = activeDialogAccountLease,
+              accountLeaseRuntime.validate(lease, at: .request).allowed,
+              let request = liveContextUpdates.afterPlaybackDrained(now: ProcessInfo.processInfo.systemUptime),
+              request.operation == operation else { return }
+        recordNativeLiveDiagnostic(event: "contextUpdateRead", reason: "playbackDrained")
+        liveContextReadControl = liveContextClient.fetchLiveContextUpdate(
+            request: request, applicationLease: lease
+        ) { [weak self] result in
+            guard let self, self.activeDialogOperationId == operation,
+                  self.activeDialogAccountLease == lease,
+                  self.accountLeaseRuntime.validate(lease, at: .runtime).allowed,
+                  self.isDialogActive, !self.isEnding, !self.isAISpeaking,
+                  self.liveFarewellRequest == nil else { return }
+            switch result {
+            case .failure:
+                self.liveContextUpdates.readFailed(request)
+                self.recordNativeLiveDiagnostic(event: "contextUpdateSkipped", reason: "readUnavailable")
+            case .success(let grant):
+                guard grant.sequence == request.sequence, grant.previousHash == request.previousHash,
+                      grant.expiresAt > Date().timeIntervalSince1970,
+                      let engine = self.engine,
+                      let data = try? JSONSerialization.data(withJSONObject: ["dialog": ["system_role": grant.envelope]]),
+                      let json = String(data: data, encoding: .utf8),
+                      self.liveContextUpdates.prepareSend(request, hash: grant.hash,
+                          now: ProcessInfo.processInfo.systemUptime) else { return }
+                let code = engine.send(SEDirectiveEventUpdateConfig, data: json)
+                guard code == SENoError else {
+                    self.liveContextUpdates.disable()
+                    self.recordNativeLiveDiagnostic(event: "contextUpdateSkipped", reason: "sdkRejected")
+                    return
+                }
+                self.recordNativeLiveDiagnostic(event: "contextUpdateSubmitted", reason: "authorizedGrant")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                    guard let self, self.activeDialogOperationId == operation else { return }
+                    self.liveContextUpdates.expireACK(requestID: request.id, now: ProcessInfo.processInfo.systemUptime)
+                    if self.liveContextUpdates.disabled {
+                        self.recordNativeLiveDiagnostic(event: "contextUpdateSkipped", reason: "ackDeadline")
+                    }
+                }
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, self.activeDialogOperationId == operation else { return }
+            self.liveContextUpdates.readFailed(request)
+        }
+    }
+
+    #if LIVE_MANAGER_CONTROLLED_SDK
+    func setLiveContextClientForTesting(_ client: DreamJourneyBackendClient?) {
+        liveContextClient = client ?? .shared
+    }
+    var liveContextStateForTesting: LiveContextUpdateState { liveContextUpdates }
+    #endif
+
+    private func resetLiveContextUpdates() {
+        liveContextReadControl?.cancel()
+        liveContextReadControl = nil
+        liveContextUpdates.end()
     }
 
     /// 客户端主动打断 AI 回复（仅在 AI 正在播报时生效）
@@ -4114,6 +4288,7 @@ final class DialogEngineManager: NSObject {
             isDialogActive = false
             activeDialogAccountLease = nil
             activeDialogBindingHandle = nil
+            resetLiveContextUpdates()
             activeDialogOperationId = nil
             voiceLaunchControl.invalidate()
             providerSessionOperationId = nil
@@ -4131,6 +4306,8 @@ final class DialogEngineManager: NSObject {
         activeDialogAccountLease = accountLease
         activeDialogBindingHandle = bindingHandle
         activeDialogOperationId = dialogOperationId
+        resetLiveContextUpdates()
+        liveContextUpdates.begin(operation: dialogOperationId, ticketID: runtimeContextUpdateTicketID, hash: runtimeProviderContextHash)
         pendingVoiceLaunchID = voiceLaunchID
         voiceLaunchControl.begin(
             operationID: dialogOperationId,
@@ -4237,6 +4414,7 @@ final class DialogEngineManager: NSObject {
         pendingVoiceStartSubmitted = false
         activeDialogAccountLease = nil
         activeDialogBindingHandle = nil
+        resetLiveContextUpdates()
         activeDialogOperationId = nil
         voiceLaunchControl.invalidate()
         providerSessionOperationId = nil
@@ -4356,6 +4534,7 @@ final class DialogEngineManager: NSObject {
         isEnding = false
         activeDialogAccountLease = nil
         activeDialogBindingHandle = nil
+        resetLiveContextUpdates()
         activeDialogOperationId = nil
         voiceLaunchControl.invalidate()
         providerSessionOperationId = nil
@@ -4887,6 +5066,7 @@ final class DialogEngineManager: NSObject {
         liveStartDirectiveReturnCode = nil
         liveFirstResponseObserved = false
         activeDialogBindingHandle = nil
+        resetLiveContextUpdates()
         activeDialogOperationId = nil
         voiceLaunchControl.invalidate()
         providerSessionOperationId = nil
@@ -6138,6 +6318,7 @@ extension DialogEngineManager {
         providerInterruptionState.clearAudibleReply()
         activeDialogAccountLease = nil
         activeDialogBindingHandle = nil
+        resetLiveContextUpdates()
         activeDialogOperationId = nil
         voiceLaunchControl.invalidate()
         providerSessionOperationId = nil
@@ -6158,6 +6339,13 @@ extension DialogEngineManager {
                 "type=\(type.rawValue) generation=\(engineGeneration.uuidString)"
             )
             return
+        }
+        // Fence a pending read at accepted SDK ingress, before the UI delegate is queued.
+        if type == SEEventASRInfo || type == SEEventASRResponse || type == SEEventChatTextQueryConfirmed,
+           let request = liveContextUpdates.fetching {
+            liveContextReadControl?.cancel()
+            liveContextReadControl = nil
+            liveContextUpdates.readFailed(request)
         }
         providerCallbackOrdinal = max(providerCallbackOrdinal &+ 1, frozen.callbackOrdinal)
         let callbackOrdinal = providerCallbackOrdinal
@@ -6761,6 +6949,11 @@ extension DialogEngineManager {
                 }
             }
 
+        case SEEventConfigUpdated:
+            if liveContextUpdates.acknowledge(now: ProcessInfo.processInfo.systemUptime) {
+                recordNativeLiveDiagnostic(event: "contextUpdateAcknowledged", reason: "currentOperation")
+            }
+
         case SEEventTTSResponse:
             break
 
@@ -7113,6 +7306,7 @@ extension DialogEngineManager {
         isEnding = false
         activeDialogAccountLease = nil
         activeDialogBindingHandle = nil
+        resetLiveContextUpdates()
         activeDialogOperationId = nil
         providerSessionOperationId = nil
         requiresEngineRecreationBeforeNextDialog = true
