@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 // MARK: - 回忆模型
 struct MemoryModel: Codable, Identifiable {
@@ -80,11 +81,30 @@ struct CommentModel: Codable, Identifiable {
     }
 }
 
+// Bounded private profile thumbnail; never used as memory or conversation input.
+struct ProfileAvatar: Codable, Equatable {
+    let mimeType: String
+    let imageBase64: String
+    let sha256: String
+    let width: Int
+    let height: Int
+
+    var jpegData: Data? {
+        guard mimeType == "image/jpeg", width == 256, height == 256,
+              imageBase64.utf8.count <= 174_764,
+              let data = Data(base64Encoded: imageBase64), !data.isEmpty, data.count <= 131_072,
+              data.starts(with: [0xff, 0xd8]),
+              SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == sha256 else { return nil }
+        return data
+    }
+}
+
 // MARK: - 用户模型
 struct UserModel: Codable {
     var id: String
     var nickname: String
     var phone: String           // 明文手机号（本地存储）
+    var avatar: ProfileAvatar? = nil
     var avatarName: String?     // 系统 SF Symbol 名称作为头像占位
     var gender: String?
     var region: String?

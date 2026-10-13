@@ -30,6 +30,8 @@ final class UserManager {
     private var syntheticPrivateUserId: String?
     #endif
 
+    private var avatarOperationID = UUID()
+    private var avatarUploadSessionID: String?
     private var storedCurrentUser: UserModel?
     private var privateAccessState: PrivateAccessState = .signedOut
     var currentUser: UserModel? {
@@ -371,6 +373,92 @@ final class UserManager {
                 completion(.savedWithRemoteWarning(error.localizedDescription))
             }
         }
+    }
+
+    // Avatar is server-confirmed and independent of the locally saved profile form.
+    func refreshAvatar(completion: @escaping () -> Void = {}) {
+        guard canEnterPrivateUI, let user = currentUser,
+              let session = BackendAuthSessionStore.shared.currentSession,
+              session.isPrivateAccessEligible(for: user.id) else { completion(); return }
+        accountStateLock.lock()
+        guard avatarUploadSessionID != session.sessionId else { accountStateLock.unlock(); completion(); return }
+        let operation = UUID(); avatarOperationID = operation
+        accountStateLock.unlock()
+        DreamJourneyBackendClient.shared.readAvatarProfile(userId: user.id, session: session) { result in
+            if case .success(let json) = result,
+               let profile = json["profile"] as? [String: Any], profile["userId"] as? String == user.id {
+                self.applyAvatarProfile(profile, userID: user.id, sessionID: session.sessionId, operation: operation)
+            }
+            completion()
+        }
+    }
+
+    func saveAvatar(jpeg: Data, expectedUserID: String, expectedSessionID: String,
+                    completion: @escaping (UserProfileSaveResult) -> Void) {
+        guard jpeg.count <= 131_072, !jpeg.isEmpty, canEnterPrivateUI,
+              currentUser?.id == expectedUserID,
+              let session = BackendAuthSessionStore.shared.currentSession,
+              session.sessionId == expectedSessionID,
+              session.isPrivateAccessEligible(for: expectedUserID) else {
+            completion(.failed("账号状态已变化，请重新选择头像")); return
+        }
+        accountStateLock.lock()
+        guard avatarUploadSessionID != expectedSessionID else {
+            accountStateLock.unlock(); completion(.failed("头像正在保存，请稍候")); return
+        }
+        let operation = UUID(); avatarOperationID = operation; avatarUploadSessionID = expectedSessionID
+        accountStateLock.unlock()
+        DreamJourneyBackendClient.shared.uploadProfileAvatar(userId: expectedUserID, jpeg: jpeg, session: session) { result in
+            self.accountStateLock.lock()
+            if self.avatarOperationID == operation { self.avatarUploadSessionID = nil }
+            self.accountStateLock.unlock()
+            switch result {
+            case .success(let json):
+                guard let profile = json["profile"] as? [String: Any],
+                      profile["avatar"] != nil,
+                      self.applyAvatarProfile(profile, userID: expectedUserID, sessionID: expectedSessionID, operation: operation) else {
+                    completion(.failed("头像保存结果尚未核实，请重新进入页面查看")); return
+                }
+                completion(.saved)
+            case .failure(let error):
+                let message: String
+                switch error {
+                case DreamJourneyBackendClient.ClientError.featurePolicyDenied(_, _):
+                    message = "暂时无法保存头像，请稍后重试"
+                case DreamJourneyBackendClient.ClientError.accountScopeChanged:
+                    message = "账号状态已变化，请重新进入资料页"
+                case is URLError:
+                    message = "头像未保存成功，请检查网络后重试"
+                default:
+                    message = "头像未保存成功，请稍后重试"
+                }
+                completion(.failed(message))
+            }
+        }
+    }
+
+    @discardableResult
+    private func applyAvatarProfile(_ profile: [String: Any], userID: String, sessionID: String, operation: UUID) -> Bool {
+        var avatar: ProfileAvatar?
+        if let object = profile["avatar"] {
+            guard let bytes = try? JSONSerialization.data(withJSONObject: object),
+                  let parsed = try? JSONDecoder().decode(ProfileAvatar.self, from: bytes),
+                  parsed.jpegData != nil else { return false }
+            avatar = parsed
+        }
+        accountStateLock.lock()
+        guard avatarOperationID == operation, profile["userId"] as? String == userID,
+              var user = storedCurrentUser, user.id == userID,
+              privateAccessState == .authenticated,
+              BackendAuthSessionStore.shared.currentSession?.sessionId == sessionID else {
+            accountStateLock.unlock(); return false
+        }
+        user.avatar = avatar
+        guard saveToDefaultsLocked(user: user) else { accountStateLock.unlock(); return false }
+        storedCurrentUser = user
+        accountStateLock.unlock()
+        NotificationCenter.default.post(name: .djUserDidUpdate, object: nil)
+        return true
     }
 
     private func normalizedProfileField(_ value: String?) -> String? {

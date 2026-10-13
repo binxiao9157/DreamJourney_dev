@@ -770,6 +770,7 @@ final class ProfileViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: animated)
+        UserManager.shared.refreshAvatar()
         restoreFormalMemoryMarkdownExportStatus()
         updateFormalMemoryMarkdownExportRow()
         rebuildContent()
@@ -860,7 +861,10 @@ final class ProfileViewController: UIViewController {
         }
     }
 
+    @objc private func profileAvatarDidChange() { rebuildContent() }
+
     private func observeDigitalHumanContext() {
+        NotificationCenter.default.addObserver(self, selector: #selector(profileAvatarDidChange), name: .djUserDidUpdate, object: nil)
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(digitalHumanContextDidChange(_:)),
@@ -1031,6 +1035,13 @@ final class ProfileViewController: UIViewController {
         avatarImageView.image = UIImage(systemName: "face.smiling", withConfiguration: avatarConfig)
         avatarImageView.tintColor = DJDesignTokens.Color.accentDeep
         avatarImageView.contentMode = .scaleAspectFit
+        if context.isSelfAssistant, let data = UserManager.shared.currentUser?.avatar?.jpegData,
+           let image = UIImage(data: data) {
+            avatarImageView.image = image
+            avatarImageView.contentMode = .scaleAspectFill
+            avatarImageView.layer.cornerRadius = ProfileLayout.personaAvatarSize / 2 - 2
+            avatarImageView.clipsToBounds = true
+        }
 
         let statusDot = UIView()
         statusDot.backgroundColor = personaStatusColor(context: context)
@@ -1082,8 +1093,8 @@ final class ProfileViewController: UIViewController {
 
             avatarImageView.centerXAnchor.constraint(equalTo: avatarContainer.centerXAnchor),
             avatarImageView.centerYAnchor.constraint(equalTo: avatarContainer.centerYAnchor),
-            avatarImageView.widthAnchor.constraint(equalToConstant: ProfileLayout.personaAvatarIconSize + 2),
-            avatarImageView.heightAnchor.constraint(equalToConstant: ProfileLayout.personaAvatarIconSize + 2),
+            avatarImageView.widthAnchor.constraint(equalToConstant: context.isSelfAssistant && UserManager.shared.currentUser?.avatar?.jpegData != nil ? ProfileLayout.personaAvatarSize - 4 : ProfileLayout.personaAvatarIconSize + 2),
+            avatarImageView.heightAnchor.constraint(equalToConstant: context.isSelfAssistant && UserManager.shared.currentUser?.avatar?.jpegData != nil ? ProfileLayout.personaAvatarSize - 4 : ProfileLayout.personaAvatarIconSize + 2),
 
             statusDot.trailingAnchor.constraint(equalTo: avatarContainer.trailingAnchor, constant: -2),
             statusDot.bottomAnchor.constraint(equalTo: avatarContainer.bottomAnchor, constant: -2),

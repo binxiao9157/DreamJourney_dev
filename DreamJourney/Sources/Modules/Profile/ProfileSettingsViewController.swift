@@ -1,4 +1,7 @@
 import UIKit
+import PhotosUI
+import ImageIO
+import UniformTypeIdentifiers
 
 final class ProfileSettingsViewController: UIViewController {
 
@@ -23,6 +26,13 @@ final class ProfileSettingsViewController: UIViewController {
     private let regionField = UITextField()
     private let phoneValueLabel = UILabel()
     private let statusLabel = UILabel()
+    private let avatarImageView = UIImageView()
+    private let avatarStatusLabel = UILabel()
+    private var selectedAvatarJPEG: Data?
+    private var avatarSelectionID = UUID()
+    private var avatarSelectionOwner: (userID: String, sessionID: String)?
+    private var avatarBusy = false
+    private var profileSaving = false
     private let avatarEditButton = UIButton(type: .system)
     private let saveButton = UIButton(type: .system)
     private lazy var securityCard = makeSecurityCard()
@@ -66,6 +76,7 @@ final class ProfileSettingsViewController: UIViewController {
             .font: DJDesignTokens.Font.title(18),
         ]
         loadPasswordAuthenticationCapability()
+        UserManager.shared.refreshAvatar { [weak self] in self?.renderAvatar() }
     }
 
     private func configureScrollView() {
@@ -137,7 +148,6 @@ final class ProfileSettingsViewController: UIViewController {
         avatarContainer.layer.borderWidth = 1
         avatarContainer.layer.borderColor = DJDesignTokens.Color.divider.cgColor
 
-        let avatarImageView = UIImageView()
         let avatarConfig = UIImage.SymbolConfiguration(pointSize: 34, weight: .light)
         avatarImageView.image = UIImage(systemName: UserManager.shared.currentUser?.avatarName ?? "person.circle.fill", withConfiguration: avatarConfig)
         avatarImageView.tintColor = DJDesignTokens.Color.accentDeep
@@ -148,20 +158,21 @@ final class ProfileSettingsViewController: UIViewController {
             font: DJDesignTokens.Font.title(17),
             color: DJDesignTokens.Color.textPrimary
         )
-        let subtitleLabel = makeLabel(
-            text: "当前版本仅展示系统头像，暂不开放相册选择。",
-            font: DJDesignTokens.Font.body(13),
-            color: DJDesignTokens.Color.textSecondary
-        )
-
-        avatarEditButton.setTitle("头像上传暂未开放", for: .normal)
+        avatarEditButton.setTitle("从相册选择", for: .normal)
         avatarEditButton.titleLabel?.font = DJDesignTokens.Font.label(13)
         avatarEditButton.setTitleColor(DJDesignTokens.Color.accentDeep, for: .normal)
         avatarEditButton.contentHorizontalAlignment = .left
-        avatarEditButton.accessibilityIdentifier = "profile-settings-avatar-placeholder"
-        avatarEditButton.addTarget(self, action: #selector(showAvatarPlaceholder), for: .touchUpInside)
+        avatarEditButton.accessibilityIdentifier = "profile-settings-avatar-picker"
+        avatarEditButton.addTarget(self, action: #selector(selectAvatar), for: .touchUpInside)
 
-        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel, avatarEditButton])
+        avatarImageView.clipsToBounds = true
+        avatarImageView.layer.cornerRadius = 28
+        avatarImageView.accessibilityIdentifier = "profile-settings-avatar-image"
+        avatarStatusLabel.font = DJDesignTokens.Font.body(13)
+        avatarStatusLabel.textColor = DJDesignTokens.Color.textSecondary
+        avatarStatusLabel.numberOfLines = 0
+        avatarStatusLabel.accessibilityIdentifier = "profile-settings-avatar-status"
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, avatarEditButton, avatarStatusLabel])
         textStack.axis = .vertical
         textStack.spacing = 6
 
@@ -187,8 +198,8 @@ final class ProfileSettingsViewController: UIViewController {
 
             avatarImageView.centerXAnchor.constraint(equalTo: avatarContainer.centerXAnchor),
             avatarImageView.centerYAnchor.constraint(equalTo: avatarContainer.centerYAnchor),
-            avatarImageView.widthAnchor.constraint(equalToConstant: 38),
-            avatarImageView.heightAnchor.constraint(equalToConstant: 38),
+            avatarImageView.widthAnchor.constraint(equalToConstant: 56),
+            avatarImageView.heightAnchor.constraint(equalToConstant: 56),
         ])
 
         return card
@@ -378,29 +389,83 @@ final class ProfileSettingsViewController: UIViewController {
         genderField.text = user?.gender ?? ""
         regionField.text = user?.region ?? ""
         phoneValueLabel.text = user?.maskedPhone ?? "未登录"
+        renderAvatar()
     }
 
     @objc private func saveTapped() {
+        guard !profileSaving, !avatarBusy else { return }
         [nameField, genderField, regionField].forEach { $0.resignFirstResponder() }
-
         switch validateProfile(name: nameField.text, gender: genderField.text, region: regionField.text) {
         case .valid(let name, let gender, let region):
-            renderSaveState(.saving)
-            UserManager.shared.saveProfile(nickname: name, gender: gender, region: region) { [weak self] result in
-                guard let self else { return }
-                self.loadUser()
-                switch result {
-                case .saved:
-                    self.renderSaveState(.saved)
-                case .savedWithRemoteWarning:
-                    self.renderSaveState(.networkUnavailable)
-                case .failed(let message):
-                    self.renderSaveState(.failed(message))
+            guard let user = UserManager.shared.currentUser,
+                  let session = BackendAuthSessionStore.shared.currentSession,
+                  session.isPrivateAccessEligible(for: user.id) else {
+                renderSaveState(.failed("请先登录后再保存")); return
+            }
+            let userID = user.id
+            let sessionID = session.sessionId
+            let jpeg = selectedAvatarJPEG
+            if jpeg != nil {
+                guard avatarSelectionOwner?.userID == userID,
+                      avatarSelectionOwner?.sessionID == sessionID else {
+                    cancelAvatarSelection()
+                    renderSaveState(.failed("账号状态已变化，请重新选择头像")); return
                 }
+            }
+            profileSaving = true
+            renderSaveState(.saving)
+            // Retain this authorized save until it settles, even if the page is popped.
+            let saveFields: () -> Void = { [self] in
+                guard UserManager.shared.currentUser?.id == userID,
+                      BackendAuthSessionStore.shared.currentSession?.sessionId == sessionID else {
+                    finishProfileSave(.failed("账号状态已变化，请重新进入资料页")); return
+                }
+                UserManager.shared.saveProfile(nickname: name, gender: gender, region: region) { [self] result in
+                    guard UserManager.shared.currentUser?.id == userID,
+                          BackendAuthSessionStore.shared.currentSession?.sessionId == sessionID else {
+                        finishProfileSave(.failed("账号状态已变化，请重新进入资料页")); return
+                    }
+                    switch result {
+                    case .saved:
+                        loadUser()
+                        finishProfileSave(.saved)
+                    case .savedWithRemoteWarning:
+                        if jpeg != nil {
+                            finishProfileSave(.failed("头像已保存，其他资料尚未同步，请再次点击保存"))
+                        } else {
+                            finishProfileSave(.networkUnavailable)
+                        }
+                    case .failed(let message):
+                        finishProfileSave(.failed(jpeg != nil ? "头像已保存，其他资料未保存：\(message)" : message))
+                    }
+                }
+            }
+            if let jpeg {
+                UserManager.shared.saveAvatar(jpeg: jpeg, expectedUserID: userID, expectedSessionID: sessionID) { [self] result in
+                    switch result {
+                    case .saved:
+                        selectedAvatarJPEG = nil
+                        avatarSelectionOwner = nil
+                        avatarStatusLabel.text = nil
+                        renderAvatar()
+                        saveFields()
+                    case .failed(let message):
+                        finishProfileSave(.failed(message))
+                    case .savedWithRemoteWarning:
+                        finishProfileSave(.failed("头像未保存成功，请重试"))
+                    }
+                }
+            } else {
+                saveFields()
             }
         case .invalid(let message):
             renderSaveState(.invalid(message))
         }
+    }
+
+    private func finishProfileSave(_ state: ProfileSaveState) {
+        profileSaving = false
+        renderSaveState(state)
     }
 
     private func validateProfile(name rawName: String?, gender rawGender: String?, region rawRegion: String?) -> AccountProfileValidationResult {
@@ -429,7 +494,9 @@ final class ProfileSettingsViewController: UIViewController {
     }
 
     private func renderSaveState(_ state: ProfileSaveState) {
-        saveButton.isEnabled = true
+        saveButton.isEnabled = !profileSaving && !avatarBusy
+        [nameField, genderField, regionField].forEach { $0.isEnabled = !profileSaving }
+        renderAvatar()
         saveButton.alpha = 1
         saveButton.setTitle("保存", for: .normal)
 
@@ -467,14 +534,58 @@ final class ProfileSettingsViewController: UIViewController {
         renderSaveState(.idle)
     }
 
-    @objc private func showAvatarPlaceholder() {
-        let alert = UIAlertController(
-            title: "头像上传暂未开放",
-            message: "当前版本仅展示系统头像，暂不开放相册选择。",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "知道了", style: .default))
-        present(alert, animated: true)
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isMovingFromParent || isBeingDismissed {
+            if !profileSaving {
+                avatarSelectionID = UUID()
+                selectedAvatarJPEG = nil
+                avatarSelectionOwner = nil
+            }
+        }
+    }
+
+    private func renderAvatar() {
+        if let owner = avatarSelectionOwner,
+           UserManager.shared.currentUser?.id != owner.userID || BackendAuthSessionStore.shared.currentSession?.sessionId != owner.sessionID {
+            avatarSelectionID = UUID(); selectedAvatarJPEG = nil; avatarSelectionOwner = nil; avatarBusy = false
+        }
+        let data = selectedAvatarJPEG ?? UserManager.shared.currentUser?.avatar?.jpegData
+        if let data, let image = UIImage(data: data) {
+            avatarImageView.image = image
+            avatarImageView.contentMode = .scaleAspectFill
+        } else {
+            avatarImageView.image = UIImage(systemName: UserManager.shared.currentUser?.avatarName ?? "person.circle.fill")
+            avatarImageView.contentMode = .scaleAspectFit
+        }
+        avatarEditButton.isEnabled = !avatarBusy && !profileSaving
+        saveButton.isEnabled = !avatarBusy && !profileSaving
+        avatarStatusLabel.isHidden = avatarStatusLabel.text?.isEmpty ?? true
+    }
+
+    @objc private func selectAvatar() {
+        guard let user = UserManager.shared.currentUser,
+              let session = BackendAuthSessionStore.shared.currentSession,
+              session.isPrivateAccessEligible(for: user.id), !avatarBusy, !profileSaving else { return }
+        avatarSelectionOwner = (user.id, session.sessionId)
+        avatarSelectionID = UUID()
+        avatarStatusLabel.text = nil
+        renderAvatar()
+        var config = PHPickerConfiguration()
+        config.filter = .images
+        config.selectionLimit = 1
+        config.preferredAssetRepresentationMode = .current
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+
+    private func cancelAvatarSelection() {
+        avatarSelectionID = UUID()
+        selectedAvatarJPEG = nil
+        avatarSelectionOwner = nil
+        avatarStatusLabel.text = nil
+        renderAvatar()
     }
 
     @objc private func passwordChangeTapped() {
@@ -523,5 +634,62 @@ extension ProfileSettingsViewController: UITextFieldDelegate {
             return false
         }
         return true
+    }
+}
+
+
+extension ProfileSettingsViewController: PHPickerViewControllerDelegate {
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+        guard let provider = results.first?.itemProvider else { return }
+        let selection = avatarSelectionID
+        avatarBusy = true; avatarStatusLabel.text = "正在读取照片…"; renderAvatar()
+        provider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { [weak self] url, _ in
+            let jpeg = url.flatMap { try? ProfileAvatarImageProcessor.jpeg(from: $0) }
+            DispatchQueue.main.async {
+                guard let self, self.avatarSelectionID == selection else { return }
+                self.avatarBusy = false
+                guard let owner = self.avatarSelectionOwner,
+                      UserManager.shared.currentUser?.id == owner.userID,
+                      BackendAuthSessionStore.shared.currentSession?.sessionId == owner.sessionID else {
+                    self.cancelAvatarSelection(); return
+                }
+                if let jpeg {
+                    self.selectedAvatarJPEG = jpeg
+                    self.avatarStatusLabel.text = nil
+                    self.renderSaveState(.idle)
+                } else {
+                    self.avatarStatusLabel.text = "照片读取失败，请选择30MB以内的静态照片后重试"
+                }
+                self.renderAvatar()
+            }
+        }
+    }
+}
+
+enum ProfileAvatarImageProcessor {
+    enum Failure: Error { case invalidImage }
+    static func jpeg(from url: URL) throws -> Data {
+        let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        guard size > 0, size <= 30 * 1024 * 1024,
+              let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
+              CGImageSourceGetCount(source) == 1,
+              let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 1024,
+                kCGImageSourceShouldCacheImmediately: true,
+              ] as CFDictionary) else { throw Failure.invalidImage }
+        let image = UIImage(cgImage: cg)
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 256, height: 256), format: format)
+        let square = renderer.image { context in
+            UIColor.white.setFill(); context.fill(CGRect(x: 0, y: 0, width: 256, height: 256))
+            let scale = max(256 / image.size.width, 256 / image.size.height)
+            let width = image.size.width * scale, height = image.size.height * scale
+            image.draw(in: CGRect(x: (256 - width) / 2, y: (256 - height) / 2, width: width, height: height))
+        }
+        guard let jpeg = square.jpegData(compressionQuality: 0.85), jpeg.count <= 131_072 else { throw Failure.invalidImage }
+        return jpeg
     }
 }

@@ -14062,6 +14062,86 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         authSessionStore.clear(ifCurrentMatches: session)
     }
 
+    func readAvatarProfile(userId: String, session: BackendAuthSessionContract,
+                           completion: @escaping (Result<[String: Any], Error>) -> Void) {
+        requestJSON(path: "/profile/\(userId)", method: .get, payload: nil,
+                    authPolicy: .userRequired, requiredAuthSession: session, completion: completion)
+    }
+
+    /// A new profile save intent must not inherit an expired page-route decision.
+    /// Recovery is scoped here, before transport; business POSTs are never replayed.
+    private func performProfileWrite(
+        payload: [String: Any], session: BackendAuthSessionContract,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        let traceID = "profile-write-" + UUID().uuidString.lowercased()
+        guard canEnterPrivateUI, currentUserID == session.userId,
+              currentAuthenticatedSession?.matchesCASIdentity(session) == true,
+              let lease = accountLeaseRuntime.capture(forSubjectId: session.userId),
+              accountLeaseRuntime.validate(lease, at: .request).allowed else {
+            completion(.failure(ClientError.accountScopeChanged)); return
+        }
+        let stillCurrent: () -> Bool = {
+            self.canEnterPrivateUI && self.currentUserID == session.userId
+                && self.currentAuthenticatedSession?.sessionId == session.sessionId
+                && self.accountLeaseRuntime.validate(lease, at: .request).allowed
+        }
+        let submit: () -> Void = {
+            guard stillCurrent(), let currentSession = self.currentAuthenticatedSession else {
+                completion(.failure(ClientError.accountScopeChanged)); return
+            }
+            let decision = self.freshRequestFeatureDecision(for: .profileSettings)
+            guard decision.allowed else {
+                self.logRequestStage(traceID: traceID, attempt: 1, event: "requestDenied",
+                                     stage: "profilePolicy", reason: decision.reason)
+                completion(.failure(ClientError.featurePolicyDenied(feature: "profileSettings", reason: decision.reason)))
+                return
+            }
+            self.requestJSON(path: "/profile", method: .post, payload: payload,
+                authPolicy: .userRequired, requiredAuthSession: currentSession,
+                applicationLease: lease, featureDecision: decision,
+                diagnosticTraceID: traceID, completion: completion)
+        }
+        let initial = freshRequestFeatureDecision(for: .profileSettings)
+        guard !initial.allowed else { submit(); return }
+        let recoverableReasons: Set<String> = ["expiredPolicyCache", "capturedPolicyExpired", "missingPolicyCache"]
+        guard recoverableReasons.contains(initial.reason) else { submit(); return }
+        logRequestStage(traceID: traceID, attempt: 1, event: "policyRefreshStarted",
+                        stage: "profilePolicy", reason: initial.reason)
+        let refreshGate = CandidatePolicyRefreshCompletionGate()
+        let finish: (Result<BackendReleasePolicySnapshot, Error>) -> Void = { result in
+            guard refreshGate.claimCompletion() else { return }
+            guard stillCurrent() else { completion(.failure(ClientError.accountScopeChanged)); return }
+            switch result {
+            case .success:
+                self.logRequestStage(traceID: traceID, attempt: 1, event: "policyRefreshFinished",
+                                     stage: "profilePolicy", reason: "recheckRequired")
+                submit()
+            case .failure(let error):
+                self.logRequestStage(traceID: traceID, attempt: 1, event: "policyRefreshFailed",
+                                     stage: "profilePolicy", reason: "refreshUnavailable")
+                completion(.failure(error))
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+            finish(.failure(URLError(.timedOut)))
+        }
+        fetchReleasePolicyForCandidateInbox(
+            audience: DJFeature.profileSettings.backendReleasePolicyAudience,
+            cohort: DJFeature.profileSettings.backendReleasePolicyCohort,
+            clientBuild: FeatureGateService.shared.clientBuild,
+            knownPolicyRevision: initial.policyRevision ?? 0,
+            applicationLease: lease, diagnosticTraceID: traceID,
+            diagnosticAttempt: 1, diagnosticAttemptState: nil, completion: finish)
+    }
+
+    func uploadProfileAvatar(userId: String, jpeg: Data, session: BackendAuthSessionContract,
+                             completion: @escaping (Result<[String: Any], Error>) -> Void) {
+        guard userId == session.userId else { completion(.failure(ClientError.accountScopeChanged)); return }
+        performProfileWrite(payload: ["userId": userId, "operation": "updateAvatar", "avatarJPEGBase64": jpeg.base64EncodedString()],
+                            session: session, completion: completion)
+    }
+
     func updateProfile(
         userId: String,
         nickname: String,
@@ -14080,13 +14160,10 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         if let avatarName {
             payload["avatarName"] = avatarName
         }
-        requestJSON(
-            path: "/profile",
-            method: .post,
-            payload: payload,
-            authPolicy: .userRequired,
-            completion: completion
-        )
+        guard let session = currentAuthenticatedSession, session.userId == userId else {
+            completion(.failure(ClientError.accountScopeChanged)); return
+        }
+        performProfileWrite(payload: payload, session: session, completion: completion)
     }
 
     func setupPassword(

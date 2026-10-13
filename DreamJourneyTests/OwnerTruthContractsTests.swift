@@ -10,6 +10,106 @@ import XCTest
 #endif
 
 final class OwnerTruthContractsTests: XCTestCase {
+    @MainActor
+    func testProfilePolicyExpiredAvatarRefreshesBeforeOneWrite() throws {
+        try runProfilePolicyScenario(mode: "expired", avatar: true)
+    }
+
+    @MainActor
+    func testProfilePolicyExpiredBasicFieldsRefreshBeforeOneWrite() throws {
+        try runProfilePolicyScenario(mode: "expired", avatar: false)
+    }
+
+    @MainActor
+    func testProfilePolicyFreshAvatarDoesNotRefresh() throws {
+        try runProfilePolicyScenario(mode: "fresh", avatar: true)
+    }
+
+    @MainActor
+    func testProfilePolicyDenialAfterRefreshNeverWrites() throws {
+        try runProfilePolicyScenario(mode: "denied", avatar: true)
+    }
+
+    @MainActor
+    func testProfilePolicyRefreshNetworkFailureNeverWrites() throws {
+        try runProfilePolicyScenario(mode: "offline", avatar: true)
+    }
+
+    @MainActor
+    func testProfilePolicyAccountChangeDuringRefreshNeverWrites() throws {
+        try runProfilePolicyScenario(mode: "accountChanged", avatar: true)
+    }
+
+    @MainActor
+    func testProfilePolicyLateRefreshCannotWriteAfterTimeout() throws {
+        try runProfilePolicyScenario(mode: "timeout", avatar: true)
+    }
+
+    @MainActor
+    private func runProfilePolicyScenario(mode: String, avatar: Bool) throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let auth = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        var activeAuth: BackendAuthSessionContract? = auth
+        let defaultsName = "profile-expiry-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+        defer { defaults.removePersistentDomain(forName: defaultsName) }
+        let store = ReleasePolicyStore(userDefaults: defaults)
+        func policy(_ expired: Bool, enabled: Bool = true, revision: Int = 101) -> [String: Any] {
+            var payload = candidateReleasePolicyPayload(version: "profile-v1", revision: revision,
+                expiresAt: expired ? "2025-01-02T00:00:00Z" : "2099-01-01T00:00:00Z", enabled: enabled)
+            var features = payload["features"] as! [[String: Any]]
+            features[0]["feature"] = DJFeature.profileSettings.backendReleasePolicyFeature
+            payload["features"] = features
+            return payload
+        }
+        try saveCandidateReleasePolicy(policy(mode != "fresh", revision: 100), store: store,
+            scope: candidateReleasePolicyScope(lease: lease))
+        let gate = FeatureGateService.makeQATestService(accountGeneration: { auth.sessionId }, policy: { feature, risk in
+            BackendCachedReleasePolicyEvaluation(cache: store.evaluate(scope: self.candidateReleasePolicyScope(lease: lease), risk: risk), risk: risk)
+                .featureGatePolicySnapshot(for: feature)
+        })
+        // Capture the route once: refreshing cache must not reuse its old denied decision.
+        gate.captureRoute(feature: .profileSettings, localEnabled: true)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!, session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { activeAuth }, currentUserID: { activeAuth?.userId }, privateAccessAllowed: { true },
+            featureDecision: { gate.requestDecision(for: $0, localEnabled: true) },
+            freshFeatureDecision: { gate.freshServerPolicyManagedRequestDecision(for: $0) },
+            featureDecisionRevalidator: { gate.revalidateRequest($0, localEnabled: true) },
+            accountLeaseRuntime: runtime, releasePolicyStore: store, candidateInboxPolicyTimeout: 0.08)
+        var paths: [String] = []
+        var lateLoader: OwnerTruthReviewReadyHTTPURLProtocol?
+        let freshBody = try JSONSerialization.data(withJSONObject: policy(false, enabled: mode != "denied"))
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            paths.append(request.url!.path)
+            if request.url?.path == "/v2/release-policy" {
+                if mode == "offline" { loader.fail(URLError(.notConnectedToInternet)); return }
+                if mode == "accountChanged" { activeAuth = nil }
+                if mode == "timeout" { lateLoader = loader; return }
+                loader.respond(statusCode: 200, body: freshBody)
+            } else if request.url?.path == "/profile" {
+                loader.respond(statusCode: 200, body: Data("{\"profile\":{}}".utf8))
+            } else { XCTFail("Unexpected path"); loader.fail(URLError(.badURL)) }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+        var outcome: Result<[String: Any], Error>?
+        var completions = 0
+        let finish: (Result<[String: Any], Error>) -> Void = { outcome = $0; completions += 1 }
+        if avatar { client.uploadProfileAvatar(userId: lease.subjectId, jpeg: Data([1]), session: auth, completion: finish) }
+        else { client.updateProfile(userId: lease.subjectId, nickname: "same", gender: nil, region: nil, avatarName: nil, completion: finish) }
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: mode == "timeout" ? 18 : 3) { outcome != nil })
+        if mode == "timeout" {
+            lateLoader?.respond(statusCode: 200, body: freshBody)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        }
+        let succeeds = mode == "fresh" || mode == "expired"
+        if succeeds { XCTAssertNoThrow(try outcome?.get()) }
+        else { if case .success = outcome { XCTFail("Denied/failed refresh cannot succeed") } }
+        XCTAssertEqual(paths.filter { $0 == "/v2/release-policy" }.count, mode == "fresh" ? 0 : 1)
+        XCTAssertEqual(paths.filter { $0 == "/profile" }.count, succeeds ? 1 : 0)
+        XCTAssertEqual(completions, 1)
+    }
+
     func testLiveContextUpdateWaitsForDrainAndRejectsLateRead() {
         var state = LiveContextUpdateState()
         let operation = UUID()
