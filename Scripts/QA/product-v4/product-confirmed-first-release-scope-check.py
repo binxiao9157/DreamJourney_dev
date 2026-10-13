@@ -29,7 +29,6 @@ for marker in (
     ".archiveAudioUpload,",
     ".archiveVideoUpload,",
     ".kbliteUserSurface,",
-    ".accountDataExport,",
 ):
     require(marker in closed_block, f"missing client product closure {marker}")
 
@@ -51,8 +50,11 @@ require(
     "KBLite must remain reachable only through the isolated QA branch",
 )
 require(
-    "private var isAccountDataExportVisible: Bool {\n        false\n    }" in profile,
-    "the client must expose no full-account export entry",
+    "isServerPolicyManagedGeneralRouteAllowed(.accountDataExport)" in profile
+    and "snapshot(for: .accountDataExport)?.isPubliclyAvailable == true" in profile
+    and "rows.append(.dataExport)" in profile
+    and ".accountDataExport," not in closed_block,
+    "account export must use its own server policy and runtime readiness",
 )
 require(
     "注销前可导出个人数据副本" not in profile,

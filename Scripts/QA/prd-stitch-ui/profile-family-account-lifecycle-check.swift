@@ -155,8 +155,8 @@ for required in [
 assertNotContains(profileView, "提交注销申请（未开放）", "Account deletion should no longer be blocked shell")
 assertContains(
     profileView,
-    "private var isAccountDataExportVisible: Bool {\n        false\n    }",
-    "Full-account export must have no client entry"
+    "isServerPolicyManagedGeneralRouteAllowed(.accountDataExport)",
+    "Account export must use its independent authenticated-owner policy"
 )
 assertNotContains(profileView, "注销前可导出个人数据副本", "Deletion copy must not advertise full-account export")
 assertNotContains(

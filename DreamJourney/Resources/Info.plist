@@ -26,6 +26,8 @@
 	<string>$(DREAMJOURNEY_BACKEND_BASE_URL)</string>
 	<key>DreamJourneyAppGroupIdentifier</key>
 	<string>$(DREAMJOURNEY_APP_GROUP_IDENTIFIER)</string>
+	<key>LiveRecoveryEnabled</key>
+	<true/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>

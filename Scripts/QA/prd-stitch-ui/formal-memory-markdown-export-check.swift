@@ -48,7 +48,7 @@ for token in [
 }
 
 for token in [
-    "private var isAccountDataExportVisible: Bool {\n        false",
+    "isServerPolicyManagedGeneralRouteAllowed(.accountDataExport)",
     "rows.append(.formalMemoryExport)",
     "return \"导出正式记忆\"",
     "profile-formal-memory-export-row",

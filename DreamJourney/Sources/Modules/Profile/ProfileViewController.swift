@@ -699,7 +699,8 @@ final class ProfileViewController: UIViewController {
     }
 
     private var isAccountDataExportVisible: Bool {
-        false
+        FeatureGateService.shared.isServerPolicyManagedGeneralRouteAllowed(.accountDataExport)
+            && RuntimeCapabilitySnapshotStore.shared.snapshot(for: .accountDataExport)?.isPubliclyAvailable == true
     }
 
     private var isFormalMemoryMarkdownExportVisible: Bool {
@@ -1312,6 +1313,9 @@ final class ProfileViewController: UIViewController {
         }
         if isFormalMemoryMarkdownExportVisible {
             rows.append(.formalMemoryExport)
+        }
+        if isAccountDataExportVisible {
+            rows.append(.dataExport)
         }
         rows.append(.logout)
         if isFeatureRouteAllowed(.accountDeletion, risk: .ownerTextCore) {

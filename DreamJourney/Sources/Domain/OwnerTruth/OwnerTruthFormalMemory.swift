@@ -460,6 +460,11 @@ struct OwnerTruthPersonLifeStory: Equatable, Sendable {
             throw OwnerTruthFormalMemoryContractError.invalidProfile("人生记录篇章契约无效")
         }
         let overview = OwnerTruthFormalMemoryContract.requiredString(object["overview"])
+        // Topic-based biographies have complete chapters without a global summary.
+        // A supplied summary must still be valid text; null/missing alone is optional.
+        if let rawOverview = object["overview"], !(rawOverview is NSNull), overview == nil {
+            throw OwnerTruthFormalMemoryContractError.invalidProfile("人生记录总览格式无效")
+        }
         let documentVersion = OwnerTruthFormalMemoryContract.sha256(object["documentVersion"])
         let sourceFingerprint = OwnerTruthFormalMemoryContract.sha256(object["sourceFingerprint"])
         let chapters = try rawChapters.map(OwnerTruthPersonLifeStoryChapter.init)
@@ -472,9 +477,9 @@ struct OwnerTruthPersonLifeStory: Equatable, Sendable {
         }
         switch state {
         case .ready:
-            guard overview != nil, !chapters.isEmpty, !memoryIDs.isEmpty,
+            guard !chapters.isEmpty, !memoryIDs.isEmpty,
                   documentVersion != nil, sourceFingerprint != nil else {
-                throw OwnerTruthFormalMemoryContractError.invalidProfile("人生记录缺少总览或篇章")
+                throw OwnerTruthFormalMemoryContractError.invalidProfile("人生记录篇章或版本不完整")
             }
         case .empty:
             guard overview == nil, chapters.isEmpty, memoryIDs.isEmpty,

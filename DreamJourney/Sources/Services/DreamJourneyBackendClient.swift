@@ -370,7 +370,6 @@ final class FeatureGateService {
     /// says that the feature is available. QA launch arguments use the
     /// isolated synthetic route in Echo and do not pass through this set.
     private static let productClosedFeatures: Set<DJFeature> = [
-        .accountDataExport,
         .archiveAudioUpload,
         .archiveVideoUpload,
         .digitalHumanLivePanel,
@@ -402,6 +401,8 @@ final class FeatureGateService {
     ]
 
     private static let serverPolicyManagedGeneralFeatures: Set<DJFeature> = [
+        .accountDataExport,
+        .accountPasswordChange,
         .familyManagement,
         .familySpace,
         .careDashboard,
