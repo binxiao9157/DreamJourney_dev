@@ -70,7 +70,7 @@ assertContains(profileReadiness, "V4 Closed Pilot 暂不公开家庭关系写入
 assertContains(profile, ".djDigitalHumanContextDidChange", "profile should observe selected persona changes")
 assertContains(profile, "makePersonaTitle(context:", "profile should derive persona title from context")
 assertContains(profile, "makePersonaSubtitle(context:", "profile should derive persona subtitle from context")
-assertContains(profile, "\"外面世界很美好\"", "default self profile title should keep Stitch visual copy")
+assertContains(profile, "UserManager.shared.currentUser?.nickname", "self profile title should use the current account nickname")
 assertContains(profile, "\"今天又是阳光灿烂的一天\"", "default self profile subtitle should keep Stitch visual copy")
 
 assertContains(family, "private enum FamilyPersonaOption", "family page should expose explicit persona options")

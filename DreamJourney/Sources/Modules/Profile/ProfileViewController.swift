@@ -1118,7 +1118,8 @@ final class ProfileViewController: UIViewController {
 
     private func makePersonaTitle(context: DigitalHumanContext) -> String {
         if context.isSelfAssistant {
-            return "外面世界很美好"
+            let nickname = UserManager.shared.currentUser?.nickname.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return nickname.isEmpty ? "寻梦环游用户" : nickname
         }
         return context.resolvedDisplayName
     }
