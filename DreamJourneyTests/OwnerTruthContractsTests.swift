@@ -10,6 +10,63 @@ import XCTest
 #endif
 
 final class OwnerTruthContractsTests: XCTestCase {
+    func testFamilyIncomingPermissionDoesNotAuthorizeReverseDirection() throws {
+        let payload: [String: Any] = ["id": "fm-1", "name": "家人", "userId": "viewer-b",
+            "viewerUserId": "viewer-b", "ownerUserId": "owner-a", "digitalHumanId": "owner-a",
+            "relationshipId": "rel-1", "relationshipStatus": "accepted", "relationshipEpoch": 1,
+            "memberSubjectId": "viewer-b", "accessStatus": "active", "invitationStatus": "accepted",
+            "accessGrants": [["id": "g-1", "relationshipId": "rel-1", "grantorSubjectId": "owner-a",
+                "granteeSubjectId": "viewer-b", "purpose": "family.persona", "resourceType": "familyMember",
+                "resourceId": "fm-1", "operations": ["read"], "status": "active", "rowVersion": 1]]]
+        let member = try XCTUnwrap(FamilyMember.fromBackendJSON(payload))
+        XCTAssertEqual(member.digitalHumanId, "owner-a")
+        XCTAssertEqual(member.relationshipViewerUserId, "viewer-b")
+        XCTAssertTrue(member.isAcceptedFamilyMember(for: "viewer-b"))
+        XCTAssertFalse(member.isAcceptedFamilyMember(for: "owner-a"))
+        XCTAssertFalse(member.isAcceptedFamilyMember(for: "stranger"))
+        let restored = try JSONDecoder().decode(FamilyMember.self, from: JSONEncoder().encode(member))
+        XCTAssertTrue(restored.isAcceptedFamilyMember(for: "viewer-b"))
+        for mutation: [String: Any] in [["accessGrants": []], ["accessStatus": "revoked"],
+            ["relationshipStatus": "paused"], ["invitationStatus": "pending"]] {
+            var changed = payload; changed.merge(mutation) { _, new in new }
+            XCTAssertFalse(try XCTUnwrap(FamilyMember.fromBackendJSON(changed)).isAcceptedFamilyMember(for: "viewer-b"))
+        }
+    }
+
+    func testFamilyFormalReadRoutingRetainsPersonalAndNeverEnablesLegacyContext() {
+        let family = EchoV4IdentityRoutingPolicy.evaluate(viewerSubjectID: "b", targetOwnerSubjectID: "a",
+            isSelfAssistant: false, relationshipAccepted: true, visitorSessionOwnerSubjectID: nil,
+            visitorSessionActive: false, formalMemoryReadGranted: true)
+        XCTAssertEqual(family.route, .familyFormalRead)
+        XCTAssertFalse(family.privateContextAllowed)
+        XCTAssertFalse(family.legacyFallbackAllowed)
+        let denied = EchoV4IdentityRoutingPolicy.evaluate(viewerSubjectID: "b", targetOwnerSubjectID: "a",
+            isSelfAssistant: false, relationshipAccepted: true, visitorSessionOwnerSubjectID: nil,
+            visitorSessionActive: false)
+        XCTAssertEqual(denied.route, .familyContribution)
+        let own = EchoV4IdentityRoutingPolicy.evaluate(viewerSubjectID: "a", targetOwnerSubjectID: "a",
+            isSelfAssistant: true, relationshipAccepted: false, visitorSessionOwnerSubjectID: nil,
+            visitorSessionActive: false)
+        XCTAssertEqual(own.route, .ownerPrivate)
+    }
+
+    func testUsernameRegistrationCapabilityRequiresExplicitServerContract() {
+        var json: [String: Any] = ["implemented": true, "enabled": true, "ready": true,
+            "loginReady": true, "changeReady": true, "setupReady": false, "resetReady": false, "reauthReady": false,
+            "loginEndpoint": "/v2/auth/password/login", "setupEndpoint": "/v2/auth/password/setup",
+            "changeEndpoint": "/v2/auth/password/change", "resetEndpoint": "/v2/auth/password/reset",
+            "resetChallengePurpose": "passwordReset", "reauthChallengePurpose": "sensitiveOperation",
+            "minLength": 8, "maxLength": 128, "maxAttempts": 5, "lockoutSeconds": 300,
+            "sessionContractVersion": 2, "contractVersion": 2]
+        XCTAssertTrue(BackendPasswordAuthenticationCapability(json: json).canLogin)
+        XCTAssertFalse(BackendPasswordAuthenticationCapability(json: json).canRegisterUsername)
+        json["usernameLoginReady"] = true; json["usernameRegistrationReady"] = true
+        json["usernameRegistrationEndpoint"] = "/v2/auth/username/register"
+        XCTAssertTrue(BackendPasswordAuthenticationCapability(json: json).canRegisterUsername)
+        json["usernameRegistrationEndpoint"] = "/unexpected"
+        XCTAssertFalse(BackendPasswordAuthenticationCapability(json: json).canRegisterUsername)
+    }
+
     @MainActor
     func testProfilePolicyExpiredAvatarRefreshesBeforeOneWrite() throws {
         try runProfilePolicyScenario(mode: "expired", avatar: true)
@@ -1322,7 +1379,24 @@ final class OwnerTruthContractsTests: XCTestCase {
 
     @MainActor
     func testRecoveryActualHTTPFourScenesShort20Short40() throws {
-        let path = "/private/tmp/dj-recovery-four-config.json"
+        try runRecoveryActualHTTPScenes(configPath: "/private/tmp/dj-recovery-four-config.json")
+    }
+
+    @MainActor
+    func testCAP15RecoveryActualHTTPShortThenLogicalTenMinutes() throws {
+        let path = "/private/tmp/dj-three-tests-recovery-config.json"
+        guard FileManager.default.fileExists(atPath: path) else { throw XCTSkip("Requires isolated API/Worker/PG gate") }
+        let config = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: path))) as? [String: Any])
+        let scenes = try XCTUnwrap(config["scenes"] as? [[String: Any]])
+        XCTAssertEqual(scenes.compactMap { $0["name"] as? String }, ["short6", "logical10"])
+        XCTAssertEqual((scenes.first?["texts"] as? [String])?.count, 6)
+        XCTAssertEqual(scenes.last?["logicalDurationSeconds"] as? Double, 600)
+        try runRecoveryActualHTTPScenes(configPath: path)
+    }
+
+    @MainActor
+    private func runRecoveryActualHTTPScenes(configPath: String) throws {
+        let path = configPath
         guard FileManager.default.fileExists(atPath: path) else { throw XCTSkip("Requires disposable local recovery API/Worker/PG harness") }
         let config = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: path))) as? [String: Any])
         let baseURL = try XCTUnwrap((config["baseURL"] as? String).flatMap(URL.init(string:)))
@@ -1731,6 +1805,141 @@ final class OwnerTruthContractsTests: XCTestCase {
                        item.candidateVersion)
         restored.reviewDidCommit()
         XCTAssertNil(try store.load(candidateID: item.id.rawValue.uuidString, for: lease))
+    }
+
+    @MainActor
+    func testCandidateThemesRejectInvalidContractsAndNeverWriteOnReadFailure() throws {
+        for failure in ["schema", "vault", "http"] {
+        let (runtime, lease) = try makeActiveRuntime()
+        let authSession = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        let evaluator = FeatureGateEvaluator()
+        var policy = FeatureGatePolicySnapshot(
+            accessMode: .useCachedPolicy,
+            policyVersion: "candidate-write-visible-failure-v1",
+            policyRevision: 1,
+            emergencyRevision: 1,
+            expiresAt: Date().addingTimeInterval(300),
+            featureEnabled: true,
+            releaseVisible: true,
+            reason: "candidateReviewEnabled"
+        )
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!,
+            session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { authSession },
+            currentUserID: { lease.subjectId },
+            privateAccessAllowed: { true },
+            featureDecision: { feature in
+                evaluator.capture(
+                    feature: feature,
+                    risk: .ownerTextCore,
+                    purpose: .request,
+                    localEnabled: true,
+                    qaSyntheticOverride: false,
+                    accountGeneration: authSession.sessionId,
+                    policy: policy
+                )
+            },
+            featureDecisionRevalidator: { decision in
+                evaluator.revalidateForRequest(
+                    captured: decision,
+                    localEnabled: true,
+                    accountGeneration: authSession.sessionId,
+                    currentPolicy: policy
+                )
+            },
+            accountLeaseRuntime: runtime
+        )
+
+            var themeReads = 0, writes = 0
+            let empty = sequentialV5CandidateInboxJSONObject(vaultID: lease.vaultId,
+                candidateIDs: [], memoryRevision: 9, proposalGeneration: 1)
+            OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+                let path = request.url?.path ?? ""
+                if request.httpMethod == "GET" && path == "/v2/vaults/\(lease.vaultId)/live-memory-themes" {
+                    themeReads += 1
+                    loader.respond(statusCode: failure == "http" ? 503 : 200,
+                        body: try! JSONSerialization.data(withJSONObject: [
+                            "schemaVersion": failure == "schema" ? "invalid" : "owner-truth-live-theme-inbox-v1",
+                            "vaultId": failure == "vault" ? "other-vault" : lease.vaultId,
+                            "themes": [], "nextCursor": NSNull()]))
+                } else if request.httpMethod == "GET" && path.hasSuffix("/candidates") {
+                    loader.respond(statusCode: 200, body: try! JSONSerialization.data(withJSONObject: empty))
+                } else {
+                    if request.httpMethod == "POST" { writes += 1 }
+                    XCTFail("Unexpected theme failure request: \(request.httpMethod ?? "") \(path)")
+                    loader.fail(URLError(.badURL))
+                }
+            }
+            defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+            var result: Result<OwnerTruthLiveThemePage, Error>?
+            client.fetchOwnerTruthLiveThemes(lease: lease, after: nil) { result = $0 }
+            XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { result != nil })
+            if case .failure = result {} else { XCTFail("Invalid theme contract accepted: \(failure)") }
+            let controller = OwnerTruthCandidateInboxViewController(accountLease: lease, client: client,
+                accountLeaseRuntime: runtime, qaGateEnabled: { true },
+                pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore(), themesEnabled: true)
+            controller.loadViewIfNeeded()
+            controller.beginAppearanceTransition(true, animated: false); controller.endAppearanceTransition()
+            XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) { themeReads == 2 })
+            XCTAssertEqual(writes, 0)
+        }
+    }
+
+    @MainActor
+    func testRecoveryMissingOrWrongGenerationStartPreservesOutboxAndRefusesLegacyFallback() throws {
+        for wrongGeneration in [false, true] {
+            let (runtime, lease) = try makeActiveRuntime()
+            let vault = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent("invalid-recovery-\(UUID())")
+            defer { try? FileManager.default.removeItem(at: root) }
+            let store = OwnerTruthInterviewLiveTurnOutboxStore(rootDirectory: root)
+            let client = InterviewNaturalInputClientSpy()
+            client.freshNaturalInputDecision = Self.liveNaturalInputDecision(for: lease)
+            client.startHandler = { command in Result {
+                XCTAssertEqual(command.recoveryProtocol, "live-recovery-v1")
+                var object: [String: Any] = ["schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion,
+                    "vaultId": vault.rawValue, "receipt": ["status": "created", "threadId": command.threadID.rawValue.uuidString,
+                        "sessionId": command.sessionID.rawValue.uuidString, "threadVersion": 1, "sessionVersion": 1,
+                        "state": "active", "boundary": "open", "authorityEpoch": 0]]
+                if wrongGeneration {
+                    object["recovery"] = ["protocol": "live-recovery-v1", "sessionId": command.sessionID.rawValue.uuidString,
+                        "generation": 2, "version": 1, "state": "collecting", "continuousSequence": 0,
+                        "highestSeenSequence": 0, "endPositionKnown": false, "receivedRanges": [], "missingRanges": [],
+                        "rangeOffset": 0, "rangePageTruncated": false, "snapshotRevision": 0]
+                }
+                return try OwnerTruthInterviewNaturalInputReceipt(backendJSONObject: object, expectedVaultID: vault)
+            } }
+            let product = "negative-recovery"
+            let coordinator = EchoLiveMemoryCaptureCoordinator(accountLease: lease, client: client,
+                accountLeaseRuntime: runtime, productSessionID: product, liveTurnOutboxStore: store,
+                completionCheckpointStore: EchoLiveMemoryCompletionCheckpointStore(rootDirectory: root.appendingPathComponent("completion")),
+                criticalDiagnosticsStore: NativeLiveDiagnosticsRingStore(rootDirectory: root.appendingPathComponent("diagnostics")),
+                recoveryEnabled: true, naturalInputPolicyAvailable: { true }, naturalInputPolicyRefresh: { $0(true) },
+                candidateReviewPolicyAvailable: { true })
+            coordinator.appendOwnerTurn("这条合成正文必须在非法协商后保留。")
+            XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+                (try? store.load(for: lease, productSessionID: product))?.startDispatchState == .outcomeUnknown
+            })
+            coordinator.finish()
+            XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
+                (try? store.load(for: lease, productSessionID: product))?.closeIntentRequestedAt != nil
+            })
+            let disk = try XCTUnwrap(OwnerTruthInterviewLiveTurnOutboxStore(rootDirectory: root).load(for: lease, productSessionID: product))
+            XCTAssertEqual(disk.pendingTurns.map(\.text), ["这条合成正文必须在非法协商后保留。"])
+            XCTAssertEqual(disk.preparedStartCommand?.sessionID, client.startCommand?.sessionID)
+            XCTAssertEqual(disk.preparedStartCommand?.recoveryProtocol, "live-recovery-v1")
+            XCTAssertNil(disk.acceptedRecoveryProtocol)
+            XCTAssertEqual(disk.canonicalCoverageSummary.serverConfirmedCount, 0)
+            XCTAssertTrue(client.appendCommands.isEmpty)
+            XCTAssertTrue(client.endCommands.isEmpty)
+            XCTAssertTrue(client.acknowledgementCommands.isEmpty)
+            XCTAssertTrue(client.admissionCommands.isEmpty)
+        }
+    }
+
+    func testReleaseRecoveryFlagRemainsEnabled() {
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "LiveRecoveryEnabled") as? Bool, true)
     }
 
     func testRecoveryStartNegotiationIsExplicitAndBindsOriginalSession() throws {
@@ -4372,7 +4581,18 @@ final class OwnerTruthContractsTests: XCTestCase {
         ])
     }
 
+    @MainActor
     func testCAP06CoordinatorConflictKeepsCaptureAndPersistsLaterTurnsAndCloseIntent() throws {
+        try verifyCAP06Conflict(recoveryEnabled: false) // Explicit legacy compatibility, never a release switch.
+    }
+
+    @MainActor
+    func testCAP06RecoveryConflictKeepsAllElevenBodiesAndCloseIntent() throws {
+        try verifyCAP06Conflict(recoveryEnabled: true)
+    }
+
+    @MainActor
+    private func verifyCAP06Conflict(recoveryEnabled: Bool) throws {
         let (runtime, lease) = try makeActiveRuntime()
         let vaultID = try XCTUnwrap(OwnerTruthVaultID(lease.vaultId))
         let root = FileManager.default.temporaryDirectory
@@ -4385,11 +4605,46 @@ final class OwnerTruthContractsTests: XCTestCase {
         let productSessionID = "cap06-coordinator-conflict"
         let client = InterviewNaturalInputClientSpy()
         client.freshNaturalInputDecision = Self.liveNaturalInputDecision(for: lease)
-        client.startHandler = { [unowned self] command in
-            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command) }
+        var received: [OwnerTruthInterviewNaturalInputAppendCommand] = []
+        var finalSequence: Int?
+        var closeReceived = false
+        var version = 1
+        func progressObject() throws -> [String: Any] {
+            let command = try XCTUnwrap(client.startCommand)
+            return ["protocol": "live-recovery-v1", "sessionId": command.sessionID.rawValue.uuidString,
+                "generation": 1, "version": version, "state": closeReceived ? "repairing" : "collecting",
+                "continuousSequence": received.count, "highestSeenSequence": received.count,
+                "endPositionKnown": finalSequence != nil, "finalSequence": finalSequence as Any? ?? NSNull(),
+                "receivedRanges": received.isEmpty ? [] : [[1,received.count]], "missingRanges": [],
+                "rangeOffset": 0, "rangePageTruncated": false, "snapshotRevision": 0]
+        }
+        client.startHandler = { [unowned self] command in Result {
+            XCTAssertEqual(command.recoveryProtocol, recoveryEnabled ? "live-recovery-v1" : nil)
+            let legacy = try self.interviewNaturalInputReceipt(vaultID: vaultID, start: command)
+            guard recoveryEnabled else { return legacy }
+            return try OwnerTruthInterviewNaturalInputReceipt(backendJSONObject: [
+                "schemaVersion": OwnerTruthInterviewNaturalInputReceipt.schemaVersion, "vaultId": vaultID.rawValue,
+                "receipt": ["status": "created", "threadId": command.threadID.rawValue.uuidString,
+                    "sessionId": command.sessionID.rawValue.uuidString, "threadVersion": 1,
+                    "sessionVersion": 1, "state": "active", "boundary": "open", "authorityEpoch": 0],
+                "recovery": try progressObject()], expectedVaultID: vaultID)
+        } }
+        client.recoveryControlHandler = { action, sequence in
+            if action == "close" { closeReceived = true; finalSequence = sequence }
+            version += 1
+            return try OwnerTruthLiveRecoveryProgress(backendJSONObject: progressObject(),
+                expectedSessionID: XCTUnwrap(client.startCommand).sessionID, expectedGeneration: 1)
+        }
+        client.recoveryAuthorizationHandler = {
+            try OwnerTruthLiveRecoveryProgress(backendJSONObject: progressObject(),
+                expectedSessionID: XCTUnwrap(client.startCommand).sessionID, expectedGeneration: 1)
         }
         client.appendHandler = { [unowned self] command in
-            Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, append: command) }
+            Result {
+                XCTAssertEqual(command.clientSequenceNumber, received.count + 1)
+                received.append(command); version += 1
+                return try self.interviewNaturalInputReceipt(vaultID: vaultID, append: command)
+            }
         }
         client.endHandler = { [unowned self] command in
             Result { try self.interviewNaturalInputReceipt(vaultID: vaultID, end: command) }
@@ -4407,6 +4662,14 @@ final class OwnerTruthContractsTests: XCTestCase {
                 rootDirectory: root.appendingPathComponent("completion", isDirectory: true)
             ),
             criticalDiagnosticsStore: diagnostics,
+            recoveryEnabled: recoveryEnabled,
+            deliveryObservationSchedule: { delay, action in
+                let item = DispatchWorkItem(block: action)
+                // Advance status polling in test time; leave request timeout at its real 15 seconds.
+                let testDelay = (delay == 5 || delay == 20) ? 0.02 : delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + testDelay, execute: item)
+                return item
+            },
             naturalInputPolicyAvailable: { true },
             naturalInputPolicyRefresh: { $0(true) },
             candidateReviewPolicyAvailable: { true }
@@ -4494,6 +4757,35 @@ final class OwnerTruthContractsTests: XCTestCase {
             (try? store.load(for: lease, productSessionID: productSessionID))?
                 .pendingTurns.isEmpty == true
         }, "争议不妨碍后续合法正文按原命令同步")
+        let snapshot = try XCTUnwrap(store.load(for: lease, productSessionID: productSessionID))
+        XCTAssertEqual(snapshot.canonicalConflictCount, 1)
+        XCTAssertEqual(snapshot.canonicalCoverageSummary.serverConfirmedCount, 11)
+        XCTAssertEqual(received.compactMap(\.clientSequenceNumber), Array(1...11))
+        XCTAssertEqual(Set(received.map(\.messageID)).count, 11)
+        XCTAssertEqual(received.map(\.text), ["第一问的不可变终稿。"] + (2...11).map { "冲突后的第 \($0) 条合法正文。" })
+        let bindings = try cap15CanonicalDeliveryBindings(root: root, productSessionID: productSessionID)
+        for (index, command) in received.enumerated() {
+            XCTAssertEqual(bindings["owner-q\(index + 1)"]?.messageID, command.messageID.rawValue.uuidString.lowercased())
+        }
+        if recoveryEnabled {
+            XCTAssertEqual(snapshot.acceptedRecoveryProtocol, "live-recovery-v1")
+            XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { client.recoveryControls.contains { $0.0 == "close" } })
+            XCTAssertTrue(client.recoveryControls.filter { $0.0 == "close" }.allSatisfy { $0.1 == nil }, "冲突时只发送关闭意图，不伪造已完整冻结的末序号")
+            XCTAssertNil(snapshot.closeRequestedLastClientSequenceNumber)
+            XCTAssertEqual(snapshot.lastClientSequenceNumber, 11)
+            XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) {
+                (try? store.load(for: lease, productSessionID: productSessionID))?.recoveryProgress?.continuousSequence == 11
+            })
+            let restored = try XCTUnwrap(OwnerTruthInterviewLiveTurnOutboxStore(rootDirectory: root).load(for: lease, productSessionID: productSessionID))
+            XCTAssertEqual(restored.recoveryProgress?.endPositionKnown, false)
+            XCTAssertNil(restored.recoveryProgress?.publication)
+            XCTAssertEqual(restored.canonicalConflictCount, 1)
+            // Conflict remains visible even though all eleven legitimate bodies are acknowledged.
+            XCTAssertEqual(try store.load(for: lease, productSessionID: productSessionID)?.firstCanonicalConflictReason, .immutableBodyConflict)
+        } else {
+            XCTAssertNil(snapshot.acceptedRecoveryProtocol)
+            XCTAssertTrue(client.recoveryControls.isEmpty)
+        }
         XCTAssertTrue(client.endCommands.isEmpty, "存在争议时不得发送完整 end")
         XCTAssertTrue(client.acknowledgementCommands.isEmpty)
         XCTAssertTrue(client.admissionCommands.isEmpty)
@@ -8358,6 +8650,7 @@ final class OwnerTruthContractsTests: XCTestCase {
     @MainActor
     func testManagerEchoRealGateBackendLogicalTwentyMinutesClosesAtExactWatermark() throws {
         try runManagerEchoRealGateBackendLogicalTwentyMinutes(
+            protocolMode: .legacy,
             questionCount: 10,
             authenticationRejectionSequence: nil
         )
@@ -8366,6 +8659,7 @@ final class OwnerTruthContractsTests: XCTestCase {
     @MainActor
     func testManagerEchoRealGateBackendLogicalTwentyMinutesRecoversOnePreHandlerAuthenticationRejection() throws {
         try runManagerEchoRealGateBackendLogicalTwentyMinutes(
+            protocolMode: .legacy,
             questionCount: 10,
             authenticationRejectionSequence: 15
         )
@@ -8374,6 +8668,7 @@ final class OwnerTruthContractsTests: XCTestCase {
     @MainActor
     func testManagerEchoRealGateBackendSeventySegmentsResumeFromFortyEightConfirmed() throws {
         try runManagerEchoRealGateBackendLogicalTwentyMinutes(
+            protocolMode: .legacy,
             questionCount: 35,
             authenticationRejectionSequence: 49,
             deferAuthenticationRecoveryUntilAfterCapture: true
@@ -8383,6 +8678,7 @@ final class OwnerTruthContractsTests: XCTestCase {
     @MainActor
     func testAstraProbeRecoveryFailureThenFreshCredentialsCompletesOriginalSeventy() throws {
         try runManagerEchoRealGateBackendLogicalTwentyMinutes(
+            protocolMode: .legacy,
             questionCount: 35,
             authenticationRejectionSequence: 49,
             deferAuthenticationRecoveryUntilAfterCapture: true,
@@ -8393,6 +8689,7 @@ final class OwnerTruthContractsTests: XCTestCase {
     @MainActor
     func testCAP14ManagerEchoRealGateBackendLogicalTwentyMinutesPersistsOneHundredOwnerTurns() throws {
         try runManagerEchoRealGateBackendLogicalTwentyMinutes(
+            protocolMode: .legacy,
             questionCount: 100,
             logicalDuration: 20 * 60,
             authenticationRejectionSequence: nil
@@ -8402,6 +8699,7 @@ final class OwnerTruthContractsTests: XCTestCase {
     @MainActor
     func testCAP14ManagerEchoRealGateBackendLogicalSixtyFiveMinutesPersistsOneHundredFiftyOwnerTurns() throws {
         try runManagerEchoRealGateBackendLogicalTwentyMinutes(
+            protocolMode: .legacy,
             questionCount: 150,
             logicalDuration: 65 * 60,
             authenticationRejectionSequence: nil
@@ -8411,6 +8709,7 @@ final class OwnerTruthContractsTests: XCTestCase {
     @MainActor
     func testCAP15ManagerEchoRealGateBackendShortSessionEmitsReviewReadyCommandSequence() throws {
         try runManagerEchoRealGateBackendLogicalTwentyMinutes(
+            protocolMode: .legacy,
             questionCount: 6,
             logicalDuration: 90,
             authenticationRejectionSequence: nil,
@@ -8421,6 +8720,7 @@ final class OwnerTruthContractsTests: XCTestCase {
     @MainActor
     func testCAP15ManagerEchoRealGateBackendLogicalSixtyFiveMinutesEmitsReviewReadyCommandSequence() throws {
         try runManagerEchoRealGateBackendLogicalTwentyMinutes(
+            protocolMode: .legacy,
             questionCount: 150,
             logicalDuration: 65 * 60,
             authenticationRejectionSequence: nil,
@@ -9396,8 +9696,11 @@ final class OwnerTruthContractsTests: XCTestCase {
         )
     }
 
+    private enum CaptureTestProtocol { case legacy, recovery }
+
     @MainActor
     private func runManagerEchoRealGateBackendLogicalTwentyMinutes(
+        protocolMode: CaptureTestProtocol,
         questionCount: Int,
         logicalDuration: TimeInterval = 20 * 60,
         authenticationRejectionSequence: Int?,
@@ -9405,6 +9708,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         forceUnusableRecoveryCredential: Bool = false,
         emitCAP15Bridge: Bool = false
     ) throws {
+        XCTAssertEqual(protocolMode, .legacy, "This helper emits legacy end/ACK/admit receipts; use recovery HTTP gate for current protocol")
         let (runtime, lease) = try makeActiveRuntime()
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("manager-real-backend-twenty-minute-\(UUID().uuidString)")
@@ -9892,6 +10196,7 @@ final class OwnerTruthContractsTests: XCTestCase {
             liveTurnOutboxStore: outbox,
             followUpStore: followUp,
             completionCheckpointStore: checkpoint,
+            recoveryEnabled: protocolMode == .recovery,
             organizationStatusTimeout: 5,
             deliveryStatusTimeout: 2,
             liveAuthorityNow: { fakeNow },
@@ -22180,10 +22485,17 @@ final class OwnerTruthContractsTests: XCTestCase {
             ],
             "memoryRevision": 10,
         ]
+        var themesGETCount = 0
         var inboxGETCount = 0
         var decisionPOSTCount = 0
         OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
             switch (request.httpMethod, request.url?.path ?? "") {
+            case ("GET", let path) where path == "/v2/vaults/\(lease.vaultId)/live-memory-themes":
+                themesGETCount += 1
+                loader.respond(statusCode: 200, body: try! JSONSerialization.data(withJSONObject: [
+                    "schemaVersion": "owner-truth-live-theme-inbox-v1", "vaultId": lease.vaultId,
+                    "themes": [], "nextCursor": NSNull()
+                ]))
             case ("GET", let path) where path.hasSuffix("/candidates"):
                 inboxGETCount += 1
                 loader.respond(
@@ -22210,7 +22522,8 @@ final class OwnerTruthContractsTests: XCTestCase {
             client: client,
             accountLeaseRuntime: runtime,
             qaGateEnabled: { true },
-            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore()
+            pendingResultStore: OwnerTruthCandidateReviewTransientPendingResultStore(),
+            themesEnabled: true
         )
         var renderedInboxState: OwnerTruthCandidateInboxViewState?
         controller.onViewStateRendered = { renderedInboxState = $0 }
@@ -22225,7 +22538,7 @@ final class OwnerTruthContractsTests: XCTestCase {
         defer { window.isHidden = true }
         controller.loadViewIfNeeded()
         XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 2) {
-            inboxGETCount == 1
+            themesGETCount == 1 && inboxGETCount == 1
                 && renderedInboxState?.items.count == 2
                 && renderedInboxState?.items.first?.reviewBinding?.baseMemoryRevision == 9
         })

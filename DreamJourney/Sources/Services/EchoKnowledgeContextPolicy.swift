@@ -203,6 +203,7 @@ typealias EchoKnowledgeContextIdentity = KBPersonaIdentity
 
 enum EchoV4IdentityRoute: String, Equatable {
     case ownerPrivate
+    case familyFormalRead
     case visitorPublic
     case familyContribution
     case denied
@@ -222,7 +223,8 @@ enum EchoV4IdentityRoutingPolicy {
         isSelfAssistant: Bool,
         relationshipAccepted: Bool,
         visitorSessionOwnerSubjectID: String?,
-        visitorSessionActive: Bool
+        visitorSessionActive: Bool,
+        formalMemoryReadGranted: Bool = false
     ) -> EchoV4IdentityRouteDecision {
         let viewer = KBPersonaIdentity.normalizedIdentifier(viewerSubjectID)
         let target = KBPersonaIdentity.normalizedIdentifier(targetOwnerSubjectID ?? "")
@@ -242,6 +244,11 @@ enum EchoV4IdentityRoutingPolicy {
                 privateContextAllowed: false,
                 legacyFallbackAllowed: false
             )
+        }
+        if formalMemoryReadGranted, viewer != target {
+            return EchoV4IdentityRouteDecision(route: .familyFormalRead,
+                reason: "explicitFormalMemoryReadGrant", privateContextAllowed: false,
+                legacyFallbackAllowed: false)
         }
         if visitorSessionActive, visitorOwner == target {
             return EchoV4IdentityRouteDecision(

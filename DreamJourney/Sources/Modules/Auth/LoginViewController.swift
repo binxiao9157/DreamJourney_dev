@@ -466,6 +466,11 @@ final class LoginViewController: UIViewController {
     }
 
     @objc private func phoneChanged() {
+        if credentialMode == .password && passwordAuthentication.usernameLoginReady {
+            rawPhone = ""
+            updateControls()
+            return
+        }
         guard let text = phoneField.text else { return }
         let digits = text.filter { $0.isNumber }
         rawPhone = String(digits.prefix(11))
@@ -495,7 +500,49 @@ final class LoginViewController: UIViewController {
         updateControls()
     }
 
+    private var passwordLoginIdentifier: String {
+        (phoneField.text ?? "").replacingOccurrences(of: " ", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func presentUsernameRegistration() {
+        guard requireLegalConsent() else { return }
+        let alert = UIAlertController(title: "凭邀请码注册", message: "不需要短信。用户名为 4–32 位字母、数字或下划线，以字母开头；密码 8–128 位。注册不会自动开放家人记忆。", preferredStyle: .alert)
+        alert.addTextField { $0.placeholder = "家人提供的邀请码"; $0.autocapitalizationType = .allCharacters; $0.accessibilityIdentifier = "auth.invitationCode" }
+        alert.addTextField { $0.placeholder = "用户名（与昵称分开）"; $0.autocapitalizationType = .none; $0.autocorrectionType = .no; $0.accessibilityIdentifier = "auth.username" }
+        alert.addTextField { $0.placeholder = "设置密码"; $0.isSecureTextEntry = true; $0.textContentType = .newPassword; $0.accessibilityIdentifier = "auth.registrationPassword" }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "注册", style: .default) { [weak self, weak alert] _ in
+            guard let self, let fields = alert?.textFields else { return }
+            let code = fields[0].text ?? "", name = fields[1].text ?? "", password = fields[2].text ?? ""
+            self.setLoginInProgress(true)
+            DreamJourneyBackendClient.shared.registerInvitedUsername(code: code, username: name, password: password) { [weak self] result in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.setLoginInProgress(false)
+                    switch result {
+                    case .success:
+                        self.authMode = .login
+                        self.credentialMode = .password
+                        self.credentialModeControl.selectedSegmentIndex = CredentialMode.password.rawValue
+                        self.phoneField.text = name
+                        self.passwordField.text = password
+                        self.applyAuthMode(animated: false)
+                        self.applyCredentialMode(animated: false)
+                        self.showLoginAlert(title: "注册成功", message: "请点击登录。加入家庭时在家人管理中输入同一邀请码；回响授权需由本人另外确认。")
+                    case .failure:
+                        self.showLoginAlert(title: "未完成注册", message: "请核对邀请码是否有效、用户名是否符合规则或已被使用，密码需 8–128 位。如已注册，请直接登录。")
+                    }
+                }
+            }
+        })
+        present(alert, animated: true)
+    }
+
     @objc private func registerTapped() {
+        if passwordAuthentication.canRegisterUsername {
+            presentUsernameRegistration()
+            return
+        }
         authMode = authMode == .login ? .register : .login
         if authMode == .register {
             credentialMode = .verificationCode
@@ -508,6 +555,10 @@ final class LoginViewController: UIViewController {
 
     @objc private func forgotPasswordTapped() {
         guard requireLegalConsent() else { return }
+        if passwordAuthentication.usernameLoginReady && !passwordLoginIdentifier.allSatisfy({ $0.isNumber }) {
+            showLoginAlert(title: "找回用户名账号", message: "请联系 liftora@163.com 核对账号。邀请码不能用于重设已注册账号的密码。")
+            return
+        }
         guard passwordAuthentication.canResetPassword else {
             showLoginAlert(title: "密码重置暂不可用", message: "当前无法安全重置密码，请使用验证码登录。")
             return
@@ -569,8 +620,8 @@ final class LoginViewController: UIViewController {
     @objc private func loginTapped() {
         guard requireLegalConsent() else { return }
         guard !isLoginInProgress, !isChallengeRequestInProgress else { return }
-        guard rawPhone.count == 11 else {
-            showLoginAlert(title: "手机号不完整", message: "请输入 11 位手机号。")
+        guard credentialMode == .password ? !passwordLoginIdentifier.isEmpty : rawPhone.count == 11 else {
+            showLoginAlert(title: "登录信息不完整", message: "请输入用户名或有效手机号。")
             phoneField.becomeFirstResponder()
             return
         }
@@ -600,10 +651,12 @@ final class LoginViewController: UIViewController {
         }
 
         setLoginInProgress(true)
-        let submittedPhone = rawPhone
+        let submittedPhone = passwordLoginIdentifier
+        let isUsername = !submittedPhone.allSatisfy { $0.isNumber }
         DreamJourneyBackendClient.shared.loginWithPassword(
             phone: submittedPhone,
-            password: password
+            password: password,
+            identityType: isUsername ? "username" : "phone"
         ) { [weak self] result in
             guard let self else { return }
             self.setLoginInProgress(false)
@@ -612,7 +665,7 @@ final class LoginViewController: UIViewController {
                 self.completeLogin(
                     userId: login.userId,
                     nickname: login.nickname,
-                    phone: submittedPhone
+                    phone: isUsername ? "" : submittedPhone
                 )
             case .failure(let error):
                 self.renderPasswordFailure(error, title: "密码登录失败")
@@ -879,9 +932,13 @@ final class LoginViewController: UIViewController {
     private func applyCredentialMode(animated: Bool) {
         let updates = {
             let usesPassword = self.credentialMode == .password && self.authMode == .login
+            self.phoneField.keyboardType = usesPassword && self.passwordAuthentication.usernameLoginReady ? .asciiCapable : .numberPad
+            self.phoneField.autocapitalizationType = .none
+            self.phoneField.autocorrectionType = .no
+            self.phoneField.placeholder = usesPassword && self.passwordAuthentication.usernameLoginReady ? "用户名或手机号" : "手机号"
             self.passwordFieldContainer.isHidden = !usesPassword
             self.verificationFieldContainer.isHidden = usesPassword
-            self.forgotPasswordButton.isHidden = !usesPassword || !self.passwordAuthentication.canResetPassword
+            self.forgotPasswordButton.isHidden = !usesPassword || !(self.passwordAuthentication.canResetPassword || self.passwordAuthentication.usernameLoginReady)
             if usesPassword {
                 self.verificationHintLabel.text = self.passwordAuthentication.canLogin
                     ? "使用已设置的密码登录"
@@ -943,8 +1000,8 @@ final class LoginViewController: UIViewController {
         passwordField.isEnabled = !isBusy
         verificationField.isEnabled = !isBusy
         requestCodeButton.isEnabled = hasAcceptedLegal && !usesPassword && rawPhone.count == 11 && !isBusy
-        forgotPasswordButton.isEnabled = hasAcceptedLegal && passwordAuthentication.canResetPassword && !isBusy
-        loginButton.isEnabled = hasAcceptedLegal && rawPhone.count == 11
+        forgotPasswordButton.isEnabled = hasAcceptedLegal && (passwordAuthentication.canResetPassword || passwordAuthentication.usernameLoginReady) && !isBusy
+        loginButton.isEnabled = hasAcceptedLegal && (usesPassword ? !passwordLoginIdentifier.isEmpty : rawPhone.count == 11)
             && (usesPassword ? hasPassword && passwordAuthentication.canLogin : hasVerificationCode)
             && !isBusy
         registerButton.isEnabled = !isBusy

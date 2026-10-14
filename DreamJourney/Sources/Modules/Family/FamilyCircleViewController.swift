@@ -173,7 +173,7 @@ final class FamilyCircleViewController: UIViewController {
         stampIcon.contentMode = .scaleAspectFit
 
         let label = UILabel()
-        label.text = "发送手机号邀请"
+        label.text = "邀请或加入家人"
         label.font = .systemFont(ofSize: 14, weight: .medium)
         label.textColor = .warmAccent
         label.textAlignment = .center
@@ -516,12 +516,11 @@ final class FamilyCircleViewController: UIViewController {
 
     // MARK: - Actions
     @objc private func addTapped() {
-        // 弹出搜索/邀请弹窗（复用 searchField 聚焦）
-        searchField.becomeFirstResponder()
+        presentAccountFamilyActions()
     }
 
     @objc private func copyInviteTapped() {
-        presentFamilyInviteSheet(prefilledPhone: searchField.text)
+        presentAccountFamilyActions()
     }
 
     @objc private func contributeMemoryTapped() {
@@ -684,7 +683,123 @@ final class FamilyCircleViewController: UIViewController {
         navigationController?.popViewController(animated: true)
     }
 
+    private func runFamilyCommand(path: String, payload: [String: Any], success: @escaping ([String: Any]) -> Void) {
+        guard let user = UserManager.shared.currentUser,
+              let lease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id) else { return }
+        DreamJourneyBackendClient.shared.familyAccountCommand(accountLease: lease, path: path, payload: payload) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self, AccountLeaseRuntime.shared.validate(lease, at: .ui).allowed else { return }
+                switch result {
+                case .success(let response):
+                    FamilyRepository.shared.refreshFromBackend(userId: lease.subjectId)
+                    success(response)
+                case .failure:
+                    self.showToast("操作未完成，请刷新后核对邀请、账号或授权状态", type: .error)
+                }
+            }
+        }
+    }
+
+    private func presentAccountFamilyActions() {
+        let sheet = UIAlertController(title: "家人邀请", message: "接受邀请不会自动开放记忆。回响需要本人单独授权。", preferredStyle: .alert)
+        sheet.addAction(UIAlertAction(title: "为新用户创建注册邀请码", style: .default) { [weak self] _ in self?.createAccountInvitation(existing: false) })
+        sheet.addAction(UIAlertAction(title: "邀请已注册的用户名", style: .default) { [weak self] _ in self?.createAccountInvitation(existing: true) })
+        sheet.addAction(UIAlertAction(title: "输入邀请码加入", style: .default) { [weak self] _ in self?.acceptAccountInvitation() })
+        sheet.addAction(UIAlertAction(title: "通过已验证手机号邀请", style: .default) { [weak self] _ in self?.presentFamilyInviteSheet(prefilledPhone: self?.searchField.text) })
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        present(sheet, animated: true)
+    }
+
+    private func createAccountInvitation(existing: Bool) {
+        let alert = UIAlertController(title: existing ? "邀请已有账号" : "创建注册邀请码", message: existing ? "输入家人的登录用户名，昵称不能用于定位账号。" : "邀请码有效期 7 天，仅供一位家人创建独立账号；请只分享给本人。", preferredStyle: .alert)
+        alert.addTextField { $0.placeholder = existing ? "家人的登录用户名" : "家人的称呼"; $0.autocapitalizationType = .none; $0.autocorrectionType = .no }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "创建", style: .default) { [weak self, weak alert] _ in
+            guard let self, let user = UserManager.shared.currentUser else { return }
+            let name = alert?.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            self.runFamilyCommand(path: "/family/invite", payload: ["userId":user.id, "name":name.isEmpty ? "家人" : name,
+                "relation":"家人", "invitationKind":existing ? "username" : "accountRegistration", "username":name]) { [weak self] response in
+                guard let member = response["member"] as? [String: Any], let code = member["invitationCode"] as? String else { return }
+                self?.presentInvitationCode(code)
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func presentInvitationCode(_ code: String) {
+        let alert = UIAlertController(title: "邀请已创建", message: "邀请码：\(code)\n请通过你的联系方式交给家人。未自动发送短信。", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "分享邀请码", style: .default) { [weak self] _ in
+            guard let self else { return }
+            let share = UIActivityViewController(activityItems:["寻梦环游家人邀请码：\(code)"], applicationActivities:nil)
+            share.popoverPresentationController?.sourceView = self.addButton
+            self.present(share, animated:true)
+        })
+        alert.addAction(UIAlertAction(title: "关闭", style: .cancel))
+        present(alert, animated:true)
+    }
+
+    private func acceptAccountInvitation() {
+        let alert = UIAlertController(title: "接受家人邀请", message: "请输入家人分享的邀请码。若是旧手机号邀请，另填本账号已验证的手机号；用户名邀请无需填手机号。接受后记忆仍不自动共享。", preferredStyle: .alert)
+        alert.addTextField { $0.placeholder = "邀请码"; $0.autocapitalizationType = .allCharacters; $0.accessibilityIdentifier = "family.acceptCode" }
+        alert.addTextField { $0.placeholder = "已验证手机号（仅手机号邀请需要）"; $0.keyboardType = .phonePad }
+        alert.addAction(UIAlertAction(title:"取消",style:.cancel))
+        alert.addAction(UIAlertAction(title:"接受邀请",style:.default) { [weak self, weak alert] _ in
+            guard let self else { return }
+            let code = (alert?.textFields?.first?.text ?? "").trimmingCharacters(in:.whitespacesAndNewlines).uppercased()
+            guard !code.isEmpty, code.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else { self.showToast("请核对邀请码",type:.error); return }
+            let phone = alert?.textFields?.last?.text?.trimmingCharacters(in:.whitespacesAndNewlines) ?? ""
+            self.runFamilyCommand(path:"/family/invitations/\(code)/accept", payload:phone.isEmpty ? [:] : ["phone":phone]) { [weak self] response in
+                guard response["status"] as? String == "accepted" else { return }
+                self?.showToast("已加入，回响访问仍需本人授权",type:.success)
+            }
+        })
+        present(alert,animated:true)
+    }
+
     private func openMemberDetail(member: FamilyMember) {
+        guard let user = UserManager.shared.currentUser else { return }
+        if member.relationshipViewerUserId == user.id && member.relationshipOwnerUserId != user.id {
+            let sheet = UIAlertController(title:member.name, message:"对方允许你只读已确认的正式记忆，不能查看原始对话或修改对方记忆。", preferredStyle:.alert)
+            if member.isAcceptedFamilyMember(for:user.id) {
+                sheet.addAction(UIAlertAction(title:"进入回响",style:.default) { [weak self] _ in self?.selectPersona(option:.familyMember(member)) })
+            }
+            sheet.addAction(UIAlertAction(title:"取消",style:.cancel))
+            present(sheet,animated:true)
+            return
+        }
+        let sheet = UIAlertController(title:member.name, message:"你给对方的授权，和对方给你的授权相互独立。",preferredStyle:.alert)
+        if member.relationshipStatus == .accepted {
+            let grants = member.activeFamilyPersonaReadGrants().filter { $0.grantorSubjectId == user.id && $0.granteeSubjectId == member.memberSubjectId }
+            if grants.isEmpty {
+                sheet.addAction(UIAlertAction(title:"允许对方访问我的回响",style:.default) { [weak self] _ in self?.confirmFamilyEchoGrant(member) })
+            } else {
+                sheet.addAction(UIAlertAction(title:"撤销对方的回响访问",style:.destructive) { [weak self] _ in
+                    guard let grant = grants.first else { return }
+                    self?.runFamilyCommand(path:"/family/access-grants/\(user.id)/\(grant.id)/revoke",payload:["expectedVersion":grant.rowVersion]) { [weak self] _ in self?.showToast("已撤销访问",type:.success) }
+                })
+            }
+        }
+        if member.invitationStatus == "pending", let code = member.invitationCode {
+            sheet.addAction(UIAlertAction(title:"分享邀请码",style:.default) { [weak self] _ in self?.presentInvitationCode(code) })
+        }
+        sheet.addAction(UIAlertAction(title:"查看家庭关系与其他设置",style:.default) { [weak self] _ in self?.openLegacyMemberDetail(member:member) })
+        sheet.addAction(UIAlertAction(title:"取消",style:.cancel))
+        present(sheet,animated:true)
+    }
+
+    private func confirmFamilyEchoGrant(_ member: FamilyMember) {
+        guard let user = UserManager.shared.currentUser, member.relationshipOwnerUserId == user.id else { return }
+        let alert = UIAlertController(title:"允许家人访问我的回响？",message:"\(member.name)可以通过 Live 和文字回响读取你现在及今后确认的正式记忆。不会开放待确认、原始对话或编辑权限。你可随时撤销。",preferredStyle:.alert)
+        alert.addAction(UIAlertAction(title:"取消",style:.cancel))
+        alert.addAction(UIAlertAction(title:"同意授权",style:.default) { [weak self] _ in
+            self?.runFamilyCommand(path:"/family/access-grants",payload:["userId":user.id,"relationshipId":member.relationshipId,
+                "granteeSubjectId":member.memberSubjectId,"purpose":"family.persona","resourceType":"familyMember",
+                "resourceId":member.id,"operations":["read"]]) { [weak self] _ in self?.showToast("已授权对方只读我的正式记忆",type:.success) }
+        })
+        present(alert,animated:true)
+    }
+
+    private func openLegacyMemberDetail(member: FamilyMember) {
         let detail = FamilyMemberDetailViewController(member: member)
         detail.onSelectPersona = { [weak self] refreshedMember in
             self?.selectPersona(option: .familyMember(refreshedMember))
@@ -756,7 +871,7 @@ extension FamilyCircleViewController: UITableViewDelegate {
     private func presentFamilyInviteSheet(prefilledPhone: String?) {
         let alert = UIAlertController(
             title: "邀请家人",
-            message: "通过手机号发送邀请。家人加入后可解除家庭关系，但不会删除对方账号。",
+            message: "填写家人已验证的手机号创建邀请，再分享邀请码。不会自动发送短信；解除关系不会删除账号。",
             preferredStyle: .alert
         )
         alert.addTextField { textField in
@@ -810,8 +925,8 @@ extension FamilyCircleViewController: UITableViewDelegate {
             self?.searchField.text = nil
             self?.updateMemberListUI()
             switch result {
-            case .success:
-                self?.showToast("邀请已发送，等待家人加入", type: .success)
+            case .success(let member):
+                if let code = member.invitationCode { self?.presentInvitationCode(code) }
             case .failure:
                 self?.showToast("邀请失败，可稍后重试", type: .error)
             }

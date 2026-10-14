@@ -388,7 +388,7 @@ final class ProfileSettingsViewController: UIViewController {
         nameField.text = user?.nickname ?? "寻梦环游用户"
         genderField.text = user?.gender ?? ""
         regionField.text = user?.region ?? ""
-        phoneValueLabel.text = user?.maskedPhone ?? "未登录"
+        phoneValueLabel.text = user.map { $0.phone.isEmpty ? "未绑定" : $0.maskedPhone } ?? "未登录"
         renderAvatar()
     }
 

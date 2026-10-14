@@ -406,27 +406,22 @@ enum FamilyRelationshipAuthorizationPolicy {
         context: FamilyRelationshipAuthorizationContext,
         now: Date = Date()
     ) -> Bool {
-        guard isAcceptedRelationship(
-            relationshipId: relationshipId,
-            relationshipOwnerUserId: relationshipOwnerUserId,
-            relationshipStatus: relationshipStatus,
-            authoritySource: authoritySource,
-            accessStatus: accessStatus,
-            invitationStatus: invitationStatus,
-            context: context
-        ) else {
-            return false
-        }
-
+        // Relationship ownership is not the direction of the viewer's permission.
         if authoritySource == .qaFixture && context.allowQAFixtures && accessGrants.isEmpty {
-            return true
+            return isAcceptedRelationship(relationshipId: relationshipId,
+                relationshipOwnerUserId: relationshipOwnerUserId, relationshipStatus: relationshipStatus,
+                authoritySource: authoritySource, accessStatus: accessStatus,
+                invitationStatus: invitationStatus, context: context)
         }
-
-        guard authoritySource == .backendInvitation else { return false }
         let normalizedRelationshipId = normalized(relationshipId)
         let normalizedOwnerUserId = normalized(relationshipOwnerUserId)
         let normalizedMemberSubjectId = normalized(memberSubjectId)
-        guard !normalizedMemberSubjectId.isEmpty else { return false }
+        guard authoritySource == .backendInvitation, relationshipStatus == .accepted,
+              normalized(accessStatus).lowercased() == "active",
+              normalized(invitationStatus).lowercased() == "accepted",
+              !normalizedRelationshipId.isEmpty, !normalizedOwnerUserId.isEmpty,
+              normalizedMemberSubjectId == context.currentOwnerUserId,
+              normalizedOwnerUserId != context.currentOwnerUserId else { return false }
         return accessGrants.contains { grant in
             normalized(grant.relationshipId) == normalizedRelationshipId
                 && normalized(grant.grantorSubjectId) == normalizedOwnerUserId

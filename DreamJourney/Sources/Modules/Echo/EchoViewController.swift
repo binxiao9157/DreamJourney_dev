@@ -12350,11 +12350,12 @@ final class EchoViewController: UIViewController {
             viewerSubjectID: accountLease.subjectId,
             targetOwnerSubjectID: context.isSelfAssistant
                 ? accountLease.subjectId
-                : member?.memberSubjectId,
+                : member?.digitalHumanId,
             isSelfAssistant: context.isSelfAssistant,
             relationshipAccepted: member != nil,
             visitorSessionOwnerSubjectID: visitorSession.ownerSubjectID,
-            visitorSessionActive: visitorSession.isActive
+            visitorSessionActive: visitorSession.isActive,
+            formalMemoryReadGranted: member?.isAcceptedFamilyMember(for: accountLease.subjectId) == true
         )
     }
 
@@ -13833,7 +13834,7 @@ final class EchoViewController: UIViewController {
                 turnID: turnID
             )
             return
-        case .ownerPrivate:
+        case .ownerPrivate, .familyFormalRead:
             break
         case .denied:
             activeVoiceInteractionLifecycleToken = nil
@@ -13869,7 +13870,7 @@ final class EchoViewController: UIViewController {
             digitalHumanId: expectedIdentity.digitalHumanId,
             personaName: context.resolvedDisplayName,
             lifecycleMode: context.mode,
-            viewerFamilyMemberID: nil,
+            viewerFamilyMemberID: context.isSelfAssistant ? nil : context.ownerId,
             recentTurns: recentTurns,
             productSessionID: productSessionID,
             clientTurnID: clientTurnID
@@ -14037,7 +14038,7 @@ final class EchoViewController: UIViewController {
         )
 
         switch routeDecision.route {
-        case .ownerPrivate:
+        case .ownerPrivate, .familyFormalRead:
             guard let expectedIdentity = echoKnowledgeContextIdentity(for: context) else {
                 viewModel.fail("本人记忆身份暂不可用")
                 return
@@ -14057,7 +14058,7 @@ final class EchoViewController: UIViewController {
                 digitalHumanId: expectedIdentity.digitalHumanId,
                 personaName: context.resolvedDisplayName,
                 lifecycleMode: context.mode,
-                viewerFamilyMemberID: nil,
+                viewerFamilyMemberID: context.isSelfAssistant ? nil : context.ownerId,
                 recentTurns: recentTurns,
                 productSessionID: productSessionID,
                 clientTurnID: clientTurnID
@@ -17084,7 +17085,7 @@ final class EchoViewController: UIViewController {
         let targetPersonaId = context.isSelfAssistant
             ? accountLease.subjectId
             : (FamilyRepository.shared.acceptedMembers(for: accountLease.subjectId)
-                .first(where: { $0.id == context.ownerId })?.memberSubjectId ?? context.ownerId)
+                .first(where: { $0.id == context.ownerId })?.digitalHumanId ?? context.ownerId)
         let viewerFamilyMemberID = context.isSelfAssistant
             ? nil
             : context.ownerId

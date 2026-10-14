@@ -909,7 +909,9 @@ final class FamilyRepository {
     private func isOwnedBackendRecord(_ member: FamilyMember, ownerUserId: String) -> Bool {
         member.relationshipAuthoritySource == .backendInvitation
             && !ownerUserId.isEmpty
-            && member.relationshipOwnerUserId == ownerUserId
+            && (member.relationshipOwnerUserId == ownerUserId
+                || (member.relationshipViewerUserId == ownerUserId && member.memberSubjectId == ownerUserId
+                    && member.isAcceptedFamilyMember(for: ownerUserId)))
     }
 
     @discardableResult

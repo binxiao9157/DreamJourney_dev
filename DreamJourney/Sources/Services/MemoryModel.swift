@@ -159,6 +159,7 @@ struct FamilyMember: Codable, Identifiable {
     var backendContractMode: String?
     var defaultReleaseVisible: Bool
     /// 家庭关系归属与授权来源。缺失/legacy 一律不具备家庭访问权限。
+    var relationshipViewerUserId: String?
     var relationshipOwnerUserId: String
     var relationshipAuthoritySource: FamilyRelationshipAuthoritySource
     var relationshipId: String
@@ -183,7 +184,7 @@ struct FamilyMember: Codable, Identifiable {
 
     var isAcceptedFamilyMember: Bool {
         isAcceptedFamilyMember(
-            for: relationshipOwnerUserId,
+            for: relationshipViewerUserId ?? relationshipOwnerUserId,
             allowQAFixtures: FamilyRelationshipAuthorizationPolicy.currentBuildAllowsQAFixtures
         )
     }
@@ -314,6 +315,7 @@ struct FamilyMember: Codable, Identifiable {
          familyPersonaContractVersion: Int = 1,
          backendContractMode: String? = nil,
          defaultReleaseVisible: Bool = false,
+         relationshipViewerUserId: String? = nil,
          relationshipOwnerUserId: String = "",
          relationshipAuthoritySource: FamilyRelationshipAuthoritySource = .legacyUnverified,
          relationshipId: String = "",
@@ -344,6 +346,7 @@ struct FamilyMember: Codable, Identifiable {
         self.familyPersonaContractVersion = familyPersonaContractVersion
         self.backendContractMode = backendContractMode
         self.defaultReleaseVisible = defaultReleaseVisible
+        self.relationshipViewerUserId = relationshipViewerUserId
         self.relationshipOwnerUserId = relationshipOwnerUserId
         self.relationshipAuthoritySource = relationshipAuthoritySource
         self.relationshipId = relationshipId
@@ -377,6 +380,7 @@ struct FamilyMember: Codable, Identifiable {
         case familyPersonaContractVersion
         case backendContractMode
         case defaultReleaseVisible
+        case relationshipViewerUserId
         case relationshipOwnerUserId
         case relationshipAuthoritySource
         case relationshipId
@@ -411,6 +415,7 @@ struct FamilyMember: Codable, Identifiable {
         familyPersonaContractVersion = try container.decodeIfPresent(Int.self, forKey: .familyPersonaContractVersion) ?? 1
         backendContractMode = try container.decodeIfPresent(String.self, forKey: .backendContractMode)
         defaultReleaseVisible = try container.decodeIfPresent(Bool.self, forKey: .defaultReleaseVisible) ?? false
+        relationshipViewerUserId = try container.decodeIfPresent(String.self, forKey: .relationshipViewerUserId)
         relationshipOwnerUserId = try container.decodeIfPresent(String.self, forKey: .relationshipOwnerUserId) ?? ""
         relationshipAuthoritySource = try container.decodeIfPresent(
             FamilyRelationshipAuthoritySource.self,
@@ -457,6 +462,7 @@ struct FamilyMember: Codable, Identifiable {
             familyPersonaContractVersion: intValue(in: object, for: "familyPersonaContractVersion") ?? 1,
             backendContractMode: stringValue(in: object, for: "backendContractMode"),
             defaultReleaseVisible: boolValue(in: object, for: "defaultReleaseVisible") ?? false,
+            relationshipViewerUserId: stringValue(in: object, for: "viewerUserId"),
             relationshipOwnerUserId: stringValue(in: object, for: "ownerUserId")
                 ?? stringValue(in: object, for: "userId")
                 ?? "",

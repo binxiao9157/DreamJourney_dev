@@ -1,6 +1,9 @@
 import Foundation
 
 struct BackendPasswordAuthenticationCapability: Equatable {
+    let usernameLoginReady: Bool
+    let usernameRegistrationReady: Bool
+    let usernameRegistrationEndpoint: String
     let implemented: Bool
     let enabled: Bool
     let ready: Bool
@@ -37,6 +40,10 @@ struct BackendPasswordAuthenticationCapability: Equatable {
         baseReady
             && loginReady
             && loginEndpoint == "/v2/auth/password/login"
+    }
+
+    var canRegisterUsername: Bool {
+        canLogin && usernameRegistrationReady && usernameRegistrationEndpoint == "/v2/auth/username/register"
     }
 
     var canSetupPassword: Bool {
@@ -87,6 +94,9 @@ struct BackendPasswordAuthenticationCapability: Equatable {
         let parsedSessionContractVersion = Self.int(json?["sessionContractVersion"])
         let parsedContractVersion = Self.int(json?["contractVersion"])
 
+        usernameLoginReady = Self.bool(json?["usernameLoginReady"]) ?? false
+        usernameRegistrationReady = Self.bool(json?["usernameRegistrationReady"]) ?? false
+        usernameRegistrationEndpoint = Self.string(json?["usernameRegistrationEndpoint"]) ?? ""
         implemented = parsedImplemented ?? false
         enabled = parsedEnabled ?? false
         ready = parsedReady ?? false

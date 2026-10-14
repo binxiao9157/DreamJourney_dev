@@ -1553,7 +1553,7 @@ final class ProfileViewController: UIViewController {
         }
         let alert = UIAlertController(
             title: "注销账户",
-            message: "提交注销后会立即退出当前账号。你的数据会保留 30 天；30 天内用同手机号重新注册可恢复数据，恢复机会只有 1 次。超过 30 天后将不可逆删除。",
+            message: "提交注销后会立即退出当前账号。你的数据会保留 30 天；账号恢复请联系支持核实身份，不要重新注册其他账号。超过 30 天后将不可逆删除。",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))

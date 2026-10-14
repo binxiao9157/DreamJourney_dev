@@ -13976,13 +13976,14 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
     func loginWithPassword(
         phone: String,
         password: String,
+        identityType: String = "phone",
         completion: @escaping (Result<BackendPasswordLoginContract, Error>) -> Void
     ) {
         requestJSON(
             path: "/v2/auth/password/login",
             method: .post,
             payload: [
-                "identityType": "phone",
+                "identityType": identityType,
                 "target": phone,
                 "password": password,
             ],
@@ -14010,6 +14011,26 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
                 completion(.failure(error))
             }
         }
+    }
+
+    func registerInvitedUsername(code: String, username: String, password: String,
+                                 completion: @escaping (Result<Void, Error>) -> Void) {
+        requestJSON(path: "/v2/auth/username/register", method: .post,
+            payload: ["invitationCode": code, "username": username, "password": password, "legalConsent": true],
+            authPolicy: .publicRequest, allowsRefresh: false) { result in
+                completion(result.flatMap { object in
+                    guard object["status"] as? String == "registered" else {
+                        return .failure(ClientError.invalidJSONResponse)
+                    }
+                    return .success(())
+                })
+            }
+    }
+
+    func familyAccountCommand(accountLease: AccountLease, path: String, payload: [String: Any],
+                              completion: @escaping (Result<[String: Any], Error>) -> Void) {
+        requestJSON(path: path, method: .post, payload: payload, authPolicy: .userRequired,
+            applicationLease: accountLease, sessionUserId: accountLease.subjectId, completion: completion)
     }
 
     func resumePrivateAccessSession(completion: @escaping (Bool) -> Void) {
