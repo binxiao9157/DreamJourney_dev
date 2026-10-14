@@ -159,6 +159,28 @@ final class LoginViewController: UIViewController {
         return button
     }()
 
+    private let loginScrollView = UIScrollView()
+    private let loginContentView = UIView()
+    private let legalDocumentLinks = UIStackView()
+    private var hasAcceptedLegal = false
+    private lazy var legalConsentButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.tintColor = DJDesignTokens.Color.accentDeep
+        button.accessibilityIdentifier = "auth.legalConsent"
+        button.accessibilityLabel = "同意使用说明和免责说明，并知悉隐私说明"
+        button.addTarget(self, action: #selector(toggleLegalConsent), for: .touchUpInside)
+        return button
+    }()
+    private let capabilityLoader: (@escaping (Result<BackendRuntimeConfig, Error>) -> Void) -> Void
+
+    init(capabilityLoader: @escaping (@escaping (Result<BackendRuntimeConfig, Error>) -> Void) -> Void = {
+        DreamJourneyBackendClient.shared.fetchRuntimeConfig(completion: $0)
+    }) {
+        self.capabilityLoader = capabilityLoader
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
     private var rawPhone = ""
     private var authMode: AuthMode = .login
     private var credentialMode: CredentialMode = .verificationCode
@@ -181,7 +203,104 @@ final class LoginViewController: UIViewController {
         hideKeyboardWhenTapped()
     }
 
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        legalDocumentLinks.axis = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? .vertical : .horizontal
+    }
+
+    @objc private func toggleLegalConsent() {
+        guard !isLoginInProgress, !isChallengeRequestInProgress else { return }
+        hasAcceptedLegal.toggle()
+        updateControls()
+    }
+
+    /// All credential request paths, including auto-submit continuations, require explicit consent.
+    private func requireLegalConsent() -> Bool {
+        guard hasAcceptedLegal else {
+            showLoginAlert(title: "请先阅读并勾选", message: "登录前请阅读并同意使用说明和免责说明，并了解隐私说明。")
+            return false
+        }
+        return true
+    }
+
+    private func makeLegalControls() -> UIView {
+        let explanation = UILabel()
+        explanation.text = "我已阅读并同意使用说明、免责说明，并知悉隐私说明"
+        explanation.font = .preferredFont(forTextStyle: .footnote)
+        explanation.adjustsFontForContentSizeCategory = true
+        explanation.textColor = DJDesignTokens.Color.textSecondary
+        explanation.numberOfLines = 0
+        let row = UIStackView(arrangedSubviews: [legalConsentButton, explanation])
+        row.axis = .horizontal
+        row.alignment = .top
+        row.spacing = 4
+        legalConsentButton.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        legalConsentButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        let links = UIStackView()
+        links.axis = .vertical
+        links.alignment = .leading
+        let documentLinks = legalDocumentLinks
+        documentLinks.axis = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? .vertical : .horizontal
+        documentLinks.alignment = .leading
+        documentLinks.spacing = 6
+        links.addArrangedSubview(documentLinks)
+        for document in [AppLegalDocument.usage, .disclaimer, .privacy] {
+            let button = UIButton(type: .system)
+            button.setTitle("《\(document.title)》", for: .normal)
+            button.titleLabel?.font = .preferredFont(forTextStyle: .footnote)
+            button.titleLabel?.adjustsFontForContentSizeCategory = true
+            button.tintColor = DJDesignTokens.Color.accentDeep
+            button.accessibilityIdentifier = "auth.legal.\(document.rawValue)"
+            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+            button.addAction(UIAction { [weak self] _ in self?.presentLegal(document: document) }, for: .touchUpInside)
+            documentLinks.addArrangedSubview(button)
+        }
+        let all = UIButton(type: .system)
+        all.setTitle("查看全部法律说明", for: .normal)
+        all.titleLabel?.font = .preferredFont(forTextStyle: .footnote)
+        all.titleLabel?.adjustsFontForContentSizeCategory = true
+        all.tintColor = DJDesignTokens.Color.accentDeep
+        all.accessibilityIdentifier = "auth.legal.all"
+        all.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        all.addAction(UIAction { [weak self] _ in self?.presentLegal(document: nil) }, for: .touchUpInside)
+        links.addArrangedSubview(all)
+        let stack = UIStackView(arrangedSubviews: [row, links])
+        stack.axis = .vertical
+        stack.spacing = 0
+        return stack
+    }
+
+    private func presentLegal(document: AppLegalDocument?) {
+        view.endEditing(true)
+        let reader: UIViewController = document.map { LegalDocumentViewController(document: $0) } ?? ProfileLegalViewController()
+        reader.navigationItem.leftBarButtonItem = UIBarButtonItem(title: "关闭", style: .plain, target: self, action: #selector(closeLegal))
+        let navigation = UINavigationController(rootViewController: reader)
+        navigation.navigationBar.tintColor = DJDesignTokens.Color.accentDeep
+        navigation.modalPresentationStyle = .fullScreen
+        present(navigation, animated: true)
+    }
+
+    @objc private func closeLegal() { dismiss(animated: true) }
+
     private func setupLayout() {
+        loginScrollView.keyboardDismissMode = .interactive
+        loginScrollView.alwaysBounceVertical = true
+        view.addSubview(loginScrollView)
+        loginScrollView.addSubview(loginContentView)
+        loginScrollView.translatesAutoresizingMaskIntoConstraints = false
+        loginContentView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            loginScrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            loginScrollView.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
+            loginScrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            loginScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            loginContentView.topAnchor.constraint(equalTo: loginScrollView.contentLayoutGuide.topAnchor),
+            loginContentView.bottomAnchor.constraint(equalTo: loginScrollView.contentLayoutGuide.bottomAnchor),
+            loginContentView.leadingAnchor.constraint(equalTo: loginScrollView.contentLayoutGuide.leadingAnchor),
+            loginContentView.trailingAnchor.constraint(equalTo: loginScrollView.contentLayoutGuide.trailingAnchor),
+            loginContentView.widthAnchor.constraint(equalTo: loginScrollView.frameLayoutGuide.widthAnchor),
+        ])
+        let legalControls = makeLegalControls()
         configureFieldContainer(phoneFieldContainer, icon: phoneIcon, textField: phoneField)
         configureFieldContainer(passwordFieldContainer, icon: passwordIcon, textField: passwordField)
         configureVerificationFieldContainer()
@@ -204,30 +323,31 @@ final class LoginViewController: UIViewController {
             passwordFieldContainer,
             verificationFieldContainer,
             credentialHelpStack,
+            legalControls,
             loginButton,
             registerStack,
         ].forEach {
-            view.addSubview($0)
+            loginContentView.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
 
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 80),
-            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            titleLabel.topAnchor.constraint(equalTo: loginContentView.topAnchor, constant: 32),
+            titleLabel.leadingAnchor.constraint(equalTo: loginContentView.leadingAnchor, constant: 24),
+            titleLabel.trailingAnchor.constraint(equalTo: loginContentView.trailingAnchor, constant: -24),
 
             subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
             subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             subtitleLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
 
             credentialModeControl.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 36),
-            credentialModeControl.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
-            credentialModeControl.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            credentialModeControl.leadingAnchor.constraint(equalTo: loginContentView.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            credentialModeControl.trailingAnchor.constraint(equalTo: loginContentView.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
             credentialModeControl.heightAnchor.constraint(equalToConstant: 36),
 
             phoneFieldContainer.topAnchor.constraint(equalTo: credentialModeControl.bottomAnchor, constant: 20),
-            phoneFieldContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: DJDesignTokens.Spacing.page),
-            phoneFieldContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
+            phoneFieldContainer.leadingAnchor.constraint(equalTo: loginContentView.leadingAnchor, constant: DJDesignTokens.Spacing.page),
+            phoneFieldContainer.trailingAnchor.constraint(equalTo: loginContentView.trailingAnchor, constant: -DJDesignTokens.Spacing.page),
             phoneFieldContainer.heightAnchor.constraint(equalToConstant: 56),
 
             passwordFieldContainer.topAnchor.constraint(equalTo: phoneFieldContainer.bottomAnchor, constant: 16),
@@ -244,13 +364,17 @@ final class LoginViewController: UIViewController {
             credentialHelpStack.leadingAnchor.constraint(equalTo: verificationFieldContainer.leadingAnchor, constant: 16),
             credentialHelpStack.trailingAnchor.constraint(equalTo: verificationFieldContainer.trailingAnchor, constant: -16),
 
-            loginButton.topAnchor.constraint(equalTo: credentialHelpStack.bottomAnchor, constant: 20),
+            legalControls.topAnchor.constraint(equalTo: credentialHelpStack.bottomAnchor, constant: 16),
+            legalControls.leadingAnchor.constraint(equalTo: phoneFieldContainer.leadingAnchor),
+            legalControls.trailingAnchor.constraint(equalTo: phoneFieldContainer.trailingAnchor),
+            loginButton.topAnchor.constraint(equalTo: legalControls.bottomAnchor, constant: 16),
             loginButton.leadingAnchor.constraint(equalTo: phoneFieldContainer.leadingAnchor),
             loginButton.trailingAnchor.constraint(equalTo: phoneFieldContainer.trailingAnchor),
             loginButton.heightAnchor.constraint(equalToConstant: 57),
 
             registerStack.topAnchor.constraint(equalTo: loginButton.bottomAnchor, constant: 28),
-            registerStack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            registerStack.centerXAnchor.constraint(equalTo: loginContentView.centerXAnchor),
+            registerStack.bottomAnchor.constraint(equalTo: loginContentView.bottomAnchor, constant: -24),
         ])
     }
 
@@ -383,6 +507,7 @@ final class LoginViewController: UIViewController {
     }
 
     @objc private func forgotPasswordTapped() {
+        guard requireLegalConsent() else { return }
         guard passwordAuthentication.canResetPassword else {
             showLoginAlert(title: "密码重置暂不可用", message: "当前无法安全重置密码，请使用验证码登录。")
             return
@@ -398,6 +523,7 @@ final class LoginViewController: UIViewController {
     }
 
     private func requestIdentityChallenge(autoSubmitCode: String?) {
+        guard requireLegalConsent() else { return }
         guard !isChallengeRequestInProgress, !isLoginInProgress else { return }
         guard rawPhone.count == 11 else {
             showLoginAlert(title: "手机号不完整", message: "请输入 11 位手机号。")
@@ -415,7 +541,7 @@ final class LoginViewController: UIViewController {
 
         let submittedPhone = rawPhone
         setChallengeRequestInProgress(true)
-        DreamJourneyBackendClient.shared.fetchRuntimeConfig { [weak self] result in
+        capabilityLoader { [weak self] result in
             guard let self else { return }
             switch result {
             case .success(let runtime):
@@ -441,6 +567,7 @@ final class LoginViewController: UIViewController {
     }
 
     @objc private func loginTapped() {
+        guard requireLegalConsent() else { return }
         guard !isLoginInProgress, !isChallengeRequestInProgress else { return }
         guard rawPhone.count == 11 else {
             showLoginAlert(title: "手机号不完整", message: "请输入 11 位手机号。")
@@ -456,6 +583,7 @@ final class LoginViewController: UIViewController {
     }
 
     private func submitPasswordLogin() {
+        guard requireLegalConsent() else { return }
         guard authMode == .login, passwordAuthentication.canLogin else {
             showLoginAlert(title: "密码登录暂不可用", message: "请切换到验证码登录。")
             return
@@ -493,6 +621,7 @@ final class LoginViewController: UIViewController {
     }
 
     private func submitVerificationCodeLogin() {
+        guard requireLegalConsent() else { return }
         let verificationCode = verificationField.text?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !verificationCode.isEmpty else {
@@ -525,6 +654,7 @@ final class LoginViewController: UIViewController {
         verificationCode: String,
         phone: String
     ) {
+        guard requireLegalConsent() else { return }
         setLoginInProgress(true)
         DreamJourneyBackendClient.shared.verifyIdentityChallenge(
             challengeId: challenge.challengeId,
@@ -556,6 +686,10 @@ final class LoginViewController: UIViewController {
         capability: BackendIdentityChallengeCapability,
         autoSubmitCode: String?
     ) {
+        guard requireLegalConsent() else {
+            setChallengeRequestInProgress(false)
+            return
+        }
         DreamJourneyBackendClient.shared.createIdentityChallenge(
             phone: phone,
             purpose: authMode == .register ? "register" : "login"
@@ -772,7 +906,7 @@ final class LoginViewController: UIViewController {
 
     private func loadAuthenticationCapabilities() {
         credentialModeControl.setEnabled(false, forSegmentAt: CredentialMode.password.rawValue)
-        DreamJourneyBackendClient.shared.fetchRuntimeConfig { [weak self] result in
+        capabilityLoader { [weak self] result in
             guard let self else { return }
             if case .success(let runtime) = result {
                 self.passwordAuthentication = runtime.passwordAuthentication
@@ -800,13 +934,17 @@ final class LoginViewController: UIViewController {
             && passwordLength <= passwordAuthentication.maximumPasswordLength
         let usesPassword = credentialMode == .password && authMode == .login
 
+        legalConsentButton.isEnabled = !isBusy
+        legalConsentButton.setImage(UIImage(systemName: hasAcceptedLegal ? "checkmark.square.fill" : "square"), for: .normal)
+        legalConsentButton.accessibilityValue = hasAcceptedLegal ? "已勾选" : "未勾选"
+        legalConsentButton.accessibilityTraits = hasAcceptedLegal ? [.button, .selected] : [.button]
         credentialModeControl.isEnabled = !isBusy
         phoneField.isEnabled = !isBusy
         passwordField.isEnabled = !isBusy
         verificationField.isEnabled = !isBusy
-        requestCodeButton.isEnabled = !usesPassword && rawPhone.count == 11 && !isBusy
-        forgotPasswordButton.isEnabled = passwordAuthentication.canResetPassword && !isBusy
-        loginButton.isEnabled = rawPhone.count == 11
+        requestCodeButton.isEnabled = hasAcceptedLegal && !usesPassword && rawPhone.count == 11 && !isBusy
+        forgotPasswordButton.isEnabled = hasAcceptedLegal && passwordAuthentication.canResetPassword && !isBusy
+        loginButton.isEnabled = hasAcceptedLegal && rawPhone.count == 11
             && (usesPassword ? hasPassword && passwordAuthentication.canLogin : hasVerificationCode)
             && !isBusy
         registerButton.isEnabled = !isBusy

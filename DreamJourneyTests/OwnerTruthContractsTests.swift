@@ -46188,3 +46188,234 @@ extension OwnerTruthContractsTests {
         XCTAssertFalse(controller.liveLimitSessionOpenForTesting)
     }
 }
+
+@MainActor
+final class LegalConsentTests: XCTestCase {
+    private func controller() -> LoginViewController {
+        let controller = LoginViewController(capabilityLoader: { _ in })
+        controller.loadViewIfNeeded()
+        return controller
+    }
+    private func find<T: UIView>(_ id: String, in view: UIView, as type: T.Type = T.self) -> T? {
+        if view.accessibilityIdentifier == id { return view as? T }
+        for child in view.subviews {
+            if let found: T = find(id, in: child) { return found }
+        }
+        return nil
+    }
+    private func fillCredentials(_ c: LoginViewController) throws {
+        let phone: UITextField = try XCTUnwrap(find("auth.phone", in: c.view))
+        phone.text = "19900000000"
+        phone.sendActions(for: .editingChanged)
+        let code: UITextField = try XCTUnwrap(find("auth.verificationCode", in: c.view))
+        code.text = "123456"
+        code.sendActions(for: .editingChanged)
+    }
+    func testConsentIsExplicitAndReversibleWithValidCredentials() throws {
+        let c = controller()
+        try fillCredentials(c)
+        let submit: UIButton = try XCTUnwrap(find("auth.submit", in: c.view))
+        let request: UIButton = try XCTUnwrap(find("auth.requestCode", in: c.view))
+        let consent: UIButton = try XCTUnwrap(find("auth.legalConsent", in: c.view))
+        XCTAssertFalse(submit.isEnabled)
+        XCTAssertFalse(request.isEnabled)
+        XCTAssertEqual(consent.accessibilityValue, "未勾选")
+        consent.sendActions(for: .touchUpInside)
+        XCTAssertTrue(submit.isEnabled)
+        XCTAssertTrue(request.isEnabled)
+        consent.sendActions(for: .touchUpInside)
+        XCTAssertFalse(submit.isEnabled)
+        XCTAssertFalse(request.isEnabled)
+        XCTAssertEqual(consent.accessibilityValue, "未勾选")
+    }
+    func testConsentDoesNotBypassCredentialsOrCarryIntoNewLogin() throws {
+        let c = controller()
+        let consent: UIButton = try XCTUnwrap(find("auth.legalConsent", in: c.view))
+        consent.sendActions(for: .touchUpInside)
+        let submit: UIButton = try XCTUnwrap(find("auth.submit", in: c.view))
+        XCTAssertFalse(submit.isEnabled)
+        try fillCredentials(c)
+        XCTAssertTrue(submit.isEnabled)
+        let next = controller()
+        try fillCredentials(next)
+        let nextSubmit: UIButton = try XCTUnwrap(find("auth.submit", in: next.view))
+        XCTAssertFalse(nextSubmit.isEnabled)
+    }
+    func testRegisterRequiresSameExplicitConsent() throws {
+        let c = controller()
+        try fillCredentials(c)
+        let mode: UIButton = try XCTUnwrap(find("auth.switchMode", in: c.view))
+        mode.sendActions(for: .touchUpInside)
+        let submit: UIButton = try XCTUnwrap(find("auth.submit", in: c.view))
+        XCTAssertEqual(submit.title(for: .normal), "注册并登录")
+        XCTAssertFalse(submit.isEnabled)
+        let consent: UIButton = try XCTUnwrap(find("auth.legalConsent", in: c.view))
+        consent.sendActions(for: .touchUpInside)
+        XCTAssertTrue(submit.isEnabled)
+        mode.sendActions(for: .touchUpInside)
+        consent.sendActions(for: .touchUpInside)
+        XCTAssertFalse(submit.isEnabled)
+    }
+    func testDirectActionsAreBlockedBeforeAuthentication() throws {
+        for action in ["loginTapped", "requestVerificationCodeTapped", "forgotPasswordTapped"] {
+            let c = controller()
+            try fillCredentials(c)
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 393, height: 852))
+            window.rootViewController = c
+            window.makeKeyAndVisible()
+            defer { window.isHidden = true }
+            c.perform(NSSelectorFromString(action))
+            XCTAssertEqual((c.presentedViewController as? UIAlertController)?.title, "请先阅读并勾选", action)
+        }
+    }
+    func testReadingDoesNotAcceptAndPreservesInput() throws {
+        let c = controller()
+        try fillCredentials(c)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 393, height: 852))
+        window.rootViewController = c
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let link: UIButton = try XCTUnwrap(find("auth.legal.disclaimer", in: c.view))
+        link.sendActions(for: .touchUpInside)
+        let nav = try XCTUnwrap(c.presentedViewController as? UINavigationController)
+        let reader = try XCTUnwrap(nav.topViewController as? LegalDocumentViewController)
+        XCTAssertEqual(reader.document, .disclaimer)
+        let consent: UIButton = try XCTUnwrap(find("auth.legalConsent", in: c.view))
+        XCTAssertEqual(consent.accessibilityValue, "未勾选")
+        let phone: UITextField = try XCTUnwrap(find("auth.phone", in: c.view))
+        XCTAssertEqual(phone.text, "199 0000 0000")
+    }
+    func testBundledDirectoryAndAllReadersAreAvailableOffline() {
+        let directory = ProfileLegalViewController()
+        directory.loadViewIfNeeded()
+        XCTAssertEqual(directory.tableView.style, .plain)
+        XCTAssertEqual(directory.tableView(directory.tableView, numberOfRowsInSection: 0), 10)
+        for document in AppLegalDocument.allCases {
+            let reader = LegalDocumentViewController(document: document)
+            reader.loadViewIfNeeded()
+            let text = reader.view.subviews.compactMap { $0 as? UITextView }.first
+            XCTAssertTrue(text?.isSelectable == true)
+            XCTAssertTrue(text?.isEditable == false)
+            XCTAssertTrue(text?.text.contains(AppLegalDocument.version) == true)
+            XCTAssertTrue(text?.text.contains(document.body) == true)
+        }
+    }
+    func testSmallScreenCanScrollToConsentAndSubmit() throws {
+        let c = controller()
+        c.view.frame = CGRect(x: 0, y: 0, width: 320, height: 568)
+        c.view.layoutIfNeeded()
+        let scroll = try XCTUnwrap(c.view.subviews.compactMap { $0 as? UIScrollView }.first)
+        XCTAssertGreaterThan(scroll.contentSize.height, scroll.bounds.height)
+        let submit: UIButton = try XCTUnwrap(find("auth.submit", in: c.view))
+        let consent: UIButton = try XCTUnwrap(find("auth.legalConsent", in: c.view))
+        XCTAssertGreaterThanOrEqual(consent.bounds.width, 44)
+        XCTAssertGreaterThanOrEqual(consent.bounds.height, 44)
+        XCTAssertLessThanOrEqual(submit.convert(submit.bounds, to: scroll).maxY, scroll.contentSize.height)
+    }
+}
+
+@MainActor
+extension LegalConsentTests {
+    func testPendingChallengeLocksConsentUntilRequestEnds() throws {
+        var callbacks: [(Result<BackendRuntimeConfig, Error>) -> Void] = []
+        let c = LoginViewController(capabilityLoader: { callbacks.append($0) })
+        c.loadViewIfNeeded()
+        try fillCredentials(c)
+        let consent: UIButton = try XCTUnwrap(find("auth.legalConsent", in: c.view))
+        let request: UIButton = try XCTUnwrap(find("auth.requestCode", in: c.view))
+        consent.sendActions(for: .touchUpInside)
+        request.sendActions(for: .touchUpInside)
+        XCTAssertEqual(callbacks.count, 2) // initial public capabilities plus pre-challenge runtime config
+        XCTAssertFalse(consent.isEnabled)
+        c.perform(NSSelectorFromString("toggleLegalConsent"))
+        XCTAssertEqual(consent.accessibilityValue, "已勾选")
+        callbacks[1](.failure(NSError(domain: "LocalFixture", code: 1)))
+        XCTAssertTrue(consent.isEnabled)
+        consent.sendActions(for: .touchUpInside)
+        XCTAssertFalse(request.isEnabled)
+        XCTAssertEqual(consent.accessibilityValue, "未勾选")
+    }
+
+    func testPasswordLoginAlsoRequiresConsent() throws {
+        let password: [String: Any] = [
+            "implemented": true, "enabled": true, "ready": true,
+            "loginReady": true, "changeReady": true, "setupReady": true,
+            "resetReady": true, "reauthReady": true,
+            "loginEndpoint": "/v2/auth/password/login", "setupEndpoint": "/v2/auth/password/setup",
+            "changeEndpoint": "/v2/auth/password/change", "resetEndpoint": "/v2/auth/password/reset",
+            "resetChallengePurpose": "password_reset", "reauthChallengePurpose": "sensitive_operation",
+            "minLength": 8, "maxLength": 128, "maxAttempts": 5, "lockoutSeconds": 60,
+            "sessionContractVersion": 2, "contractVersion": 2,
+        ]
+        let c = LoginViewController(capabilityLoader: { done in
+            done(.success(BackendRuntimeConfig(json: ["auth": ["passwordAuthentication": password]])))
+        })
+        c.loadViewIfNeeded()
+        try fillCredentials(c)
+        let mode: UISegmentedControl = try XCTUnwrap(find("auth.credentialMode", in: c.view))
+        XCTAssertTrue(mode.isEnabledForSegment(at: 0))
+        mode.selectedSegmentIndex = 0
+        mode.sendActions(for: .valueChanged)
+        let field: UITextField = try XCTUnwrap(find("auth.password", in: c.view))
+        field.text = "FixturePass123"
+        field.sendActions(for: .editingChanged)
+        let submit: UIButton = try XCTUnwrap(find("auth.submit", in: c.view))
+        let consent: UIButton = try XCTUnwrap(find("auth.legalConsent", in: c.view))
+        XCTAssertFalse(submit.isEnabled)
+        consent.sendActions(for: .touchUpInside)
+        XCTAssertTrue(submit.isEnabled)
+        consent.sendActions(for: .touchUpInside)
+        XCTAssertFalse(submit.isEnabled)
+    }
+
+    func testControlHitTargetsAndLargeTextRemainReachable() throws {
+        let c = controller()
+        if #available(iOS 17.0, *) {
+            c.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
+        }
+        c.view.frame = CGRect(x: 0, y: 0, width: 320, height: 568)
+        c.view.layoutIfNeeded()
+        let scroll = try XCTUnwrap(c.view.subviews.compactMap { $0 as? UIScrollView }.first)
+        for id in ["auth.legalConsent", "auth.legal.all", "auth.legal.usage", "auth.submit"] {
+            let button: UIButton = try XCTUnwrap(find(id, in: c.view))
+            let rect = button.convert(button.bounds, to: scroll)
+            scroll.scrollRectToVisible(rect, animated: false)
+            c.view.layoutIfNeeded()
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44, id)
+            XCTAssertLessThanOrEqual(rect.maxY, scroll.contentSize.height, id)
+        }
+    }
+}
+
+@MainActor
+extension LegalConsentTests {
+    func testLegalScreensRenderAndConsentReceivesTouches() throws {
+        let c = controller()
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 393, height: 852))
+        window.rootViewController = c
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let consent: UIButton = try XCTUnwrap(find("auth.legalConsent", in: c.view))
+        let point = consent.convert(CGPoint(x: consent.bounds.midX, y: consent.bounds.midY), to: c.view)
+        let hit = try XCTUnwrap(c.view.hitTest(point, with: nil))
+        XCTAssertTrue(hit === consent || hit.isDescendant(of: consent))
+        for (name, root) in [
+            ("legal-directory", ProfileLegalViewController() as UIViewController),
+            ("legal-disclaimer", LegalDocumentViewController(document: .disclaimer) as UIViewController),
+        ] {
+            let nav = UINavigationController(rootViewController: root)
+            window.rootViewController = nav
+            window.layoutIfNeeded()
+            nav.view.layoutIfNeeded()
+            root.view.layoutIfNeeded()
+            let image = UIGraphicsImageRenderer(bounds: nav.view.bounds).image { context in
+                nav.view.layer.render(in: context.cgContext)
+            }
+            let attachment = XCTAttachment(image: image)
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+    }
+}
