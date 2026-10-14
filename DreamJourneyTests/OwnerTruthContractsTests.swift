@@ -103,6 +103,281 @@ final class OwnerTruthContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testFamilyPolicyExpiredAcceptRefreshesBeforeOneWrite() throws {
+        try runFamilyPolicyScenario(mode: "expired")
+    }
+
+    @MainActor
+    func testFamilyPolicyFreshCommandDoesNotRefresh() throws {
+        try runFamilyPolicyScenario(mode: "fresh")
+    }
+
+    @MainActor
+    func testFamilyPolicyMissingCacheRefreshesBeforeOneWrite() throws {
+        try runFamilyPolicyScenario(mode: "missing")
+    }
+
+    @MainActor
+    func testFamilyPolicyActualDenyNeverRefreshesOrWrites() throws {
+        try runFamilyPolicyScenario(mode: "initialDenied")
+    }
+
+    @MainActor
+    func testFamilyPolicyRefreshedDenyNeverWrites() throws {
+        try runFamilyPolicyScenario(mode: "denied")
+    }
+
+    @MainActor
+    func testFamilyPolicyOfflineRefreshNeverWrites() throws {
+        try runFamilyPolicyScenario(mode: "offline")
+    }
+
+    @MainActor
+    func testFamilyPolicyAccountChangeDuringRefreshNeverWrites() throws {
+        try runFamilyPolicyScenario(mode: "accountChanged")
+    }
+
+    @MainActor
+    func testFamilyPolicyTimeoutDropsLateRefresh() throws {
+        try runFamilyPolicyScenario(mode: "timeout")
+    }
+
+    @MainActor
+    func testFamilyPolicyUnknownPOSTFailureNeverReplays() throws {
+        try runFamilyPolicyScenario(mode: "postFailure")
+    }
+
+    @MainActor
+    func testFamilyPolicyLostPOSTResponseNeverReplays() throws {
+        try runFamilyPolicyScenario(mode: "postOffline")
+    }
+
+    @MainActor
+    func testFamilyPolicyWrongSubjectNeverWrites() throws {
+        try runFamilyPolicyScenario(mode: "wrongSubject")
+    }
+
+    @MainActor
+    func testFamilyPolicyAllCommandRoutesRefreshBeforeOneWrite() throws {
+        for path in ["/family/invite", "/family/access-grants", "/family/access-grants/owner/grant/revoke",
+                     "/family/relationships/relation/terminate"] {
+            try runFamilyPolicyScenario(mode: "expired", command: path)
+        }
+    }
+
+    @MainActor
+    func testFamilyPolicyLegacyPhoneInvitationUsesSameRefresh() throws {
+        try runFamilyPolicyScenario(mode: "legacy", command: "/family/invite")
+    }
+
+    @MainActor
+    func testFamilyPolicyCannotSubmitNonFamilyPath() throws {
+        try runFamilyPolicyScenario(mode: "invalidPath", command: "/profile")
+    }
+
+    func testFamilyCommandUIRetainsDraftAndPreventsDuplicateSubmission() throws {
+        var state = FamilyCommandUIState()
+        state.bind(owner: "a")
+        state.save(["TESTCODE", "10000000001"], key: "accept")
+        let first = try XCTUnwrap(state.begin(owner: "a"))
+        XCTAssertNil(state.begin(owner: "a"))
+        XCTAssertTrue(state.finish(first))
+        XCTAssertEqual(state.draft("accept"), ["TESTCODE", "10000000001"])
+        let next = try XCTUnwrap(state.begin(owner: "a"))
+        XCTAssertFalse(state.finish(first), "Old callback must not release the next submission")
+        XCTAssertEqual(state.inFlight, next)
+        state.clear("accept")
+        XCTAssertTrue(state.draft("accept").isEmpty)
+        XCTAssertTrue(state.finish(next))
+    }
+
+    func testFamilyCommandUIAccountChangeClearsDraftAndOldCompletion() throws {
+        var state = FamilyCommandUIState()
+        let old = try XCTUnwrap(state.begin(owner: "a"))
+        state.save(["PRIVATECODE"], key: "registration")
+        let next = try XCTUnwrap(state.begin(owner: "b"))
+        XCTAssertTrue(state.draft("registration").isEmpty)
+        XCTAssertFalse(state.finish(old))
+        XCTAssertEqual(state.inFlight, next)
+        state.bind(owner: nil)
+        XCTAssertNil(state.inFlight)
+        XCTAssertFalse(state.finish(next))
+    }
+
+    func testFamilyCommandErrorsDoNotExposeInternalReasonOrClaimUnknownWriteFailed() {
+        let denied = FamilyCommandFailurePresentation.message(for:
+            DreamJourneyBackendClient.ClientError.featurePolicyDenied(feature: "familyManagement", reason: "private-internal-detail"))
+        XCTAssertFalse(denied.contains("private-internal-detail"))
+        XCTAssertFalse(denied.contains("familyManagement"))
+        let unknown = FamilyCommandFailurePresentation.message(for: URLError(.networkConnectionLost))
+        XCTAssertTrue(unknown.contains("无法确认"))
+        XCTAssertTrue(unknown.contains("避免重复"))
+        XCTAssertTrue(unknown.contains("输入已保留"))
+    }
+
+    @MainActor
+    func testFamilyPolicySameSessionTokenRotationUsesCurrentCredential() throws {
+        try runFamilyPolicyScenario(mode: "tokenRotated")
+    }
+
+    @MainActor
+    func testFamilyPolicyLeaseGenerationChangeDropsOldIntent() throws {
+        try runFamilyPolicyScenario(mode: "generationChanged")
+    }
+
+    @MainActor
+    func testFamilyPolicyTerminationPreservesCommandAndReceiptContract() throws {
+        try runFamilyPolicyScenario(mode: "terminate", command: "/family/relationships/relationship-a/terminate")
+    }
+
+    private func ownerTruthRequestBodyDataForFamily(_ request: URLRequest) -> Data {
+        if let data = request.httpBody { return data }
+        guard let stream = request.httpBodyStream else { return Data() }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            guard count > 0 else { break }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
+
+    @MainActor
+    func testFamilyPolicyReadsAfterWriteDoNotReuseExpiredRoute() throws {
+        try runFamilyPolicyScenario(mode: "readAfterWrite")
+    }
+
+    @MainActor
+    private func runFamilyPolicyScenario(mode: String, command: String = "/family/invitations/TEST/accept") throws {
+        let (runtime, lease) = try makeActiveRuntime()
+        let auth = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)
+        var activeAuth: BackendAuthSessionContract? = auth
+        let rotated = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId,
+            sessionID: auth.sessionId, accessTokenSuffix: "rotated")
+        let defaultsName = "family-expiry-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+        defer { defaults.removePersistentDomain(forName: defaultsName) }
+        let store = ReleasePolicyStore(userDefaults: defaults)
+        func policy(_ expired: Bool, enabled: Bool = true, revision: Int = 101) -> [String: Any] {
+            var payload = candidateReleasePolicyPayload(version: "family-v1", revision: revision,
+                expiresAt: expired ? "2025-01-02T00:00:00Z" : "2099-01-01T00:00:00Z", enabled: enabled)
+            var features = payload["features"] as! [[String: Any]]
+            features[0]["feature"] = DJFeature.familyManagement.backendReleasePolicyFeature
+            payload["features"] = features
+            return payload
+        }
+        if mode != "missing" {
+            try saveCandidateReleasePolicy(policy(mode != "fresh" && mode != "initialDenied", enabled: mode != "initialDenied", revision: 100), store: store,
+                scope: candidateReleasePolicyScope(lease: lease))
+        }
+        let gate = FeatureGateService.makeQATestService(accountGeneration: { auth.sessionId }, policy: { feature, risk in
+            BackendCachedReleasePolicyEvaluation(cache: store.evaluate(scope: self.candidateReleasePolicyScope(lease: lease), risk: risk), risk: risk)
+                .featureGatePolicySnapshot(for: feature)
+        })
+        // Capture the route once: refreshing cache must not reuse its old denied decision.
+        gate.captureRoute(feature: .familyManagement, localEnabled: true)
+        let client = DreamJourneyBackendClient.makeQATestClient(
+            baseURL: URL(string: "https://owner-truth.qa.invalid")!, session: try makeOwnerTruthHTTPTestSession(),
+            authenticatedSession: { activeAuth }, currentUserID: { activeAuth?.userId }, privateAccessAllowed: { true },
+            featureDecision: { gate.requestDecision(for: $0, localEnabled: true) },
+            freshFeatureDecision: { gate.freshServerPolicyManagedRequestDecision(for: $0) },
+            featureDecisionRevalidator: { gate.revalidateRequest($0, localEnabled: true) },
+            accountLeaseRuntime: runtime, releasePolicyStore: store, candidateInboxPolicyTimeout: 0.08)
+        var paths: [String] = []
+        var lateLoader: OwnerTruthReviewReadyHTTPURLProtocol?
+        let freshBody = try JSONSerialization.data(withJSONObject: policy(false, enabled: mode != "denied"))
+        OwnerTruthReviewReadyHTTPURLProtocol.install { request, loader in
+            paths.append(request.url!.path)
+            if request.url?.path == "/v2/release-policy" {
+                if mode == "offline" { loader.fail(URLError(.notConnectedToInternet)); return }
+                if mode == "accountChanged" { activeAuth = nil }
+                if mode == "tokenRotated" { activeAuth = rotated }
+                if mode == "generationChanged" {
+                    runtime.publish(session: self.accountSession(subjectId: lease.subjectId, vaultId: lease.vaultId,
+                        generation: 2, generationID: UUID()))
+                }
+                if mode == "timeout" { lateLoader = loader; return }
+                loader.respond(statusCode: 200, body: freshBody)
+            } else if request.url?.path == "/family/members/" + lease.subjectId {
+                loader.respond(statusCode: 200, body: Data("{\"members\":[]}".utf8))
+            } else if request.url?.path == "/family/relationships" {
+                loader.respond(statusCode: 200, body: try! JSONSerialization.data(withJSONObject:
+                    ["participantSubjectId": lease.subjectId, "relationships": []]))
+            } else if request.url?.path == command {
+                if mode == "postOffline" { loader.fail(URLError(.networkConnectionLost)); return }
+                if mode == "tokenRotated" {
+                    XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer " + rotated.accessToken)
+                }
+                if mode == "terminate" {
+                    let payload = try! JSONSerialization.jsonObject(with: self.ownerTruthRequestBodyDataForFamily(request)) as! [String: Any]
+                    XCTAssertEqual(payload["commandId"] as? String, "termination-command")
+                    XCTAssertEqual(payload["expectedEpoch"] as? Int, 3)
+                    XCTAssertEqual(payload["secondConfirmation"] as? Bool, true)
+                    XCTAssertEqual(payload["publicationGrantAction"] as? String, "preserve")
+                    let receipt: [String: Any] = ["receiptId": "receipt-test", "relationshipId": "relationship-a",
+                        "ownerSubjectId": lease.subjectId, "memberSubjectId": "member-a", "actorSubjectId": lease.subjectId,
+                        "actorRole": "owner", "outcome": "terminated", "relationshipEpoch": 4,
+                        "revokedAccessGrantCount": 1, "revokedContributionGrantCount": 0,
+                        "withdrawnPendingContributionCount": 0, "retainedAcceptedSourceCount": 1,
+                        "acceptedSourceDisposition": "retainedWithProvenance", "publicationGrantDisposition": "preservedRequiresOwnerAction",
+                        "accountsDeleted": false, "terminatedAt": "2026-08-19T08:00:00Z"]
+                    let body = try! JSONSerialization.data(withJSONObject: ["schemaVersion": "family-relationship-termination-v1", "status": "terminated", "receipt": receipt])
+                    loader.respond(statusCode: 200, body: body); return
+                }
+                loader.respond(statusCode: mode == "postFailure" ? 500 : 200, body: Data("{\"status\":\"accepted\",\"member\":{\"id\":\"synthetic\",\"name\":\"family\"}}".utf8))
+            } else { XCTFail("Unexpected path"); loader.fail(URLError(.badURL)) }
+        }
+        defer { OwnerTruthReviewReadyHTTPURLProtocol.reset() }
+        var outcome: Result<[String: Any], Error>?
+        var completions = 0
+        let finish: (Result<[String: Any], Error>) -> Void = { outcome = $0; completions += 1 }
+        if mode == "terminate" {
+            client.terminateFamilyRelationship(accountLease: lease, relationshipId: "relationship-a", expectedEpoch: 3,
+                commandId: "termination-command") { finish($0.map { ["relationshipId": $0.relationshipId] }) }
+        } else if mode == "legacy" {
+            client.inviteFamilyMember(userId: lease.subjectId, name: "family", relation: "family", phone: "10000000002") {
+                finish($0.map { ["id": $0.id] })
+            }
+        } else {
+            client.familyAccountCommand(accountLease: lease, path: command,
+                payload: ["userId": mode == "wrongSubject" ? "another-account" : lease.subjectId], completion: finish)
+        }
+        XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: mode == "timeout" ? 18 : 3) { outcome != nil })
+        if mode == "timeout" {
+            lateLoader?.respond(statusCode: 200, body: freshBody)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        }
+        let succeeds = ["fresh", "expired", "missing", "legacy", "tokenRotated", "terminate", "readAfterWrite"].contains(mode)
+        let expectedRefresh = ["fresh", "initialDenied", "wrongSubject", "invalidPath"].contains(mode) ? 0 : 1
+        let expectedWrite = succeeds || mode == "postFailure" || mode == "postOffline" ? 1 : 0
+        if succeeds { XCTAssertNoThrow(try outcome?.get()) }
+        else { if case .success = outcome { XCTFail("Denied/failed refresh cannot succeed") } }
+        XCTAssertEqual(paths.filter { $0 == "/v2/release-policy" }.count, expectedRefresh)
+        XCTAssertEqual(paths.filter { $0 == command }.count, expectedWrite)
+        XCTAssertEqual(completions, 1)
+        if mode == "readAfterWrite" || mode == "initialDenied" {
+            var memberResult: Result<[String: Any], Error>?
+            client.listFamilyMembers(userId: lease.subjectId) { memberResult = $0 }
+            XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { memberResult != nil })
+            var relationshipResult: Result<[FamilyRelationshipMembershipContract], Error>?
+            client.listFamilyRelationshipMemberships(accountLease: lease) { relationshipResult = $0 }
+            XCTAssertTrue(waitForOwnerTruthHTTPUI(timeout: 3) { relationshipResult != nil })
+            if mode == "readAfterWrite" {
+                XCTAssertNoThrow(try memberResult?.get())
+                XCTAssertNoThrow(try relationshipResult?.get())
+            } else {
+                if case .success = memberResult { XCTFail("Denied member read") }
+                if case .success = relationshipResult { XCTFail("Denied relationship read") }
+            }
+            XCTAssertEqual(paths.filter { $0 == "/family/members/" + lease.subjectId }.count, mode == "readAfterWrite" ? 1 : 0)
+            XCTAssertEqual(paths.filter { $0 == "/family/relationships" }.count, mode == "readAfterWrite" ? 1 : 0)
+        }
+    }
+
+    @MainActor
     private func runProfilePolicyScenario(mode: String, avatar: Bool) throws {
         let (runtime, lease) = try makeActiveRuntime()
         let auth = try makeOwnerTruthHTTPTestAuthSession(userID: lease.subjectId)

@@ -14027,10 +14027,88 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             }
     }
 
-    func familyAccountCommand(accountLease: AccountLease, path: String, payload: [String: Any],
+    /// Refresh only family command policy before exposing a write. This does not
+    /// retry an unknown business outcome or change shared auth/recovery behavior.
+    func familyAccountCommand(accountLease lease: AccountLease, path: String, payload: [String: Any],
                               completion: @escaping (Result<[String: Any], Error>) -> Void) {
-        requestJSON(path: path, method: .post, payload: payload, authPolicy: .userRequired,
-            applicationLease: accountLease, sessionUserId: accountLease.subjectId, completion: completion)
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async {
+                self.familyAccountCommand(accountLease: lease, path: path, payload: payload, completion: completion)
+            }
+            return
+        }
+        let parts = path.split(separator: "/").map(String.init)
+        let allowedPath = path == "/family/invite" || path == "/family/access-grants"
+            || (parts.count == 4 && parts[0] == "family"
+                && ((parts[1] == "invitations" && parts[3] == "accept")
+                    || (parts[1] == "relationships" && parts[3] == "terminate")))
+            || (parts.count == 5 && parts[0] == "family" && parts[1] == "access-grants" && parts[4] == "revoke")
+        guard allowedPath, path == "/" + parts.joined(separator: "/"), !path.contains("?") else {
+            completion(.failure(ClientError.invalidJSONResponse)); return
+        }
+        guard let session = currentAuthenticatedSession, session.isPrivateAccessEligible,
+              session.userId == lease.subjectId,
+              payload["userId"] == nil || payload["userId"] as? String == lease.subjectId else {
+            completion(.failure(ClientError.accountScopeChanged)); return
+        }
+        let traceID = "family-command-" + UUID().uuidString.lowercased()
+        guard canEnterPrivateUI, currentUserID == session.userId,
+              currentAuthenticatedSession?.matchesCASIdentity(session) == true,
+              accountLeaseRuntime.validate(lease, at: .request).allowed else {
+            completion(.failure(ClientError.accountScopeChanged)); return
+        }
+        let stillCurrent: () -> Bool = {
+            self.canEnterPrivateUI && self.currentUserID == session.userId
+                && self.currentAuthenticatedSession?.sessionId == session.sessionId
+                && self.accountLeaseRuntime.validate(lease, at: .request).allowed
+        }
+        let submit: () -> Void = {
+            guard stillCurrent(), let currentSession = self.currentAuthenticatedSession else {
+                completion(.failure(ClientError.accountScopeChanged)); return
+            }
+            let decision = self.freshRequestFeatureDecision(for: .familyManagement)
+            guard decision.allowed else {
+                self.logRequestStage(traceID: traceID, attempt: 1, event: "requestDenied",
+                                     stage: "familyPolicy", reason: decision.reason)
+                completion(.failure(ClientError.featurePolicyDenied(feature: "familyManagement", reason: decision.reason)))
+                return
+            }
+            self.requestJSON(path: path, method: .post, payload: payload,
+                authPolicy: .userRequired, requiredAuthSession: currentSession,
+                applicationLease: lease, sessionUserId: lease.subjectId, featureDecision: decision,
+                diagnosticTraceID: traceID, completion: completion)
+        }
+        let initial = freshRequestFeatureDecision(for: .familyManagement)
+        guard !initial.allowed else { submit(); return }
+        let recoverableReasons: Set<String> = ["expiredPolicyCache", "capturedPolicyExpired", "missingPolicyCache"]
+        guard recoverableReasons.contains(initial.reason) else { submit(); return }
+        logRequestStage(traceID: traceID, attempt: 1, event: "policyRefreshStarted",
+                        stage: "familyPolicy", reason: initial.reason)
+        let refreshGate = CandidatePolicyRefreshCompletionGate()
+        let finish: (Result<BackendReleasePolicySnapshot, Error>) -> Void = { result in
+            guard refreshGate.claimCompletion() else { return }
+            guard stillCurrent() else { completion(.failure(ClientError.accountScopeChanged)); return }
+            switch result {
+            case .success:
+                self.logRequestStage(traceID: traceID, attempt: 1, event: "policyRefreshFinished",
+                                     stage: "familyPolicy", reason: "recheckRequired")
+                submit()
+            case .failure(let error):
+                self.logRequestStage(traceID: traceID, attempt: 1, event: "policyRefreshFailed",
+                                     stage: "familyPolicy", reason: "refreshUnavailable")
+                completion(.failure(error))
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+            finish(.failure(URLError(.timedOut)))
+        }
+        fetchReleasePolicyForCandidateInbox(
+            audience: DJFeature.familyManagement.backendReleasePolicyAudience,
+            cohort: DJFeature.familyManagement.backendReleasePolicyCohort,
+            clientBuild: FeatureGateService.shared.clientBuild,
+            knownPolicyRevision: initial.policyRevision ?? 0,
+            applicationLease: lease, diagnosticTraceID: traceID,
+            diagnosticAttempt: 1, diagnosticAttemptState: nil, completion: finish)
     }
 
     func resumePrivateAccessSession(completion: @escaping (Bool) -> Void) {
@@ -15306,6 +15384,7 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             payload: nil,
             authPolicy: .userRequired,
             sessionUserId: userId,
+            featureDecision: freshRequestFeatureDecision(for: .familyManagement),
             completion: completion
         )
     }
@@ -15317,16 +15396,18 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         phone: String,
         completion: @escaping (Result<FamilyMember, Error>) -> Void
     ) {
-        requestJSON(
+        guard let lease = accountLeaseRuntime.capture(forSubjectId: userId) else {
+            completion(.failure(ClientError.accountScopeChanged)); return
+        }
+        familyAccountCommand(
+            accountLease: lease,
             path: "/family/invite",
-            method: .post,
             payload: [
                 "userId": userId,
                 "name": name,
                 "relation": relation,
                 "phone": phone,
-            ],
-            authPolicy: .userRequired
+            ]
         ) { result in
             switch result {
             case .success(let object):
@@ -15372,18 +15453,15 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             completion(.failure(FamilyRelationshipTerminationContractError.malformedResponse))
             return
         }
-        requestJSON(
+        familyAccountCommand(
+            accountLease: accountLease,
             path: "/family/relationships/\(pathComponent(relationshipId))/terminate",
-            method: .post,
             payload: [
                 "commandId": commandId,
                 "expectedEpoch": expectedEpoch,
                 "secondConfirmation": true,
                 "publicationGrantAction": "preserve",
-            ],
-            authPolicy: .userRequired,
-            applicationLease: accountLease,
-            sessionUserId: accountLease.subjectId
+            ]
         ) { result in
             completion(result.flatMap { object in
                 guard object["schemaVersion"] as? String == "family-relationship-termination-v1",
@@ -15418,7 +15496,8 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
             payload: nil,
             authPolicy: .userRequired,
             applicationLease: accountLease,
-            sessionUserId: accountLease.subjectId
+            sessionUserId: accountLease.subjectId,
+            featureDecision: freshRequestFeatureDecision(for: .familyManagement)
         ) { result in
             completion(result.flatMap { object in
                 guard object["participantSubjectId"] as? String == accountLease.subjectId,

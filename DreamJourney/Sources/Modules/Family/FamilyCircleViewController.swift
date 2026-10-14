@@ -1,6 +1,62 @@
 import PhotosUI
 import UIKit
 
+/// Page-local state only: invite codes never enter preferences or diagnostic logs.
+struct FamilyCommandUIState {
+    private(set) var owner: String?
+    private(set) var inFlight: UUID?
+    private var drafts: [String: [String]] = [:]
+
+    mutating func bind(owner: String?) {
+        guard self.owner != owner else { return }
+        self.owner = owner
+        drafts.removeAll()
+        inFlight = nil
+    }
+
+    mutating func begin(owner: String) -> UUID? {
+        bind(owner: owner)
+        guard inFlight == nil else { return nil }
+        let id = UUID()
+        inFlight = id
+        return id
+    }
+
+    @discardableResult mutating func finish(_ id: UUID) -> Bool {
+        guard inFlight == id else { return false }
+        inFlight = nil
+        return true
+    }
+
+    mutating func save(_ values: [String], key: String) { drafts[key] = values }
+    func draft(_ key: String) -> [String] { drafts[key] ?? [] }
+    mutating func clear(_ key: String) { drafts.removeValue(forKey: key) }
+}
+
+enum FamilyCommandFailurePresentation {
+    static func message(for error: Error) -> String {
+        switch error {
+        case DreamJourneyBackendClient.ClientError.accountScopeChanged:
+            return "账号状态已变化。请回到家人管理页面核对当前账号后再操作。"
+        case DreamJourneyBackendClient.ClientError.userAuthenticationRequired,
+             DreamJourneyBackendClient.ClientError.sessionUpgradeRequired:
+            return "登录状态需要重新验证。请先核对账号状态。"
+        case DreamJourneyBackendClient.ClientError.featurePolicyDenied:
+            return "家人功能暂不可用，请稍后再试。本次输入已保留。"
+        case DreamJourneyBackendClient.ClientError.recoveryAccessDenied:
+            return "服务正在恢复，请稍后再核对家人状态。本次输入已保留。"
+        case DreamJourneyBackendClient.ClientError.backendError(let status, _):
+            if status == 400 || status == 403 || status == 404 || status == 409 || status == 410 {
+                return "当前邀请或授权无法完成。请核对邀请码、接收账号及最新家人状态。本次输入已保留。"
+            }
+            if status == 401 { return "登录状态需要重新验证。请先核对账号状态。" }
+            fallthrough
+        default:
+            return "网络或服务暂不可用，暂时无法确认操作结果，请先重新进入家人管理核对最新状态，避免重复创建或提交。本次输入已保留。"
+        }
+    }
+}
+
 private enum FamilyCircleLayout {
     static let rowHeight: CGFloat = 96
 }
@@ -683,24 +739,58 @@ final class FamilyCircleViewController: UIViewController {
         navigationController?.popViewController(animated: true)
     }
 
+    private var familyCommandState = FamilyCommandUIState()
+
+    private func familyDraft(_ key: String) -> [String] {
+        familyCommandState.bind(owner: UserManager.shared.currentUser?.id)
+        return familyCommandState.draft(key)
+    }
+
+    private func presentFamilyCommandFailure(_ error: Error) {
+        let alert = UIAlertController(title: "操作未完成",
+            message: FamilyCommandFailurePresentation.message(for: error), preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "知道了", style: .cancel))
+        let owner = UserManager.shared.currentUser?.id
+        let show: () -> Void = { [weak self] in
+            guard let self, self.viewIfLoaded?.window != nil,
+                  UserManager.shared.currentUser?.id == owner,
+                  self.presentedViewController == nil else { return }
+            self.present(alert, animated: true)
+        }
+        if let current = presentedViewController as? UIAlertController {
+            current.dismiss(animated: true, completion: show)
+        } else {
+            show()
+        }
+    }
+
     private func runFamilyCommand(path: String, payload: [String: Any], success: @escaping ([String: Any]) -> Void) {
         guard let user = UserManager.shared.currentUser,
-              let lease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id) else { return }
+              let lease = AccountLeaseRuntime.shared.capture(forSubjectId: user.id),
+              let operation = familyCommandState.begin(owner: user.id) else { return }
+        showToast("正在处理，请稍候", type: .info)
         DreamJourneyBackendClient.shared.familyAccountCommand(accountLease: lease, path: path, payload: payload) { [weak self] result in
             DispatchQueue.main.async {
-                guard let self, AccountLeaseRuntime.shared.validate(lease, at: .ui).allowed else { return }
+                guard let self, self.familyCommandState.finish(operation),
+                      AccountLeaseRuntime.shared.validate(lease, at: .ui).allowed else { return }
                 switch result {
                 case .success(let response):
-                    FamilyRepository.shared.refreshFromBackend(userId: lease.subjectId)
+                    FamilyRepository.shared.refreshFromBackend(userId: lease.subjectId) { [weak self] readResult in
+                        guard let self, case .success = readResult,
+                              AccountLeaseRuntime.shared.validate(lease, at: .ui).allowed else { return }
+                        self.updateMemberListUI()
+                    }
                     success(response)
-                case .failure:
-                    self.showToast("操作未完成，请刷新后核对邀请、账号或授权状态", type: .error)
+                case .failure(let error):
+                    self.presentFamilyCommandFailure(error)
                 }
             }
         }
     }
 
     private func presentAccountFamilyActions() {
+        familyCommandState.bind(owner: UserManager.shared.currentUser?.id)
+        guard familyCommandState.inFlight == nil else { return }
         let sheet = UIAlertController(title: "家人邀请", message: "接受邀请不会自动开放记忆。回响需要本人单独授权。", preferredStyle: .alert)
         sheet.addAction(UIAlertAction(title: "为新用户创建注册邀请码", style: .default) { [weak self] _ in self?.createAccountInvitation(existing: false) })
         sheet.addAction(UIAlertAction(title: "邀请已注册的用户名", style: .default) { [weak self] _ in self?.createAccountInvitation(existing: true) })
@@ -711,15 +801,24 @@ final class FamilyCircleViewController: UIViewController {
     }
 
     private func createAccountInvitation(existing: Bool) {
+        let draftKey = existing ? "username" : "registration"
+        let draft = familyDraft(draftKey)
+        guard familyCommandState.inFlight == nil else { return }
+        let ownerAtPresentation = familyCommandState.owner
         let alert = UIAlertController(title: existing ? "邀请已有账号" : "创建注册邀请码", message: existing ? "输入家人的登录用户名，昵称不能用于定位账号。" : "邀请码有效期 7 天，仅供一位家人创建独立账号；请只分享给本人。", preferredStyle: .alert)
-        alert.addTextField { $0.placeholder = existing ? "家人的登录用户名" : "家人的称呼"; $0.autocapitalizationType = .none; $0.autocorrectionType = .no }
+        alert.addTextField { $0.placeholder = existing ? "家人的登录用户名" : "家人的称呼"; $0.autocapitalizationType = .none; $0.autocorrectionType = .no; $0.text = draft.first }
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.addAction(UIAlertAction(title: "创建", style: .default) { [weak self, weak alert] _ in
             guard let self, let user = UserManager.shared.currentUser else { return }
+            guard ownerAtPresentation == user.id else {
+                self.presentFamilyCommandFailure(DreamJourneyBackendClient.ClientError.accountScopeChanged); return
+            }
             let name = alert?.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            self.familyCommandState.save([name], key: draftKey)
             self.runFamilyCommand(path: "/family/invite", payload: ["userId":user.id, "name":name.isEmpty ? "家人" : name,
                 "relation":"家人", "invitationKind":existing ? "username" : "accountRegistration", "username":name]) { [weak self] response in
                 guard let member = response["member"] as? [String: Any], let code = member["invitationCode"] as? String else { return }
+                self?.familyCommandState.clear(draftKey)
                 self?.presentInvitationCode(code)
             }
         })
@@ -739,17 +838,25 @@ final class FamilyCircleViewController: UIViewController {
     }
 
     private func acceptAccountInvitation() {
+        let draft = familyDraft("accept")
+        guard familyCommandState.inFlight == nil else { return }
+        let ownerAtPresentation = familyCommandState.owner
         let alert = UIAlertController(title: "接受家人邀请", message: "请输入家人分享的邀请码。若是旧手机号邀请，另填本账号已验证的手机号；用户名邀请无需填手机号。接受后记忆仍不自动共享。", preferredStyle: .alert)
-        alert.addTextField { $0.placeholder = "邀请码"; $0.autocapitalizationType = .allCharacters; $0.accessibilityIdentifier = "family.acceptCode" }
-        alert.addTextField { $0.placeholder = "已验证手机号（仅手机号邀请需要）"; $0.keyboardType = .phonePad }
+        alert.addTextField { $0.placeholder = "邀请码"; $0.autocapitalizationType = .allCharacters; $0.accessibilityIdentifier = "family.acceptCode"; $0.text = draft.first }
+        alert.addTextField { $0.placeholder = "已验证手机号（仅手机号邀请需要）"; $0.keyboardType = .phonePad; $0.accessibilityIdentifier = "family.acceptPhone"; $0.text = draft.count > 1 ? draft[1] : nil }
         alert.addAction(UIAlertAction(title:"取消",style:.cancel))
         alert.addAction(UIAlertAction(title:"接受邀请",style:.default) { [weak self, weak alert] _ in
             guard let self else { return }
+            guard ownerAtPresentation == UserManager.shared.currentUser?.id else {
+                self.presentFamilyCommandFailure(DreamJourneyBackendClient.ClientError.accountScopeChanged); return
+            }
             let code = (alert?.textFields?.first?.text ?? "").trimmingCharacters(in:.whitespacesAndNewlines).uppercased()
             guard !code.isEmpty, code.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else { self.showToast("请核对邀请码",type:.error); return }
             let phone = alert?.textFields?.last?.text?.trimmingCharacters(in:.whitespacesAndNewlines) ?? ""
+            self.familyCommandState.save([code, phone], key: "accept")
             self.runFamilyCommand(path:"/family/invitations/\(code)/accept", payload:phone.isEmpty ? [:] : ["phone":phone]) { [weak self] response in
                 guard response["status"] as? String == "accepted" else { return }
+                self?.familyCommandState.clear("accept")
                 self?.showToast("已加入，回响访问仍需本人授权",type:.success)
             }
         })
@@ -757,6 +864,8 @@ final class FamilyCircleViewController: UIViewController {
     }
 
     private func openMemberDetail(member: FamilyMember) {
+        familyCommandState.bind(owner: UserManager.shared.currentUser?.id)
+        guard familyCommandState.inFlight == nil else { return }
         guard let user = UserManager.shared.currentUser else { return }
         if member.relationshipViewerUserId == user.id && member.relationshipOwnerUserId != user.id {
             let sheet = UIAlertController(title:member.name, message:"对方允许你只读已确认的正式记忆，不能查看原始对话或修改对方记忆。", preferredStyle:.alert)
@@ -869,6 +978,9 @@ extension FamilyCircleViewController: UITableViewDelegate {
     }
 
     private func presentFamilyInviteSheet(prefilledPhone: String?) {
+        let draft = familyDraft("phone")
+        guard familyCommandState.inFlight == nil else { return }
+        let ownerAtPresentation = familyCommandState.owner
         let alert = UIAlertController(
             title: "邀请家人",
             message: "填写家人已验证的手机号创建邀请，再分享邀请码。不会自动发送短信；解除关系不会删除账号。",
@@ -877,25 +989,30 @@ extension FamilyCircleViewController: UITableViewDelegate {
         alert.addTextField { textField in
             textField.placeholder = "手机号"
             textField.keyboardType = .phonePad
-            textField.text = prefilledPhone?.trimmingCharacters(in: .whitespacesAndNewlines)
+            textField.text = draft.first ?? prefilledPhone?.trimmingCharacters(in: .whitespacesAndNewlines)
             textField.accessibilityIdentifier = "familyInvitePhoneField"
         }
         alert.addTextField { textField in
             textField.placeholder = "称呼，例如 陈岚"
             textField.accessibilityIdentifier = "familyInviteNameField"
+            textField.text = draft.count > 1 ? draft[1] : nil
         }
         alert.addTextField { textField in
             textField.placeholder = "关系，例如 女儿"
-            textField.text = "家人"
+            textField.text = draft.count > 2 ? draft[2] : "家人"
             textField.accessibilityIdentifier = "familyInviteRelationField"
         }
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.addAction(UIAlertAction(title: "发送邀请", style: .default) { [weak self, weak alert] _ in
             guard let self else { return }
+            guard ownerAtPresentation == UserManager.shared.currentUser?.id else {
+                self.presentFamilyCommandFailure(DreamJourneyBackendClient.ClientError.accountScopeChanged); return
+            }
             let phone = alert?.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let fields = alert?.textFields ?? []
             let name = fields.indices.contains(1) ? fields[1].text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" : ""
             let relation = fields.indices.contains(2) ? fields[2].text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" : ""
+            self.familyCommandState.save([phone, name, relation], key: "phone")
             inviteFamilyMember(
                 phone: phone,
                 name: name.isEmpty ? "家人 \(phone.suffix(4))" : name,
@@ -915,6 +1032,8 @@ extension FamilyCircleViewController: UITableViewDelegate {
             showToast("请先登录后再邀请家人", type: .info)
             return
         }
+        guard let lease = AccountLeaseRuntime.shared.capture(forSubjectId: userId),
+              let operation = familyCommandState.begin(owner: userId) else { return }
         showToast("正在发送邀请", type: .info)
         FamilyRepository.shared.inviteByPhone(
             userId: userId,
@@ -922,13 +1041,16 @@ extension FamilyCircleViewController: UITableViewDelegate {
             name: name,
             relation: relation
         ) { [weak self] result in
-            self?.searchField.text = nil
-            self?.updateMemberListUI()
+            guard let self, self.familyCommandState.finish(operation),
+                  AccountLeaseRuntime.shared.validate(lease, at: .ui).allowed else { return }
+            self.updateMemberListUI()
             switch result {
             case .success(let member):
-                if let code = member.invitationCode { self?.presentInvitationCode(code) }
-            case .failure:
-                self?.showToast("邀请失败，可稍后重试", type: .error)
+                self.searchField.text = nil
+                self.familyCommandState.clear("phone")
+                if let code = member.invitationCode { self.presentInvitationCode(code) }
+            case .failure(let error):
+                self.presentFamilyCommandFailure(error)
             }
         }
     }
