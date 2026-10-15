@@ -847,9 +847,11 @@ final class FamilyRepository {
             ownerUserId: ownerUserId,
             authorizationChanged: authorizationChanged
         )
-        if authorizationChanged {
-            DigitalHumanContextStore.shared.reconcileFamilyAuthorization()
-        }
+        // A persisted choice may already be unauthorized before this refresh
+        // (e.g. expired grant or restored empty projection). Reconcile even when
+        // both authorization sets are empty; the store keeps self/valid choices
+        // and repeated notifications idempotent.
+        DigitalHumanContextStore.shared.reconcileFamilyAuthorization()
         return true
     }
 
@@ -1153,6 +1155,22 @@ final class FamilyRepository {
     private static func normalizedUserId(_ userId: String?) -> String {
         userId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
+
+    #if DEBUG && UI_QA_SIMULATOR && targetEnvironment(simulator)
+    /// Supplies the server snapshot boundary only; exercises the actual
+    /// activation, snapshot validation, authorization and context reconciliation.
+    @discardableResult
+    func replaceRemoteMembersForTesting(_ members: [FamilyMember], accountLease: AccountLease) -> Bool {
+        guard isCurrentAccountLeaseForTest(accountLease) else { return false }
+        activateUser(accountLease.subjectId, accountLease: accountLease)
+        return replaceRemoteMembers(members, ownerUserId: accountLease.subjectId, accountLease: accountLease)
+    }
+
+    private func isCurrentAccountLeaseForTest(_ lease: AccountLease) -> Bool {
+        Thread.isMainThread && UserManager.shared.currentUser?.id == lease.subjectId
+            && accountLeaseRuntime.validate(lease, at: .request).allowed
+    }
+    #endif
 
     private static var isUIQARuntime: Bool {
         #if UI_QA_SIMULATOR && targetEnvironment(simulator)

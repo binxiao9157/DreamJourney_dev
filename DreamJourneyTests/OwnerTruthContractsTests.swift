@@ -10,6 +10,179 @@ import XCTest
 #endif
 
 final class OwnerTruthContractsTests: XCTestCase {
+    @MainActor
+    func testFamilyRevokeRealRepositoryRefreshAndRegrantKeepSelf() throws {
+        try withFamilyRevokeStore { lease, key, original in
+            let payload: [String: Any] = ["id": "revoked-member", "name": "Synthetic family", "userId": lease.subjectId,
+                "viewerUserId": lease.subjectId, "ownerUserId": "family-owner", "digitalHumanId": "family-owner",
+                "relationshipId": "revoke-rel", "relationshipStatus": "accepted", "relationshipEpoch": 1,
+                "memberSubjectId": lease.subjectId, "accessStatus": "active", "invitationStatus": "accepted",
+                "accessGrants": [["id": "revoke-grant", "relationshipId": "revoke-rel", "grantorSubjectId": "family-owner",
+                    "granteeSubjectId": lease.subjectId, "purpose": "family.persona", "resourceType": "familyMember",
+                    "resourceId": "revoked-member", "operations": ["read"], "status": "active", "rowVersion": 1]]]
+            let member = try XCTUnwrap(FamilyMember.fromBackendJSON(payload))
+            let repo = FamilyRepository.shared
+            let store = DigitalHumanContextStore.shared
+            XCTAssertTrue(repo.replaceRemoteMembersForTesting([member], accountLease: lease))
+            XCTAssertEqual(store.current.ownerId, member.id)
+            XCTAssertFalse(store.current.isSelfAssistant)
+            var notifications = 0
+            let observer = NotificationCenter.default.addObserver(forName: .djDigitalHumanContextDidChange,
+                object: nil, queue: nil) { _ in notifications += 1 }
+            defer { NotificationCenter.default.removeObserver(observer) }
+            XCTAssertTrue(repo.replaceRemoteMembersForTesting([member], accountLease: lease))
+            XCTAssertEqual(notifications, 0, "Same valid grant cannot reset an ongoing family dialogue")
+            XCTAssertTrue(repo.replaceRemoteMembersForTesting([], accountLease: lease))
+            XCTAssertTrue(store.current.isSelfAssistant)
+            XCTAssertEqual(store.current.ownerId, lease.subjectId)
+            XCTAssertEqual(notifications, 1)
+            XCTAssertNil(repo.acceptedMember(by: member.id))
+            XCTAssertTrue(repo.replaceRemoteMembersForTesting([], accountLease: lease))
+            XCTAssertEqual(notifications, 1)
+            XCTAssertTrue(repo.replaceRemoteMembersForTesting([member], accountLease: lease))
+            XCTAssertTrue(store.current.isSelfAssistant, "Regrant is not an instruction to select the old family")
+            XCTAssertEqual(notifications, 1)
+            store.current = DigitalHumanContext(viewerUserId: lease.subjectId, ownerId: member.id,
+                displayName: member.name, relation: member.relation, mode: .sunlight, isSelfAssistant: false)
+            XCTAssertEqual(store.current.ownerId, member.id, "Explicit re-selection still works")
+            XCTAssertTrue(repo.replaceRemoteMembersForTesting([], accountLease: lease))
+            XCTAssertTrue(store.current.isSelfAssistant)
+            // A restored old selection with an already empty family projection must recover too.
+            UserDefaults.standard.set(original, forKey: key)
+            let before = notifications
+            XCTAssertTrue(repo.replaceRemoteMembersForTesting([], accountLease: lease))
+            XCTAssertTrue(store.current.isSelfAssistant, "Empty-to-empty refresh must reconcile stale selection")
+            XCTAssertEqual(notifications, before + 1)
+        }
+    }
+
+    @MainActor
+    func testFamilyRevokeQueuedOldAccountCannotOverwriteNewAccount() throws {
+        try withFamilyRevokeStore { lease, key, original in
+            let queued = DispatchSemaphore(value: 0)
+            DispatchQueue.global().async {
+                DigitalHumanContextStore.shared.reconcileFamilyAuthorization()
+                queued.signal()
+            }
+            XCTAssertEqual(queued.wait(timeout: .now() + 3), .success)
+            let runtime = AccountLeaseRuntime.shared
+            let other = "other-" + UUID().uuidString
+            runtime.publish(session: accountSession(subjectId: other, vaultId: other, generation: 2, generationID: UUID()))
+            UserManager.shared.setSyntheticCurrentUserForTesting(UserModel(id: other, nickname: "Other synthetic", phone: ""))
+            var notifications = 0
+            let observer = NotificationCenter.default.addObserver(forName: .djDigitalHumanContextDidChange,
+                object: nil, queue: nil) { _ in notifications += 1 }
+            defer { NotificationCenter.default.removeObserver(observer) }
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            XCTAssertEqual(UserDefaults.standard.data(forKey: key), original)
+            XCTAssertEqual(DigitalHumanContextStore.shared.current.ownerId, other)
+            XCTAssertEqual(notifications, 0)
+            XCTAssertFalse(FamilyRepository.shared.replaceRemoteMembersForTesting([], accountLease: lease))
+        }
+    }
+
+    @MainActor
+    func testFamilyRevokeSameGenerationSessionRefreshCanReconcile() throws {
+        try withFamilyRevokeStore { lease, _, _ in
+            AccountLeaseRuntime.shared.publish(session: accountSession(subjectId: lease.subjectId,
+                vaultId: lease.vaultId, generation: lease.generation, generationID: lease.generationId,
+                sessionID: "rotated-session"))
+            XCTAssertTrue(AccountLeaseRuntime.shared.validate(lease, at: .request).allowed)
+            DigitalHumanContextStore.shared.reconcileFamilyAuthorization()
+            XCTAssertTrue(DigitalHumanContextStore.shared.current.isSelfAssistant)
+        }
+    }
+
+    @MainActor
+    func testFamilyRevokeSignedOutDoesNotClaimOldSelection() throws {
+        try withFamilyRevokeStore { _, key, original in
+            AccountLeaseRuntime.shared.publish(session: nil)
+            UserManager.shared.setSyntheticCurrentUserForTesting(nil)
+            DigitalHumanContextStore.shared.reconcileFamilyAuthorization()
+            XCTAssertEqual(DigitalHumanContextStore.shared.current.ownerId, "")
+            XCTAssertFalse(DigitalHumanContextStore.shared.current.isSelfAssistant)
+            XCTAssertEqual(UserDefaults.standard.data(forKey: key), original)
+        }
+    }
+
+    @MainActor
+    func testFamilyRevokeRealStorePersistsSelfAndNotifiesOnce() throws {
+        try withFamilyRevokeStore { lease, key, original in
+            let store = DigitalHumanContextStore.shared
+            XCTAssertFalse(store.current.isSelfAssistant)
+            XCTAssertEqual(store.current.ownerId, "", "Unauthorized family must remain unreadable before reconciliation")
+            var contexts: [DigitalHumanContext] = []
+            let observer = NotificationCenter.default.addObserver(forName: .djDigitalHumanContextDidChange,
+                object: nil, queue: nil) { note in
+                if let context = note.object as? DigitalHumanContext { contexts.append(context) }
+            }
+            defer { NotificationCenter.default.removeObserver(observer) }
+            store.reconcileFamilyAuthorization()
+            XCTAssertTrue(store.current.isSelfAssistant, "Revocation must return to the actual self context")
+            XCTAssertEqual(store.current.ownerId, lease.subjectId)
+            XCTAssertNotEqual(UserDefaults.standard.data(forKey: key), original)
+            let saved = try XCTUnwrap(try JSONSerialization.jsonObject(with: XCTUnwrap(UserDefaults.standard.data(forKey: key))) as? [String: Any])
+            XCTAssertEqual((saved["context"] as? [String: Any])?["isSelfAssistant"] as? Bool, true)
+            XCTAssertEqual(contexts.count, 1)
+            XCTAssertEqual(contexts.first?.ownerId, lease.subjectId)
+            store.reconcileFamilyAuthorization()
+            XCTAssertEqual(contexts.count, 1, "Repeated refresh must not clear an in-progress self conversation")
+        }
+    }
+
+    @MainActor
+    func testFamilyRevokeRealStoreRejectsCorruptAndForeignEnvelopes() throws {
+        try withFamilyRevokeStore { lease, key, original in
+            var notifications = 0
+            let observer = NotificationCenter.default.addObserver(forName: .djDigitalHumanContextDidChange,
+                object: nil, queue: nil) { _ in notifications += 1 }
+            defer { NotificationCenter.default.removeObserver(observer) }
+            let valid = try XCTUnwrap(JSONSerialization.jsonObject(with: original) as? [String: Any])
+            for field in ["subjectId", "accountGeneration", "accountGenerationId", "schemaVersion"] {
+                var invalid = valid
+                invalid[field] = (field == "accountGeneration" || field == "schemaVersion") ? 999 : "another-scope"
+                let data = try JSONSerialization.data(withJSONObject: invalid)
+                UserDefaults.standard.set(data, forKey: key)
+                DigitalHumanContextStore.shared.reconcileFamilyAuthorization()
+                XCTAssertEqual(UserDefaults.standard.data(forKey: key), data, field)
+                XCTAssertEqual(DigitalHumanContextStore.shared.current.ownerId, "", field)
+            }
+            let malformed = Data("invalid-json".utf8)
+            UserDefaults.standard.set(malformed, forKey: key)
+            DigitalHumanContextStore.shared.reconcileFamilyAuthorization()
+            XCTAssertEqual(UserDefaults.standard.data(forKey: key), malformed)
+            XCTAssertEqual(notifications, 0)
+        }
+    }
+
+    @MainActor
+    private func withFamilyRevokeStore(_ body: (AccountLease, String, Data) throws -> Void) throws {
+        let owner = "revoke-local-" + UUID().uuidString.lowercased()
+        let previousUser = UserManager.shared.currentUser
+        let runtime = AccountLeaseRuntime.shared
+        runtime.updateAuthorityEpoch("revoke-local-epoch")
+        runtime.publish(session: accountSession(subjectId: owner, vaultId: owner,
+            generation: 1, generationID: UUID()))
+        UserManager.shared.setSyntheticCurrentUserForTesting(UserModel(id: owner, nickname: "Synthetic", phone: ""))
+        let lease = try XCTUnwrap(runtime.capture(forSubjectId: owner))
+        let component = Data(owner.utf8).base64EncodedString().replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+        let key = "dj.digitalHuman.currentContext.v2.\(component).\(lease.generation).\(lease.generationId.uuidString.lowercased())"
+        let context = DigitalHumanContext(viewerUserId: owner, ownerId: "revoked-member",
+            displayName: "Synthetic family", relation: "Family", mode: .sunlight, isSelfAssistant: false)
+        let payload: [String: Any] = ["schemaVersion": 2, "subjectId": owner,
+            "accountGeneration": lease.generation, "accountGenerationId": lease.generationId.uuidString,
+            "context": try JSONSerialization.jsonObject(with: JSONEncoder().encode(context))]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        UserDefaults.standard.set(data, forKey: key)
+        defer {
+            UserDefaults.standard.removeObject(forKey: key)
+            UserManager.shared.setSyntheticCurrentUserForTesting(previousUser)
+            runtime.publish(session: nil)
+        }
+        try body(lease, key, data)
+    }
+
     func testFamilyIncomingPermissionDoesNotAuthorizeReverseDirection() throws {
         let payload: [String: Any] = ["id": "fm-1", "name": "家人", "userId": "viewer-b",
             "viewerUserId": "viewer-b", "ownerUserId": "owner-a", "digitalHumanId": "owner-a",

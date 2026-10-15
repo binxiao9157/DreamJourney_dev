@@ -125,6 +125,9 @@ final class DigitalHumanContextStore {
 
     private enum ReadResult {
         case stored(DigitalHumanContext)
+        // Scope is valid, but this family choice is no longer authorized.
+        // Only reconciliation may use it; public reads remain fail-closed.
+        case unauthorizedFamily(DigitalHumanContext)
         case empty
         case denied
     }
@@ -156,7 +159,7 @@ final class DigitalHumanContextStore {
                 return context
             case .empty:
                 return .defaultContext(userId: accountLease.subjectId)
-            case .denied:
+            case .denied, .unauthorizedFamily:
                 return unavailableContext
             }
         }
@@ -297,7 +300,11 @@ final class DigitalHumanContextStore {
               accountLeaseRuntime.validate(accountLease, at: .request).allowed else {
             return
         }
-        guard case .stored(let storedContext) = readCurrent(accountLease: accountLease) else {
+        let storedContext: DigitalHumanContext
+        switch readCurrent(accountLease: accountLease) {
+        case .stored(let context), .unauthorizedFamily(let context):
+            storedContext = context
+        case .empty, .denied:
             return
         }
         let hasAuthorizedFamilyMember = FamilyRepository.shared.acceptedMember(
@@ -336,11 +343,16 @@ final class DigitalHumanContextStore {
             from: data
         ),
         envelope.matches(accountLease),
-        let context = validatedContext(envelope.context, userId: accountLease.subjectId),
         accountLeaseRuntime.validate(accountLease, at: .runtime).allowed else {
             return .denied
         }
-        return .stored(context)
+        if let context = validatedContext(envelope.context, userId: accountLease.subjectId) {
+            return .stored(context)
+        }
+        let ownerId = envelope.context.ownerId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !ownerId.isEmpty, ownerId != accountLease.subjectId,
+              !envelope.context.isSelfAssistant else { return .denied }
+        return .unauthorizedFamily(envelope.context)
     }
 
     private func validatedContext(_ context: DigitalHumanContext, userId: String) -> DigitalHumanContext? {
