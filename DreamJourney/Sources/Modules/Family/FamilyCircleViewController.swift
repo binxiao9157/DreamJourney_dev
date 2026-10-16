@@ -158,20 +158,10 @@ final class FamilyCircleViewController: UIViewController {
     // MARK: - UI：顶部标题行
     private let titleLabel: UILabel = {
         let l = UILabel()
-        l.text = "选择数字人"
+        l.text = "选择家人"
         l.font = .systemFont(ofSize: 28, weight: .bold)
         l.textColor = UIColor(red: 0.15, green: 0.12, blue: 0.10, alpha: 1.0)
         return l
-    }()
-
-    /// 右上角"+"邀请按钮
-    private lazy var addButton: UIButton = {
-        let b = UIButton(type: .system)
-        let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
-        b.setImage(UIImage(systemName: "plus", withConfiguration: config), for: .normal)
-        b.tintColor = .warmAccent
-        b.addTarget(self, action: #selector(addTapped), for: .touchUpInside)
-        return b
     }()
 
     // MARK: - UI：邀请区
@@ -183,37 +173,7 @@ final class FamilyCircleViewController: UIViewController {
         return l
     }()
 
-    /// 搜索框容器
-    private let searchContainer: UIView = {
-        let v = UIView()
-        v.backgroundColor = .white
-        v.layer.cornerRadius = 12
-        v.layer.borderWidth = 0.5
-        v.layer.borderColor = UIColor(white: 0.88, alpha: 1.0).cgColor
-        return v
-    }()
-
-    private let searchIcon: UIImageView = {
-        let iv = UIImageView()
-        let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-        iv.image = UIImage(systemName: "magnifyingglass", withConfiguration: config)
-        iv.tintColor = UIColor(white: 0.65, alpha: 1.0)
-        iv.contentMode = .scaleAspectFit
-        return iv
-    }()
-
-    private let searchField: UITextField = {
-        let f = UITextField()
-        f.placeholder = "输入手机号邀请家人"
-        f.font = .systemFont(ofSize: 15)
-        f.textColor = UIColor(red: 0.15, green: 0.12, blue: 0.10, alpha: 1.0)
-        f.returnKeyType = .search
-        f.borderStyle = .none
-        f.backgroundColor = .clear
-        return f
-    }()
-
-    /// 手机号邀请按钮
+    /// 统一邀请与加入入口
     private lazy var inviteButton: UIButton = {
         let b = UIButton(type: .system)
         b.backgroundColor = .white
@@ -366,7 +326,6 @@ final class FamilyCircleViewController: UIViewController {
         // 让 scrollView 的 contentInset 自动避让 TabBar，底部 slogan 不被遮挡
         additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: 0, bottom: 56, right: 0)
         setupLayout()
-        searchField.delegate = self
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -411,22 +370,7 @@ final class FamilyCircleViewController: UIViewController {
             content.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
         ])
 
-        // 搜索框内部布局
-        searchContainer.addSubview(searchIcon)
-        searchContainer.addSubview(searchField)
-        searchIcon.translatesAutoresizingMaskIntoConstraints = false
-        searchField.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            searchIcon.leadingAnchor.constraint(equalTo: searchContainer.leadingAnchor, constant: 12),
-            searchIcon.centerYAnchor.constraint(equalTo: searchContainer.centerYAnchor),
-            searchIcon.widthAnchor.constraint(equalToConstant: 16),
-            searchIcon.heightAnchor.constraint(equalToConstant: 16),
-            searchField.leadingAnchor.constraint(equalTo: searchIcon.trailingAnchor, constant: 8),
-            searchField.trailingAnchor.constraint(equalTo: searchContainer.trailingAnchor, constant: -12),
-            searchField.centerYAnchor.constraint(equalTo: searchContainer.centerYAnchor),
-        ])
-
-        [titleLabel, addButton, inviteSectionLabel, searchContainer, inviteButton, contributionActionsStack,
+        [titleLabel, inviteSectionLabel, inviteButton, contributionActionsStack,
          circleHeaderLabel, memberCountLabel, membersTableView, sloganLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview($0)
@@ -440,21 +384,11 @@ final class FamilyCircleViewController: UIViewController {
             titleLabel.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
             titleLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
 
-            addButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            addButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
-            addButton.widthAnchor.constraint(equalToConstant: 32),
-            addButton.heightAnchor.constraint(equalToConstant: 32),
-
             // 邀请区
             inviteSectionLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 24),
             inviteSectionLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
 
-            searchContainer.topAnchor.constraint(equalTo: inviteSectionLabel.bottomAnchor, constant: 10),
-            searchContainer.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
-            searchContainer.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
-            searchContainer.heightAnchor.constraint(equalToConstant: 46),
-
-            inviteButton.topAnchor.constraint(equalTo: searchContainer.bottomAnchor, constant: 12),
+            inviteButton.topAnchor.constraint(equalTo: inviteSectionLabel.bottomAnchor, constant: 10),
             inviteButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             inviteButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
             inviteButton.heightAnchor.constraint(equalToConstant: 56),
@@ -571,10 +505,6 @@ final class FamilyCircleViewController: UIViewController {
     }
 
     // MARK: - Actions
-    @objc private func addTapped() {
-        presentAccountFamilyActions()
-    }
-
     @objc private func copyInviteTapped() {
         presentAccountFamilyActions()
     }
@@ -795,7 +725,7 @@ final class FamilyCircleViewController: UIViewController {
         sheet.addAction(UIAlertAction(title: "为新用户创建注册邀请码", style: .default) { [weak self] _ in self?.createAccountInvitation(existing: false) })
         sheet.addAction(UIAlertAction(title: "邀请已注册的用户名", style: .default) { [weak self] _ in self?.createAccountInvitation(existing: true) })
         sheet.addAction(UIAlertAction(title: "输入邀请码加入", style: .default) { [weak self] _ in self?.acceptAccountInvitation() })
-        sheet.addAction(UIAlertAction(title: "通过已验证手机号邀请", style: .default) { [weak self] _ in self?.presentFamilyInviteSheet(prefilledPhone: self?.searchField.text) })
+        sheet.addAction(UIAlertAction(title: "通过已验证手机号邀请", style: .default) { [weak self] _ in self?.presentFamilyInviteSheet(prefilledPhone: nil) })
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
         present(sheet, animated: true)
     }
@@ -830,7 +760,8 @@ final class FamilyCircleViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "分享邀请码", style: .default) { [weak self] _ in
             guard let self else { return }
             let share = UIActivityViewController(activityItems:["寻梦环游家人邀请码：\(code)"], applicationActivities:nil)
-            share.popoverPresentationController?.sourceView = self.addButton
+            share.popoverPresentationController?.sourceView = self.inviteButton
+            share.popoverPresentationController?.sourceRect = self.inviteButton.bounds
             self.present(share, animated:true)
         })
         alert.addAction(UIAlertAction(title: "关闭", style: .cancel))
@@ -1046,7 +977,6 @@ extension FamilyCircleViewController: UITableViewDelegate {
             self.updateMemberListUI()
             switch result {
             case .success(let member):
-                self.searchField.text = nil
                 self.familyCommandState.clear("phone")
                 if let code = member.invitationCode { self.presentInvitationCode(code) }
             case .failure(let error):
@@ -2100,20 +2030,6 @@ private final class FamilyContributionDecisionViewController: UIViewController {
         let button = UIButton(configuration: configuration)
         button.addAction(UIAction { [weak self] _ in self?.onDecision?(accepted) }, for: .touchUpInside)
         return button
-    }
-}
-
-// MARK: - UITextFieldDelegate
-extension FamilyCircleViewController: UITextFieldDelegate {
-    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        let phone = textField.text?.trimmingCharacters(in: .whitespaces) ?? ""
-        if phone.isEmpty {
-            showToast("请输入手机号", type: .info)
-        } else {
-            presentFamilyInviteSheet(prefilledPhone: phone)
-        }
-        textField.resignFirstResponder()
-        return true
     }
 }
 
