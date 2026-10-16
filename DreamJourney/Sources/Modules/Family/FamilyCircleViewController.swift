@@ -756,16 +756,49 @@ final class FamilyCircleViewController: UIViewController {
     }
 
     private func presentInvitationCode(_ code: String) {
-        let alert = UIAlertController(title: "邀请已创建", message: "邀请码：\(code)\n请通过你的联系方式交给家人。未自动发送短信。", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "分享邀请码", style: .default) { [weak self] _ in
-            guard let self else { return }
-            let share = UIActivityViewController(activityItems:["寻梦环游家人邀请码：\(code)"], applicationActivities:nil)
+        guard let owner = UserManager.shared.currentUser?.id else { return }
+        let alert = UIAlertController(title: "邀请已创建", message: "邀请码：\(code)\n可复制邀请码到微信粘贴，或分享邀请图片。接受邀请不会自动共享记忆。", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "复制邀请码", style: .default) { [weak self] _ in
+            guard let self, FamilyInvitationSharePolicy.copyCode(code, owner: owner, currentOwner: UserManager.shared.currentUser?.id) else { return }
+            self.showToast("邀请码已复制", type: .info)
+        })
+        alert.addAction(UIAlertAction(title: "分享邀请图片", style: .default) { [weak self] _ in
+            guard let self, FamilyInvitationSharePolicy.isCurrent(owner: owner, currentOwner: UserManager.shared.currentUser?.id) else { return }
+            guard let item = FamilyInvitationImageItem(code: code) else {
+                self.showToast("邀请图片生成失败，请使用复制邀请码", type: .error)
+                self.presentInvitationCode(code)
+                return
+            }
+            let share = UIActivityViewController(activityItems: [item], applicationActivities: nil)
             share.popoverPresentationController?.sourceView = self.inviteButton
             share.popoverPresentationController?.sourceRect = self.inviteButton.bounds
-            self.present(share, animated:true)
+            share.completionWithItemsHandler = { [weak self, weak share] _, completed, _, error in
+                let outcome = FamilyInvitationSharePolicy.outcome(completed: completed, hasError: error != nil)
+                // Extension completion does not establish recipient delivery or invitation acceptance.
+                guard outcome != .reportedComplete else { return }
+                DispatchQueue.main.async { [weak self, weak share] in
+                    guard let self, self.viewIfLoaded?.window != nil,
+                          FamilyInvitationSharePolicy.isCurrent(owner: owner, currentOwner: UserManager.shared.currentUser?.id) else { return }
+                    let restore = { [weak self] in
+                        guard let self, self.viewIfLoaded?.window != nil,
+                              FamilyInvitationSharePolicy.isCurrent(owner: owner, currentOwner: UserManager.shared.currentUser?.id),
+                              self.presentedViewController == nil else { return }
+                        if outcome == .failed {
+                            self.showToast("分享未完成，可复制邀请码后到微信粘贴", type: .error)
+                        }
+                        self.presentInvitationCode(code)
+                    }
+                    if let share, self.presentedViewController === share {
+                        share.dismiss(animated: true, completion: restore)
+                    } else {
+                        restore()
+                    }
+                }
+            }
+            self.present(share, animated: true)
         })
         alert.addAction(UIAlertAction(title: "关闭", style: .cancel))
-        present(alert, animated:true)
+        present(alert, animated: true)
     }
 
     private func acceptAccountInvitation() {
@@ -2290,4 +2323,74 @@ final class FamilyMembersCell: UITableViewCell {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
     }
     required init?(coder: NSCoder) { fatalError() }
+}
+
+// MARK: - Invitation-only sharing (no account data, files, or network calls)
+enum FamilyInvitationSharePolicy {
+    enum Outcome { case cancelled, failed, reportedComplete }
+
+    static func isCurrent(owner: String, currentOwner: String?) -> Bool {
+        !owner.isEmpty && owner == currentOwner
+    }
+
+    static func copyCode(_ code: String, owner: String, currentOwner: String?, pasteboard: UIPasteboard = .general) -> Bool {
+        guard isCurrent(owner: owner, currentOwner: currentOwner) else { return false }
+        pasteboard.setItems([["public.utf8-plain-text": code]], options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(300)])
+        return true
+    }
+
+    static func outcome(completed: Bool, hasError: Bool) -> Outcome {
+        if hasError { return .failed }
+        return completed ? .reportedComplete : .cancelled
+    }
+}
+
+final class FamilyInvitationImageItem: NSObject, UIActivityItemSource {
+    let image: UIImage
+
+    init?(code: String) {
+        guard !code.isEmpty, code.count <= 128,
+              code.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else { return nil }
+        let characters = Array(code)
+        let lines = stride(from: 0, to: characters.count, by: 24).map {
+            String(characters[$0..<min($0 + 24, characters.count)])
+        }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        format.preferredRange = .standard
+        let size = CGSize(width: 1080, height: CGFloat(560 + lines.count * 64))
+        image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor(red: 1, green: 0.98, blue: 0.94, alpha: 1).setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            let ink = UIColor(red: 0.18, green: 0.15, blue: 0.12, alpha: 1)
+            func draw(_ text: String, y: CGFloat, font: UIFont, color: UIColor = .black) {
+                (text as NSString).draw(in: CGRect(x: 64, y: y, width: 952, height: 64), withAttributes: [.font: font, .foregroundColor: color])
+            }
+            draw("寻梦环游", y: 54, font: .systemFont(ofSize: 36, weight: .semibold), color: ink)
+            UIColor(red: 0.94, green: 0.48, blue: 0.08, alpha: 1).setFill()
+            context.fill(CGRect(x: 64, y: 124, width: 952, height: 3))
+            draw("家人邀请", y: 162, font: .systemFont(ofSize: 52, weight: .bold), color: ink)
+            draw("邀请码", y: 258, font: .systemFont(ofSize: 28), color: ink)
+            for (index, line) in lines.enumerated() {
+                draw(line, y: CGFloat(310 + index * 64), font: .monospacedSystemFont(ofSize: 46, weight: .semibold), color: ink)
+            }
+            let bottom = CGFloat(310 + lines.count * 64)
+            draw("在寻梦环游中输入邀请码加入或注册。", y: bottom + 46, font: .systemFont(ofSize: 28), color: ink)
+            draw("接受邀请不会自动共享记忆，需本人授权。", y: bottom + 94, font: .systemFont(ofSize: 28), color: ink)
+        }
+        super.init()
+    }
+
+    func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any {
+        image
+    }
+
+    func activityViewController(_ activityViewController: UIActivityViewController, itemForActivityType activityType: UIActivity.ActivityType?) -> Any? {
+        image
+    }
+
+    func activityViewController(_ activityViewController: UIActivityViewController, dataTypeIdentifierForActivityType activityType: UIActivity.ActivityType?) -> String {
+        "public.png"
+    }
 }
