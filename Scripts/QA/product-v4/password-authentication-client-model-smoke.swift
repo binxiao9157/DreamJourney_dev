@@ -3,6 +3,16 @@ import Foundation
 @main
 enum PasswordAuthenticationClientModelSmoke {
     static func main() {
+        for phone in ["13800000001", "+86 138-0000-0001", "008613800000001"] {
+            precondition(!LoginIdentifierPolicy.isUsername(phone))
+            precondition(LoginIdentifierPolicy.mainlandPhone(phone) == "13800000001")
+        }
+        precondition(!LoginIdentifierPolicy.isUsername("10000000001"))
+        precondition(LoginIdentifierPolicy.mainlandPhone("10000000001") == nil)
+        precondition(LoginIdentifierPolicy.isUsername("Family_2026"))
+        precondition(LoginIdentifierPolicy.mainlandPhone("１３８０００００００１") == nil)
+        precondition(!BackendPasswordAuthenticationCapability(json: [:]).canRegisterPhone)
+
         let capability = BackendPasswordAuthenticationCapability(json: [
             "implemented": true,
             "enabled": true,

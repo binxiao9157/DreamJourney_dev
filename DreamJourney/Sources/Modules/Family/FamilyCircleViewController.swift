@@ -45,7 +45,13 @@ enum FamilyCommandFailurePresentation {
             return "家人功能暂不可用，请稍后再试。本次输入已保留。"
         case DreamJourneyBackendClient.ClientError.recoveryAccessDenied:
             return "服务正在恢复，请稍后再核对家人状态。本次输入已保留。"
-        case DreamJourneyBackendClient.ClientError.backendError(let status, _):
+        case DreamJourneyBackendClient.ClientError.backendError(let status, let context):
+            if context.detail.contains("registrationAllocationRequired") {
+                return "暂未分配可用的注册名额，请联系管理员申请。已注册家人的邀请和已有功能不受影响。"
+            }
+            if context.detail.contains("registrationPaused") {
+                return "新用户注册目前暂停，暂不能领取邀请码。已有账号和家人回响仍可正常使用。"
+            }
             if status == 400 || status == 403 || status == 404 || status == 409 || status == 410 {
                 return "当前邀请或授权无法完成。请核对邀请码、接收账号及最新家人状态。本次输入已保留。"
             }
@@ -722,7 +728,7 @@ final class FamilyCircleViewController: UIViewController {
         familyCommandState.bind(owner: UserManager.shared.currentUser?.id)
         guard familyCommandState.inFlight == nil else { return }
         let sheet = UIAlertController(title: "家人邀请", message: "接受邀请不会自动开放记忆。回响需要本人单独授权。", preferredStyle: .alert)
-        sheet.addAction(UIAlertAction(title: "为新用户创建注册邀请码", style: .default) { [weak self] _ in self?.createAccountInvitation(existing: false) })
+        sheet.addAction(UIAlertAction(title: "领取注册邀请码", style: .default) { [weak self] _ in self?.createAccountInvitation(existing: false) })
         sheet.addAction(UIAlertAction(title: "邀请已注册的用户名", style: .default) { [weak self] _ in self?.createAccountInvitation(existing: true) })
         sheet.addAction(UIAlertAction(title: "输入邀请码加入", style: .default) { [weak self] _ in self?.acceptAccountInvitation() })
         sheet.addAction(UIAlertAction(title: "通过已验证手机号邀请", style: .default) { [weak self] _ in self?.presentFamilyInviteSheet(prefilledPhone: nil) })
@@ -735,7 +741,7 @@ final class FamilyCircleViewController: UIViewController {
         let draft = familyDraft(draftKey)
         guard familyCommandState.inFlight == nil else { return }
         let ownerAtPresentation = familyCommandState.owner
-        let alert = UIAlertController(title: existing ? "邀请已有账号" : "创建注册邀请码", message: existing ? "输入家人的登录用户名，昵称不能用于定位账号。" : "邀请码有效期 7 天，仅供一位家人创建独立账号；请只分享给本人。", preferredStyle: .alert)
+        let alert = UIAlertController(title: existing ? "邀请已有账号" : "领取注册邀请码", message: existing ? "输入家人的登录用户名，昵称不能用于定位账号。" : "领取管理员已分配给你的注册名额。无可用名额时请联系管理员；不会自动增加名额。邀请码仅供一人注册，不限制功能。", preferredStyle: .alert)
         alert.addTextField { $0.placeholder = existing ? "家人的登录用户名" : "家人的称呼"; $0.autocapitalizationType = .none; $0.autocorrectionType = .no; $0.text = draft.first }
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.addAction(UIAlertAction(title: "创建", style: .default) { [weak self, weak alert] _ in

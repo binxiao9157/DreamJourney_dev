@@ -539,6 +539,26 @@ final class LoginViewController: UIViewController {
     }
 
     @objc private func registerTapped() {
+        if passwordAuthentication.registrationAdmissionEnabled {
+            guard requireLegalConsent() else { return }
+            guard passwordAuthentication.canRegisterPhone else {
+                showLoginAlert(title: "手机号注册暂未开放", message: "短信服务尚未准备完成，请稍后再试。已有账号可以正常登录。")
+                return
+            }
+            let controller = PhoneRegistrationViewController()
+            controller.onRegistered = { [weak self] phone in
+                guard let self else { return }
+                self.authMode = .login
+                self.credentialMode = .password
+                self.credentialModeControl.selectedSegmentIndex = CredentialMode.password.rawValue
+                self.phoneField.text = phone
+                self.passwordField.text = ""
+                self.applyAuthMode(animated: false)
+                self.applyCredentialMode(animated: false)
+            }
+            present(UINavigationController(rootViewController: controller), animated: true)
+            return
+        }
         if passwordAuthentication.canRegisterUsername {
             presentUsernameRegistration()
             return
@@ -555,7 +575,7 @@ final class LoginViewController: UIViewController {
 
     @objc private func forgotPasswordTapped() {
         guard requireLegalConsent() else { return }
-        if passwordAuthentication.usernameLoginReady && !passwordLoginIdentifier.allSatisfy({ $0.isNumber }) {
+        if passwordAuthentication.usernameLoginReady && LoginIdentifierPolicy.isUsername(passwordLoginIdentifier) {
             showLoginAlert(title: "找回用户名账号", message: "请联系 liftora@163.com 核对账号。邀请码不能用于重设已注册账号的密码。")
             return
         }
@@ -652,7 +672,7 @@ final class LoginViewController: UIViewController {
 
         setLoginInProgress(true)
         let submittedPhone = passwordLoginIdentifier
-        let isUsername = !submittedPhone.allSatisfy { $0.isNumber }
+        let isUsername = LoginIdentifierPolicy.isUsername(submittedPhone)
         DreamJourneyBackendClient.shared.loginWithPassword(
             phone: submittedPhone,
             password: password,
@@ -1037,5 +1057,168 @@ extension LoginViewController: UITextFieldDelegate {
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         textField.resignFirstResponder()
         return true
+    }
+}
+
+/// Enrollment is separate from login: an OTP/grant never becomes an app session.
+private final class PhoneRegistrationViewController: UIViewController {
+    var onRegistered: ((String) -> Void)?
+    private let invite = UITextField(), phone = UITextField(), code = UITextField()
+    private let password = UITextField(), confirmation = UITextField(), consent = UISwitch()
+    private let status = UILabel(), send = UIButton(type: .system), submit = UIButton(type: .system)
+    private let checkResult = UIButton(type: .system)
+    private var attempt: [String: Any]?
+    private var sendOperation = UUID().uuidString, completionOperation = UUID().uuidString
+    private var sentInput = "", grant = "", busy = false, nextSend = Date.distantPast
+    private var completing = false
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "手机号注册"
+        view.backgroundColor = .systemBackground
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "取消", style: .plain, target: self, action: #selector(close))
+        let scroll = UIScrollView(), stack = UIStackView()
+        scroll.keyboardDismissMode = .interactive
+        stack.axis = .vertical; stack.spacing = 16
+        view.addSubview(scroll); scroll.addSubview(stack)
+        scroll.translatesAutoresizingMaskIntoConstraints = false; stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
+            scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 20),
+            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -20),
+            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -24),
+            stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48)])
+        let intro = UILabel(); intro.numberOfLines = 0
+        intro.text = "凭有效邀请码验证手机号并注册。邀请码仅控制注册人数；家人记忆仍需本人另行授权。"
+        stack.addArrangedSubview(intro)
+        for (field, title, id) in [(invite,"注册邀请码","invite"),(phone,"中国大陆手机号","phone"),
+            (code,"短信验证码","code"),(password,"设置密码（8–128位）","password"),(confirmation,"再次输入密码","confirmation")] {
+            field.placeholder = title; field.borderStyle = .roundedRect; field.autocorrectionType = .no
+            field.autocapitalizationType = .none; field.accessibilityIdentifier = "registration." + id
+            field.heightAnchor.constraint(greaterThanOrEqualToConstant: 46).isActive = true
+            stack.addArrangedSubview(field)
+        }
+        phone.keyboardType = .phonePad; code.keyboardType = .numberPad; code.textContentType = .oneTimeCode
+        password.isSecureTextEntry = true; confirmation.isSecureTextEntry = true
+        password.textContentType = .newPassword; confirmation.textContentType = .newPassword
+        let legal = UILabel(); legal.numberOfLines = 0; legal.text = "同意使用说明、免责说明，并知悉隐私说明"
+        let legalRow = UIStackView(arrangedSubviews: [consent,legal]); legalRow.spacing = 12
+        consent.accessibilityIdentifier = "registration.consent"; stack.addArrangedSubview(legalRow)
+        for document in [AppLegalDocument.usage, .disclaimer, .privacy] {
+            let button = UIButton(type: .system); button.setTitle(document.title, for: .normal)
+            button.addAction(UIAction { [weak self] _ in
+                self?.navigationController?.pushViewController(LegalDocumentViewController(document: document), animated: true)
+            }, for: .touchUpInside); stack.addArrangedSubview(button)
+        }
+        send.setTitle("获取验证码", for: .normal); submit.setTitle("完成注册", for: .normal)
+        checkResult.setTitle("查询本次注册结果", for: .normal); checkResult.isHidden = true
+        send.accessibilityIdentifier = "registration.send"; submit.accessibilityIdentifier = "registration.submit"
+        send.addTarget(self, action: #selector(sendCode), for: .touchUpInside)
+        submit.addTarget(self, action: #selector(register), for: .touchUpInside)
+        checkResult.addTarget(self, action: #selector(queryResult), for: .touchUpInside)
+        [send,submit,checkResult].forEach { stack.addArrangedSubview($0); $0.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true }
+        status.numberOfLines = 0; status.accessibilityIdentifier = "registration.status"; stack.addArrangedSubview(status)
+    }
+
+    private func setBusy(_ value: Bool) {
+        busy = value; [send,submit,checkResult].forEach { $0.isEnabled = !value }
+        [invite,phone,code,password,confirmation].forEach { $0.isEnabled = !value && !completing }
+        consent.isEnabled = !value && !completing
+        isModalInPresentation = value || completing
+    }
+    private var inputKey: String { (invite.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased() + ":" + (LoginIdentifierPolicy.mainlandPhone(phone.text ?? "") ?? "") }
+    private func call(_ operation: String, _ payload: [String:Any], completion: @escaping ([String:Any]) -> Void) {
+        setBusy(true)
+        DreamJourneyBackendClient.shared.phoneRegistrationCommand(operation,payload:payload) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }; self.setBusy(false)
+                switch result {
+                case .success(let json): completion(json)
+                case .failure(let error):
+                    if case DreamJourneyBackendClient.ClientError.backendError(let httpStatus, _) = error,
+                       let httpStatus, [400,409,410,429].contains(httpStatus) {
+                        self.completing = false; self.setBusy(false)
+                        self.status.text = "本次操作未完成，请核对邀请码、验证码和名额状态。验证码过期时请重新获取；已有账号可直接登录。"
+                        return
+                    }
+                    self.status.text = self.completing ? "暂未确认注册结果，请点“查询本次注册结果”；不要重新注册。" : "操作未完成。请核对邀请码、验证码及网络；短信未开放、已达人数上限或发送过于频繁时暂不可注册。"
+                }
+            }
+        }
+    }
+    @objc private func close() {
+        guard !busy else { return }
+        let leave = { [weak self] in
+            self?.password.text = ""; self?.confirmation.text = ""
+            self?.dismiss(animated: true)
+        }
+        guard completing else { leave(); return }
+        let alert = UIAlertController(title: "注册结果尚未确认",
+            message: "建议先查询结果。离开不会撤销已提交的注册；稍后可用刚才的手机号和密码尝试登录。", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "继续查询", style: .cancel))
+        alert.addAction(UIAlertAction(title: "返回登录", style: .default) { _ in leave() })
+        present(alert, animated: true)
+    }
+    @objc private func sendCode() {
+        guard !busy && !completing else { return }
+        guard consent.isOn, let normalized = LoginIdentifierPolicy.mainlandPhone(phone.text ?? ""), !(invite.text ?? "").isEmpty else {
+            status.text = "请填写邀请码、有效大陆手机号，并勾选说明。"; return
+        }
+        guard Date() >= nextSend else { status.text = "请等待60秒后再获取验证码。"; return }
+        // Explicit resend is a new operation only after a known response/cooldown.
+        if attempt != nil || sentInput != inputKey { sendOperation = UUID().uuidString }
+        sentInput = inputKey; attempt = nil; grant = ""; completionOperation = UUID().uuidString
+        status.text = "验证码发送中"
+        call("challenges",["invitationCode":invite.text ?? "","phone":normalized,"legalConsent":true,"operationId":sendOperation]) { [weak self] json in
+            guard let self else { return }; self.attempt = json; self.nextSend = Date().addingTimeInterval(60)
+            let accepted = ["accepted","delivered"].contains(json["status"] as? String ?? "")
+            self.status.text = accepted ? "验证码已提交发送，请查看短信。" : "暂未确认短信送达；若收到验证码可继续，60秒后可主动重发。"
+        }
+    }
+    private var attemptPayload: [String:Any]? {
+        guard let attempt, let id = attempt["attemptId"] as? String, let token = attempt["attemptToken"] as? String else { return nil }
+        return ["attemptId":id,"attemptToken":token]
+    }
+    @objc private func register() {
+        guard !busy && !completing else { return }
+        guard consent.isOn, sentInput == inputKey, let base = attemptPayload else { status.text = "请先为当前手机号获取验证码。"; return }
+        let value = password.text ?? ""
+        guard (8...128).contains(value.count), value == confirmation.text else { status.text = "两次密码需一致，长度8–128位。"; return }
+        status.text = "正在验证验证码"
+        call("verify",base.merging(["code":code.text ?? ""]) { _,new in new }) { [weak self] json in
+            guard let self, let grant = json["grant"] as? String else { return }
+            self.grant = grant; self.completing = true; self.checkResult.isHidden = false
+            self.finish(base:base,password:value)
+        }
+    }
+    private func finish(base:[String:Any],password:String) {
+        status.text = "正在注册"
+        call("complete",base.merging(["grant":grant,"password":password,"legalConsent":true,"operationId":completionOperation]) { _,new in new }) { [weak self] json in self?.handleResult(json) }
+    }
+    @objc private func queryResult() {
+        guard !busy, let base = attemptPayload else { return }
+        call("result",base) { [weak self] json in
+            guard let self else { return }
+            if json["status"] as? String == "verified" {
+                // Same operation and immutable fields: safe replay after unknown HTTP result.
+                self.finish(base:base,password:self.password.text ?? "")
+            } else { self.handleResult(json) }
+        }
+    }
+    private func handleResult(_ json:[String:Any]) {
+        let result = json["status"] as? String ?? ""
+        guard ["registered","existingAccount"].contains(result) else {
+            if ["locked", "superseded", "undeliverable"].contains(result) { completing = false; setBusy(false) }
+            status.text = "本次尚未完成注册，请核对短信或稍后查询结果。"; return
+        }
+        completing = false; setBusy(false); password.text = ""; confirmation.text = ""
+        let number = LoginIdentifierPolicy.mainlandPhone(phone.text ?? "") ?? ""
+        let alert = UIAlertController(title: result == "registered" ? "注册成功" : "手机号已有账号",
+            message: "请返回登录；已有账号密码未改变。家庭关系与记忆授权需另外确认。",preferredStyle:.alert)
+        alert.addAction(UIAlertAction(title:"去登录",style:.default) { [weak self] _ in self?.onRegistered?(number); self?.dismiss(animated:true) })
+        present(alert,animated:true)
     }
 }

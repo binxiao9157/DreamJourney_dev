@@ -1,6 +1,9 @@
 import Foundation
 
 struct BackendPasswordAuthenticationCapability: Equatable {
+    let phoneRegistrationReady: Bool
+    let registrationAdmissionEnabled: Bool
+    var canRegisterPhone: Bool { canLogin && phoneRegistrationReady }
     let usernameLoginReady: Bool
     let usernameRegistrationReady: Bool
     let usernameRegistrationEndpoint: String
@@ -94,6 +97,10 @@ struct BackendPasswordAuthenticationCapability: Equatable {
         let parsedSessionContractVersion = Self.int(json?["sessionContractVersion"])
         let parsedContractVersion = Self.int(json?["contractVersion"])
 
+        phoneRegistrationReady = Self.bool(json?["phoneRegistrationReady"]) == true
+            && Self.int(json?["registrationAdmissionContractVersion"]) == 1
+            && Self.string(json?["phoneRegistrationEndpoint"]) == "/v2/auth/phone-registration"
+        registrationAdmissionEnabled = Self.bool(json?["registrationInviteAllocationRequired"]) == true
         usernameLoginReady = Self.bool(json?["usernameLoginReady"]) ?? false
         usernameRegistrationReady = Self.bool(json?["usernameRegistrationReady"]) ?? false
         usernameRegistrationEndpoint = Self.string(json?["usernameRegistrationEndpoint"]) ?? ""
@@ -400,5 +407,20 @@ enum BackendPasswordFailureState: Equatable {
             return .failed(message: "该账号尚未设置密码，请先完成手机号验证。")
         }
         return .failed(message: message)
+    }
+}
+
+/// Explicit ASCII namespaces: +86/0086 and formatting remain phone login.
+enum LoginIdentifierPolicy {
+    static func isUsername(_ value: String) -> Bool {
+        let input = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return input.range(of: "^[A-Za-z]", options: .regularExpression) != nil
+    }
+    static func mainlandPhone(_ value: String) -> String? {
+        var phone = value.replacingOccurrences(of: "[\\s\\-()]", with: "", options: .regularExpression)
+        if phone.hasPrefix("+86") { phone.removeFirst(3) }
+        else if phone.hasPrefix("0086") { phone.removeFirst(4) }
+        guard phone.range(of: "^1[3-9][0-9]{9}$", options: .regularExpression) != nil else { return nil }
+        return phone
     }
 }

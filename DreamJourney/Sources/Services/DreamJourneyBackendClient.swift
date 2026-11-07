@@ -14013,6 +14013,17 @@ final class DreamJourneyBackendClient: EchoDelayedReplyAnswerReadClient, Publica
         }
     }
 
+    /// Public registration never adopts or clears a login session, and never refreshes it.
+    func phoneRegistrationCommand(_ operation: String, payload: [String: Any],
+                                  completion: @escaping (Result<[String: Any], Error>) -> Void) {
+        guard ["challenges", "verify", "complete", "result"].contains(operation) else {
+            completion(.failure(ClientError.invalidJSONResponse)); return
+        }
+        requestJSON(path: "/v2/auth/phone-registration/" + operation, method: .post,
+                    payload: payload, authPolicy: .publicRequest, allowsRefresh: false, allowsRecoveryRefresh: false,
+                    mutatesAuthenticatedSessionForRecoveryPolicy: false, completion: completion)
+    }
+
     func registerInvitedUsername(code: String, username: String, password: String,
                                  completion: @escaping (Result<Void, Error>) -> Void) {
         requestJSON(path: "/v2/auth/username/register", method: .post,
