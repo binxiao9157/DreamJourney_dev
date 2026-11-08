@@ -1072,55 +1072,205 @@ private final class PhoneRegistrationViewController: UIViewController {
     private var sentInput = "", grant = "", busy = false, nextSend = Date.distantPast
     private var completing = false
 
+    private let registrationScroll = UIScrollView()
+    private let legalLinks = UIStackView()
+    private let codeRow = UIStackView()
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "手机号注册"
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = DJDesignTokens.Color.background
+        navigationController?.navigationBar.tintColor = DJDesignTokens.Color.accentDeep
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = DJDesignTokens.Color.background
+        appearance.shadowColor = .clear
+        appearance.titleTextAttributes = [.foregroundColor: DJDesignTokens.Color.textPrimary]
+        navigationItem.standardAppearance = appearance
+        navigationItem.scrollEdgeAppearance = appearance
+        navigationItem.compactAppearance = appearance
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: "取消", style: .plain, target: self, action: #selector(close))
-        let scroll = UIScrollView(), stack = UIStackView()
+
+        let scroll = registrationScroll, stack = UIStackView()
         scroll.keyboardDismissMode = .interactive
-        stack.axis = .vertical; stack.spacing = 16
-        view.addSubview(scroll); scroll.addSubview(stack)
+        scroll.alwaysBounceVertical = true
+        scroll.accessibilityIdentifier = "registration.form"
+        stack.axis = .vertical; stack.spacing = 14
+        view.addSubview(scroll); scroll.addSubview(stack); view.addSubview(status)
+        status.translatesAutoresizingMaskIntoConstraints = false
         scroll.translatesAutoresizingMaskIntoConstraints = false; stack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: status.topAnchor, constant: -8),
+            status.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -8),
+            status.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            status.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 20),
-            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -20),
+            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 16),
+            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24),
             stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 24),
             stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -24),
             stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48)])
-        let intro = UILabel(); intro.numberOfLines = 0
-        intro.text = "凭有效邀请码验证手机号并注册。邀请码仅控制注册人数；家人记忆仍需本人另行授权。"
-        stack.addArrangedSubview(intro)
-        for (field, title, id) in [(invite,"注册邀请码","invite"),(phone,"中国大陆手机号","phone"),
+
+        let heading = registrationLabel("创建你的账号", font: DJDesignTokens.Font.display(28), color: DJDesignTokens.Color.accentDeep)
+        let intro = registrationLabel("让值得珍藏的回忆，从这里开始。", font: DJDesignTokens.Font.body(14))
+        let header = UIStackView(arrangedSubviews: [heading, intro])
+        header.axis = .vertical; header.spacing = 8
+        stack.addArrangedSubview(header)
+
+        let toolbar = UIToolbar()
+        toolbar.items = [UIBarButtonItem(systemItem: .flexibleSpace),
+            UIBarButtonItem(title: "完成", style: .done, target: self, action: #selector(dismissRegistrationKeyboard))]
+        toolbar.tintColor = DJDesignTokens.Color.accentDeep
+        toolbar.sizeToFit()
+        for (field, placeholder, id) in [(invite,"请输入注册邀请码","invite"),(phone,"中国大陆手机号","phone"),
             (code,"短信验证码","code"),(password,"设置密码（8–128位）","password"),(confirmation,"再次输入密码","confirmation")] {
-            field.placeholder = title; field.borderStyle = .roundedRect; field.autocorrectionType = .no
+            field.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: DJDesignTokens.Font.body(16))
+            field.adjustsFontForContentSizeCategory = true
+            field.textColor = DJDesignTokens.Color.textPrimary
+            field.tintColor = DJDesignTokens.Color.accentDeep
+            field.attributedPlaceholder = NSAttributedString(string: placeholder, attributes: [.foregroundColor: DJDesignTokens.Color.textTertiary])
+            field.borderStyle = .none; field.autocorrectionType = .no
             field.autocapitalizationType = .none; field.accessibilityIdentifier = "registration." + id
-            field.heightAnchor.constraint(greaterThanOrEqualToConstant: 46).isActive = true
-            stack.addArrangedSubview(field)
+            field.accessibilityLabel = placeholder
+            field.inputAccessoryView = toolbar
         }
         phone.keyboardType = .phonePad; code.keyboardType = .numberPad; code.textContentType = .oneTimeCode
         password.isSecureTextEntry = true; confirmation.isSecureTextEntry = true
         password.textContentType = .newPassword; confirmation.textContentType = .newPassword
-        let legal = UILabel(); legal.numberOfLines = 0; legal.text = "同意使用说明、免责说明，并知悉隐私说明"
-        let legalRow = UIStackView(arrangedSubviews: [consent,legal]); legalRow.spacing = 12
-        consent.accessibilityIdentifier = "registration.consent"; stack.addArrangedSubview(legalRow)
+
+        stack.addArrangedSubview(registrationSection("注册邀请码", views: [registrationField(invite, icon: "ticket")]))
+        let codeContainer = registrationField(code, icon: "number.square")
+        codeRow.addArrangedSubview(codeContainer); codeRow.addArrangedSubview(send)
+        codeRow.spacing = 8; codeRow.alignment = .fill
+        send.setContentHuggingPriority(.required, for: .horizontal)
+        send.setContentCompressionResistancePriority(.required, for: .horizontal)
+        send.titleLabel?.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(for: DJDesignTokens.Font.label(14))
+        send.titleLabel?.adjustsFontForContentSizeCategory = true
+        send.tintColor = DJDesignTokens.Color.accentDeep
+        send.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        stack.addArrangedSubview(registrationSection("验证手机号", views: [registrationField(phone, icon: "iphone"), codeRow]))
+        stack.addArrangedSubview(registrationSection("设置登录密码", views: [registrationField(password, icon: "lock"), registrationField(confirmation, icon: "lock.rotation")]))
+
+        let legal = registrationLabel("我已阅读并同意使用说明、免责说明，并知悉隐私说明", font: DJDesignTokens.Font.body(13))
+        consent.onTintColor = DJDesignTokens.Color.accentDeep
+        consent.setContentHuggingPriority(.required, for: .horizontal)
+        consent.setContentCompressionResistancePriority(.required, for: .horizontal)
+        consent.accessibilityIdentifier = "registration.consent"
+        consent.accessibilityLabel = "同意使用说明、免责说明，并知悉隐私说明"
+        let legalRow = UIStackView(arrangedSubviews: [consent, legal])
+        legalRow.spacing = 12; legalRow.alignment = .center
+        legalLinks.spacing = 4; legalLinks.distribution = .fillEqually
         for document in [AppLegalDocument.usage, .disclaimer, .privacy] {
-            let button = UIButton(type: .system); button.setTitle(document.title, for: .normal)
+            let button = UIButton(type: .system)
+            button.setTitle("《\(document.title)》", for: .normal)
+            button.titleLabel?.font = UIFontMetrics(forTextStyle: .footnote).scaledFont(for: DJDesignTokens.Font.body(13))
+            button.titleLabel?.adjustsFontForContentSizeCategory = true
+            button.tintColor = DJDesignTokens.Color.accentDeep
+            button.accessibilityIdentifier = "registration.legal.\(document.rawValue)"
+            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
             button.addAction(UIAction { [weak self] _ in
+                self?.view.endEditing(true)
                 self?.navigationController?.pushViewController(LegalDocumentViewController(document: document), animated: true)
-            }, for: .touchUpInside); stack.addArrangedSubview(button)
+            }, for: .touchUpInside)
+            legalLinks.addArrangedSubview(button)
         }
-        send.setTitle("获取验证码", for: .normal); submit.setTitle("完成注册", for: .normal)
+        let legalGroup = UIStackView(arrangedSubviews: [legalRow, legalLinks])
+        legalGroup.axis = .vertical; legalGroup.spacing = 0
+        stack.addArrangedSubview(legalGroup)
+        stack.setCustomSpacing(12, after: legalGroup)
+
+        send.setTitle("获取验证码", for: .normal)
+        var primary = UIButton.Configuration.filled()
+        primary.title = "完成注册"
+        primary.baseForegroundColor = DJDesignTokens.Color.textPrimary
+        primary.baseBackgroundColor = DJDesignTokens.Color.accent
+        primary.cornerStyle = .capsule
+        primary.contentInsets = NSDirectionalEdgeInsets(top: 16, leading: 24, bottom: 16, trailing: 24)
+        primary.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var attributes = incoming
+            attributes.font = UIFontMetrics(forTextStyle: .headline).scaledFont(for: DJDesignTokens.Font.label(16))
+            return attributes
+        }
+        submit.configuration = primary
+        submit.heightAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true
         checkResult.setTitle("查询本次注册结果", for: .normal); checkResult.isHidden = true
+        checkResult.tintColor = DJDesignTokens.Color.accentDeep
+        checkResult.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        checkResult.titleLabel?.adjustsFontForContentSizeCategory = true
+        checkResult.titleLabel?.numberOfLines = 0
+        checkResult.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
         send.accessibilityIdentifier = "registration.send"; submit.accessibilityIdentifier = "registration.submit"
         send.addTarget(self, action: #selector(sendCode), for: .touchUpInside)
         submit.addTarget(self, action: #selector(register), for: .touchUpInside)
         checkResult.addTarget(self, action: #selector(queryResult), for: .touchUpInside)
-        [send,submit,checkResult].forEach { stack.addArrangedSubview($0); $0.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true }
-        status.numberOfLines = 0; status.accessibilityIdentifier = "registration.status"; stack.addArrangedSubview(status)
+        [submit, checkResult].forEach { stack.addArrangedSubview($0) }
+        status.numberOfLines = 0; status.accessibilityIdentifier = "registration.status"
+        status.font = .preferredFont(forTextStyle: .footnote); status.adjustsFontForContentSizeCategory = true
+        status.textColor = DJDesignTokens.Color.textSecondary
+        stack.setCustomSpacing(8, after: submit)
+        let note = registrationLabel("邀请码仅控制名额；家人记忆需本人另行授权。", font: DJDesignTokens.Font.body(12))
+        note.textAlignment = .center
+        stack.addArrangedSubview(note)
+        updateRegistrationLayout()
+        NotificationCenter.default.addObserver(self, selector: #selector(revealRegistrationField), name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
+    }
+
+    private func registrationLabel(_ text: String, font: UIFont, color: UIColor = DJDesignTokens.Color.textSecondary) -> UILabel {
+        let label = UILabel()
+        label.text = text; label.numberOfLines = 0; label.textColor = color
+        label.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: font)
+        label.adjustsFontForContentSizeCategory = true
+        return label
+    }
+
+    private func registrationSection(_ title: String, views: [UIView]) -> UIStackView {
+        let label = registrationLabel(title, font: DJDesignTokens.Font.label(13))
+        let stack = UIStackView(arrangedSubviews: [label] + views)
+        stack.axis = .vertical; stack.spacing = 10
+        return stack
+    }
+
+    private func registrationField(_ field: UITextField, icon: String) -> UIView {
+        let container = UIView()
+        container.backgroundColor = DJDesignTokens.Color.surfaceContainer
+        container.layer.cornerRadius = 28
+        let symbol = UIImageView(image: UIImage(systemName: icon))
+        symbol.tintColor = DJDesignTokens.Color.textTertiary
+        symbol.contentMode = .scaleAspectFit
+        symbol.isAccessibilityElement = false
+        let row = UIStackView(arrangedSubviews: [symbol, field])
+        row.alignment = .center; row.spacing = 10
+        container.addSubview(row); row.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            row.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            row.topAnchor.constraint(equalTo: container.topAnchor, constant: 6),
+            row.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -6),
+            container.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
+            field.heightAnchor.constraint(equalTo: row.heightAnchor),
+            field.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+            symbol.widthAnchor.constraint(equalToConstant: 20), symbol.heightAnchor.constraint(equalToConstant: 20)])
+        return container
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        updateRegistrationLayout()
+    }
+
+    private func updateRegistrationLayout() {
+        let largeText = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        legalLinks.axis = largeText ? .vertical : .horizontal
+        codeRow.axis = largeText ? .vertical : .horizontal
+    }
+
+    @objc private func dismissRegistrationKeyboard() { view.endEditing(true) }
+
+    @objc private func revealRegistrationField() {
+        guard let field = [invite, phone, code, password, confirmation].first(where: { $0.isFirstResponder }) else { return }
+        view.layoutIfNeeded()
+        registrationScroll.scrollRectToVisible(field.convert(field.bounds, to: registrationScroll).insetBy(dx: 0, dy: -20), animated: true)
     }
 
     private func setBusy(_ value: Bool) {
